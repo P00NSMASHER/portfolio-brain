@@ -1,0 +1,55 @@
+name: runtime-worker
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        required: true
+        type: string
+      target_repository_id:
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: portfolio-runtime-state
+  cancel-in-progress: false
+
+jobs:
+  runtime:
+    if: ${{ vars.PORTFOLIO_RUNTIME_DISABLED != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PORTFOLIO_RUNTIME_DISABLED: ${{ vars.PORTFOLIO_RUNTIME_DISABLED }}
+      PORTFOLIO_GITHUB_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+      RUNTIME_MODE: ${{ inputs.mode }}
+      TARGET_REPOSITORY_ID: ${{ inputs.target_repository_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Restore latest runtime state
+        run: python -m runtime.artifact_state --output runtime/live/runtime_state.json
+      - name: Execute deterministic runtime cycle
+        run: >-
+          python -m runtime.continuous_runtime
+          --mode "$RUNTIME_MODE"
+          --state-path runtime/live/runtime_state.json
+          --output-dir runtime/out
+          ${TARGET_REPOSITORY_ID:+--target-repository-id "$TARGET_REPOSITORY_ID"}
+      - name: Validate emitted runtime state
+        run: python -c "import json; from runtime.state import validate_state; validate_state(json.load(open('runtime/out/runtime_state.json')))"
+      - name: Upload sanitized continuation state
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-runtime-state
+          path: runtime/out/
+          if-no-files-found: error
+          retention-days: 30

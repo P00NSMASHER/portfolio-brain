@@ -1,0 +1,16 @@
+name: runtime-hourly-sync
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  sync:
+    uses: ./.github/workflows/runtime-worker.yml
+    with:
+      mode: sync

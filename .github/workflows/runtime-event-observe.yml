@@ -1,0 +1,24 @@
+name: runtime-event-observe
+
+on:
+  push:
+    branches: ["main"]
+  repository_dispatch:
+    types: ["portfolio_observe"]
+  workflow_dispatch:
+    inputs:
+      repository_id:
+        description: "Registered repository id to observe"
+        required: false
+        default: "REPO-008"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  observe:
+    uses: ./.github/workflows/runtime-worker.yml
+    with:
+      mode: observe
+      target_repository_id: ${{ github.event.client_payload.repository_id || inputs.repository_id || 'REPO-008' }}
