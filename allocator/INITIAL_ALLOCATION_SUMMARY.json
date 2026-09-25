@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0.0",
+  "resource_plan_count": 9,
+  "active_resource_count": 3,
+  "hold_resource_count": 6,
+  "recommendation_entry_count": 29,
+  "active_resource_types": [
+    "HUMAN_REVIEW",
+    "HUNTER_RUNS",
+    "RESEARCH"
+  ],
+  "hold_resource_types": [
+    "API_INFRASTRUCTURE",
+    "ART_PRODUCTION",
+    "CASH",
+    "ENGINEERING_CAPACITY",
+    "MODEL_CALLS",
+    "TESTING"
+  ],
+  "top_research_project_id": "PRJ-000",
+  "top_hunter_project_id": "PRJ-001",
+  "top_human_review_project_id": "PRJ-001",
+  "cash_allocated_share_basis_points": 0,
+  "model_calls_allocated_share_basis_points": 0,
+  "opaque_score_used": false
+}

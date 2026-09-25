@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/PORTFOLIO_ALLOCATION_PLAN_SCHEMA.json",
+  "title": "Portfolio Resource Allocation Recommendation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "resource_type",
+    "status",
+    "normalized_share_basis_points",
+    "allocated_share_basis_points",
+    "unallocated_share_basis_points",
+    "hold_reason",
+    "recommendations",
+    "plan_hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "resource_type": {
+      "enum": [
+        "MODEL_CALLS",
+        "ENGINEERING_CAPACITY",
+        "TESTING",
+        "RESEARCH",
+        "HUNTER_RUNS",
+        "ART_PRODUCTION",
+        "HUMAN_REVIEW",
+        "API_INFRASTRUCTURE",
+        "CASH"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ACTIVE_RECOMMENDATION",
+        "HOLD_NO_ELIGIBLE_EVIDENCE",
+        "HOLD_PROVIDER_DISABLED",
+        "HOLD_HUMAN_GATED_NO_APPROVED_POOL",
+        "HOLD_NO_APPROVED_INFRASTRUCTURE_NEED"
+      ]
+    },
+    "normalized_share_basis_points": {
+      "const": 10000
+    },
+    "allocated_share_basis_points": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000
+    },
+    "unallocated_share_basis_points": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000
+    },
+    "hold_reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 1000
+    },
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "project_id",
+          "source_uncertainty_id",
+          "source_experiment_id",
+          "pareto_layer",
+          "rank_order",
+          "share_basis_points",
+          "authority_requirement",
+          "actionability",
+          "resource_fit_reason",
+          "uncertainty_components",
+          "evidence_refs"
+        ],
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "pattern": "^PRJ-[0-9]{3,}$"
+          },
+          "source_uncertainty_id": {
+            "type": "string",
+            "pattern": "^UNC-[A-Z0-9-]+$"
+          },
+          "source_experiment_id": {
+            "type": "string",
+            "pattern": "^PEXP-[A-Z0-9]{16}$"
+          },
+          "pareto_layer": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "rank_order": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "share_basis_points": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000
+          },
+          "authority_requirement": {
+            "enum": [
+              "OBSERVE_ONLY",
+              "BOUNDED_EXPERIMENT",
+              "HUMAN_GATED_ACT"
+            ]
+          },
+          "actionability": {
+            "enum": [
+              "READY_FOR_INFORMATION_GATHERING",
+              "READY_FOR_EXPERIMENT_DESIGN",
+              "HUMAN_APPROVAL_REQUIRED",
+              "BLOCKED"
+            ]
+          },
+          "resource_fit_reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "uncertainty_components": {
+            "type": "object"
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "uniqueItems": true,
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "plan_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

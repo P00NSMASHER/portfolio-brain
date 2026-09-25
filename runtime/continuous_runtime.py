@@ -11,6 +11,7 @@ from runtime.state import advance_cycle, bootstrap_state, canonical_hash, load_j
 from learning.continuous_learning import rebuild_from_ledger
 from uncertainty.highest_value_uncertainty import build_snapshot as build_uncertainty_snapshot
 from experiments.experiment_engine import build_experiment_portfolio
+from allocator.portfolio_allocator import build_allocation_snapshot
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -154,7 +155,10 @@ def run(mode: str, *, state_path: Path, output_dir: Path, target_repository_id: 
         (output_dir/"highest_value_uncertainty.json").write_text(json.dumps(uncertainty_state,indent=2)+"\n")
         experiment_state=build_experiment_portfolio(uncertainty_state)
         (output_dir/"experiment_plan.json").write_text(json.dumps(experiment_state,indent=2)+"\n")
+        allocation_state=build_allocation_snapshot(uncertainty_state,experiment_state,generated_at=at)
+        (output_dir/"portfolio_allocation_recommendation.json").write_text(json.dumps(allocation_state,indent=2)+"\n")
         snap=daily_snapshot(updated,observations,at)
+        snap["active_allocation_resource_count"]=allocation_state["active_resource_count"]
         snap["selected_experiment_id"]=experiment_state["selected_experiment_id"]
         snap["selected_uncertainty_id"]=uncertainty_state["selected_uncertainty_id"]
         snap["portfolio_learning_state_hash"]=learning_state["state_hash"]
