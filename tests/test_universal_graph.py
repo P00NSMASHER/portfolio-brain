@@ -15,10 +15,11 @@ def node(node_id,node_type,key,*,state="OBSERVED",mapping=("PORTFOLIO_ONLY",None
     }
 
 def edge(edge_id,source,etype,target,*,state="OBSERVED",status="ACTIVE",start="2026-09-25T17:00:00Z",end=None,sup=None):
+    refs=["git:relationship-source","ci-run:hostile-fixture"] if state=="VERIFIED" else ["git:relationship-source"]
     return {
       "schema_version":"1.0.0","edge_id":edge_id,"source_node_id":source,
       "edge_type":etype,"target_node_id":target,"attributes":{},
-      "provenance_refs":["git:relationship-source"],"verification_state":state,
+      "provenance_refs":refs,"verification_state":state,
       "status":status,"valid_from":start,"valid_to":end,"supersedes_edge_id":sup
     }
 
