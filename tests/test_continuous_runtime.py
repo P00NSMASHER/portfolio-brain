@@ -1,4 +1,4 @@
-import copy, json, tempfile, unittest
+import copy, json, os, tempfile, unittest\nfrom unittest.mock import patch
 from pathlib import Path
 from runtime.continuous_runtime import RuntimePolicyError, run
 from runtime.state import bootstrap_state, validate_state
@@ -72,6 +72,14 @@ class RuntimeTests(unittest.TestCase):
                 ids.append(r["cycle_id"])
         self.assertEqual(ids[0],ids[1])
 
+    def test_environment_kill_switch_exits_cleanly_with_state(self):
+        with tempfile.TemporaryDirectory() as td, patch.dict(os.environ,{"PORTFOLIO_RUNTIME_DISABLED":"true"}):
+            receipt=run("sync",state_path=Path(td)/"none.json",output_dir=Path(td)/"out",
+                        fetch_json=FakeGitHub(current_heads()),forced_now="2026-09-25T17:00:00Z")
+            self.assertEqual(receipt["status"],"DISABLED")
+            state=json.loads((Path(td)/"out"/"runtime_state.json").read_text())
+            self.assertEqual(state["sequence"],0)
+
     def test_daily_rebuild_is_deterministic_and_no_model_needed(self):
         fake=FakeGitHub(current_heads())
         with tempfile.TemporaryDirectory() as td:
@@ -80,6 +88,7 @@ class RuntimeTests(unittest.TestCase):
             snap=json.loads((Path(td)/"out"/"daily_learning_state.json").read_text())
         self.assertIn("snapshot_hash",snap)
         self.assertEqual(snap["verified_memory_outcomes"],0)
+        self.assertEqual(snap["runtime_sequence_before_rebuild"],1)
 
     def test_weekly_synthesis_contains_portfolio_counts(self):
         fake=FakeGitHub(current_heads())
