@@ -270,6 +270,10 @@ def validate_bundle(events: Iterable[dict[str, Any]], evidence: Iterable[dict[st
         idempotency.add(item["idempotency_key"])
         event_hashes.add(item["event_hash"])
 
+    for evidence_item in evidence_list:
+        for basis_id in evidence_item["verification"]["basis_evidence_ids"]:
+            _require(basis_id in evidence_by_id, f"missing basis evidence: {basis_id}")
+
     for item in event_list:
         for dependency in item["dependency_event_ids"]:
             _require(dependency in event_by_id, f"missing dependency event: {dependency}")
