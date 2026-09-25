@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/OBJECTIVE_SCHEMA.json",
+  "title": "Portfolio Brain Objective",
+  "description": "Evidence-bound owner/project objective. Objectives express desired outcomes, not execution authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version","objective_id","project_id","title","statement","status",
+    "priority","success_conditions","constraints","evidence_requirements","provenance"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "objective_id": {"type": "string","pattern": "^OBJ-[0-9]{3,}$"},
+    "project_id": {"type": "string","pattern": "^PRJ-[0-9]{3,}$"},
+    "title": {"type": "string","minLength": 1,"maxLength": 160},
+    "statement": {"type": "string","minLength": 1,"maxLength": 1000},
+    "status": {"enum": ["PROPOSED","ACTIVE","PAUSED","ACHIEVED","RETIRED"]},
+    "priority": {"enum": ["LOW","MEDIUM","HIGH","CRITICAL"]},
+    "success_conditions": {
+      "type": "array",
+      "items": {"type": "string","minLength": 1,"maxLength": 500},
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "constraints": {
+      "type": "array",
+      "items": {"type": "string","minLength": 1,"maxLength": 500},
+      "uniqueItems": true
+    },
+    "evidence_requirements": {
+      "type": "array",
+      "items": {"type": "string","minLength": 1,"maxLength": 500},
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "provenance": {"$ref": "#/$defs/provenance"}
+  },
+  "$defs": {
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_type","source_ref"],
+      "properties": {
+        "source_type": {"enum": ["OWNER_DECLARATION","REPOSITORY_EVIDENCE","MIGRATED_REGISTRY"]},
+        "source_ref": {"type": "string","minLength": 1,"maxLength": 500},
+        "source_revision": {"type": ["string","null"],"pattern": "^[0-9a-f]{40}$"}
+      }
+    }
+  }
+}
