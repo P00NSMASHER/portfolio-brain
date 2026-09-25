@@ -144,8 +144,10 @@ def validate_plan(plan):
     req(plan["execution_mode"] in policy()["execution_modes"],"invalid execution mode")
     if plan["status"]!="READY_FOR_ISOLATED_EXECUTION":req(plan["autonomous_execution_allowed"] is False,"gated/blocked experiment cannot be autonomous")
     if plan["authority_requirement"]=="HUMAN_GATED_ACT":
-        req(plan["status"]=="HUMAN_APPROVAL_REQUIRED","human-gated ACT must remain approval-required")
-        req(plan["approval_requirements"],"human-gated ACT requires approval requirements")
+        req(plan["status"] in {"HUMAN_APPROVAL_REQUIRED","BLOCKED"},"human-gated ACT must remain approval-required or more restrictive BLOCKED")
+        req(plan["approval_requirements"] or plan["hard_blockers"],"human-gated ACT requires approval requirements or an explicit blocker")
+        if plan["status"]=="BLOCKED":
+            req(plan["hard_blockers"],"blocked human-gated ACT requires explicit blocker")
     if "NO_AUTONOMOUS_TRADING" in plan["inherited_hard_boundaries"]:
         req(plan["authority_requirement"]!="HUMAN_GATED_ACT","trading research plan cannot create ACT authority")
     c=plan["cost_boundary"]
