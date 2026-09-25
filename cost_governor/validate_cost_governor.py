@@ -73,16 +73,24 @@ def validate_cost_governor():
     req(overage["status"] == "HARD_STOP_OVERAGE", "overage did not trip hard stop")
     req(hard_stop_reason(fresh, at=at) == "CURRENT_DAY_RESERVATION_OVERAGE", "hard stop reason missing")
 
-    scheduler = (ROOT / ".github/workflows/portfolio-autonomous-scheduler.yml").read_text().lower()
-    for text in [
-        "portfolio-cost-governed-autonomy",
-        "cost_governor.artifact_state",
-        "cost_governor.workflow_gate preflight",
-        "cost_governor.workflow_gate finalize",
-        "portfolio_spend_disabled",
-        "portfolio-cost-governor-state",
-    ]:
-        req(text in scheduler, f"scheduler cost integration missing: {text}")
+    governed_workflows = {
+        "portfolio-autonomous-scheduler": ROOT / ".github/workflows/portfolio-autonomous-scheduler.yml",
+        "runtime-worker": ROOT / ".github/workflows/runtime-worker.yml",
+        "hunter-autonomous-cycle": ROOT / ".github/workflows/hunter-autonomous-cycle.yml",
+        "software-factory-candidate": ROOT / ".github/workflows/software-factory-candidate.yml",
+    }
+    for name, path in governed_workflows.items():
+        body = path.read_text().lower()
+        for text in [
+            "portfolio-cost-governed-autonomy",
+            "cost_governor.artifact_state",
+            "cost_governor.workflow_gate preflight",
+            "cost_governor.workflow_gate finalize",
+            "portfolio_spend_disabled",
+            "portfolio-cost-governor-state",
+        ]:
+            req(text in body, f"{name} cost integration missing: {text}")
+    scheduler = governed_workflows["portfolio-autonomous-scheduler"].read_text().lower()
     req("contents: write" not in scheduler and "actions: write" not in scheduler, "scheduler write authority widened")
 
     watchdog = (ROOT / ".github/workflows/portfolio-cost-watchdog.yml").read_text().lower()
@@ -100,6 +108,7 @@ def validate_cost_governor():
         "github_runner_minutes_ceiling": p["portfolio_ceiling"]["github_runner_minutes"],
         "retry_limits": p["retry_limits"],
         "managed_workflows": len(p["managed_workflow_names"]),
+        "governed_execution_workflows": len(governed_workflows),
         "duplicate_suppression": True,
         "overage_hard_stop": True,
         "authority_change": "NONE",
