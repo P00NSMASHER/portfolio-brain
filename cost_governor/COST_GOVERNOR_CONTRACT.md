@@ -28,7 +28,7 @@ Reusing the same idempotency key with the same immutable request is duplicate-su
 
 Reservations store only sanitized IDs/hashes, project/provider/model/workflow identifiers, numeric token/cost/runner usage, timestamps and evidence references. Prompt text, payloads, credentials, customer data and private evidence are prohibited while BLK-005 remains open.
 
-Actual usage is committed against the reservation. If actual usage exceeds any reserved dimension, the reservation becomes OVERAGE and the watchdog treats the current day as a hard stop.
+Actual usage is committed against the reservation. If execution disappears before commit, an expired reservation remains charged at its reserved maximum for the rest of that UTC accounting day; a crash can therefore reduce capacity but cannot silently create more spend headroom. If actual usage exceeds any reserved dimension, the reservation becomes OVERAGE and the watchdog treats the current day as a hard stop.
 
 ## GitHub race prevention
 
