@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0.0",
+  "integration_id": "TRUTH-AI-BUSINESS-OS-001",
+  "source_repository": "P00NSMASHER/github-value-hunt-ledger",
+  "source_revision": "5559112ed4dfaa4c690d608b257945e1595560a5",
+  "source_path": "ai_business_os/truth_engine.py",
+  "source_blob_sha": "9b3eaa9412ece784c05e9c93dfcea04e1ec96105",
+  "source_test_path": "ai_business_os/test_truth_engine.py",
+  "source_test_blob_sha": "5705d2876741a39250c1e1662d62e995820a4ebc",
+  "integration_mode": "PINNED_INTERFACE_ADAPTER",
+  "copied_source_code": false,
+  "upstream_contract": {
+    "verdicts": [
+      "PROVEN",
+      "CONTESTED",
+      "NOT_PROVEN",
+      "UNKNOWN"
+    ],
+    "finding_statuses": [
+      "SATISFIED",
+      "MISSING",
+      "STALE",
+      "INADMISSIBLE",
+      "INSUFFICIENT_SUPPORT",
+      "INSUFFICIENT_INDEPENDENCE",
+      "CONFLICTED",
+      "CONTRADICTED"
+    ],
+    "evidence_stances": [
+      "SUPPORTS",
+      "CONTRADICTS"
+    ],
+    "required_receipt_fields": [
+      "claim_id",
+      "claim_hash",
+      "verdict",
+      "evaluated_at",
+      "findings",
+      "evidence_set_hash",
+      "receipt_hash"
+    ]
+  },
+  "observed_semantics": [
+    "Model confidence is never accepted as proof.",
+    "Missing evidence is UNKNOWN rather than false.",
+    "Wrong-authority or future evidence is INADMISSIBLE.",
+    "Stale evidence remains visible and does not prove a claim.",
+    "Admissible support plus contradiction produces CONTESTED.",
+    "Insufficient source independence fails closed.",
+    "Receipt identity changes when the evidence set changes.",
+    "Counterfactual evidence planning does not persist fake evidence."
+  ],
+  "drift_policy": {
+    "exact_repository_revision_required": true,
+    "exact_blob_sha_required": true,
+    "on_source_revision_change": "RECONFORM_BEFORE_USE",
+    "on_blob_mismatch": "FAIL_CLOSED"
+  }
+}
