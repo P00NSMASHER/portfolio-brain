@@ -12,7 +12,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: portfolio-scheduler-state
+  group: portfolio-cost-governed-autonomy
   cancel-in-progress: false
 
 jobs:
@@ -22,22 +22,58 @@ jobs:
     timeout-minutes: 5
     env:
       PORTFOLIO_SCHEDULER_DISABLED: ${{ vars.PORTFOLIO_SCHEDULER_DISABLED }}
+      PORTFOLIO_SPEND_DISABLED: ${{ vars.PORTFOLIO_SPEND_DISABLED }}
       GITHUB_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Restore latest cost-governor state
+        run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
+      - name: Reserve bounded scheduler compute
+        id: cost
+        run: >-
+          python -m cost_governor.workflow_gate preflight
+          --state cost_governor/live/cost_state.json
+          --output-dir cost_governor/out
+          --workflow-id portfolio-autonomous-scheduler
+          --job-id schedule
+          --project-id PRJ-000
+          --estimated-minutes 5
+          --authority OBSERVE
       - name: Restore latest scheduler state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m scheduler.artifact_state --output scheduler/live/scheduler_state.json
       - name: Select bounded work
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m scheduler.autonomous_scheduler --state scheduler/live/scheduler_state.json --output-dir scheduler/out
       - name: Validate persisted scheduler state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -c "import json; from scheduler.autonomous_scheduler import validate_state; validate_state(json.load(open('scheduler/out/scheduler_state.json')))"
+      - name: Commit conservative scheduler compute usage
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: >-
+          python -m cost_governor.workflow_gate finalize
+          --state cost_governor/out/cost_state.json
+          --decision cost_governor/out/cost_decision.json
+          --output cost_governor/out/cost_state.json
       - name: Upload sanitized scheduler continuation state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-scheduler-state
           path: scheduler/out/
           if-no-files-found: error
           retention-days: 30
+      - name: Upload sanitized cost-governor continuation state
+        if: ${{ always() && hashFiles('cost_governor/out/cost_state.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-cost-governor-state
+          path: cost_governor/out/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Fail closed when cost gate blocks
+        if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
+        run: exit 3
