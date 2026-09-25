@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile deterministic Python
-        run: python -m compileall -q registry events adapters truth memory graph runtime hunting learning uncertainty experiments model_router agents allocator software_factory repair transfer scheduler cost_governor dashboard notifications hostile canary tests
+        run: python -m compileall -q registry events adapters truth memory graph runtime hunting learning uncertainty experiments model_router agents allocator software_factory repair transfer scheduler cost_governor dashboard notifications hostile canary operations tests
       - name: Validate foundation
         run: python tests/validate_foundation.py
       - name: Validate Step 2 registry
@@ -70,6 +70,8 @@ jobs:
         run: python -m hostile.validate_hostile_examination
       - name: Execute and validate Step 24 autonomous learning canary
         run: python -m canary.validate_canary --output-dir canary/out
+      - name: Validate Step 25 final operating-mode release candidate
+        run: python -m operations.validate_operating_mode
       - name: Run regression tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
       - name: Upload Step 24 sanitized canary receipts
