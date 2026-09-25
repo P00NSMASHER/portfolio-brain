@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99",
+      "last_inspected_sha": "76b920579a442ddc82d8278b903d9753508146ec",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T21:05:45Z",
-      "notes": "Step 19 autonomous scheduler verified at b97ab4c46c6a281cc357d49e3d7167c5553ede99. Scheduler supports seven work types, persists a sanitized artifact-backed queue, suppresses duplicates/active leases, and currently selects exactly RESEARCH, HUNT and INTEGRATION assessment while keeping six external-validation experiments approval-blocked."
+      "last_observed_at": "2026-09-25T22:12:00Z",
+      "notes": "Step 20 cost governor verified at code head 76b920579a442ddc82d8278b903d9753508146ec. Fail-closed durable reservations now cover portfolio, project, provider/model, workflow/job and retry scopes; paid/model/API budgets remain zero by default; managed autonomous GitHub jobs are serialized and cost-gated; hard-stop cancellation is staged but not active on default branch."
     }
   },
   "decisions": [
@@ -1177,6 +1177,68 @@
         "scheduler/SCHEDULER_POLICY.json",
         "scheduler/SCHEDULER_CONTRACT.md"
       ]
+    },
+    {
+      "decision_id": "DEC-116",
+      "summary": "Step 20 establishes a fail-closed pre-execution cost governor with durable reservations. Checked-in portfolio, project and provider/model paid/model/API ceilings remain zero, so enabling a provider elsewhere cannot by itself authorize spend.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "cost_governor/COST_GOVERNOR_POLICY.json",
+        "cost_governor/cost_governor.py",
+        "cost_governor/COST_GOVERNOR_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-117",
+      "summary": "Cost admission is independently constrained by portfolio, project, provider/model, workflow/job and retry scopes. Active reservations count against ceilings; idempotency suppresses duplicate spend; retry groups cannot reset attempt numbers; actual token/cost/runner usage is committed against the reservation and overage triggers a hard stop.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "cost_governor/cost_governor.py",
+        "schemas/COST_GOVERNOR_REQUEST_SCHEMA.json",
+        "tests/test_cost_governor.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-118",
+      "summary": "Artifact-backed cost accounting is serialized through the shared portfolio-cost-governed-autonomy concurrency group. Runtime, Hunter, autonomous scheduler and software-factory candidate jobs reserve before substantive work, conservatively commit runner usage and persist only sanitized cost state.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        ".github/workflows/runtime-worker.yml",
+        ".github/workflows/hunter-autonomous-cycle.yml",
+        ".github/workflows/portfolio-autonomous-scheduler.yml",
+        ".github/workflows/software-factory-candidate.yml",
+        "cost_governor/artifact_state.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-119",
+      "summary": "Step 13 model routing remains deterministic-first. Tier 0 requires no model/API reservation; every future non-Tier-0 provider invocation must pass the Step 20 durable reservation gate after routing and before execution.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "model_router/model_router.py",
+        "model_router/MODEL_ROUTER_POLICY.json",
+        "cost_governor/cost_governor.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-120",
+      "summary": "A staged autonomous cost watchdog can cancel queued/in-progress managed autonomous jobs when PORTFOLIO_SPEND_DISABLED, the file kill switch, or a current-day overage creates a hard stop. The watchdog has actions:write solely for cancellation and no repository-content or pull-request write authority.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        ".github/workflows/portfolio-cost-watchdog.yml",
+        "cost_governor/cancel_managed_jobs.py",
+        "cost_governor/COST_KILL_SWITCH.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-121",
+      "summary": "Budget availability never grants authority. ACT cost requests are rejected, and customer communication, cash movement, payments, live trading, deployment and other consequential actions remain governed by their existing human/authority gates.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "cost_governor/COST_GOVERNOR_CONTRACT.md",
+        "cost_governor/cost_governor.py",
+        "tests/test_cost_governor.py"
+      ]
     }
   ],
   "blockers": [
@@ -1211,11 +1273,11 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.19.0",
+  "architecture_version": "1.20.0",
   "state_id": "portfolio-brain-master",
-  "working_branch": "step19-autonomous-scheduler-20260925",
+  "working_branch": "step20-cost-governor-20260925",
   "phase": "architecture_build",
-  "current_step": 20,
+  "current_step": 21,
   "completed_steps": [
     0,
     1,
@@ -1236,7 +1298,8 @@
     16,
     17,
     18,
-    19
+    19,
+    20
   ],
   "artifacts": [
     {
@@ -2582,6 +2645,120 @@
       "kind": "step19_ci_validation_extension",
       "step": 19,
       "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "cost_governor/COST_GOVERNOR_POLICY.json",
+      "kind": "step20_cost_policy",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
+    },
+    {
+      "path": "cost_governor/COST_STATE_SEED.json",
+      "kind": "step20_cost_state_seed",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
+    },
+    {
+      "path": "cost_governor/COST_KILL_SWITCH.json",
+      "kind": "step20_cost_kill_switch",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
+    },
+    {
+      "path": "schemas/COST_GOVERNOR_REQUEST_SCHEMA.json",
+      "kind": "step20_cost_request_schema",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
+    },
+    {
+      "path": "cost_governor/cost_governor.py",
+      "kind": "step20_cost_governor",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
+    },
+    {
+      "path": "cost_governor/artifact_state.py",
+      "kind": "step20_cost_artifact_restore",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
+    },
+    {
+      "path": "cost_governor/workflow_gate.py",
+      "kind": "step20_workflow_cost_gate",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
+    },
+    {
+      "path": "cost_governor/cancel_managed_jobs.py",
+      "kind": "step20_job_cancellation_watchdog_runtime",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
+    },
+    {
+      "path": "cost_governor/COST_GOVERNOR_CONTRACT.md",
+      "kind": "step20_cost_contract",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
+    },
+    {
+      "path": "cost_governor/validate_cost_governor.py",
+      "kind": "step20_cost_validator",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
+    },
+    {
+      "path": "tests/test_cost_governor.py",
+      "kind": "step20_cost_regressions",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
+    },
+    {
+      "path": ".github/workflows/portfolio-cost-watchdog.yml",
+      "kind": "step20_cost_watchdog_workflow",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
+    },
+    {
+      "path": ".github/workflows/runtime-worker.yml",
+      "kind": "step20_runtime_cost_gate",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
+    },
+    {
+      "path": ".github/workflows/hunter-autonomous-cycle.yml",
+      "kind": "step20_hunter_cost_gate",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
+    },
+    {
+      "path": ".github/workflows/portfolio-autonomous-scheduler.yml",
+      "kind": "step20_scheduler_cost_gate",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
+    },
+    {
+      "path": ".github/workflows/software-factory-candidate.yml",
+      "kind": "step20_factory_cost_gate",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
+    },
+    {
+      "path": "model_router/model_router.py",
+      "kind": "step20_model_execution_cost_gate",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
+    },
+    {
+      "path": "model_router/MODEL_ROUTER_POLICY.json",
+      "kind": "step20_model_router_cost_contract",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step20_ci_validation_extension",
+      "step": 20,
+      "commit_sha": "76b920579a442ddc82d8278b903d9753508146ec"
     }
   ],
   "tests": [
@@ -2806,25 +2983,30 @@
       "status": "PASS",
       "step": 19,
       "evidence": "GitHub Actions foundation-ci run 36189604512 succeeded at exact Step 19 code head b97ab4c46c6a281cc357d49e3d7167c5553ede99. Scheduler validator reported work_types=7, selected_current=3, blocked_approval=6, queued_agents=3, act_work=0 and max_new_per_cycle=4; 247 total regression tests passed."
+    },
+    {
+      "name": "step20_cost_governor_ci",
+      "status": "PASS",
+      "step": 20,
+      "evidence": "GitHub Actions foundation-ci run 36195297900 succeeded at exact Step 20 code head 76b920579a442ddc82d8278b903d9753508146ec. Cost validator reported durable_state_artifact=portfolio-cost-governor-state, global_concurrency_group=portfolio-cost-governed-autonomy, managed_budgeted_workflows=4, paid_route_checked_in_status=BLOCKED_BUDGET, portfolio_model_calls_daily=0, portfolio_paid_usd_daily=0.0, retry_max=2 and tier0_status=TIER0_NO_SPEND; 260 total regression tests passed."
     }
   ],
   "next_action": {
-    "step": 20,
-    "summary": "WAIT FOR CONTINUE. Step 19 is complete. Next exact numbered step is Step 20 — Cost governor: prevent runaway AI/API/GitHub compute use with budgets, per-project ceilings, model-call ceilings, retry limits, duplicate suppression, token accounting, job cancellation and kill switches. Do not begin Step 20 until explicit CONTINUE.",
+    "step": 21,
+    "summary": "WAIT FOR CONTINUE. Step 20 is complete. Next exact numbered step is Step 21 — Executive dashboard: build a single evidence-backed read-only operating view over portfolio status, value/outcomes, blockers, scheduler work, experiments, repairs, transfers, resource allocation and cost-governor state. Do not begin Step 21 until explicit CONTINUE.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Do not repeat Steps 0–19 unless an exact pinned source cursor changed.",
-      "Work on Step 20 only and stop after its verified commit.",
-      "Do not activate Step 8, Step 9, Step 16 or Step 19 workflows on main yet; recurring/live activation remains deferred.",
-      "Cost controls must fail closed before model/API/compute execution and keep deterministic Tier 0 preferred.",
-      "Budgets need portfolio, project, provider/model, workflow/job and retry dimensions with durable accounting.",
-      "Duplicate suppression and idempotency must prevent accidental repeated spend.",
-      "Cancellation/kill-switch behavior must not require ChatGPT.",
-      "No cost budget may grant ACT, cash movement, customer communication, live trading or deployment authority.",
-      "While BLK-005 is open, store only sanitized non-sensitive accounting metadata/evidence references."
+      "Do not repeat Steps 0–20 unless an exact pinned source cursor changed.",
+      "Work on Step 21 only and stop after its verified commit.",
+      "The executive dashboard must be derived from machine-readable state and evidence; it must not fabricate outcomes or silently upgrade evidence.",
+      "Dashboard rendering is read-only and grants no new OBSERVE, EXPERIMENT, MODIFY or ACT authority.",
+      "Expose cost-governor budget/usage/hard-stop state alongside scheduler, experiment, repair, transfer and allocation state.",
+      "Keep live trading, customer communications, payments, deployment and other consequential ACT human-gated.",
+      "Do not activate staged recurring workflows on the default branch yet.",
+      "While BLK-005 is open, render and persist only sanitized non-sensitive state/evidence references."
     ]
   },
-  "updated_at": "2026-09-25T21:08:00Z",
+  "updated_at": "2026-09-25T22:12:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -3394,6 +3576,40 @@
         "workflow_contents_write": false,
         "opaque_priority_score_used": false,
         "regression_tests": 247
+      }
+    },
+    "20": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "20A_DEFINE_FAIL_CLOSED_MULTI_SCOPE_BUDGETS",
+        "20B_DURABLE_RESERVATION_AND_USAGE_LEDGER",
+        "20C_IDEMPOTENCY_RETRY_AND_TOKEN_ACCOUNTING",
+        "20D_MODEL_ROUTER_PRE_EXECUTION_GATE",
+        "20E_SERIALIZED_AUTONOMOUS_GITHUB_JOB_GATES",
+        "20F_KILL_SWITCH_AND_JOB_CANCELLATION_WATCHDOG",
+        "20G_SANITIZED_ARTIFACT_PERSISTENCE",
+        "20H_REGRESSION_AND_CODE_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "activation_status": "STAGED_ON_ISOLATED_BRANCH_NOT_ACTIVE_ON_DEFAULT_BRANCH",
+      "verified_contract": {
+        "mode": "FAIL_CLOSED_PRE_EXECUTION_RESERVATION",
+        "portfolio_paid_usd_daily": 0,
+        "portfolio_model_calls_daily": 0,
+        "portfolio_api_calls_daily": 0,
+        "portfolio_github_job_starts_daily": 64,
+        "portfolio_github_runner_minutes_daily": 320,
+        "retry_max": 2,
+        "managed_budgeted_workflows": 4,
+        "durable_state_artifact": "portfolio-cost-governor-state",
+        "global_concurrency_group": "portfolio-cost-governed-autonomy",
+        "hard_stop_job_cancellation": true,
+        "tier0_requires_model_reservation": false,
+        "paid_model_route_default": "BLOCKED_BUDGET",
+        "act_authority_granted": false,
+        "sanitized_persistence_only": true,
+        "regression_tests": 260
       }
     }
   }
