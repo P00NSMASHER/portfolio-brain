@@ -230,6 +230,10 @@ def _usage_for(state: dict[str, Any], at: str, predicate) -> dict[str, Any]:
         usage = None
         if row["status"] == "RESERVED" and _time(row["expires_at"], "expires_at") > now:
             usage = row["estimated_usage"]
+        elif row["status"] == "EXPIRED":
+            # Fail closed after a crash: unknown execution is charged at the reserved
+            # maximum for the remainder of the accounting day.
+            usage = row["estimated_usage"]
         elif row["status"] in {"COMMITTED", "OVERAGE"}:
             usage = row["actual_usage"] or row["estimated_usage"]
         if usage is not None:
