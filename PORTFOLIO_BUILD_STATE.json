@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "0c77237bac698c87193a0fcf6753e3f836b4052c",
+      "last_inspected_sha": "196daf4d13413f7e1b4a57d69641d0d03e42fc63",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T16:39:36Z",
-      "notes": "Step 5 Truth Engine integration verified at 0c77237bac698c87193a0fcf6753e3f836b4052c. Canonical AI Business OS engine remains external and pinned; Portfolio Brain adds only a conformance/projection adapter. Repository remains temporarily public; sanitized-only constraint applies."
+      "last_observed_at": "2026-09-25T17:19:15Z",
+      "notes": "Step 6 shared value memory verified at 196daf4d13413f7e1b4a57d69641d0d03e42fc63. Canonical AI Business OS Value Memory remains external/pinned; Portfolio Brain adds shared project/objective/provenance metadata and verified-only outcome learning gates. Ledger intentionally starts empty rather than fabricating verified outcomes."
     }
   },
   "decisions": [
@@ -427,6 +427,45 @@
         "tests/test_truth_integration.py",
         "truth/TRUTH_ENGINE_CONFORMANCE.json"
       ]
+    },
+    {
+      "decision_id": "DEC-041",
+      "summary": "Reuse canonical AI Business OS Value Memory through an exact source revision/blob pin. Portfolio Brain owns shared project/objective/provenance metadata and delegates learned-value mechanics to the canonical engine rather than forking it.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "memory/AI_BUSINESS_OS_VALUE_MEMORY_PIN.json",
+        "memory/VALUE_MEMORY_CONFORMANCE.json",
+        "memory/value_memory_adapter.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-042",
+      "summary": "Only independently VERIFIED outcome receipts are eligible to change learned value. OBSERVED, INFERRED, UNKNOWN, CONTRADICTED, STALE or INVALID outcome records may remain auditable but cannot be converted into upstream learned-value observations.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/VALUE_MEMORY_OUTCOME_SCHEMA.json",
+        "memory/value_memory_adapter.py",
+        "tests/test_shared_value_memory.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-043",
+      "summary": "Verified outcome attribution is conserved across memories per event, objective/project attribution is explicit, and untested memories retain the canonical neutral prior. Verified positive outcomes can raise learned value; verified negative outcomes can lower it; speculative volume alone cannot.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "memory/value_memory_adapter.py",
+        "tests/test_shared_value_memory.py",
+        "memory/VALUE_MEMORY_CONFORMANCE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-044",
+      "summary": "The shared value-memory ledger begins empty because no Step 6 verified outcome receipts were ingested. Empty verified memory is preferable to seeding unsupported lessons as verified truth.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "memory/SHARED_VALUE_MEMORY_LEDGER.json",
+        "tests/test_shared_memory_bundle.py"
+      ]
     }
   ],
   "blockers": [
@@ -461,18 +500,19 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.5.0",
+  "architecture_version": "1.6.0",
   "state_id": "portfolio-brain-master",
-  "working_branch": "step6-shared-value-memory-20260925",
+  "working_branch": "step6-complete-20260925",
   "phase": "architecture_build",
-  "current_step": 6,
+  "current_step": 7,
   "completed_steps": [
     0,
     1,
     2,
     3,
     4,
-    5
+    5,
+    6
   ],
   "artifacts": [
     {
@@ -834,6 +874,78 @@
       "kind": "step5_ci_validation_extension",
       "step": 5,
       "commit_sha": "0c77237bac698c87193a0fcf6753e3f836b4052c"
+    },
+    {
+      "path": "schemas/VALUE_MEMORY_SCHEMA.json",
+      "kind": "step6_value_memory_schema",
+      "step": 6,
+      "commit_sha": "043d9fbb7084a113aad9cb518acf62c8a3aff661"
+    },
+    {
+      "path": "schemas/VALUE_MEMORY_OUTCOME_SCHEMA.json",
+      "kind": "step6_value_memory_outcome_schema",
+      "step": 6,
+      "commit_sha": "4ab71e8e62e2b8270fd7e1ebcc05f4a2b6eb50ff"
+    },
+    {
+      "path": "memory/AI_BUSINESS_OS_VALUE_MEMORY_PIN.json",
+      "kind": "step6_value_memory_source_pin",
+      "step": 6,
+      "commit_sha": "b81266738df3126ccacb9bdd003413b4f7afed57"
+    },
+    {
+      "path": "memory/value_memory_adapter.py",
+      "kind": "step6_shared_value_memory_adapter",
+      "step": 6,
+      "commit_sha": "0e60b79dd0c03597de377c8718add7e8e334cf4c"
+    },
+    {
+      "path": "memory/VALUE_MEMORY_CONFORMANCE.json",
+      "kind": "step6_value_memory_conformance",
+      "step": 6,
+      "commit_sha": "3a3e7b1cb4b0c4cbbb82f284ba6b684b69c9f636"
+    },
+    {
+      "path": "tests/test_shared_value_memory.py",
+      "kind": "step6_value_memory_regressions",
+      "step": 6,
+      "commit_sha": "118f9062a3788705f580b0ab6b4a525d5b5da1e0"
+    },
+    {
+      "path": "memory/SHARED_VALUE_MEMORY_LEDGER.json",
+      "kind": "step6_durable_shared_memory_ledger",
+      "step": 6,
+      "commit_sha": "1dc8d8187341d71ec0121b3daab6bb653de82d8f"
+    },
+    {
+      "path": "memory/validate_value_memory.py",
+      "kind": "step6_shared_memory_validator",
+      "step": 6,
+      "commit_sha": "8f26d2da23d7118e69585086739e5cf08f8d6deb"
+    },
+    {
+      "path": "tests/test_shared_memory_bundle.py",
+      "kind": "step6_shared_memory_bundle_tests",
+      "step": 6,
+      "commit_sha": "5d0bc93d9a3499bae23e39cfcf9c3a59f33ba2a5"
+    },
+    {
+      "path": "verification/STEP6_VALIDATION_REQUEST.json",
+      "kind": "step6_final_validation_request",
+      "step": 6,
+      "commit_sha": "a3ecade2e7603fc57e132662f72e1a56cfaf47c5"
+    },
+    {
+      "path": "tests/test_truth_integration.py",
+      "kind": "step6_truth_revision_reconformance_test_update",
+      "step": 6,
+      "commit_sha": "3d0d845e50a2cebd4951cb12bde1902cf49194f8"
+    },
+    {
+      "path": "tests/test_truth_conformance_bundle.py",
+      "kind": "step6_truth_bundle_revision_reconformance_test_update",
+      "step": 6,
+      "commit_sha": "196daf4d13413f7e1b4a57d69641d0d03e42fc63"
     }
   ],
   "tests": [
@@ -944,23 +1056,35 @@
       "status": "PASS",
       "step": 5,
       "evidence": "GitHub Actions foundation-ci run 36162139883 succeeded at exact Step 5 code head 0c77237bac698c87193a0fcf6753e3f836b4052c. Step 5 conformance validator pinned source revision 5559112ed4dfaa4c690d608b257945e1595560a5 and blob 9b3eaa9412ece784c05e9c93dfcea04e1ec96105; 72 total regression tests passed."
+    },
+    {
+      "name": "step6_shared_value_memory_ci",
+      "status": "PASS",
+      "step": 6,
+      "evidence": "GitHub Actions foundation-ci run 36166341748 succeeded at exact Step 6 code head 196daf4d13413f7e1b4a57d69641d0d03e42fc63. Step 5 source repin remained conformant, Step 6 shared-memory validator passed, and 85 total regression tests passed."
+    },
+    {
+      "name": "step6_revision_assertion_repair",
+      "status": "PASS",
+      "step": 6,
+      "evidence": "Initial final run 36166272667 failed only because two Step 5 tests hard-coded the prior repository revision after a byte-identical Truth Engine repin. Expected revision assertions were updated; replacement run 36166341748 passed with unchanged canonical Truth Engine blob."
     }
   ],
   "next_action": {
-    "step": 6,
-    "summary": "WAIT FOR CONTINUE. Step 5 is complete. Next exact numbered step is Step 6 — Shared value memory: implement portfolio-wide long-term memory where verified outcomes carry more weight than speculative predictions, while preserving provenance and project attribution. Do not begin Step 6 until explicit CONTINUE.",
+    "step": 7,
+    "summary": "Step 6 complete. Step 7 is authorized by the user's current request: implement the Universal Knowledge Graph connecting projects, capabilities, experiments, outcomes, customers, research and value with provenance-preserving typed nodes/edges. Do not begin Step 8.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Do not repeat Steps 0–5 unless an exact source cursor changed.",
-      "Work on Step 6 only and stop after its verified commit.",
-      "Preserve the Step 5 Truth Engine pin; if REPO-001 source revision changes, reconform before using truth projections.",
-      "Verified outcomes must outweigh speculative predictions without erasing provenance or uncertainty.",
+      "Work on Step 7 only; do not begin Step 8.",
+      "Reuse canonical AI Business OS knowledge_graph.py and entity_canonicalization.py through pinned interfaces; do not copy uncontrolled forks.",
+      "Every consequential edge requires provenance; graph connectivity cannot supply missing truth evidence.",
+      "Entity canonicalization must remain reversible and preserve conflicting source records.",
       "Keep downstream adapters OBSERVE-only and runtime/ACT disabled.",
-      "While BLK-005 is open, store only sanitized non-sensitive material.",
-      "REPO-006 remains blocked and must not be read while BLK-001 is open."
+      "While BLK-005 is open, store only sanitized non-sensitive graph metadata/references.",
+      "REPO-006 remains blocked while BLK-001 is open."
     ]
   },
-  "updated_at": "2026-09-25T16:47:00Z",
+  "updated_at": "2026-09-25T17:21:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -1066,6 +1190,27 @@
           "UNKNOWN"
         ],
         "regression_tests": 72
+      }
+    },
+    "6": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "6A_RECONCILE_CANONICAL_SOURCE_CURSOR",
+        "6B_PIN_CANONICAL_VALUE_MEMORY",
+        "6C_SHARED_MEMORY_AND_OUTCOME_CONTRACTS",
+        "6D_VERIFIED_ONLY_LEARNING_ADAPTER",
+        "6E_CREDIT_AND_SCOPE_GATES",
+        "6F_DURABLE_LEDGER_AND_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_revision": "b906d3f12aa9ad1bf443c41ff5281f38f5eeab0a",
+        "source_blob_sha": "5e6450087e2fe0402ebe0af9ea0443383964a7a8",
+        "verified_learning_only": true,
+        "initial_memories": 0,
+        "initial_outcomes": 0,
+        "regression_tests": 85
       }
     }
   }
