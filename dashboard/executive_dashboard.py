@@ -98,8 +98,8 @@ def build_dashboard_snapshot():
       "project_count":len(rows),"projects":rows,
       "portfolio":{
         "highest_value_uncertainty_id":unc["selected_uncertainty_id"],
-        "active_resource_types":allocation["active_resource_types"],
-        "hold_resource_types":allocation["hold_resource_types"],
+        "active_resource_types":sorted([p["resource_type"] for p in allocation["plans"] if p["status"]=="ACTIVE_RECOMMENDATION"]),
+        "hold_resource_types":sorted([p["resource_type"] for p in allocation["plans"] if p["status"]!="ACTIVE_RECOMMENDATION"]),
         "pending_autonomous_work_count":len(sched_receipt["selected_work"]),
         "blocked_action_count":len(sched_receipt["blocked_work"]),
         "learning_observation_count":learning["source_observation_count"],
