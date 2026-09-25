@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/PROJECT_SCHEMA.json",
+  "title": "Portfolio Brain Project Record",
+  "description": "Canonical top-level project identity contract. Registration is descriptive and never grants authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "project_id",
+    "slug",
+    "canonical_name",
+    "project_type",
+    "lifecycle_status",
+    "parent_project_id",
+    "aliases",
+    "categories",
+    "repository_bindings",
+    "autonomy_profile_id",
+    "objective_ids",
+    "metric_ids",
+    "evidence_policy",
+    "data_boundary",
+    "registration_state"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^PRJ-[0-9]{3,}$"
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "canonical_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "project_type": {
+      "enum": ["BUSINESS", "PRODUCT", "RESEARCH", "INFRASTRUCTURE", "PORTFOLIO"]
+    },
+    "lifecycle_status": {
+      "enum": ["PLANNED", "IN_DEVELOPMENT", "ACTIVE", "ACTIVE_RESEARCH_ONLY", "PAUSED", "RETIRED"]
+    },
+    "parent_project_id": {
+      "type": ["string", "null"],
+      "pattern": "^PRJ-[0-9]{3,}$"
+    },
+    "aliases": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1, "maxLength": 200},
+      "uniqueItems": true
+    },
+    "categories": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[a-z0-9]+(?:_[a-z0-9]+)*$"},
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "repository_bindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["repository_id", "full_name", "integration_status"],
+        "properties": {
+          "repository_id": {"type": "string", "pattern": "^REPO-[0-9]{3,}$"},
+          "full_name": {"type": "string", "pattern": "^[^/]+/[^/]+$"},
+          "integration_status": {
+            "enum": ["DECLARED", "OBSERVE_ALLOWED", "BLOCKED", "RETIRED"]
+          },
+          "blocker_id": {
+            "type": ["string", "null"],
+            "pattern": "^BLK-[0-9]{3,}$"
+          }
+        }
+      }
+    },
+    "autonomy_profile_id": {
+      "type": "string",
+      "pattern": "^AUT-[0-9]{3,}$"
+    },
+    "objective_ids": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^OBJ-[0-9]{3,}$"},
+      "uniqueItems": true
+    },
+    "metric_ids": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^MET-[0-9]{3,}$"},
+      "uniqueItems": true
+    },
+    "evidence_policy": {
+      "enum": ["PROVENANCE_REQUIRED"]
+    },
+    "data_boundary": {
+      "enum": [
+        "SANITIZED_CODE_POLICY_AND_RECEIPTS_ONLY",
+        "PUBLIC_OR_SANITIZED_EVIDENCE_ONLY",
+        "PRIVATE_DATA_BY_REFERENCE_ONLY"
+      ]
+    },
+    "registration_state": {
+      "enum": ["PROPOSED", "REGISTERED", "SUSPENDED", "RETIRED"]
+    },
+    "hard_boundaries": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[A-Z0-9_]+$"},
+      "uniqueItems": true
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_type", "source_ref"],
+      "properties": {
+        "source_type": {
+          "enum": ["OWNER_DECLARATION", "REPOSITORY_EVIDENCE", "MIGRATED_REGISTRY"]
+        },
+        "source_ref": {"type": "string", "minLength": 1, "maxLength": 500},
+        "source_revision": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      }
+    }
+  }
+}
