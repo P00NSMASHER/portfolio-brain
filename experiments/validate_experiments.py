@@ -18,7 +18,7 @@ def validate_experiments():
     outcomes=load("experiments/EXPERIMENT_OUTCOME_LEDGER.json")
     uncertainty=__import__("uncertainty.highest_value_uncertainty",fromlist=["build_snapshot"]).build_snapshot()
     portfolio=build_experiment_portfolio(uncertainty)
-    req(pin["source_revision"]=="21b9023a57392f380c73b2fe952c35840f2e2025","unexpected experiment source revision")
+    req(pin["source_revision"]=="9533769a669429d2553302df6068b4b1f8099e89","unexpected experiment source revision")
     expected={"allocator":"7832c10f16925d35b6446c24a999b9cef5e212b5","work_identity":"ac783e93b8c1db54a374d00de1cfb8dd7883e617","action_router":"1941232cf3ff9b11ac5191b7001f29b387c23ea2","action_tests":"473df7dc20558aff91eafe12fa89598e2d4f5ae4"}
     for k,v in expected.items():req(pin["components"][k]["blob_sha"]==v,f"{k} blob mismatch")
     req(pin["copied_source_code"] is False,"canonical experiment source must not be copied")

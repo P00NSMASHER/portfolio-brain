@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/REPAIR_TASK_SCHEMA.json",
+  "title": "Portfolio Repair Task",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "repair_task_id",
+    "failure_id",
+    "project_ids",
+    "target_repository_id",
+    "target_paths",
+    "state",
+    "regression_test_requirement",
+    "factory_work_id",
+    "candidate",
+    "heldout",
+    "audit",
+    "canary",
+    "promotion",
+    "evidence_refs",
+    "history",
+    "history_head_hash",
+    "task_hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "repair_task_id": {
+      "type": "string",
+      "pattern": "^RTASK-[A-Z0-9-]+$"
+    },
+    "failure_id": {
+      "type": "string",
+      "pattern": "^RFAIL-[A-Z0-9-]+$"
+    },
+    "project_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^PRJ-[0-9]{3,}$"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "target_repository_id": {
+      "type": "string",
+      "pattern": "^REPO-[0-9]{3,}$"
+    },
+    "target_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "state": {
+      "enum": [
+        "NEEDS_REPRODUCTION",
+        "READY_FOR_REPAIR",
+        "FACTORY_PENDING",
+        "HELD_OUT_PENDING",
+        "INDEPENDENT_AUDIT_PENDING",
+        "CANARY_PENDING",
+        "PROMOTION_ELIGIBLE",
+        "BLOCKED"
+      ]
+    },
+    "regression_test_requirement": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "factory_work_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^SFW-[A-Z0-9-]+$"
+    },
+    "candidate": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "heldout": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "audit": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "canary": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "promotion": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "history_head_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "task_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

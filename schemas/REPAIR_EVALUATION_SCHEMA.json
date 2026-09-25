@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/REPAIR_EVALUATION_SCHEMA.json",
+  "title": "Portfolio Repair Evaluation Packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evaluation_id",
+    "repair_task_id",
+    "stage",
+    "actor_agent_id",
+    "candidate_commit_sha",
+    "candidate_diff_hash",
+    "result",
+    "tests_total",
+    "tests_passed",
+    "regressions",
+    "authority_violations",
+    "evidence_refs",
+    "report_hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "evaluation_id": {
+      "type": "string",
+      "pattern": "^REVAL-[A-Z0-9-]+$"
+    },
+    "repair_task_id": {
+      "type": "string",
+      "pattern": "^RTASK-[A-Z0-9-]+$"
+    },
+    "stage": {
+      "enum": [
+        "HELD_OUT",
+        "INDEPENDENT_AUDIT",
+        "CANARY"
+      ]
+    },
+    "actor_agent_id": {
+      "type": "string",
+      "pattern": "^AGT-[A-Z0-9-]+$"
+    },
+    "candidate_commit_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "candidate_diff_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "result": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "UNKNOWN"
+      ]
+    },
+    "tests_total": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tests_passed": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "regressions": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "authority_violations": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "report_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

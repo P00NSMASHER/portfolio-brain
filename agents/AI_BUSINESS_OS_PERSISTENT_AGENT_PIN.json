@@ -2,7 +2,7 @@
   "schema_version": "1.0.0",
   "integration_id": "PERSISTENT-AGENTS-AI-BUSINESS-OS-001",
   "source_repository": "P00NSMASHER/github-value-hunt-ledger",
-  "source_revision": "21b9023a57392f380c73b2fe952c35840f2e2025",
+  "source_revision": "9533769a669429d2553302df6068b4b1f8099e89",
   "components": {
     "durable_runtime": {
       "path": "ai_business_os/persistent_agents/runtime.py",

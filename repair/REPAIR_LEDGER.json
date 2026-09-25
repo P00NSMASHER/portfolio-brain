@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "ledger_id": "portfolio-repair-ledger",
+  "policy": [
+    "The ledger begins empty because no Step 17 reproducible Portfolio Brain failure packet has been ingested.",
+    "Learning alerts may be rendered as reproduction-only tasks but are not stored here as repair authority.",
+    "PROMOTION_ELIGIBLE is not global promotion and still requires integrator/human approval."
+  ],
+  "failures": [],
+  "tasks": []
+}

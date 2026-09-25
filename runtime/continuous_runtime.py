@@ -12,6 +12,7 @@ from learning.continuous_learning import rebuild_from_ledger
 from uncertainty.highest_value_uncertainty import build_snapshot as build_uncertainty_snapshot
 from experiments.experiment_engine import build_experiment_portfolio
 from allocator.portfolio_allocator import build_allocation_snapshot
+from repair.repair_engine import build_repair_state
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -157,7 +158,10 @@ def run(mode: str, *, state_path: Path, output_dir: Path, target_repository_id: 
         (output_dir/"experiment_plan.json").write_text(json.dumps(experiment_state,indent=2)+"\n")
         allocation_state=build_allocation_snapshot(uncertainty_state,experiment_state,generated_at=at)
         (output_dir/"portfolio_allocation_recommendation.json").write_text(json.dumps(allocation_state,indent=2)+"\n")
+        repair_state=build_repair_state(learning_state)
+        (output_dir/"repair_state.json").write_text(json.dumps(repair_state,indent=2)+"\n")
         snap=daily_snapshot(updated,observations,at)
+        snap["repair_task_count"]=repair_state["task_count"]
         snap["active_allocation_resource_count"]=allocation_state["active_resource_count"]
         snap["selected_experiment_id"]=experiment_state["selected_experiment_id"]
         snap["selected_uncertainty_id"]=uncertainty_state["selected_uncertainty_id"]

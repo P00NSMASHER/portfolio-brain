@@ -34,9 +34,9 @@ def validate_model_router():
     req(ledger["calls"]==[] and ledger["outcomes"]==[],"Step 13 checked-in routing ledger must start empty")
     req(value_summary([],[])=={},"empty routing ledger produced learned value")
     gw=load("model_router/AI_BUSINESS_OS_RUNTIME_GATEWAY_PIN.json")
-    req(gw["source_revision"]=="21b9023a57392f380c73b2fe952c35840f2e2025","runtime gateway pin revision mismatch")
+    req(gw["source_revision"]=="9533769a669429d2553302df6068b4b1f8099e89","runtime gateway pin revision mismatch")
     req(gw["gateway"]["blob_sha"]=="fdc77391ce6ed3e0f6db25aed859aa684e0818f0","runtime gateway blob mismatch")
-    state=load("PORTFOLIO_BUILD_STATE.json");req(state["repositories"]["REPO-001"]["last_inspected_sha"]=="21b9023a57392f380c73b2fe952c35840f2e2025","source cursor not reconciled")
+    state=load("PORTFOLIO_BUILD_STATE.json");req(state["repositories"]["REPO-001"]["last_inspected_sha"]=="9533769a669429d2553302df6068b4b1f8099e89","source cursor not reconciled")
     return {"tiers":4,"enabled_nonzero_models":0,"tier0_provider":"deterministic","checked_in_calls":0,"checked_in_outcomes":0}
 
 if __name__=="__main__":print("portfolio-brain Step 13 model router: PASS",json.dumps(validate_model_router(),sort_keys=True))

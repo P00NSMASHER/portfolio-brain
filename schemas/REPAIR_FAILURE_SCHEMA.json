@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/REPAIR_FAILURE_SCHEMA.json",
+  "title": "Portfolio Repair Failure Packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "failure_id",
+    "source_type",
+    "project_ids",
+    "target_repository_id",
+    "target_paths",
+    "failure_class",
+    "observation",
+    "reproduction_steps",
+    "evidence_refs",
+    "regression_test_requirement",
+    "evidence_state",
+    "sensitive_material_involved",
+    "benchmark_contaminated",
+    "reported_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "failure_id": {
+      "type": "string",
+      "pattern": "^RFAIL-[A-Z0-9-]+$"
+    },
+    "source_type": {
+      "enum": [
+        "LEARNING_ALERT",
+        "FAILURE_PACKET"
+      ]
+    },
+    "project_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^PRJ-[0-9]{3,}$"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "target_repository_id": {
+      "type": "string",
+      "pattern": "^REPO-[0-9]{3,}$"
+    },
+    "target_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "failure_class": {
+      "enum": [
+        "REGRESSION",
+        "FALSE_POSITIVE",
+        "FALSE_NEGATIVE",
+        "OVERFIT",
+        "CRASH",
+        "INVARIANT_VIOLATION",
+        "DATA_QUALITY",
+        "ROUTING_FAILURE"
+      ]
+    },
+    "observation": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1500
+    },
+    "reproduction_steps": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "uniqueItems": true
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "regression_test_requirement": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 1000
+    },
+    "evidence_state": {
+      "enum": [
+        "OBSERVED",
+        "VERIFIED",
+        "INFERRED",
+        "UNKNOWN",
+        "CONTRADICTED",
+        "STALE",
+        "INVALID"
+      ]
+    },
+    "sensitive_material_involved": {
+      "type": "boolean"
+    },
+    "benchmark_contaminated": {
+      "type": "boolean"
+    },
+    "reported_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

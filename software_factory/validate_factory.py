@@ -10,7 +10,7 @@ def req(ok,msg):
 def load(p):return json.loads((ROOT/p).read_text())
 def validate_factory():
     pin=load("software_factory/AI_BUSINESS_OS_SOFTWARE_FACTORY_PIN.json");p=load("software_factory/FACTORY_POLICY.json");ledger=load("software_factory/SOFTWARE_FACTORY_LEDGER.json")
-    req(pin["source_revision"]=="21b9023a57392f380c73b2fe952c35840f2e2025","factory source revision mismatch")
+    req(pin["source_revision"]=="9533769a669429d2553302df6068b4b1f8099e89","factory source revision mismatch")
     blobs={"governed_factory":"70baa5a71ea568c3041664fa397e4c09c9c9511f","factory_contract":"b71a6c7b6efd907e900bbbe80e6c250939be24bf","factory_tests":"a3d020a42c4f54587811430c6671543528f112c3","verification":"556b809feb98554c05c158c93a0b9d98ef2919e1","verification_tests":"3b194771fe0b72a21fecf934e57d8f6cfefbe0d2","governance":"40d278e479830d6f76aca7da22b6893f5d0060a7","governance_tests":"3a1429ec8d81e92d1043e89c55a7868b226a6fd4"}
     for k,v in blobs.items():req(pin["components"][k]["blob_sha"]==v,f"{k} blob mismatch")
     req(pin["copied_source_code"] is False,"canonical software factory copied")
