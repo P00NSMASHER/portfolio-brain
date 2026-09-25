@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566",
+      "last_inspected_sha": "b745dff130b5a7185945ebaab948fee761f5be81",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T22:27:00Z",
-      "notes": "Step 21 executive dashboard verified at 6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566. Dashboard deterministically covers all 12 registered projects and separates evidence health, lifecycle/maturity basis, uncertainties, experiment state, allocation, pending/blocked work and measured cost/outcomes without inventing missing evidence."
+      "last_observed_at": "2026-09-25T22:59:00Z",
+      "notes": "Step 22 notification/escalation layer verified at b745dff130b5a7185945ebaab948fee761f5be81. Current checked-in state produces two aggregated HIGH alerts (human approval queue and open human-decision blockers); unchanged conditions are fingerprint-deduplicated and cooldown-suppressed, delivery is GitHub Actions annotations/summary only, and the staged notification cycle is cost-governed."
     }
   },
   "decisions": [
@@ -1278,6 +1278,56 @@
         "dashboard/STEP21_VALIDATION_NOTE.md",
         "tests/test_executive_dashboard.py"
       ]
+    },
+    {
+      "decision_id": "DEC-126",
+      "summary": "Step 22 creates alerts only from five evidence classes: human approval queues/open human-decision blockers, autonomous-work failures, cost/kill-switch hard stops, independently VERIFIED decision-relevant experiment/transfer outcomes, and post-baseline deterministic dashboard state changes. Missing evidence produces no outcome alert.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "notifications/notification_engine.py",
+        "notifications/NOTIFICATION_POLICY.json",
+        "tests/test_notifications.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-127",
+      "summary": "Stable alert fingerprints deduplicate unchanged conditions. Severity-specific cooldowns rate-limit repeats; HIGH alerts are at most daily, MEDIUM at most every three days, and persistent autonomous-work failures may escalate to CRITICAL after three observations without granting authority.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "notifications/notification_engine.py",
+        "notifications/NOTIFICATION_POLICY.json",
+        "notifications/NOTIFICATION_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-128",
+      "summary": "Notification delivery is limited to sanitized GitHub Actions annotations and the GitHub step summary. No email, SMS, Slack, arbitrary webhook, customer communication, payment, trading, deployment, merge or downstream-write channel is present.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "notifications/github_sink.py",
+        ".github/workflows/portfolio-notification-cycle.yml",
+        "notifications/NOTIFICATION_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-129",
+      "summary": "The staged notification cycle is serialized through the Step 20 cost governor, runs at most every six hours when later activated, reserves at most two runner minutes per run, and is included in the managed-workflow cancellation allowlist. It remains staged off the default branch.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        ".github/workflows/portfolio-notification-cycle.yml",
+        "cost_governor/COST_GOVERNOR_POLICY.json",
+        "cost_governor/validate_cost_governor.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-130",
+      "summary": "Notification continuation state persists as a sanitized Actions artifact containing only alert IDs/fingerprints, severity, project/entity/evidence references, timestamps and counts. While BLK-005 is open, private payloads, credentials, prompt text and sensitive evidence bodies are prohibited.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "notifications/NOTIFICATION_STATE_SEED.json",
+        "notifications/artifact_state.py",
+        "schemas/ALERT_SCHEMA.json"
+      ]
     }
   ],
   "blockers": [
@@ -1312,11 +1362,11 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.21.0",
+  "architecture_version": "1.22.0",
   "state_id": "portfolio-brain-master",
-  "working_branch": "step21-executive-dashboard-20260925",
+  "working_branch": "step22-notification-escalation-20260925",
   "phase": "architecture_build",
-  "current_step": 22,
+  "current_step": 23,
   "completed_steps": [
     0,
     1,
@@ -1339,7 +1389,8 @@
     18,
     19,
     20,
-    21
+    21,
+    22
   ],
   "artifacts": [
     {
@@ -2829,6 +2880,90 @@
       "kind": "step21_ci_validation_extension",
       "step": 21,
       "commit_sha": "6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566"
+    },
+    {
+      "path": "notifications/NOTIFICATION_POLICY.json",
+      "kind": "step22_notification_policy",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "notifications/KILL_SWITCH.json",
+      "kind": "step22_notification_kill_switch",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "notifications/NOTIFICATION_STATE_SEED.json",
+      "kind": "step22_notification_state_seed",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "schemas/ALERT_SCHEMA.json",
+      "kind": "step22_alert_schema",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "notifications/NOTIFICATION_CONTRACT.md",
+      "kind": "step22_notification_contract",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "notifications/notification_engine.py",
+      "kind": "step22_notification_engine",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "notifications/artifact_state.py",
+      "kind": "step22_notification_artifact_restore",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "notifications/github_sink.py",
+      "kind": "step22_github_notification_sink",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "notifications/validate_notifications.py",
+      "kind": "step22_notification_validator",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "tests/test_notifications.py",
+      "kind": "step22_notification_regressions",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": ".github/workflows/portfolio-notification-cycle.yml",
+      "kind": "step22_notification_workflow",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "cost_governor/COST_GOVERNOR_POLICY.json",
+      "kind": "step22_notification_cost_budget",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "cost_governor/validate_cost_governor.py",
+      "kind": "step22_cost_validation_extension",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step22_ci_validation_extension",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
     }
   ],
   "tests": [
@@ -3065,21 +3200,29 @@
       "status": "PASS",
       "step": 21,
       "evidence": "GitHub Actions foundation-ci run 36196658241 succeeded at exact Step 21 implementation head 6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566. Step 21 validator passed and 278 total regression tests passed; Steps 1-20 validators remained green."
+    },
+    {
+      "name": "step22_notification_escalation_ci",
+      "status": "PASS",
+      "step": 22,
+      "evidence": "GitHub Actions foundation-ci run 36198962231 succeeded at exact Step 22 implementation head b745dff130b5a7185945ebaab948fee761f5be81. Step 22 validator passed and 290 total regression tests passed; Steps 1-21 validators remained green."
     }
   ],
   "next_action": {
-    "step": 22,
-    "summary": "WAIT FOR CONTINUE. Step 21 is complete. Next exact numbered step is Step 22 — Notification and escalation layer. Build evidence-gated alerts for material state changes, blocked approvals, failures, budget/kill-switch events and decision-relevant outcomes without notification spam or autonomous consequential ACT. Do not begin Step 22 until explicit CONTINUE.",
+    "step": 23,
+    "summary": "WAIT FOR CONTINUE. Step 22 is complete. Next exact numbered step is Step 23 — Hostile examination: adversarially attack the Portfolio Brain architecture and runtime boundaries, convert meaningful failures into permanent regression tests, patch the system, and verify the exact hardened head. Do not begin Step 23 until explicit CONTINUE.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Do not repeat Steps 0–21 unless an exact pinned source cursor changed.",
-      "Work on Step 22 only and stop after its verified commit.",
-      "Keep notifications evidence-gated, deduplicated, rate-limited and severity-aware.",
-      "No notification may itself approve ACT, contact customers, move money, trade, deploy or merge.",
+      "Do not repeat Steps 0–22 unless an exact pinned source cursor changed.",
+      "Work on Step 23 only and stop after its verified commit.",
+      "Attack prompt injection, malicious repositories, reward/metric gaming, self-approval, evidence/memory/graph poisoning, verification circularity, privilege escalation, provider failure, cost/retry/action failures, secrets/data corruption, autonomous deployment, unauthorized contact, child-safety bypasses, and financial/trading bypasses.",
+      "Every meaningful hostile finding must either be blocked by an existing invariant with evidence or produce the smallest safe fix plus a permanent regression test.",
+      "Do not activate recurring Step 8, 9, 16, 19, 20 or 22 workflows on main during hostile examination.",
+      "Keep consequential ACT, customer communication, cash movement, live trading, deployment and merges human-gated/prohibited as already defined.",
       "Preserve BLK-005 sanitized-only persistence while the repository remains public."
     ]
   },
-  "updated_at": "2026-09-25T22:27:00Z",
+  "updated_at": "2026-09-25T22:59:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -3723,6 +3866,50 @@
         "estimated_value_presented_as_measured": false,
         "authority_class": "OBSERVE",
         "regression_tests": 278
+      }
+    },
+    "22": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "22A_DEFINE_EVIDENCE_GATED_ALERT_CLASSES",
+        "22B_BUILD_STABLE_ALERT_FINGERPRINTS_AND_DEDUP",
+        "22C_ADD_SEVERITY_COOLDOWNS_AND_RATE_LIMITS",
+        "22D_ADD_PERSISTENT_FAILURE_ESCALATION_WITHOUT_AUTHORITY",
+        "22E_PERSIST_SANITIZED_NOTIFICATION_STATE",
+        "22F_ADD_GITHUB_ACTIONS_ONLY_DELIVERY_SINK",
+        "22G_COST_GOVERN_STAGED_NOTIFICATION_CYCLE",
+        "22H_PRESERVE_HUMAN_APPROVAL_AND_ACT_BOUNDARIES",
+        "22I_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "activation_status": "STAGED_ON_ISOLATED_BRANCH_NOT_SCHEDULED_ON_DEFAULT_BRANCH",
+      "verified_contract": {
+        "implementation_head": "b745dff130b5a7185945ebaab948fee761f5be81",
+        "ci_run_id": 36198962231,
+        "current_signal_count": 2,
+        "current_emitted_alerts": 2,
+        "current_alert_kinds": [
+          "HUMAN_APPROVAL_QUEUE",
+          "OPEN_HUMAN_BLOCKERS"
+        ],
+        "current_high_alerts": 2,
+        "next_unchanged_cycle_suppressed": 2,
+        "high_cooldown_minutes": 1440,
+        "medium_cooldown_minutes": 4320,
+        "critical_cooldown_minutes": 60,
+        "persistent_failure_escalate_after_seen": 3,
+        "delivery_channels": [
+          "GITHUB_ACTIONS_ANNOTATION",
+          "GITHUB_STEP_SUMMARY"
+        ],
+        "persistent_state_artifact": "portfolio-notification-state",
+        "schedule_cron": "7 */6 * * *",
+        "max_emitted_per_cycle": 8,
+        "cost_governed": true,
+        "notification_authority": "NONE",
+        "arbitrary_outbound_webhooks": false,
+        "regression_tests": 290
       }
     }
   }
