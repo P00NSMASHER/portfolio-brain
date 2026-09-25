@@ -1,0 +1,11 @@
+{
+  "schema_version":"1.0.0",
+  "ledger_id":"cross-project-capability-transfer",
+  "policy":[
+    "The checked-in outcome ledger starts empty; hypotheses are not outcomes.",
+    "No REUSED_BY or GENERATED_VALUE_FOR claim is persisted without independently VERIFIED measurable target outcome evidence.",
+    "VERIFIED_NO_VALUE and INCONCLUSIVE outcomes are durable negative or uncertain knowledge.",
+    "Private target payloads are referenced, not stored, while Portfolio Brain remains public."
+  ],
+  "outcomes":[]
+}

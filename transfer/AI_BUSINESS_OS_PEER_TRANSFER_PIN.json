@@ -1,0 +1,25 @@
+{
+  "schema_version":"1.0.0",
+  "integration_id":"PEER-TRANSFER-AI-BUSINESS-OS-001",
+  "source_repository":"P00NSMASHER/github-value-hunt-ledger",
+  "source_revision":"9533769a669429d2553302df6068b4b1f8099e89",
+  "components":{
+    "learning_engine":{"path":"production/learning_engine.py","blob_sha":"6ce4b266e24b9f6d8089e32618fa7a5c95bfe89c"},
+    "learning_engine_contract":{"path":"production/LEARNING_ENGINE.md","blob_sha":"4baf08ed31bb6727ec316ffd79189650cd938f68"},
+    "learning_engine_tests":{"path":"tests/test_ti_learning_engine.py","blob_sha":"ada39ebadffd047ab5f2de706887747c9fff2795"},
+    "knowledge_graph":{"path":"ai_business_os/knowledge_graph.py","blob_sha":"d0ed2e015dc4593361d7600e48cb680a0df13245"},
+    "entity_canonicalization":{"path":"ai_business_os/entity_canonicalization.py","blob_sha":"29a765be3598f83d20f5747518deb8de8f41ffd2"}
+  },
+  "preserved_semantics":[
+    "Peer capability transfer is target-context evidence, not source prestige.",
+    "A source capability with regressions is not transfer-ready.",
+    "Compatibility below the transfer threshold is rejected rather than generalized.",
+    "Local adaptation/absorption remains distinct from global promotion.",
+    "Cross-context success evidence must be measured in the target context.",
+    "A graph path or shared label is a transfer hypothesis, not proof that transfer worked.",
+    "Capability and entity provenance remain durable and reversible."
+  ],
+  "integration_mode":"PINNED_PEER_TRANSFER_AND_GRAPH_SEMANTICS",
+  "copied_source_code":false,
+  "drift_policy":{"exact_repository_revision_required":true,"component_blob_shas_required":true,"on_source_revision_change":"TARGETED_DELTA_AND_RECONFORM","on_component_blob_mismatch":"FAIL_CLOSED"}
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version":"1.0.0",
+  "rules":[
+    {"rule_id":"TRULE-EVENT-EVIDENCE","capability_key":"portfolio:event-evidence","universal":true,"repository_required":false,"target_any_categories":[],"target_any_project_types":[],"experiment_kind":"INTERFACE_AND_EVIDENCE_PATTERN_TRANSFER"},
+    {"rule_id":"TRULE-READONLY-ADAPTERS","capability_key":"portfolio:readonly-adapters","universal":false,"repository_required":true,"target_any_categories":[],"target_any_project_types":[],"experiment_kind":"READ_ONLY_ADAPTER_TRANSFER"},
+    {"rule_id":"TRULE-TRUTH","capability_key":"portfolio:truth-integration","universal":true,"repository_required":false,"target_any_categories":[],"target_any_project_types":[],"experiment_kind":"TRUTH_CONTRACT_TRANSFER"},
+    {"rule_id":"TRULE-VALUE-MEMORY","capability_key":"portfolio:shared-value-memory","universal":true,"repository_required":false,"target_any_categories":[],"target_any_project_types":["BUSINESS","PRODUCT","RESEARCH","INFRASTRUCTURE"],"experiment_kind":"OUTCOME_MEMORY_TRANSFER"},
+    {"rule_id":"TRULE-HUNTER-DISCOVERY","capability_key":"hunter:discovery-engine","universal":false,"repository_required":false,"target_any_categories":["business","recovery","govcon","permit_intelligence"],"target_any_project_types":[],"experiment_kind":"DISCOVERY_METHOD_TRANSFER"},
+    {"rule_id":"TRULE-RECOVERY-EVIDENCE","capability_key":"recovery:evidence-architecture","universal":false,"repository_required":false,"target_any_categories":["govcon","recovery","assurance","recovery_support"],"target_any_project_types":[],"experiment_kind":"EVIDENCE_ARCHITECTURE_TRANSFER"},
+    {"rule_id":"TRULE-PRODUCT-EXPERIMENT","capability_key":"product:experimentation","universal":false,"repository_required":false,"target_any_categories":["education"],"target_any_project_types":[],"experiment_kind":"EXPERIMENTATION_METHOD_TRANSFER"},
+    {"rule_id":"TRULE-RESEARCH-EVAL","capability_key":"research:evaluation-methods","universal":false,"repository_required":false,"target_any_categories":["technology_intelligence","market_surveillance","model_validation"],"target_any_project_types":[],"experiment_kind":"EVALUATION_METHOD_TRANSFER"},
+    {"rule_id":"TRULE-PORTFOLIO-LEARNING","capability_key":"portfolio:continuous-learning","universal":true,"repository_required":false,"target_any_categories":[],"target_any_project_types":[],"experiment_kind":"LEARNING_CONTRACT_TRANSFER"}
+  ]
+}

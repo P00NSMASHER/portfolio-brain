@@ -1,0 +1,26 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://portfolio-brain.local/schemas/CAPABILITY_TRANSFER_PROPOSAL_SCHEMA.json",
+  "title":"Cross-project capability transfer proposal",
+  "type":"object","additionalProperties":false,
+  "required":["schema_version","transfer_id","source_project_id","source_capability_node_id","source_capability_key","target_project_id","target_need_uncertainty_id","applicability_rule_id","experiment_kind","state","authority_requirement","implementation_allowed","hard_blockers","rights_review_required","source_capability_provenance","target_need_evidence_refs","hypothesis","bounded_experiment","provenance_refs","proposal_hash"],
+  "properties":{
+    "schema_version":{"const":"1.0.0"},"transfer_id":{"type":"string","pattern":"^XFER-[A-Z0-9-]+$"},
+    "source_project_id":{"type":"string","pattern":"^PRJ-[0-9]{3,}$"},"source_capability_node_id":{"type":"string","minLength":1},"source_capability_key":{"type":"string","minLength":1},
+    "target_project_id":{"type":"string","pattern":"^PRJ-[0-9]{3,}$"},"target_need_uncertainty_id":{"type":"string","pattern":"^UNC-CAPABILITY-PRJ-[0-9]{3,}$"},
+    "applicability_rule_id":{"type":"string","pattern":"^TRULE-[A-Z0-9-]+$"},"experiment_kind":{"type":"string","pattern":"^[A-Z0-9_]+$"},
+    "state":{"enum":["ASSESSMENT_READY","BLOCKED"]},"authority_requirement":{"const":"OBSERVE_ONLY"},"implementation_allowed":{"const":false},
+    "hard_blockers":{"type":"array","items":{"type":"string","minLength":1},"uniqueItems":true},"rights_review_required":{"const":true},
+    "source_capability_provenance":{"type":"array","items":{"type":"string","minLength":1},"uniqueItems":true,"minItems":1},
+    "target_need_evidence_refs":{"type":"array","items":{"type":"string","minLength":1},"uniqueItems":true,"minItems":1},
+    "hypothesis":{"type":"string","minLength":1,"maxLength":1200},
+    "bounded_experiment":{"type":"object","additionalProperties":false,"required":["baseline","success_condition","failure_condition","inconclusive_condition","evidence_requirements","measurement_requirement","rollback"],
+      "properties":{
+        "baseline":{"type":"string","minLength":1,"maxLength":1200},"success_condition":{"type":"string","minLength":1,"maxLength":1200},"failure_condition":{"type":"string","minLength":1,"maxLength":1200},
+        "inconclusive_condition":{"type":"string","minLength":1,"maxLength":1200},"evidence_requirements":{"type":"array","items":{"type":"string","minLength":1,"maxLength":500},"uniqueItems":true,"minItems":1},
+        "measurement_requirement":{"type":"string","minLength":1,"maxLength":1000},"rollback":{"type":"string","minLength":1,"maxLength":1000}
+      }},
+    "provenance_refs":{"type":"array","items":{"type":"string","minLength":1,"maxLength":500},"uniqueItems":true,"minItems":1},
+    "proposal_hash":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}
+  }
+}

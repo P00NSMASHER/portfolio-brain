@@ -13,6 +13,7 @@ from uncertainty.highest_value_uncertainty import build_snapshot as build_uncert
 from experiments.experiment_engine import build_experiment_portfolio
 from allocator.portfolio_allocator import build_allocation_snapshot
 from repair.repair_engine import build_repair_state
+from transfer.cross_project_transfer import build_transfer_state
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -160,7 +161,11 @@ def run(mode: str, *, state_path: Path, output_dir: Path, target_repository_id: 
         (output_dir/"portfolio_allocation_recommendation.json").write_text(json.dumps(allocation_state,indent=2)+"\n")
         repair_state=build_repair_state(learning_state)
         (output_dir/"repair_state.json").write_text(json.dumps(repair_state,indent=2)+"\n")
+        transfer_state=build_transfer_state(uncertainty_state)
+        (output_dir/"cross_project_transfer_state.json").write_text(json.dumps(transfer_state,indent=2)+"\n")
         snap=daily_snapshot(updated,observations,at)
+        snap["transfer_assessment_ready_count"]=transfer_state["assessment_ready"]
+        snap["verified_transfer_success_edge_candidates"]=transfer_state["verified_success_edge_candidates"]
         snap["repair_task_count"]=repair_state["task_count"]
         snap["active_allocation_resource_count"]=allocation_state["active_resource_count"]
         snap["selected_experiment_id"]=experiment_state["selected_experiment_id"]

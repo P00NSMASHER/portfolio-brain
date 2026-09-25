@@ -1,0 +1,19 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://portfolio-brain.local/schemas/CAPABILITY_TRANSFER_OUTCOME_SCHEMA.json",
+  "title":"Cross-project capability transfer outcome",
+  "type":"object","additionalProperties":false,
+  "required":["schema_version","outcome_id","transfer_id","source_capability_key","target_project_id","result","evidence_state","actor_agent_id","verifier_agent_id","implementation_evidence_ids","measurement_evidence_ids","metric_name","metric_unit","metric_direction","baseline_value","observed_value","measurable_delta","authority_violations","started_at","completed_at","outcome_event_id","provenance_refs","outcome_hash"],
+  "properties":{
+    "schema_version":{"const":"1.0.0"},"outcome_id":{"type":"string","pattern":"^XOUT-[A-Z0-9-]+$"},"transfer_id":{"type":"string","pattern":"^XFER-[A-Z0-9-]+$"},"source_capability_key":{"type":"string","minLength":1},
+    "target_project_id":{"type":"string","pattern":"^PRJ-[0-9]{3,}$"},"result":{"enum":["VERIFIED_EFFECTIVE","VERIFIED_NO_VALUE","INCONCLUSIVE","INVALID"]},
+    "evidence_state":{"enum":["OBSERVED","VERIFIED","INFERRED","UNKNOWN","CONTRADICTED","STALE","INVALID"]},"actor_agent_id":{"type":"string","pattern":"^AGT-[A-Z0-9-]+$"},
+    "verifier_agent_id":{"type":["string","null"],"pattern":"^AGT-[A-Z0-9-]+$"},
+    "implementation_evidence_ids":{"type":"array","items":{"type":"string","pattern":"^EVD-[A-Z0-9-]{8,}$"},"uniqueItems":true,"minItems":1},
+    "measurement_evidence_ids":{"type":"array","items":{"type":"string","pattern":"^EVD-[A-Z0-9-]{8,}$"},"uniqueItems":true,"minItems":1},
+    "metric_name":{"type":"string","minLength":1,"maxLength":200},"metric_unit":{"type":"string","minLength":1,"maxLength":100},"metric_direction":{"enum":["HIGHER_BETTER","LOWER_BETTER"]},
+    "baseline_value":{"type":"number"},"observed_value":{"type":"number"},"measurable_delta":{"type":"number","minimum":0},"authority_violations":{"type":"integer","minimum":0},
+    "started_at":{"type":"string","format":"date-time"},"completed_at":{"type":"string","format":"date-time"},"outcome_event_id":{"type":"string","pattern":"^EVT-[A-Z0-9-]{8,}$"},
+    "provenance_refs":{"type":"array","items":{"type":"string","minLength":1,"maxLength":500},"uniqueItems":true,"minItems":1},"outcome_hash":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}
+  }
+}
