@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile deterministic Python
-        run: python -m compileall -q registry events adapters truth memory tests
+        run: python -m compileall -q registry events adapters truth memory graph tests
       - name: Validate foundation
         run: python tests/validate_foundation.py
       - name: Validate Step 2 registry
@@ -34,5 +34,7 @@ jobs:
         run: python -m truth.validate_truth_integration
       - name: Validate Step 6 shared memory
         run: python -m memory.validate_value_memory
+      - name: Validate Step 7 universal graph
+        run: python -m graph.validate_graph
       - name: Run regression tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
