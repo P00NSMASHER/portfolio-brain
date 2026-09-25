@@ -78,6 +78,7 @@ def validate_cost_governor():
         "runtime-worker": ROOT / ".github/workflows/runtime-worker.yml",
         "hunter-autonomous-cycle": ROOT / ".github/workflows/hunter-autonomous-cycle.yml",
         "software-factory-candidate": ROOT / ".github/workflows/software-factory-candidate.yml",
+        "portfolio-notification-cycle": ROOT / ".github/workflows/portfolio-notification-cycle.yml",
     }
     for name, path in governed_workflows.items():
         body = path.read_text().lower()
