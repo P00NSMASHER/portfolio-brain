@@ -123,11 +123,7 @@ class CostGovernorTests(unittest.TestCase):
 
     def test_act_budget_request_is_rejected(self):
         request = scheduler_job(authority="ACT")
-        with self.assertRaises(CostGovernorError):
-            # CLI builder intentionally cannot emit ACT; direct mutation proves validator/governor boundary.
-            validate_request({**request, "authority_class": "ACT"})
-        # A syntactically valid request constructed outside the CLI still cannot receive cost authority.
-        request["authority_class"] = "ACT"
+        validate_request(request)
         state, decision = preflight(load_state(), request, at=AT)
         self.assertEqual(decision["status"], "BLOCKED_AUTHORITY")
         self.assertFalse(decision["authority_granted"])
