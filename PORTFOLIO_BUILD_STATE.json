@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da",
+      "last_inspected_sha": "6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T22:14:00Z",
-      "notes": "Step 20 cost governor verified at 1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da. Fail-closed pre-execution reservations now govern paid/model/API and staged autonomous GitHub compute. Checked-in paid/model/API ceilings remain zero; runtime, Hunter, scheduler and software-factory compute paths are reservation-gated, and the watchdog cancellation allowlist excludes foundation CI."
+      "last_observed_at": "2026-09-25T22:27:00Z",
+      "notes": "Step 21 executive dashboard verified at 6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566. Dashboard deterministically covers all 12 registered projects and separates evidence health, lifecycle/maturity basis, uncertainties, experiment state, allocation, pending/blocked work and measured cost/outcomes without inventing missing evidence."
     }
   },
   "decisions": [
@@ -1238,6 +1238,46 @@
         "cost_governor/COST_STATE_SEED.json",
         "tests/test_cost_governor.py"
       ]
+    },
+    {
+      "decision_id": "DEC-122",
+      "summary": "Step 21 defines project health as evidence coverage state (BLOCKED, EVIDENCE_GAPS or UNKNOWN), not a subjective scalar score. Lifecycle status is displayed separately as the only registered maturity basis.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "dashboard/executive_dashboard.py",
+        "registry/projects.json",
+        "tests/test_executive_dashboard.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-123",
+      "summary": "The executive dashboard covers all 12 registered projects and displays current bottleneck/highest-value uncertainty, active experiment state, resource recommendations, pending autonomous work, blocked actions, measured outcomes, measured model cost and evidence coverage.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "dashboard/executive_dashboard.py",
+        "dashboard/validate_dashboard.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-124",
+      "summary": "Missing verified outcomes, learning observations, transfer outcomes and cost records remain NONE/UNKNOWN/zero measured values. Policy estimates and hypotheses are never promoted to measured results.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "dashboard/executive_dashboard.py",
+        "learning/LEARNING_OBSERVATION_LEDGER.json",
+        "transfer/TRANSFER_LEDGER.json",
+        "cost_governor/COST_STATE_SEED.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-125",
+      "summary": "Step 21 is an OBSERVE-only decision-support surface. It grants no ACT, deployment, merge, customer communication, payment, trading or other execution authority.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "dashboard/executive_dashboard.py",
+        "dashboard/STEP21_VALIDATION_NOTE.md",
+        "tests/test_executive_dashboard.py"
+      ]
     }
   ],
   "blockers": [
@@ -1272,11 +1312,11 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.20.0",
+  "architecture_version": "1.21.0",
   "state_id": "portfolio-brain-master",
-  "working_branch": "step20-cost-governor-20260925-finalize",
+  "working_branch": "step21-executive-dashboard-20260925",
   "phase": "architecture_build",
-  "current_step": 21,
+  "current_step": 22,
   "completed_steps": [
     0,
     1,
@@ -1298,7 +1338,8 @@
     17,
     18,
     19,
-    20
+    20,
+    21
   ],
   "artifacts": [
     {
@@ -2758,6 +2799,36 @@
       "kind": "step20_ci_validation_extension",
       "step": 20,
       "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": "dashboard/executive_dashboard.py",
+      "kind": "step21_executive_dashboard",
+      "step": 21,
+      "commit_sha": "6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566"
+    },
+    {
+      "path": "dashboard/validate_dashboard.py",
+      "kind": "step21_dashboard_validator",
+      "step": 21,
+      "commit_sha": "6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566"
+    },
+    {
+      "path": "dashboard/STEP21_VALIDATION_NOTE.md",
+      "kind": "step21_validation_note",
+      "step": 21,
+      "commit_sha": "6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566"
+    },
+    {
+      "path": "tests/test_executive_dashboard.py",
+      "kind": "step21_dashboard_regressions",
+      "step": 21,
+      "commit_sha": "6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step21_ci_validation_extension",
+      "step": 21,
+      "commit_sha": "6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566"
     }
   ],
   "tests": [
@@ -2988,24 +3059,27 @@
       "status": "PASS",
       "step": 20,
       "evidence": "GitHub Actions foundation-ci run 36195654197 succeeded at exact Step 20 implementation head 1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da. Step 20 validator passed and 269 total regression tests passed; Steps 1-19 validators also remained green."
+    },
+    {
+      "name": "step21_executive_dashboard_ci",
+      "status": "PASS",
+      "step": 21,
+      "evidence": "GitHub Actions foundation-ci run 36196658241 succeeded at exact Step 21 implementation head 6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566. Step 21 validator passed and 278 total regression tests passed; Steps 1-20 validators remained green."
     }
   ],
   "next_action": {
-    "step": 21,
-    "summary": "WAIT FOR CONTINUE. Step 20 is complete. Next exact numbered step is Step 21 — Executive dashboard: display every project, maturity, health, current bottleneck, high-value uncertainty, active experiment, recent outcome, resource use, learned capabilities, pending autonomous work, blocked actions, model costs and recommended portfolio allocation from verified Portfolio Brain state. Do not begin Step 21 until explicit CONTINUE.",
+    "step": 22,
+    "summary": "WAIT FOR CONTINUE. Step 21 is complete. Next exact numbered step is Step 22 — Notification and escalation layer. Build evidence-gated alerts for material state changes, blocked approvals, failures, budget/kill-switch events and decision-relevant outcomes without notification spam or autonomous consequential ACT. Do not begin Step 22 until explicit CONTINUE.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Do not repeat Steps 0–20 unless an exact pinned source cursor changed.",
-      "Work on Step 21 only and stop after its verified commit.",
-      "Do not activate Step 8, Step 9, Step 16, Step 19 or Step 20 recurring workflows on main yet; recurring/live activation remains deferred.",
-      "Dashboard outputs must be evidence-backed. Show evidence coverage or unknown state instead of inventing missing revenue, health, cost or outcome values.",
-      "Display every project, maturity, health, current bottleneck, highest-value uncertainty, active experiment, recent outcome, resource use, learned capabilities, pending autonomous work, blocked actions, model costs and recommended portfolio allocation.",
-      "Keep MEASURED RESULT distinct from ESTIMATED VALUE; never present estimated value as measured savings or revenue.",
-      "While BLK-005 is open, commit only sanitized renderer/manifest/state summaries; do not copy secrets, private operational/customer payloads, credentials or sensitive evidence into the public repository.",
-      "The dashboard is an observation/decision-support surface only and may not grant authority, approve ACT, move money, communicate with customers, trade, deploy or merge."
+      "Do not repeat Steps 0–21 unless an exact pinned source cursor changed.",
+      "Work on Step 22 only and stop after its verified commit.",
+      "Keep notifications evidence-gated, deduplicated, rate-limited and severity-aware.",
+      "No notification may itself approve ACT, contact customers, move money, trade, deploy or merge.",
+      "Preserve BLK-005 sanitized-only persistence while the repository remains public."
     ]
   },
-  "updated_at": "2026-09-25T22:14:00Z",
+  "updated_at": "2026-09-25T22:27:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -3619,6 +3693,36 @@
         "act_cost_authorization": false,
         "sanitized_persistence_only": true,
         "regression_tests": 269
+      }
+    },
+    "21": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "21A_BUILD_DETERMINISTIC_DASHBOARD_SNAPSHOT",
+        "21B_COVER_ALL_REGISTERED_PROJECTS",
+        "21C_SEPARATE_LIFECYCLE_FROM_EVIDENCE_HEALTH",
+        "21D_SURFACE_UNCERTAINTIES_EXPERIMENTS_AND_BOTTLENECKS",
+        "21E_SURFACE_RESOURCE_ALLOCATION_PENDING_AND_BLOCKED_WORK",
+        "21F_PRESERVE_MEASURED_VS_ESTIMATED_BOUNDARY",
+        "21G_SURFACE_MEASURED_COST_AND_OUTCOME_UNKNOWN_STATES",
+        "21H_RENDER_SANITIZED_EXECUTIVE_SUMMARY",
+        "21I_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "implementation_head": "6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566",
+        "ci_run_id": 36196658241,
+        "project_count": 12,
+        "pending_autonomous_work": 3,
+        "blocked_actions": 6,
+        "verified_learning_observations": 0,
+        "verified_transfer_outcomes": 0,
+        "checked_in_measured_model_cost_usd": 0,
+        "subjective_health_score_used": false,
+        "estimated_value_presented_as_measured": false,
+        "authority_class": "OBSERVE",
+        "regression_tests": 278
       }
     }
   }
