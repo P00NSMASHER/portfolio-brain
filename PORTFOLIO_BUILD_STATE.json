@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7",
+      "last_inspected_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T18:26:36Z",
-      "notes": "Step 10 continuous portfolio learning engine verified at 304cc7005ded511463d98b125f3de00d5b27ccc7. Nine domains share one evidence-aware, replayable advisory learner with TRAIN/CONFIRM/EVALUATION_ONLY separation, scope isolation, verified-outcome weighting and no automatic policy promotion."
+      "last_observed_at": "2026-09-25T18:49:42Z",
+      "notes": "Step 11 highest-value uncertainty engine verified at 5abcc0dece04cc0368041053a6f25ef3f894dde5. It preserves eight evidence-bearing decision components, uses Pareto layers plus explicit tie-breaks, prohibits scalar scoring, and integrates into the deterministic daily runtime. Current selected question is a human-gated external-validation uncertainty, not permission to act."
     }
   },
   "decisions": [
@@ -690,6 +690,70 @@
         "runtime/continuous_runtime.py",
         "learning/validate_learning.py"
       ]
+    },
+    {
+      "decision_id": "DEC-067",
+      "summary": "Step 11 reconciled REPO-001 from b906d3f12aa9ad1bf443c41ff5281f38f5eeab0a to b9031219f39502251afd6da92cc89effbbea2f21 using a targeted delta. Only HUNTER-01/HUNTER-02 scout queue state changed; pinned Truth, Value Memory, Graph, Hunter and Learning blobs remained unchanged and their repository revision pins were safely advanced.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "PORTFOLIO_BUILD_STATE.json",
+        "truth/AI_BUSINESS_OS_TRUTH_ENGINE_PIN.json",
+        "memory/AI_BUSINESS_OS_VALUE_MEMORY_PIN.json",
+        "graph/AI_BUSINESS_OS_GRAPH_PIN.json",
+        "hunting/AI_BUSINESS_OS_HUNTER_PIN.json",
+        "learning/AI_BUSINESS_OS_LEARNING_ENGINE_PIN.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-068",
+      "summary": "Highest-value uncertainty selection does not use a weighted sum or opaque scalar. It preserves importance, uncertainty, test cost, time to evidence, reversibility, downstream impact, strategic reuse and external-validation value with per-component basis type/rationale/evidence, ranks by Pareto layers, then uses a documented lexicographic tie-break.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "uncertainty/UNCERTAINTY_POLICY.json",
+        "schemas/UNCERTAINTY_SCHEMA.json",
+        "uncertainty/highest_value_uncertainty.py",
+        "tests/test_highest_value_uncertainty.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-069",
+      "summary": "At the Step 11 evidence snapshot, the selected uncertainty is UNC-EXTERNAL-PRJ-001: determine the smallest reversible external validation that can produce the first VERIFIED customer/value outcome for RecoveryWorks. It is HUMAN_GATED_ACT with CUSTOMER_COMMUNICATION approval required; selection is advisory and grants no authority to contact anyone.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "uncertainty/INITIAL_UNCERTAINTY_SUMMARY.json",
+        "uncertainty/HIGHEST_VALUE_UNCERTAINTY_CONTRACT.md",
+        "registry/projects.json",
+        "graph/UNIVERSAL_GRAPH_LEDGER.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-070",
+      "summary": "Graph absence is treated only as uncertainty. A missing HAS_CAPABILITY or verified commercial node generates an evidence question but is never represented as proof that the capability or real-world validation does not exist outside the current evidence system.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "uncertainty/highest_value_uncertainty.py",
+        "tests/test_highest_value_uncertainty.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-071",
+      "summary": "Test-cost and time-to-evidence components are explicitly labeled POLICY_ESTIMATE ordinal values rather than observed dollars or elapsed time. This prevents planning assumptions from masquerading as verified measurements.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/UNCERTAINTY_SCHEMA.json",
+        "uncertainty/highest_value_uncertainty.py",
+        "uncertainty/HIGHEST_VALUE_UNCERTAINTY_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-072",
+      "summary": "The no-prompt autonomous canary uncertainty remains visible but BLOCKED by the explicit Step 24 canary gate. Highest-value reasoning cannot jump the numbered governance sequence.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "uncertainty/highest_value_uncertainty.py",
+        "tests/test_highest_value_uncertainty.py",
+        "PORTFOLIO_BUILD_STATE.json"
+      ]
     }
   ],
   "blockers": [
@@ -724,11 +788,11 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.10.0",
+  "architecture_version": "1.11.0",
   "state_id": "portfolio-brain-master",
   "working_branch": "step11-highest-value-uncertainty-20260925",
   "phase": "architecture_build",
-  "current_step": 11,
+  "current_step": 12,
   "completed_steps": [
     0,
     1,
@@ -740,7 +804,8 @@
     7,
     8,
     9,
-    10
+    10,
+    11
   ],
   "artifacts": [
     {
@@ -1468,6 +1533,60 @@
       "kind": "step10_ci_validation_extension",
       "step": 10,
       "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": "uncertainty/UNCERTAINTY_POLICY.json",
+      "kind": "step11_uncertainty_policy",
+      "step": 11,
+      "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
+    },
+    {
+      "path": "schemas/UNCERTAINTY_SCHEMA.json",
+      "kind": "step11_uncertainty_schema",
+      "step": 11,
+      "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
+    },
+    {
+      "path": "uncertainty/highest_value_uncertainty.py",
+      "kind": "step11_uncertainty_engine",
+      "step": 11,
+      "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
+    },
+    {
+      "path": "uncertainty/HIGHEST_VALUE_UNCERTAINTY_CONTRACT.md",
+      "kind": "step11_uncertainty_contract",
+      "step": 11,
+      "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
+    },
+    {
+      "path": "uncertainty/INITIAL_UNCERTAINTY_SUMMARY.json",
+      "kind": "step11_initial_uncertainty_summary",
+      "step": 11,
+      "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
+    },
+    {
+      "path": "uncertainty/validate_uncertainty.py",
+      "kind": "step11_uncertainty_validator",
+      "step": 11,
+      "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
+    },
+    {
+      "path": "tests/test_highest_value_uncertainty.py",
+      "kind": "step11_uncertainty_regressions",
+      "step": 11,
+      "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
+    },
+    {
+      "path": "runtime/continuous_runtime.py",
+      "kind": "step11_daily_uncertainty_runtime_integration",
+      "step": 11,
+      "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step11_ci_validation_extension",
+      "step": 11,
+      "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
     }
   ],
   "tests": [
@@ -1626,25 +1745,31 @@
       "status": "PASS",
       "step": 10,
       "evidence": "GitHub Actions foundation-ci run 36173436527 succeeded at exact Step 10 code head 304cc7005ded511463d98b125f3de00d5b27ccc7. Learning validator reported 9 domains, 6 pinned canonical learning components, source_observations=0, eligible_records=0 and policy_effect=NONE; 142 total regression tests passed."
+    },
+    {
+      "name": "step11_highest_value_uncertainty_ci",
+      "status": "PASS",
+      "step": 11,
+      "evidence": "GitHub Actions foundation-ci run 36175867747 succeeded at exact Step 11 code head 5abcc0dece04cc0368041053a6f25ef3f894dde5. Uncertainty validator reported 20 candidates, 18 eligible, 2 Pareto-front candidates, scalar_score=false and selected UNC-EXTERNAL-PRJ-001; 152 total regression tests passed."
     }
   ],
   "next_action": {
-    "step": 11,
-    "summary": "WAIT FOR CONTINUE. Step 10 is complete. Next exact numbered step is Step 11 — Highest-value uncertainty engine: determine what unresolved question the portfolio should learn next, prioritizing cheap decisive experiments using importance, uncertainty, test cost, time to evidence, reversibility, downstream impact, strategic reuse and external-validation value. Do not begin Step 11 until explicit CONTINUE.",
+    "step": 12,
+    "summary": "WAIT FOR CONTINUE. Step 11 is complete. Next exact numbered step is Step 12 — Experiment engine: convert high-value uncertainties into bounded experiments with hypothesis, inputs, baseline, success/failure conditions, evidence requirements, cost, rollback and outcome recording. Do not begin Step 12 until explicit CONTINUE.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Do not repeat Steps 0–10 unless an exact pinned source cursor changed.",
-      "Work on Step 11 only and stop after its verified commit.",
+      "Do not repeat Steps 0–11 unless an exact pinned source cursor changed.",
+      "Work on Step 12 only and stop after its verified commit.",
       "Do not activate Step 8 or Step 9 schedules on main yet; recurring production activation remains deferred.",
-      "The uncertainty engine must keep component evidence rather than collapsing decisions into one opaque score.",
-      "Prefer cheap decisive experiments over additional feature construction when they resolve more decision value.",
-      "Learning state is advisory and cannot override truth, governance, STOP or authority gates.",
-      "Keep downstream writes and ACT disabled.",
-      "While BLK-005 is open, store only sanitized non-sensitive uncertainty state/evidence references.",
+      "Experiment design may describe human-gated external validation but must not send customer communications or perform ACT without explicit approval.",
+      "Preserve the full Step 11 component evidence; do not replace it with an opaque score.",
+      "Experiments must have explicit hypothesis, baseline, success, failure, evidence, cost boundary, rollback and outcome-recording contract.",
+      "Keep downstream uncontrolled writes and live trading prohibited.",
+      "While BLK-005 is open, store only sanitized non-sensitive experiment metadata/evidence references.",
       "REPO-006 remains blocked while BLK-001 is open."
     ]
   },
-  "updated_at": "2026-09-25T18:42:00Z",
+  "updated_at": "2026-09-25T18:51:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -1893,6 +2018,34 @@
         "minimum_confirm_observations": 2,
         "minimum_confirm_sample_size": 6,
         "regression_tests": 142
+      }
+    },
+    "11": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "11A_RECONCILE_PINNED_SOURCE_CURSOR",
+        "11B_EIGHT_COMPONENT_UNCERTAINTY_CONTRACT",
+        "11C_PORTFOLIO_UNCERTAINTY_GENERATION",
+        "11D_PARETO_AND_EXPLICIT_TIE_BREAK_RANKING",
+        "11E_HUMAN_AUTHORITY_AND_SEQUENCE_GATES",
+        "11F_DAILY_RUNTIME_UNCERTAINTY_INTEGRATION",
+        "11G_INITIAL_DECISION_SNAPSHOT_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_revision": "b9031219f39502251afd6da92cc89effbbea2f21",
+        "candidate_uncertainties": 20,
+        "eligible_candidates": 18,
+        "pareto_front_candidates": 2,
+        "scalar_score_used": false,
+        "selected_uncertainty_id": "UNC-EXTERNAL-PRJ-001",
+        "selected_authority_requirement": "HUMAN_GATED_ACT",
+        "selected_actionability": "HUMAN_APPROVAL_REQUIRED",
+        "selected_approval_requirements": [
+          "CUSTOMER_COMMUNICATION"
+        ],
+        "regression_tests": 152
       }
     }
   }
