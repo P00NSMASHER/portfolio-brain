@@ -3,10 +3,10 @@
   "repositories": {
     "REPO-001": {
       "full_name": "P00NSMASHER/github-value-hunt-ledger",
-      "last_inspected_sha": "b9031219f39502251afd6da92cc89effbbea2f21",
+      "last_inspected_sha": "c4be1a3e10a92b9255906b1600097fe6371ea929",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T18:42:00Z",
-      "notes": "Step 11 prerequisite delta-only reconciliation from b906d3f12aa9ad1bf443c41ff5281f38f5eeab0a to b9031219f39502251afd6da92cc89effbbea2f21: 2 commits, only intelligence/scout_queue/HUNTER-01.json and HUNTER-02.json changed. Truth, Value Memory, Knowledge Graph, Hunter and Learning component blobs are unchanged; their repository revision pins were safely advanced without semantic changes."
+      "last_observed_at": "2026-09-25T18:56:00Z",
+      "notes": "Step 12 prerequisite delta-only reconciliation from b9031219f39502251afd6da92cc89effbbea2f21 to c4be1a3e10a92b9255906b1600097fe6371ea929: 3 commits, only intelligence/scout_queue/HUNTER-03.json, HUNTER-04.json and HUNTER-05.json changed. Pinned Truth, Value Memory, Knowledge Graph, Hunter, Learning and experiment-semantic component blobs remain unchanged; repository revision pins were advanced without semantic changes."
     },
     "REPO-002": {
       "full_name": "P00NSMASHER/StarBlox",
@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5",
+      "last_inspected_sha": "f1bb345325ba8caf181701969814096e39b2e30f",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T18:49:42Z",
-      "notes": "Step 11 highest-value uncertainty engine verified at 5abcc0dece04cc0368041053a6f25ef3f894dde5. It preserves eight evidence-bearing decision components, uses Pareto layers plus explicit tie-breaks, prohibits scalar scoring, and integrates into the deterministic daily runtime. Current selected question is a human-gated external-validation uncertainty, not permission to act."
+      "last_observed_at": "2026-09-25T18:58:47Z",
+      "notes": "Step 12 bounded experiment engine verified at f1bb345325ba8caf181701969814096e39b2e30f. It converts all Step 11 uncertainties into explicit plans with authority, cost, rollback and outcome gates. The selected RecoveryWorks external-validation plan is complete but HUMAN_APPROVAL_REQUIRED and has zero autonomous messages/spend/writes/model calls."
     }
   },
   "decisions": [
@@ -754,6 +754,64 @@
         "tests/test_highest_value_uncertainty.py",
         "PORTFOLIO_BUILD_STATE.json"
       ]
+    },
+    {
+      "decision_id": "DEC-073",
+      "summary": "Step 12 reconciled REPO-001 from b9031219f39502251afd6da92cc89effbbea2f21 to c4be1a3e10a92b9255906b1600097fe6371ea929 using a targeted delta. Only HUNTER-03/HUNTER-04/HUNTER-05 scout queue state changed; pinned architecture blobs were unchanged and repository revision pins were safely advanced.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "PORTFOLIO_BUILD_STATE.json",
+        "experiments/HUNTER_EXPERIMENT_SEMANTICS_PIN.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-074",
+      "summary": "Every Step 11 uncertainty now compiles into a deterministic bounded experiment plan containing hypothesis, inputs, evidence baseline, success/failure/inconclusive conditions, evidence requirements, cost boundary, rollback, outcome-recording contract, complete uncertainty component vector, semantic revision and experiment hash.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/EXPERIMENT_SCHEMA.json",
+        "experiments/experiment_engine.py",
+        "experiments/EXPERIMENT_ENGINE_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-075",
+      "summary": "The selected RecoveryWorks external-validation experiment remains HUMAN_APPROVAL_REQUIRED. It requires CUSTOMER_COMMUNICATION approval and grants zero autonomous external messages, cash spend, model calls or downstream writes. Step 12 does not draft/send outreach or choose a target.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "experiments/INITIAL_EXPERIMENT_SUMMARY.json",
+        "experiments/EXPERIMENT_POLICY.json",
+        "tests/test_experiment_engine.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-076",
+      "summary": "Experiment blocker precedence is fail-closed: an explicit hard blocker outranks a human-approval state. A blocked human-gated experiment remains BLOCKED and non-autonomous rather than being downgraded to merely approval-required.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "experiments/experiment_engine.py",
+        "tests/test_experiment_engine.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-077",
+      "summary": "Definitive PASSED or FAILED experiment outcomes require VERIFIED evidence and an independent verifier distinct from the experiment actor. INCONCLUSIVE cannot claim a decision change. The checked-in outcome ledger starts empty because plans are not outcomes.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/EXPERIMENT_OUTCOME_SCHEMA.json",
+        "experiments/EXPERIMENT_OUTCOME_LEDGER.json",
+        "experiments/experiment_engine.py",
+        "tests/test_experiment_engine.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-078",
+      "summary": "Step 8 daily mode now emits experiment_plan.json after rebuilding learning and uncertainty state. This integration performs planning only; it does not execute experiments or grant ACT.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "runtime/continuous_runtime.py",
+        "experiments/EXPERIMENT_ENGINE_CONTRACT.md"
+      ]
     }
   ],
   "blockers": [
@@ -788,11 +846,11 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.11.0",
+  "architecture_version": "1.12.0",
   "state_id": "portfolio-brain-master",
-  "working_branch": "step11-highest-value-uncertainty-20260925",
+  "working_branch": "step12-experiment-engine-20260925",
   "phase": "architecture_build",
-  "current_step": 12,
+  "current_step": 13,
   "completed_steps": [
     0,
     1,
@@ -805,7 +863,8 @@
     8,
     9,
     10,
-    11
+    11,
+    12
   ],
   "artifacts": [
     {
@@ -1587,6 +1646,78 @@
       "kind": "step11_ci_validation_extension",
       "step": 11,
       "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
+    },
+    {
+      "path": "experiments/HUNTER_EXPERIMENT_SEMANTICS_PIN.json",
+      "kind": "step12_experiment_semantics_pin",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "experiments/EXPERIMENT_POLICY.json",
+      "kind": "step12_experiment_policy",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "schemas/EXPERIMENT_SCHEMA.json",
+      "kind": "step12_experiment_schema",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "schemas/EXPERIMENT_OUTCOME_SCHEMA.json",
+      "kind": "step12_experiment_outcome_schema",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "experiments/EXPERIMENT_OUTCOME_LEDGER.json",
+      "kind": "step12_experiment_outcome_ledger",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "experiments/experiment_engine.py",
+      "kind": "step12_experiment_engine",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "experiments/validate_experiments.py",
+      "kind": "step12_experiment_validator",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "experiments/EXPERIMENT_ENGINE_CONTRACT.md",
+      "kind": "step12_experiment_contract",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "experiments/INITIAL_EXPERIMENT_SUMMARY.json",
+      "kind": "step12_initial_experiment_summary",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "tests/test_experiment_engine.py",
+      "kind": "step12_experiment_regressions",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "runtime/continuous_runtime.py",
+      "kind": "step12_daily_experiment_planning_integration",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step12_ci_validation_extension",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
     }
   ],
   "tests": [
@@ -1751,25 +1882,37 @@
       "status": "PASS",
       "step": 11,
       "evidence": "GitHub Actions foundation-ci run 36175867747 succeeded at exact Step 11 code head 5abcc0dece04cc0368041053a6f25ef3f894dde5. Uncertainty validator reported 20 candidates, 18 eligible, 2 Pareto-front candidates, scalar_score=false and selected UNC-EXTERNAL-PRJ-001; 152 total regression tests passed."
+    },
+    {
+      "name": "step12_experiment_engine_ci",
+      "status": "PASS",
+      "step": 12,
+      "evidence": "GitHub Actions foundation-ci run 36176812095 succeeded at exact Step 12 code head f1bb345325ba8caf181701969814096e39b2e30f. Experiment validator reported 20 plans: 12 READY_FOR_ISOLATED_EXECUTION, 6 HUMAN_APPROVAL_REQUIRED, 2 BLOCKED, 0 outcomes; selected uncertainty UNC-EXTERNAL-PRJ-001; 164 total regression tests passed."
+    },
+    {
+      "name": "step12_blocker_precedence_repair",
+      "status": "PASS",
+      "step": 12,
+      "evidence": "Initial Step 12 run 36176704610 failed because a blocked human-gated uncertainty was validated as if HUMAN_APPROVAL_REQUIRED were the only allowed state. Repair commits 0c5411c142aa61d7ac10a83238c225b27f5d6f43 and f1bb345325ba8caf181701969814096e39b2e30f made explicit blockers more restrictive than approval and added a regression; replacement run 36176812095 passed."
     }
   ],
   "next_action": {
-    "step": 12,
-    "summary": "WAIT FOR CONTINUE. Step 11 is complete. Next exact numbered step is Step 12 — Experiment engine: convert high-value uncertainties into bounded experiments with hypothesis, inputs, baseline, success/failure conditions, evidence requirements, cost, rollback and outcome recording. Do not begin Step 12 until explicit CONTINUE.",
+    "step": 13,
+    "summary": "WAIT FOR CONTINUE. Step 12 is complete. Next exact numbered step is Step 13 — Model router: implement deterministic/cheap/strong/adversarial intelligence routing and record model cost plus downstream outcomes, with Tier 0 deterministic code preferred whenever sufficient. Do not begin Step 13 until explicit CONTINUE.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Do not repeat Steps 0–11 unless an exact pinned source cursor changed.",
-      "Work on Step 12 only and stop after its verified commit.",
+      "Do not repeat Steps 0–12 unless an exact pinned source cursor changed.",
+      "Work on Step 13 only and stop after its verified commit.",
       "Do not activate Step 8 or Step 9 schedules on main yet; recurring production activation remains deferred.",
-      "Experiment design may describe human-gated external validation but must not send customer communications or perform ACT without explicit approval.",
-      "Preserve the full Step 11 component evidence; do not replace it with an opaque score.",
-      "Experiments must have explicit hypothesis, baseline, success, failure, evidence, cost boundary, rollback and outcome-recording contract.",
-      "Keep downstream uncontrolled writes and live trading prohibited.",
-      "While BLK-005 is open, store only sanitized non-sensitive experiment metadata/evidence references.",
-      "REPO-006 remains blocked while BLK-001 is open."
+      "Tier 0 deterministic code is preferred whenever sufficient.",
+      "Model calls cannot grant authority or upgrade evidence state.",
+      "Tier 3/adversarial verification must remain independent from the builder for consequential promotion decisions.",
+      "Record provider/model identity, cost/usage and eventual downstream outcome so routing can later learn from value rather than model prestige.",
+      "Keep human-gated ACT, live trading, payments and customer communications outside autonomous model authority.",
+      "While BLK-005 is open, store only sanitized non-sensitive model-routing metadata/evidence references."
     ]
   },
-  "updated_at": "2026-09-25T18:51:00Z",
+  "updated_at": "2026-09-25T19:02:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -2046,6 +2189,41 @@
           "CUSTOMER_COMMUNICATION"
         ],
         "regression_tests": 152
+      }
+    },
+    "12": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "12A_RECONCILE_PINNED_SOURCE_CURSOR",
+        "12B_PIN_CANONICAL_EXPERIMENT_PACKET_SEMANTICS",
+        "12C_UNIVERSAL_EXPERIMENT_AND_OUTCOME_SCHEMAS",
+        "12D_UNCERTAINTY_TO_BOUNDED_EXPERIMENT_COMPILER",
+        "12E_AUTHORITY_COST_ROLLBACK_AND_BLOCKER_GATES",
+        "12F_INDEPENDENT_OUTCOME_VERIFICATION_CONTRACT",
+        "12G_DAILY_RUNTIME_EXPERIMENT_PLANNING_INTEGRATION",
+        "12H_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_revision": "c4be1a3e10a92b9255906b1600097fe6371ea929",
+        "plan_count": 20,
+        "ready_for_isolated_execution": 12,
+        "human_approval_required": 6,
+        "blocked": 2,
+        "checked_in_outcomes": 0,
+        "selected_uncertainty_id": "UNC-EXTERNAL-PRJ-001",
+        "selected_status": "HUMAN_APPROVAL_REQUIRED",
+        "selected_authority_requirement": "HUMAN_GATED_ACT",
+        "selected_approval_requirements": [
+          "CUSTOMER_COMMUNICATION"
+        ],
+        "autonomous_cash_spend_usd_max": 0,
+        "autonomous_model_calls_max": 0,
+        "autonomous_external_messages_max": 0,
+        "autonomous_downstream_writes_max": 0,
+        "definitive_outcome_requires_verified_independent_verifier": true,
+        "regression_tests": 164
       }
     }
   }

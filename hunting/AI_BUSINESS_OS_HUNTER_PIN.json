@@ -2,7 +2,7 @@
   "schema_version": "1.0.0",
   "integration_id": "HUNTER-TI-001",
   "source_repository": "P00NSMASHER/github-value-hunt-ledger",
-  "source_revision": "b9031219f39502251afd6da92cc89effbbea2f21",
+  "source_revision": "c4be1a3e10a92b9255906b1600097fe6371ea929",
   "components": {
     "business_os_bridge": {
       "path": "ai_business_os/hunter_bridge.py",
