@@ -95,7 +95,7 @@ def validate_cost_governor():
     req("contents: write" not in watchdog and "pull-requests: write" not in watchdog, "watchdog has excess repository write authority")
 
     contract = (ROOT / "cost_governor/COST_GOVERNOR_CONTRACT.md").read_text()
-    for phrase in ["fail-closed", "Idempotency", "PORTFOLIO_SPEND_DISABLED", "ACT requests are rejected"]:
+    for phrase in ["fail-closed", "idempotency", "PORTFOLIO_SPEND_DISABLED", "ACT requests are rejected"]:
         req(phrase in contract, f"cost contract missing {phrase}")
 
     return {
