@@ -48,6 +48,13 @@ class ExperimentEngineTests(unittest.TestCase):
             self.assertEqual(p["status"],"BLOCKED")
             self.assertFalse(p["autonomous_execution_allowed"])
 
+    def test_blocked_human_gated_source_stays_blocked(self):
+        p=self.by_unc["UNC-BLOCKER-PRJ-003"]
+        self.assertEqual(p["authority_requirement"],"HUMAN_GATED_ACT")
+        self.assertEqual(p["status"],"BLOCKED")
+        self.assertFalse(p["autonomous_execution_allowed"])
+        self.assertIn("BLK-001",p["hard_blockers"])
+
     def test_child_facing_approvals_are_inherited(self):
         for uid in ["UNC-EXTERNAL-PRJ-005","UNC-EXTERNAL-PRJ-006"]:
             self.assertIn("CONSEQUENTIAL_CHILD_FACING_CHANGE",self.by_unc[uid]["approval_requirements"])
