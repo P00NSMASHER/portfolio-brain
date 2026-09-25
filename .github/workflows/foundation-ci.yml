@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile deterministic Python
-        run: python -m compileall -q registry events adapters truth memory graph runtime hunting learning uncertainty experiments model_router agents allocator software_factory repair transfer scheduler cost_governor dashboard tests
+        run: python -m compileall -q registry events adapters truth memory graph runtime hunting learning uncertainty experiments model_router agents allocator software_factory repair transfer scheduler cost_governor dashboard notifications tests
       - name: Validate foundation
         run: python tests/validate_foundation.py
       - name: Validate Step 2 registry
@@ -64,5 +64,7 @@ jobs:
         run: python -m cost_governor.validate_cost_governor
       - name: Validate Step 21 executive dashboard
         run: python -m dashboard.validate_dashboard
+      - name: Validate Step 22 notification and escalation layer
+        run: python -m notifications.validate_notifications
       - name: Run regression tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
