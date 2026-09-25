@@ -1,0 +1,43 @@
+name: portfolio-autonomous-scheduler
+
+on:
+  schedule:
+    - cron: "23 * * * *"
+  repository_dispatch:
+    types: ["portfolio_schedule"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: portfolio-scheduler-state
+  cancel-in-progress: false
+
+jobs:
+  schedule:
+    if: ${{ vars.PORTFOLIO_SCHEDULER_DISABLED != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PORTFOLIO_SCHEDULER_DISABLED: ${{ vars.PORTFOLIO_SCHEDULER_DISABLED }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Restore latest scheduler state
+        run: python -m scheduler.artifact_state --output scheduler/live/scheduler_state.json
+      - name: Select bounded work
+        run: python -m scheduler.autonomous_scheduler --state scheduler/live/scheduler_state.json --output-dir scheduler/out
+      - name: Validate persisted scheduler state
+        run: python -c "import json; from scheduler.autonomous_scheduler import validate_state; validate_state(json.load(open('scheduler/out/scheduler_state.json')))"
+      - name: Upload sanitized scheduler continuation state
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-scheduler-state
+          path: scheduler/out/
+          if-no-files-found: error
+          retention-days: 30

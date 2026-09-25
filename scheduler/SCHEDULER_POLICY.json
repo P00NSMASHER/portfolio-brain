@@ -1,0 +1,98 @@
+{
+  "schema_version": "1.0.0",
+  "scheduler_id": "portfolio-autonomous-scheduler-v1",
+  "mode": "EVIDENCE_GATED_PERSISTENT_QUEUE",
+  "authority_class": "OBSERVE",
+  "enabled": true,
+  "work_types": [
+    "HUNT",
+    "EXPERIMENT",
+    "REPAIR",
+    "TEST",
+    "RESEARCH",
+    "INTEGRATION",
+    "VERIFICATION"
+  ],
+  "gate_precedence": {
+    "VERIFICATION": 0,
+    "TEST": 1,
+    "REPAIR": 2,
+    "RESEARCH": 3,
+    "EXPERIMENT": 4,
+    "HUNT": 5,
+    "INTEGRATION": 6
+  },
+  "max_new_work_per_cycle": 4,
+  "max_open_work_per_agent": 1,
+  "max_queue_items": 32,
+  "stale_external_lease_policy": "SUPPRESS_DUPLICATE_UNTIL_AGENT_RUNTIME_RECONCILES",
+  "role_map": {
+    "HUNT": {
+      "agent_id": "AGT-HUNTER",
+      "goal_type": "PUBLIC_HUNT",
+      "required_authority": "OBSERVE"
+    },
+    "EXPERIMENT": {
+      "agent_id": "AGT-PRODUCT-ANALYST",
+      "goal_type": "EXPERIMENT_DESIGN",
+      "required_authority": "EXPERIMENT"
+    },
+    "REPAIR": {
+      "agent_id": "AGT-ENGINEER",
+      "goal_type": "ISOLATED_IMPLEMENTATION",
+      "required_authority": "MODIFY"
+    },
+    "TEST": {
+      "agent_id": "AGT-TESTER",
+      "goal_type": "REGRESSION_VALIDATION",
+      "required_authority": "EXPERIMENT"
+    },
+    "RESEARCH": {
+      "agent_id": "AGT-RESEARCHER",
+      "goal_type": "RESEARCH_EVIDENCE",
+      "required_authority": "OBSERVE"
+    },
+    "INTEGRATION": {
+      "agent_id": "AGT-PRODUCT-ANALYST",
+      "goal_type": "PRODUCT_ANALYSIS",
+      "required_authority": "OBSERVE"
+    },
+    "VERIFICATION": {
+      "agent_id": "AGT-AUDITOR",
+      "goal_type": "INDEPENDENT_AUDIT",
+      "required_authority": "EXPERIMENT"
+    }
+  },
+  "state_persistence": {
+    "mode": "GITHUB_ACTIONS_ARTIFACT",
+    "artifact_name": "portfolio-scheduler-state",
+    "retention_days": 30,
+    "seed_file": "scheduler/SCHEDULER_STATE_SEED.json",
+    "sanitized_only": true
+  },
+  "kill_switches": {
+    "repository_variable": "PORTFOLIO_SCHEDULER_DISABLED",
+    "file": "scheduler/KILL_SWITCH.json"
+  },
+  "selection_order": [
+    "filter authority, role, resource, blocker and source-state gates",
+    "suppress work already queued/active/completed for the same immutable source fingerprint",
+    "preserve live or stale external leases; scheduler never creates overlapping replacement work",
+    "sort by explicit gate precedence",
+    "within a gate sort by source Pareto layer, source rank, allocation share, source identity",
+    "enqueue at most one new item per agent and at most four per cycle"
+  ],
+  "invariants": [
+    "The scheduler never uses an opaque scalar priority score.",
+    "No work is created solely to satisfy a quota or keep an agent busy.",
+    "Only work whose target agent goal type and autonomy ceiling already allow it may enter QUEUED.",
+    "Human-gated ACT is reported as BLOCKED_APPROVAL and never enters the autonomous queue.",
+    "Open/leased work suppresses duplicate scheduling.",
+    "An expired external lease is not blindly duplicated; it awaits agent-runtime reconciliation.",
+    "Verified repair/verification/test gates outrank new discovery work because they unblock already-started evidence chains.",
+    "Step 15 resource HOLD prevents ordinary engineering/testing/model/art/cash work from being invented.",
+    "Cross-project transfer work is assessment only until target outcome evidence and MODIFY gates exist.",
+    "Kill switches and STOP/governance boundaries override scheduling.",
+    "The scheduler cannot send customer communications, move money, trade, merge PRs, deploy or grant authority."
+  ]
+}

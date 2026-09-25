@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0.0",
+  "integration_id": "SCHEDULER-AI-BUSINESS-OS-001",
+  "source_repository": "P00NSMASHER/github-value-hunt-ledger",
+  "source_revision": "c6276c80828d2632d5fee37cdaaf65f1d5b36427",
+  "components": {
+    "priority_lease_runtime": {
+      "path": "business_os/agents/persistent_runtime.py",
+      "blob_sha": "2118648b08ff53a4eb3add2fc77715fe722f0588"
+    },
+    "priority_lease_contract": {
+      "path": "business_os/agents/README.md",
+      "blob_sha": "455a9f60ee15a6f390d32acf2cbb9eb87c942474"
+    },
+    "durable_agent_runtime": {
+      "path": "ai_business_os/persistent_agents/runtime.py",
+      "blob_sha": "f200573259bcf29c09fbe9e480df4f983dd50903"
+    },
+    "current_hunter_schedule": {
+      "path": "automation/hunter_schedule.json",
+      "blob_sha": "243d11413ab63212af1efc9241b32f8540f5734f"
+    },
+    "current_hunter_workflow": {
+      "path": ".github/workflows/public-repo-hunter.yml",
+      "blob_sha": "15a905bbb99f568661b5b4f0247fbf6efeda0ca7"
+    }
+  },
+  "reused_semantics": [
+    "Priority ordering is explicit and durable.",
+    "Live leases block duplicate work.",
+    "Expired/stale lease generations cannot be trusted as current progress.",
+    "Work identity and state persist outside a model/chat session.",
+    "Crash recovery/requeue must preserve history and reject stale completion."
+  ],
+  "deliberately_not_reused": [
+    "The current upstream StarBlox-specific hunter mission is not treated as portfolio-wide scheduling policy.",
+    "The upstream scout workflow's direct commit/push-to-main behavior is not adopted because Portfolio Brain preserves isolated/default-branch authority boundaries.",
+    "Fixed activity quotas are not used to create work when evidence/resource/governance gates do not justify it."
+  ],
+  "integration_mode": "PINNED_PRIORITY_LEASE_SEMANTICS_ONLY",
+  "copied_source_code": false,
+  "drift_policy": {
+    "exact_repository_revision_required": true,
+    "component_blob_shas_required": true,
+    "on_source_revision_change": "TARGETED_DELTA_AND_RECONFORM",
+    "on_component_blob_mismatch": "FAIL_CLOSED"
+  }
+}
