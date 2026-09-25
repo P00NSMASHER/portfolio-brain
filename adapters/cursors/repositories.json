@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0.0",
+  "cursor_semantics": "Exact source SHA last successfully observed. BLOCKED cursors are historical-only and are not network-refreshed.",
+  "repositories": {
+    "REPO-001": {
+      "source_ref": "main",
+      "cursor_sha": "5559112ed4dfaa4c690d608b257945e1595560a5",
+      "status": "CURRENT"
+    },
+    "REPO-002": {
+      "source_ref": "main",
+      "cursor_sha": "094fe7bc6d61151a8bfec7b236bb68e8c236b834",
+      "status": "CURRENT"
+    },
+    "REPO-003": {
+      "source_ref": "main",
+      "cursor_sha": "a15c7c2214a065707123e9b8ab8ac51a42240345",
+      "status": "CURRENT"
+    },
+    "REPO-004": {
+      "source_ref": "main",
+      "cursor_sha": "f9be7d5537d38bef24a5b0f99022c5d5885988d1",
+      "status": "CURRENT"
+    },
+    "REPO-005": {
+      "source_ref": "main",
+      "cursor_sha": "7c9a8fc4dd9fa12275d336beb8eb10732718666a",
+      "status": "CURRENT"
+    },
+    "REPO-006": {
+      "source_ref": "main",
+      "cursor_sha": "c64fe06a22c3826c9ad3a7b85a4f911a6e589c19",
+      "status": "BLOCKED_HISTORICAL_ONLY"
+    },
+    "REPO-007": {
+      "source_ref": "main",
+      "cursor_sha": "3b5867c422cbf9da08d02f1b9c6e7c8afa5b42ba",
+      "status": "CURRENT"
+    },
+    "REPO-008": {
+      "source_ref": "main",
+      "cursor_sha": "78772da70970aaf56dc41e386bb024de0bbc6585",
+      "status": "CURRENT"
+    }
+  }
+}
