@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile deterministic Python
-        run: python -m compileall -q registry tests
+        run: python -m compileall -q registry events tests
       - name: Validate foundation
         run: python tests/validate_foundation.py
       - name: Validate Step 2 registry
