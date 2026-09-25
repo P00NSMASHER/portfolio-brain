@@ -132,17 +132,24 @@ def validate_request(r: dict[str, Any]) -> None:
     req(r["data_classification"] in DATA_CLASSES, "data classification invalid")
     validate_usage(r["estimated_usage"])
     req(isinstance(r["evidence_refs"], list) and r["evidence_refs"] and all(isinstance(x, str) and x for x in r["evidence_refs"]), "sanitized evidence refs required")
+    req(r["idempotency_key"]==f'{r["retry_group"]}:attempt:{r["attempt"]}',"idempotency key must bind retry group and attempt")
     _time(r["requested_at"], "requested_at")
     usage = r["estimated_usage"]
     if r["resource_kind"] == "MODEL_CALL":
         req(isinstance(r["provider_id"], str) and r["provider_id"], "model call provider required")
         req(isinstance(r["model_id"], str) and r["model_id"], "model call model required")
+        route_refs=[x[6:] for x in r["evidence_refs"] if x.startswith("route:")]
+        req(len(route_refs)==1 and route_refs[0],"model call requires exactly one route evidence ref")
+        req(r["retry_group"]==f"model:{route_refs[0]}","model retry group must bind routed identity")
         req(r["workflow_id"] is None and r["job_id"] is None, "model call may not claim workflow/job scope")
         req(usage["model_calls"] == 1 and usage["api_calls"] == 1, "model call must reserve one model/API call")
         req(usage["github_job_starts"] == 0 and usage["github_runner_minutes"] == 0, "model call may not reserve GitHub usage")
     elif r["resource_kind"] == "API_CALL":
         req(isinstance(r["provider_id"], str) and r["provider_id"], "API provider required")
         req(r["model_id"] is None, "generic API call model_id must be null")
+        op_refs=[x[len("api-operation:"):] for x in r["evidence_refs"] if x.startswith("api-operation:")]
+        req(len(op_refs)==1 and op_refs[0],"API call requires exactly one stable api-operation evidence ref")
+        req(r["retry_group"]==f"api:{op_refs[0]}","API retry group must bind stable operation identity")
         req(r["workflow_id"] is None and r["job_id"] is None, "API call may not claim workflow/job scope")
         req(usage["api_calls"] == 1 and usage["model_calls"] == 0, "API call usage invalid")
         req(usage["github_job_starts"] == 0 and usage["github_runner_minutes"] == 0, "API call may not reserve GitHub usage")
@@ -150,6 +157,9 @@ def validate_request(r: dict[str, Any]) -> None:
         req(r["provider_id"] is None and r["model_id"] is None, "GitHub job provider/model must be null")
         req(isinstance(r["workflow_id"], str) and r["workflow_id"], "workflow_id required")
         req(isinstance(r["job_id"], str) and r["job_id"], "job_id required")
+        run_refs=[x[len("github-run:"):] for x in r["evidence_refs"] if x.startswith("github-run:")]
+        req(len(run_refs)==1 and run_refs[0],"GitHub job requires exactly one github-run evidence ref")
+        req(r["retry_group"]==f'github-job:{run_refs[0]}:{r["job_id"]}',"GitHub retry group must bind run and job identity")
         req(usage["github_job_starts"] == 1 and usage["github_runner_minutes"] > 0, "GitHub job usage invalid")
         req(all(usage[x] == 0 for x in ("cost_usd", "input_tokens", "output_tokens", "model_calls", "api_calls")), "GitHub job cannot reserve model/API usage")
 
