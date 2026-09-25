@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa",
+      "last_inspected_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T23:11:00Z",
-      "notes": "Step 23 hostile examination verified at c03779b83e4aac47058c76a16be2549fbf1e17aa. Seventeen adversarial scenarios were exercised; four concrete weaknesses were fixed (unverified capability-gap suppression, VERIFIED graph provenance laundering, GitHub Actions workflow-command injection, retry identity reset), all other scenarios remained blocked by existing controls, and no recurring workflow was activated."
+      "last_observed_at": "2026-09-25T23:20:00Z",
+      "notes": "Step 24 autonomous learning canary verified at 6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab. The deterministic no-prompt shadow cycle restored runtime/scheduler/cost/notification/learning state, used seven local exact-cursor mirror reads, selected three first-pass work items and zero continuation items, suppressed three scheduler duplicates plus duplicate cost/notifications, used zero paid model/API resources, promoted zero learning records, and recorded zero authority violations."
     }
   },
   "decisions": [
@@ -1386,6 +1386,64 @@
         "hostile/validate_hostile_examination.py",
         ".github/workflows/foundation-ci.yml"
       ]
+    },
+    {
+      "decision_id": "DEC-137",
+      "summary": "Step 24 executes the autonomous-learning canary without live web/model/API dependency by mirroring only the exact source SHAs already persisted in adapter cursor state. Blocked sources remain unread and the runtime path still enforces its ordinary budgets and OBSERVE-only policy.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "canary/autonomous_learning_canary.py",
+        "canary/CANARY_POLICY.json",
+        "runtime/continuous_runtime.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-138",
+      "summary": "The first canary pass restores/advances five durable state classes: runtime, scheduler, cost, notifications and learning. It schedules exactly RESEARCH, HUNT and INTEGRATION work, preserves six human-approval-blocked items, reserves/commits zero-paid-cost compute, evaluates notifications and rebuilds learning with zero eligible promotions.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "canary/autonomous_learning_canary.py",
+        "canary/CANARY_CONTRACT.md",
+        "canary/validate_canary.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-139",
+      "summary": "The continuation pass reloads the persisted JSON bytes rather than reconstructing state. With unchanged source evidence it selects zero new scheduler work, suppresses at least three prior work fingerprints, suppresses the duplicate cost execution, suppresses repeated notification delivery and reproduces the same learning-state hash.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "canary/autonomous_learning_canary.py",
+        "tests/test_autonomous_learning_canary.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-140",
+      "summary": "Step 24 canary execution used zero model calls, zero paid cost, produced zero learning promotions and zero authority violations; no customer communication, payment, money movement, live trading, deployment, merge or default-branch update was attempted.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "canary/out/canary_receipt.json",
+        "ci-run:36200414277",
+        "sha256:e7b97e727155e3f7e2fccc0d1594592ca0722a48a067ebda70720ef080384ebc"
+      ]
+    },
+    {
+      "decision_id": "DEC-141",
+      "summary": "Exact-head CI persists sanitized Step 24 canary receipts/states as a GitHub Actions artifact for 30 days. Implementation run 36200414277 produced artifact 10892145046 with digest sha256:13b557d80458b3f0b48ea3b8b87cd22d408f9c694bb77146cf9e75f131001469.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "ci-run:36200414277",
+        "actions-artifact:10892145046",
+        "sha256:13b557d80458b3f0b48ea3b8b87cd22d408f9c694bb77146cf9e75f131001469"
+      ]
+    },
+    {
+      "decision_id": "DEC-142",
+      "summary": "The canary remains shadow-only on an isolated branch. Passing Step 24 does not itself activate recurring autonomous operation on main; default-branch promotion and final operating-mode activation remain Step 25.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "canary/CANARY_CONTRACT.md",
+        "PORTFOLIO_BUILD_STATE.json"
+      ]
     }
   ],
   "blockers": [
@@ -1420,11 +1478,11 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.23.0",
+  "architecture_version": "1.24.0",
   "state_id": "portfolio-brain-master",
-  "working_branch": "step23-hostile-examination-20260925",
+  "working_branch": "step24-autonomous-learning-canary-20260925",
   "phase": "architecture_build",
-  "current_step": 24,
+  "current_step": 25,
   "completed_steps": [
     0,
     1,
@@ -1449,7 +1507,8 @@
     20,
     21,
     22,
-    23
+    23,
+    24
   ],
   "artifacts": [
     {
@@ -3089,6 +3148,54 @@
       "kind": "step23_ci_validation_extension",
       "step": 23,
       "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "canary/CANARY_POLICY.json",
+      "kind": "step24_canary_policy",
+      "step": 24,
+      "commit_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab"
+    },
+    {
+      "path": "canary/CANARY_CONTRACT.md",
+      "kind": "step24_canary_contract",
+      "step": 24,
+      "commit_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab"
+    },
+    {
+      "path": "canary/autonomous_learning_canary.py",
+      "kind": "step24_canary_orchestrator",
+      "step": 24,
+      "commit_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab"
+    },
+    {
+      "path": "canary/validate_canary.py",
+      "kind": "step24_canary_validator",
+      "step": 24,
+      "commit_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab"
+    },
+    {
+      "path": "tests/test_autonomous_learning_canary.py",
+      "kind": "step24_canary_regressions",
+      "step": 24,
+      "commit_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab"
+    },
+    {
+      "path": "cost_governor/COST_GOVERNOR_POLICY.json",
+      "kind": "step24_canary_cost_budget",
+      "step": 24,
+      "commit_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step24_canary_ci_execution",
+      "step": 24,
+      "commit_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab"
+    },
+    {
+      "path": "canary/out/canary_receipt.json",
+      "kind": "step24_ci_canary_receipt",
+      "step": 24,
+      "commit_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab"
     }
   ],
   "tests": [
@@ -3337,24 +3444,31 @@
       "status": "PASS",
       "step": 23,
       "evidence": "GitHub Actions foundation-ci run 36199773915 succeeded at exact Step 23 implementation head c03779b83e4aac47058c76a16be2549fbf1e17aa. Step 23 hostile validator passed, all 17 hostile scenarios were resolved/blocked, and 301 total regression tests passed; Steps 1-22 validators remained green."
+    },
+    {
+      "name": "step24_autonomous_learning_canary_ci",
+      "status": "PASS",
+      "step": 24,
+      "evidence": "GitHub Actions foundation-ci run 36200414277 succeeded at exact Step 24 implementation head 6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab. Canary receipt sha256:e7b97e727155e3f7e2fccc0d1594592ca0722a48a067ebda70720ef080384ebc reported runtime_reads=7, first_selected_work=3, continuation_selected_work=0, suppressed_duplicates=3, paid_cost_usd=0.0, model_calls=0, learning_promotions=0 and authority_violations=0. 309 total regression tests passed. Sanitized Actions artifact 10892145046 was uploaded."
     }
   ],
   "next_action": {
-    "step": 24,
-    "summary": "WAIT FOR CONTINUE. Step 23 is complete. Next exact numbered step is Step 24 — Autonomous learning canary: execute one fully bounded no-prompt autonomous cycle across durable state restoration, observation/research scheduling, cost governance, notification evaluation and learning-state rebuild; prove deterministic continuation, zero duplicate work, zero authority violations and durable evidence receipts before final operating-mode activation. Do not begin Step 24 until explicit CONTINUE.",
+    "step": 25,
+    "summary": "WAIT FOR CONTINUE. Step 24 is complete. Next exact numbered step is Step 25 — Final autonomous operating mode: perform the final release gate, reconcile the verified Step 0–24 architecture, promote only the approved recurring deterministic/autonomous workflows to the default branch under existing kill switches and cost controls, verify durable state continuity after promotion, and record the system as operational without interactive ChatGPT as an ordinary runtime dependency. Do not begin Step 25 until explicit CONTINUE.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Do not repeat Steps 0–23 unless an exact pinned source cursor changed.",
-      "Work on Step 24 only and stop after its verified commit.",
-      "Run a bounded canary/shadow cycle only; do not yet enable final recurring autonomous operating mode on main.",
-      "The canary must restore durable runtime/scheduler/cost/notification state and complete without interactive ChatGPT as an execution dependency.",
-      "Use deterministic/Tier-0 paths only under the checked-in zero paid-model/API budgets.",
-      "Prove no duplicate work, no budget overrun, no unverified learning promotion and zero authority violations.",
-      "No customer communication, payment, cash movement, live trading, deployment, merge or other consequential ACT may occur.",
-      "Persist only sanitized canary state/evidence while BLK-005 remains open."
+      "Do not repeat Steps 0–24 unless an exact pinned source cursor changed.",
+      "Work on Step 25 only and stop after the final verified operating-mode state.",
+      "Use the Step 24 exact canary evidence as the activation prerequisite; do not weaken any Step 23 hostile-examination regression.",
+      "Before promotion, verify default-branch diff, workflow permissions, kill switches, cost ceilings, artifact state names and source-revision pins.",
+      "Keep paid/model/API execution deny-by-default at the checked-in zero ceilings unless a separate explicit authorized policy change exists.",
+      "Activate only workflows already covered by cost governance, durable state, duplicate suppression and kill switches; do not invent new authority during release.",
+      "Consequential ACT, customer communication, payments/cash movement, live trading/broker execution and deployment/merge authority remain human-gated or prohibited exactly as currently defined.",
+      "Preserve BLK-005 sanitized-only persistence while the repository remains public.",
+      "After promotion, require exact-head CI plus a bounded post-promotion state-continuity check before declaring Portfolio Brain operational."
     ]
   },
-  "updated_at": "2026-09-25T23:11:00Z",
+  "updated_at": "2026-09-25T23:20:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -4074,6 +4188,60 @@
         "authority_change": "NONE",
         "recurring_workflows_activated": false,
         "regression_tests": 301
+      }
+    },
+    "24": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "24A_DEFINE_DETERMINISTIC_SHADOW_CANARY_CONTRACT",
+        "24B_RESTORE_RUNTIME_SCHEDULER_COST_NOTIFICATION_AND_LEARNING_STATE",
+        "24C_EXECUTE_BOUNDED_DAILY_RUNTIME_WITH_EXACT_CURSOR_MIRROR",
+        "24D_EXECUTE_EVIDENCE_GATED_RESEARCH_HUNT_INTEGRATION_SCHEDULING",
+        "24E_RESERVE_AND_COMMIT_ZERO_PAID_COST_GOVERNED_COMPUTE",
+        "24F_EVALUATE_NOTIFICATIONS_AND_REBUILD_LEARNING_WITHOUT_PROMOTION",
+        "24G_RELOAD_PERSISTED_BYTES_AND_PROVE_DUPLICATE_SUPPRESSION",
+        "24H_PERSIST_SANITIZED_EXACT_HEAD_CANARY_RECEIPTS",
+        "24I_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "activation_status": "SHADOW_CANARY_PASSED_FINAL_RECURRING_MODE_NOT_YET_ACTIVATED",
+      "verified_contract": {
+        "implementation_head": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab",
+        "ci_run_id": 36200414277,
+        "canary_receipt_hash": "sha256:e7b97e727155e3f7e2fccc0d1594592ca0722a48a067ebda70720ef080384ebc",
+        "actions_artifact_id": 10892145046,
+        "actions_artifact_name": "portfolio-step24-canary-92a64cef5dfd45b867d07daf06ada52de02749b0",
+        "actions_artifact_digest": "sha256:13b557d80458b3f0b48ea3b8b87cd22d408f9c694bb77146cf9e75f131001469",
+        "actions_artifact_expires_at": "2026-10-25T23:17:30Z",
+        "state_classes_restored": [
+          "runtime",
+          "scheduler",
+          "cost",
+          "notifications",
+          "learning"
+        ],
+        "runtime_reads": 7,
+        "first_selected_work": 3,
+        "first_selected_work_types": [
+          "HUNT",
+          "INTEGRATION",
+          "RESEARCH"
+        ],
+        "continuation_selected_work": 0,
+        "scheduler_suppressed_duplicates": 3,
+        "cost_continuation_status": "DUPLICATE_SUPPRESSED",
+        "notification_continuation_emitted": 0,
+        "learning_state_hash_unchanged": true,
+        "paid_cost_usd": 0,
+        "model_calls": 0,
+        "learning_promotions": 0,
+        "authority_violations": 0,
+        "forbidden_actions_attempted": 0,
+        "live_network_dependency": false,
+        "interactive_chatgpt_dependency": false,
+        "recurring_operating_mode_activated": false,
+        "regression_tests": 309
       }
     }
   }
