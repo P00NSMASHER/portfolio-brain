@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723",
+      "last_inspected_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T19:11:22Z",
-      "notes": "Step 13 deterministic-first, provider-agnostic model router verified at 18de5db7471cbaa2936cd9bf476217f7bd197723. Checked-in configuration enables Tier 0 only; Tier 1-3 provider slots are disabled and contain no secrets. Routing records sanitized usage/cost hashes and only VERIFIED downstream feedback may contribute to later routing value."
+      "last_observed_at": "2026-09-25T19:43:54Z",
+      "notes": "Step 14 persistent-agent control plane verified at 5b7edadc6545bb3703d2a34c77eba49838e7b21d. Ten stable bounded roles persist identity/work/lease/evidence/state through a deterministic SQLite reference runtime with stale-generation fencing, hash-chained events, snapshots and independent verification. No role has ACT authority; checked-in live model providers remain Tier-0-only."
     }
   },
   "decisions": [
@@ -870,6 +870,67 @@
         "model_router/AI_BUSINESS_OS_RUNTIME_GATEWAY_PIN.json",
         "model_router/MODEL_ROUTER_CONTRACT.md"
       ]
+    },
+    {
+      "decision_id": "DEC-085",
+      "summary": "Step 14 reconciled REPO-001 from dcca6215f2439bb55391335fe0513f471c762290 to 21b9023a57392f380c73b2fe952c35840f2e2025 using a targeted delta. Only HUNTER-08 through HUNTER-14 scout state changed; pinned architecture components remained byte-identical and their repository revision pins were safely advanced.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "PORTFOLIO_BUILD_STATE.json",
+        "agents/AI_BUSINESS_OS_PERSISTENT_AGENT_PIN.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-086",
+      "summary": "Portfolio Brain has ten stable persistent roles: Portfolio Manager, Hunter, Researcher, Product Analyst, Engineer, Tester, Auditor, Red Team, Data Steward and Commercial Analyst. Identity and role are durable and explicit rather than inferred from transient prompts.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "agents/AGENT_REGISTRY.json",
+        "schemas/AGENT_ROLE_SCHEMA.json",
+        "agents/PERSISTENT_AGENT_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-087",
+      "summary": "No persistent role has ACT authority. Engineer is the only builder-eligible role and is capped at MODIFY. Tester, Auditor, Red Team and Data Steward are verifier-eligible and not builder-eligible; verifier identity and independence group must differ from the builder before work can become COMPLETE.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "agents/AGENT_POLICY.json",
+        "agents/AGENT_REGISTRY.json",
+        "agents/persistent_agents.py",
+        "tests/test_persistent_agents.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-088",
+      "summary": "Persistent work uses explicit PENDING/RUNNING/VERIFYING/terminal states, generation-fenced leases, heartbeats, expired-lease requeue, durable run identity, sanitized evidence/state references, verification receipts, snapshots and an append-only SHA-256 event chain. Snapshot restoration never erases historical events.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/AGENT_WORK_ITEM_SCHEMA.json",
+        "schemas/AGENT_VERIFICATION_SCHEMA.json",
+        "agents/persistent_agents.py",
+        "tests/test_persistent_agents.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-089",
+      "summary": "Agent model-tier ceilings are role ceilings only and cannot bypass the Step 13 router. Engineer is capped below Tier 3; Auditor and Red Team may request Tier 3, but checked-in Tier 1-3 providers remain disabled so no paid/non-deterministic route is activated by Step 14.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "agents/AGENT_REGISTRY.json",
+        "model_router/PROVIDER_REGISTRY.json",
+        "agents/validate_agents.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-090",
+      "summary": "The checked-in persistent-agent seed contains ten identities but no work items or evidence. Step 14 provides the durable role/work control plane; always-on external worker deployment remains a later runtime concern and private payloads are not stored while Portfolio Brain is public.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "agents/AGENT_STATE_SEED.json",
+        "agents/PERSISTENT_AGENT_CONTRACT.md",
+        "PORTFOLIO_BUILD_STATE.json"
+      ]
     }
   ],
   "blockers": [
@@ -904,11 +965,11 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.13.0",
+  "architecture_version": "1.14.0",
   "state_id": "portfolio-brain-master",
   "working_branch": "step14-persistent-agents-20260925",
   "phase": "architecture_build",
-  "current_step": 14,
+  "current_step": 15,
   "completed_steps": [
     0,
     1,
@@ -923,7 +984,8 @@
     10,
     11,
     12,
-    13
+    13,
+    14
   ],
   "artifacts": [
     {
@@ -1849,6 +1911,78 @@
       "kind": "step13_ci_validation_extension",
       "step": 13,
       "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "schemas/AGENT_ROLE_SCHEMA.json",
+      "kind": "step14_agent_role_schema",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "schemas/AGENT_WORK_ITEM_SCHEMA.json",
+      "kind": "step14_agent_work_schema",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "schemas/AGENT_VERIFICATION_SCHEMA.json",
+      "kind": "step14_agent_verification_schema",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "agents/AGENT_POLICY.json",
+      "kind": "step14_agent_policy",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "agents/AGENT_REGISTRY.json",
+      "kind": "step14_agent_registry",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "agents/AGENT_STATE_SEED.json",
+      "kind": "step14_agent_state_seed",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "agents/AI_BUSINESS_OS_PERSISTENT_AGENT_PIN.json",
+      "kind": "step14_persistent_agent_source_pin",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "agents/persistent_agents.py",
+      "kind": "step14_persistent_agent_runtime",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "agents/validate_agents.py",
+      "kind": "step14_agent_validator",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "agents/PERSISTENT_AGENT_CONTRACT.md",
+      "kind": "step14_persistent_agent_contract",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "tests/test_persistent_agents.py",
+      "kind": "step14_persistent_agent_regressions",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step14_ci_validation_extension",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
     }
   ],
   "tests": [
@@ -2031,24 +2165,31 @@
       "status": "PASS",
       "step": 13,
       "evidence": "GitHub Actions foundation-ci run 36178117494 succeeded at exact Step 13 code head 18de5db7471cbaa2936cd9bf476217f7bd197723. Model-router validator reported 4 tiers, deterministic Tier 0 provider, enabled_nonzero_models=0, checked_in_calls=0 and checked_in_outcomes=0; 176 total regression tests passed."
+    },
+    {
+      "name": "step14_persistent_agents_ci",
+      "status": "PASS",
+      "step": 14,
+      "evidence": "GitHub Actions foundation-ci run 36181438958 succeeded at exact Step 14 code head 5b7edadc6545bb3703d2a34c77eba49838e7b21d. Agent validator reported roles=10, builder_roles=1, verifier_roles=4, human_act_roles=0, seed_work_items=0 and enabled_nonzero_models=0; 188 total regression tests passed."
     }
   ],
   "next_action": {
-    "step": 14,
-    "summary": "WAIT FOR CONTINUE. Step 13 is complete. Next exact numbered step is Step 14 — Persistent agents: implement bounded persistent roles for Portfolio Manager, Hunter, Researcher, Product Analyst, Engineer, Tester, Auditor, Red Team, Data Steward and Commercial Analyst, persisting identity, work, evidence and state. Do not begin Step 14 until explicit CONTINUE.",
+    "step": 15,
+    "summary": "WAIT FOR CONTINUE. Step 14 is complete. Next exact numbered step is Step 15 — Portfolio allocator: allocate scarce resources across projects using evidence while keeping recommendations explainable and retaining component evidence rather than a single opaque score. Do not begin Step 15 until explicit CONTINUE.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Do not repeat Steps 0–13 unless an exact pinned source cursor changed.",
-      "Work on Step 14 only and stop after its verified commit.",
+      "Do not repeat Steps 0–14 unless an exact pinned source cursor changed.",
+      "Work on Step 15 only and stop after its verified commit.",
       "Do not activate Step 8 or Step 9 schedules on main yet; recurring production activation remains deferred.",
-      "Agents inherit autonomy ceilings and cannot create authority for themselves.",
-      "Builder and verifier roles must remain separable for consequential work.",
-      "Use Tier 0 deterministic routing when sufficient; checked-in Tier 1-3 providers remain disabled until explicitly configured.",
-      "Persist agent identity, leases/work, evidence and resumable state without storing private payloads in this public repository.",
-      "Keep customer communications, payments, live trading and other consequential ACT human-gated."
+      "Allocator recommendations are advisory and may not create ACT authority.",
+      "Retain component evidence for AI/model calls, engineering capacity, testing, research, Hunter, art, human review, API/infrastructure and eventual cash allocation.",
+      "Verified external outcomes and high-value uncertainty resolution outrank internal activity.",
+      "Do not use a single opaque score.",
+      "Keep checked-in Tier 1-3 model providers disabled until explicitly configured.",
+      "While BLK-005 is open, store only sanitized non-sensitive allocation state/evidence references."
     ]
   },
-  "updated_at": "2026-09-25T19:20:00Z",
+  "updated_at": "2026-09-25T19:45:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -2389,6 +2530,39 @@
         "model_can_upgrade_evidence": false,
         "routing_value_feedback_requires_verified_outcome": true,
         "regression_tests": 176
+      }
+    },
+    "14": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "14A_RECONCILE_PINNED_SOURCE_CURSOR",
+        "14B_PIN_PERSISTENT_AGENT_AND_LEASE_SEMANTICS",
+        "14C_DEFINE_TEN_STABLE_ROLE_CONTRACTS",
+        "14D_DURABLE_WORK_LEASE_EVIDENCE_AND_STATE_RUNTIME",
+        "14E_BUILDER_VERIFIER_INDEPENDENCE_GATES",
+        "14F_STALE_LEASE_REQUEUE_AND_EVENT_CHAIN",
+        "14G_SNAPSHOT_RESTORE_WITHOUT_HISTORY_ERASURE",
+        "14H_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "BOUNDED_OBSERVE_EXPERIMENT_MODIFY_ONLY",
+      "verified_contract": {
+        "source_revision": "21b9023a57392f380c73b2fe952c35840f2e2025",
+        "persistent_roles": 10,
+        "builder_roles": 1,
+        "verifier_roles": 4,
+        "human_act_roles": 0,
+        "seed_work_items": 0,
+        "seeded_evidence_items": 0,
+        "tier3_capable_verifier_roles": [
+          "AUDITOR",
+          "RED_TEAM"
+        ],
+        "engineer_max_model_tier": 2,
+        "checked_in_enabled_nonzero_models": 0,
+        "stale_lease_generation_fencing": true,
+        "append_only_hash_chained_events": true,
+        "regression_tests": 188
       }
     }
   }
