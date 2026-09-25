@@ -1,0 +1,90 @@
+name: portfolio-notification-cycle
+
+on:
+  schedule:
+    - cron: "7 */6 * * *"
+  repository_dispatch:
+    types: ["portfolio_notify"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: portfolio-cost-governed-autonomy
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    if: ${{ vars.PORTFOLIO_NOTIFICATION_DISABLED != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      PORTFOLIO_NOTIFICATION_DISABLED: ${{ vars.PORTFOLIO_NOTIFICATION_DISABLED }}
+      PORTFOLIO_SPEND_DISABLED: ${{ vars.PORTFOLIO_SPEND_DISABLED }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Restore latest cost-governor state
+        run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
+      - name: Reserve bounded notification compute
+        id: cost
+        run: >-
+          python -m cost_governor.workflow_gate preflight
+          --state cost_governor/live/cost_state.json
+          --output-dir cost_governor/out
+          --workflow-id portfolio-notification-cycle
+          --job-id notify
+          --project-id PRJ-000
+          --estimated-minutes 2
+          --authority OBSERVE
+      - name: Restore latest notification state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: python -m notifications.artifact_state --output notifications/live/notification_state.json
+      - name: Restore latest scheduler state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: python -m scheduler.artifact_state --output scheduler/live/scheduler_state.json
+      - name: Build evidence-gated alerts
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: >-
+          python -m notifications.notification_engine
+          --state notifications/live/notification_state.json
+          --scheduler-state scheduler/live/scheduler_state.json
+          --cost-state cost_governor/live/cost_state.json
+          --output-dir notifications/out
+      - name: Emit sanitized GitHub alerts
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: python -m notifications.github_sink --alerts notifications/out/emitted_alerts.json
+      - name: Validate persisted notification state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: python -c "import json; from notifications.notification_engine import validate_state; validate_state(json.load(open('notifications/out/notification_state.json')))"
+      - name: Commit conservative notification compute usage
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: >-
+          python -m cost_governor.workflow_gate finalize
+          --state cost_governor/out/cost_state.json
+          --decision cost_governor/out/cost_decision.json
+          --output cost_governor/out/cost_state.json
+      - name: Upload sanitized notification continuation state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-notification-state
+          path: notifications/out/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload sanitized cost-governor continuation state
+        if: ${{ always() && hashFiles('cost_governor/out/cost_state.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-cost-governor-state
+          path: cost_governor/out/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Fail closed when cost gate blocks
+        if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
+        run: exit 3
