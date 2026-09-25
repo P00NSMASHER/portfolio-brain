@@ -107,6 +107,11 @@ def route_request(r,registry=None):
     route={**route_core,"route_id":route_id}
     return {**route,"route_hash":hashv(route)}
 
+def reserve_execution(route, request, cost_state, *, attempt=1, at=None):
+    """Reserve Step-20 budget before any non-Tier-0 provider invocation."""
+    from cost_governor.cost_governor import reserve_model_execution
+    return reserve_model_execution(cost_state, route, request, attempt=attempt, at=at)
+
 class ProviderExecutor(Protocol):
     def invoke(self,*,provider_id:str,model_id:str,input_hash:str,max_output_tokens:int)->dict[str,Any]: ...
 
