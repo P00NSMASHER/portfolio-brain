@@ -1,0 +1,31 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://portfolio-brain.local/schemas/GRAPH_EDGE_SCHEMA.json",
+  "title":"Portfolio Brain Universal Graph Edge",
+  "type":"object",
+  "additionalProperties":false,
+  "required":[
+    "schema_version","edge_id","source_node_id","edge_type","target_node_id",
+    "attributes","provenance_refs","verification_state","status","valid_from",
+    "valid_to","supersedes_edge_id"
+  ],
+  "properties":{
+    "schema_version":{"const":"1.0.0"},
+    "edge_id":{"type":"string","pattern":"^GE-[A-Z0-9-]{8,}$"},
+    "source_node_id":{"type":"string","pattern":"^GN-[A-Z0-9-]{8,}$"},
+    "edge_type":{"enum":[
+      "IMPLEMENTS","USES","DISCOVERED_BY","CREATED","DEPENDS_ON","ENABLES",
+      "STRENGTHENS","WEAKENS","TESTED_BY","PRODUCED","FAILED","IMPROVED",
+      "INVALIDATES","REUSED_BY","GENERATED_VALUE_FOR","SUPERSEDES","CONTRADICTS",
+      "APPLIES_TO","HAS_REPOSITORY","HAS_CAPABILITY","ATTRIBUTED_TO"
+    ]},
+    "target_node_id":{"type":"string","pattern":"^GN-[A-Z0-9-]{8,}$"},
+    "attributes":{"type":"object"},
+    "provenance_refs":{"type":"array","items":{"type":"string","minLength":1,"maxLength":1000},"uniqueItems":true,"minItems":1},
+    "verification_state":{"enum":["OBSERVED","VERIFIED","INFERRED","UNKNOWN","CONTRADICTED","STALE","INVALID"]},
+    "status":{"enum":["ACTIVE","SUPERSEDED","RETIRED"]},
+    "valid_from":{"type":"string","format":"date-time"},
+    "valid_to":{"type":["string","null"],"format":"date-time"},
+    "supersedes_edge_id":{"type":["string","null"],"pattern":"^GE-[A-Z0-9-]{8,}$"}
+  }
+}

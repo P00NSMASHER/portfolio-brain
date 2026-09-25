@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0.0",
+  "ledger_id": "portfolio-experiment-outcomes",
+  "policy": [
+    "The ledger begins empty; plans are not outcomes.",
+    "Definitive PASSED/FAILED results require VERIFIED evidence and independent verification.",
+    "Corrections append a new superseding outcome/evidence chain rather than silently rewriting prior outcomes."
+  ],
+  "outcomes": []
+}

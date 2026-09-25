@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0.0",
+  "integration_id": "HUNTER-TI-001",
+  "source_repository": "P00NSMASHER/github-value-hunt-ledger",
+  "source_revision": "c6276c80828d2632d5fee37cdaaf65f1d5b36427",
+  "components": {
+    "business_os_bridge": {
+      "path": "ai_business_os/hunter_bridge.py",
+      "blob_sha": "185866871c1e3eaa9d8d3aadc700c11c05babc0c"
+    },
+    "seed_compiler": {
+      "path": "tools/ti_seed_compiler.py",
+      "blob_sha": "6ab65a4f5593601d21d58e9d3a2d771fb070e3bb"
+    },
+    "allocator": {
+      "path": "tools/ti_allocator.py",
+      "blob_sha": "7832c10f16925d35b6446c24a999b9cef5e212b5"
+    },
+    "adaptive_policy": {
+      "path": "tools/ti_policy.py",
+      "blob_sha": "fcb7193202e7a5ac68ff5c205653db4a73631c81"
+    },
+    "learning_report": {
+      "path": "tools/ti_report.py",
+      "blob_sha": "562ec2cc880924a366e3ec45c5e053c555c22a36"
+    },
+    "run_ingest": {
+      "path": "tools/ti_ingest_runs.py",
+      "blob_sha": "844337f7f87991282d20b6862e4d82553bc6d14e"
+    }
+  },
+  "preserved_semantics": [
+    "Gap-driven search seeds carry explicit acceptance targets and STOP conditions.",
+    "Public technical sources are allowlisted; private/customer/bank/ledger gaps do not enter public Hunter search.",
+    "Search telemetry preserves candidate and deep-inspection denominators.",
+    "Negative/no-find information is retained instead of discarded.",
+    "Exact repository revision and capability identity are part of deduplication.",
+    "Independent verification is distinct from discovery.",
+    "Outcome attribution is explicit and realized outcomes outrank repository popularity or predicted commercial scores.",
+    "Strategy adaptation requires sufficient measured evidence rather than one anecdote."
+  ],
+  "integration_mode": "PINNED_TELEMETRY_AND_SEARCH_SEMANTICS",
+  "copied_source_code": false,
+  "drift_policy": {
+    "exact_repository_revision_required": true,
+    "component_blob_shas_required": true,
+    "on_source_revision_change": "TARGETED_DELTA_AND_RECONFORM",
+    "on_component_blob_mismatch": "FAIL_CLOSED"
+  }
+}

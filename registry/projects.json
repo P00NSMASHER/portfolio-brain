@@ -1,0 +1,453 @@
+{
+  "schema_version": "1.0.0",
+  "projects": [
+    {
+      "schema_version": "1.0.0",
+      "project_id": "PRJ-000",
+      "slug": "portfolio-brain",
+      "canonical_name": "Portfolio Brain",
+      "project_type": "PORTFOLIO",
+      "lifecycle_status": "ACTIVE",
+      "parent_project_id": null,
+      "aliases": [],
+      "categories": [
+        "portfolio_control_plane"
+      ],
+      "repository_bindings": [
+        {
+          "repository_id": "REPO-008",
+          "full_name": "P00NSMASHER/portfolio-brain",
+          "integration_status": "DECLARED"
+        }
+      ],
+      "autonomy_profile_id": "AUT-000",
+      "objective_ids": [
+        "OBJ-000"
+      ],
+      "metric_ids": [
+        "MET-000",
+        "MET-001"
+      ],
+      "evidence_policy": "PROVENANCE_REQUIRED",
+      "data_boundary": "SANITIZED_CODE_POLICY_AND_RECEIPTS_ONLY",
+      "registration_state": "REGISTERED",
+      "hard_boundaries": [],
+      "provenance": {
+        "source_type": "MIGRATED_REGISTRY",
+        "source_ref": "P00NSMASHER/github-value-hunt-ledger:portfolio_prework/PROJECT_ID_REGISTRY.json@blob:60c97e366814388d0f10862d1d0737837866361e"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "project_id": "PRJ-001",
+      "slug": "recoveryworks",
+      "canonical_name": "RecoveryWorks",
+      "project_type": "BUSINESS",
+      "lifecycle_status": "ACTIVE",
+      "parent_project_id": null,
+      "aliases": [
+        "Recovery Works",
+        "RecoveryOS",
+        "Recovery Scan 360"
+      ],
+      "categories": [
+        "business",
+        "recovery",
+        "assurance"
+      ],
+      "repository_bindings": [
+        {
+          "repository_id": "REPO-001",
+          "full_name": "P00NSMASHER/github-value-hunt-ledger",
+          "integration_status": "DECLARED"
+        }
+      ],
+      "autonomy_profile_id": "AUT-001",
+      "objective_ids": [],
+      "metric_ids": [],
+      "evidence_policy": "PROVENANCE_REQUIRED",
+      "data_boundary": "PRIVATE_DATA_BY_REFERENCE_ONLY",
+      "registration_state": "REGISTERED",
+      "hard_boundaries": [],
+      "provenance": {
+        "source_type": "MIGRATED_REGISTRY",
+        "source_ref": "P00NSMASHER/github-value-hunt-ledger:portfolio_prework/PROJECT_ID_REGISTRY.json@blob:60c97e366814388d0f10862d1d0737837866361e"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "project_id": "PRJ-002",
+      "slug": "freight-recovery",
+      "canonical_name": "Freight Recovery",
+      "project_type": "BUSINESS",
+      "lifecycle_status": "ACTIVE",
+      "parent_project_id": "PRJ-001",
+      "aliases": [
+        "FreightRecovery"
+      ],
+      "categories": [
+        "business",
+        "recovery",
+        "freight"
+      ],
+      "repository_bindings": [
+        {
+          "repository_id": "REPO-001",
+          "full_name": "P00NSMASHER/github-value-hunt-ledger",
+          "integration_status": "DECLARED"
+        }
+      ],
+      "autonomy_profile_id": "AUT-002",
+      "objective_ids": [],
+      "metric_ids": [],
+      "evidence_policy": "PROVENANCE_REQUIRED",
+      "data_boundary": "PRIVATE_DATA_BY_REFERENCE_ONLY",
+      "registration_state": "REGISTERED",
+      "hard_boundaries": [],
+      "provenance": {
+        "source_type": "MIGRATED_REGISTRY",
+        "source_ref": "P00NSMASHER/github-value-hunt-ledger:portfolio_prework/PROJECT_ID_REGISTRY.json@blob:60c97e366814388d0f10862d1d0737837866361e"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "project_id": "PRJ-003",
+      "slug": "permitplate",
+      "canonical_name": "PermitPlate",
+      "project_type": "BUSINESS",
+      "lifecycle_status": "ACTIVE",
+      "parent_project_id": null,
+      "aliases": [
+        "Permit Plate",
+        "PermitPlate NYC"
+      ],
+      "categories": [
+        "business",
+        "product",
+        "permit_intelligence"
+      ],
+      "repository_bindings": [
+        {
+          "repository_id": "REPO-005",
+          "full_name": "P00NSMASHER/permitplate-nyc",
+          "integration_status": "DECLARED"
+        },
+        {
+          "repository_id": "REPO-006",
+          "full_name": "P00NSMASHER/permitplate-state",
+          "integration_status": "BLOCKED",
+          "blocker_id": "BLK-001"
+        }
+      ],
+      "autonomy_profile_id": "AUT-003",
+      "objective_ids": [],
+      "metric_ids": [],
+      "evidence_policy": "PROVENANCE_REQUIRED",
+      "data_boundary": "PRIVATE_DATA_BY_REFERENCE_ONLY",
+      "registration_state": "REGISTERED",
+      "hard_boundaries": [],
+      "provenance": {
+        "source_type": "MIGRATED_REGISTRY",
+        "source_ref": "P00NSMASHER/github-value-hunt-ledger:portfolio_prework/PROJECT_ID_REGISTRY.json@blob:60c97e366814388d0f10862d1d0737837866361e"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "project_id": "PRJ-004",
+      "slug": "capturebrief",
+      "canonical_name": "CaptureBrief",
+      "project_type": "BUSINESS",
+      "lifecycle_status": "ACTIVE",
+      "parent_project_id": null,
+      "aliases": [
+        "Capture Brief"
+      ],
+      "categories": [
+        "business",
+        "product",
+        "govcon"
+      ],
+      "repository_bindings": [
+        {
+          "repository_id": "REPO-007",
+          "full_name": "P00NSMASHER/capturebrief",
+          "integration_status": "DECLARED"
+        }
+      ],
+      "autonomy_profile_id": "AUT-004",
+      "objective_ids": [],
+      "metric_ids": [],
+      "evidence_policy": "PROVENANCE_REQUIRED",
+      "data_boundary": "PUBLIC_OR_SANITIZED_EVIDENCE_ONLY",
+      "registration_state": "REGISTERED",
+      "hard_boundaries": [],
+      "provenance": {
+        "source_type": "MIGRATED_REGISTRY",
+        "source_ref": "P00NSMASHER/github-value-hunt-ledger:portfolio_prework/PROJECT_ID_REGISTRY.json@blob:60c97e366814388d0f10862d1d0737837866361e"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "project_id": "PRJ-005",
+      "slug": "starblox",
+      "canonical_name": "StarBlox",
+      "project_type": "PRODUCT",
+      "lifecycle_status": "ACTIVE",
+      "parent_project_id": null,
+      "aliases": [
+        "Star Blocks",
+        "Star Market"
+      ],
+      "categories": [
+        "product",
+        "education",
+        "game"
+      ],
+      "repository_bindings": [
+        {
+          "repository_id": "REPO-002",
+          "full_name": "P00NSMASHER/StarBlox",
+          "integration_status": "DECLARED"
+        }
+      ],
+      "autonomy_profile_id": "AUT-005",
+      "objective_ids": [],
+      "metric_ids": [],
+      "evidence_policy": "PROVENANCE_REQUIRED",
+      "data_boundary": "PUBLIC_OR_SANITIZED_EVIDENCE_ONLY",
+      "registration_state": "REGISTERED",
+      "hard_boundaries": [],
+      "provenance": {
+        "source_type": "MIGRATED_REGISTRY",
+        "source_ref": "P00NSMASHER/github-value-hunt-ledger:portfolio_prework/PROJECT_ID_REGISTRY.json@blob:60c97e366814388d0f10862d1d0737837866361e"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "project_id": "PRJ-006",
+      "slug": "abvm-parent-companion",
+      "canonical_name": "ABVM Grade 2 Parent Companion",
+      "project_type": "PRODUCT",
+      "lifecycle_status": "ACTIVE",
+      "parent_project_id": null,
+      "aliases": [
+        "ABVM",
+        "ABVM app",
+        "ABVM School Star World"
+      ],
+      "categories": [
+        "product",
+        "education",
+        "parent_companion"
+      ],
+      "repository_bindings": [
+        {
+          "repository_id": "REPO-003",
+          "full_name": "P00NSMASHER/abvmschoolstarworld",
+          "integration_status": "DECLARED"
+        }
+      ],
+      "autonomy_profile_id": "AUT-006",
+      "objective_ids": [],
+      "metric_ids": [],
+      "evidence_policy": "PROVENANCE_REQUIRED",
+      "data_boundary": "PUBLIC_OR_SANITIZED_EVIDENCE_ONLY",
+      "registration_state": "REGISTERED",
+      "hard_boundaries": [],
+      "provenance": {
+        "source_type": "MIGRATED_REGISTRY",
+        "source_ref": "P00NSMASHER/github-value-hunt-ledger:portfolio_prework/PROJECT_ID_REGISTRY.json@blob:60c97e366814388d0f10862d1d0737837866361e"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "project_id": "PRJ-007",
+      "slug": "market-surveillance-research",
+      "canonical_name": "Market Surveillance Research Platform",
+      "project_type": "RESEARCH",
+      "lifecycle_status": "ACTIVE_RESEARCH_ONLY",
+      "parent_project_id": null,
+      "aliases": [
+        "trading-platform",
+        "Trading Platform"
+      ],
+      "categories": [
+        "research",
+        "market_surveillance",
+        "model_validation"
+      ],
+      "repository_bindings": [
+        {
+          "repository_id": "REPO-004",
+          "full_name": "P00NSMASHER/trading-platform",
+          "integration_status": "DECLARED"
+        }
+      ],
+      "autonomy_profile_id": "AUT-007",
+      "objective_ids": [],
+      "metric_ids": [],
+      "evidence_policy": "PROVENANCE_REQUIRED",
+      "data_boundary": "PRIVATE_DATA_BY_REFERENCE_ONLY",
+      "registration_state": "REGISTERED",
+      "hard_boundaries": [
+        "NO_AUTONOMOUS_TRADING",
+        "NO_BROKER_ORDER_EXECUTION"
+      ],
+      "provenance": {
+        "source_type": "MIGRATED_REGISTRY",
+        "source_ref": "P00NSMASHER/github-value-hunt-ledger:portfolio_prework/PROJECT_ID_REGISTRY.json@blob:60c97e366814388d0f10862d1d0737837866361e"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "project_id": "PRJ-008",
+      "slug": "hunter",
+      "canonical_name": "Hunter / GitHub Value Hunt",
+      "project_type": "RESEARCH",
+      "lifecycle_status": "ACTIVE",
+      "parent_project_id": null,
+      "aliases": [
+        "Hunter",
+        "GitHub Value Hunt",
+        "Technology Intelligence Loop"
+      ],
+      "categories": [
+        "research",
+        "technology_intelligence",
+        "continuous_learning"
+      ],
+      "repository_bindings": [
+        {
+          "repository_id": "REPO-001",
+          "full_name": "P00NSMASHER/github-value-hunt-ledger",
+          "integration_status": "DECLARED"
+        }
+      ],
+      "autonomy_profile_id": "AUT-008",
+      "objective_ids": [],
+      "metric_ids": [],
+      "evidence_policy": "PROVENANCE_REQUIRED",
+      "data_boundary": "PUBLIC_OR_SANITIZED_EVIDENCE_ONLY",
+      "registration_state": "REGISTERED",
+      "hard_boundaries": [],
+      "provenance": {
+        "source_type": "MIGRATED_REGISTRY",
+        "source_ref": "P00NSMASHER/github-value-hunt-ledger:portfolio_prework/PROJECT_ID_REGISTRY.json@blob:60c97e366814388d0f10862d1d0737837866361e"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "project_id": "PRJ-009",
+      "slug": "ai-business-os",
+      "canonical_name": "AI Business OS",
+      "project_type": "INFRASTRUCTURE",
+      "lifecycle_status": "ACTIVE",
+      "parent_project_id": null,
+      "aliases": [
+        "Business OS",
+        "Persistent Agent Runtime",
+        "Truth Engine",
+        "Value Memory",
+        "Knowledge Graph",
+        "Software Factory"
+      ],
+      "categories": [
+        "infrastructure",
+        "agents",
+        "governance",
+        "learning"
+      ],
+      "repository_bindings": [
+        {
+          "repository_id": "REPO-001",
+          "full_name": "P00NSMASHER/github-value-hunt-ledger",
+          "integration_status": "DECLARED"
+        }
+      ],
+      "autonomy_profile_id": "AUT-009",
+      "objective_ids": [],
+      "metric_ids": [],
+      "evidence_policy": "PROVENANCE_REQUIRED",
+      "data_boundary": "SANITIZED_CODE_POLICY_AND_RECEIPTS_ONLY",
+      "registration_state": "REGISTERED",
+      "hard_boundaries": [],
+      "provenance": {
+        "source_type": "MIGRATED_REGISTRY",
+        "source_ref": "P00NSMASHER/github-value-hunt-ledger:portfolio_prework/PROJECT_ID_REGISTRY.json@blob:60c97e366814388d0f10862d1d0737837866361e"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "project_id": "PRJ-010",
+      "slug": "browser-gateway",
+      "canonical_name": "Browser Gateway",
+      "project_type": "INFRASTRUCTURE",
+      "lifecycle_status": "IN_DEVELOPMENT",
+      "parent_project_id": null,
+      "aliases": [
+        "Mobile Browser Gateway"
+      ],
+      "categories": [
+        "infrastructure",
+        "browser",
+        "agent_tooling"
+      ],
+      "repository_bindings": [
+        {
+          "repository_id": "REPO-001",
+          "full_name": "P00NSMASHER/github-value-hunt-ledger",
+          "integration_status": "DECLARED"
+        }
+      ],
+      "autonomy_profile_id": "AUT-010",
+      "objective_ids": [],
+      "metric_ids": [],
+      "evidence_policy": "PROVENANCE_REQUIRED",
+      "data_boundary": "SANITIZED_CODE_POLICY_AND_RECEIPTS_ONLY",
+      "registration_state": "REGISTERED",
+      "hard_boundaries": [],
+      "provenance": {
+        "source_type": "MIGRATED_REGISTRY",
+        "source_ref": "P00NSMASHER/github-value-hunt-ledger:portfolio_prework/PROJECT_ID_REGISTRY.json@blob:60c97e366814388d0f10862d1d0737837866361e"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "project_id": "PRJ-011",
+      "slug": "evidence-data-ledgers",
+      "canonical_name": "Evidence Data Ledgers",
+      "project_type": "INFRASTRUCTURE",
+      "lifecycle_status": "ACTIVE",
+      "parent_project_id": null,
+      "aliases": [
+        "FMC Tariff Rule Ledger",
+        "Hospital Price Transparency MRF Ledger",
+        "Transparency-in-Coverage Payer MRF Ledger",
+        "OpenEI URDB Utility Rate Ledger"
+      ],
+      "categories": [
+        "data_infrastructure",
+        "provenance",
+        "recovery_support"
+      ],
+      "repository_bindings": [
+        {
+          "repository_id": "REPO-001",
+          "full_name": "P00NSMASHER/github-value-hunt-ledger",
+          "integration_status": "DECLARED"
+        }
+      ],
+      "autonomy_profile_id": "AUT-011",
+      "objective_ids": [],
+      "metric_ids": [],
+      "evidence_policy": "PROVENANCE_REQUIRED",
+      "data_boundary": "PUBLIC_OR_SANITIZED_EVIDENCE_ONLY",
+      "registration_state": "REGISTERED",
+      "hard_boundaries": [],
+      "provenance": {
+        "source_type": "MIGRATED_REGISTRY",
+        "source_ref": "P00NSMASHER/github-value-hunt-ledger:portfolio_prework/PROJECT_ID_REGISTRY.json@blob:60c97e366814388d0f10862d1d0737837866361e"
+      }
+    }
+  ]
+}

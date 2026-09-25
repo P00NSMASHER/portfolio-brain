@@ -1,0 +1,122 @@
+{
+  "schema_version": "1.0.0",
+  "factory_id": "portfolio-software-factory-v1",
+  "mode": "ISOLATED_BRANCH_PR_ONLY",
+  "max_attempts": 3,
+  "lease_seconds": 300,
+  "branch_prefix": "factory/",
+  "max_changed_files": 50,
+  "max_total_content_bytes": 1048576,
+  "max_single_file_bytes": 262144,
+  "allowed_builder_agent_ids": [
+    "AGT-ENGINEER"
+  ],
+  "allowed_verifier_agent_ids": [
+    "AGT-TESTER",
+    "AGT-AUDITOR",
+    "AGT-RED-TEAM"
+  ],
+  "required_submission_evidence": [
+    "commit_sha",
+    "changed_paths",
+    "test_commands",
+    "test_receipt_hashes",
+    "diff_hash"
+  ],
+  "forbidden_candidate_paths": [
+    ".git/",
+    ".github/workflows/",
+    ".github/actions/",
+    "CODEOWNERS",
+    ".env",
+    ".env.",
+    "PORTFOLIO_BUILD_STATE.json",
+    "runtime/KILL_SWITCH.json",
+    "hunting/KILL_SWITCH.json",
+    "agents/AGENT_POLICY.json",
+    "model_router/PROVIDER_REGISTRY.json"
+  ],
+  "executor_operations": [
+    "CREATE_BRANCH",
+    "COMMIT_CANDIDATE",
+    "CREATE_PR"
+  ],
+  "absent_operations": [
+    "UPDATE_DEFAULT_BRANCH",
+    "MERGE_PR",
+    "DEPLOY",
+    "DELETE_BRANCH",
+    "CHANGE_REPOSITORY_SETTINGS",
+    "CHANGE_SECRETS"
+  ],
+  "repository_policies": [
+    {
+      "repository_id": "REPO-008",
+      "repository_full_name": "P00NSMASHER/portfolio-brain",
+      "default_branch": "main",
+      "candidate_modify_enabled": true,
+      "pr_create_enabled": true
+    },
+    {
+      "repository_id": "REPO-001",
+      "repository_full_name": "P00NSMASHER/github-value-hunt-ledger",
+      "default_branch": "main",
+      "candidate_modify_enabled": false,
+      "pr_create_enabled": false
+    },
+    {
+      "repository_id": "REPO-002",
+      "repository_full_name": "P00NSMASHER/StarBlox",
+      "default_branch": "main",
+      "candidate_modify_enabled": false,
+      "pr_create_enabled": false
+    },
+    {
+      "repository_id": "REPO-003",
+      "repository_full_name": "P00NSMASHER/abvmschoolstarworld",
+      "default_branch": "main",
+      "candidate_modify_enabled": false,
+      "pr_create_enabled": false
+    },
+    {
+      "repository_id": "REPO-004",
+      "repository_full_name": "P00NSMASHER/trading-platform",
+      "default_branch": "main",
+      "candidate_modify_enabled": false,
+      "pr_create_enabled": false
+    },
+    {
+      "repository_id": "REPO-005",
+      "repository_full_name": "P00NSMASHER/permitplate-nyc",
+      "default_branch": "main",
+      "candidate_modify_enabled": false,
+      "pr_create_enabled": false
+    },
+    {
+      "repository_id": "REPO-006",
+      "repository_full_name": "P00NSMASHER/permitplate-state",
+      "default_branch": "main",
+      "candidate_modify_enabled": false,
+      "pr_create_enabled": false
+    },
+    {
+      "repository_id": "REPO-007",
+      "repository_full_name": "P00NSMASHER/capturebrief",
+      "default_branch": "main",
+      "candidate_modify_enabled": false,
+      "pr_create_enabled": false
+    }
+  ],
+  "invariants": [
+    "Only Engineer may build candidate software.",
+    "Factory writes are permitted only on isolated factory/ branches in explicitly write-enabled repositories.",
+    "Default-branch writes are structurally rejected.",
+    "Candidate commits must include regression-test commands and test receipt hashes.",
+    "Forbidden governance/workflow/secret surfaces cannot be modified by the v1 factory.",
+    "Builder cannot verify its own work.",
+    "PR creation requires an independent PASS verification bound to the exact commit/diff/tests.",
+    "The executor exposes no merge, deploy, default-branch update, settings, secrets or destructive branch operations.",
+    "Downstream repositories remain read-only until explicitly onboarded by a later policy change.",
+    "Factory work identification is evidence-driven; an empty engineering allocation produces no fabricated work."
+  ]
+}

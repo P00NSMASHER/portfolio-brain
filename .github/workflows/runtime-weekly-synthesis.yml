@@ -1,0 +1,16 @@
+name: runtime-weekly-synthesis
+
+on:
+  schedule:
+    - cron: "17 10 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  weekly:
+    uses: ./.github/workflows/runtime-worker.yml
+    with:
+      mode: weekly

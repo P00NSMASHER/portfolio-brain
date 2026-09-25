@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0.0",
+  "step": 3,
+  "purpose": "Bind final Step 3 verification to a clean concurrency key after the source branch runner stalled before the newest exact-head run began.",
+  "source_head": "bf357c8543def025cb42b997a6dbd87df54f4c56",
+  "expected_invariants": {
+    "evidence_states": [
+      "OBSERVED",
+      "VERIFIED",
+      "INFERRED",
+      "UNKNOWN",
+      "CONTRADICTED",
+      "STALE",
+      "INVALID"
+    ],
+    "required_event_types": 26,
+    "model_output_self_verification": "REJECTED",
+    "verified_event_without_verified_evidence": "REJECTED",
+    "unresolved_inference_basis": "REJECTED",
+    "duplicate_source_event": "REJECTED",
+    "private_reference_raw_payload": "REJECTED",
+    "deterministic_event_hash": "REQUIRED",
+    "deterministic_evidence_hash": "REQUIRED",
+    "deterministic_idempotency_key": "REQUIRED"
+  },
+  "authority_change": "NONE"
+}

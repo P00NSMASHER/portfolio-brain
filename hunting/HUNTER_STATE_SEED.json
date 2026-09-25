@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0.0",
+  "state_id": "portfolio-hunter-state",
+  "sequence": 0,
+  "updated_at": null,
+  "seen_candidate_fingerprints": {},
+  "negative_knowledge": [],
+  "strategy_stats": {
+    "STRAT:capability-conjunction-search-claim-tracing": {
+      "cycles": 0,
+      "queries": 0,
+      "candidates": 0,
+      "inspected": 0,
+      "retained": 0,
+      "experiment_proposals": 0,
+      "verified_value_outcomes": 0
+    },
+    "STRAT:first-party-production-source-triangulation": {
+      "cycles": 0,
+      "queries": 0,
+      "candidates": 0,
+      "inspected": 0,
+      "retained": 0,
+      "experiment_proposals": 0,
+      "verified_value_outcomes": 0
+    },
+    "STRAT:fail-open-boundary-archaeology": {
+      "cycles": 0,
+      "queries": 0,
+      "candidates": 0,
+      "inspected": 0,
+      "retained": 0,
+      "experiment_proposals": 0,
+      "verified_value_outcomes": 0
+    },
+    "STRAT:cross-source-emergence-triangulation": {
+      "cycles": 0,
+      "queries": 0,
+      "candidates": 0,
+      "inspected": 0,
+      "retained": 0,
+      "experiment_proposals": 0,
+      "verified_value_outcomes": 0
+    }
+  },
+  "exploration_cursor": 0,
+  "feedback_ids": [],
+  "recent_cycles": []
+}

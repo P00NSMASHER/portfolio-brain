@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "plan_count": 20,
+  "status_counts": {
+    "READY_FOR_ISOLATED_EXECUTION": 12,
+    "HUMAN_APPROVAL_REQUIRED": 6,
+    "BLOCKED": 2
+  },
+  "selected_uncertainty_id": "UNC-EXTERNAL-PRJ-001",
+  "selected_status": "HUMAN_APPROVAL_REQUIRED",
+  "selected_authority_requirement": "HUMAN_GATED_ACT",
+  "selected_approval_requirements": [
+    "CUSTOMER_COMMUNICATION"
+  ],
+  "checked_in_outcome_count": 0
+}

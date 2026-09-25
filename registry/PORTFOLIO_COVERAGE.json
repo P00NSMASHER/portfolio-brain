@@ -1,0 +1,402 @@
+{
+  "schema_version": "1.0.0",
+  "purpose": "Coverage map for owner-named portfolio businesses, products, research streams, and infrastructure. Coverage registration does not assert independent business validation or grant authority.",
+  "items": [
+    {
+      "name": "RecoveryWorks",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "RecoveryOS",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS_SYSTEM",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "AP Recovery",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS_LINE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Payer Recovery",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS_LINE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Utility Recovery",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS_LINE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Duty Recovery",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS_LINE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "SaaS Recovery",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS_LINE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Telecom Recovery",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS_LINE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Rebate Recovery",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS_LINE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Lease Recovery",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS_LINE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Construction Recovery",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS_LINE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Tax Recovery",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS_LINE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Insurance Recovery",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS_LINE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Cloud Recovery",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS_LINE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Merchant Fee Recovery",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS_LINE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Parcel Recovery",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS_LINE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Procurement Recovery",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS_LINE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Warranty/Credit Recovery",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS_LINE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Payroll/Benefit Billing Recovery",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "BUSINESS_LINE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Recovery Scan 360",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "PRODUCT_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Recovery Proof SLA",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "COMMERCIAL_CONCEPT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Commission/Payout Assurance",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "COMMERCIAL_CONCEPT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "AP Leakage Assurance",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "COMMERCIAL_CONCEPT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Money-State Integrity",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "COMMERCIAL_CONCEPT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Revenue Assurance concepts",
+      "canonical_project_id": "PRJ-001",
+      "item_kind": "COMMERCIAL_CONCEPT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Freight Recovery",
+      "canonical_project_id": "PRJ-002",
+      "item_kind": "BUSINESS",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "PermitPlate",
+      "canonical_project_id": "PRJ-003",
+      "item_kind": "BUSINESS",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "PermitPlate NYC",
+      "canonical_project_id": "PRJ-003",
+      "item_kind": "PRODUCT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "CaptureBrief",
+      "canonical_project_id": "PRJ-004",
+      "item_kind": "BUSINESS",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "ScopeSignal",
+      "canonical_project_id": "PRJ-004",
+      "item_kind": "COMMERCIAL_CONCEPT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "StarBlox",
+      "canonical_project_id": "PRJ-005",
+      "item_kind": "PRODUCT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "StarBlox learning systems",
+      "canonical_project_id": "PRJ-005",
+      "item_kind": "PRODUCT_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Star Market",
+      "canonical_project_id": "PRJ-005",
+      "item_kind": "PRODUCT_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "avatar/equipment/home/Buddy systems",
+      "canonical_project_id": "PRJ-005",
+      "item_kind": "PRODUCT_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "StarBlox artwork pipeline",
+      "canonical_project_id": "PRJ-005",
+      "item_kind": "PRODUCT_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "ABVM School Star World",
+      "canonical_project_id": "PRJ-006",
+      "item_kind": "PRODUCT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "ABVM Grade 2 Parent Companion",
+      "canonical_project_id": "PRJ-006",
+      "item_kind": "PRODUCT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "school-information ingestion/refresh systems",
+      "canonical_project_id": "PRJ-006",
+      "item_kind": "PRODUCT_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "trading-platform",
+      "canonical_project_id": "PRJ-007",
+      "item_kind": "RESEARCH",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "historical market-surveillance research",
+      "canonical_project_id": "PRJ-007",
+      "item_kind": "RESEARCH_STREAM",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Hunter / GitHub Value Hunt",
+      "canonical_project_id": "PRJ-008",
+      "item_kind": "RESEARCH",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "technology-intelligence experiments",
+      "canonical_project_id": "PRJ-008",
+      "item_kind": "RESEARCH_STREAM",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "search-strategy research",
+      "canonical_project_id": "PRJ-008",
+      "item_kind": "RESEARCH_STREAM",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "data/repository discovery",
+      "canonical_project_id": "PRJ-008",
+      "item_kind": "RESEARCH_STREAM",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "model evaluation",
+      "canonical_project_id": "PRJ-008",
+      "item_kind": "RESEARCH_STREAM",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "FMC tariff research",
+      "canonical_project_id": "PRJ-011",
+      "item_kind": "RESEARCH_STREAM",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Hospital Price Transparency MRF research",
+      "canonical_project_id": "PRJ-011",
+      "item_kind": "RESEARCH_STREAM",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "TiC payer MRF research",
+      "canonical_project_id": "PRJ-011",
+      "item_kind": "RESEARCH_STREAM",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "URDB utility-rate research",
+      "canonical_project_id": "PRJ-011",
+      "item_kind": "RESEARCH_STREAM",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "AI Business OS",
+      "canonical_project_id": "PRJ-009",
+      "item_kind": "INFRASTRUCTURE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Business OS",
+      "canonical_project_id": "PRJ-009",
+      "item_kind": "LEGACY_INFRASTRUCTURE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "persistent agents",
+      "canonical_project_id": "PRJ-009",
+      "item_kind": "INFRASTRUCTURE_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Truth Engine",
+      "canonical_project_id": "PRJ-009",
+      "item_kind": "INFRASTRUCTURE_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Value Memory",
+      "canonical_project_id": "PRJ-009",
+      "item_kind": "INFRASTRUCTURE_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Knowledge Graph",
+      "canonical_project_id": "PRJ-009",
+      "item_kind": "INFRASTRUCTURE_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "entity canonicalization",
+      "canonical_project_id": "PRJ-009",
+      "item_kind": "INFRASTRUCTURE_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "governance/control plane",
+      "canonical_project_id": "PRJ-009",
+      "item_kind": "INFRASTRUCTURE_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "software factory",
+      "canonical_project_id": "PRJ-009",
+      "item_kind": "INFRASTRUCTURE_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "portfolio allocator",
+      "canonical_project_id": "PRJ-009",
+      "item_kind": "INFRASTRUCTURE_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "learning engine",
+      "canonical_project_id": "PRJ-009",
+      "item_kind": "INFRASTRUCTURE_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "training environment",
+      "canonical_project_id": "PRJ-009",
+      "item_kind": "INFRASTRUCTURE_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "repair pipeline",
+      "canonical_project_id": "PRJ-009",
+      "item_kind": "INFRASTRUCTURE_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "skill evaluation/promotion",
+      "canonical_project_id": "PRJ-009",
+      "item_kind": "INFRASTRUCTURE_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "Browser Gateway",
+      "canonical_project_id": "PRJ-010",
+      "item_kind": "INFRASTRUCTURE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "GitHub automation",
+      "canonical_project_id": "PRJ-000",
+      "item_kind": "INFRASTRUCTURE_COMPONENT",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    },
+    {
+      "name": "future autonomous infrastructure",
+      "canonical_project_id": "PRJ-000",
+      "item_kind": "FUTURE_SCOPE",
+      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+    }
+  ]
+}

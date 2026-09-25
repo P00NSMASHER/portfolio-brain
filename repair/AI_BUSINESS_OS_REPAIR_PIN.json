@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0.0",
+  "integration_id": "REPAIR-AI-BUSINESS-OS-001",
+  "source_repository": "P00NSMASHER/github-value-hunt-ledger",
+  "source_revision": "c6276c80828d2632d5fee37cdaaf65f1d5b36427",
+  "components": {
+    "repair_queue": {
+      "path": "production/repair_queue.py",
+      "blob_sha": "eca81c795a130cd467812de5867c26dec1044ef2"
+    },
+    "repair_intake": {
+      "path": "production/repair_intake.py",
+      "blob_sha": "21b513b5347b0ef3b7e027498f437dfb84f699d6"
+    },
+    "learning_engine": {
+      "path": "production/learning_engine.py",
+      "blob_sha": "6ce4b266e24b9f6d8089e32618fa7a5c95bfe89c"
+    },
+    "skill_eval_intake": {
+      "path": "production/skill_eval_intake.py",
+      "blob_sha": "501f5c201588b57f83928461d1aedf0bddb589db"
+    },
+    "skill_promotion_intake": {
+      "path": "production/skill_promotion_intake.py",
+      "blob_sha": "417c387bdc9e6b2a77b860964b4f01d364235a59"
+    },
+    "skill_eval_tool": {
+      "path": "tools/ti_skill_eval_result_intake.py",
+      "blob_sha": "adbcc1875ab42aec245cc08994b81735c5eee424"
+    },
+    "skill_promotion_tool": {
+      "path": "tools/ti_skill_promotion_result_intake.py",
+      "blob_sha": "78c6526f7980e57ee0012bfa888eb6572a9d89e0"
+    },
+    "repair_candidate_contract": {
+      "path": "intelligence/repair_candidate_spool/README.md",
+      "blob_sha": "de8ebb24706b225c8cacbd2b60889174bcdfb636"
+    },
+    "repair_queue_tests": {
+      "path": "tests/test_ti_repair_queue.py",
+      "blob_sha": "8779c9c8dbc08bb505816cc56f255c97e2d58588"
+    }
+  },
+  "preserved_semantics": [
+    "Statistical overfit/regression alerts create reproduction-first tasks and cannot authorize mutation.",
+    "Only immutable non-sensitive non-benchmark-contaminated failure evidence with reproduction steps and a concrete regression test becomes repair-ready.",
+    "Repair candidates bind the exact repair-task hash, exact target, baseline/candidate artifacts, diff hash and regression-test evidence.",
+    "A repair candidate is not a live edit and cannot broaden its mutation scope.",
+    "Independent held-out evaluation is separate from candidate construction.",
+    "Canary/global promotion gates cannot be bypassed by a candidate score or self-assertion.",
+    "Automatic global promotion remains disabled.",
+    "Promotion eligibility still requires a separate integrator/human approval boundary."
+  ],
+  "integration_mode": "PINNED_REPAIR_AND_PROMOTION_SEMANTICS",
+  "copied_source_code": false,
+  "drift_policy": {
+    "exact_repository_revision_required": true,
+    "component_blob_shas_required": true,
+    "on_source_revision_change": "TARGETED_DELTA_AND_RECONFORM",
+    "on_component_blob_mismatch": "FAIL_CLOSED"
+  }
+}

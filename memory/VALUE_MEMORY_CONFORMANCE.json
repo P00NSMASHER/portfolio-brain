@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0.0",
+  "source": {
+    "repository": "P00NSMASHER/github-value-hunt-ledger",
+    "revision": "c6276c80828d2632d5fee37cdaaf65f1d5b36427",
+    "path": "ai_business_os/value_memory.py",
+    "blob_sha": "5e6450087e2fe0402ebe0af9ea0443383964a7a8",
+    "test_path": "ai_business_os/test_value_memory.py",
+    "test_blob_sha": "4bf0cb53a70ce196c9f1398fdf2aecc9980396fa"
+  },
+  "semantics": {
+    "independently_verified_outcomes_only": "REQUIRED",
+    "observer_verifier_separation": "REQUIRED",
+    "immutable_verification_decision": "REQUIRED",
+    "per_event_credit_conservation": "MAX_1_TOTAL",
+    "objective_conditioning": "REQUIRED",
+    "untested_memory_prior": "NEUTRAL",
+    "recency_decay": "HALF_LIFE",
+    "duplicate_event_per_memory": "REJECT"
+  },
+  "authority_change": "NONE"
+}

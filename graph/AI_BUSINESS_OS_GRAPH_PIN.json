@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0.0",
+  "integration_id": "GRAPH-AI-BUSINESS-OS-001",
+  "source_repository": "P00NSMASHER/github-value-hunt-ledger",
+  "source_revision": "c6276c80828d2632d5fee37cdaaf65f1d5b36427",
+  "knowledge_graph": {
+    "path": "ai_business_os/knowledge_graph.py",
+    "blob_sha": "d0ed2e015dc4593361d7600e48cb680a0df13245",
+    "test_path": "ai_business_os/test_knowledge_graph.py",
+    "test_blob_sha": "31cb7619a3ca7ae6cc83f35274894deddae911db"
+  },
+  "entity_canonicalization": {
+    "path": "ai_business_os/entity_canonicalization.py",
+    "blob_sha": "29a765be3598f83d20f5747518deb8de8f41ffd2",
+    "test_path": "ai_business_os/test_entity_canonicalization.py",
+    "test_blob_sha": "19c8dd8d9b6f8cbf91faa6f038a592348aa194d3"
+  },
+  "integration_mode": "PINNED_INTERFACE_PLUS_LOSSLESS_PORTFOLIO_ENVELOPE",
+  "copied_source_code": false,
+  "upstream_semantics": [
+    "Typed edge contracts fail closed.",
+    "Nodes require provenance evidence references.",
+    "Edges require non-empty evidence and content-addressed evidence hashes.",
+    "OUTCOME nodes require verified stable provenance.",
+    "Relationship supersession preserves temporal history.",
+    "Aliases resolve without destructive merge.",
+    "Hard identifier conflicts forbid canonicalization.",
+    "Ambiguous identity merges require HUMAN review with evidence.",
+    "Source-weighted survivorship preserves losing values/conflicts.",
+    "Canonicalization can be reversed after dependent live relationships are cleared."
+  ],
+  "drift_policy": {
+    "exact_repository_revision_required": true,
+    "exact_blob_shas_required": true,
+    "on_source_revision_change": "RECONFORM_BEFORE_USE",
+    "on_blob_mismatch": "FAIL_CLOSED"
+  }
+}

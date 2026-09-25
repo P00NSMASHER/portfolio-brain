@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0.0",
+  "ledger_id": "portfolio-learning-observations",
+  "policy": [
+    "Observations are append-only source records; corrections use new superseding evidence, not silent rewriting.",
+    "Empty production learning state is preferable to fabricated historical observations.",
+    "Private payloads are referenced, not stored, while Portfolio Brain remains public."
+  ],
+  "observations": []
+}

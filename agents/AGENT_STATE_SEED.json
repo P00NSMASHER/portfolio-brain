@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0.0",
+  "state_id": "portfolio-persistent-agent-seed",
+  "agents": [
+    {
+      "agent_id": "AGT-PORTFOLIO-MANAGER",
+      "role_key": "PORTFOLIO_MANAGER",
+      "status": "ACTIVE",
+      "generation": 1,
+      "last_heartbeat_at": null,
+      "state_refs": []
+    },
+    {
+      "agent_id": "AGT-HUNTER",
+      "role_key": "HUNTER",
+      "status": "ACTIVE",
+      "generation": 1,
+      "last_heartbeat_at": null,
+      "state_refs": []
+    },
+    {
+      "agent_id": "AGT-RESEARCHER",
+      "role_key": "RESEARCHER",
+      "status": "ACTIVE",
+      "generation": 1,
+      "last_heartbeat_at": null,
+      "state_refs": []
+    },
+    {
+      "agent_id": "AGT-PRODUCT-ANALYST",
+      "role_key": "PRODUCT_ANALYST",
+      "status": "ACTIVE",
+      "generation": 1,
+      "last_heartbeat_at": null,
+      "state_refs": []
+    },
+    {
+      "agent_id": "AGT-ENGINEER",
+      "role_key": "ENGINEER",
+      "status": "ACTIVE",
+      "generation": 1,
+      "last_heartbeat_at": null,
+      "state_refs": []
+    },
+    {
+      "agent_id": "AGT-TESTER",
+      "role_key": "TESTER",
+      "status": "ACTIVE",
+      "generation": 1,
+      "last_heartbeat_at": null,
+      "state_refs": []
+    },
+    {
+      "agent_id": "AGT-AUDITOR",
+      "role_key": "AUDITOR",
+      "status": "ACTIVE",
+      "generation": 1,
+      "last_heartbeat_at": null,
+      "state_refs": []
+    },
+    {
+      "agent_id": "AGT-RED-TEAM",
+      "role_key": "RED_TEAM",
+      "status": "ACTIVE",
+      "generation": 1,
+      "last_heartbeat_at": null,
+      "state_refs": []
+    },
+    {
+      "agent_id": "AGT-DATA-STEWARD",
+      "role_key": "DATA_STEWARD",
+      "status": "ACTIVE",
+      "generation": 1,
+      "last_heartbeat_at": null,
+      "state_refs": []
+    },
+    {
+      "agent_id": "AGT-COMMERCIAL-ANALYST",
+      "role_key": "COMMERCIAL_ANALYST",
+      "status": "ACTIVE",
+      "generation": 1,
+      "last_heartbeat_at": null,
+      "state_refs": []
+    }
+  ],
+  "work_items": [],
+  "evidence_refs": [],
+  "event_chain_head": null
+}

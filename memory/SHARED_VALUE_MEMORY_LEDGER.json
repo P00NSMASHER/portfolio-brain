@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "ledger_id": "portfolio-shared-value-memory",
+  "policy": [
+    "The ledger stores sanitized portfolio memory metadata and references, not private payloads.",
+    "No outcome changes learned value until independently VERIFIED.",
+    "Rejected or unverified observations remain auditable but do not contribute to learned value.",
+    "Verified attribution for a single event is conserved across memories and may not exceed 1.0 in total.",
+    "Objective-specific memories do not silently generalize to unrelated objectives.",
+    "An empty ledger is preferable to fabricated verified outcomes."
+  ],
+  "memories": [],
+  "outcomes": []
+}

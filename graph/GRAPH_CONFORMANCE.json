@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0.0",
+  "source_revision": "c6276c80828d2632d5fee37cdaaf65f1d5b36427",
+  "knowledge_graph_blob": "d0ed2e015dc4593361d7600e48cb680a0df13245",
+  "entity_canonicalization_blob": "29a765be3598f83d20f5747518deb8de8f41ffd2",
+  "semantics": {
+    "typed_edges": "FAIL_CLOSED",
+    "node_provenance": "REQUIRED",
+    "edge_evidence": "REQUIRED",
+    "outcome_provenance": "VERIFIED_AND_STABLE_EVENT_REQUIRED",
+    "temporal_supersession": "PRESERVE_HISTORY",
+    "aliases": "NON_DESTRUCTIVE",
+    "hard_identifier_conflict": "KEEP_SEPARATE",
+    "ambiguous_merge": "HUMAN_REVIEW_REQUIRED",
+    "survivorship_conflicts": "PRESERVED",
+    "canonicalization_reversal": "SUPPORTED_WITH_DEPENDENCY_GATES"
+  },
+  "universal_extension": {
+    "mapping_policy": "LOSSLESS_ONLY",
+    "unsupported_types": "PORTFOLIO_ONLY",
+    "graph_connectivity_truth_effect": "NONE",
+    "private_payload_policy": "REFERENCE_ONLY_WHILE_PUBLIC"
+  },
+  "authority_change": "NONE"
+}

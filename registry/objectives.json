@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0.0",
+  "objectives": [
+    {
+      "schema_version": "1.0.0",
+      "objective_id": "OBJ-000",
+      "project_id": "PRJ-000",
+      "title": "Operate an autonomous evidence-driven portfolio intelligence system",
+      "statement": "Build a self-triggering portfolio intelligence layer that continuously observes, learns, hunts, experiments, verifies, and improves without requiring interactive ChatGPT for ordinary operation while keeping consequential external authority human-gated.",
+      "status": "ACTIVE",
+      "priority": "CRITICAL",
+      "success_conditions": [
+        "Ordinary portfolio learning cycles can execute from durable automation without an interactive ChatGPT prompt.",
+        "Consequential ACT remains explicitly human-gated.",
+        "Verified outcomes update durable shared state and future decision policy."
+      ],
+      "constraints": [
+        "Evidence over confidence.",
+        "Independent verification for consequential promotion.",
+        "No autonomous live trading or brokerage execution.",
+        "No secrets or private operational/customer payloads stored while this repository is public."
+      ],
+      "evidence_requirements": [
+        "Exact source revisions and durable event/evidence receipts.",
+        "Deterministic tests plus independent verification for consequential promotion."
+      ],
+      "provenance": {
+        "source_type": "OWNER_DECLARATION",
+        "source_ref": "Portfolio Intelligence System primary mission"
+      }
+    }
+  ]
+}

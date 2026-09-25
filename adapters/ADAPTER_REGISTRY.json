@@ -1,0 +1,210 @@
+{
+  "schema_version": "1.0.0",
+  "policy": [
+    "Adapters are OBSERVE-only.",
+    "No adapter may write to a downstream repository.",
+    "Unchanged exact SHAs are skipped without content reread.",
+    "A changed repository is compared from prior cursor SHA to current source HEAD before any deeper inspection.",
+    "Blocked adapters perform no network read and do not advance their cursor.",
+    "Cursor advancement occurs only after a successful observation receipt."
+  ],
+  "adapters": [
+    {
+      "schema_version": "1.0.0",
+      "adapter_id": "ADP-001",
+      "adapter_name": "hunter_recoveryworks",
+      "adapter_type": "GITHUB_REPOSITORY",
+      "repository_id": "REPO-001",
+      "repository_full_name": "P00NSMASHER/github-value-hunt-ledger",
+      "project_ids": [
+        "PRJ-001",
+        "PRJ-002",
+        "PRJ-008",
+        "PRJ-009",
+        "PRJ-010",
+        "PRJ-011"
+      ],
+      "authority_class": "OBSERVE",
+      "enabled": true,
+      "source_ref_policy": {
+        "mode": "DEFAULT_BRANCH",
+        "ref": "main"
+      },
+      "data_classification": "PUBLIC",
+      "cursor_policy": {
+        "persist_exact_sha": true,
+        "skip_unchanged": true,
+        "compare_changed_only": true
+      },
+      "blocked_by": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "adapter_id": "ADP-002",
+      "adapter_name": "starblox",
+      "adapter_type": "GITHUB_REPOSITORY",
+      "repository_id": "REPO-002",
+      "repository_full_name": "P00NSMASHER/StarBlox",
+      "project_ids": [
+        "PRJ-005"
+      ],
+      "authority_class": "OBSERVE",
+      "enabled": true,
+      "source_ref_policy": {
+        "mode": "DEFAULT_BRANCH",
+        "ref": "main"
+      },
+      "data_classification": "PUBLIC",
+      "cursor_policy": {
+        "persist_exact_sha": true,
+        "skip_unchanged": true,
+        "compare_changed_only": true
+      },
+      "blocked_by": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "adapter_id": "ADP-003",
+      "adapter_name": "abvm",
+      "adapter_type": "GITHUB_REPOSITORY",
+      "repository_id": "REPO-003",
+      "repository_full_name": "P00NSMASHER/abvmschoolstarworld",
+      "project_ids": [
+        "PRJ-006"
+      ],
+      "authority_class": "OBSERVE",
+      "enabled": true,
+      "source_ref_policy": {
+        "mode": "DEFAULT_BRANCH",
+        "ref": "main"
+      },
+      "data_classification": "PUBLIC",
+      "cursor_policy": {
+        "persist_exact_sha": true,
+        "skip_unchanged": true,
+        "compare_changed_only": true
+      },
+      "blocked_by": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "adapter_id": "ADP-004",
+      "adapter_name": "trading_research",
+      "adapter_type": "GITHUB_REPOSITORY",
+      "repository_id": "REPO-004",
+      "repository_full_name": "P00NSMASHER/trading-platform",
+      "project_ids": [
+        "PRJ-007"
+      ],
+      "authority_class": "OBSERVE",
+      "enabled": true,
+      "source_ref_policy": {
+        "mode": "DEFAULT_BRANCH",
+        "ref": "main"
+      },
+      "data_classification": "PUBLIC",
+      "cursor_policy": {
+        "persist_exact_sha": true,
+        "skip_unchanged": true,
+        "compare_changed_only": true
+      },
+      "blocked_by": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "adapter_id": "ADP-005",
+      "adapter_name": "permitplate_nyc",
+      "adapter_type": "GITHUB_REPOSITORY",
+      "repository_id": "REPO-005",
+      "repository_full_name": "P00NSMASHER/permitplate-nyc",
+      "project_ids": [
+        "PRJ-003"
+      ],
+      "authority_class": "OBSERVE",
+      "enabled": true,
+      "source_ref_policy": {
+        "mode": "DEFAULT_BRANCH",
+        "ref": "main"
+      },
+      "data_classification": "PUBLIC",
+      "cursor_policy": {
+        "persist_exact_sha": true,
+        "skip_unchanged": true,
+        "compare_changed_only": true
+      },
+      "blocked_by": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "adapter_id": "ADP-006",
+      "adapter_name": "permitplate_state",
+      "adapter_type": "GITHUB_REPOSITORY",
+      "repository_id": "REPO-006",
+      "repository_full_name": "P00NSMASHER/permitplate-state",
+      "project_ids": [
+        "PRJ-003"
+      ],
+      "authority_class": "OBSERVE",
+      "enabled": false,
+      "source_ref_policy": {
+        "mode": "DEFAULT_BRANCH",
+        "ref": "main"
+      },
+      "data_classification": "PRIVATE_REFERENCE_ONLY",
+      "cursor_policy": {
+        "persist_exact_sha": true,
+        "skip_unchanged": true,
+        "compare_changed_only": true
+      },
+      "blocked_by": "BLK-001"
+    },
+    {
+      "schema_version": "1.0.0",
+      "adapter_id": "ADP-007",
+      "adapter_name": "capturebrief",
+      "adapter_type": "GITHUB_REPOSITORY",
+      "repository_id": "REPO-007",
+      "repository_full_name": "P00NSMASHER/capturebrief",
+      "project_ids": [
+        "PRJ-004"
+      ],
+      "authority_class": "OBSERVE",
+      "enabled": true,
+      "source_ref_policy": {
+        "mode": "DEFAULT_BRANCH",
+        "ref": "main"
+      },
+      "data_classification": "PUBLIC",
+      "cursor_policy": {
+        "persist_exact_sha": true,
+        "skip_unchanged": true,
+        "compare_changed_only": true
+      },
+      "blocked_by": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "adapter_id": "ADP-008",
+      "adapter_name": "portfolio_brain",
+      "adapter_type": "GITHUB_REPOSITORY",
+      "repository_id": "REPO-008",
+      "repository_full_name": "P00NSMASHER/portfolio-brain",
+      "project_ids": [
+        "PRJ-000"
+      ],
+      "authority_class": "OBSERVE",
+      "enabled": true,
+      "source_ref_policy": {
+        "mode": "DEFAULT_BRANCH",
+        "ref": "main"
+      },
+      "data_classification": "SANITIZED",
+      "cursor_policy": {
+        "persist_exact_sha": true,
+        "skip_unchanged": true,
+        "compare_changed_only": true
+      },
+      "blocked_by": null
+    }
+  ]
+}

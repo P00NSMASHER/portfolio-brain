@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/EVIDENCE_SCHEMA.json",
+  "title": "Portfolio Brain Evidence Receipt",
+  "description": "Immutable evidence receipt with explicit epistemic state, provenance, verification method, and deterministic hash.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version","evidence_id","project_id","evidence_type","evidence_state",
+    "subject_refs","source","actor","observed_at","verification","supports_refs",
+    "contradicts_refs","evidence_hash"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "evidence_id": {"type": "string","pattern": "^EVD-[A-Z0-9-]{8,}$"},
+    "project_id": {"type": "string","pattern": "^PRJ-[0-9]{3,}$"},
+    "evidence_type": {
+      "enum": [
+        "SOURCE_ARTIFACT","SYSTEM_OBSERVATION","TEST_RECEIPT","HUMAN_ATTESTATION",
+        "EXTERNAL_OUTCOME","MODEL_OUTPUT","DETERMINISTIC_DERIVATION"
+      ]
+    },
+    "evidence_state": {
+      "enum": ["OBSERVED","VERIFIED","INFERRED","UNKNOWN","CONTRADICTED","STALE","INVALID"]
+    },
+    "subject_refs": {
+      "type": "array",
+      "items": {"type": "string","minLength": 1,"maxLength": 300},
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_kind","source_ref","source_revision","retrieved_at","content_hash"],
+      "properties": {
+        "source_kind": {
+          "enum": ["GITHUB","FILE","API","WEB","DATABASE","HUMAN","SYSTEM","MODEL","EXTERNAL_SERVICE"]
+        },
+        "source_ref": {"type": "string","minLength": 1,"maxLength": 1000},
+        "source_revision": {
+          "type": ["string","null"],
+          "pattern": "^[A-Za-z0-9._:/@+-]{1,300}$"
+        },
+        "retrieved_at": {"type": "string","format": "date-time"},
+        "content_hash": {
+          "type": ["string","null"],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor_type","actor_id"],
+      "properties": {
+        "actor_type": {"enum": ["HUMAN","SYSTEM","MODEL","EXTERNAL"]},
+        "actor_id": {"type": "string","minLength": 1,"maxLength": 300}
+      }
+    },
+    "observed_at": {"type": "string","format": "date-time"},
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method","verifier_actor_id","verified_at","basis_evidence_ids","reason"],
+      "properties": {
+        "method": {
+          "enum": [
+            "NONE","DIRECT_SOURCE","DETERMINISTIC_TEST","INDEPENDENT_VERIFIER",
+            "HUMAN_CONFIRMATION","MODEL_INFERENCE","DETERMINISTIC_DERIVATION"
+          ]
+        },
+        "verifier_actor_id": {"type": ["string","null"],"minLength": 1,"maxLength": 300},
+        "verified_at": {"type": ["string","null"],"format": "date-time"},
+        "basis_evidence_ids": {
+          "type": "array",
+          "items": {"type": "string","pattern": "^EVD-[A-Z0-9-]{8,}$"},
+          "uniqueItems": true
+        },
+        "reason": {"type": ["string","null"],"maxLength": 1000}
+      }
+    },
+    "supports_refs": {
+      "type": "array",
+      "items": {"type": "string","minLength": 1,"maxLength": 300},
+      "uniqueItems": true
+    },
+    "contradicts_refs": {
+      "type": "array",
+      "items": {"type": "string","minLength": 1,"maxLength": 300},
+      "uniqueItems": true
+    },
+    "evidence_hash": {"type": "string","pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

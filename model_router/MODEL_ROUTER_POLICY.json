@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0.0",
+  "router_id": "portfolio-model-router-v1",
+  "mode": "DETERMINISTIC_FIRST",
+  "routing_adaptation": "VERIFIED_OUTCOME_FEEDBACK_ONLY",
+  "tiers": {
+    "0": {
+      "name": "NO_AI",
+      "purpose": "Deterministic code for hashing, validation, state transitions, aggregation and routine reports."
+    },
+    "1": {
+      "name": "LOW_COST_INTELLIGENCE",
+      "purpose": "Categorization, extraction, summarization and simple documentation."
+    },
+    "2": {
+      "name": "STRONG_REASONING",
+      "purpose": "Architecture, difficult debugging, cross-project synthesis, experiment design and opportunity reasoning."
+    },
+    "3": {
+      "name": "INDEPENDENT_ADVERSARIAL_REASONING",
+      "purpose": "Red-team evaluation, consequential architecture/self-improvement verification and high-impact promotion review."
+    }
+  },
+  "deterministic_task_kinds": [
+    "HASHING",
+    "SCHEMA_VALIDATION",
+    "STATE_TRANSITION",
+    "AGGREGATION",
+    "ROUTINE_REPORT"
+  ],
+  "tier1_task_kinds": [
+    "CLASSIFICATION",
+    "EXTRACTION",
+    "SUMMARIZATION",
+    "SIMPLE_DOCUMENTATION"
+  ],
+  "tier2_task_kinds": [
+    "ARCHITECTURE",
+    "DEBUGGING",
+    "CROSS_PROJECT_SYNTHESIS",
+    "EXPERIMENT_DESIGN",
+    "OPPORTUNITY_REASONING"
+  ],
+  "tier3_task_kinds": [
+    "ADVERSARIAL_REVIEW",
+    "PROMOTION_VERIFICATION",
+    "SELF_IMPROVEMENT_VERIFICATION",
+    "HIGH_IMPACT_AUDIT"
+  ],
+  "invariants": [
+    "Tier 0 is selected whenever deterministic_sufficient=true unless independent adversarial verification is explicitly required.",
+    "No model route can grant authority, approve an action, or upgrade evidence state.",
+    "A non-Tier-0 route requires an explicitly enabled provider and model compatible with the request data classification.",
+    "Every non-Tier-0 route must have a finite precomputed maximum cost not exceeding the request cost ceiling.",
+    "Tier 3 requires a nonempty builder independence group and a verifier model with a different independence group.",
+    "Provider/model prestige does not affect routing value; only verified downstream outcome feedback may later adapt routing.",
+    "Prompt/payload content is not stored in routing ledgers; only sanitized IDs, hashes, usage and cost metadata are retained.",
+    "Human-gated ACT, customer communication, payments and live trading remain governed outside the model router.",
+    "Every routed non-Tier-0 provider execution must obtain a Step 20 cost-governor reservation before invocation; routing alone is never spend authorization."
+  ]
+}

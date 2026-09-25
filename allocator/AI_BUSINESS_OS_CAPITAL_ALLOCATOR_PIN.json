@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0.0",
+  "integration_id": "ALLOCATOR-AI-BUSINESS-OS-001",
+  "source_repository": "P00NSMASHER/github-value-hunt-ledger",
+  "source_revision": "c6276c80828d2632d5fee37cdaaf65f1d5b36427",
+  "components": {
+    "capital_allocator": {
+      "path": "ai_business_os/capital_allocator.py",
+      "blob_sha": "cf08795e72de378656f9be963b36efa80b945c33"
+    },
+    "capital_allocator_contract": {
+      "path": "ai_business_os/CAPITAL_ALLOCATOR_CONTRACT.md",
+      "blob_sha": "d997ad49c90c9b8bcf298cffbb764d2122a66ad3"
+    },
+    "capital_allocator_tests": {
+      "path": "ai_business_os/test_capital_allocator.py",
+      "blob_sha": "3c15babd1cd899c32bcf62c0945c57e481a9d511"
+    },
+    "governance": {
+      "path": "ai_business_os/governance.py",
+      "blob_sha": "40d278e479830d6f76aca7da22b6893f5d0060a7"
+    },
+    "governance_tests": {
+      "path": "ai_business_os/test_governance.py",
+      "blob_sha": "3a1429ec8d81e92d1043e89c55a7868b226a6fd4"
+    }
+  },
+  "reused_semantics": [
+    "Allocator output is decision support rather than autonomous execution.",
+    "Evidence provenance, source identity and freshness matter to allocation evidence.",
+    "Weak or missing evidence reduces allocation authority.",
+    "Forecasts and speculative signals are not realized cash.",
+    "Concentration limits remain explicit.",
+    "Real resource/cash movement must cross governance and human approval boundaries.",
+    "Allocation authorization binds to an exact immutable plan.",
+    "Kill switches and stale-policy/evidence rechecks are part of execution governance."
+  ],
+  "deliberately_not_reused": [
+    "The upstream composite portfolio score is not used as the Portfolio Brain cross-project allocation oracle.",
+    "Portfolio Brain uses resource-specific Pareto layers and explicit share-conversion rules instead of one cross-resource scalar score."
+  ],
+  "integration_mode": "PINNED_EVIDENCE_AND_GOVERNANCE_SEMANTICS",
+  "copied_source_code": false,
+  "drift_policy": {
+    "exact_repository_revision_required": true,
+    "component_blob_shas_required": true,
+    "on_source_revision_change": "TARGETED_DELTA_AND_RECONFORM",
+    "on_component_blob_mismatch": "FAIL_CLOSED"
+  }
+}

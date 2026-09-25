@@ -1,0 +1,16 @@
+name: runtime-daily-learning
+
+on:
+  schedule:
+    - cron: "37 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  daily:
+    uses: ./.github/workflows/runtime-worker.yml
+    with:
+      mode: daily

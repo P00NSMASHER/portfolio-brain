@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "operating_mode_id": "portfolio-brain-autonomous-operating-mode-v1",
+  "status": "RELEASE_CANDIDATE",
+  "candidate_branch": "step25-final-autonomous-operating-mode-20260925",
+  "candidate_source_head": "8891764144dbcaccb8683d3f28a7db45bef52aba",
+  "target_branch": "main",
+  "promoted_main_sha": null,
+  "final_ci_run_id": null,
+  "post_promotion_runtime_run_id": null,
+  "post_promotion_runtime_artifacts": [],
+  "authority_change": "NONE",
+  "operational_without_interactive_chatgpt": null
+}

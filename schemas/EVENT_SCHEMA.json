@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/EVENT_SCHEMA.json",
+  "title": "Portfolio Brain Event Envelope",
+  "description": "Versioned, replay-safe portfolio event envelope with explicit provenance, evidence links, dependencies, causal links, verification status, and deterministic hash.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version","event_id","event_type","occurred_at","recorded_at","project_id",
+    "source","actor","authority_class","subject_refs","evidence_ids",
+    "verification_status","dependency_event_ids","causal_event_ids","metrics",
+    "data_classification","payload","idempotency_key","event_hash"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "event_id": {"type": "string","pattern": "^EVT-[A-Z0-9-]{8,}$"},
+    "event_type": {"type": "string","pattern": "^[A-Z][A-Z0-9_]{2,127}$"},
+    "occurred_at": {"type": "string","format": "date-time"},
+    "recorded_at": {"type": "string","format": "date-time"},
+    "project_id": {"type": "string","pattern": "^PRJ-[0-9]{3,}$"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system","source_ref","source_revision"],
+      "properties": {
+        "system": {"type": "string","minLength": 1,"maxLength": 120},
+        "source_ref": {"type": "string","minLength": 1,"maxLength": 1000},
+        "source_revision": {
+          "type": ["string","null"],
+          "pattern": "^[A-Za-z0-9._:/@+-]{1,300}$"
+        }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor_type","actor_id"],
+      "properties": {
+        "actor_type": {"enum": ["HUMAN","SYSTEM","MODEL","EXTERNAL"]},
+        "actor_id": {"type": "string","minLength": 1,"maxLength": 300}
+      }
+    },
+    "authority_class": {"enum": ["NONE","OBSERVE","EXPERIMENT","MODIFY","ACT"]},
+    "subject_refs": {
+      "type": "array",
+      "items": {"type": "string","minLength": 1,"maxLength": 300},
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "evidence_ids": {
+      "type": "array",
+      "items": {"type": "string","pattern": "^EVD-[A-Z0-9-]{8,}$"},
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "verification_status": {
+      "enum": ["OBSERVED","VERIFIED","INFERRED","UNKNOWN","CONTRADICTED","STALE","INVALID"]
+    },
+    "dependency_event_ids": {
+      "type": "array",
+      "items": {"type": "string","pattern": "^EVT-[A-Z0-9-]{8,}$"},
+      "uniqueItems": true
+    },
+    "causal_event_ids": {
+      "type": "array",
+      "items": {"type": "string","pattern": "^EVT-[A-Z0-9-]{8,}$"},
+      "uniqueItems": true
+    },
+    "metrics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["metric_id","value","unit"],
+        "properties": {
+          "metric_id": {"type": "string","pattern": "^MET-[0-9]{3,}$"},
+          "value": {"type": ["number","integer","string","boolean"]},
+          "unit": {"type": "string","minLength": 1,"maxLength": 80}
+        }
+      }
+    },
+    "data_classification": {
+      "enum": ["PUBLIC","SANITIZED","PRIVATE_REFERENCE_ONLY"]
+    },
+    "payload": {"type": "object"},
+    "idempotency_key": {"type": "string","pattern": "^sha256:[0-9a-f]{64}$"},
+    "event_hash": {"type": "string","pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

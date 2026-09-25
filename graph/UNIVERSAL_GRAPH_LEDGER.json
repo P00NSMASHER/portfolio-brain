@@ -1,0 +1,1056 @@
+{
+  "schema_version": "1.0.0",
+  "ledger_id": "portfolio-universal-knowledge-graph",
+  "policy": [
+    "Only evidence-backed nodes and edges are persisted.",
+    "Graph connectivity does not upgrade truth state.",
+    "No customer, revenue, opportunity, or commercial outcome is seeded without supporting evidence.",
+    "Private data is represented by references only while Portfolio Brain is public."
+  ],
+  "nodes": [
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-PROJECT-00000000",
+      "node_type": "PROJECT",
+      "canonical_key": "PRJ-000",
+      "label": "Portfolio Brain",
+      "project_ids": [
+        "PRJ-000"
+      ],
+      "attributes": {
+        "slug": "portfolio-brain",
+        "project_type": "PORTFOLIO",
+        "lifecycle_status": "ACTIVE"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "PORTFOLIO_ONLY",
+        "upstream_node_type": null
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-PROJECT-00000001",
+      "node_type": "PROJECT",
+      "canonical_key": "PRJ-001",
+      "label": "RecoveryWorks",
+      "project_ids": [
+        "PRJ-001"
+      ],
+      "attributes": {
+        "slug": "recoveryworks",
+        "project_type": "BUSINESS",
+        "lifecycle_status": "ACTIVE"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "PORTFOLIO_ONLY",
+        "upstream_node_type": null
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-PROJECT-00000002",
+      "node_type": "PROJECT",
+      "canonical_key": "PRJ-002",
+      "label": "Freight Recovery",
+      "project_ids": [
+        "PRJ-002"
+      ],
+      "attributes": {
+        "slug": "freight-recovery",
+        "project_type": "BUSINESS",
+        "lifecycle_status": "ACTIVE"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "PORTFOLIO_ONLY",
+        "upstream_node_type": null
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-PROJECT-00000003",
+      "node_type": "PROJECT",
+      "canonical_key": "PRJ-003",
+      "label": "PermitPlate",
+      "project_ids": [
+        "PRJ-003"
+      ],
+      "attributes": {
+        "slug": "permitplate",
+        "project_type": "BUSINESS",
+        "lifecycle_status": "ACTIVE"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "PORTFOLIO_ONLY",
+        "upstream_node_type": null
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-PROJECT-00000004",
+      "node_type": "PROJECT",
+      "canonical_key": "PRJ-004",
+      "label": "CaptureBrief",
+      "project_ids": [
+        "PRJ-004"
+      ],
+      "attributes": {
+        "slug": "capturebrief",
+        "project_type": "BUSINESS",
+        "lifecycle_status": "ACTIVE"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "PORTFOLIO_ONLY",
+        "upstream_node_type": null
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-PROJECT-00000005",
+      "node_type": "PROJECT",
+      "canonical_key": "PRJ-005",
+      "label": "StarBlox",
+      "project_ids": [
+        "PRJ-005"
+      ],
+      "attributes": {
+        "slug": "starblox",
+        "project_type": "PRODUCT",
+        "lifecycle_status": "ACTIVE"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "PORTFOLIO_ONLY",
+        "upstream_node_type": null
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-PROJECT-00000006",
+      "node_type": "PROJECT",
+      "canonical_key": "PRJ-006",
+      "label": "ABVM Grade 2 Parent Companion",
+      "project_ids": [
+        "PRJ-006"
+      ],
+      "attributes": {
+        "slug": "abvm-parent-companion",
+        "project_type": "PRODUCT",
+        "lifecycle_status": "ACTIVE"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "PORTFOLIO_ONLY",
+        "upstream_node_type": null
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-PROJECT-00000007",
+      "node_type": "PROJECT",
+      "canonical_key": "PRJ-007",
+      "label": "Market Surveillance Research Platform",
+      "project_ids": [
+        "PRJ-007"
+      ],
+      "attributes": {
+        "slug": "market-surveillance-research",
+        "project_type": "RESEARCH",
+        "lifecycle_status": "ACTIVE_RESEARCH_ONLY"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "PORTFOLIO_ONLY",
+        "upstream_node_type": null
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-PROJECT-00000008",
+      "node_type": "PROJECT",
+      "canonical_key": "PRJ-008",
+      "label": "Hunter / GitHub Value Hunt",
+      "project_ids": [
+        "PRJ-008"
+      ],
+      "attributes": {
+        "slug": "hunter",
+        "project_type": "RESEARCH",
+        "lifecycle_status": "ACTIVE"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "PORTFOLIO_ONLY",
+        "upstream_node_type": null
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-PROJECT-00000009",
+      "node_type": "PROJECT",
+      "canonical_key": "PRJ-009",
+      "label": "AI Business OS",
+      "project_ids": [
+        "PRJ-009"
+      ],
+      "attributes": {
+        "slug": "ai-business-os",
+        "project_type": "INFRASTRUCTURE",
+        "lifecycle_status": "ACTIVE"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "PORTFOLIO_ONLY",
+        "upstream_node_type": null
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-PROJECT-00000010",
+      "node_type": "PROJECT",
+      "canonical_key": "PRJ-010",
+      "label": "Browser Gateway",
+      "project_ids": [
+        "PRJ-010"
+      ],
+      "attributes": {
+        "slug": "browser-gateway",
+        "project_type": "INFRASTRUCTURE",
+        "lifecycle_status": "IN_DEVELOPMENT"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "PORTFOLIO_ONLY",
+        "upstream_node_type": null
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-PROJECT-00000011",
+      "node_type": "PROJECT",
+      "canonical_key": "PRJ-011",
+      "label": "Evidence Data Ledgers",
+      "project_ids": [
+        "PRJ-011"
+      ],
+      "attributes": {
+        "slug": "evidence-data-ledgers",
+        "project_type": "INFRASTRUCTURE",
+        "lifecycle_status": "ACTIVE"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "PORTFOLIO_ONLY",
+        "upstream_node_type": null
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-REPOSITORY-00000001",
+      "node_type": "REPOSITORY",
+      "canonical_key": "P00NSMASHER/github-value-hunt-ledger",
+      "label": "P00NSMASHER/github-value-hunt-ledger",
+      "project_ids": [
+        "PRJ-001",
+        "PRJ-002",
+        "PRJ-008",
+        "PRJ-009",
+        "PRJ-010",
+        "PRJ-011"
+      ],
+      "attributes": {
+        "repository_id": "REPO-001"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "NATIVE",
+        "upstream_node_type": "REPO"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-REPOSITORY-00000002",
+      "node_type": "REPOSITORY",
+      "canonical_key": "P00NSMASHER/StarBlox",
+      "label": "P00NSMASHER/StarBlox",
+      "project_ids": [
+        "PRJ-005"
+      ],
+      "attributes": {
+        "repository_id": "REPO-002"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "NATIVE",
+        "upstream_node_type": "REPO"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-REPOSITORY-00000003",
+      "node_type": "REPOSITORY",
+      "canonical_key": "P00NSMASHER/abvmschoolstarworld",
+      "label": "P00NSMASHER/abvmschoolstarworld",
+      "project_ids": [
+        "PRJ-006"
+      ],
+      "attributes": {
+        "repository_id": "REPO-003"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "NATIVE",
+        "upstream_node_type": "REPO"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-REPOSITORY-00000004",
+      "node_type": "REPOSITORY",
+      "canonical_key": "P00NSMASHER/trading-platform",
+      "label": "P00NSMASHER/trading-platform",
+      "project_ids": [
+        "PRJ-007"
+      ],
+      "attributes": {
+        "repository_id": "REPO-004"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "NATIVE",
+        "upstream_node_type": "REPO"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-REPOSITORY-00000005",
+      "node_type": "REPOSITORY",
+      "canonical_key": "P00NSMASHER/permitplate-nyc",
+      "label": "P00NSMASHER/permitplate-nyc",
+      "project_ids": [
+        "PRJ-003"
+      ],
+      "attributes": {
+        "repository_id": "REPO-005"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "NATIVE",
+        "upstream_node_type": "REPO"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-REPOSITORY-00000006",
+      "node_type": "REPOSITORY",
+      "canonical_key": "P00NSMASHER/permitplate-state",
+      "label": "P00NSMASHER/permitplate-state",
+      "project_ids": [
+        "PRJ-003"
+      ],
+      "attributes": {
+        "repository_id": "REPO-006"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "NATIVE",
+        "upstream_node_type": "REPO"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-REPOSITORY-00000007",
+      "node_type": "REPOSITORY",
+      "canonical_key": "P00NSMASHER/capturebrief",
+      "label": "P00NSMASHER/capturebrief",
+      "project_ids": [
+        "PRJ-004"
+      ],
+      "attributes": {
+        "repository_id": "REPO-007"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "NATIVE",
+        "upstream_node_type": "REPO"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-REPOSITORY-00000008",
+      "node_type": "REPOSITORY",
+      "canonical_key": "P00NSMASHER/portfolio-brain",
+      "label": "P00NSMASHER/portfolio-brain",
+      "project_ids": [
+        "PRJ-000"
+      ],
+      "attributes": {
+        "repository_id": "REPO-008"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "NATIVE",
+        "upstream_node_type": "REPO"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-OWNEROBJECTIVE-00000000",
+      "node_type": "OWNER_OBJECTIVE",
+      "canonical_key": "OBJ-000",
+      "label": "Operate an autonomous evidence-driven portfolio intelligence system",
+      "project_ids": [
+        "PRJ-000"
+      ],
+      "attributes": {
+        "objective_id": "OBJ-000",
+        "priority": "CRITICAL",
+        "status": "ACTIVE"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain:registry/objectives.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "PORTFOLIO_ONLY",
+        "upstream_node_type": null
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-CAPABILITY-EVENTS-0001",
+      "node_type": "CAPABILITY",
+      "canonical_key": "portfolio:event-evidence",
+      "label": "Universal event/evidence contracts",
+      "project_ids": [
+        "PRJ-000"
+      ],
+      "attributes": {
+        "verified_build_commit": "c67b6aaf207e600add0a6c614a167ce2f6334f9d",
+        "ci_run": "36160478176"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain@c67b6aaf207e600add0a6c614a167ce2f6334f9d",
+        "ci-run:36160478176"
+      ],
+      "verification_state": "VERIFIED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "NATIVE",
+        "upstream_node_type": "CAPABILITY"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-CAPABILITY-ADAPTERS-01",
+      "node_type": "CAPABILITY",
+      "canonical_key": "portfolio:readonly-adapters",
+      "label": "Read-only delta repository adapters",
+      "project_ids": [
+        "PRJ-000"
+      ],
+      "attributes": {
+        "verified_build_commit": "5647dc9c345992266ce81b33f7ed5c6f44c45e76",
+        "ci_run": "36161615211"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain@5647dc9c345992266ce81b33f7ed5c6f44c45e76",
+        "ci-run:36161615211"
+      ],
+      "verification_state": "VERIFIED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "NATIVE",
+        "upstream_node_type": "CAPABILITY"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-CAPABILITY-TRUTH-0001",
+      "node_type": "CAPABILITY",
+      "canonical_key": "portfolio:truth-integration",
+      "label": "Pinned Truth Engine integration",
+      "project_ids": [
+        "PRJ-000"
+      ],
+      "attributes": {
+        "verified_build_commit": "fe58cd53a216091fcd6e210ac2cf72adf46e1747",
+        "ci_run": "36162245537"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain@fe58cd53a216091fcd6e210ac2cf72adf46e1747",
+        "ci-run:36162245537"
+      ],
+      "verification_state": "VERIFIED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "NATIVE",
+        "upstream_node_type": "CAPABILITY"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "node_id": "GN-CAPABILITY-MEMORY-001",
+      "node_type": "CAPABILITY",
+      "canonical_key": "portfolio:shared-value-memory",
+      "label": "Verified-outcome shared value memory",
+      "project_ids": [
+        "PRJ-000"
+      ],
+      "attributes": {
+        "verified_build_commit": "2417a2f4a95dec7f528b0bfd4ba71e7f0858290a",
+        "ci_run": "36166448312"
+      },
+      "provenance_refs": [
+        "git:portfolio-brain@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a",
+        "ci-run:36166448312"
+      ],
+      "verification_state": "VERIFIED",
+      "data_classification": "SANITIZED",
+      "status": "ACTIVE",
+      "upstream_mapping": {
+        "mode": "NATIVE",
+        "upstream_node_type": "CAPABILITY"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000001",
+      "source_node_id": "GN-OWNEROBJECTIVE-00000000",
+      "edge_type": "APPLIES_TO",
+      "target_node_id": "GN-PROJECT-00000000",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain:registry/objectives.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000002",
+      "source_node_id": "GN-PROJECT-00000000",
+      "edge_type": "HAS_REPOSITORY",
+      "target_node_id": "GN-REPOSITORY-00000008",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000003",
+      "source_node_id": "GN-PROJECT-00000001",
+      "edge_type": "HAS_REPOSITORY",
+      "target_node_id": "GN-REPOSITORY-00000001",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000004",
+      "source_node_id": "GN-PROJECT-00000002",
+      "edge_type": "HAS_REPOSITORY",
+      "target_node_id": "GN-REPOSITORY-00000001",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000005",
+      "source_node_id": "GN-PROJECT-00000003",
+      "edge_type": "HAS_REPOSITORY",
+      "target_node_id": "GN-REPOSITORY-00000005",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000006",
+      "source_node_id": "GN-PROJECT-00000003",
+      "edge_type": "HAS_REPOSITORY",
+      "target_node_id": "GN-REPOSITORY-00000006",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000007",
+      "source_node_id": "GN-PROJECT-00000004",
+      "edge_type": "HAS_REPOSITORY",
+      "target_node_id": "GN-REPOSITORY-00000007",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000008",
+      "source_node_id": "GN-PROJECT-00000005",
+      "edge_type": "HAS_REPOSITORY",
+      "target_node_id": "GN-REPOSITORY-00000002",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000009",
+      "source_node_id": "GN-PROJECT-00000006",
+      "edge_type": "HAS_REPOSITORY",
+      "target_node_id": "GN-REPOSITORY-00000003",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000010",
+      "source_node_id": "GN-PROJECT-00000007",
+      "edge_type": "HAS_REPOSITORY",
+      "target_node_id": "GN-REPOSITORY-00000004",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000011",
+      "source_node_id": "GN-PROJECT-00000008",
+      "edge_type": "HAS_REPOSITORY",
+      "target_node_id": "GN-REPOSITORY-00000001",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000012",
+      "source_node_id": "GN-PROJECT-00000009",
+      "edge_type": "HAS_REPOSITORY",
+      "target_node_id": "GN-REPOSITORY-00000001",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000013",
+      "source_node_id": "GN-PROJECT-00000010",
+      "edge_type": "HAS_REPOSITORY",
+      "target_node_id": "GN-REPOSITORY-00000001",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000014",
+      "source_node_id": "GN-PROJECT-00000011",
+      "edge_type": "HAS_REPOSITORY",
+      "target_node_id": "GN-REPOSITORY-00000001",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain:registry/projects.json@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a"
+      ],
+      "verification_state": "OBSERVED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000015",
+      "source_node_id": "GN-REPOSITORY-00000008",
+      "edge_type": "IMPLEMENTS",
+      "target_node_id": "GN-CAPABILITY-EVENTS-0001",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain@c67b6aaf207e600add0a6c614a167ce2f6334f9d",
+        "ci-run:36160478176"
+      ],
+      "verification_state": "VERIFIED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000016",
+      "source_node_id": "GN-PROJECT-00000000",
+      "edge_type": "HAS_CAPABILITY",
+      "target_node_id": "GN-CAPABILITY-EVENTS-0001",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain@c67b6aaf207e600add0a6c614a167ce2f6334f9d",
+        "ci-run:36160478176"
+      ],
+      "verification_state": "VERIFIED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000017",
+      "source_node_id": "GN-CAPABILITY-EVENTS-0001",
+      "edge_type": "ENABLES",
+      "target_node_id": "GN-PROJECT-00000000",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain@c67b6aaf207e600add0a6c614a167ce2f6334f9d",
+        "ci-run:36160478176"
+      ],
+      "verification_state": "VERIFIED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000018",
+      "source_node_id": "GN-REPOSITORY-00000008",
+      "edge_type": "IMPLEMENTS",
+      "target_node_id": "GN-CAPABILITY-ADAPTERS-01",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain@5647dc9c345992266ce81b33f7ed5c6f44c45e76",
+        "ci-run:36161615211"
+      ],
+      "verification_state": "VERIFIED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000019",
+      "source_node_id": "GN-PROJECT-00000000",
+      "edge_type": "HAS_CAPABILITY",
+      "target_node_id": "GN-CAPABILITY-ADAPTERS-01",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain@5647dc9c345992266ce81b33f7ed5c6f44c45e76",
+        "ci-run:36161615211"
+      ],
+      "verification_state": "VERIFIED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000020",
+      "source_node_id": "GN-CAPABILITY-ADAPTERS-01",
+      "edge_type": "ENABLES",
+      "target_node_id": "GN-PROJECT-00000000",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain@5647dc9c345992266ce81b33f7ed5c6f44c45e76",
+        "ci-run:36161615211"
+      ],
+      "verification_state": "VERIFIED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000021",
+      "source_node_id": "GN-REPOSITORY-00000008",
+      "edge_type": "IMPLEMENTS",
+      "target_node_id": "GN-CAPABILITY-TRUTH-0001",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain@fe58cd53a216091fcd6e210ac2cf72adf46e1747",
+        "ci-run:36162245537"
+      ],
+      "verification_state": "VERIFIED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000022",
+      "source_node_id": "GN-PROJECT-00000000",
+      "edge_type": "HAS_CAPABILITY",
+      "target_node_id": "GN-CAPABILITY-TRUTH-0001",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain@fe58cd53a216091fcd6e210ac2cf72adf46e1747",
+        "ci-run:36162245537"
+      ],
+      "verification_state": "VERIFIED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000023",
+      "source_node_id": "GN-CAPABILITY-TRUTH-0001",
+      "edge_type": "ENABLES",
+      "target_node_id": "GN-PROJECT-00000000",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain@fe58cd53a216091fcd6e210ac2cf72adf46e1747",
+        "ci-run:36162245537"
+      ],
+      "verification_state": "VERIFIED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000024",
+      "source_node_id": "GN-REPOSITORY-00000008",
+      "edge_type": "IMPLEMENTS",
+      "target_node_id": "GN-CAPABILITY-MEMORY-001",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a",
+        "ci-run:36166448312"
+      ],
+      "verification_state": "VERIFIED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000025",
+      "source_node_id": "GN-PROJECT-00000000",
+      "edge_type": "HAS_CAPABILITY",
+      "target_node_id": "GN-CAPABILITY-MEMORY-001",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a",
+        "ci-run:36166448312"
+      ],
+      "verification_state": "VERIFIED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "edge_id": "GE-EDGE-00000026",
+      "source_node_id": "GN-CAPABILITY-MEMORY-001",
+      "edge_type": "ENABLES",
+      "target_node_id": "GN-PROJECT-00000000",
+      "attributes": {},
+      "provenance_refs": [
+        "git:portfolio-brain@2417a2f4a95dec7f528b0bfd4ba71e7f0858290a",
+        "ci-run:36166448312"
+      ],
+      "verification_state": "VERIFIED",
+      "status": "ACTIVE",
+      "valid_from": "2026-09-25T17:25:00Z",
+      "valid_to": null,
+      "supersedes_edge_id": null
+    }
+  ]
+}

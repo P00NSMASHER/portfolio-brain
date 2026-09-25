@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "step": 6,
+  "purpose": "Bind final Step 6 verification to a clean concurrency key.",
+  "source_head": "7bc12e42f9735b38762dfac2ade8390e1b9e2372",
+  "expected_invariants": {
+    "canonical_value_memory_source_revision": "b906d3f12aa9ad1bf443c41ff5281f38f5eeab0a",
+    "canonical_value_memory_blob": "5e6450087e2fe0402ebe0af9ea0443383964a7a8",
+    "independently_verified_outcomes_only": true,
+    "observer_verifier_separation": true,
+    "per_event_verified_credit_max": 1,
+    "objective_conditioning": true,
+    "untested_memory_prior": "NEUTRAL",
+    "fabricated_seed_outcomes": 0
+  },
+  "authority_change": "NONE"
+}

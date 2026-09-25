@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0.0",
+  "integration_id": "EXPERIMENT-HUNTER-001",
+  "source_repository": "P00NSMASHER/github-value-hunt-ledger",
+  "source_revision": "c6276c80828d2632d5fee37cdaaf65f1d5b36427",
+  "components": {
+    "allocator": {
+      "path": "tools/ti_allocator.py",
+      "blob_sha": "7832c10f16925d35b6446c24a999b9cef5e212b5"
+    },
+    "work_identity": {
+      "path": "tools/ti_work_identity.py",
+      "blob_sha": "ac783e93b8c1db54a374d00de1cfb8dd7883e617"
+    },
+    "action_router": {
+      "path": "tools/ti_search_actions.py",
+      "blob_sha": "1941232cf3ff9b11ac5191b7001f29b387c23ea2"
+    },
+    "action_tests": {
+      "path": "tests/test_ti_search_actions.py",
+      "blob_sha": "473df7dc20558aff91eafe12fa89598e2d4f5ae4"
+    }
+  },
+  "preserved_semantics": [
+    "Experiment work carries explicit hypothesis, next action, success and failure fields.",
+    "Work identity is content-addressed to source identity plus semantic payload.",
+    "Search, artifact verification, fixture execution and external prerequisites are distinct action classes.",
+    "Non-search actions may not hide discovery queries.",
+    "STOP conditions and gated capability actions are inherited rather than bypassed.",
+    "Independent verification is represented as a separate work item rather than builder self-certification."
+  ],
+  "integration_mode": "PINNED_EXPERIMENT_PACKET_SEMANTICS",
+  "copied_source_code": false,
+  "drift_policy": {
+    "exact_repository_revision_required": true,
+    "component_blob_shas_required": true,
+    "on_source_revision_change": "TARGETED_DELTA_AND_RECONFORM",
+    "on_component_blob_mismatch": "FAIL_CLOSED"
+  }
+}

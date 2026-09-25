@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/ADAPTER_SCHEMA.json",
+  "title": "Portfolio Brain Read-Only Repository Adapter",
+  "description": "Observation-only repository adapter declaration. Registration never grants downstream write authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version","adapter_id","adapter_name","adapter_type","repository_id",
+    "repository_full_name","project_ids","authority_class","enabled",
+    "source_ref_policy","data_classification","cursor_policy","blocked_by"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "adapter_id": {"type": "string","pattern": "^ADP-[0-9]{3,}$"},
+    "adapter_name": {"type": "string","pattern": "^[a-z0-9]+(?:_[a-z0-9]+)*$"},
+    "adapter_type": {"const": "GITHUB_REPOSITORY"},
+    "repository_id": {"type": "string","pattern": "^REPO-[0-9]{3,}$"},
+    "repository_full_name": {"type": "string","pattern": "^[^/]+/[^/]+$"},
+    "project_ids": {
+      "type": "array",
+      "items": {"type": "string","pattern": "^PRJ-[0-9]{3,}$"},
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "authority_class": {"const": "OBSERVE"},
+    "enabled": {"type": "boolean"},
+    "source_ref_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode","ref"],
+      "properties": {
+        "mode": {"enum": ["EXPLICIT_REF","DEFAULT_BRANCH"]},
+        "ref": {"type": ["string","null"],"minLength": 1,"maxLength": 200}
+      }
+    },
+    "data_classification": {
+      "enum": ["PUBLIC","SANITIZED","PRIVATE_REFERENCE_ONLY"]
+    },
+    "cursor_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["persist_exact_sha","skip_unchanged","compare_changed_only"],
+      "properties": {
+        "persist_exact_sha": {"const": true},
+        "skip_unchanged": {"const": true},
+        "compare_changed_only": {"const": true}
+      }
+    },
+    "blocked_by": {
+      "type": ["string","null"],
+      "pattern": "^BLK-[0-9]{3,}$"
+    }
+  }
+}

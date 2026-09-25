@@ -1,0 +1,31 @@
+{
+  "schema_version":"1.0.0",
+  "engine_id":"portfolio-cross-project-transfer-v1",
+  "mode":"HYPOTHESIS_EXPERIMENT_VERIFIED_OUTCOME",
+  "automatic_downstream_modify":false,
+  "automatic_generated_value_edges":false,
+  "automatic_rights_assumption":false,
+  "proposal_states":["ASSESSMENT_READY","BLOCKED"],
+  "outcome_results":["VERIFIED_EFFECTIVE","VERIFIED_NO_VALUE","INCONCLUSIVE","INVALID"],
+  "independent_verifier_agent_ids":["AGT-AUDITOR","AGT-RED-TEAM","AGT-DATA-STEWARD"],
+  "current_source_capability_requirements":{"node_verification_state":"VERIFIED","has_capability_edge_verification_state":"VERIFIED","source_project_registered":true},
+  "implementation_gates":[
+    "TARGET_NEED_EVIDENCE_REQUIRED",
+    "RIGHTS_AND_LICENSE_VERIFICATION_REQUIRED_BEFORE_CODE_OR_ASSET_REUSE",
+    "STEP16_FACTORY_ONBOARDING_REQUIRED_FOR_TARGET_REPOSITORY_MODIFY",
+    "HUMAN_APPROVAL_REQUIRED_FOR_ANY_ACT"
+  ],
+  "success_claim_gate":{"evidence_state":"VERIFIED","independent_verifier_required":true,"measurable_target_metric_required":true,"authority_violations_max":0,"allowed_result":"VERIFIED_EFFECTIVE"},
+  "invariants":[
+    "A source capability must already be VERIFIED with provenance before it can seed a transfer hypothesis.",
+    "A target need must be evidenced; graph absence is uncertainty, not proof of missing capability.",
+    "Transfer proposals begin as hypotheses and cannot add REUSED_BY or GENERATED_VALUE_FOR graph edges.",
+    "Actual code or asset reuse requires rights/license verification and applicable Step 16 target-repository onboarding.",
+    "Target implementation cannot bypass factory, repair, governance or human ACT gates.",
+    "Transfer success requires a measurable target metric and independently VERIFIED target outcome.",
+    "VERIFIED_NO_VALUE is useful negative knowledge and must not be rewritten as success.",
+    "INCONCLUSIVE remains inconclusive; silence or missing evidence is not failure or success.",
+    "Only VERIFIED_EFFECTIVE outcomes with zero authority violations may generate success-edge candidates.",
+    "Generated success edges are proposals for graph ingestion, not automatic graph mutation."
+  ]
+}

@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/AGENT_WORK_ITEM_SCHEMA.json",
+  "title": "Portfolio Persistent Agent Work Item",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "work_id",
+    "goal_type",
+    "assigned_agent_id",
+    "project_ids",
+    "required_authority",
+    "consequence",
+    "state",
+    "priority",
+    "lease_generation",
+    "lease_owner",
+    "lease_expires_at",
+    "run_id",
+    "state_refs",
+    "evidence_refs",
+    "output_hash",
+    "verification_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "work_id": {
+      "type": "string",
+      "pattern": "^AWORK-[A-Z0-9-]+$"
+    },
+    "goal_type": {
+      "type": "string",
+      "pattern": "^[A-Z0-9_]+$"
+    },
+    "assigned_agent_id": {
+      "type": "string",
+      "pattern": "^AGT-[A-Z0-9-]+$"
+    },
+    "project_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^PRJ-[0-9]{3,}$"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "required_authority": {
+      "enum": [
+        "NONE",
+        "OBSERVE",
+        "EXPERIMENT",
+        "MODIFY"
+      ]
+    },
+    "consequence": {
+      "enum": [
+        "LOW",
+        "MEDIUM",
+        "HIGH",
+        "CRITICAL"
+      ]
+    },
+    "state": {
+      "enum": [
+        "PENDING",
+        "RUNNING",
+        "BLOCKED",
+        "VERIFYING",
+        "COMPLETE",
+        "FAILED",
+        "CANCELLED"
+      ]
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "lease_generation": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "lease_owner": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "lease_expires_at": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "run_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "state_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "uniqueItems": true
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "uniqueItems": true
+    },
+    "output_hash": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "verification_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^AVER-[A-Z0-9-]+$"
+    }
+  }
+}

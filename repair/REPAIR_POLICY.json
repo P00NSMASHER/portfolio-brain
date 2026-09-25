@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0.0",
+  "engine_id": "portfolio-continuous-repair-v1",
+  "mode": "DETECT_PLAN_VERIFY_CANARY_ONLY",
+  "automatic_mutation": false,
+  "automatic_canary": false,
+  "automatic_promotion": false,
+  "repair_repository_id": "REPO-008",
+  "builder_agent_id": "AGT-ENGINEER",
+  "heldout_evaluator_agent_ids": [
+    "AGT-TESTER",
+    "AGT-DATA-STEWARD"
+  ],
+  "independent_auditor_agent_ids": [
+    "AGT-AUDITOR",
+    "AGT-RED-TEAM"
+  ],
+  "canary_verifier_agent_ids": [
+    "AGT-TESTER",
+    "AGT-AUDITOR",
+    "AGT-RED-TEAM"
+  ],
+  "protected_target_prefixes": [
+    ".github/workflows/",
+    ".github/actions/",
+    "model_router/",
+    "agents/AGENT_POLICY.json",
+    "software_factory/FACTORY_POLICY.json",
+    "repair/REPAIR_POLICY.json",
+    "PORTFOLIO_BUILD_STATE.json",
+    "runtime/KILL_SWITCH.json",
+    "hunting/KILL_SWITCH.json"
+  ],
+  "states": [
+    "NEEDS_REPRODUCTION",
+    "READY_FOR_REPAIR",
+    "FACTORY_PENDING",
+    "HELD_OUT_PENDING",
+    "INDEPENDENT_AUDIT_PENDING",
+    "CANARY_PENDING",
+    "PROMOTION_ELIGIBLE",
+    "BLOCKED"
+  ],
+  "invariants": [
+    "A learning alert alone can create only NEEDS_REPRODUCTION.",
+    "READY_FOR_REPAIR requires VERIFIED failure evidence, reproduction steps, evidence references and a concrete regression-test requirement.",
+    "Sensitive-material or benchmark-contaminated failures are BLOCKED.",
+    "Repair targets may not include protected governance/workflow/provider/build-state surfaces in v1.",
+    "Repair implementation must use the Step 16 isolated factory path on REPO-008.",
+    "A factory candidate must be independently verified and PR_OPEN before held-out evaluation begins.",
+    "Held-out evaluator must differ from the builder and use exact candidate commit/diff identity.",
+    "Independent auditor must differ from both builder and held-out evaluator.",
+    "Canary must report zero regressions and zero authority violations.",
+    "PROMOTION_ELIGIBLE is not promotion and still requires INTEGRATOR_APPROVAL.",
+    "No function in the Step 17 engine merges, deploys, changes default branches or promotes globally."
+  ]
+}

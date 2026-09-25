@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0.0",
+  "candidate_count": 20,
+  "eligible_candidate_count": 18,
+  "pareto_front_candidate_ids": [
+    "UNC-EXTERNAL-PRJ-001",
+    "UNC-LEARNING-PRJ-000"
+  ],
+  "selected_uncertainty_id": "UNC-EXTERNAL-PRJ-001",
+  "selected_question": "What is the smallest reversible external validation that can produce the first VERIFIED customer/value outcome for RecoveryWorks?",
+  "selected_components": {
+    "importance": 5,
+    "uncertainty": 5,
+    "test_cost": 2,
+    "time_to_evidence": 2,
+    "reversibility": 5,
+    "downstream_impact": 5,
+    "strategic_reuse": 5,
+    "external_validation_value": 5
+  },
+  "selected_authority_requirement": "HUMAN_GATED_ACT",
+  "selected_actionability": "HUMAN_APPROVAL_REQUIRED",
+  "selected_approval_requirements": [
+    "CUSTOMER_COMMUNICATION"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0.0",
+  "canary_id": "portfolio-autonomous-learning-canary-v1",
+  "mode": "DETERMINISTIC_SHADOW_NO_PROMPT",
+  "authority_class": "OBSERVE",
+  "runtime_mode": "daily",
+  "network_mode": "LOCAL_CURSOR_MIRROR_ONLY",
+  "paid_model_api_allowed": false,
+  "max_model_calls": 0,
+  "max_paid_cost_usd": 0,
+  "max_runtime_api_reads": 8,
+  "max_selected_scheduler_work": 4,
+  "expected_first_selected_work_types": [
+    "HUNT",
+    "INTEGRATION",
+    "RESEARCH"
+  ],
+  "expected_blocked_approval_count": 6,
+  "continuation_requires_zero_new_selected_work": true,
+  "continuation_requires_duplicate_suppression": true,
+  "learning_promotion_allowed": false,
+  "authority_violations_allowed": 0,
+  "forbidden_actions": [
+    "CUSTOMER_COMMUNICATION",
+    "PAYMENT_OR_PURCHASE",
+    "MOVE_MONEY",
+    "LIVE_MARKET_TRADING",
+    "BROKERAGE_ORDER",
+    "DEPLOY",
+    "MERGE_PR",
+    "UPDATE_DEFAULT_BRANCH"
+  ],
+  "output_files": [
+    "canary_receipt.json",
+    "runtime_state.json",
+    "scheduler_state.json",
+    "cost_state.json",
+    "notification_state.json",
+    "learning_state.json"
+  ],
+  "invariants": [
+    "The canary executes from deterministic local state and exact persisted cursor identities without live web/model/API access.",
+    "The canary uses only Tier-0 deterministic logic and zero paid model/API budget.",
+    "The scheduler may surface human-gated work but the canary never executes it.",
+    "The first cycle may enqueue bounded observe/research work; continuation from persisted state must enqueue no duplicate work.",
+    "Notification evaluation may emit GitHub-local alerts but cannot satisfy approvals or perform consequential ACT.",
+    "Learning rebuild may summarize evidence but cannot promote unverified observations or change authority.",
+    "All persisted canary artifacts are sanitized state and receipt metadata only."
+  ]
+}

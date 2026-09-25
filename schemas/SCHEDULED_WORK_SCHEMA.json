@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/SCHEDULED_WORK_SCHEMA.json",
+  "title": "Portfolio Scheduler Work Packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scheduler_work_id",
+    "fingerprint",
+    "work_type",
+    "source_ref",
+    "project_ids",
+    "assigned_agent_id",
+    "agent_goal_type",
+    "required_authority",
+    "consequence",
+    "state",
+    "source_pareto_layer",
+    "source_rank_order",
+    "allocation_share_basis_points",
+    "approval_requirements",
+    "hard_blockers",
+    "selection_reason",
+    "evidence_refs",
+    "created_at",
+    "lease_generation",
+    "lease_owner",
+    "lease_expires_at",
+    "work_hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "scheduler_work_id": {
+      "type": "string",
+      "pattern": "^SWORK-[A-Z0-9-]+$"
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "work_type": {
+      "enum": [
+        "HUNT",
+        "EXPERIMENT",
+        "REPAIR",
+        "TEST",
+        "RESEARCH",
+        "INTEGRATION",
+        "VERIFICATION"
+      ]
+    },
+    "source_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "project_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^PRJ-[0-9]{3,}$"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "assigned_agent_id": {
+      "type": "string",
+      "pattern": "^AGT-[A-Z0-9-]+$"
+    },
+    "agent_goal_type": {
+      "type": "string",
+      "pattern": "^[A-Z0-9_]+$"
+    },
+    "required_authority": {
+      "enum": [
+        "NONE",
+        "OBSERVE",
+        "EXPERIMENT",
+        "MODIFY"
+      ]
+    },
+    "consequence": {
+      "enum": [
+        "LOW",
+        "MEDIUM",
+        "HIGH",
+        "CRITICAL"
+      ]
+    },
+    "state": {
+      "enum": [
+        "QUEUED",
+        "ACTIVE",
+        "COMPLETE",
+        "CANCELLED",
+        "BLOCKED_APPROVAL",
+        "BLOCKED_POLICY"
+      ]
+    },
+    "source_pareto_layer": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "source_rank_order": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "allocation_share_basis_points": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 10000
+    },
+    "approval_requirements": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "hard_blockers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "selection_reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lease_generation": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "lease_owner": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "lease_expires_at": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "work_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

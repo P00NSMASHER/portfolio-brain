@@ -1,0 +1,38 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://portfolio-brain.local/schemas/GRAPH_NODE_SCHEMA.json",
+  "title":"Portfolio Brain Universal Graph Node",
+  "type":"object",
+  "additionalProperties":false,
+  "required":[
+    "schema_version","node_id","node_type","canonical_key","label","project_ids",
+    "attributes","provenance_refs","verification_state","data_classification",
+    "status","upstream_mapping"
+  ],
+  "properties":{
+    "schema_version":{"const":"1.0.0"},
+    "node_id":{"type":"string","pattern":"^GN-[A-Z0-9-]{8,}$"},
+    "node_type":{"enum":[
+      "OWNER_OBJECTIVE","PROJECT","BUSINESS","PRODUCT","REPOSITORY","CAPABILITY",
+      "DATASET","MODEL","AGENT","SKILL","SEARCH","FINDING","EXPERIMENT","CHANGE",
+      "BUG","CUSTOMER","MARKET","OPPORTUNITY","OUTCOME","REVENUE","COST","EVIDENCE"
+    ]},
+    "canonical_key":{"type":"string","minLength":1,"maxLength":300},
+    "label":{"type":"string","minLength":1,"maxLength":300},
+    "project_ids":{"type":"array","items":{"type":"string","pattern":"^PRJ-[0-9]{3,}$"},"uniqueItems":true},
+    "attributes":{"type":"object"},
+    "provenance_refs":{"type":"array","items":{"type":"string","minLength":1,"maxLength":1000},"uniqueItems":true,"minItems":1},
+    "verification_state":{"enum":["OBSERVED","VERIFIED","INFERRED","UNKNOWN","CONTRADICTED","STALE","INVALID"]},
+    "data_classification":{"enum":["PUBLIC","SANITIZED","PRIVATE_REFERENCE_ONLY"]},
+    "status":{"enum":["ACTIVE","SUPERSEDED","RETIRED","CANONICALIZED","REVERSED"]},
+    "upstream_mapping":{
+      "type":"object",
+      "additionalProperties":false,
+      "required":["mode","upstream_node_type"],
+      "properties":{
+        "mode":{"enum":["NATIVE","ADAPTED","PORTFOLIO_ONLY"]},
+        "upstream_node_type":{"type":["string","null"],"enum":["REPO","DATA","CAPABILITY","TECHNOLOGY","PRODUCT","BUSINESS","CUSTOMER","EXPERIMENT","OUTCOME","MEMORY",null]}
+      }
+    }
+  }
+}

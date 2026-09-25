@@ -1,0 +1,4248 @@
+{
+  "schema_version": "1.0.0",
+  "repositories": {
+    "REPO-001": {
+      "full_name": "P00NSMASHER/github-value-hunt-ledger",
+      "last_inspected_sha": "c6276c80828d2632d5fee37cdaaf65f1d5b36427",
+      "inspection_status": "INSPECTED",
+      "last_observed_at": "2026-09-25T21:06:00Z",
+      "notes": "Step 19 prerequisite delta-only reconciliation from 9533769a669429d2553302df6068b4b1f8099e89 to c6276c80828d2632d5fee37cdaaf65f1d5b36427: 2 commits, only .github/workflows/public-repo-hunter.yml and automation/hunter_schedule.json changed. Existing Portfolio Brain component blobs remain byte-identical and their source revision pins were advanced without semantic changes. The upstream workflow's StarBlox-specific fixed schedule and direct push-to-main behavior were inspected but deliberately not adopted."
+    },
+    "REPO-002": {
+      "full_name": "P00NSMASHER/StarBlox",
+      "last_inspected_sha": "094fe7bc6d61151a8bfec7b236bb68e8c236b834",
+      "inspection_status": "INSPECTED",
+      "last_observed_at": "2026-09-25T16:16:00Z",
+      "notes": "Step 4 delta-only observation from prior cursor: 32 commits, 21 changed paths. Path/stat metadata persisted; unchanged content was not reread."
+    },
+    "REPO-003": {
+      "full_name": "P00NSMASHER/abvmschoolstarworld",
+      "last_inspected_sha": "a15c7c2214a065707123e9b8ab8ac51a42240345",
+      "inspection_status": "UNCHANGED",
+      "last_observed_at": "2026-09-25T16:16:00Z",
+      "notes": "Step 4 exact HEAD matched stored cursor; compare/content reread skipped."
+    },
+    "REPO-004": {
+      "full_name": "P00NSMASHER/trading-platform",
+      "last_inspected_sha": "f9be7d5537d38bef24a5b0f99022c5d5885988d1",
+      "inspection_status": "INSPECTED",
+      "last_observed_at": "2026-09-25T16:16:00Z",
+      "notes": "Step 4 delta-only observation from prior cursor: 2 commits, 6 changed paths. Research-only authority unchanged; no trading execution authority."
+    },
+    "REPO-005": {
+      "full_name": "P00NSMASHER/permitplate-nyc",
+      "last_inspected_sha": "7c9a8fc4dd9fa12275d336beb8eb10732718666a",
+      "inspection_status": "UNCHANGED",
+      "last_observed_at": "2026-09-25T16:16:00Z",
+      "notes": "Step 4 exact HEAD matched stored cursor; compare/content reread skipped."
+    },
+    "REPO-006": {
+      "full_name": "P00NSMASHER/permitplate-state",
+      "last_inspected_sha": "c64fe06a22c3826c9ad3a7b85a4f911a6e589c19",
+      "inspection_status": "UNCHANGED",
+      "last_observed_at": "2026-09-25T08:27:30Z",
+      "notes": "Step 4 adapter is registered but disabled by BLK-001. No network read was performed and the historical cursor was not advanced."
+    },
+    "REPO-007": {
+      "full_name": "P00NSMASHER/capturebrief",
+      "last_inspected_sha": "3b5867c422cbf9da08d02f1b9c6e7c8afa5b42ba",
+      "inspection_status": "UNCHANGED",
+      "last_observed_at": "2026-09-25T16:16:00Z",
+      "notes": "Step 4 exact HEAD matched stored cursor; compare/content reread skipped."
+    },
+    "REPO-008": {
+      "full_name": "P00NSMASHER/portfolio-brain",
+      "last_inspected_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab",
+      "inspection_status": "INSPECTED",
+      "last_observed_at": "2026-09-25T23:20:00Z",
+      "notes": "Step 24 autonomous learning canary verified at 6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab. The deterministic no-prompt shadow cycle restored runtime/scheduler/cost/notification/learning state, used seven local exact-cursor mirror reads, selected three first-pass work items and zero continuation items, suppressed three scheduler duplicates plus duplicate cost/notifications, used zero paid model/API resources, promoted zero learning records, and recorded zero authority violations."
+    }
+  },
+  "decisions": [
+    {
+      "decision_id": "DEC-001",
+      "summary": "Keep product repositories independent and build a portfolio-level control plane rather than a source-code monolith.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "portfolio_prework/PORTFOLIO_INVENTORY.md",
+        "portfolio_prework/PROJECT_ID_REGISTRY.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-002",
+      "summary": "Use exact repository HEAD SHAs as the first cache key and inspect unchanged repositories only when the task specifically requires deeper evidence.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "portfolio_prework/REPOSITORY_SNAPSHOT.md",
+        "portfolio_prework/REPOSITORY_DELTA.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-003",
+      "summary": "Reserve PRJ-000 for Portfolio Brain and keep stable project identities separate from repository identities.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "portfolio_prework/PROJECT_ID_REGISTRY.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-004",
+      "summary": "Use four autonomy classes (OBSERVE, EXPERIMENT, MODIFY, ACT) with deny-by-default semantics and the most restrictive applicable rule winning.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "portfolio_prework/AUTONOMY_ACTION_TAXONOMY.json",
+        "portfolio_prework/AUTONOMY_MATRIX.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-005",
+      "summary": "No project receives unbounded external ACT authority; consequential external actions remain human-gated and market-surveillance live trading/execution remains prohibited.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "portfolio_prework/AUTONOMY_MATRIX.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-006",
+      "summary": "Treat existing GitHub workflow write/deploy credentials as capabilities of those workflows, not as blanket authority for Portfolio Brain.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "portfolio_prework/WORKFLOW_INVENTORY.json",
+        "portfolio_prework/WORKFLOW_INVENTORY.md",
+        "portfolio_prework/AUTONOMY_MATRIX.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-007",
+      "summary": "Use changed-path/risk-aware targeted test selection rather than running every downstream repository test suite after every candidate change.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "portfolio_prework/TEST_SUITE_INVENTORY.json",
+        "portfolio_prework/TEST_SUITE_INVENTORY.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-008",
+      "summary": "Treat dependency manifests and lockfiles as promotion evidence; manifest/lockfile changes should trigger dependency-specific validation rather than relying on one successful install.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "portfolio_prework/DEPENDENCY_INVENTORY.json",
+        "portfolio_prework/DEPENDENCY_INVENTORY.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-009",
+      "summary": "Use ARCHITECTURE_EVIDENCE_BUNDLE.json plus the current SHA delta as the canonical prework handoff into Portfolio Brain Step 0; do not rescan unchanged repositories by default.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "portfolio_prework/ARCHITECTURE_EVIDENCE_BUNDLE.json",
+        "portfolio_prework/STEP0_RESUME_HANDOFF.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-010",
+      "summary": "At architecture handoff, re-inspect only the two repositories whose HEADs diverged from the pinned snapshot (github-value-hunt-ledger and abvmschoolstarworld) before completing master Step 0; keep the other five repositories cached unless a specific architecture question requires them.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "portfolio_prework/repository_snapshot.json",
+        "portfolio_prework/ARCHITECTURE_EVIDENCE_BUNDLE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-011",
+      "summary": "Reuse canonical ai_business_os and existing TI controls through pinned interfaces; business_os remains frozen legacy.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "docs/PORTFOLIO_ARCHITECTURE_BASELINE.md",
+        "docs/PORTFOLIO_STEP0_EVIDENCE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-012",
+      "summary": "Reuse the command center, portfolio planner and production read bridge; require separated observation credentials and authenticated human authority before runtime integration.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "docs/PORTFOLIO_ARCHITECTURE_BASELINE.md",
+        "docs/PORTFOLIO_STEP0_EVIDENCE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-013",
+      "summary": "Treat scouts as pre-verification intake; connect findings through existing immutable run/claim/lease/verifier/outcome paths rather than create a competing Hunter control plane.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "docs/PORTFOLIO_ARCHITECTURE_BASELINE.md",
+        "docs/PORTFOLIO_STEP0_EVIDENCE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-014",
+      "summary": "Preserve prework inventories byte-for-byte and append delta evidence; distinguish discovered tests from currently invoked CI tests.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "docs/PORTFOLIO_ARCHITECTURE_BASELINE.md",
+        "docs/PORTFOLIO_STEP0_EVIDENCE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-015",
+      "summary": "GitHub stores code, policy and sanitized evidence receipts; private operating/customer payloads stay in authorized private storage.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "docs/PORTFOLIO_ARCHITECTURE_BASELINE.md",
+        "docs/PORTFOLIO_STEP0_EVIDENCE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-016",
+      "summary": "Minimum budgets, timeouts, retry bounds, idempotency and kill switches are prerequisites for recurring execution before the full Step 20 governor.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "docs/PORTFOLIO_ARCHITECTURE_BASELINE.md",
+        "docs/PORTFOLIO_STEP0_EVIDENCE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-017",
+      "summary": "Root PORTFOLIO_BUILD_STATE.json is now canonical for master steps 0–25; portfolio_prework/PORTFOLIO_BUILD_STATE.json is immutable completed prework history. current_step denotes the next pending step. Artifact commit_sha records the creation checkpoint; the containing state commit is resolved from the isolated branch HEAD to avoid a self-referential Git hash.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "docs/PORTFOLIO_ARCHITECTURE_BASELINE.md",
+        "docs/PORTFOLIO_STEP0_EVIDENCE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-018",
+      "summary": "Record ABVM runtime and test coverage changes explicitly; green narrowed CI is not proof of inherited offline/calendar/persistence coverage.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "docs/PORTFOLIO_ARCHITECTURE_BASELINE.md",
+        "docs/PORTFOLIO_STEP0_EVIDENCE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-019",
+      "summary": "Stage Step 1 foundation artifacts on an isolated Hunter infrastructure branch until the dedicated PRJ-000 repository can be created; this staging branch grants no downstream authority and will not be treated as the final Portfolio Brain repository.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "docs/PORTFOLIO_BRAIN_ARCHITECTURE_CONTRACT.md",
+        "PORTFOLIO_BUILD_STATE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-020",
+      "summary": "Represent the uncreated dedicated repository with a relocatable portfolio_brain_seed manifest. The Step 1 registration mechanism is deny-by-default and grants no authority; Step 2 will expand it into the full project/autonomy/objective/metric schemas.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "portfolio_brain_seed/FOUNDATION_SKELETON.json",
+        "portfolio_brain_seed/registry/PROJECT_REGISTRATION_CONTRACT.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-021",
+      "summary": "Initial Portfolio Brain CI is deterministic and read-only: standard-library validation only, contents:read permission, five-minute timeout, no schedule, no model/network/install/deploy/write steps.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "portfolio_brain_seed/tests/validate_foundation.py",
+        "portfolio_brain_seed/.github/workflows/foundation-ci.yml"
+      ]
+    },
+    {
+      "decision_id": "DEC-022",
+      "summary": "The dedicated Portfolio Brain repository is temporarily public by explicit owner choice. Until it is made private, store only non-sensitive code, policy, schemas, build state, and sanitized evidence receipts; never store secrets, private customer/operational payloads, credentials, or sensitive evidence.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "P00NSMASHER/portfolio-brain",
+        "docs/ARCHITECTURE_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-023",
+      "summary": "Step 1 is complete only after the dedicated repository foundation CI passes at the materialized branch head. GitHub Actions run 36152821896 succeeded at b61583369f03a4582781a418aef8a0cba318fab1.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        ".github/workflows/foundation-ci.yml",
+        "tests/validate_foundation.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-024",
+      "summary": "PROJECT_SCHEMA is closed by default, keeps stable project identity separate from repository identity, binds autonomy/objective/metric references explicitly, requires provenance policy, and treats repository integration state as declared/observe/block/retired rather than as implied authority.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/PROJECT_SCHEMA.json",
+        "registry/validate_project.py",
+        "tests/test_project_schema.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-025",
+      "summary": "Autonomy registration is descriptive and deny-by-default: runtime_enabled remains false for every Step 2 profile; ACT is HUMAN_APPROVAL_REQUIRED or PROHIBITED, and builders cannot self-approve promotion.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/AUTONOMY_SCHEMA.json",
+        "registry/autonomy_profiles.json",
+        "registry/validate_contracts.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-026",
+      "summary": "Owner-named businesses, products, research streams and infrastructure are covered by canonical stable projects without falsely asserting that every alias, subsystem or concept is an independently validated business. Coverage status is REGISTERED_COVERAGE_ONLY.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "registry/projects.json",
+        "registry/PORTFOLIO_COVERAGE.json",
+        "registry/validate_registry.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-027",
+      "summary": "Objectives and metrics cannot grant execution authority. Objectives require explicit evidence requirements and provenance; metrics require an explicit evidence source and OBSERVED or VERIFIED verification requirement.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/OBJECTIVE_SCHEMA.json",
+        "schemas/METRIC_SCHEMA.json",
+        "registry/validate_contracts.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-028",
+      "summary": "Registry validation runs as a Python package module in CI so package-relative imports resolve from repository root. The initial direct-script invocation failure is permanently covered by exact-head CI.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        ".github/workflows/foundation-ci.yml",
+        "registry/validate_registry.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-029",
+      "summary": "Use one versioned universal event envelope carrying event identity/type/timestamps, project/source/actor, authority class, subjects, evidence IDs, explicit verification status, dependency and causal event links, metric observations, data classification, deterministic idempotency key and event hash.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/EVENT_SCHEMA.json",
+        "events/validate_event.py",
+        "events/EVENT_TYPE_CATALOG.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-030",
+      "summary": "Evidence receipts preserve explicit epistemic state OBSERVED/VERIFIED/INFERRED/UNKNOWN/CONTRADICTED/STALE/INVALID. VERIFIED requires non-model verification; MODEL_OUTPUT cannot self-verify, and INFERRED evidence requires explicit basis evidence.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/EVIDENCE_SCHEMA.json",
+        "events/validate_event.py",
+        "tests/test_event_evidence_schema.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-031",
+      "summary": "Deterministic SHA-256 receipt hashes and source-event idempotency keys are mandatory. Bundle validation rejects tampered hashes, duplicate source events, unresolved evidence bases, unresolved event dependencies/causal links, and unsupported VERIFIED event claims.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "events/validate_event.py",
+        "tests/test_event_evidence_schema.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-032",
+      "summary": "PRIVATE_REFERENCE_ONLY events may carry only a redacted reference/summary envelope, preventing the event bus contract from becoming a path for raw private payloads while Portfolio Brain is public.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/EVENT_SCHEMA.json",
+        "events/validate_event.py",
+        "tests/test_event_evidence_schema.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-033",
+      "summary": "Repository adapters are OBSERVE-only and use exact source-SHA cursors. Unchanged sources perform one HEAD resolution and skip compare/content rereads; changed sources compare only prior cursor SHA to current head; blocked sources perform zero reads and do not advance.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/ADAPTER_SCHEMA.json",
+        "adapters/ADAPTER_REGISTRY.json",
+        "adapters/github_readonly.py",
+        "tests/test_readonly_adapters.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-034",
+      "summary": "Repository observation cursors are source-ref-specific and separate from architecture build-branch state. REPO-008 therefore tracks main in the adapter cursor while PORTFOLIO_BUILD_STATE.json tracks the isolated working branch used for the numbered build.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "adapters/cursors/repositories.json",
+        "PORTFOLIO_BUILD_STATE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-035",
+      "summary": "The initial Step 4 observation captured three changed repositories (67 commits, 131 changed paths total), three unchanged repositories with zero content rereads, one blocked repository with zero network reads, and one initialized default-branch cursor.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "adapters/observations/INITIAL_STEP4_OBSERVATION.json",
+        "adapters/validate_adapters.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-036",
+      "summary": "An additional accessible private repository was minimally checked for relevance; no README or code-search evidence established a portfolio mapping. It was not added to the durable adapter set, and no private content or identifying metadata was persisted in the public Portfolio Brain repository. Reconsider only after relevance is evidenced or the control repository becomes private.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "PORTFOLIO_BUILD_STATE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-037",
+      "summary": "Reuse the canonical AI Business OS Truth Engine through an exact source revision/blob pin and a conformance adapter; do not vendor or fork its evaluator into Portfolio Brain.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "truth/AI_BUSINESS_OS_TRUTH_ENGINE_PIN.json",
+        "truth/TRUTH_ENGINE_CONFORMANCE.json",
+        "truth/truth_adapter.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-038",
+      "summary": "Portfolio truth projection preserves upstream semantics: PROVEN maps to VERIFIED only when all required findings are SATISFIED; CONTESTED/conflicted maps to CONTRADICTED; required stale evidence maps to STALE; NOT_PROVEN and UNKNOWN remain UNKNOWN rather than false.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "truth/truth_adapter.py",
+        "tests/test_truth_integration.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-039",
+      "summary": "Truth integration fails closed on upstream drift: the pinned source revision must equal the durable REPO-001 cursor and the pinned blob identity must match the conformance record before projection is accepted.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "truth/validate_truth_integration.py",
+        "truth/AI_BUSINESS_OS_TRUTH_ENGINE_PIN.json",
+        "PORTFOLIO_BUILD_STATE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-040",
+      "summary": "Repeated assertions, additional same-family support, or model confidence cannot promote a claim to VERIFIED. Evidence independence, admissible authority, freshness, contradiction handling, and the upstream proof verdict remain controlling.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "tests/test_truth_integration.py",
+        "truth/TRUTH_ENGINE_CONFORMANCE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-041",
+      "summary": "Reuse canonical AI Business OS Value Memory through an exact source revision/blob pin. Portfolio Brain owns shared project/objective/provenance metadata and delegates learned-value mechanics to the canonical engine rather than forking it.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "memory/AI_BUSINESS_OS_VALUE_MEMORY_PIN.json",
+        "memory/VALUE_MEMORY_CONFORMANCE.json",
+        "memory/value_memory_adapter.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-042",
+      "summary": "Only independently VERIFIED outcome receipts are eligible to change learned value. OBSERVED, INFERRED, UNKNOWN, CONTRADICTED, STALE or INVALID outcome records may remain auditable but cannot be converted into upstream learned-value observations.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/VALUE_MEMORY_OUTCOME_SCHEMA.json",
+        "memory/value_memory_adapter.py",
+        "tests/test_shared_value_memory.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-043",
+      "summary": "Verified outcome attribution is conserved across memories per event, objective/project attribution is explicit, and untested memories retain the canonical neutral prior. Verified positive outcomes can raise learned value; verified negative outcomes can lower it; speculative volume alone cannot.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "memory/value_memory_adapter.py",
+        "tests/test_shared_value_memory.py",
+        "memory/VALUE_MEMORY_CONFORMANCE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-044",
+      "summary": "The shared value-memory ledger begins empty because no Step 6 verified outcome receipts were ingested. Empty verified memory is preferable to seeding unsupported lessons as verified truth.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "memory/SHARED_VALUE_MEMORY_LEDGER.json",
+        "tests/test_shared_memory_bundle.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-045",
+      "summary": "Reuse canonical AI Business OS KnowledgeGraph and EntityCanonicalizer through exact source revision/blob pins. Portfolio Brain extends vocabulary with a lossless semantic envelope rather than copying or weakening the canonical graph/canonicalization engines.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "graph/AI_BUSINESS_OS_GRAPH_PIN.json",
+        "graph/GRAPH_CONFORMANCE.json",
+        "graph/universal_graph.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-046",
+      "summary": "Universal graph vocabulary covers the owner-requested 22 node types and all required relationships. Every node and edge requires provenance; graph connectivity and path existence have zero truth-upgrade effect.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "graph/UNIVERSAL_GRAPH_CONTRACT.json",
+        "schemas/GRAPH_NODE_SCHEMA.json",
+        "schemas/GRAPH_EDGE_SCHEMA.json",
+        "tests/test_universal_graph.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-047",
+      "summary": "The initial graph is evidence-conservative: it seeds all 12 registered projects, 8 repository identities, the owner objective, and four already CI-verified Portfolio Brain capabilities, but deliberately creates no CUSTOMER, REVENUE, OPPORTUNITY, or OUTCOME nodes without supporting evidence.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "graph/UNIVERSAL_GRAPH_LEDGER.json",
+        "graph/validate_graph.py",
+        "tests/test_graph_bundle.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-048",
+      "summary": "Identity canonicalization remains reversible and fail-closed. Hard identifier conflicts force KEEP_SEPARATE; ambiguous merges require HUMAN review with provenance; source records and conflicting losing values remain preserved; dependent live relationships gate reversal.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "graph/AI_BUSINESS_OS_GRAPH_PIN.json",
+        "graph/GRAPH_CONFORMANCE.json",
+        "graph/universal_graph.py",
+        "tests/test_universal_graph.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-049",
+      "summary": "Only semantically compatible universal nodes/edges are projected into the canonical upstream graph. Unsupported portfolio semantics remain losslessly in the Portfolio Brain envelope rather than being coerced into a misleading upstream relation.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "graph/universal_graph.py",
+        "graph/UNIVERSAL_GRAPH_CONTRACT.json",
+        "tests/test_graph_bundle.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-050",
+      "summary": "Step 8 operational continuation state uses sanitized GitHub Actions artifacts with the checked-in exact-SHA cursor store as bootstrap. Runtime cycles restore the newest non-expired state artifact and advance cursors only after successful observation receipts; no repository or downstream write is required.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "runtime/RUNTIME_POLICY.json",
+        "runtime/artifact_state.py",
+        "runtime/state.py",
+        "runtime/CONTINUOUS_RUNTIME_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-051",
+      "summary": "Continuous observation is deterministic and model-free in Step 8. The runtime has four modes: event-driven single-repository observation, hourly full synchronization, daily synchronized learning-state rebuild, and weekly synchronized portfolio synthesis.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "runtime/continuous_runtime.py",
+        ".github/workflows/runtime-event-observe.yml",
+        ".github/workflows/runtime-hourly-sync.yml",
+        ".github/workflows/runtime-daily-learning.yml",
+        ".github/workflows/runtime-weekly-synthesis.yml"
+      ]
+    },
+    {
+      "decision_id": "DEC-052",
+      "summary": "Minimum autonomy safety controls are mandatory before recurring execution: OBSERVE-only authority, model-call ceiling zero, downstream-write ceiling zero, external-action ceiling zero, finite API/repository/file/output/time budgets, retry limit two, shared serialized concurrency, repository-variable and file kill switches, and least-privilege contents/actions read permissions.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "runtime/RUNTIME_POLICY.json",
+        ".github/workflows/runtime-worker.yml",
+        "runtime/validate_runtime.py",
+        "tests/test_continuous_runtime.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-053",
+      "summary": "Step 8 workflow definitions are implementation-complete but intentionally staged on an isolated branch. GitHub scheduled triggers execute only from the default branch; recurring production activation is deferred to the later authorized operating-mode gate rather than bypassing Steps 9–25.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        ".github/workflows/runtime-hourly-sync.yml",
+        ".github/workflows/runtime-daily-learning.yml",
+        ".github/workflows/runtime-weekly-synthesis.yml",
+        "PORTFOLIO_BUILD_STATE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-054",
+      "summary": "Step 8 runtime artifacts are sanitized operational continuation state, not independent truth evidence. Daily and weekly reports derive deterministically from current cursor state plus checked-in verified graph/memory registries and cannot upgrade evidence state.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "runtime/continuous_runtime.py",
+        "runtime/CONTINUOUS_RUNTIME_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-055",
+      "summary": "Reuse the canonical Technology Intelligence/Hunter system through exact source revision/component pins: Business OS bridge, seed compiler, allocator, adaptive policy, learning report and immutable run ingestion. Portfolio Brain adds an autonomous portfolio gap/search executor rather than a second incompatible Hunter.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "hunting/AI_BUSINESS_OS_HUNTER_PIN.json",
+        "hunting/AUTONOMOUS_HUNTER_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-056",
+      "summary": "Step 9 automatically derives structural portfolio capability-coverage gaps from the Universal Knowledge Graph. Absence of a HAS_CAPABILITY edge is labeled UNMAPPED_CAPABILITY_COVERAGE and is not treated as proof that the project lacks the capability.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "hunting/autonomous_hunter.py",
+        "tests/test_autonomous_hunter.py",
+        "graph/UNIVERSAL_GRAPH_LEDGER.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-057",
+      "summary": "Autonomous Hunter v1 searches only lawful public GitHub repositories and inspects metadata plus exact-revision tree structure. It does not execute discovered code or ingest repository contents. Retained candidates remain OBSERVED; discovery does not prove capability or grant reuse/license rights.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "hunting/HUNTER_POLICY.json",
+        "hunting/autonomous_hunter.py",
+        "schemas/HUNTER_FINDING_SCHEMA.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-058",
+      "summary": "Hunter optimization explicitly assigns zero reward to repository count. Candidate identity includes exact repository revision plus capability need; duplicate revisions are suppressed, no-find/dead-end queries become durable negative knowledge, and at least 20% of bounded objective capacity remains reserved for exploration.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "hunting/HUNTER_POLICY.json",
+        "hunting/HUNTER_STATE_SEED.json",
+        "hunting/autonomous_hunter.py",
+        "tests/test_autonomous_hunter.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-059",
+      "summary": "Hunter strategy value telemetry may receive value credit only from explicit VERIFIED downstream outcome feedback. Stars, repository popularity, README claims, model confidence, candidate volume and unverified outcomes do not train value.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "hunting/autonomous_hunter.py",
+        "hunting/HUNTER_POLICY.json",
+        "tests/test_autonomous_hunter.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-060",
+      "summary": "The Autonomous Hunter workflow is implementation-complete but staged on the isolated Step 9 branch. Its six-hour schedule and repository-dispatch trigger are not active until later authorized promotion to the default branch.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        ".github/workflows/hunter-autonomous-cycle.yml",
+        "PORTFOLIO_BUILD_STATE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-061",
+      "summary": "Reuse the canonical Hunter production learning architecture through exact source/component pins: bounded value memory, learning-state compiler, search-move learning, repair queue and regression tests. Portfolio Brain generalizes those semantics across nine domains rather than creating separate incompatible learners.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "learning/AI_BUSINESS_OS_LEARNING_ENGINE_PIN.json",
+        "learning/CONTINUOUS_LEARNING_CONTRACT.md",
+        "learning/continuous_learning.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-062",
+      "summary": "Portfolio learning domains are SEARCH, ENGINEERING, TEST, REGRESSION, PRODUCT, CUSTOMER, EXPERIMENT, MODEL and RESOURCE. Global and project-scoped memory keys are distinct, preventing success in one project or objective from silently generalizing to unrelated work.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "learning/LEARNING_POLICY.json",
+        "schemas/LEARNING_OBSERVATION_SCHEMA.json",
+        "tests/test_continuous_learning.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-063",
+      "summary": "Only VERIFIED TRAIN observations with PROSPECTIVE or BENCHMARK quality and nonzero value-bearing signal class may update learned Q-values. CONFIRM gates generalization but never trains; EVALUATION_ONLY, retrospective, internal-activity, inferred, observed, unknown, contradicted, stale and invalid signals receive zero learned-value credit.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "learning/continuous_learning.py",
+        "learning/LEARNING_POLICY.json",
+        "tests/test_continuous_learning.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-064",
+      "summary": "Reward evidence ordering is explicit: VERIFIED_EXTERNAL_VALUE has weight 1.0, VERIFIED_TECHNICAL 0.5, COST_RESOURCE 0.4 and INTERNAL_ACTIVITY 0.0. Verified customer value therefore outranks internal commits/tests/activity, while speculative predictions cannot train value.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "learning/LEARNING_POLICY.json",
+        "learning/continuous_learning.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-065",
+      "summary": "No single anecdote can promote a learning prior. Policy consideration requires at least 5 TRAIN observations/20 samples plus 2 independent CONFIRM observations/6 samples with nonnegative confirmation behavior and at least one positive confirmation. Negative confirmation is surfaced as an overfit/regression alert.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "learning/LEARNING_POLICY.json",
+        "learning/continuous_learning.py",
+        "tests/test_continuous_learning.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-066",
+      "summary": "The production learning-observation ledger begins empty instead of reconstructing historical learning evidence from prose. Step 8 daily mode now deterministically emits portfolio_learning_state.json from this ledger; future verified observation producers can feed the same engine without changing its evidence rules.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "learning/LEARNING_OBSERVATION_LEDGER.json",
+        "runtime/continuous_runtime.py",
+        "learning/validate_learning.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-067",
+      "summary": "Step 11 reconciled REPO-001 from b906d3f12aa9ad1bf443c41ff5281f38f5eeab0a to b9031219f39502251afd6da92cc89effbbea2f21 using a targeted delta. Only HUNTER-01/HUNTER-02 scout queue state changed; pinned Truth, Value Memory, Graph, Hunter and Learning blobs remained unchanged and their repository revision pins were safely advanced.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "PORTFOLIO_BUILD_STATE.json",
+        "truth/AI_BUSINESS_OS_TRUTH_ENGINE_PIN.json",
+        "memory/AI_BUSINESS_OS_VALUE_MEMORY_PIN.json",
+        "graph/AI_BUSINESS_OS_GRAPH_PIN.json",
+        "hunting/AI_BUSINESS_OS_HUNTER_PIN.json",
+        "learning/AI_BUSINESS_OS_LEARNING_ENGINE_PIN.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-068",
+      "summary": "Highest-value uncertainty selection does not use a weighted sum or opaque scalar. It preserves importance, uncertainty, test cost, time to evidence, reversibility, downstream impact, strategic reuse and external-validation value with per-component basis type/rationale/evidence, ranks by Pareto layers, then uses a documented lexicographic tie-break.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "uncertainty/UNCERTAINTY_POLICY.json",
+        "schemas/UNCERTAINTY_SCHEMA.json",
+        "uncertainty/highest_value_uncertainty.py",
+        "tests/test_highest_value_uncertainty.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-069",
+      "summary": "At the Step 11 evidence snapshot, the selected uncertainty is UNC-EXTERNAL-PRJ-001: determine the smallest reversible external validation that can produce the first VERIFIED customer/value outcome for RecoveryWorks. It is HUMAN_GATED_ACT with CUSTOMER_COMMUNICATION approval required; selection is advisory and grants no authority to contact anyone.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "uncertainty/INITIAL_UNCERTAINTY_SUMMARY.json",
+        "uncertainty/HIGHEST_VALUE_UNCERTAINTY_CONTRACT.md",
+        "registry/projects.json",
+        "graph/UNIVERSAL_GRAPH_LEDGER.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-070",
+      "summary": "Graph absence is treated only as uncertainty. A missing HAS_CAPABILITY or verified commercial node generates an evidence question but is never represented as proof that the capability or real-world validation does not exist outside the current evidence system.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "uncertainty/highest_value_uncertainty.py",
+        "tests/test_highest_value_uncertainty.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-071",
+      "summary": "Test-cost and time-to-evidence components are explicitly labeled POLICY_ESTIMATE ordinal values rather than observed dollars or elapsed time. This prevents planning assumptions from masquerading as verified measurements.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/UNCERTAINTY_SCHEMA.json",
+        "uncertainty/highest_value_uncertainty.py",
+        "uncertainty/HIGHEST_VALUE_UNCERTAINTY_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-072",
+      "summary": "The no-prompt autonomous canary uncertainty remains visible but BLOCKED by the explicit Step 24 canary gate. Highest-value reasoning cannot jump the numbered governance sequence.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "uncertainty/highest_value_uncertainty.py",
+        "tests/test_highest_value_uncertainty.py",
+        "PORTFOLIO_BUILD_STATE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-073",
+      "summary": "Step 12 reconciled REPO-001 from b9031219f39502251afd6da92cc89effbbea2f21 to c4be1a3e10a92b9255906b1600097fe6371ea929 using a targeted delta. Only HUNTER-03/HUNTER-04/HUNTER-05 scout queue state changed; pinned architecture blobs were unchanged and repository revision pins were safely advanced.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "PORTFOLIO_BUILD_STATE.json",
+        "experiments/HUNTER_EXPERIMENT_SEMANTICS_PIN.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-074",
+      "summary": "Every Step 11 uncertainty now compiles into a deterministic bounded experiment plan containing hypothesis, inputs, evidence baseline, success/failure/inconclusive conditions, evidence requirements, cost boundary, rollback, outcome-recording contract, complete uncertainty component vector, semantic revision and experiment hash.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/EXPERIMENT_SCHEMA.json",
+        "experiments/experiment_engine.py",
+        "experiments/EXPERIMENT_ENGINE_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-075",
+      "summary": "The selected RecoveryWorks external-validation experiment remains HUMAN_APPROVAL_REQUIRED. It requires CUSTOMER_COMMUNICATION approval and grants zero autonomous external messages, cash spend, model calls or downstream writes. Step 12 does not draft/send outreach or choose a target.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "experiments/INITIAL_EXPERIMENT_SUMMARY.json",
+        "experiments/EXPERIMENT_POLICY.json",
+        "tests/test_experiment_engine.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-076",
+      "summary": "Experiment blocker precedence is fail-closed: an explicit hard blocker outranks a human-approval state. A blocked human-gated experiment remains BLOCKED and non-autonomous rather than being downgraded to merely approval-required.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "experiments/experiment_engine.py",
+        "tests/test_experiment_engine.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-077",
+      "summary": "Definitive PASSED or FAILED experiment outcomes require VERIFIED evidence and an independent verifier distinct from the experiment actor. INCONCLUSIVE cannot claim a decision change. The checked-in outcome ledger starts empty because plans are not outcomes.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/EXPERIMENT_OUTCOME_SCHEMA.json",
+        "experiments/EXPERIMENT_OUTCOME_LEDGER.json",
+        "experiments/experiment_engine.py",
+        "tests/test_experiment_engine.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-078",
+      "summary": "Step 8 daily mode now emits experiment_plan.json after rebuilding learning and uncertainty state. This integration performs planning only; it does not execute experiments or grant ACT.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "runtime/continuous_runtime.py",
+        "experiments/EXPERIMENT_ENGINE_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-079",
+      "summary": "Step 13 reconciled REPO-001 from c4be1a3e10a92b9255906b1600097fe6371ea929 to dcca6215f2439bb55391335fe0513f471c762290 using a targeted delta. HUNTER-06/HUNTER-07 plus the runtime gateway/worker-contract test changed; existing Truth, Value Memory, Graph, Hunter, Learning and Experiment component blobs remained unchanged and were repinned without semantic changes.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "PORTFOLIO_BUILD_STATE.json",
+        "model_router/AI_BUSINESS_OS_RUNTIME_GATEWAY_PIN.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-080",
+      "summary": "Model routing is deterministic-first. Tier 0 is mandatory whenever deterministic code is sufficient unless independent adversarial verification is explicitly required. Tier 1 handles cheap extraction/classification/summarization, Tier 2 strong reasoning, and Tier 3 independent adversarial verification.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "model_router/MODEL_ROUTER_POLICY.json",
+        "model_router/model_router.py",
+        "tests/test_model_router.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-081",
+      "summary": "The checked-in provider registry enables only deterministic Tier 0. API and self-hosted Tier 1-3 slots are disabled, carry only environment-variable names rather than secrets, and cannot route until an explicit provider/model plus finite pre-call pricing is configured.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "model_router/PROVIDER_REGISTRY.json",
+        "model_router/MODEL_ROUTER_CONTRACT.md",
+        "model_router/validate_model_router.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-082",
+      "summary": "Tier 3 adversarial routing requires explicit builder independence context and a verifier model from a different independence group. If no independent eligible verifier exists within data/token/cost boundaries, routing fails closed.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "model_router/model_router.py",
+        "tests/test_model_router.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-083",
+      "summary": "Model-call receipts can never grant authority or upgrade evidence state. They record provider/model/tier, token usage, cost/cost basis, latency and input/output hashes without prompt content. Only VERIFIED downstream outcome feedback contributes to model-routing value summaries.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/MODEL_CALL_RECEIPT_SCHEMA.json",
+        "schemas/MODEL_OUTCOME_FEEDBACK_SCHEMA.json",
+        "model_router/model_router.py",
+        "model_router/MODEL_ROUTING_LEDGER.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-084",
+      "summary": "The inspected AI Business OS runtime gateway remains a named-operation/approval boundary rather than the model router: worker operations are named, arbitrary SQL is absent, and human approval decisions are separately intent-bound. Portfolio Brain keeps provider routing separate from authority/approval operations.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "model_router/AI_BUSINESS_OS_RUNTIME_GATEWAY_PIN.json",
+        "model_router/MODEL_ROUTER_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-085",
+      "summary": "Step 14 reconciled REPO-001 from dcca6215f2439bb55391335fe0513f471c762290 to 21b9023a57392f380c73b2fe952c35840f2e2025 using a targeted delta. Only HUNTER-08 through HUNTER-14 scout state changed; pinned architecture components remained byte-identical and their repository revision pins were safely advanced.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "PORTFOLIO_BUILD_STATE.json",
+        "agents/AI_BUSINESS_OS_PERSISTENT_AGENT_PIN.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-086",
+      "summary": "Portfolio Brain has ten stable persistent roles: Portfolio Manager, Hunter, Researcher, Product Analyst, Engineer, Tester, Auditor, Red Team, Data Steward and Commercial Analyst. Identity and role are durable and explicit rather than inferred from transient prompts.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "agents/AGENT_REGISTRY.json",
+        "schemas/AGENT_ROLE_SCHEMA.json",
+        "agents/PERSISTENT_AGENT_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-087",
+      "summary": "No persistent role has ACT authority. Engineer is the only builder-eligible role and is capped at MODIFY. Tester, Auditor, Red Team and Data Steward are verifier-eligible and not builder-eligible; verifier identity and independence group must differ from the builder before work can become COMPLETE.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "agents/AGENT_POLICY.json",
+        "agents/AGENT_REGISTRY.json",
+        "agents/persistent_agents.py",
+        "tests/test_persistent_agents.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-088",
+      "summary": "Persistent work uses explicit PENDING/RUNNING/VERIFYING/terminal states, generation-fenced leases, heartbeats, expired-lease requeue, durable run identity, sanitized evidence/state references, verification receipts, snapshots and an append-only SHA-256 event chain. Snapshot restoration never erases historical events.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/AGENT_WORK_ITEM_SCHEMA.json",
+        "schemas/AGENT_VERIFICATION_SCHEMA.json",
+        "agents/persistent_agents.py",
+        "tests/test_persistent_agents.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-089",
+      "summary": "Agent model-tier ceilings are role ceilings only and cannot bypass the Step 13 router. Engineer is capped below Tier 3; Auditor and Red Team may request Tier 3, but checked-in Tier 1-3 providers remain disabled so no paid/non-deterministic route is activated by Step 14.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "agents/AGENT_REGISTRY.json",
+        "model_router/PROVIDER_REGISTRY.json",
+        "agents/validate_agents.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-090",
+      "summary": "The checked-in persistent-agent seed contains ten identities but no work items or evidence. Step 14 provides the durable role/work control plane; always-on external worker deployment remains a later runtime concern and private payloads are not stored while Portfolio Brain is public.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "agents/AGENT_STATE_SEED.json",
+        "agents/PERSISTENT_AGENT_CONTRACT.md",
+        "PORTFOLIO_BUILD_STATE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-091",
+      "summary": "Step 15 reuses the canonical AI Business OS capital allocator's evidence provenance, freshness, concentration, immutable-plan and governance semantics at source revision 21b9023a57392f380c73b2fe952c35840f2e2025, but deliberately does not reuse a single composite cross-project score as Portfolio Brain's allocation oracle.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "allocator/AI_BUSINESS_OS_CAPITAL_ALLOCATOR_PIN.json",
+        "allocator/PORTFOLIO_ALLOCATOR_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-092",
+      "summary": "Portfolio allocation covers nine explicit resource classes: MODEL_CALLS, ENGINEERING_CAPACITY, TESTING, RESEARCH, HUNTER_RUNS, ART_PRODUCTION, HUMAN_REVIEW, API_INFRASTRUCTURE and CASH. Because no real resource pool was supplied, checked-in recommendations use normalized basis-point shares only and do not invent hours, dollars, calls or capacity.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "allocator/ALLOCATOR_POLICY.json",
+        "schemas/PORTFOLIO_ALLOCATION_PLAN_SCHEMA.json",
+        "allocator/portfolio_allocator.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-093",
+      "summary": "Current evidence supports active advisory allocation only for RESEARCH, HUNTER_RUNS and HUMAN_REVIEW. The allocator emits 29 project-resource recommendations; PRJ-000 is the top research priority from the learning-measurement gap, while PRJ-001 RecoveryWorks is the top human-review priority because its external-validation uncertainty dominates the other current human-gated candidates.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "allocator/INITIAL_ALLOCATION_SUMMARY.json",
+        "uncertainty/INITIAL_UNCERTAINTY_SUMMARY.json",
+        "tests/test_portfolio_allocator.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-094",
+      "summary": "Current evidence explicitly holds MODEL_CALLS, ENGINEERING_CAPACITY, TESTING, ART_PRODUCTION, API_INFRASTRUCTURE and CASH. Tier 1-3 providers are disabled; no ready isolated synthetic implementation/test demand exists; no art-specific uncertainty exists; no approved infrastructure expansion need exists; and no human-approved concrete cash pool/governance receipt exists.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "allocator/PORTFOLIO_ALLOCATOR_CONTRACT.md",
+        "model_router/PROVIDER_REGISTRY.json",
+        "experiments/INITIAL_EXPERIMENT_SUMMARY.json",
+        "allocator/INITIAL_ALLOCATION_SUMMARY.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-095",
+      "summary": "Allocator ranking is resource-specific: eligible project uncertainties retain their complete eight-component evidence vector, are separated by Pareto layers, converted to normalized shares with explicit public layer weights, and capped at 50% per project. Unallocated share remains HOLD rather than being forced into activity.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "allocator/ALLOCATOR_POLICY.json",
+        "allocator/portfolio_allocator.py",
+        "tests/test_portfolio_allocator.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-096",
+      "summary": "Step 8 daily mode now emits portfolio_allocation_recommendation.json after learning, uncertainty and experiment planning. The output remains advisory and cannot move cash, enable models, send customer communications, deploy software or execute downstream work.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "runtime/continuous_runtime.py",
+        "allocator/PORTFOLIO_ALLOCATOR_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-097",
+      "summary": "Step 16 reuses the canonical AI Business OS software-factory, independent-verification and governance semantics at source revision 21b9023a57392f380c73b2fe952c35840f2e2025: unique attempt branches/workspaces, test-bound submissions, independent verification before PR readiness, bounded retries and separate PR/production authority.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "software_factory/AI_BUSINESS_OS_SOFTWARE_FACTORY_PIN.json",
+        "software_factory/SOFTWARE_FACTORY_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-098",
+      "summary": "The Portfolio Brain factory executor exposes exactly CREATE_BRANCH, COMMIT_CANDIDATE and CREATE_PR. It has no merge, deployment, default-branch update, repository-settings, secrets, destructive-branch or production operation.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "software_factory/FACTORY_POLICY.json",
+        "software_factory/github_executor.py",
+        "software_factory/validate_factory.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-099",
+      "summary": "Only AGT-ENGINEER may build candidate software. Candidate submission requires exact commit SHA, changed paths, regression-test commands, test receipt hashes and immutable diff hash. The builder cannot verify its own work, and PR creation requires PASS from the exact bound Tester/Auditor/Red Team verifier.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "software_factory/software_factory.py",
+        "tests/test_software_factory.py",
+        "schemas/SOFTWARE_FACTORY_WORK_SCHEMA.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-100",
+      "summary": "Step 16 candidate MODIFY is enabled only for P00NSMASHER/portfolio-brain. REPO-001 through REPO-007 remain candidate-write disabled until explicitly onboarded by a later policy/credential decision. The executor also rejects candidate edits to workflow/security/governance/secret surfaces in v1.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "software_factory/FACTORY_POLICY.json",
+        "software_factory/SOFTWARE_FACTORY_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-101",
+      "summary": "Software-factory work identification is evidence-driven from the Step 15 engineering allocation plus Step 12 executable experiments. Because ENGINEERING_CAPACITY is currently HOLD and no isolated synthetic implementation experiment is ready, the checked-in factory ledger and current identify_work result remain empty rather than inventing engineering activity.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "software_factory/SOFTWARE_FACTORY_LEDGER.json",
+        "allocator/INITIAL_ALLOCATION_SUMMARY.json",
+        "software_factory/validate_factory.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-102",
+      "summary": "The initial Step 16 CI run correctly rejected verifier substitution: an e2e fixture used AGT-AUDITOR for work explicitly bound to AGT-TESTER. The fixture was corrected and a dedicated regression now proves that an eligible but unbound verifier is rejected.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "tests/test_software_factory.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-103",
+      "summary": "Step 17 reconciled REPO-001 from 21b9023a57392f380c73b2fe952c35840f2e2025 to 9533769a669429d2553302df6068b4b1f8099e89 using a targeted delta. Only automation/SCOUT_DIGEST.md changed; pinned architecture/repair component blobs were unchanged and repository revision pins were safely advanced.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "PORTFOLIO_BUILD_STATE.json",
+        "repair/AI_BUSINESS_OS_REPAIR_PIN.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-104",
+      "summary": "Statistical learning alerts may create only NEEDS_REPRODUCTION tasks. READY_FOR_REPAIR requires a FAILURE_PACKET with VERIFIED evidence, reproduction steps, evidence references and a concrete regression-test requirement; sensitive or benchmark-contaminated failures are blocked.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "repair/REPAIR_POLICY.json",
+        "schemas/REPAIR_FAILURE_SCHEMA.json",
+        "repair/repair_engine.py",
+        "tests/test_continuous_repair.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-105",
+      "summary": "Repair implementation must use the Step 16 isolated factory path on REPO-008 and may not target protected workflow/governance/provider/build-state surfaces in v1. A candidate is accepted into held-out evaluation only after the factory reaches independently verified PR_OPEN with exact commit/diff/test identity.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "repair/repair_engine.py",
+        "software_factory/FACTORY_POLICY.json",
+        "repair/CONTINUOUS_REPAIR_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-106",
+      "summary": "Self-improvement verification is role-separated: held-out evaluator differs from the Engineer builder; independent Auditor/Red Team differs from both builder and held-out evaluator; every evaluation binds the exact candidate commit and diff hash.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/REPAIR_EVALUATION_SCHEMA.json",
+        "repair/repair_engine.py",
+        "tests/test_continuous_repair.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-107",
+      "summary": "A repair-specific canary can advance only when it executes at least one check, passes all checks, records zero regressions and zero authority violations. Fail/unknown/regression/authority-violation evidence blocks the repair instead of being averaged away.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "repair/repair_engine.py",
+        "tests/test_continuous_repair.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-108",
+      "summary": "PROMOTION_ELIGIBLE is not promotion. Successful canary evidence creates only a record with automatic_promotion=false, required_approval=INTEGRATOR_APPROVAL and promotion_action=null. Step 17 exposes no promote, merge, deploy or default-branch action.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "repair/repair_engine.py",
+        "repair/CONTINUOUS_REPAIR_CONTRACT.md",
+        "repair/validate_repair.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-109",
+      "summary": "The checked-in repair ledger starts empty because no reproducible Portfolio Brain failure packet has been ingested and Step 10 currently emits no production learning alerts. Daily runtime now emits repair_state.json for continuous detection without fabricating or executing repair work.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "repair/REPAIR_LEDGER.json",
+        "runtime/continuous_runtime.py",
+        "repair/validate_repair.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-110",
+      "summary": "Step 19 reconciled REPO-001 from 9533769a669429d2553302df6068b4b1f8099e89 to c6276c80828d2632d5fee37cdaaf65f1d5b36427 using a targeted two-file delta. The new upstream StarBlox scout schedule/direct-main writer was inspected but its fixed domain schedule and git push-to-main behavior were deliberately not inherited into Portfolio Brain.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "scheduler/AI_BUSINESS_OS_SCHEDULER_PIN.json",
+        "scheduler/SCHEDULER_CONTRACT.md",
+        "PORTFOLIO_BUILD_STATE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-111",
+      "summary": "The autonomous scheduler supports HUNT, EXPERIMENT, REPAIR, TEST, RESEARCH, INTEGRATION and VERIFICATION. Selection uses explicit source/governance/resource gates followed by gate precedence and source Pareto/rank/allocation evidence; no opaque scalar priority score or activity quota is used.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "scheduler/SCHEDULER_POLICY.json",
+        "scheduler/autonomous_scheduler.py",
+        "schemas/SCHEDULED_WORK_SCHEMA.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-112",
+      "summary": "Scheduler state persists outside ChatGPT as the portfolio-scheduler-state Actions artifact. QUEUED/ACTIVE/completed fingerprints suppress duplicate work, one open/new item per agent is enforced, and stale external leases remain held for Step 14 runtime reconciliation rather than being blindly duplicated.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "scheduler/SCHEDULER_STATE_SEED.json",
+        "scheduler/artifact_state.py",
+        "scheduler/autonomous_scheduler.py",
+        "tests/test_autonomous_scheduler.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-113",
+      "summary": "At the Step 19 evidence snapshot, the scheduler enqueues exactly three autonomous work packets: RESEARCH to AGT-RESEARCHER, HUNT to AGT-HUNTER and read-only INTEGRATION assessment to AGT-PRODUCT-ANALYST. No REPAIR, TEST, VERIFICATION or isolated EXPERIMENT work is invented because the required source states are absent.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "scheduler/validate_scheduler.py",
+        "allocator/INITIAL_ALLOCATION_SUMMARY.json",
+        "repair/REPAIR_LEDGER.json",
+        "software_factory/SOFTWARE_FACTORY_LEDGER.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-114",
+      "summary": "The six current external-validation experiments remain visible as BLOCKED_APPROVAL work and never enter the autonomous queue. Customer-communication approval requirements are preserved and no scheduler packet requires ACT authority.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "scheduler/autonomous_scheduler.py",
+        "tests/test_autonomous_scheduler.py",
+        "experiments/INITIAL_EXPERIMENT_SUMMARY.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-115",
+      "summary": "The Step 19 scheduler workflow is staged on the isolated branch and, once promoted later, is configured for hourly self-triggering plus dispatch/manual triggers with contents/actions read-only permissions, serialized state, artifact persistence and a kill switch. It is not active on main yet.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        ".github/workflows/portfolio-autonomous-scheduler.yml",
+        "scheduler/SCHEDULER_POLICY.json",
+        "scheduler/SCHEDULER_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-116",
+      "summary": "Step 20 implements a fail-closed pre-execution cost governor with durable sanitized reservations. Portfolio, per-project, provider/model and workflow/job ceilings are checked independently, active reservations consume headroom, and the strictest failing scope blocks execution.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "cost_governor/COST_GOVERNOR_POLICY.json",
+        "cost_governor/cost_governor.py",
+        "schemas/COST_GOVERNOR_REQUEST_SCHEMA.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-117",
+      "summary": "Checked-in paid/model/API budgets remain deny-by-default at zero USD, zero input/output tokens and zero model/API calls. Deterministic Tier 0 remains the preferred no-model path; enabling a provider elsewhere is insufficient to authorize spend.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "cost_governor/COST_GOVERNOR_POLICY.json",
+        "model_router/MODEL_ROUTER_POLICY.json",
+        "model_router/model_router.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-118",
+      "summary": "Idempotency keys suppress duplicate spend, conflicting reuse fails closed, retry groups cannot reset attempt numbers, and expired unknown executions remain conservatively charged at their reserved maximum for the rest of the UTC accounting day.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "cost_governor/cost_governor.py",
+        "tests/test_cost_governor.py",
+        "cost_governor/COST_GOVERNOR_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-119",
+      "summary": "All currently staged autonomous compute entry points are behind the shared portfolio-cost-governed-autonomy reservation ledger: runtime-worker covers runtime callers, plus hunter-autonomous-cycle, portfolio-autonomous-scheduler and software-factory-candidate. No Step 8/9/16/19/20 recurring workflow is activated on the default branch.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        ".github/workflows/runtime-worker.yml",
+        ".github/workflows/hunter-autonomous-cycle.yml",
+        ".github/workflows/portfolio-autonomous-scheduler.yml",
+        ".github/workflows/software-factory-candidate.yml"
+      ]
+    },
+    {
+      "decision_id": "DEC-120",
+      "summary": "A staged cost watchdog can use actions:write only to cancel queued/in-progress workflow runs whose names are explicitly allowlisted by the cost policy when a kill switch or current-day overage is present. foundation-ci is not managed or cancelled by this watchdog.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        ".github/workflows/portfolio-cost-watchdog.yml",
+        "cost_governor/cancel_managed_jobs.py",
+        "cost_governor/COST_GOVERNOR_POLICY.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-121",
+      "summary": "Cost accounting grants no authority. ACT requests are rejected at the cost boundary, including Tier 0 routing, and BLK-005 continues to permit only sanitized identifiers, hashes, numeric usage/costs and evidence references in persistent cost state.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "cost_governor/cost_governor.py",
+        "cost_governor/COST_STATE_SEED.json",
+        "tests/test_cost_governor.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-122",
+      "summary": "Step 21 defines project health as evidence coverage state (BLOCKED, EVIDENCE_GAPS or UNKNOWN), not a subjective scalar score. Lifecycle status is displayed separately as the only registered maturity basis.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "dashboard/executive_dashboard.py",
+        "registry/projects.json",
+        "tests/test_executive_dashboard.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-123",
+      "summary": "The executive dashboard covers all 12 registered projects and displays current bottleneck/highest-value uncertainty, active experiment state, resource recommendations, pending autonomous work, blocked actions, measured outcomes, measured model cost and evidence coverage.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "dashboard/executive_dashboard.py",
+        "dashboard/validate_dashboard.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-124",
+      "summary": "Missing verified outcomes, learning observations, transfer outcomes and cost records remain NONE/UNKNOWN/zero measured values. Policy estimates and hypotheses are never promoted to measured results.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "dashboard/executive_dashboard.py",
+        "learning/LEARNING_OBSERVATION_LEDGER.json",
+        "transfer/TRANSFER_LEDGER.json",
+        "cost_governor/COST_STATE_SEED.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-125",
+      "summary": "Step 21 is an OBSERVE-only decision-support surface. It grants no ACT, deployment, merge, customer communication, payment, trading or other execution authority.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "dashboard/executive_dashboard.py",
+        "dashboard/STEP21_VALIDATION_NOTE.md",
+        "tests/test_executive_dashboard.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-126",
+      "summary": "Step 22 creates alerts only from five evidence classes: human approval queues/open human-decision blockers, autonomous-work failures, cost/kill-switch hard stops, independently VERIFIED decision-relevant experiment/transfer outcomes, and post-baseline deterministic dashboard state changes. Missing evidence produces no outcome alert.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "notifications/notification_engine.py",
+        "notifications/NOTIFICATION_POLICY.json",
+        "tests/test_notifications.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-127",
+      "summary": "Stable alert fingerprints deduplicate unchanged conditions. Severity-specific cooldowns rate-limit repeats; HIGH alerts are at most daily, MEDIUM at most every three days, and persistent autonomous-work failures may escalate to CRITICAL after three observations without granting authority.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "notifications/notification_engine.py",
+        "notifications/NOTIFICATION_POLICY.json",
+        "notifications/NOTIFICATION_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-128",
+      "summary": "Notification delivery is limited to sanitized GitHub Actions annotations and the GitHub step summary. No email, SMS, Slack, arbitrary webhook, customer communication, payment, trading, deployment, merge or downstream-write channel is present.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "notifications/github_sink.py",
+        ".github/workflows/portfolio-notification-cycle.yml",
+        "notifications/NOTIFICATION_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-129",
+      "summary": "The staged notification cycle is serialized through the Step 20 cost governor, runs at most every six hours when later activated, reserves at most two runner minutes per run, and is included in the managed-workflow cancellation allowlist. It remains staged off the default branch.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        ".github/workflows/portfolio-notification-cycle.yml",
+        "cost_governor/COST_GOVERNOR_POLICY.json",
+        "cost_governor/validate_cost_governor.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-130",
+      "summary": "Notification continuation state persists as a sanitized Actions artifact containing only alert IDs/fingerprints, severity, project/entity/evidence references, timestamps and counts. While BLK-005 is open, private payloads, credentials, prompt text and sensitive evidence bodies are prohibited.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "notifications/NOTIFICATION_STATE_SEED.json",
+        "notifications/artifact_state.py",
+        "schemas/ALERT_SCHEMA.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-131",
+      "summary": "Step 23 hostile examination covers 17 threat classes: prompt injection/malicious repositories, graph/evidence/memory poisoning, reward gaming, self-approval, verification circularity, privilege escalation, provider/cost/retry/action failure, secret/private-data leakage, autonomous deployment/merge, unauthorized contact, child-safety bypass and financial/trading bypass.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "hostile/ATTACK_MATRIX.json",
+        "hostile/HOSTILE_EXAMINATION_REPORT.md",
+        "tests/test_hostile_examination.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-132",
+      "summary": "Capability coverage can no longer be poisoned by an active but unverified graph edge. Hunter and highest-value uncertainty now count only VERIFIED HAS_CAPABILITY edges whose target capability node is also VERIFIED.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "hunting/autonomous_hunter.py",
+        "uncertainty/highest_value_uncertainty.py",
+        "tests/test_hostile_examination.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-133",
+      "summary": "VERIFIED graph nodes and edges now require a machine/human verification anchor such as CI, event, evidence, verification or test-receipt provenance. Arbitrary provenance text cannot launder a graph claim into VERIFIED.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "graph/universal_graph.py",
+        "tests/test_hostile_examination.py",
+        "tests/test_universal_graph.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-134",
+      "summary": "GitHub Actions notification output now sanitizes entity/project fields and escapes workflow-command data so persisted or hostile alert text cannot inject a second Actions command.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "notifications/github_sink.py",
+        "tests/test_hostile_examination.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-135",
+      "summary": "Cost-governor retry and idempotency identities are now bound to the immutable model route or GitHub run/job identity. Renaming a retry group cannot restart the bounded retry sequence; generic API calls require an explicit stable api-operation identity.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "cost_governor/cost_governor.py",
+        "tests/test_hostile_examination.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-136",
+      "summary": "Hostile examination introduced no authority expansion and activated no recurring workflows. Existing protections for self-verification, ACT escalation, provider failure, private-data storage, deployment/merge, customer contact, child-facing consequential changes and live trading all remained fail-closed under regression.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "hostile/ATTACK_MATRIX.json",
+        "hostile/validate_hostile_examination.py",
+        ".github/workflows/foundation-ci.yml"
+      ]
+    },
+    {
+      "decision_id": "DEC-137",
+      "summary": "Step 24 executes the autonomous-learning canary without live web/model/API dependency by mirroring only the exact source SHAs already persisted in adapter cursor state. Blocked sources remain unread and the runtime path still enforces its ordinary budgets and OBSERVE-only policy.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "canary/autonomous_learning_canary.py",
+        "canary/CANARY_POLICY.json",
+        "runtime/continuous_runtime.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-138",
+      "summary": "The first canary pass restores/advances five durable state classes: runtime, scheduler, cost, notifications and learning. It schedules exactly RESEARCH, HUNT and INTEGRATION work, preserves six human-approval-blocked items, reserves/commits zero-paid-cost compute, evaluates notifications and rebuilds learning with zero eligible promotions.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "canary/autonomous_learning_canary.py",
+        "canary/CANARY_CONTRACT.md",
+        "canary/validate_canary.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-139",
+      "summary": "The continuation pass reloads the persisted JSON bytes rather than reconstructing state. With unchanged source evidence it selects zero new scheduler work, suppresses at least three prior work fingerprints, suppresses the duplicate cost execution, suppresses repeated notification delivery and reproduces the same learning-state hash.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "canary/autonomous_learning_canary.py",
+        "tests/test_autonomous_learning_canary.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-140",
+      "summary": "Step 24 canary execution used zero model calls, zero paid cost, produced zero learning promotions and zero authority violations; no customer communication, payment, money movement, live trading, deployment, merge or default-branch update was attempted.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "canary/out/canary_receipt.json",
+        "ci-run:36200414277",
+        "sha256:e7b97e727155e3f7e2fccc0d1594592ca0722a48a067ebda70720ef080384ebc"
+      ]
+    },
+    {
+      "decision_id": "DEC-141",
+      "summary": "Exact-head CI persists sanitized Step 24 canary receipts/states as a GitHub Actions artifact for 30 days. Implementation run 36200414277 produced artifact 10892145046 with digest sha256:13b557d80458b3f0b48ea3b8b87cd22d408f9c694bb77146cf9e75f131001469.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "ci-run:36200414277",
+        "actions-artifact:10892145046",
+        "sha256:13b557d80458b3f0b48ea3b8b87cd22d408f9c694bb77146cf9e75f131001469"
+      ]
+    },
+    {
+      "decision_id": "DEC-142",
+      "summary": "The canary remains shadow-only on an isolated branch. Passing Step 24 does not itself activate recurring autonomous operation on main; default-branch promotion and final operating-mode activation remain Step 25.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "canary/CANARY_CONTRACT.md",
+        "PORTFOLIO_BUILD_STATE.json"
+      ]
+    }
+  ],
+  "blockers": [
+    {
+      "blocker_id": "BLK-001",
+      "summary": "permitplate-state is currently public while durable architecture treats it as sensitive operational state; review intended visibility and access controls before integrating it into Portfolio Brain.",
+      "status": "OPEN",
+      "requires_human_decision": true
+    },
+    {
+      "blocker_id": "BLK-002",
+      "summary": "Production reuse requires live identity, privilege, deployment and independent-verifier evidence. Existing gateway token includes write operations; observers must not inherit it. Blocks integration/activation, not architecture completion.",
+      "status": "DEFERRED",
+      "requires_human_decision": false
+    },
+    {
+      "blocker_id": "BLK-003",
+      "summary": "ABVM active CI excludes retained browser suites and unit invocation; record current coverage/persistence/calendar limitations before future reliance.",
+      "status": "DEFERRED",
+      "requires_human_decision": false
+    },
+    {
+      "blocker_id": "BLK-004",
+      "summary": "Dedicated P00NSMASHER/portfolio-brain repository now exists and the Step 1 foundation is materialized and CI-verified.",
+      "status": "RESOLVED",
+      "requires_human_decision": false
+    },
+    {
+      "blocker_id": "BLK-005",
+      "summary": "P00NSMASHER/portfolio-brain is temporarily public by explicit owner choice. This does not block sanitized architecture work, but it blocks storage of secrets, private operational/customer payloads, sensitive evidence, or credentials until repository visibility is changed to private.",
+      "status": "OPEN",
+      "requires_human_decision": true
+    }
+  ],
+  "architecture_version": "1.24.0",
+  "state_id": "portfolio-brain-master",
+  "working_branch": "step24-autonomous-learning-canary-20260925",
+  "phase": "architecture_build",
+  "current_step": 25,
+  "completed_steps": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24
+  ],
+  "artifacts": [
+    {
+      "path": "portfolio_prework/PORTFOLIO_BUILD_STATE.json",
+      "kind": "immutable_parallel_prework_history",
+      "step": 0,
+      "commit_sha": "bd169dba2539de9e9fa9338c063b60f453d903de"
+    },
+    {
+      "path": "portfolio_prework/ARCHITECTURE_EVIDENCE_BUNDLE.json",
+      "kind": "immutable_prework_handoff",
+      "step": 0,
+      "commit_sha": "bd169dba2539de9e9fa9338c063b60f453d903de"
+    },
+    {
+      "path": "docs/PORTFOLIO_ARCHITECTURE_BASELINE.md",
+      "kind": "architecture_baseline",
+      "step": 0,
+      "commit_sha": "bb237238c96b272bec5bae91c7358b41e26d6e17"
+    },
+    {
+      "path": "docs/PORTFOLIO_STEP0_EVIDENCE.json",
+      "kind": "delta_and_verification_receipt",
+      "step": 0,
+      "commit_sha": "bb237238c96b272bec5bae91c7358b41e26d6e17"
+    },
+    {
+      "path": "portfolio_prework/test_portfolio_architecture_baseline.py",
+      "kind": "baseline_regression_checks",
+      "step": 0,
+      "commit_sha": "bb237238c96b272bec5bae91c7358b41e26d6e17"
+    },
+    {
+      "path": "PORTFOLIO_BUILD_STATE.json",
+      "kind": "canonical_master_continuation_state",
+      "step": 0,
+      "commit_sha": "bb237238c96b272bec5bae91c7358b41e26d6e17"
+    },
+    {
+      "path": "docs/PORTFOLIO_BRAIN_ARCHITECTURE_CONTRACT.md",
+      "kind": "step1_architecture_contract_staging",
+      "step": 1,
+      "commit_sha": "a75148054f57f8388093359a8cb1b67c9a26d646"
+    },
+    {
+      "path": "portfolio_brain_seed/FOUNDATION_SKELETON.json",
+      "kind": "step1_foundation_skeleton_manifest",
+      "step": 1,
+      "commit_sha": "cba39a987e484b328d9b817f6e49798de966f034"
+    },
+    {
+      "path": "portfolio_brain_seed/registry/PROJECT_REGISTRATION_CONTRACT.json",
+      "kind": "step1_project_registration_contract",
+      "step": 1,
+      "commit_sha": "0409a1c42c438b8352f311bb6bf8b943e0ed9740"
+    },
+    {
+      "path": "portfolio_brain_seed/docs/ARCHITECTURE_CONTRACT.md",
+      "kind": "step1_self_contained_architecture_contract",
+      "step": 1,
+      "commit_sha": "3c973b5393d8b6939ad2cd95c89e715b563f31ce"
+    },
+    {
+      "path": "portfolio_brain_seed/README.md",
+      "kind": "step1_seed_materialization_runbook",
+      "step": 1,
+      "commit_sha": "72c01df8d861fdcc8dc7d1968148495736795449"
+    },
+    {
+      "path": "portfolio_brain_seed/tests/validate_foundation.py",
+      "kind": "step1_foundation_validator",
+      "step": 1,
+      "commit_sha": "ced4122d74307c2638cdb21b4708dedce5a45973"
+    },
+    {
+      "path": "portfolio_brain_seed/.github/workflows/foundation-ci.yml",
+      "kind": "step1_initial_ci",
+      "step": 1,
+      "commit_sha": "c5ef42f56ce32dd437e6f819c153a732bd329b68"
+    },
+    {
+      "path": "README.md",
+      "kind": "step1_repository_readme",
+      "step": 1,
+      "commit_sha": "024870ce9bf7e9864297eeba585b3081c4628438",
+      "source_repository": "P00NSMASHER/portfolio-brain"
+    },
+    {
+      "path": "FOUNDATION_SKELETON.json",
+      "kind": "step1_materialized_foundation_skeleton",
+      "step": 1,
+      "commit_sha": "a650313272b64391394116f30d44b4b5f998ecf7",
+      "source_repository": "P00NSMASHER/portfolio-brain"
+    },
+    {
+      "path": "registry/PROJECT_REGISTRATION_CONTRACT.json",
+      "kind": "step1_materialized_registration_contract",
+      "step": 1,
+      "commit_sha": "87e4e5e7b735b1e0b70cae220ef1ca6092c1834b",
+      "source_repository": "P00NSMASHER/portfolio-brain"
+    },
+    {
+      "path": "docs/ARCHITECTURE_CONTRACT.md",
+      "kind": "step1_materialized_architecture_contract",
+      "step": 1,
+      "commit_sha": "bf8c5609670fe90a76e6104acef462519b3617e5",
+      "source_repository": "P00NSMASHER/portfolio-brain"
+    },
+    {
+      "path": "tests/validate_foundation.py",
+      "kind": "step1_materialized_foundation_validator",
+      "step": 1,
+      "commit_sha": "3fdbb5011387053d33d0c84514da061409c21df8",
+      "source_repository": "P00NSMASHER/portfolio-brain"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step1_materialized_foundation_ci",
+      "step": 1,
+      "commit_sha": "b61583369f03a4582781a418aef8a0cba318fab1",
+      "source_repository": "P00NSMASHER/portfolio-brain"
+    },
+    {
+      "path": "schemas/PROJECT_SCHEMA.json",
+      "kind": "step2_project_schema",
+      "step": 2,
+      "commit_sha": "49bb20c05c3ecf0a3ebd6efc1e698453e676aa17"
+    },
+    {
+      "path": "registry/validate_project.py",
+      "kind": "step2_project_validator",
+      "step": 2,
+      "commit_sha": "fbb3864dec13544d564f423b00f5ad9a06788c38"
+    },
+    {
+      "path": "tests/test_project_schema.py",
+      "kind": "step2_project_schema_regression_tests",
+      "step": 2,
+      "commit_sha": "d445e8718c4a819359db4982d3f763c8b50c07ee"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step2_numbered_branch_ci_extension",
+      "step": 2,
+      "commit_sha": "d5241e6943b88754104539316222406c1a61e04b"
+    },
+    {
+      "path": "schemas/AUTONOMY_SCHEMA.json",
+      "kind": "step2_autonomy_schema",
+      "step": 2,
+      "commit_sha": "994eef31165dd98aba5fb270bf40f59e99b6c68c"
+    },
+    {
+      "path": "schemas/OBJECTIVE_SCHEMA.json",
+      "kind": "step2_objective_schema",
+      "step": 2,
+      "commit_sha": "8cbe2961ea553db2ca32ffde6f659040a0f427c3"
+    },
+    {
+      "path": "schemas/METRIC_SCHEMA.json",
+      "kind": "step2_metric_schema",
+      "step": 2,
+      "commit_sha": "0072dea1ae1f84df3ff2577d21314d4747ec25a0"
+    },
+    {
+      "path": "registry/validate_contracts.py",
+      "kind": "step2_contract_validators",
+      "step": 2,
+      "commit_sha": "7fafb9fa391551d2c454d43332f53ad6c280614f"
+    },
+    {
+      "path": "tests/test_step2_contracts.py",
+      "kind": "step2_contract_regression_tests",
+      "step": 2,
+      "commit_sha": "cd2e31f0610183a7f8ecc1c5ac5a2a384ae321a9"
+    },
+    {
+      "path": "registry/projects.json",
+      "kind": "step2_universal_project_registry",
+      "step": 2,
+      "commit_sha": "d6291bef645d2e6fce770fb57ff9cc1f6f7c137c"
+    },
+    {
+      "path": "registry/autonomy_profiles.json",
+      "kind": "step2_autonomy_profiles",
+      "step": 2,
+      "commit_sha": "e3b0c025238843f8873fe65faf9f7c33cbdcd869"
+    },
+    {
+      "path": "registry/objectives.json",
+      "kind": "step2_objective_registry",
+      "step": 2,
+      "commit_sha": "eee367c676c8d88d67e4f1aaedfddf938ccef674"
+    },
+    {
+      "path": "registry/metrics.json",
+      "kind": "step2_metric_registry",
+      "step": 2,
+      "commit_sha": "53ba989cc3a600099384cfd6265cd3d9e24f8c3e"
+    },
+    {
+      "path": "registry/PORTFOLIO_COVERAGE.json",
+      "kind": "step2_named_portfolio_coverage",
+      "step": 2,
+      "commit_sha": "1a826d9cb576eaebe68fe81b0e9f86796b7cda26"
+    },
+    {
+      "path": "registry/validate_registry.py",
+      "kind": "step2_cross_registry_validator",
+      "step": 2,
+      "commit_sha": "23f7e87220cc717ea5c3123d1a7ddefcab9e400a"
+    },
+    {
+      "path": "tests/test_registry_bundle.py",
+      "kind": "step2_registry_bundle_tests",
+      "step": 2,
+      "commit_sha": "64f39f9f4fcf175c3b3d4f39df6e4ee3ecf12393"
+    },
+    {
+      "path": "verification/STEP2_VALIDATION_REQUEST.json",
+      "kind": "step2_final_validation_request",
+      "step": 2,
+      "commit_sha": "5a560af370ae239d19e93a6fc1be17dd955e9cee"
+    },
+    {
+      "path": "schemas/EVIDENCE_SCHEMA.json",
+      "kind": "step3_evidence_schema",
+      "step": 3,
+      "commit_sha": "91eeba1d632da045a517df28154183b00daaba4a"
+    },
+    {
+      "path": "schemas/EVENT_SCHEMA.json",
+      "kind": "step3_event_schema",
+      "step": 3,
+      "commit_sha": "1fdb07f8ddac3a96036ae364297216825db65eaa"
+    },
+    {
+      "path": "events/EVENT_TYPE_CATALOG.json",
+      "kind": "step3_event_type_catalog",
+      "step": 3,
+      "commit_sha": "530da2992cd7f0829a7b90f5cfb0a99fc42df2da"
+    },
+    {
+      "path": "events/validate_event.py",
+      "kind": "step3_event_evidence_validator",
+      "step": 3,
+      "commit_sha": "607b041c08ac37fd06b509147a7c8add59af4e23"
+    },
+    {
+      "path": "tests/test_event_evidence_schema.py",
+      "kind": "step3_event_evidence_regressions",
+      "step": 3,
+      "commit_sha": "004f246fc0bbce657590e2f40ccb7420d6787dab"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step3_ci_compile_extension",
+      "step": 3,
+      "commit_sha": "bf357c8543def025cb42b997a6dbd87df54f4c56"
+    },
+    {
+      "path": "verification/STEP3_VALIDATION_REQUEST.json",
+      "kind": "step3_final_validation_request",
+      "step": 3,
+      "commit_sha": "77fbf807b4af3d73ca73f95e69bf8ab4978c9ae3"
+    },
+    {
+      "path": "schemas/ADAPTER_SCHEMA.json",
+      "kind": "step4_adapter_schema",
+      "step": 4,
+      "commit_sha": "7c234950db1cfbed3e09d7701e00d9570f2026e3"
+    },
+    {
+      "path": "adapters/ADAPTER_REGISTRY.json",
+      "kind": "step4_adapter_registry",
+      "step": 4,
+      "commit_sha": "8f6c385b399c3d3cd030811878f5de2b8317b083"
+    },
+    {
+      "path": "adapters/cursors/repositories.json",
+      "kind": "step4_repository_cursors",
+      "step": 4,
+      "commit_sha": "05ab0ee785634e210289e02fe68799d6bea95bac"
+    },
+    {
+      "path": "adapters/github_readonly.py",
+      "kind": "step4_github_readonly_adapter",
+      "step": 4,
+      "commit_sha": "7acfd6b19ab7adfb4f43ca898cf6bf89e3e7df14"
+    },
+    {
+      "path": "tests/test_readonly_adapters.py",
+      "kind": "step4_adapter_behavior_tests",
+      "step": 4,
+      "commit_sha": "95fa6eadfa0cf84ad0aa96e0dbfb810ef6e1eca9"
+    },
+    {
+      "path": "adapters/observations/INITIAL_STEP4_OBSERVATION.json",
+      "kind": "step4_initial_delta_observation",
+      "step": 4,
+      "commit_sha": "46db9b2d7c9c51d584a633ac3b4cb372ee874fac"
+    },
+    {
+      "path": "adapters/validate_adapters.py",
+      "kind": "step4_adapter_bundle_validator",
+      "step": 4,
+      "commit_sha": "b6fcdcf90d9b2d3f03311f4c7c67ed870b457456"
+    },
+    {
+      "path": "tests/test_adapter_bundle.py",
+      "kind": "step4_adapter_bundle_tests",
+      "step": 4,
+      "commit_sha": "bd4a3c1fb244627ff75f683fdc8632023ca2f188"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step4_ci_validation_extension",
+      "step": 4,
+      "commit_sha": "c6dd95bce5310a68e9cb18202a52cadffa0ea76d"
+    },
+    {
+      "path": "truth/AI_BUSINESS_OS_TRUTH_ENGINE_PIN.json",
+      "kind": "step5_truth_engine_source_pin",
+      "step": 5,
+      "commit_sha": "2e04dbb6801e9bc0cd938580ad4994aa9fdcec50"
+    },
+    {
+      "path": "truth/truth_adapter.py",
+      "kind": "step5_truth_projection_adapter",
+      "step": 5,
+      "commit_sha": "f1d821e59ace45243684288a91c9578dda73417d"
+    },
+    {
+      "path": "truth/TRUTH_ENGINE_CONFORMANCE.json",
+      "kind": "step5_truth_conformance_receipt",
+      "step": 5,
+      "commit_sha": "49d1c12aed5744bc957df45d7d17a762f7b8a8f3"
+    },
+    {
+      "path": "tests/test_truth_integration.py",
+      "kind": "step5_truth_integration_regressions",
+      "step": 5,
+      "commit_sha": "02ee656a0f21237b52ebe2383172b1c0ccd31c30"
+    },
+    {
+      "path": "truth/validate_truth_integration.py",
+      "kind": "step5_truth_cross_file_validator",
+      "step": 5,
+      "commit_sha": "3d490dd131054e13e04746997cb8e17c7efb46b6"
+    },
+    {
+      "path": "tests/test_truth_conformance_bundle.py",
+      "kind": "step5_truth_bundle_tests",
+      "step": 5,
+      "commit_sha": "67fc853b4edfebe2056c6fd2c640ffb97fc13a47"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step5_ci_validation_extension",
+      "step": 5,
+      "commit_sha": "0c77237bac698c87193a0fcf6753e3f836b4052c"
+    },
+    {
+      "path": "schemas/VALUE_MEMORY_SCHEMA.json",
+      "kind": "step6_value_memory_schema",
+      "step": 6,
+      "commit_sha": "043d9fbb7084a113aad9cb518acf62c8a3aff661"
+    },
+    {
+      "path": "schemas/VALUE_MEMORY_OUTCOME_SCHEMA.json",
+      "kind": "step6_value_memory_outcome_schema",
+      "step": 6,
+      "commit_sha": "4ab71e8e62e2b8270fd7e1ebcc05f4a2b6eb50ff"
+    },
+    {
+      "path": "memory/AI_BUSINESS_OS_VALUE_MEMORY_PIN.json",
+      "kind": "step6_value_memory_source_pin",
+      "step": 6,
+      "commit_sha": "b81266738df3126ccacb9bdd003413b4f7afed57"
+    },
+    {
+      "path": "memory/value_memory_adapter.py",
+      "kind": "step6_shared_value_memory_adapter",
+      "step": 6,
+      "commit_sha": "0e60b79dd0c03597de377c8718add7e8e334cf4c"
+    },
+    {
+      "path": "memory/VALUE_MEMORY_CONFORMANCE.json",
+      "kind": "step6_value_memory_conformance",
+      "step": 6,
+      "commit_sha": "3a3e7b1cb4b0c4cbbb82f284ba6b684b69c9f636"
+    },
+    {
+      "path": "tests/test_shared_value_memory.py",
+      "kind": "step6_value_memory_regressions",
+      "step": 6,
+      "commit_sha": "118f9062a3788705f580b0ab6b4a525d5b5da1e0"
+    },
+    {
+      "path": "memory/SHARED_VALUE_MEMORY_LEDGER.json",
+      "kind": "step6_durable_shared_memory_ledger",
+      "step": 6,
+      "commit_sha": "1dc8d8187341d71ec0121b3daab6bb653de82d8f"
+    },
+    {
+      "path": "memory/validate_value_memory.py",
+      "kind": "step6_shared_memory_validator",
+      "step": 6,
+      "commit_sha": "8f26d2da23d7118e69585086739e5cf08f8d6deb"
+    },
+    {
+      "path": "tests/test_shared_memory_bundle.py",
+      "kind": "step6_shared_memory_bundle_tests",
+      "step": 6,
+      "commit_sha": "5d0bc93d9a3499bae23e39cfcf9c3a59f33ba2a5"
+    },
+    {
+      "path": "verification/STEP6_VALIDATION_REQUEST.json",
+      "kind": "step6_final_validation_request",
+      "step": 6,
+      "commit_sha": "a3ecade2e7603fc57e132662f72e1a56cfaf47c5"
+    },
+    {
+      "path": "tests/test_truth_integration.py",
+      "kind": "step6_truth_revision_reconformance_test_update",
+      "step": 6,
+      "commit_sha": "3d0d845e50a2cebd4951cb12bde1902cf49194f8"
+    },
+    {
+      "path": "tests/test_truth_conformance_bundle.py",
+      "kind": "step6_truth_bundle_revision_reconformance_test_update",
+      "step": 6,
+      "commit_sha": "196daf4d13413f7e1b4a57d69641d0d03e42fc63"
+    },
+    {
+      "path": "schemas/GRAPH_NODE_SCHEMA.json",
+      "kind": "step7_graph_node_schema",
+      "step": 7,
+      "commit_sha": "b74fd6ff147c1a0747d018aea11119f9c1eefb68"
+    },
+    {
+      "path": "schemas/GRAPH_EDGE_SCHEMA.json",
+      "kind": "step7_graph_edge_schema",
+      "step": 7,
+      "commit_sha": "8a01d34d09fe261a069f38a7106d33d49c18c49a"
+    },
+    {
+      "path": "graph/UNIVERSAL_GRAPH_CONTRACT.json",
+      "kind": "step7_universal_graph_contract",
+      "step": 7,
+      "commit_sha": "2e46ea0fc9c909972e3b3fb788e0b1ca45f95d0a"
+    },
+    {
+      "path": "graph/AI_BUSINESS_OS_GRAPH_PIN.json",
+      "kind": "step7_canonical_graph_pin",
+      "step": 7,
+      "commit_sha": "e99c7a04abdc9a19684922e51120c5e191e472fb"
+    },
+    {
+      "path": "graph/universal_graph.py",
+      "kind": "step7_universal_graph_adapter",
+      "step": 7,
+      "commit_sha": "c7df4839ef373638e386e5257ad0d54ce18c1bce"
+    },
+    {
+      "path": "tests/test_universal_graph.py",
+      "kind": "step7_universal_graph_regressions",
+      "step": 7,
+      "commit_sha": "3b012ce106da56b333870f638d7665d0f3cb8c24"
+    },
+    {
+      "path": "graph/UNIVERSAL_GRAPH_LEDGER.json",
+      "kind": "step7_seed_graph_ledger",
+      "step": 7,
+      "commit_sha": "622af8bbb426d29ecc6f2db031b09d66a7ca210a"
+    },
+    {
+      "path": "graph/GRAPH_CONFORMANCE.json",
+      "kind": "step7_graph_conformance",
+      "step": 7,
+      "commit_sha": "37c36560b2b93a4ec06b473c904931c2805636bd"
+    },
+    {
+      "path": "graph/validate_graph.py",
+      "kind": "step7_graph_bundle_validator",
+      "step": 7,
+      "commit_sha": "1a7c0eb9a20959b77cd228f5d03db97f6a836fab"
+    },
+    {
+      "path": "tests/test_graph_bundle.py",
+      "kind": "step7_graph_bundle_tests",
+      "step": 7,
+      "commit_sha": "510c3aec4ab6749e6ae70b1a0d462ce9d79fbb18"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step7_ci_validation_extension",
+      "step": 7,
+      "commit_sha": "7c6ffb6f9ec201112b1c6bdd267e901a08ea8b00"
+    },
+    {
+      "path": "runtime/RUNTIME_POLICY.json",
+      "kind": "step8_runtime_policy",
+      "step": 8,
+      "commit_sha": "4d29a68bc8bff64edbe91170b5c2efdbe9154946"
+    },
+    {
+      "path": "runtime/KILL_SWITCH.json",
+      "kind": "step8_file_kill_switch",
+      "step": 8,
+      "commit_sha": "4d29a68bc8bff64edbe91170b5c2efdbe9154946"
+    },
+    {
+      "path": "runtime/CONTINUOUS_RUNTIME_CONTRACT.md",
+      "kind": "step8_runtime_contract",
+      "step": 8,
+      "commit_sha": "4d29a68bc8bff64edbe91170b5c2efdbe9154946"
+    },
+    {
+      "path": "runtime/state.py",
+      "kind": "step8_runtime_state_model",
+      "step": 8,
+      "commit_sha": "4d29a68bc8bff64edbe91170b5c2efdbe9154946"
+    },
+    {
+      "path": "runtime/artifact_state.py",
+      "kind": "step8_artifact_state_restore",
+      "step": 8,
+      "commit_sha": "4d29a68bc8bff64edbe91170b5c2efdbe9154946"
+    },
+    {
+      "path": "runtime/continuous_runtime.py",
+      "kind": "step8_continuous_runtime",
+      "step": 8,
+      "commit_sha": "c0fc8074624758eb6a4a04af8a6488622a606ab3"
+    },
+    {
+      "path": "runtime/validate_runtime.py",
+      "kind": "step8_runtime_validator",
+      "step": 8,
+      "commit_sha": "4d29a68bc8bff64edbe91170b5c2efdbe9154946"
+    },
+    {
+      "path": "tests/test_continuous_runtime.py",
+      "kind": "step8_runtime_regressions",
+      "step": 8,
+      "commit_sha": "261bec3511442d2e84cafd5ff077ec6b243ddd32"
+    },
+    {
+      "path": ".github/workflows/runtime-worker.yml",
+      "kind": "step8_reusable_runtime_worker",
+      "step": 8,
+      "commit_sha": "4d29a68bc8bff64edbe91170b5c2efdbe9154946"
+    },
+    {
+      "path": ".github/workflows/runtime-event-observe.yml",
+      "kind": "step8_event_observation_workflow",
+      "step": 8,
+      "commit_sha": "4d29a68bc8bff64edbe91170b5c2efdbe9154946"
+    },
+    {
+      "path": ".github/workflows/runtime-hourly-sync.yml",
+      "kind": "step8_hourly_sync_workflow",
+      "step": 8,
+      "commit_sha": "4d29a68bc8bff64edbe91170b5c2efdbe9154946"
+    },
+    {
+      "path": ".github/workflows/runtime-daily-learning.yml",
+      "kind": "step8_daily_learning_workflow",
+      "step": 8,
+      "commit_sha": "4d29a68bc8bff64edbe91170b5c2efdbe9154946"
+    },
+    {
+      "path": ".github/workflows/runtime-weekly-synthesis.yml",
+      "kind": "step8_weekly_synthesis_workflow",
+      "step": 8,
+      "commit_sha": "4d29a68bc8bff64edbe91170b5c2efdbe9154946"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step8_ci_validation_extension",
+      "step": 8,
+      "commit_sha": "4d29a68bc8bff64edbe91170b5c2efdbe9154946"
+    },
+    {
+      "path": "hunting/AI_BUSINESS_OS_HUNTER_PIN.json",
+      "kind": "step9_canonical_hunter_pin",
+      "step": 9,
+      "commit_sha": "aa4f0c0e17a4b9431473ab8889619201049fdc97"
+    },
+    {
+      "path": "hunting/HUNTER_POLICY.json",
+      "kind": "step9_hunter_policy",
+      "step": 9,
+      "commit_sha": "aa4f0c0e17a4b9431473ab8889619201049fdc97"
+    },
+    {
+      "path": "hunting/KILL_SWITCH.json",
+      "kind": "step9_hunter_kill_switch",
+      "step": 9,
+      "commit_sha": "aa4f0c0e17a4b9431473ab8889619201049fdc97"
+    },
+    {
+      "path": "hunting/SEARCH_STRATEGIES.json",
+      "kind": "step9_search_strategies",
+      "step": 9,
+      "commit_sha": "aa4f0c0e17a4b9431473ab8889619201049fdc97"
+    },
+    {
+      "path": "hunting/HUNTER_STATE_SEED.json",
+      "kind": "step9_hunter_state_seed",
+      "step": 9,
+      "commit_sha": "aa4f0c0e17a4b9431473ab8889619201049fdc97"
+    },
+    {
+      "path": "hunting/AUTONOMOUS_HUNTER_CONTRACT.md",
+      "kind": "step9_autonomous_hunter_contract",
+      "step": 9,
+      "commit_sha": "aa4f0c0e17a4b9431473ab8889619201049fdc97"
+    },
+    {
+      "path": "schemas/HUNT_OBJECTIVE_SCHEMA.json",
+      "kind": "step9_hunt_objective_schema",
+      "step": 9,
+      "commit_sha": "aa4f0c0e17a4b9431473ab8889619201049fdc97"
+    },
+    {
+      "path": "schemas/HUNTER_FINDING_SCHEMA.json",
+      "kind": "step9_hunter_finding_schema",
+      "step": 9,
+      "commit_sha": "aa4f0c0e17a4b9431473ab8889619201049fdc97"
+    },
+    {
+      "path": "hunting/autonomous_hunter.py",
+      "kind": "step9_autonomous_hunter_executor",
+      "step": 9,
+      "commit_sha": "aa4f0c0e17a4b9431473ab8889619201049fdc97"
+    },
+    {
+      "path": "hunting/artifact_state.py",
+      "kind": "step9_hunter_artifact_restore",
+      "step": 9,
+      "commit_sha": "aa4f0c0e17a4b9431473ab8889619201049fdc97"
+    },
+    {
+      "path": "hunting/validate_hunter.py",
+      "kind": "step9_hunter_validator",
+      "step": 9,
+      "commit_sha": "aa4f0c0e17a4b9431473ab8889619201049fdc97"
+    },
+    {
+      "path": "tests/test_autonomous_hunter.py",
+      "kind": "step9_hunter_regressions",
+      "step": 9,
+      "commit_sha": "2463d5c9403cdce2854a58183f42f1b08b532bb4"
+    },
+    {
+      "path": ".github/workflows/hunter-autonomous-cycle.yml",
+      "kind": "step9_autonomous_hunter_workflow",
+      "step": 9,
+      "commit_sha": "aa4f0c0e17a4b9431473ab8889619201049fdc97"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step9_ci_validation_extension",
+      "step": 9,
+      "commit_sha": "aa4f0c0e17a4b9431473ab8889619201049fdc97"
+    },
+    {
+      "path": "learning/AI_BUSINESS_OS_LEARNING_ENGINE_PIN.json",
+      "kind": "step10_canonical_learning_pin",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": "learning/LEARNING_POLICY.json",
+      "kind": "step10_learning_policy",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": "schemas/LEARNING_OBSERVATION_SCHEMA.json",
+      "kind": "step10_learning_observation_schema",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": "learning/LEARNING_OBSERVATION_LEDGER.json",
+      "kind": "step10_learning_observation_ledger",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": "learning/continuous_learning.py",
+      "kind": "step10_continuous_learning_engine",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": "learning/validate_learning.py",
+      "kind": "step10_learning_validator",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": "learning/CONTINUOUS_LEARNING_CONTRACT.md",
+      "kind": "step10_learning_contract",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": "tests/test_continuous_learning.py",
+      "kind": "step10_learning_regressions",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": "runtime/continuous_runtime.py",
+      "kind": "step10_daily_learning_runtime_integration",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step10_ci_validation_extension",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": "uncertainty/UNCERTAINTY_POLICY.json",
+      "kind": "step11_uncertainty_policy",
+      "step": 11,
+      "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
+    },
+    {
+      "path": "schemas/UNCERTAINTY_SCHEMA.json",
+      "kind": "step11_uncertainty_schema",
+      "step": 11,
+      "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
+    },
+    {
+      "path": "uncertainty/highest_value_uncertainty.py",
+      "kind": "step11_uncertainty_engine",
+      "step": 11,
+      "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
+    },
+    {
+      "path": "uncertainty/HIGHEST_VALUE_UNCERTAINTY_CONTRACT.md",
+      "kind": "step11_uncertainty_contract",
+      "step": 11,
+      "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
+    },
+    {
+      "path": "uncertainty/INITIAL_UNCERTAINTY_SUMMARY.json",
+      "kind": "step11_initial_uncertainty_summary",
+      "step": 11,
+      "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
+    },
+    {
+      "path": "uncertainty/validate_uncertainty.py",
+      "kind": "step11_uncertainty_validator",
+      "step": 11,
+      "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
+    },
+    {
+      "path": "tests/test_highest_value_uncertainty.py",
+      "kind": "step11_uncertainty_regressions",
+      "step": 11,
+      "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
+    },
+    {
+      "path": "runtime/continuous_runtime.py",
+      "kind": "step11_daily_uncertainty_runtime_integration",
+      "step": 11,
+      "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step11_ci_validation_extension",
+      "step": 11,
+      "commit_sha": "5abcc0dece04cc0368041053a6f25ef3f894dde5"
+    },
+    {
+      "path": "experiments/HUNTER_EXPERIMENT_SEMANTICS_PIN.json",
+      "kind": "step12_experiment_semantics_pin",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "experiments/EXPERIMENT_POLICY.json",
+      "kind": "step12_experiment_policy",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "schemas/EXPERIMENT_SCHEMA.json",
+      "kind": "step12_experiment_schema",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "schemas/EXPERIMENT_OUTCOME_SCHEMA.json",
+      "kind": "step12_experiment_outcome_schema",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "experiments/EXPERIMENT_OUTCOME_LEDGER.json",
+      "kind": "step12_experiment_outcome_ledger",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "experiments/experiment_engine.py",
+      "kind": "step12_experiment_engine",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "experiments/validate_experiments.py",
+      "kind": "step12_experiment_validator",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "experiments/EXPERIMENT_ENGINE_CONTRACT.md",
+      "kind": "step12_experiment_contract",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "experiments/INITIAL_EXPERIMENT_SUMMARY.json",
+      "kind": "step12_initial_experiment_summary",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "tests/test_experiment_engine.py",
+      "kind": "step12_experiment_regressions",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "runtime/continuous_runtime.py",
+      "kind": "step12_daily_experiment_planning_integration",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step12_ci_validation_extension",
+      "step": 12,
+      "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "model_router/MODEL_ROUTER_POLICY.json",
+      "kind": "step13_model_router_policy",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "model_router/PROVIDER_REGISTRY.json",
+      "kind": "step13_provider_registry",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "model_router/AI_BUSINESS_OS_RUNTIME_GATEWAY_PIN.json",
+      "kind": "step13_runtime_gateway_boundary_pin",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "schemas/MODEL_ROUTE_REQUEST_SCHEMA.json",
+      "kind": "step13_model_route_request_schema",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "schemas/MODEL_CALL_RECEIPT_SCHEMA.json",
+      "kind": "step13_model_call_receipt_schema",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "schemas/MODEL_OUTCOME_FEEDBACK_SCHEMA.json",
+      "kind": "step13_model_outcome_feedback_schema",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "model_router/MODEL_ROUTING_LEDGER.json",
+      "kind": "step13_model_routing_ledger",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "model_router/model_router.py",
+      "kind": "step13_model_router",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "model_router/validate_model_router.py",
+      "kind": "step13_model_router_validator",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "model_router/MODEL_ROUTER_CONTRACT.md",
+      "kind": "step13_model_router_contract",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "tests/test_model_router.py",
+      "kind": "step13_model_router_regressions",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step13_ci_validation_extension",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "schemas/AGENT_ROLE_SCHEMA.json",
+      "kind": "step14_agent_role_schema",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "schemas/AGENT_WORK_ITEM_SCHEMA.json",
+      "kind": "step14_agent_work_schema",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "schemas/AGENT_VERIFICATION_SCHEMA.json",
+      "kind": "step14_agent_verification_schema",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "agents/AGENT_POLICY.json",
+      "kind": "step14_agent_policy",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "agents/AGENT_REGISTRY.json",
+      "kind": "step14_agent_registry",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "agents/AGENT_STATE_SEED.json",
+      "kind": "step14_agent_state_seed",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "agents/AI_BUSINESS_OS_PERSISTENT_AGENT_PIN.json",
+      "kind": "step14_persistent_agent_source_pin",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "agents/persistent_agents.py",
+      "kind": "step14_persistent_agent_runtime",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "agents/validate_agents.py",
+      "kind": "step14_agent_validator",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "agents/PERSISTENT_AGENT_CONTRACT.md",
+      "kind": "step14_persistent_agent_contract",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "tests/test_persistent_agents.py",
+      "kind": "step14_persistent_agent_regressions",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step14_ci_validation_extension",
+      "step": 14,
+      "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "allocator/AI_BUSINESS_OS_CAPITAL_ALLOCATOR_PIN.json",
+      "kind": "step15_capital_allocator_source_pin",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": "allocator/ALLOCATOR_POLICY.json",
+      "kind": "step15_allocator_policy",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": "schemas/PORTFOLIO_ALLOCATION_PLAN_SCHEMA.json",
+      "kind": "step15_allocation_plan_schema",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": "allocator/portfolio_allocator.py",
+      "kind": "step15_portfolio_allocator",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": "allocator/INITIAL_ALLOCATION_SUMMARY.json",
+      "kind": "step15_initial_allocation_summary",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": "allocator/validate_allocator.py",
+      "kind": "step15_allocator_validator",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": "allocator/PORTFOLIO_ALLOCATOR_CONTRACT.md",
+      "kind": "step15_allocator_contract",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": "tests/test_portfolio_allocator.py",
+      "kind": "step15_allocator_regressions",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": "runtime/continuous_runtime.py",
+      "kind": "step15_daily_allocator_runtime_integration",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step15_ci_validation_extension",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": "software_factory/AI_BUSINESS_OS_SOFTWARE_FACTORY_PIN.json",
+      "kind": "step16_software_factory_source_pin",
+      "step": 16,
+      "commit_sha": "74428e98ae660f65b149c0a2845cb2c82d3ba2a5"
+    },
+    {
+      "path": "software_factory/FACTORY_POLICY.json",
+      "kind": "step16_factory_policy",
+      "step": 16,
+      "commit_sha": "74428e98ae660f65b149c0a2845cb2c82d3ba2a5"
+    },
+    {
+      "path": "schemas/SOFTWARE_FACTORY_WORK_SCHEMA.json",
+      "kind": "step16_factory_work_schema",
+      "step": 16,
+      "commit_sha": "74428e98ae660f65b149c0a2845cb2c82d3ba2a5"
+    },
+    {
+      "path": "schemas/SOFTWARE_FACTORY_ACTION_SCHEMA.json",
+      "kind": "step16_factory_action_schema",
+      "step": 16,
+      "commit_sha": "74428e98ae660f65b149c0a2845cb2c82d3ba2a5"
+    },
+    {
+      "path": "software_factory/SOFTWARE_FACTORY_LEDGER.json",
+      "kind": "step16_factory_ledger",
+      "step": 16,
+      "commit_sha": "74428e98ae660f65b149c0a2845cb2c82d3ba2a5"
+    },
+    {
+      "path": "software_factory/software_factory.py",
+      "kind": "step16_factory_control_plane",
+      "step": 16,
+      "commit_sha": "74428e98ae660f65b149c0a2845cb2c82d3ba2a5"
+    },
+    {
+      "path": "software_factory/github_executor.py",
+      "kind": "step16_pr_only_github_executor",
+      "step": 16,
+      "commit_sha": "74428e98ae660f65b149c0a2845cb2c82d3ba2a5"
+    },
+    {
+      "path": "software_factory/validate_factory.py",
+      "kind": "step16_factory_validator",
+      "step": 16,
+      "commit_sha": "74428e98ae660f65b149c0a2845cb2c82d3ba2a5"
+    },
+    {
+      "path": "software_factory/SOFTWARE_FACTORY_CONTRACT.md",
+      "kind": "step16_factory_contract",
+      "step": 16,
+      "commit_sha": "74428e98ae660f65b149c0a2845cb2c82d3ba2a5"
+    },
+    {
+      "path": "tests/test_software_factory.py",
+      "kind": "step16_factory_regressions",
+      "step": 16,
+      "commit_sha": "5331fd52be6cc71598c85606c0e245e90e2047a6"
+    },
+    {
+      "path": ".github/workflows/software-factory-candidate.yml",
+      "kind": "step16_candidate_executor_workflow",
+      "step": 16,
+      "commit_sha": "74428e98ae660f65b149c0a2845cb2c82d3ba2a5"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step16_ci_validation_extension",
+      "step": 16,
+      "commit_sha": "74428e98ae660f65b149c0a2845cb2c82d3ba2a5"
+    },
+    {
+      "path": "repair/AI_BUSINESS_OS_REPAIR_PIN.json",
+      "kind": "step17_repair_source_pin",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "repair/REPAIR_POLICY.json",
+      "kind": "step17_repair_policy",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "schemas/REPAIR_FAILURE_SCHEMA.json",
+      "kind": "step17_repair_failure_schema",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "schemas/REPAIR_TASK_SCHEMA.json",
+      "kind": "step17_repair_task_schema",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "schemas/REPAIR_EVALUATION_SCHEMA.json",
+      "kind": "step17_repair_evaluation_schema",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "repair/REPAIR_LEDGER.json",
+      "kind": "step17_repair_ledger",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "repair/repair_engine.py",
+      "kind": "step17_continuous_repair_engine",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "repair/validate_repair.py",
+      "kind": "step17_repair_validator",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "repair/CONTINUOUS_REPAIR_CONTRACT.md",
+      "kind": "step17_repair_contract",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "tests/test_continuous_repair.py",
+      "kind": "step17_repair_regressions",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "runtime/continuous_runtime.py",
+      "kind": "step17_daily_repair_detection_integration",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step17_ci_validation_extension",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "transfer/AI_BUSINESS_OS_PEER_TRANSFER_PIN.json",
+      "kind": "step18_peer_transfer_source_pin",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "transfer/TRANSFER_POLICY.json",
+      "kind": "step18_transfer_policy",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "transfer/CAPABILITY_TRANSFER_RULES.json",
+      "kind": "step18_transfer_applicability_rules",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "schemas/CAPABILITY_TRANSFER_PROPOSAL_SCHEMA.json",
+      "kind": "step18_transfer_proposal_schema",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "schemas/CAPABILITY_TRANSFER_OUTCOME_SCHEMA.json",
+      "kind": "step18_transfer_outcome_schema",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "transfer/TRANSFER_LEDGER.json",
+      "kind": "step18_transfer_outcome_ledger",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "transfer/cross_project_transfer.py",
+      "kind": "step18_cross_project_transfer_engine",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "transfer/validate_transfer.py",
+      "kind": "step18_transfer_validator",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "transfer/CROSS_PROJECT_TRANSFER_CONTRACT.md",
+      "kind": "step18_transfer_contract",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "tests/test_cross_project_transfer.py",
+      "kind": "step18_transfer_regressions",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "runtime/continuous_runtime.py",
+      "kind": "step18_daily_transfer_runtime_integration",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step18_ci_validation_extension",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "scheduler/AI_BUSINESS_OS_SCHEDULER_PIN.json",
+      "kind": "step19_scheduler_source_pin",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "scheduler/SCHEDULER_POLICY.json",
+      "kind": "step19_scheduler_policy",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "scheduler/KILL_SWITCH.json",
+      "kind": "step19_scheduler_kill_switch",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "scheduler/SCHEDULER_STATE_SEED.json",
+      "kind": "step19_scheduler_state_seed",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "schemas/SCHEDULED_WORK_SCHEMA.json",
+      "kind": "step19_scheduled_work_schema",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "scheduler/autonomous_scheduler.py",
+      "kind": "step19_autonomous_scheduler",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "scheduler/artifact_state.py",
+      "kind": "step19_scheduler_artifact_restore",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "scheduler/validate_scheduler.py",
+      "kind": "step19_scheduler_validator",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "scheduler/SCHEDULER_CONTRACT.md",
+      "kind": "step19_scheduler_contract",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "tests/test_autonomous_scheduler.py",
+      "kind": "step19_scheduler_regressions",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": ".github/workflows/portfolio-autonomous-scheduler.yml",
+      "kind": "step19_scheduler_workflow",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step19_ci_validation_extension",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "cost_governor/COST_GOVERNOR_POLICY.json",
+      "kind": "step20_cost_policy",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": "cost_governor/COST_KILL_SWITCH.json",
+      "kind": "step20_cost_kill_switch",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": "cost_governor/COST_STATE_SEED.json",
+      "kind": "step20_cost_state_seed",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": "cost_governor/cost_governor.py",
+      "kind": "step20_cost_governor",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": "cost_governor/artifact_state.py",
+      "kind": "step20_cost_artifact_restore",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": "cost_governor/workflow_gate.py",
+      "kind": "step20_workflow_cost_gate",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": "cost_governor/cancel_managed_jobs.py",
+      "kind": "step20_managed_job_cancellation",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": "cost_governor/validate_cost_governor.py",
+      "kind": "step20_cost_validator",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": "cost_governor/COST_GOVERNOR_CONTRACT.md",
+      "kind": "step20_cost_contract",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": "schemas/COST_GOVERNOR_REQUEST_SCHEMA.json",
+      "kind": "step20_cost_request_schema",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": "tests/test_cost_governor.py",
+      "kind": "step20_cost_regressions",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": "model_router/model_router.py",
+      "kind": "step20_model_router_cost_gate",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": "model_router/MODEL_ROUTER_POLICY.json",
+      "kind": "step20_model_router_cost_policy",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": ".github/workflows/runtime-worker.yml",
+      "kind": "step20_runtime_compute_gate",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": ".github/workflows/hunter-autonomous-cycle.yml",
+      "kind": "step20_hunter_compute_gate",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": ".github/workflows/portfolio-autonomous-scheduler.yml",
+      "kind": "step20_scheduler_compute_gate",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": ".github/workflows/software-factory-candidate.yml",
+      "kind": "step20_factory_compute_gate",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": ".github/workflows/portfolio-cost-watchdog.yml",
+      "kind": "step20_cost_watchdog",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step20_ci_validation_extension",
+      "step": 20,
+      "commit_sha": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da"
+    },
+    {
+      "path": "dashboard/executive_dashboard.py",
+      "kind": "step21_executive_dashboard",
+      "step": 21,
+      "commit_sha": "6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566"
+    },
+    {
+      "path": "dashboard/validate_dashboard.py",
+      "kind": "step21_dashboard_validator",
+      "step": 21,
+      "commit_sha": "6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566"
+    },
+    {
+      "path": "dashboard/STEP21_VALIDATION_NOTE.md",
+      "kind": "step21_validation_note",
+      "step": 21,
+      "commit_sha": "6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566"
+    },
+    {
+      "path": "tests/test_executive_dashboard.py",
+      "kind": "step21_dashboard_regressions",
+      "step": 21,
+      "commit_sha": "6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step21_ci_validation_extension",
+      "step": 21,
+      "commit_sha": "6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566"
+    },
+    {
+      "path": "notifications/NOTIFICATION_POLICY.json",
+      "kind": "step22_notification_policy",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "notifications/KILL_SWITCH.json",
+      "kind": "step22_notification_kill_switch",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "notifications/NOTIFICATION_STATE_SEED.json",
+      "kind": "step22_notification_state_seed",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "schemas/ALERT_SCHEMA.json",
+      "kind": "step22_alert_schema",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "notifications/NOTIFICATION_CONTRACT.md",
+      "kind": "step22_notification_contract",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "notifications/notification_engine.py",
+      "kind": "step22_notification_engine",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "notifications/artifact_state.py",
+      "kind": "step22_notification_artifact_restore",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "notifications/github_sink.py",
+      "kind": "step22_github_notification_sink",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "notifications/validate_notifications.py",
+      "kind": "step22_notification_validator",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "tests/test_notifications.py",
+      "kind": "step22_notification_regressions",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": ".github/workflows/portfolio-notification-cycle.yml",
+      "kind": "step22_notification_workflow",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "cost_governor/COST_GOVERNOR_POLICY.json",
+      "kind": "step22_notification_cost_budget",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "cost_governor/validate_cost_governor.py",
+      "kind": "step22_cost_validation_extension",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step22_ci_validation_extension",
+      "step": 22,
+      "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "hostile/ATTACK_MATRIX.json",
+      "kind": "step23_hostile_attack_matrix",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "hostile/HOSTILE_EXAMINATION_REPORT.md",
+      "kind": "step23_hostile_report",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "hostile/validate_hostile_examination.py",
+      "kind": "step23_hostile_validator",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "tests/test_hostile_examination.py",
+      "kind": "step23_hostile_regressions",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "graph/universal_graph.py",
+      "kind": "step23_graph_provenance_hardening",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "hunting/autonomous_hunter.py",
+      "kind": "step23_hunter_graph_poisoning_fix",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "uncertainty/highest_value_uncertainty.py",
+      "kind": "step23_uncertainty_graph_poisoning_fix",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "notifications/github_sink.py",
+      "kind": "step23_workflow_command_injection_fix",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "cost_governor/cost_governor.py",
+      "kind": "step23_retry_identity_hardening",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "tests/test_universal_graph.py",
+      "kind": "step23_verified_graph_fixture_hardening",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step23_ci_validation_extension",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "canary/CANARY_POLICY.json",
+      "kind": "step24_canary_policy",
+      "step": 24,
+      "commit_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab"
+    },
+    {
+      "path": "canary/CANARY_CONTRACT.md",
+      "kind": "step24_canary_contract",
+      "step": 24,
+      "commit_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab"
+    },
+    {
+      "path": "canary/autonomous_learning_canary.py",
+      "kind": "step24_canary_orchestrator",
+      "step": 24,
+      "commit_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab"
+    },
+    {
+      "path": "canary/validate_canary.py",
+      "kind": "step24_canary_validator",
+      "step": 24,
+      "commit_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab"
+    },
+    {
+      "path": "tests/test_autonomous_learning_canary.py",
+      "kind": "step24_canary_regressions",
+      "step": 24,
+      "commit_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab"
+    },
+    {
+      "path": "cost_governor/COST_GOVERNOR_POLICY.json",
+      "kind": "step24_canary_cost_budget",
+      "step": 24,
+      "commit_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step24_canary_ci_execution",
+      "step": 24,
+      "commit_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab"
+    },
+    {
+      "path": "canary/out/canary_receipt.json",
+      "kind": "step24_ci_canary_receipt",
+      "step": 24,
+      "commit_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab"
+    }
+  ],
+  "tests": [
+    {
+      "name": "prework_and_baseline_tests",
+      "status": "PASS",
+      "step": 0,
+      "evidence": "56 tests; exit 0. Command/output/source receipt in docs/PORTFOLIO_STEP0_EVIDENCE.json."
+    },
+    {
+      "name": "ai_business_os_delta_tests",
+      "status": "PASS",
+      "step": 0,
+      "evidence": "32 tests; exit 0. Command/output/source receipt in docs/PORTFOLIO_STEP0_EVIDENCE.json."
+    },
+    {
+      "name": "scout_delta_tests",
+      "status": "PASS",
+      "step": 0,
+      "evidence": "8 tests; exit 0. Command/output/source receipt in docs/PORTFOLIO_STEP0_EVIDENCE.json."
+    },
+    {
+      "name": "build_state_invariants",
+      "status": "PASS",
+      "step": 0,
+      "evidence": "exit 0; schema core invariants checked by preserved validator."
+    },
+    {
+      "name": "prework provenance and immutable inventory checks",
+      "status": "PASS",
+      "step": 0,
+      "evidence": "All ten source-artifact Git blob hashes match the supplied bundle; frozen prework files checked by baseline tests."
+    },
+    {
+      "name": "ABVM exact-source configured CI",
+      "status": "PASS",
+      "step": 0,
+      "evidence": "GitHub run 36103280547 at a15c7c2214a065707123e9b8ab8ac51a42240345; narrowed configured suite only; not rerun locally."
+    },
+    {
+      "name": "step1_architecture_contract_invariants",
+      "status": "PASS",
+      "step": 1,
+      "evidence": "Exact staged contract fetched at commit a75148054f57f8388093359a8cb1b67c9a26d646; required repository, evidence, autonomy, builder/verifier, state, model-independence, data and runtime-safety boundaries are present."
+    },
+    {
+      "name": "step1_skeleton_registration_invariants",
+      "status": "PASS",
+      "step": 1,
+      "evidence": "10 deterministic checks passed against exact staged JSON blobs b828f9f74c509ad9684088feb29e28da9d661856 and bc23c840a258e1f2109fdd378feb56f8fb4bd3bb: required structure, project identity, adapter declarations, deny-by-default settings, stable IDs, autonomy separation and trading prohibition."
+    },
+    {
+      "name": "step1_foundation_remote_invariants",
+      "status": "PASS",
+      "step": 1,
+      "evidence": "11 deterministic checks passed against fetched seed blobs: identity/structure, no authority grant, defaults off, autonomy/evidence enums, standard-library validator, read-only bounded CI, no schedule or external/model/write commands."
+    },
+    {
+      "name": "step1_foundation_validator_execution",
+      "status": "PASS",
+      "step": 1,
+      "evidence": "Python validator compiled and executed successfully in an isolated local fixture: 'portfolio-brain Step 1 foundation: PASS'."
+    },
+    {
+      "name": "step1_dedicated_repository_presence",
+      "status": "PASS",
+      "step": 1,
+      "evidence": "Initially absent during staging; now verified present as P00NSMASHER/portfolio-brain. Owner/admin/push permissions confirmed; foundation materialized on step1-foundation-20260925."
+    },
+    {
+      "name": "step1_materialized_foundation_ci",
+      "status": "PASS",
+      "step": 1,
+      "evidence": "GitHub Actions foundation-ci run 36152821896 completed successfully at exact head b61583369f03a4582781a418aef8a0cba318fab1 on step1-foundation-20260925."
+    },
+    {
+      "name": "step2a_project_schema_ci",
+      "status": "PASS",
+      "step": 2,
+      "evidence": "GitHub Actions foundation-ci run 36153439606 succeeded at exact code head d5241e6943b88754104539316222406c1a61e04b. It compiled deterministic validators, revalidated Step 1 foundation, and ran project-schema regression tests."
+    },
+    {
+      "name": "step2_complete_registry_ci",
+      "status": "PASS",
+      "step": 2,
+      "evidence": "GitHub Actions foundation-ci run 36154536556 succeeded at exact code head a91583b9b733aaa806c1926bc5f69f30acc34a21. Foundation validation passed; Step 2 registry validator reported 12 projects, 12 autonomy profiles, 66 coverage items, 2 metrics, 1 objective and 8 repository IDs; 26 regression tests passed."
+    },
+    {
+      "name": "step2_failed_ci_regression_repair",
+      "status": "PASS",
+      "step": 2,
+      "evidence": "Run 36154434501 failed because registry/validate_registry.py was invoked as a direct script and could not resolve the registry package. CI was repaired to invoke python -m registry.validate_registry; replacement run 36154536556 passed."
+    },
+    {
+      "name": "step3_event_evidence_ci",
+      "status": "PASS",
+      "step": 3,
+      "evidence": "GitHub Actions foundation-ci run 36160359255 succeeded at exact Step 3 code head 77fbf807b4af3d73ca73f95e69bf8ab4978c9ae3. Step 1 foundation and Step 2 registry remained green; 44 total regression tests passed, including event/evidence provenance, hashing, idempotency, state, privacy and reference-integrity regressions."
+    },
+    {
+      "name": "step4_readonly_adapter_ci",
+      "status": "PASS",
+      "step": 4,
+      "evidence": "GitHub Actions foundation-ci run 36161446817 succeeded at exact Step 4 code head c6dd95bce5310a68e9cb18202a52cadffa0ea76d. Step 4 validator reported 8 adapters: 3 changed, 3 unchanged, 1 blocked, 1 initialized, 131 changed paths; 58 total regression tests passed."
+    },
+    {
+      "name": "step5_truth_engine_integration_ci",
+      "status": "PASS",
+      "step": 5,
+      "evidence": "GitHub Actions foundation-ci run 36162139883 succeeded at exact Step 5 code head 0c77237bac698c87193a0fcf6753e3f836b4052c. Step 5 conformance validator pinned source revision 5559112ed4dfaa4c690d608b257945e1595560a5 and blob 9b3eaa9412ece784c05e9c93dfcea04e1ec96105; 72 total regression tests passed."
+    },
+    {
+      "name": "step6_shared_value_memory_ci",
+      "status": "PASS",
+      "step": 6,
+      "evidence": "GitHub Actions foundation-ci run 36166341748 succeeded at exact Step 6 code head 196daf4d13413f7e1b4a57d69641d0d03e42fc63. Step 5 source repin remained conformant, Step 6 shared-memory validator passed, and 85 total regression tests passed."
+    },
+    {
+      "name": "step6_revision_assertion_repair",
+      "status": "PASS",
+      "step": 6,
+      "evidence": "Initial final run 36166272667 failed only because two Step 5 tests hard-coded the prior repository revision after a byte-identical Truth Engine repin. Expected revision assertions were updated; replacement run 36166341748 passed with unchanged canonical Truth Engine blob."
+    },
+    {
+      "name": "step7_universal_graph_ci",
+      "status": "PASS",
+      "step": 7,
+      "evidence": "GitHub Actions foundation-ci run 36167225218 succeeded at exact Step 7 code head 7c6ffb6f9ec201112b1c6bdd267e901a08ea8b00. Step 7 validator reported 25 nodes, 26 edges, 12 registered projects, 12 upstream-projectable nodes, 4 upstream-projectable edges, matching graph/ledger hash sha256:371d96f4a3c7d164a0791ad29db17d51f3f9b27e93b9d9f6021cafa9dd28241f; 105 total regression tests passed."
+    },
+    {
+      "name": "step8_continuous_runtime_ci",
+      "status": "PASS",
+      "step": 8,
+      "evidence": "GitHub Actions foundation-ci run 36169855106 succeeded at exact Step 8 code head 261bec3511442d2e84cafd5ff077ec6b243ddd32. Runtime validator reported 5 workflow definitions, model_calls=0, downstream_writes=0, external_actions=0, max_api_requests=40, max_runtime_seconds=240; 115 total regression tests passed."
+    },
+    {
+      "name": "step8_post_review_runtime_repairs",
+      "status": "PASS",
+      "step": 8,
+      "evidence": "Post-review found two operational edge cases: file kill switch did not emit continuation state, and daily/weekly reports used pre-sync state. Both were repaired. Two subsequent CI runs exposed and then fixed a test-file literal-newline syntax error; exact repaired head 261bec3511442d2e84cafd5ff077ec6b243ddd32 passed."
+    },
+    {
+      "name": "step9_autonomous_hunter_ci",
+      "status": "PASS",
+      "step": 9,
+      "evidence": "GitHub Actions foundation-ci run 36172720088 succeeded at exact Step 9 code head 2463d5c9403cdce2854a58183f42f1b08b532bb4. Hunter validator reported 11 detected structural gaps, 5 selected objectives, 1 protected exploration objective, 4 strategies, 6 pinned canonical Hunter components, model_calls=0, downstream_writes=0 and external_actions=0; 127 total regression tests passed."
+    },
+    {
+      "name": "step9_capability_fixture_repair",
+      "status": "PASS",
+      "step": 9,
+      "evidence": "Initial Step 9 run 36172644005 correctly rejected a generic synthetic candidate because its paths had no structural signal for the target capability. The synthetic fixture was repaired to represent capability-relevant exact-revision source/test paths; replacement run 36172720088 passed without weakening the retention gate."
+    },
+    {
+      "name": "step10_continuous_learning_ci",
+      "status": "PASS",
+      "step": 10,
+      "evidence": "GitHub Actions foundation-ci run 36173436527 succeeded at exact Step 10 code head 304cc7005ded511463d98b125f3de00d5b27ccc7. Learning validator reported 9 domains, 6 pinned canonical learning components, source_observations=0, eligible_records=0 and policy_effect=NONE; 142 total regression tests passed."
+    },
+    {
+      "name": "step11_highest_value_uncertainty_ci",
+      "status": "PASS",
+      "step": 11,
+      "evidence": "GitHub Actions foundation-ci run 36175867747 succeeded at exact Step 11 code head 5abcc0dece04cc0368041053a6f25ef3f894dde5. Uncertainty validator reported 20 candidates, 18 eligible, 2 Pareto-front candidates, scalar_score=false and selected UNC-EXTERNAL-PRJ-001; 152 total regression tests passed."
+    },
+    {
+      "name": "step12_experiment_engine_ci",
+      "status": "PASS",
+      "step": 12,
+      "evidence": "GitHub Actions foundation-ci run 36176812095 succeeded at exact Step 12 code head f1bb345325ba8caf181701969814096e39b2e30f. Experiment validator reported 20 plans: 12 READY_FOR_ISOLATED_EXECUTION, 6 HUMAN_APPROVAL_REQUIRED, 2 BLOCKED, 0 outcomes; selected uncertainty UNC-EXTERNAL-PRJ-001; 164 total regression tests passed."
+    },
+    {
+      "name": "step12_blocker_precedence_repair",
+      "status": "PASS",
+      "step": 12,
+      "evidence": "Initial Step 12 run 36176704610 failed because a blocked human-gated uncertainty was validated as if HUMAN_APPROVAL_REQUIRED were the only allowed state. Repair commits 0c5411c142aa61d7ac10a83238c225b27f5d6f43 and f1bb345325ba8caf181701969814096e39b2e30f made explicit blockers more restrictive than approval and added a regression; replacement run 36176812095 passed."
+    },
+    {
+      "name": "step13_model_router_ci",
+      "status": "PASS",
+      "step": 13,
+      "evidence": "GitHub Actions foundation-ci run 36178117494 succeeded at exact Step 13 code head 18de5db7471cbaa2936cd9bf476217f7bd197723. Model-router validator reported 4 tiers, deterministic Tier 0 provider, enabled_nonzero_models=0, checked_in_calls=0 and checked_in_outcomes=0; 176 total regression tests passed."
+    },
+    {
+      "name": "step14_persistent_agents_ci",
+      "status": "PASS",
+      "step": 14,
+      "evidence": "GitHub Actions foundation-ci run 36181438958 succeeded at exact Step 14 code head 5b7edadc6545bb3703d2a34c77eba49838e7b21d. Agent validator reported roles=10, builder_roles=1, verifier_roles=4, human_act_roles=0, seed_work_items=0 and enabled_nonzero_models=0; 188 total regression tests passed."
+    },
+    {
+      "name": "step15_portfolio_allocator_ci",
+      "status": "PASS",
+      "step": 15,
+      "evidence": "GitHub Actions foundation-ci run 36182464581 succeeded at exact Step 15 code head cb1bb39f8fa4731e0c50f994a952e27c01bf727c. Allocator validator reported 9 resource types, 3 active resources, 6 hold resources, 29 recommendations, cash_share_bps=0, model_call_share_bps=0 and opaque_score=false; 198 total regression tests passed."
+    },
+    {
+      "name": "step16_software_factory_ci",
+      "status": "PASS",
+      "step": 16,
+      "evidence": "GitHub Actions foundation-ci run 36183368241 succeeded at exact Step 16 code head 5331fd52be6cc71598c85606c0e245e90e2047a6. Factory validator reported executor_operations=3, candidate_write_repositories=1, downstream_write_repositories=0, seed_work_items=0 and identified_current_work=0; 209 total regression tests passed."
+    },
+    {
+      "name": "step16_bound_verifier_repair",
+      "status": "PASS",
+      "step": 16,
+      "evidence": "Initial run 36183287075 failed because the synthetic e2e test substituted AGT-AUDITOR for work explicitly bound to AGT-TESTER. Factory correctly rejected the substitution. Test commit 5331fd52be6cc71598c85606c0e245e90e2047a6 uses the bound verifier and adds a regression that an unbound eligible verifier is rejected; replacement run 36183368241 passed."
+    },
+    {
+      "name": "step17_continuous_repair_ci",
+      "status": "PASS",
+      "step": 17,
+      "evidence": "GitHub Actions foundation-ci run 36184714196 succeeded at exact Step 17 code head 5d88e6ddc84dfd8e4c2036a1968e874f35b91529. Repair validator reported pinned_components=9, seed_failures=0, seed_tasks=0, promotion_eligible=0, automatic_mutation=false and automatic_promotion=false; 223 total regression tests passed."
+    },
+    {
+      "name": "step18_cross_project_transfer_ci",
+      "status": "PASS",
+      "step": 18,
+      "evidence": "GitHub Actions foundation-ci run 36186372443 succeeded at exact Step 18 code head a5d4db95645676367848465e21aa34154eb5faab. Transfer validator reported proposals=44, assessment_ready=40, blocked=4, checked_in_outcomes=0, verified_success_edges=0 and source_capabilities=4; 235 total regression tests passed."
+    },
+    {
+      "name": "step19_autonomous_scheduler_ci",
+      "status": "PASS",
+      "step": 19,
+      "evidence": "GitHub Actions foundation-ci run 36189604512 succeeded at exact Step 19 code head b97ab4c46c6a281cc357d49e3d7167c5553ede99. Scheduler validator reported work_types=7, selected_current=3, blocked_approval=6, queued_agents=3, act_work=0 and max_new_per_cycle=4; 247 total regression tests passed."
+    },
+    {
+      "name": "step20_cost_governor_ci",
+      "status": "PASS",
+      "step": 20,
+      "evidence": "GitHub Actions foundation-ci run 36195654197 succeeded at exact Step 20 implementation head 1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da. Step 20 validator passed and 269 total regression tests passed; Steps 1-19 validators also remained green."
+    },
+    {
+      "name": "step21_executive_dashboard_ci",
+      "status": "PASS",
+      "step": 21,
+      "evidence": "GitHub Actions foundation-ci run 36196658241 succeeded at exact Step 21 implementation head 6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566. Step 21 validator passed and 278 total regression tests passed; Steps 1-20 validators remained green."
+    },
+    {
+      "name": "step22_notification_escalation_ci",
+      "status": "PASS",
+      "step": 22,
+      "evidence": "GitHub Actions foundation-ci run 36198962231 succeeded at exact Step 22 implementation head b745dff130b5a7185945ebaab948fee761f5be81. Step 22 validator passed and 290 total regression tests passed; Steps 1-21 validators remained green."
+    },
+    {
+      "name": "step23_hostile_examination_ci",
+      "status": "PASS",
+      "step": 23,
+      "evidence": "GitHub Actions foundation-ci run 36199773915 succeeded at exact Step 23 implementation head c03779b83e4aac47058c76a16be2549fbf1e17aa. Step 23 hostile validator passed, all 17 hostile scenarios were resolved/blocked, and 301 total regression tests passed; Steps 1-22 validators remained green."
+    },
+    {
+      "name": "step24_autonomous_learning_canary_ci",
+      "status": "PASS",
+      "step": 24,
+      "evidence": "GitHub Actions foundation-ci run 36200414277 succeeded at exact Step 24 implementation head 6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab. Canary receipt sha256:e7b97e727155e3f7e2fccc0d1594592ca0722a48a067ebda70720ef080384ebc reported runtime_reads=7, first_selected_work=3, continuation_selected_work=0, suppressed_duplicates=3, paid_cost_usd=0.0, model_calls=0, learning_promotions=0 and authority_violations=0. 309 total regression tests passed. Sanitized Actions artifact 10892145046 was uploaded."
+    }
+  ],
+  "next_action": {
+    "step": 25,
+    "summary": "WAIT FOR CONTINUE. Step 24 is complete. Next exact numbered step is Step 25 — Final autonomous operating mode: perform the final release gate, reconcile the verified Step 0–24 architecture, promote only the approved recurring deterministic/autonomous workflows to the default branch under existing kill switches and cost controls, verify durable state continuity after promotion, and record the system as operational without interactive ChatGPT as an ordinary runtime dependency. Do not begin Step 25 until explicit CONTINUE.",
+    "preconditions": [
+      "Read this root PORTFOLIO_BUILD_STATE.json first.",
+      "Do not repeat Steps 0–24 unless an exact pinned source cursor changed.",
+      "Work on Step 25 only and stop after the final verified operating-mode state.",
+      "Use the Step 24 exact canary evidence as the activation prerequisite; do not weaken any Step 23 hostile-examination regression.",
+      "Before promotion, verify default-branch diff, workflow permissions, kill switches, cost ceilings, artifact state names and source-revision pins.",
+      "Keep paid/model/API execution deny-by-default at the checked-in zero ceilings unless a separate explicit authorized policy change exists.",
+      "Activate only workflows already covered by cost governance, durable state, duplicate suppression and kill switches; do not invent new authority during release.",
+      "Consequential ACT, customer communication, payments/cash movement, live trading/broker execution and deployment/merge authority remain human-gated or prohibited exactly as currently defined.",
+      "Preserve BLK-005 sanitized-only persistence while the repository remains public.",
+      "After promotion, require exact-head CI plus a bounded post-promotion state-continuity check before declaring Portfolio Brain operational."
+    ]
+  },
+  "updated_at": "2026-09-25T23:20:00Z",
+  "step_progress": {
+    "1": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "1A_ARCHITECTURE_CONTRACT",
+        "1B_STAGED_SKELETON_AND_REGISTRATION_CONTRACT",
+        "1C_INITIAL_CI_AND_VALIDATOR",
+        "1D_DEDICATED_REPOSITORY_MATERIALIZATION"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE"
+    },
+    "2": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "2A_PROJECT_SCHEMA",
+        "2B_AUTONOMY_SCHEMA",
+        "2C_OBJECTIVE_SCHEMA",
+        "2D_METRIC_SCHEMA",
+        "2E_REGISTER_TOP_LEVEL_PROJECTS",
+        "2F_VALIDATE_REGISTRY_AND_COMPLETE_STEP"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_counts": {
+        "projects": 12,
+        "autonomy_profiles": 12,
+        "coverage_items": 66,
+        "objectives": 1,
+        "metrics": 2,
+        "repository_ids": 8
+      }
+    },
+    "3": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "3A_EVIDENCE_SCHEMA",
+        "3B_EVENT_SCHEMA_AND_TYPE_CATALOG",
+        "3C_DETERMINISTIC_HASH_AND_IDEMPOTENCY",
+        "3D_PROVENANCE_AND_REFERENCE_VALIDATION",
+        "3E_REGRESSION_AND_EXACT_HEAD_VERIFICATION"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "evidence_states": [
+          "OBSERVED",
+          "VERIFIED",
+          "INFERRED",
+          "UNKNOWN",
+          "CONTRADICTED",
+          "STALE",
+          "INVALID"
+        ],
+        "canonical_event_types": 26,
+        "final_code_ci_run": 36160359255,
+        "total_regression_tests": 44
+      }
+    },
+    "4": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "4A_HEAD_ONLY_RECONCILIATION",
+        "4B_READ_ONLY_ADAPTER_SCHEMA_AND_REGISTRY",
+        "4C_EXACT_SHA_CURSOR_STORE",
+        "4D_DELTA_ONLY_GITHUB_ADAPTER",
+        "4E_INITIAL_OBSERVATION_RECEIPT",
+        "4F_CROSS_FILE_VALIDATION_AND_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "OBSERVE_ONLY",
+      "verified_counts": {
+        "durable_adapters": 8,
+        "changed_repositories": 3,
+        "unchanged_repositories": 3,
+        "blocked_repositories": 1,
+        "initialized_repositories": 1,
+        "changed_paths": 131,
+        "regression_tests": 58
+      }
+    },
+    "5": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "5A_PIN_CANONICAL_AI_BUSINESS_OS_TRUTH_ENGINE",
+        "5B_PORTFOLIO_TRUTH_PROJECTION",
+        "5C_CONTRADICTION_AND_FRESHNESS_MAPPING",
+        "5D_SOURCE_CURSOR_DRIFT_GATE",
+        "5E_CONFORMANCE_AND_REGRESSION_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_repository": "P00NSMASHER/github-value-hunt-ledger",
+        "source_revision": "5559112ed4dfaa4c690d608b257945e1595560a5",
+        "source_blob_sha": "9b3eaa9412ece784c05e9c93dfcea04e1ec96105",
+        "upstream_verdicts": 4,
+        "upstream_finding_statuses": 8,
+        "portfolio_projection_states": [
+          "VERIFIED",
+          "CONTRADICTED",
+          "STALE",
+          "UNKNOWN"
+        ],
+        "regression_tests": 72
+      }
+    },
+    "6": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "6A_RECONCILE_CANONICAL_SOURCE_CURSOR",
+        "6B_PIN_CANONICAL_VALUE_MEMORY",
+        "6C_SHARED_MEMORY_AND_OUTCOME_CONTRACTS",
+        "6D_VERIFIED_ONLY_LEARNING_ADAPTER",
+        "6E_CREDIT_AND_SCOPE_GATES",
+        "6F_DURABLE_LEDGER_AND_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_revision": "b906d3f12aa9ad1bf443c41ff5281f38f5eeab0a",
+        "source_blob_sha": "5e6450087e2fe0402ebe0af9ea0443383964a7a8",
+        "verified_learning_only": true,
+        "initial_memories": 0,
+        "initial_outcomes": 0,
+        "regression_tests": 85
+      }
+    },
+    "7": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "7A_PIN_CANONICAL_GRAPH_AND_CANONICALIZER",
+        "7B_DEFINE_UNIVERSAL_GRAPH_SCHEMAS_AND_VOCABULARY",
+        "7C_LOSSLESS_PORTFOLIO_GRAPH_ADAPTER",
+        "7D_EVIDENCE_BACKED_SEED_GRAPH",
+        "7E_REVERSIBLE_CANONICALIZATION_GATES",
+        "7F_CROSS_FILE_CONFORMANCE_AND_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_revision": "b906d3f12aa9ad1bf443c41ff5281f38f5eeab0a",
+        "knowledge_graph_blob": "d0ed2e015dc4593361d7600e48cb680a0df13245",
+        "entity_canonicalization_blob": "29a765be3598f83d20f5747518deb8de8f41ffd2",
+        "universal_node_types": 22,
+        "required_relationships": 17,
+        "seeded_nodes": 25,
+        "seeded_edges": 26,
+        "registered_projects": 12,
+        "verified_capabilities": 4,
+        "fabricated_commercial_outcomes": 0,
+        "regression_tests": 105
+      }
+    },
+    "8": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "8A_RUNTIME_POLICY_BUDGETS_AND_KILL_SWITCHES",
+        "8B_SANITIZED_ARTIFACT_CONTINUATION_STATE",
+        "8C_EVENT_DRIVEN_OBSERVATION_WORKFLOW",
+        "8D_HOURLY_SYNCHRONIZATION_WORKFLOW",
+        "8E_DAILY_LEARNING_STATE_REBUILD_WORKFLOW",
+        "8F_WEEKLY_PORTFOLIO_SYNTHESIS_WORKFLOW",
+        "8G_SERIALIZATION_IDEMPOTENCY_AND_REGRESSION_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "OBSERVE_ONLY",
+      "activation_status": "STAGED_ON_ISOLATED_BRANCH_NOT_SCHEDULED_ON_DEFAULT_BRANCH",
+      "verified_contract": {
+        "workflow_definitions": 5,
+        "autonomous_modes": [
+          "observe",
+          "sync",
+          "daily",
+          "weekly"
+        ],
+        "model_calls_allowed": 0,
+        "downstream_writes_allowed": 0,
+        "external_actions_allowed": 0,
+        "max_api_requests_per_cycle": 40,
+        "max_runtime_seconds": 240,
+        "retry_limit": 2,
+        "artifact_retention_days": 30,
+        "regression_tests": 115
+      }
+    },
+    "9": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "9A_PIN_CANONICAL_HUNTER_LEARNING_COMPONENTS",
+        "9B_AUTOMATIC_PORTFOLIO_GAP_TO_OBJECTIVE_GENERATION",
+        "9C_BOUNDED_PUBLIC_GITHUB_SEARCH_AND_EXACT_REVISION_INSPECTION",
+        "9D_DEDUPLICATION_AND_NEGATIVE_KNOWLEDGE",
+        "9E_PORTFOLIO_LINKED_EXPERIMENT_PROPOSALS",
+        "9F_VERIFIED_OUTCOME_STRATEGY_TELEMETRY",
+        "9G_PROTECTED_EXPLORATION_AND_AUTONOMOUS_WORKFLOW",
+        "9H_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "OBSERVE_ONLY",
+      "activation_status": "STAGED_ON_ISOLATED_BRANCH_NOT_SCHEDULED_ON_DEFAULT_BRANCH",
+      "verified_contract": {
+        "source_revision": "b906d3f12aa9ad1bf443c41ff5281f38f5eeab0a",
+        "pinned_hunter_components": 6,
+        "detected_structural_gaps": 11,
+        "selected_objectives_per_cycle": 5,
+        "protected_exploration_objectives": 1,
+        "strategies": 4,
+        "source_allowlist": [
+          "PUBLIC_GITHUB"
+        ],
+        "repository_count_reward": 0,
+        "model_calls_allowed": 0,
+        "downstream_writes_allowed": 0,
+        "external_actions_allowed": 0,
+        "verified_outcomes_only_for_value_credit": true,
+        "regression_tests": 127
+      }
+    },
+    "10": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "10A_PIN_CANONICAL_HUNTER_LEARNING_ARCHITECTURE",
+        "10B_UNIVERSAL_NINE_DOMAIN_OBSERVATION_CONTRACT",
+        "10C_EVIDENCE_WEIGHTED_REPLAYABLE_VALUE_LEARNING",
+        "10D_TRAIN_CONFIRM_EVALUATION_ISOLATION",
+        "10E_SCOPE_AND_GENERALIZATION_GATES",
+        "10F_OVERFIT_AND_REGRESSION_ALERTS",
+        "10G_DAILY_RUNTIME_LEARNING_REBUILD_INTEGRATION",
+        "10H_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_revision": "b906d3f12aa9ad1bf443c41ff5281f38f5eeab0a",
+        "pinned_learning_components": 6,
+        "learning_domains": 9,
+        "production_observations": 0,
+        "eligible_policy_records": 0,
+        "automatic_policy_promotion": false,
+        "external_value_weight": 1,
+        "verified_technical_weight": 0.5,
+        "internal_activity_weight": 0,
+        "minimum_train_observations": 5,
+        "minimum_train_sample_size": 20,
+        "minimum_confirm_observations": 2,
+        "minimum_confirm_sample_size": 6,
+        "regression_tests": 142
+      }
+    },
+    "11": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "11A_RECONCILE_PINNED_SOURCE_CURSOR",
+        "11B_EIGHT_COMPONENT_UNCERTAINTY_CONTRACT",
+        "11C_PORTFOLIO_UNCERTAINTY_GENERATION",
+        "11D_PARETO_AND_EXPLICIT_TIE_BREAK_RANKING",
+        "11E_HUMAN_AUTHORITY_AND_SEQUENCE_GATES",
+        "11F_DAILY_RUNTIME_UNCERTAINTY_INTEGRATION",
+        "11G_INITIAL_DECISION_SNAPSHOT_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_revision": "b9031219f39502251afd6da92cc89effbbea2f21",
+        "candidate_uncertainties": 20,
+        "eligible_candidates": 18,
+        "pareto_front_candidates": 2,
+        "scalar_score_used": false,
+        "selected_uncertainty_id": "UNC-EXTERNAL-PRJ-001",
+        "selected_authority_requirement": "HUMAN_GATED_ACT",
+        "selected_actionability": "HUMAN_APPROVAL_REQUIRED",
+        "selected_approval_requirements": [
+          "CUSTOMER_COMMUNICATION"
+        ],
+        "regression_tests": 152
+      }
+    },
+    "12": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "12A_RECONCILE_PINNED_SOURCE_CURSOR",
+        "12B_PIN_CANONICAL_EXPERIMENT_PACKET_SEMANTICS",
+        "12C_UNIVERSAL_EXPERIMENT_AND_OUTCOME_SCHEMAS",
+        "12D_UNCERTAINTY_TO_BOUNDED_EXPERIMENT_COMPILER",
+        "12E_AUTHORITY_COST_ROLLBACK_AND_BLOCKER_GATES",
+        "12F_INDEPENDENT_OUTCOME_VERIFICATION_CONTRACT",
+        "12G_DAILY_RUNTIME_EXPERIMENT_PLANNING_INTEGRATION",
+        "12H_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_revision": "c4be1a3e10a92b9255906b1600097fe6371ea929",
+        "plan_count": 20,
+        "ready_for_isolated_execution": 12,
+        "human_approval_required": 6,
+        "blocked": 2,
+        "checked_in_outcomes": 0,
+        "selected_uncertainty_id": "UNC-EXTERNAL-PRJ-001",
+        "selected_status": "HUMAN_APPROVAL_REQUIRED",
+        "selected_authority_requirement": "HUMAN_GATED_ACT",
+        "selected_approval_requirements": [
+          "CUSTOMER_COMMUNICATION"
+        ],
+        "autonomous_cash_spend_usd_max": 0,
+        "autonomous_model_calls_max": 0,
+        "autonomous_external_messages_max": 0,
+        "autonomous_downstream_writes_max": 0,
+        "definitive_outcome_requires_verified_independent_verifier": true,
+        "regression_tests": 164
+      }
+    },
+    "13": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "13A_RECONCILE_PINNED_SOURCE_CURSOR",
+        "13B_DETERMINISTIC_FIRST_TIER_CONTRACT",
+        "13C_PROVIDER_AGNOSTIC_REGISTRY",
+        "13D_COST_DATA_AND_TOKEN_BOUNDED_ROUTING",
+        "13E_TIER3_INDEPENDENT_ADVERSARIAL_GATE",
+        "13F_USAGE_COST_AND_OUTCOME_RECEIPTS",
+        "13G_VERIFIED_OUTCOME_ROUTING_VALUE_TELEMETRY",
+        "13H_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_revision": "dcca6215f2439bb55391335fe0513f471c762290",
+        "tiers": 4,
+        "deterministic_tier": 0,
+        "checked_in_enabled_nonzero_models": 0,
+        "checked_in_model_calls": 0,
+        "checked_in_model_outcomes": 0,
+        "paid_api_spend_enabled": false,
+        "tier3_independence_required": true,
+        "model_can_grant_authority": false,
+        "model_can_upgrade_evidence": false,
+        "routing_value_feedback_requires_verified_outcome": true,
+        "regression_tests": 176
+      }
+    },
+    "14": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "14A_RECONCILE_PINNED_SOURCE_CURSOR",
+        "14B_PIN_PERSISTENT_AGENT_AND_LEASE_SEMANTICS",
+        "14C_DEFINE_TEN_STABLE_ROLE_CONTRACTS",
+        "14D_DURABLE_WORK_LEASE_EVIDENCE_AND_STATE_RUNTIME",
+        "14E_BUILDER_VERIFIER_INDEPENDENCE_GATES",
+        "14F_STALE_LEASE_REQUEUE_AND_EVENT_CHAIN",
+        "14G_SNAPSHOT_RESTORE_WITHOUT_HISTORY_ERASURE",
+        "14H_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "BOUNDED_OBSERVE_EXPERIMENT_MODIFY_ONLY",
+      "verified_contract": {
+        "source_revision": "21b9023a57392f380c73b2fe952c35840f2e2025",
+        "persistent_roles": 10,
+        "builder_roles": 1,
+        "verifier_roles": 4,
+        "human_act_roles": 0,
+        "seed_work_items": 0,
+        "seeded_evidence_items": 0,
+        "tier3_capable_verifier_roles": [
+          "AUDITOR",
+          "RED_TEAM"
+        ],
+        "engineer_max_model_tier": 2,
+        "checked_in_enabled_nonzero_models": 0,
+        "stale_lease_generation_fencing": true,
+        "append_only_hash_chained_events": true,
+        "regression_tests": 188
+      }
+    },
+    "15": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "15A_PIN_EVIDENCE_FIRST_ALLOCATOR_AND_GOVERNANCE_SEMANTICS",
+        "15B_DEFINE_NINE_RESOURCE_ALLOCATION_CONTRACT",
+        "15C_RESOURCE_SPECIFIC_PARETO_RANKING",
+        "15D_NORMALIZED_SHARE_AND_CONCENTRATION_ALLOCATION",
+        "15E_EVIDENCE_GATED_RESOURCE_HOLDS",
+        "15F_DAILY_RUNTIME_ALLOCATION_INTEGRATION",
+        "15G_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_revision": "21b9023a57392f380c73b2fe952c35840f2e2025",
+        "resource_types": 9,
+        "active_resource_types": [
+          "RESEARCH",
+          "HUNTER_RUNS",
+          "HUMAN_REVIEW"
+        ],
+        "hold_resource_types": [
+          "MODEL_CALLS",
+          "ENGINEERING_CAPACITY",
+          "TESTING",
+          "ART_PRODUCTION",
+          "API_INFRASTRUCTURE",
+          "CASH"
+        ],
+        "recommendation_entries": 29,
+        "top_research_project_id": "PRJ-000",
+        "top_human_review_project_id": "PRJ-001",
+        "normalized_share_basis_points": 10000,
+        "max_project_share_basis_points": 5000,
+        "cash_allocated_share_basis_points": 0,
+        "model_calls_allocated_share_basis_points": 0,
+        "opaque_score_used": false,
+        "regression_tests": 198
+      }
+    },
+    "16": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "16A_PIN_GOVERNED_SOFTWARE_FACTORY_SEMANTICS",
+        "16B_DEFINE_ISOLATED_BRANCH_PR_ONLY_POLICY",
+        "16C_EVIDENCE_DRIVEN_WORK_IDENTIFICATION",
+        "16D_ENGINEER_ONLY_CANDIDATE_BUILD_CONTROL_PLANE",
+        "16E_REQUIRED_REGRESSION_AND_DIFF_EVIDENCE",
+        "16F_INDEPENDENT_BOUND_VERIFICATION_GATE",
+        "16G_NARROW_GITHUB_BRANCH_COMMIT_PR_EXECUTOR",
+        "16H_DOWNSTREAM_WRITE_DENY_BY_DEFAULT",
+        "16I_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "BOUNDED_MODIFY_CANDIDATE_BRANCH_AND_PR_ONLY",
+      "activation_status": "STAGED_ON_ISOLATED_BRANCH_NOT_ACTIVE_ON_DEFAULT_BRANCH",
+      "verified_contract": {
+        "source_revision": "21b9023a57392f380c73b2fe952c35840f2e2025",
+        "executor_operations": [
+          "CREATE_BRANCH",
+          "COMMIT_CANDIDATE",
+          "CREATE_PR"
+        ],
+        "merge_operation_present": false,
+        "deploy_operation_present": false,
+        "candidate_write_repositories": [
+          "REPO-008"
+        ],
+        "downstream_write_repositories": [],
+        "builder_agent_id": "AGT-ENGINEER",
+        "verifier_agent_ids": [
+          "AGT-TESTER",
+          "AGT-AUDITOR",
+          "AGT-RED-TEAM"
+        ],
+        "seed_work_items": 0,
+        "identified_current_work_items": 0,
+        "checked_in_model_tier_gt0_enabled": false,
+        "regression_tests": 209
+      }
+    },
+    "17": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "17A_RECONCILE_PINNED_SOURCE_CURSOR",
+        "17B_PIN_CANONICAL_REPAIR_AND_PROMOTION_SEMANTICS",
+        "17C_REPRODUCTION_FIRST_FAILURE_GATE",
+        "17D_VERIFIED_REPAIR_TASK_AND_REGRESSION_CONTRACT",
+        "17E_STEP16_ISOLATED_FACTORY_REPAIR_BINDING",
+        "17F_HELD_OUT_AND_INDEPENDENT_AUDIT_GATES",
+        "17G_ZERO_REGRESSION_ZERO_AUTHORITY_CANARY",
+        "17H_PROMOTION_ELIGIBLE_HUMAN_GATE",
+        "17I_DAILY_RUNTIME_REPAIR_DETECTION",
+        "17J_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_revision": "9533769a669429d2553302df6068b4b1f8099e89",
+        "pinned_repair_components": 9,
+        "automatic_mutation": false,
+        "automatic_canary": false,
+        "automatic_promotion": false,
+        "repair_repository_id": "REPO-008",
+        "checked_in_failures": 0,
+        "checked_in_repair_tasks": 0,
+        "promotion_eligible_repairs": 0,
+        "builder_agent_id": "AGT-ENGINEER",
+        "heldout_evaluator_agent_ids": [
+          "AGT-TESTER",
+          "AGT-DATA-STEWARD"
+        ],
+        "independent_auditor_agent_ids": [
+          "AGT-AUDITOR",
+          "AGT-RED-TEAM"
+        ],
+        "promotion_required_approval": "INTEGRATOR_APPROVAL",
+        "regression_tests": 223
+      }
+    },
+    "18": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "18A_PIN_PEER_TRANSFER_AND_GRAPH_SEMANTICS",
+        "18B_VERIFIED_SOURCE_CAPABILITY_AND_TARGET_NEED_GATES",
+        "18C_MACHINE_READABLE_TRANSFER_APPLICABILITY_RULES",
+        "18D_BOUNDED_OBSERVE_ONLY_TRANSFER_EXPERIMENT_CONTRACT",
+        "18E_RIGHTS_FACTORY_AND_ACT_BOUNDARIES",
+        "18F_VERIFIED_MEASURABLE_TARGET_OUTCOME_GATE",
+        "18G_REUSED_BY_AND_GENERATED_VALUE_EDGE_CANDIDATES",
+        "18H_DAILY_RUNTIME_TRANSFER_INTEGRATION",
+        "18I_REQUESTED_PATTERN_SYNTHETIC_REGRESSIONS",
+        "18J_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_revision": "9533769a669429d2553302df6068b4b1f8099e89",
+        "verified_source_capabilities": 4,
+        "current_transfer_hypotheses": 44,
+        "assessment_ready": 40,
+        "blocked": 4,
+        "checked_in_transfer_outcomes": 0,
+        "verified_success_edge_candidates": 0,
+        "automatic_downstream_modify": false,
+        "automatic_generated_value_edges": false,
+        "rights_review_required": true,
+        "independent_verifier_required": true,
+        "measurable_target_metric_required": true,
+        "regression_tests": 235
+      }
+    },
+    "19": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "19A_RECONCILE_UPSTREAM_SCHEDULER_DELTA",
+        "19B_PIN_PRIORITY_LEASE_AND_DUPLICATE_SUPPRESSION_SEMANTICS",
+        "19C_DEFINE_SEVEN_WORK_TYPE_ROLE_AUTHORITY_MAP",
+        "19D_BUILD_EVIDENCE_GATED_CANDIDATE_GENERATORS",
+        "19E_EXPLICIT_GATE_PRECEDENCE_AND_NONSCALAR_SELECTION",
+        "19F_PERSISTENT_QUEUE_DUPLICATE_AND_LEASE_CONTROL",
+        "19G_HUMAN_APPROVAL_BLOCKED_WORK_PRESERVATION",
+        "19H_STAGED_HOURLY_SELF_TRIGGERING_WORKFLOW",
+        "19I_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "activation_status": "STAGED_ON_ISOLATED_BRANCH_NOT_SCHEDULED_ON_DEFAULT_BRANCH",
+      "verified_contract": {
+        "source_revision": "c6276c80828d2632d5fee37cdaaf65f1d5b36427",
+        "work_types": [
+          "HUNT",
+          "EXPERIMENT",
+          "REPAIR",
+          "TEST",
+          "RESEARCH",
+          "INTEGRATION",
+          "VERIFICATION"
+        ],
+        "current_selected_work_types": [
+          "RESEARCH",
+          "HUNT",
+          "INTEGRATION"
+        ],
+        "current_selected_work_count": 3,
+        "blocked_approval_work_count": 6,
+        "current_act_work_count": 0,
+        "max_new_work_per_cycle": 4,
+        "max_open_work_per_agent": 1,
+        "persistent_state_artifact": "portfolio-scheduler-state",
+        "schedule_cron": "23 * * * *",
+        "workflow_contents_write": false,
+        "opaque_priority_score_used": false,
+        "regression_tests": 247
+      }
+    },
+    "20": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "20A_RECONCILE_EXISTING_COST_GOVERNOR_BRANCH_WORK",
+        "20B_FAIL_CLOSED_PRE_EXECUTION_RESERVATION_LEDGER",
+        "20C_PORTFOLIO_PROJECT_PROVIDER_MODEL_WORKFLOW_BUDGETS",
+        "20D_IDEMPOTENCY_RETRY_AND_CONSERVATIVE_EXPIRY_ACCOUNTING",
+        "20E_MODEL_ROUTER_COST_EXECUTION_GATE",
+        "20F_GATE_RUNTIME_HUNTER_SCHEDULER_AND_FACTORY_COMPUTE",
+        "20G_DURABLE_SANITIZED_ARTIFACT_ACCOUNTING",
+        "20H_KILL_SWITCH_OVERAGE_AND_MANAGED_JOB_CANCELLATION",
+        "20I_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "activation_status": "STAGED_ON_ISOLATED_BRANCH_NOT_SCHEDULED_ON_DEFAULT_BRANCH",
+      "verified_contract": {
+        "implementation_head": "1ba13e9fc4309aa562ee3c7f1566e8d5d7dfa8da",
+        "ci_run_id": 36195654197,
+        "mode": "FAIL_CLOSED_PRE_EXECUTION_RESERVATION",
+        "accounting_window": "UTC_CALENDAR_DAY",
+        "paid_usd_ceiling": 0,
+        "input_tokens_ceiling": 0,
+        "output_tokens_ceiling": 0,
+        "model_calls_ceiling": 0,
+        "api_calls_ceiling": 0,
+        "github_job_starts_ceiling": 64,
+        "github_runner_minutes_ceiling": 320,
+        "retry_limits": {
+          "MODEL_CALL": 2,
+          "API_CALL": 2,
+          "GITHUB_JOB": 2
+        },
+        "persistent_state_artifact": "portfolio-cost-governor-state",
+        "global_concurrency_group": "portfolio-cost-governed-autonomy",
+        "governed_execution_workflows": 4,
+        "managed_watchdog_workflows": 8,
+        "foundation_ci_cancel_managed": false,
+        "expired_unknown_execution_charged_at_reserved_maximum": true,
+        "act_cost_authorization": false,
+        "sanitized_persistence_only": true,
+        "regression_tests": 269
+      }
+    },
+    "21": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "21A_BUILD_DETERMINISTIC_DASHBOARD_SNAPSHOT",
+        "21B_COVER_ALL_REGISTERED_PROJECTS",
+        "21C_SEPARATE_LIFECYCLE_FROM_EVIDENCE_HEALTH",
+        "21D_SURFACE_UNCERTAINTIES_EXPERIMENTS_AND_BOTTLENECKS",
+        "21E_SURFACE_RESOURCE_ALLOCATION_PENDING_AND_BLOCKED_WORK",
+        "21F_PRESERVE_MEASURED_VS_ESTIMATED_BOUNDARY",
+        "21G_SURFACE_MEASURED_COST_AND_OUTCOME_UNKNOWN_STATES",
+        "21H_RENDER_SANITIZED_EXECUTIVE_SUMMARY",
+        "21I_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "implementation_head": "6096b2c1d0f8d1842c5a805fa5d3dd9e2e124566",
+        "ci_run_id": 36196658241,
+        "project_count": 12,
+        "pending_autonomous_work": 3,
+        "blocked_actions": 6,
+        "verified_learning_observations": 0,
+        "verified_transfer_outcomes": 0,
+        "checked_in_measured_model_cost_usd": 0,
+        "subjective_health_score_used": false,
+        "estimated_value_presented_as_measured": false,
+        "authority_class": "OBSERVE",
+        "regression_tests": 278
+      }
+    },
+    "22": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "22A_DEFINE_EVIDENCE_GATED_ALERT_CLASSES",
+        "22B_BUILD_STABLE_ALERT_FINGERPRINTS_AND_DEDUP",
+        "22C_ADD_SEVERITY_COOLDOWNS_AND_RATE_LIMITS",
+        "22D_ADD_PERSISTENT_FAILURE_ESCALATION_WITHOUT_AUTHORITY",
+        "22E_PERSIST_SANITIZED_NOTIFICATION_STATE",
+        "22F_ADD_GITHUB_ACTIONS_ONLY_DELIVERY_SINK",
+        "22G_COST_GOVERN_STAGED_NOTIFICATION_CYCLE",
+        "22H_PRESERVE_HUMAN_APPROVAL_AND_ACT_BOUNDARIES",
+        "22I_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "activation_status": "STAGED_ON_ISOLATED_BRANCH_NOT_SCHEDULED_ON_DEFAULT_BRANCH",
+      "verified_contract": {
+        "implementation_head": "b745dff130b5a7185945ebaab948fee761f5be81",
+        "ci_run_id": 36198962231,
+        "current_signal_count": 2,
+        "current_emitted_alerts": 2,
+        "current_alert_kinds": [
+          "HUMAN_APPROVAL_QUEUE",
+          "OPEN_HUMAN_BLOCKERS"
+        ],
+        "current_high_alerts": 2,
+        "next_unchanged_cycle_suppressed": 2,
+        "high_cooldown_minutes": 1440,
+        "medium_cooldown_minutes": 4320,
+        "critical_cooldown_minutes": 60,
+        "persistent_failure_escalate_after_seen": 3,
+        "delivery_channels": [
+          "GITHUB_ACTIONS_ANNOTATION",
+          "GITHUB_STEP_SUMMARY"
+        ],
+        "persistent_state_artifact": "portfolio-notification-state",
+        "schedule_cron": "7 */6 * * *",
+        "max_emitted_per_cycle": 8,
+        "cost_governed": true,
+        "notification_authority": "NONE",
+        "arbitrary_outbound_webhooks": false,
+        "regression_tests": 290
+      }
+    },
+    "23": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "23A_DEFINE_17_SCENARIO_HOSTILE_THREAT_MATRIX",
+        "23B_ATTACK_PROMPT_INJECTION_AND_MALICIOUS_REPOSITORY_BOUNDARIES",
+        "23C_FIX_UNVERIFIED_CAPABILITY_GRAPH_POISONING",
+        "23D_FIX_VERIFIED_GRAPH_PROVENANCE_LAUNDERING",
+        "23E_FIX_GITHUB_WORKFLOW_COMMAND_INJECTION",
+        "23F_FIX_COST_RETRY_IDENTITY_RESET",
+        "23G_RETEST_REWARD_SELF_APPROVAL_AND_VERIFICATION_CIRCULARITY",
+        "23H_RETEST_PRIVILEGE_PROVIDER_PRIVATE_DATA_DEPLOY_CONTACT_CHILD_AND_TRADING_BOUNDARIES",
+        "23I_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "activation_status": "HARDENED_ON_ISOLATED_BRANCH_NO_RECURRING_ACTIVATION",
+      "verified_contract": {
+        "implementation_head": "c03779b83e4aac47058c76a16be2549fbf1e17aa",
+        "ci_run_id": 36199773915,
+        "hostile_scenarios": 17,
+        "fixed_step23": 4,
+        "blocked_by_existing_controls": 13,
+        "unresolved_findings": 0,
+        "graph_capability_requires_verified_edge_and_node": true,
+        "verified_graph_requires_verification_anchor": true,
+        "notification_command_injection_hardened": true,
+        "retry_identity_bound_to_route_or_run": true,
+        "authority_change": "NONE",
+        "recurring_workflows_activated": false,
+        "regression_tests": 301
+      }
+    },
+    "24": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "24A_DEFINE_DETERMINISTIC_SHADOW_CANARY_CONTRACT",
+        "24B_RESTORE_RUNTIME_SCHEDULER_COST_NOTIFICATION_AND_LEARNING_STATE",
+        "24C_EXECUTE_BOUNDED_DAILY_RUNTIME_WITH_EXACT_CURSOR_MIRROR",
+        "24D_EXECUTE_EVIDENCE_GATED_RESEARCH_HUNT_INTEGRATION_SCHEDULING",
+        "24E_RESERVE_AND_COMMIT_ZERO_PAID_COST_GOVERNED_COMPUTE",
+        "24F_EVALUATE_NOTIFICATIONS_AND_REBUILD_LEARNING_WITHOUT_PROMOTION",
+        "24G_RELOAD_PERSISTED_BYTES_AND_PROVE_DUPLICATE_SUPPRESSION",
+        "24H_PERSIST_SANITIZED_EXACT_HEAD_CANARY_RECEIPTS",
+        "24I_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "activation_status": "SHADOW_CANARY_PASSED_FINAL_RECURRING_MODE_NOT_YET_ACTIVATED",
+      "verified_contract": {
+        "implementation_head": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab",
+        "ci_run_id": 36200414277,
+        "canary_receipt_hash": "sha256:e7b97e727155e3f7e2fccc0d1594592ca0722a48a067ebda70720ef080384ebc",
+        "actions_artifact_id": 10892145046,
+        "actions_artifact_name": "portfolio-step24-canary-92a64cef5dfd45b867d07daf06ada52de02749b0",
+        "actions_artifact_digest": "sha256:13b557d80458b3f0b48ea3b8b87cd22d408f9c694bb77146cf9e75f131001469",
+        "actions_artifact_expires_at": "2026-10-25T23:17:30Z",
+        "state_classes_restored": [
+          "runtime",
+          "scheduler",
+          "cost",
+          "notifications",
+          "learning"
+        ],
+        "runtime_reads": 7,
+        "first_selected_work": 3,
+        "first_selected_work_types": [
+          "HUNT",
+          "INTEGRATION",
+          "RESEARCH"
+        ],
+        "continuation_selected_work": 0,
+        "scheduler_suppressed_duplicates": 3,
+        "cost_continuation_status": "DUPLICATE_SUPPRESSED",
+        "notification_continuation_emitted": 0,
+        "learning_state_hash_unchanged": true,
+        "paid_cost_usd": 0,
+        "model_calls": 0,
+        "learning_promotions": 0,
+        "authority_violations": 0,
+        "forbidden_actions_attempted": 0,
+        "live_network_dependency": false,
+        "interactive_chatgpt_dependency": false,
+        "recurring_operating_mode_activated": false,
+        "regression_tests": 309
+      }
+    }
+  }
+}

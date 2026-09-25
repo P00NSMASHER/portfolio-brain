@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0.0",
+  "notification_id": "portfolio-notification-layer-v1",
+  "mode": "EVIDENCE_GATED_DEDUP_RATE_LIMITED",
+  "authority_class": "NONE",
+  "delivery_channels": ["GITHUB_ACTIONS_ANNOTATION", "GITHUB_STEP_SUMMARY"],
+  "severity_order": ["CRITICAL", "HIGH", "MEDIUM", "INFO"],
+  "cooldown_minutes": {
+    "CRITICAL": 60,
+    "HIGH": 1440,
+    "MEDIUM": 4320,
+    "INFO": 10080
+  },
+  "max_emitted_per_cycle": 8,
+  "max_alert_records": 500,
+  "recent_delivery_limit": 100,
+  "failure_escalate_after_seen": 3,
+  "state_persistence": {
+    "mode": "GITHUB_ACTIONS_ARTIFACT",
+    "artifact_name": "portfolio-notification-state",
+    "retention_days": 30,
+    "seed_file": "notifications/NOTIFICATION_STATE_SEED.json",
+    "sanitized_only": true
+  },
+  "kill_switches": {
+    "repository_variable": "PORTFOLIO_NOTIFICATION_DISABLED",
+    "file": "notifications/KILL_SWITCH.json"
+  },
+  "alert_classes": {
+    "COST_HARD_STOP": "CRITICAL",
+    "HUMAN_APPROVAL_QUEUE": "HIGH",
+    "OPEN_HUMAN_BLOCKERS": "HIGH",
+    "AUTONOMOUS_WORK_FAILURE": "HIGH",
+    "VERIFIED_NEGATIVE_OUTCOME": "HIGH",
+    "VERIFIED_POSITIVE_OUTCOME": "MEDIUM",
+    "PORTFOLIO_STATE_CHANGED": "MEDIUM"
+  },
+  "invariants": [
+    "Only evidence-backed sanitized signals may produce alerts.",
+    "Stable alert fingerprints suppress duplicate notifications for unchanged conditions.",
+    "Severity-specific cooldowns rate-limit repeated active alerts.",
+    "Persistent autonomous failures may escalate severity; approvals and governance blockers do not auto-escalate into authority.",
+    "Notifications grant no authority and cannot approve ACT.",
+    "No notification channel may contact customers, move money, trade, deploy, merge, modify downstream state or invoke arbitrary outbound webhooks.",
+    "Cost hard stops and verified negative outcomes outrank informational state changes.",
+    "Missing evidence produces no outcome alert.",
+    "While BLK-005 is open, persistent notification state contains only sanitized IDs, hashes, counts, severity, timestamps and evidence references."
+  ]
+}

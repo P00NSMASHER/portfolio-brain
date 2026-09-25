@@ -1,0 +1,66 @@
+name: software-factory-candidate
+
+on:
+  workflow_call:
+    inputs:
+      packet_path:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: portfolio-cost-governed-autonomy
+  cancel-in-progress: false
+
+jobs:
+  execute-candidate-action:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PORTFOLIO_SPEND_DISABLED: ${{ vars.PORTFOLIO_SPEND_DISABLED }}
+      PORTFOLIO_FACTORY_PACKET: ${{ inputs.packet_path }}
+      PORTFOLIO_FACTORY_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Restore latest cost-governor state
+        run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
+      - name: Reserve bounded factory compute
+        id: cost
+        run: >-
+          python -m cost_governor.workflow_gate preflight
+          --state cost_governor/live/cost_state.json
+          --output-dir cost_governor/out
+          --workflow-id software-factory-candidate
+          --job-id execute-candidate-action
+          --project-id PRJ-000
+          --estimated-minutes 5
+          --authority MODIFY
+      - name: Execute bounded candidate action
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: python -m software_factory.github_executor
+      - name: Commit conservative factory compute usage
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: >-
+          python -m cost_governor.workflow_gate finalize
+          --state cost_governor/out/cost_state.json
+          --decision cost_governor/out/cost_decision.json
+          --output cost_governor/out/cost_state.json
+      - name: Upload sanitized cost-governor continuation state
+        if: ${{ always() && hashFiles('cost_governor/out/cost_state.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-cost-governor-state
+          path: cost_governor/out/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Fail closed when cost gate blocks
+        if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
+        run: exit 3

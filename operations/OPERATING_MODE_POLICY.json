@@ -1,0 +1,103 @@
+{
+  "schema_version": "1.0.0",
+  "operating_mode_id": "portfolio-brain-autonomous-operating-mode-v1",
+  "release_phase": "STEP25_FINAL_RELEASE_CANDIDATE",
+  "default_branch": "main",
+  "mode": "AUTONOMOUS_OBSERVE_LEARN_HUNT_SCHEDULE_NOTIFY",
+  "interactive_chatgpt_runtime_dependency": false,
+  "authority_class": "OBSERVE_WITH_BOUNDED_EXPERIMENT_MODIFY_PATHS",
+  "paid_model_api_default": "DENY_ZERO_BUDGET",
+  "approved_recurring_workflows": {
+    "runtime-hourly-sync": {
+      "cron": "17 * * * *",
+      "purpose": "repository observation synchronization"
+    },
+    "runtime-daily-learning": {
+      "cron": "37 9 * * *",
+      "purpose": "deterministic learning/uncertainty/experiment/allocation rebuild"
+    },
+    "runtime-weekly-synthesis": {
+      "cron": "17 10 * * 1",
+      "purpose": "weekly deterministic portfolio synthesis"
+    },
+    "hunter-autonomous-cycle": {
+      "cron": "47 */6 * * *",
+      "purpose": "bounded public capability evidence hunting"
+    },
+    "portfolio-autonomous-scheduler": {
+      "cron": "23 * * * *",
+      "purpose": "evidence-gated persistent work selection"
+    },
+    "portfolio-cost-watchdog": {
+      "cron": "*/15 * * * *",
+      "purpose": "kill-switch and overage enforcement"
+    },
+    "portfolio-notification-cycle": {
+      "cron": "7 */6 * * *",
+      "purpose": "deduplicated evidence-gated alerts"
+    }
+  },
+  "event_driven_workflows": {
+    "runtime-event-observe": {
+      "trigger": "push:main",
+      "purpose": "bounded source observation after main changes"
+    }
+  },
+  "reusable_nonrecurring_workflows": {
+    "runtime-worker": {
+      "trigger": "workflow_call",
+      "purpose": "cost-governed deterministic runtime worker"
+    },
+    "software-factory-candidate": {
+      "trigger": "workflow_call",
+      "purpose": "isolated branch/commit/PR candidate execution only"
+    }
+  },
+  "durable_state_artifacts": {
+    "runtime": "portfolio-runtime-state",
+    "hunter": "portfolio-hunter-state",
+    "scheduler": "portfolio-scheduler-state",
+    "cost": "portfolio-cost-governor-state",
+    "notifications": "portfolio-notification-state"
+  },
+  "kill_switches": [
+    "PORTFOLIO_RUNTIME_DISABLED",
+    "PORTFOLIO_HUNTER_DISABLED",
+    "PORTFOLIO_SCHEDULER_DISABLED",
+    "PORTFOLIO_SPEND_DISABLED",
+    "PORTFOLIO_NOTIFICATION_DISABLED"
+  ],
+  "activation_prerequisites": {
+    "step23_unresolved_hostile_findings": 0,
+    "step24_status": "COMPLETE",
+    "step24_paid_cost_usd": 0,
+    "step24_model_calls": 0,
+    "step24_learning_promotions": 0,
+    "step24_authority_violations": 0,
+    "step24_continuation_selected_work": 0,
+    "step24_interactive_chatgpt_dependency": false
+  },
+  "permanent_authority_boundaries": [
+    "CUSTOMER_COMMUNICATION_REQUIRES_HUMAN_APPROVAL",
+    "PAYMENT_CASH_MOVEMENT_REQUIRES_HUMAN_APPROVAL",
+    "LIVE_MARKET_TRADING_AND_BROKERAGE_EXECUTION_PROHIBITED",
+    "DEPLOYMENT_AND_MERGE_NOT_GRANTED_TO_AUTONOMOUS_SCHEDULER",
+    "CHILD_FACING_CONSEQUENTIAL_CHANGES_REQUIRE_APPROVAL",
+    "PRIVATE_PAYLOADS_PROHIBITED_WHILE_PUBLIC"
+  ],
+  "post_promotion_required_evidence": [
+    "exact main head contains this operating-mode policy",
+    "foundation-ci succeeds on promoted main head",
+    "runtime-event-observe succeeds on promoted main head",
+    "runtime/cost continuation artifacts are created or restored without authority violations",
+    "final PORTFOLIO_BUILD_STATE records exact promoted head and verification run IDs"
+  ],
+  "invariants": [
+    "Interactive ChatGPT tasks may provide advisory monitoring but are not an ordinary runtime dependency.",
+    "Recurring autonomous operation is GitHub-hosted and governed by durable state, explicit budgets, idempotency, leases, kill switches and evidence boundaries.",
+    "The Step 23 hostile regression suite and Step 24 canary remain mandatory release evidence.",
+    "Paid model/API execution stays deny-by-default because checked-in cost and provider/model routes are zero/disabled.",
+    "No recurring workflow may grant consequential ACT, contact customers, move money, trade, deploy or merge.",
+    "While BLK-005 remains open, GitHub persistence is sanitized-only."
+  ]
+}

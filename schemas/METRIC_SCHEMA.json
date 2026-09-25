@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/METRIC_SCHEMA.json",
+  "title": "Portfolio Brain Metric",
+  "description": "Explainable metric definition. Metrics describe measurements and never independently authorize actions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version","metric_id","project_id","name","description","kind","unit",
+    "direction","source","verification_requirement","aggregation","status"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "metric_id": {"type": "string","pattern": "^MET-[0-9]{3,}$"},
+    "project_id": {"type": "string","pattern": "^PRJ-[0-9]{3,}$"},
+    "name": {"type": "string","minLength": 1,"maxLength": 160},
+    "description": {"type": "string","minLength": 1,"maxLength": 800},
+    "kind": {"enum": ["OUTCOME","QUALITY","COST","LATENCY","RELIABILITY","SAFETY","LEARNING"]},
+    "unit": {"type": "string","minLength": 1,"maxLength": 80},
+    "direction": {"enum": ["HIGHER_IS_BETTER","LOWER_IS_BETTER","TARGET_RANGE","DESCRIPTIVE_ONLY"]},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_type","source_ref"],
+      "properties": {
+        "source_type": {"enum": ["EVENT","EVIDENCE_RECEIPT","DETERMINISTIC_AGGREGATE","EXTERNAL_VERIFIED_OUTCOME"]},
+        "source_ref": {"type": "string","minLength": 1,"maxLength": 500}
+      }
+    },
+    "verification_requirement": {"enum": ["OBSERVED","VERIFIED"]},
+    "aggregation": {"enum": ["NONE","SUM","COUNT","MEAN","MEDIAN","RATE","LATEST","CUSTOM_DETERMINISTIC"]},
+    "status": {"enum": ["PROPOSED","ACTIVE","PAUSED","RETIRED"]}
+  }
+}

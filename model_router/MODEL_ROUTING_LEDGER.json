@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0.0",
+  "ledger_id": "portfolio-model-routing-ledger",
+  "policy": [
+    "The checked-in ledger starts empty; no historical model calls are reconstructed from prose.",
+    "Prompt or payload content is never stored here; only hashes, usage, cost and outcome references.",
+    "Only VERIFIED outcome feedback contributes to routing-value summaries.",
+    "Model calls can never grant authority or upgrade evidence state."
+  ],
+  "calls": [],
+  "outcomes": []
+}

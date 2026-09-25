@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0.0",
+  "allocator_id": "portfolio-resource-allocator-v1",
+  "mode": "ADVISORY_NORMALIZED_SHARES_ONLY",
+  "resource_types": [
+    "MODEL_CALLS",
+    "ENGINEERING_CAPACITY",
+    "TESTING",
+    "RESEARCH",
+    "HUNTER_RUNS",
+    "ART_PRODUCTION",
+    "HUMAN_REVIEW",
+    "API_INFRASTRUCTURE",
+    "CASH"
+  ],
+  "normalized_share_basis_points": 10000,
+  "max_project_share_basis_points": 5000,
+  "ranking": {
+    "method": "RESOURCE_SPECIFIC_PARETO_LAYERS",
+    "layer_share_weights": {
+      "0": 4,
+      "1": 2,
+      "default": 1
+    },
+    "tie_break_order": [
+      "external_validation_value DESC",
+      "importance DESC",
+      "uncertainty DESC",
+      "downstream_impact DESC",
+      "strategic_reuse DESC",
+      "test_cost ASC",
+      "time_to_evidence ASC",
+      "reversibility DESC",
+      "project_id ASC"
+    ]
+  },
+  "current_resource_gates": {
+    "MODEL_CALLS": "Require at least one enabled non-Tier-0 model route and an evidence-backed model-requiring work item.",
+    "ENGINEERING_CAPACITY": "Require READY_FOR_ISOLATED_EXECUTION work whose execution mode is ISOLATED_SYNTHETIC_TEST or an explicitly verified engineering demand.",
+    "TESTING": "Require an executable isolated test/regression plan rather than generic internal activity.",
+    "RESEARCH": "Allow read-only evidence-acquisition experiments.",
+    "HUNTER_RUNS": "Allow capability-evidence-gap uncertainties suitable for public Hunter search.",
+    "ART_PRODUCTION": "Require an explicit art/asset uncertainty or experiment; product identity alone is insufficient.",
+    "HUMAN_REVIEW": "Allow HUMAN_APPROVAL_REQUIRED plans; recommendation allocates attention, not approval.",
+    "API_INFRASTRUCTURE": "Require an approved infrastructure need or enabled provider/runtime requirement.",
+    "CASH": "Require a human-approved concrete resource pool and governance receipt; normalized allocator cannot move money."
+  },
+  "invariants": [
+    "Every recommendation retains the source uncertainty component vector and evidence references.",
+    "No single opaque score or weighted cross-resource score is used.",
+    "Verified external outcomes and external-validation uncertainties outrank internal activity for relevant resources.",
+    "Normalized shares are advisory proportions, not claimed hours, dollars, API calls or other real quantities.",
+    "Unallocated share remains HOLD rather than being forced into low-value activity.",
+    "MODEL_CALLS cannot allocate while checked-in non-Tier-0 providers are disabled.",
+    "CASH cannot allocate from the checked-in normalized plan and always remains human-governed.",
+    "Human-review allocation is attention priority only and never constitutes approval.",
+    "Engineering/testing/art resources are not allocated merely because a project exists.",
+    "Allocator output cannot grant ACT, deploy, send communication, move money or execute downstream work."
+  ]
+}

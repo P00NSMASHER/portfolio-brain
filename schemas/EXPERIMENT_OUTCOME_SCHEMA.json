@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/EXPERIMENT_OUTCOME_SCHEMA.json",
+  "title": "Portfolio Experiment Outcome",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "outcome_id",
+    "experiment_id",
+    "result",
+    "evidence_state",
+    "evidence_ids",
+    "event_ids",
+    "actor_id",
+    "verifier_actor_id",
+    "started_at",
+    "completed_at",
+    "observed_metrics",
+    "decision_effect",
+    "provenance_refs",
+    "outcome_hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "outcome_id": {
+      "type": "string",
+      "pattern": "^POUT-[A-Z0-9]{16}$"
+    },
+    "experiment_id": {
+      "type": "string",
+      "pattern": "^PEXP-[A-Z0-9]{16}$"
+    },
+    "result": {
+      "enum": [
+        "PASSED",
+        "FAILED",
+        "INCONCLUSIVE",
+        "INVALID",
+        "ABORTED"
+      ]
+    },
+    "evidence_state": {
+      "enum": [
+        "OBSERVED",
+        "VERIFIED",
+        "INFERRED",
+        "UNKNOWN",
+        "CONTRADICTED",
+        "STALE",
+        "INVALID"
+      ]
+    },
+    "evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^EVD-[A-Z0-9-]{8,}$"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "event_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^EVT-[A-Z0-9-]{8,}$"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "actor_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "verifier_actor_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "observed_metrics": {
+      "type": "object"
+    },
+    "decision_effect": {
+      "enum": [
+        "SUPPORTS_HYPOTHESIS",
+        "FALSIFIES_HYPOTHESIS",
+        "NO_DECISION_CHANGE",
+        "INVALID_EXPERIMENT"
+      ]
+    },
+    "provenance_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "outcome_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

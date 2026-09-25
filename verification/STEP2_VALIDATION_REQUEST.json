@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "step": 2,
+  "purpose": "Trigger and bind final Step 2 deterministic verification on a clean concurrency key after an older runner stalled before executing steps.",
+  "source_head": "7a4f509dc0e2e181ef27360d5a6f5f8395e3c8c2",
+  "expected_invariants": {
+    "projects": 12,
+    "autonomy_profiles": 12,
+    "minimum_named_coverage_items": 60,
+    "runtime_profiles_enabled": 0,
+    "downstream_repository_integrations_enabled": 0,
+    "market_surveillance_act": "PROHIBITED",
+    "permitplate_state_binding": "BLOCKED_BY_BLK-001"
+  },
+  "authority_change": "NONE"
+}

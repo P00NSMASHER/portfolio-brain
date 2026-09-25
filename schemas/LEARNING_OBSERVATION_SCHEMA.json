@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/LEARNING_OBSERVATION_SCHEMA.json",
+  "title": "Portfolio Learning Observation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "observation_id",
+    "domain",
+    "learning_key",
+    "scope",
+    "project_ids",
+    "objective_id",
+    "phase",
+    "measurement_quality",
+    "signal_class",
+    "evidence_state",
+    "reward_signal",
+    "sample_size",
+    "measured_numerator",
+    "measured_denominator",
+    "source_event_ids",
+    "evidence_ids",
+    "resource_usage",
+    "observed_at",
+    "provenance_refs"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "observation_id": {
+      "type": "string",
+      "pattern": "^LRN-[A-Z0-9-]{8,}$"
+    },
+    "domain": {
+      "enum": [
+        "SEARCH",
+        "ENGINEERING",
+        "TEST",
+        "REGRESSION",
+        "PRODUCT",
+        "CUSTOMER",
+        "EXPERIMENT",
+        "MODEL",
+        "RESOURCE"
+      ]
+    },
+    "learning_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240
+    },
+    "scope": {
+      "type": "string",
+      "pattern": "^(GLOBAL|PRJ-[0-9]{3,})$"
+    },
+    "project_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^PRJ-[0-9]{3,}$"
+      },
+      "uniqueItems": true
+    },
+    "objective_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^OBJ-[0-9]{3,}$"
+    },
+    "phase": {
+      "enum": [
+        "TRAIN",
+        "CONFIRM",
+        "EVALUATION_ONLY"
+      ]
+    },
+    "measurement_quality": {
+      "enum": [
+        "PROSPECTIVE",
+        "BENCHMARK",
+        "RETROSPECTIVE",
+        "INTERNAL_ACTIVITY"
+      ]
+    },
+    "signal_class": {
+      "enum": [
+        "INTERNAL_ACTIVITY",
+        "VERIFIED_TECHNICAL",
+        "VERIFIED_EXTERNAL_VALUE",
+        "COST_RESOURCE"
+      ]
+    },
+    "evidence_state": {
+      "enum": [
+        "OBSERVED",
+        "VERIFIED",
+        "INFERRED",
+        "UNKNOWN",
+        "CONTRADICTED",
+        "STALE",
+        "INVALID"
+      ]
+    },
+    "reward_signal": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": -1,
+      "maximum": 1
+    },
+    "sample_size": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "measured_numerator": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "measured_denominator": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "source_event_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^EVT-[A-Z0-9-]{8,}$"
+      },
+      "uniqueItems": true
+    },
+    "evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^EVD-[A-Z0-9-]{8,}$"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "resource_usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_calls",
+        "tokens",
+        "cost_usd",
+        "compute_seconds",
+        "tool_calls"
+      ],
+      "properties": {
+        "model_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cost_usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "compute_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "tool_calls": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "provenance_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    }
+  }
+}

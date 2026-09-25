@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0.0",
+  "contract_id": "portfolio-project-registration-v1",
+  "purpose": "Minimal Step 1 registration contract; Step 2 will define the full PROJECT_SCHEMA, AUTONOMY_SCHEMA, OBJECTIVE_SCHEMA, and METRIC_SCHEMA.",
+  "registration_states": ["PROPOSED","REGISTERED","SUSPENDED","RETIRED"],
+  "required_fields": [
+    "project_id","canonical_name","project_type","registration_state",
+    "repository_bindings","autonomy_ceiling","evidence_policy","data_boundary"
+  ],
+  "project_type_values": ["BUSINESS","PRODUCT","RESEARCH","INFRASTRUCTURE","PORTFOLIO"],
+  "autonomy_classes": ["OBSERVE","EXPERIMENT","MODIFY","ACT"],
+  "defaults": {
+    "registration_state": "PROPOSED",
+    "adapters_enabled": false,
+    "autonomous_scheduling_enabled": false,
+    "downstream_writes_enabled": false,
+    "external_actions_enabled": false
+  },
+  "invariants": [
+    "project_id is stable and must not be inferred from repository name.",
+    "Registration does not grant authority.",
+    "Missing permission is DENY.",
+    "The most restrictive applicable authority rule wins.",
+    "Every repository binding must preserve repository identity and source revision provenance.",
+    "Every consequential event or relationship must carry evidence provenance.",
+    "ACT authority can never be implied by OBSERVE, EXPERIMENT, or MODIFY authority.",
+    "Live trading and brokerage execution remain prohibited for the market-surveillance research project."
+  ],
+  "minimal_project_record_example": {
+    "project_id": "PRJ-000",
+    "canonical_name": "Portfolio Brain",
+    "project_type": "PORTFOLIO",
+    "registration_state": "REGISTERED",
+    "repository_bindings": [],
+    "autonomy_ceiling": {
+      "OBSERVE": "ALLOWED",
+      "EXPERIMENT": "BOUNDED",
+      "MODIFY": "ISOLATED_BRANCH_ONLY",
+      "ACT": "HUMAN_GATED"
+    },
+    "evidence_policy": "PROVENANCE_REQUIRED",
+    "data_boundary": "SANITIZED_CODE_POLICY_AND_RECEIPTS_ONLY"
+  }
+}

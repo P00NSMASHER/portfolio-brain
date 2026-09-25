@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "portfolio-brain/alert/1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version","alert_id","fingerprint","kind","severity","project_ids",
+    "entity_refs","evidence_refs","title_code","summary_code","status",
+    "first_seen_at","last_seen_at","seen_count","last_emitted_at","emission_count"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "alert_id": {"type": "string", "pattern": "^ALT-"},
+    "fingerprint": {"type": "string", "pattern": "^sha256:"},
+    "kind": {"enum": ["COST_HARD_STOP","HUMAN_APPROVAL_QUEUE","OPEN_HUMAN_BLOCKERS","AUTONOMOUS_WORK_FAILURE","VERIFIED_NEGATIVE_OUTCOME","VERIFIED_POSITIVE_OUTCOME","PORTFOLIO_STATE_CHANGED"]},
+    "severity": {"enum": ["CRITICAL","HIGH","MEDIUM","INFO"]},
+    "project_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "entity_refs": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+    "evidence_refs": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+    "title_code": {"type": "string", "minLength": 1},
+    "summary_code": {"type": "string", "minLength": 1},
+    "status": {"enum": ["ACTIVE","RESOLVED"]},
+    "first_seen_at": {"type": "string", "minLength": 1},
+    "last_seen_at": {"type": "string", "minLength": 1},
+    "seen_count": {"type": "integer", "minimum": 1},
+    "last_emitted_at": {"type": ["string","null"]},
+    "emission_count": {"type": "integer", "minimum": 0}
+  }
+}

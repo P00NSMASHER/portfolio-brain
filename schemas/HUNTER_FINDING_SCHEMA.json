@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/HUNTER_FINDING_SCHEMA.json",
+  "title": "Portfolio Hunter Finding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "finding_id",
+    "objective_id",
+    "gap_id",
+    "project_ids",
+    "strategy_id",
+    "candidate_fingerprint",
+    "source",
+    "inspection",
+    "capability_hypothesis",
+    "evidence_state",
+    "disposition",
+    "provenance_refs",
+    "negative_reason",
+    "experiment_proposal_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "finding_id": {
+      "type": "string",
+      "pattern": "^HFD-[A-Z0-9-]{8,}$"
+    },
+    "objective_id": {
+      "type": "string",
+      "pattern": "^HOBJ-[A-Z0-9-]{8,}$"
+    },
+    "gap_id": {
+      "type": "string",
+      "pattern": "^HGAP-[A-Z0-9-]{8,}$"
+    },
+    "project_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^PRJ-[0-9]{3,}$"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "strategy_id": {
+      "type": "string",
+      "pattern": "^STRAT:.+"
+    },
+    "candidate_fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_kind",
+        "repository_full_name",
+        "repository_id",
+        "revision",
+        "public"
+      ],
+      "properties": {
+        "source_kind": {
+          "const": "PUBLIC_GITHUB"
+        },
+        "repository_full_name": {
+          "type": "string",
+          "pattern": "^[^/]+/[^/]+$"
+        },
+        "repository_id": {
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "public": {
+          "const": true
+        }
+      }
+    },
+    "inspection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tree_sha",
+        "path_count",
+        "source_path_count",
+        "test_path_count",
+        "docs_path_count",
+        "keyword_hit_count",
+        "sample_paths"
+      ],
+      "properties": {
+        "tree_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "path_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_path_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "test_path_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "docs_path_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "keyword_hit_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sample_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30
+        }
+      }
+    },
+    "capability_hypothesis": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "evidence_state": {
+      "enum": [
+        "OBSERVED",
+        "UNKNOWN"
+      ]
+    },
+    "disposition": {
+      "enum": [
+        "RETAIN",
+        "REJECT",
+        "DUPLICATE"
+      ]
+    },
+    "provenance_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "negative_reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 500
+    },
+    "experiment_proposal_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^HEXP-[A-Z0-9-]{8,}$"
+    }
+  }
+}

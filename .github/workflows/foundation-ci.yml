@@ -1,0 +1,83 @@
+name: foundation-ci
+
+on:
+  push:
+    branches: ["main", "step*-*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portfolio-brain-foundation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile deterministic Python
+        run: python -m compileall -q registry events adapters truth memory graph runtime hunting learning uncertainty experiments model_router agents allocator software_factory repair transfer scheduler cost_governor dashboard notifications hostile canary operations tests
+      - name: Validate foundation
+        run: python tests/validate_foundation.py
+      - name: Validate Step 2 registry
+        run: python -m registry.validate_registry
+      - name: Validate Step 4 adapters
+        run: python -m adapters.validate_adapters
+      - name: Validate Step 5 truth integration
+        run: python -m truth.validate_truth_integration
+      - name: Validate Step 6 shared memory
+        run: python -m memory.validate_value_memory
+      - name: Validate Step 7 universal graph
+        run: python -m graph.validate_graph
+      - name: Validate Step 8 continuous runtime
+        run: python -m runtime.validate_runtime
+      - name: Validate Step 9 autonomous Hunter
+        run: python -m hunting.validate_hunter
+      - name: Validate Step 10 continuous learning
+        run: python -m learning.validate_learning
+      - name: Validate Step 11 highest-value uncertainty
+        run: python -m uncertainty.validate_uncertainty
+      - name: Validate Step 12 experiment engine
+        run: python -m experiments.validate_experiments
+      - name: Validate Step 13 model router
+        run: python -m model_router.validate_model_router
+      - name: Validate Step 14 persistent agents
+        run: python -m agents.validate_agents
+      - name: Validate Step 15 portfolio allocator
+        run: python -m allocator.validate_allocator
+      - name: Validate Step 16 software factory
+        run: python -m software_factory.validate_factory
+      - name: Validate Step 17 continuous repair
+        run: python -m repair.validate_repair
+      - name: Validate Step 18 cross-project transfer
+        run: python -m transfer.validate_transfer
+      - name: Validate Step 19 autonomous scheduler
+        run: python -m scheduler.validate_scheduler
+      - name: Validate Step 20 cost governor
+        run: python -m cost_governor.validate_cost_governor
+      - name: Validate Step 21 executive dashboard
+        run: python -m dashboard.validate_dashboard
+      - name: Validate Step 22 notification and escalation layer
+        run: python -m notifications.validate_notifications
+      - name: Validate Step 23 hostile examination
+        run: python -m hostile.validate_hostile_examination
+      - name: Execute and validate Step 24 autonomous learning canary
+        run: python -m canary.validate_canary --output-dir canary/out
+      - name: Validate Step 25 final operating-mode release candidate
+        run: python -m operations.validate_operating_mode
+      - name: Run regression tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Upload Step 24 sanitized canary receipts
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-step24-canary-${{ github.sha }}
+          path: canary/out/
+          if-no-files-found: error
+          retention-days: 30

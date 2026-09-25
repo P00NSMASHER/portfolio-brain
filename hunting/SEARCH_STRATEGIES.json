@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0.0",
+  "strategies": [
+    {
+      "strategy_id": "STRAT:capability-conjunction-search-claim-tracing",
+      "family": "EXACT_IMPLEMENTATION",
+      "query_modes": [
+        "{category} {need} implementation tests",
+        "{category} {need} schema regression"
+      ],
+      "purpose": "Find exact implementation patterns with tests rather than README-only claims."
+    },
+    {
+      "strategy_id": "STRAT:first-party-production-source-triangulation",
+      "family": "AUTHORITATIVE_IMPLEMENTATION",
+      "query_modes": [
+        "{category} {need} reference implementation",
+        "{category} {need} production source tests"
+      ],
+      "purpose": "Prefer implementation-plus-test evidence from mature public repositories."
+    },
+    {
+      "strategy_id": "STRAT:fail-open-boundary-archaeology",
+      "family": "NEGATIVE_CONTROL",
+      "query_modes": [
+        "{category} {need} failure regression tests",
+        "{category} {need} invariant validation"
+      ],
+      "purpose": "Search for failure boundaries and negative controls, not feature count."
+    },
+    {
+      "strategy_id": "STRAT:cross-source-emergence-triangulation",
+      "family": "EXPLORATION",
+      "query_modes": [
+        "{category} verification provenance architecture",
+        "{category} unusual integrity reconciliation tests"
+      ],
+      "purpose": "Protected exploration budget for unusual but potentially reusable discoveries."
+    }
+  ]
+}

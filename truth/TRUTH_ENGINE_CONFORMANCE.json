@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "source": {
+    "repository": "P00NSMASHER/github-value-hunt-ledger",
+    "revision": "c6276c80828d2632d5fee37cdaaf65f1d5b36427",
+    "path": "ai_business_os/truth_engine.py",
+    "blob_sha": "9b3eaa9412ece784c05e9c93dfcea04e1ec96105",
+    "test_path": "ai_business_os/test_truth_engine.py",
+    "test_blob_sha": "5705d2876741a39250c1e1662d62e995820a4ebc"
+  },
+  "checked_semantics": {
+    "no_evidence": "UNKNOWN_NOT_FALSE",
+    "stale_evidence": "VISIBLE_NOT_PROOF",
+    "wrong_authority": "INADMISSIBLE",
+    "future_observation": "INADMISSIBLE",
+    "contradictions": "PRESERVED_AND_CONTESTED",
+    "independence": "REQUIRED_WHEN_CONFIGURED",
+    "evidence_set_identity": "HASH_CHANGES_WITH_EVIDENCE",
+    "counterfactual_planning": "DOES_NOT_PERSIST_FAKE_EVIDENCE"
+  },
+  "portfolio_projection": {
+    "PROVEN": "VERIFIED",
+    "CONTESTED": "CONTRADICTED",
+    "NOT_PROVEN": "UNKNOWN",
+    "UNKNOWN": "UNKNOWN",
+    "required_stale_precedence": "STALE",
+    "required_conflict_precedence": "CONTRADICTED"
+  },
+  "authority_change": "NONE"
+}

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/MODEL_OUTCOME_FEEDBACK_SCHEMA.json",
+  "title": "Portfolio Model Routing Outcome Feedback",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "feedback_id",
+    "invocation_id",
+    "outcome_event_id",
+    "evidence_state",
+    "value_class",
+    "outcome_value",
+    "provenance_refs"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "feedback_id": {
+      "type": "string",
+      "pattern": "^MFB-[A-Z0-9-]{8,}$"
+    },
+    "invocation_id": {
+      "type": "string",
+      "pattern": "^MINV-[A-Z0-9-]{8,}$"
+    },
+    "outcome_event_id": {
+      "type": "string",
+      "pattern": "^EVT-[A-Z0-9-]{8,}$"
+    },
+    "evidence_state": {
+      "enum": [
+        "OBSERVED",
+        "VERIFIED",
+        "INFERRED",
+        "UNKNOWN",
+        "CONTRADICTED",
+        "STALE",
+        "INVALID"
+      ]
+    },
+    "value_class": {
+      "enum": [
+        "TECHNICAL",
+        "EXTERNAL_VALUE",
+        "COST_EFFICIENCY"
+      ]
+    },
+    "outcome_value": {
+      "type": "number",
+      "minimum": -1,
+      "maximum": 1
+    },
+    "provenance_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    }
+  }
+}

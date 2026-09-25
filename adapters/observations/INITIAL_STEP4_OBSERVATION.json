@@ -1,0 +1,1018 @@
+{
+  "schema_version": "1.0.0",
+  "observed_at": "2026-09-25T16:16:00Z",
+  "authority_class": "OBSERVE",
+  "observation_scope": "DEFAULT_BRANCH_HEAD_AND_CHANGED_RANGE_ONLY",
+  "unchanged_content_rereads": 0,
+  "blocked_repository_reads": 0,
+  "observations": [
+    {
+      "repository_id": "REPO-001",
+      "repository_full_name": "P00NSMASHER/github-value-hunt-ledger",
+      "status": "CHANGED",
+      "prior_sha": "b7e4a7505f0406b0a80716eab9c09d81df8a2ecb",
+      "current_sha": "5559112ed4dfaa4c690d608b257945e1595560a5",
+      "compare": {
+        "status": "ahead",
+        "ahead_by": 35,
+        "behind_by": 0,
+        "total_commits": 35,
+        "changed_file_count": 104,
+        "changed_files": [
+          {
+            "path": ".github/workflows/repository-release-gate.yml",
+            "status": "added",
+            "additions": 100,
+            "deletions": 0,
+            "changes": 100
+          },
+          {
+            "path": "COMMERCIAL_EVIDENCE_SPRINT.md",
+            "status": "added",
+            "additions": 51,
+            "deletions": 0,
+            "changes": 51
+          },
+          {
+            "path": "MASTER.md",
+            "status": "modified",
+            "additions": 1,
+            "deletions": 1,
+            "changes": 2
+          },
+          {
+            "path": "RELEASE_GATE.md",
+            "status": "added",
+            "additions": 27,
+            "deletions": 0,
+            "changes": 27
+          },
+          {
+            "path": "REPOSITORY_PLAN_COMPLETE_V1.json",
+            "status": "added",
+            "additions": 63,
+            "deletions": 0,
+            "changes": 63
+          },
+          {
+            "path": "ai_business_os/COMMERCIAL_FOCUS_V1.json",
+            "status": "added",
+            "additions": 29,
+            "deletions": 0,
+            "changes": 29
+          },
+          {
+            "path": "ai_business_os/EXTERNAL_OUTCOME_LEARNING_V1.json",
+            "status": "added",
+            "additions": 87,
+            "deletions": 0,
+            "changes": 87
+          },
+          {
+            "path": "ai_business_os/HUNTER_EXECUTION_BRIDGE_CONTRACT.md",
+            "status": "added",
+            "additions": 79,
+            "deletions": 0,
+            "changes": 79
+          },
+          {
+            "path": "ai_business_os/PERSISTENT_WORKER_CONTRACT.md",
+            "status": "added",
+            "additions": 58,
+            "deletions": 0,
+            "changes": 58
+          },
+          {
+            "path": "ai_business_os/PORTFOLIO_POOLS_V1.json",
+            "status": "added",
+            "additions": 58,
+            "deletions": 0,
+            "changes": 58
+          },
+          {
+            "path": "ai_business_os/README.md",
+            "status": "modified",
+            "additions": 32,
+            "deletions": 0,
+            "changes": 32
+          },
+          {
+            "path": "ai_business_os/hunter_bridge.py",
+            "status": "added",
+            "additions": 162,
+            "deletions": 0,
+            "changes": 162
+          },
+          {
+            "path": "ai_business_os/persistent_workers.py",
+            "status": "added",
+            "additions": 286,
+            "deletions": 0,
+            "changes": 286
+          },
+          {
+            "path": "ai_business_os/runtime_service.py",
+            "status": "modified",
+            "additions": 18,
+            "deletions": 0,
+            "changes": 18
+          },
+          {
+            "path": "ai_business_os/test_commercial_focus.py",
+            "status": "added",
+            "additions": 19,
+            "deletions": 0,
+            "changes": 19
+          },
+          {
+            "path": "ai_business_os/test_external_outcome_learning_contract.py",
+            "status": "added",
+            "additions": 75,
+            "deletions": 0,
+            "changes": 75
+          },
+          {
+            "path": "ai_business_os/test_persistent_workers.py",
+            "status": "added",
+            "additions": 110,
+            "deletions": 0,
+            "changes": 110
+          },
+          {
+            "path": "ai_business_os/test_portfolio_pools.py",
+            "status": "added",
+            "additions": 24,
+            "deletions": 0,
+            "changes": 24
+          },
+          {
+            "path": "ai_business_os/test_release_gate_contract.py",
+            "status": "added",
+            "additions": 52,
+            "deletions": 0,
+            "changes": 52
+          },
+          {
+            "path": "ai_business_os/test_rights_registry.py",
+            "status": "added",
+            "additions": 43,
+            "deletions": 0,
+            "changes": 43
+          },
+          {
+            "path": "ai_business_os/test_runtime_service.py",
+            "status": "modified",
+            "additions": 2,
+            "deletions": 0,
+            "changes": 2
+          },
+          {
+            "path": "freight/RELEASE_MANIFEST.md",
+            "status": "modified",
+            "additions": 8,
+            "deletions": 0,
+            "changes": 8
+          },
+          {
+            "path": "freight/RIGHTS_DILIGENCE.md",
+            "status": "modified",
+            "additions": 22,
+            "deletions": 0,
+            "changes": 22
+          },
+          {
+            "path": "freight/test_canonical_rights_registry.py",
+            "status": "added",
+            "additions": 40,
+            "deletions": 0,
+            "changes": 40
+          },
+          {
+            "path": "intelligence/ACTIVATION_BOARD.md",
+            "status": "modified",
+            "additions": 2,
+            "deletions": 2,
+            "changes": 4
+          },
+          {
+            "path": "intelligence/ACTIVATION_RESPONSE_REPORT.md",
+            "status": "modified",
+            "additions": 1,
+            "deletions": 1,
+            "changes": 2
+          },
+          {
+            "path": "intelligence/ALLOCATOR_REPORT.md",
+            "status": "modified",
+            "additions": 2,
+            "deletions": 1,
+            "changes": 3
+          },
+          {
+            "path": "intelligence/DISPATCH_BACKPRESSURE.md",
+            "status": "modified",
+            "additions": 1,
+            "deletions": 1,
+            "changes": 2
+          },
+          {
+            "path": "intelligence/DISPATCH_BOARD.md",
+            "status": "modified",
+            "additions": 15,
+            "deletions": 15,
+            "changes": 30
+          },
+          {
+            "path": "intelligence/EXECUTION_BOARD.md",
+            "status": "modified",
+            "additions": 14,
+            "deletions": 14,
+            "changes": 28
+          },
+          {
+            "path": "intelligence/EXECUTION_DEBT.md",
+            "status": "modified",
+            "additions": 2,
+            "deletions": 2,
+            "changes": 4
+          },
+          {
+            "path": "intelligence/EXPLORATION_GAPS.md",
+            "status": "modified",
+            "additions": 1,
+            "deletions": 1,
+            "changes": 2
+          },
+          {
+            "path": "intelligence/HUNT_PLAN.md",
+            "status": "modified",
+            "additions": 15,
+            "deletions": 15,
+            "changes": 30
+          },
+          {
+            "path": "intelligence/LEARNING_MEASUREMENT_PACKETS.md",
+            "status": "modified",
+            "additions": 3,
+            "deletions": 3,
+            "changes": 6
+          },
+          {
+            "path": "intelligence/ROUTING_EXPLORATION.md",
+            "status": "modified",
+            "additions": 4,
+            "deletions": 4,
+            "changes": 8
+          },
+          {
+            "path": "intelligence/WORKER_PRESENCE.md",
+            "status": "modified",
+            "additions": 2,
+            "deletions": 2,
+            "changes": 4
+          },
+          {
+            "path": "intelligence/WORKER_ROUTING.md",
+            "status": "modified",
+            "additions": 17,
+            "deletions": 17,
+            "changes": 34
+          },
+          {
+            "path": "intelligence/activation_directives.jsonl",
+            "status": "modified",
+            "additions": 14,
+            "deletions": 14,
+            "changes": 28
+          },
+          {
+            "path": "intelligence/activation_metrics.json",
+            "status": "modified",
+            "additions": 3,
+            "deletions": 3,
+            "changes": 6
+          },
+          {
+            "path": "intelligence/activation_response_adjustments.jsonl",
+            "status": "modified",
+            "additions": 14,
+            "deletions": 14,
+            "changes": 28
+          },
+          {
+            "path": "intelligence/activation_response_metrics.json",
+            "status": "modified",
+            "additions": 3,
+            "deletions": 3,
+            "changes": 6
+          },
+          {
+            "path": "intelligence/activation_response_runs.jsonl",
+            "status": "modified",
+            "additions": 37,
+            "deletions": 37,
+            "changes": 74
+          },
+          {
+            "path": "intelligence/allocator_metrics.json",
+            "status": "modified",
+            "additions": 1,
+            "deletions": 1,
+            "changes": 2
+          },
+          {
+            "path": "intelligence/allocator_policy.json",
+            "status": "modified",
+            "additions": 4,
+            "deletions": 2,
+            "changes": 6
+          },
+          {
+            "path": "intelligence/allocator_policy_effective.json",
+            "status": "modified",
+            "additions": 4,
+            "deletions": 2,
+            "changes": 6
+          },
+          {
+            "path": "intelligence/business_os_hunter_seeds.jsonl",
+            "status": "added",
+            "additions": 0,
+            "deletions": 0,
+            "changes": 0
+          },
+          {
+            "path": "intelligence/commercial_evidence_sprint.json",
+            "status": "added",
+            "additions": 16,
+            "deletions": 0,
+            "changes": 16
+          },
+          {
+            "path": "intelligence/coverage_targets.jsonl",
+            "status": "modified",
+            "additions": 4,
+            "deletions": 4,
+            "changes": 8
+          },
+          {
+            "path": "intelligence/dispatch_backpressure.jsonl",
+            "status": "modified",
+            "additions": 14,
+            "deletions": 14,
+            "changes": 28
+          },
+          {
+            "path": "intelligence/dispatch_backpressure_metrics.json",
+            "status": "modified",
+            "additions": 2,
+            "deletions": 2,
+            "changes": 4
+          },
+          {
+            "path": "intelligence/dispatch_claim_packets.jsonl",
+            "status": "modified",
+            "additions": 14,
+            "deletions": 14,
+            "changes": 28
+          },
+          {
+            "path": "intelligence/dispatch_metrics.json",
+            "status": "modified",
+            "additions": 4,
+            "deletions": 4,
+            "changes": 8
+          },
+          {
+            "path": "intelligence/dispatch_ticket_history.jsonl",
+            "status": "modified",
+            "additions": 42,
+            "deletions": 0,
+            "changes": 42
+          },
+          {
+            "path": "intelligence/dispatch_tickets.jsonl",
+            "status": "modified",
+            "additions": 14,
+            "deletions": 14,
+            "changes": 28
+          },
+          {
+            "path": "intelligence/execution_state.jsonl",
+            "status": "modified",
+            "additions": 14,
+            "deletions": 14,
+            "changes": 28
+          },
+          {
+            "path": "intelligence/exploration_gap_queue.jsonl",
+            "status": "modified",
+            "additions": 1,
+            "deletions": 1,
+            "changes": 2
+          },
+          {
+            "path": "intelligence/hunt_allocations.jsonl",
+            "status": "modified",
+            "additions": 14,
+            "deletions": 14,
+            "changes": 28
+          },
+          {
+            "path": "intelligence/hunt_candidates.jsonl",
+            "status": "modified",
+            "additions": 1,
+            "deletions": 1,
+            "changes": 2
+          },
+          {
+            "path": "intelligence/learning_measurement_packets.json",
+            "status": "modified",
+            "additions": 9,
+            "deletions": 9,
+            "changes": 18
+          },
+          {
+            "path": "intelligence/routing_candidates.jsonl",
+            "status": "modified",
+            "additions": 196,
+            "deletions": 196,
+            "changes": 392
+          },
+          {
+            "path": "intelligence/routing_exploration_decision.json",
+            "status": "modified",
+            "additions": 6,
+            "deletions": 6,
+            "changes": 12
+          },
+          {
+            "path": "intelligence/routing_exploration_history.jsonl",
+            "status": "modified",
+            "additions": 3,
+            "deletions": 0,
+            "changes": 3
+          },
+          {
+            "path": "intelligence/routing_exploration_metrics.json",
+            "status": "modified",
+            "additions": 3,
+            "deletions": 3,
+            "changes": 6
+          },
+          {
+            "path": "intelligence/routing_metrics.json",
+            "status": "modified",
+            "additions": 3,
+            "deletions": 3,
+            "changes": 6
+          },
+          {
+            "path": "intelligence/search_seeds.jsonl",
+            "status": "modified",
+            "additions": 1,
+            "deletions": 1,
+            "changes": 2
+          },
+          {
+            "path": "intelligence/worker_activation_response_metrics.jsonl",
+            "status": "modified",
+            "additions": 14,
+            "deletions": 14,
+            "changes": 28
+          },
+          {
+            "path": "intelligence/worker_claim_packets.jsonl",
+            "status": "modified",
+            "additions": 14,
+            "deletions": 14,
+            "changes": 28
+          },
+          {
+            "path": "intelligence/worker_dispatch_response_metrics.jsonl",
+            "status": "modified",
+            "additions": 14,
+            "deletions": 14,
+            "changes": 28
+          },
+          {
+            "path": "intelligence/worker_presence_metrics.json",
+            "status": "modified",
+            "additions": 3,
+            "deletions": 3,
+            "changes": 6
+          },
+          {
+            "path": "intelligence/worker_presence_state.jsonl",
+            "status": "modified",
+            "additions": 14,
+            "deletions": 14,
+            "changes": 28
+          },
+          {
+            "path": "intelligence/worker_profiles.jsonl",
+            "status": "modified",
+            "additions": 4,
+            "deletions": 4,
+            "changes": 8
+          },
+          {
+            "path": "intelligence/worker_routing.jsonl",
+            "status": "modified",
+            "additions": 14,
+            "deletions": 14,
+            "changes": 28
+          },
+          {
+            "path": "recoveryworks/PORTFOLIO.md",
+            "status": "modified",
+            "additions": 11,
+            "deletions": 0,
+            "changes": 11
+          },
+          {
+            "path": "recoveryworks/test_canonical_rights_boundary.py",
+            "status": "added",
+            "additions": 23,
+            "deletions": 0,
+            "changes": 23
+          },
+          {
+            "path": "rights/RIGHTS_MODEL.md",
+            "status": "added",
+            "additions": 49,
+            "deletions": 0,
+            "changes": 49
+          },
+          {
+            "path": "rights/RIGHTS_REGISTRY.json",
+            "status": "added",
+            "additions": 1289,
+            "deletions": 0,
+            "changes": 1289
+          },
+          {
+            "path": "rights/__init__.py",
+            "status": "added",
+            "additions": 1,
+            "deletions": 0,
+            "changes": 1
+          },
+          {
+            "path": "rights/rights_registry.py",
+            "status": "added",
+            "additions": 115,
+            "deletions": 0,
+            "changes": 115
+          },
+          {
+            "path": "supabase/functions/ai-business-os-runtime-gateway/index.ts",
+            "status": "modified",
+            "additions": 69,
+            "deletions": 0,
+            "changes": 69
+          },
+          {
+            "path": "supabase/migrations/ai_business_os/20260925132548_focus_ai_business_os_commercial_tracks_v1.sql",
+            "status": "added",
+            "additions": 97,
+            "deletions": 0,
+            "changes": 97
+          },
+          {
+            "path": "supabase/migrations/ai_business_os/20260925133718_separate_ai_business_os_portfolio_pools_v1.sql",
+            "status": "added",
+            "additions": 347,
+            "deletions": 0,
+            "changes": 347
+          },
+          {
+            "path": "supabase/migrations/ai_business_os/20260925133954_add_ai_business_os_pool_scoped_allocator_v1.sql",
+            "status": "added",
+            "additions": 515,
+            "deletions": 0,
+            "changes": 515
+          },
+          {
+            "path": "supabase/migrations/ai_business_os/20260925134039_integrate_ai_business_os_portfolio_pools_command_center_v1.sql",
+            "status": "added",
+            "additions": 85,
+            "deletions": 0,
+            "changes": 85
+          },
+          {
+            "path": "supabase/migrations/ai_business_os/20260925141123_normalize_ai_business_os_rights_provenance_v1.sql",
+            "status": "added",
+            "additions": 412,
+            "deletions": 0,
+            "changes": 412
+          },
+          {
+            "path": "supabase/migrations/ai_business_os/20260925141435_harden_ai_business_os_rights_provenance_v1.sql",
+            "status": "added",
+            "additions": 17,
+            "deletions": 0,
+            "changes": 17
+          },
+          {
+            "path": "supabase/migrations/ai_business_os/20260925144434_create_ai_business_os_verified_external_outcomes_v1.sql",
+            "status": "added",
+            "additions": 281,
+            "deletions": 0,
+            "changes": 281
+          },
+          {
+            "path": "supabase/migrations/ai_business_os/20260925144636_wire_ai_business_os_outcomes_to_allocator_memory_v1.sql",
+            "status": "added",
+            "additions": 672,
+            "deletions": 0,
+            "changes": 672
+          },
+          {
+            "path": "supabase/migrations/ai_business_os/20260925144741_add_ai_business_os_opportunity_first_contact_v1.sql",
+            "status": "added",
+            "additions": 9,
+            "deletions": 0,
+            "changes": 9
+          },
+          {
+            "path": "supabase/migrations/ai_business_os/20260925145057_fix_ai_business_os_external_outcome_snapshot_ordering_v1.sql",
+            "status": "added",
+            "additions": 401,
+            "deletions": 0,
+            "changes": 401
+          },
+          {
+            "path": "supabase/migrations/ai_business_os/20260925145220_integrate_ai_business_os_external_outcomes_command_center_v1.sql",
+            "status": "added",
+            "additions": 103,
+            "deletions": 0,
+            "changes": 103
+          },
+          {
+            "path": "supabase/migrations/ai_business_os/20260925145237_add_ai_business_os_external_outcomes_to_ceo_snapshot_v1.sql",
+            "status": "added",
+            "additions": 63,
+            "deletions": 0,
+            "changes": 63
+          },
+          {
+            "path": "supabase/migrations/ai_business_os/20260925151646_add_ai_business_os_persistent_worker_control_v1.sql",
+            "status": "added",
+            "additions": 412,
+            "deletions": 0,
+            "changes": 412
+          },
+          {
+            "path": "supabase/migrations/ai_business_os/bootstrap.sql",
+            "status": "modified",
+            "additions": 3432,
+            "deletions": 0,
+            "changes": 3432
+          },
+          {
+            "path": "supabase/migrations/ai_business_os/manifest.json",
+            "status": "modified",
+            "additions": 69,
+            "deletions": 4,
+            "changes": 73
+          },
+          {
+            "path": "tests/test_ti_business_os_hunter_bridge.py",
+            "status": "added",
+            "additions": 67,
+            "deletions": 0,
+            "changes": 67
+          },
+          {
+            "path": "tests/test_ti_business_os_hunter_integration.py",
+            "status": "added",
+            "additions": 108,
+            "deletions": 0,
+            "changes": 108
+          },
+          {
+            "path": "tests/test_ti_commercial_evidence_sprint.py",
+            "status": "added",
+            "additions": 21,
+            "deletions": 0,
+            "changes": 21
+          },
+          {
+            "path": "tests/test_ti_rights_registry.py",
+            "status": "added",
+            "additions": 28,
+            "deletions": 0,
+            "changes": 28
+          },
+          {
+            "path": "tools/ti_allocator.py",
+            "status": "modified",
+            "additions": 54,
+            "deletions": 1,
+            "changes": 55
+          },
+          {
+            "path": "tools/ti_allocator_validate.py",
+            "status": "modified",
+            "additions": 18,
+            "deletions": 0,
+            "changes": 18
+          },
+          {
+            "path": "tools/ti_assignment_projection.py",
+            "status": "modified",
+            "additions": 7,
+            "deletions": 0,
+            "changes": 7
+          },
+          {
+            "path": "tools/ti_build.py",
+            "status": "modified",
+            "additions": 1,
+            "deletions": 0,
+            "changes": 1
+          },
+          {
+            "path": "tools/ti_business_os_bridge.py",
+            "status": "added",
+            "additions": 39,
+            "deletions": 0,
+            "changes": 39
+          },
+          {
+            "path": "tools/ti_business_os_bridge_validate.py",
+            "status": "added",
+            "additions": 80,
+            "deletions": 0,
+            "changes": 80
+          }
+        ]
+      }
+    },
+    {
+      "repository_id": "REPO-002",
+      "repository_full_name": "P00NSMASHER/StarBlox",
+      "status": "CHANGED",
+      "prior_sha": "8ebe583f6dae6a832bae2f4987c6919db41eaf5e",
+      "current_sha": "094fe7bc6d61151a8bfec7b236bb68e8c236b834",
+      "compare": {
+        "status": "ahead",
+        "ahead_by": 32,
+        "behind_by": 0,
+        "total_commits": 32,
+        "changed_file_count": 21,
+        "changed_files": [
+          {
+            "path": ".github/workflows/ci.yml",
+            "status": "modified",
+            "additions": 87,
+            "deletions": 0,
+            "changes": 87
+          },
+          {
+            "path": "docs/AI_DEVELOPMENT_FACTORY.md",
+            "status": "modified",
+            "additions": 75,
+            "deletions": 0,
+            "changes": 75
+          },
+          {
+            "path": "docs/HUMAN_PLAYTEST_EVIDENCE.md",
+            "status": "added",
+            "additions": 32,
+            "deletions": 0,
+            "changes": 32
+          },
+          {
+            "path": "docs/real-source/MILESTONE_3.md",
+            "status": "added",
+            "additions": 75,
+            "deletions": 0,
+            "changes": 75
+          },
+          {
+            "path": "docs/real-source/milestone-3-review.json",
+            "status": "added",
+            "additions": 59,
+            "deletions": 0,
+            "changes": 59
+          },
+          {
+            "path": "package.json",
+            "status": "modified",
+            "additions": 2,
+            "deletions": 1,
+            "changes": 3
+          },
+          {
+            "path": "scripts/ai-development-factory.mjs",
+            "status": "modified",
+            "additions": 46,
+            "deletions": 2,
+            "changes": 48
+          },
+          {
+            "path": "scripts/promote-migration-adaptation.mjs",
+            "status": "added",
+            "additions": 159,
+            "deletions": 0,
+            "changes": 159
+          },
+          {
+            "path": "src/App.jsx",
+            "status": "modified",
+            "additions": 2,
+            "deletions": 0,
+            "changes": 2
+          },
+          {
+            "path": "src/devFactory/adaptationReceipt.js",
+            "status": "added",
+            "additions": 214,
+            "deletions": 0,
+            "changes": 214
+          },
+          {
+            "path": "src/devFactory/developmentFactory.js",
+            "status": "modified",
+            "additions": 145,
+            "deletions": 2,
+            "changes": 147
+          },
+          {
+            "path": "src/devFactory/developmentFactory.test.js",
+            "status": "modified",
+            "additions": 301,
+            "deletions": 1,
+            "changes": 302
+          },
+          {
+            "path": "src/devFactory/promotionReceipt.js",
+            "status": "added",
+            "additions": 395,
+            "deletions": 0,
+            "changes": 395
+          },
+          {
+            "path": "src/observability/PlaytestPanel.jsx",
+            "status": "added",
+            "additions": 153,
+            "deletions": 0,
+            "changes": 153
+          },
+          {
+            "path": "src/observability/playtestEvidence.js",
+            "status": "added",
+            "additions": 222,
+            "deletions": 0,
+            "changes": 222
+          },
+          {
+            "path": "src/observability/playtestEvidence.test.js",
+            "status": "added",
+            "additions": 93,
+            "deletions": 0,
+            "changes": 93
+          },
+          {
+            "path": "tools/roblox_catalog_reader/fixtures/external/BLOXFORGE_LICENSE.txt",
+            "status": "added",
+            "additions": 21,
+            "deletions": 0,
+            "changes": 21
+          },
+          {
+            "path": "tools/roblox_catalog_reader/fixtures/external/bloxforge-baseplate-ef98c370.rbxl.b64",
+            "status": "added",
+            "additions": 1,
+            "deletions": 0,
+            "changes": 1
+          },
+          {
+            "path": "tools/roblox_catalog_reader/fixtures/external/bloxforge-baseplate-ef98c370.source.json",
+            "status": "added",
+            "additions": 18,
+            "deletions": 0,
+            "changes": 18
+          },
+          {
+            "path": "tools/roblox_catalog_reader/fixtures/external/slash-mayhem-shadow-cc6aed05.rbxl.b64",
+            "status": "added",
+            "additions": 1,
+            "deletions": 0,
+            "changes": 1
+          },
+          {
+            "path": "tools/roblox_catalog_reader/fixtures/external/slash-mayhem-shadow-cc6aed05.source.json",
+            "status": "added",
+            "additions": 18,
+            "deletions": 0,
+            "changes": 18
+          }
+        ]
+      }
+    },
+    {
+      "repository_id": "REPO-004",
+      "repository_full_name": "P00NSMASHER/trading-platform",
+      "status": "CHANGED",
+      "prior_sha": "579730f1abb595579de199277a95a8c89f733d0f",
+      "current_sha": "f9be7d5537d38bef24a5b0f99022c5d5885988d1",
+      "compare": {
+        "status": "ahead",
+        "ahead_by": 2,
+        "behind_by": 0,
+        "total_commits": 2,
+        "changed_file_count": 6,
+        "changed_files": [
+          {
+            "path": ".github/CODEOWNERS",
+            "status": "modified",
+            "additions": 1,
+            "deletions": 1,
+            "changes": 2
+          },
+          {
+            "path": ".github/dependabot.yml",
+            "status": "added",
+            "additions": 17,
+            "deletions": 0,
+            "changes": 17
+          },
+          {
+            "path": ".github/workflows/pr-ci.yml",
+            "status": "modified",
+            "additions": 3,
+            "deletions": 3,
+            "changes": 6
+          },
+          {
+            "path": ".github/workflows/synthetic-ci.yml",
+            "status": "modified",
+            "additions": 3,
+            "deletions": 3,
+            "changes": 6
+          },
+          {
+            "path": "SECURITY.md",
+            "status": "modified",
+            "additions": 9,
+            "deletions": 6,
+            "changes": 15
+          },
+          {
+            "path": "config/release_drift_allowlist.json",
+            "status": "modified",
+            "additions": 12,
+            "deletions": 8,
+            "changes": 20
+          }
+        ]
+      }
+    },
+    {
+      "repository_id": "REPO-003",
+      "repository_full_name": "P00NSMASHER/abvmschoolstarworld",
+      "status": "UNCHANGED",
+      "prior_sha": "a15c7c2214a065707123e9b8ab8ac51a42240345",
+      "current_sha": "a15c7c2214a065707123e9b8ab8ac51a42240345",
+      "compare": null
+    },
+    {
+      "repository_id": "REPO-005",
+      "repository_full_name": "P00NSMASHER/permitplate-nyc",
+      "status": "UNCHANGED",
+      "prior_sha": "7c9a8fc4dd9fa12275d336beb8eb10732718666a",
+      "current_sha": "7c9a8fc4dd9fa12275d336beb8eb10732718666a",
+      "compare": null
+    },
+    {
+      "repository_id": "REPO-006",
+      "repository_full_name": "P00NSMASHER/permitplate-state",
+      "status": "BLOCKED",
+      "prior_sha": "c64fe06a22c3826c9ad3a7b85a4f911a6e589c19",
+      "current_sha": null,
+      "compare": null,
+      "blocked_by": "BLK-001",
+      "network_reads": 0
+    },
+    {
+      "repository_id": "REPO-007",
+      "repository_full_name": "P00NSMASHER/capturebrief",
+      "status": "UNCHANGED",
+      "prior_sha": "3b5867c422cbf9da08d02f1b9c6e7c8afa5b42ba",
+      "current_sha": "3b5867c422cbf9da08d02f1b9c6e7c8afa5b42ba",
+      "compare": null
+    },
+    {
+      "repository_id": "REPO-008",
+      "repository_full_name": "P00NSMASHER/portfolio-brain",
+      "status": "INITIALIZED",
+      "prior_sha": null,
+      "current_sha": "78772da70970aaf56dc41e386bb024de0bbc6585",
+      "compare": null,
+      "source_ref": "main"
+    }
+  ]
+}

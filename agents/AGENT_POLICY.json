@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0.0",
+  "authority_rank": {
+    "NONE": 0,
+    "OBSERVE": 1,
+    "EXPERIMENT": 2,
+    "MODIFY": 3,
+    "ACT": 4
+  },
+  "allowed_work_states": [
+    "PENDING",
+    "RUNNING",
+    "BLOCKED",
+    "VERIFYING",
+    "COMPLETE",
+    "FAILED",
+    "CANCELLED"
+  ],
+  "allowed_verdicts": [
+    "PASS",
+    "FAIL",
+    "UNKNOWN"
+  ],
+  "lease": {
+    "minimum_seconds": 30,
+    "maximum_seconds": 900,
+    "default_seconds": 180
+  },
+  "global_prohibitions": [
+    "CUSTOMER_COMMUNICATION",
+    "PAYMENT_OR_PURCHASE",
+    "BILLING_CHANGE",
+    "MOVE_MONEY",
+    "LEGAL_OR_REGULATORY_COMMUNICATION",
+    "CLAIM_OR_DISPUTE_SUBMISSION",
+    "LIVE_MARKET_TRADING",
+    "BROKERAGE_ORDER",
+    "AUTONOMOUS_INVESTMENT_POSITION",
+    "DESTRUCTIVE_DATA_DELETION",
+    "PRIVATE_INFORMATION_DISCLOSURE",
+    "CONSEQUENTIAL_CHILD_FACING_CHANGE_WITHOUT_APPROVAL"
+  ],
+  "invariants": [
+    "No agent role has ACT authority.",
+    "Only the Engineer role is builder-eligible for candidate software modification.",
+    "A builder may never verify its own work.",
+    "Verifier independence group must differ from the builder independence group.",
+    "Work cannot become COMPLETE directly from RUNNING; it must enter VERIFYING and receive PASS.",
+    "Stale lease generations cannot heartbeat or submit.",
+    "Expired work is requeued without erasing prior run/event history.",
+    "Agent memory/state is not authority.",
+    "Evidence is persisted as sanitized references/hashes, not private payload bytes.",
+    "Model-tier ceilings are role ceilings only; the Step 13 router/provider registry still controls whether a model route exists."
+  ]
+}
