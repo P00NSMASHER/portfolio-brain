@@ -55,6 +55,7 @@
     "Tier 3 requires a nonempty builder independence group and a verifier model with a different independence group.",
     "Provider/model prestige does not affect routing value; only verified downstream outcome feedback may later adapt routing.",
     "Prompt/payload content is not stored in routing ledgers; only sanitized IDs, hashes, usage and cost metadata are retained.",
-    "Human-gated ACT, customer communication, payments and live trading remain governed outside the model router."
+    "Human-gated ACT, customer communication, payments and live trading remain governed outside the model router.",
+    "Every non-Tier-0 provider invocation must obtain a Step 20 durable cost reservation after routing and before execution."
   ]
 }
