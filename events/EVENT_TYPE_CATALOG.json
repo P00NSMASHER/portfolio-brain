@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0.0",
+  "policy": "Catalog entries are canonical event names. EVENT_SCHEMA also permits future uppercase event names without requiring a schema revision.",
+  "event_types": [
+    "PROJECT_CREATED",
+    "BUILD_PASSED",
+    "BUILD_FAILED",
+    "TEST_PASSED",
+    "TEST_FAILED",
+    "BUG_FOUND",
+    "BUG_FIXED",
+    "EXPERIMENT_STARTED",
+    "EXPERIMENT_PASSED",
+    "EXPERIMENT_FAILED",
+    "MODEL_REGRESSED",
+    "MODEL_IMPROVED",
+    "CAPABILITY_DISCOVERED",
+    "CAPABILITY_REUSED",
+    "CUSTOMER_ACQUIRED",
+    "CUSTOMER_LOST",
+    "REVENUE_COLLECTED",
+    "VALUE_REALIZED",
+    "PR_CREATED",
+    "PR_REJECTED",
+    "PR_MERGED",
+    "RELEASE_CREATED",
+    "HUNTER_FINDING",
+    "RESEARCH_REJECTED",
+    "POLICY_UPDATED",
+    "SKILL_PROMOTED"
+  ]
+}
