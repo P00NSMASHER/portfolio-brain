@@ -489,6 +489,15 @@ def make_model_request(route: dict[str, Any], model_request: dict[str, Any], *, 
     }
 
 def reserve_model_execution(state: dict[str, Any], route: dict[str, Any], model_request: dict[str, Any], *, attempt: int = 1, at: str | None = None, policy_data: dict[str, Any] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+    if model_request.get("authority_class") == "ACT":
+        return state, {
+            "schema_version": "1.0.0",
+            "status": "BLOCKED_AUTHORITY",
+            "can_execute": False,
+            "reservation_id": None,
+            "authority_granted": False,
+            "reason_codes": ["COST_BUDGET_CANNOT_AUTHORIZE_ACT"],
+        }
     if route.get("status") == "ROUTED" and route.get("tier") == 0:
         return state, {
             "schema_version": "1.0.0",
