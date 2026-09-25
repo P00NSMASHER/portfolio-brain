@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "b61583369f03a4582781a418aef8a0cba318fab1",
+      "last_inspected_sha": "d5241e6943b88754104539316222406c1a61e04b",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T15:14:34Z",
-      "notes": "Dedicated PRJ-000 repository created by owner and Step 1 foundation materialized on isolated branch. Repository is temporarily public by explicit owner choice; only sanitized architecture/code/state-control material may be stored until privacy hardening."
+      "last_observed_at": "2026-09-25T15:20:07Z",
+      "notes": "Step 2A PROJECT_SCHEMA, deterministic validator, tests, and generalized numbered-step CI verified at d5241e6943b88754104539316222406c1a61e04b. Repository remains temporarily public; sanitized-only constraint applies."
     }
   },
   "decisions": [
@@ -264,6 +264,16 @@
         ".github/workflows/foundation-ci.yml",
         "tests/validate_foundation.py"
       ]
+    },
+    {
+      "decision_id": "DEC-024",
+      "summary": "PROJECT_SCHEMA is closed by default, keeps stable project identity separate from repository identity, binds autonomy/objective/metric references explicitly, requires provenance policy, and treats repository integration state as declared/observe/block/retired rather than as implied authority.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/PROJECT_SCHEMA.json",
+        "registry/validate_project.py",
+        "tests/test_project_schema.py"
+      ]
     }
   ],
   "blockers": [
@@ -298,9 +308,9 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.0.0",
+  "architecture_version": "1.1.0",
   "state_id": "portfolio-brain-master",
-  "working_branch": "step1-foundation-20260925",
+  "working_branch": "step2-project-schema-20260925",
   "phase": "architecture_build",
   "current_step": 2,
   "completed_steps": [
@@ -427,6 +437,30 @@
       "step": 1,
       "commit_sha": "b61583369f03a4582781a418aef8a0cba318fab1",
       "source_repository": "P00NSMASHER/portfolio-brain"
+    },
+    {
+      "path": "schemas/PROJECT_SCHEMA.json",
+      "kind": "step2_project_schema",
+      "step": 2,
+      "commit_sha": "49bb20c05c3ecf0a3ebd6efc1e698453e676aa17"
+    },
+    {
+      "path": "registry/validate_project.py",
+      "kind": "step2_project_validator",
+      "step": 2,
+      "commit_sha": "fbb3864dec13544d564f423b00f5ad9a06788c38"
+    },
+    {
+      "path": "tests/test_project_schema.py",
+      "kind": "step2_project_schema_regression_tests",
+      "step": 2,
+      "commit_sha": "d445e8718c4a819359db4982d3f763c8b50c07ee"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step2_numbered_branch_ci_extension",
+      "step": 2,
+      "commit_sha": "d5241e6943b88754104539316222406c1a61e04b"
     }
   ],
   "tests": [
@@ -501,21 +535,27 @@
       "status": "PASS",
       "step": 1,
       "evidence": "GitHub Actions foundation-ci run 36152821896 completed successfully at exact head b61583369f03a4582781a418aef8a0cba318fab1 on step1-foundation-20260925."
+    },
+    {
+      "name": "step2a_project_schema_ci",
+      "status": "PASS",
+      "step": 2,
+      "evidence": "GitHub Actions foundation-ci run 36153439606 succeeded at exact code head d5241e6943b88754104539316222406c1a61e04b. It compiled deterministic validators, revalidated Step 1 foundation, and ran project-schema regression tests."
     }
   ],
   "next_action": {
     "step": 2,
-    "summary": "WAIT FOR CONTINUE. Step 1 is complete. Next exact numbered step is Step 2 — Universal project registry: register major businesses, products, research systems and infrastructure; implement PROJECT_SCHEMA, AUTONOMY_SCHEMA, OBJECTIVE_SCHEMA and METRIC_SCHEMA with deterministic validators/tests.",
+    "summary": "WAIT FOR CONTINUE. Step 2A PROJECT_SCHEMA is complete and verified. Next small step: implement AUTONOMY_SCHEMA with deny-by-default permissions, hard human-gated ACT boundaries, and deterministic validator/tests. Do not register or enable runtime adapters yet.",
     "preconditions": [
-      "Read this root PORTFOLIO_BUILD_STATE.json from P00NSMASHER/portfolio-brain first.",
-      "Do not repeat Step 0 reconnaissance or Step 1 foundation work unless a pinned source changed.",
-      "Work on Step 2 only and stop after its verified commit.",
-      "Keep downstream adapters and all ACT authority disabled.",
-      "While BLK-005 is open, store only sanitized non-sensitive material in this public repository.",
+      "Read this root PORTFOLIO_BUILD_STATE.json first.",
+      "Continue only Step 2; do not begin Step 3.",
+      "Reuse stable PRJ-000 through PRJ-011 identities from the inherited registry.",
+      "Keep all downstream adapters, autonomous scheduling, model calls, deployments, writes and ACT disabled.",
+      "While BLK-005 is open, store only sanitized non-sensitive material.",
       "Do not integrate REPO-006 while BLK-001 remains open."
     ]
   },
-  "updated_at": "2026-09-25T15:25:00Z",
+  "updated_at": "2026-09-25T15:22:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -526,6 +566,20 @@
         "1D_DEDICATED_REPOSITORY_MATERIALIZATION"
       ],
       "pending_substeps": [],
+      "authority_change": "NONE"
+    },
+    "2": {
+      "status": "IN_PROGRESS",
+      "completed_substeps": [
+        "2A_PROJECT_SCHEMA"
+      ],
+      "pending_substeps": [
+        "2B_AUTONOMY_SCHEMA",
+        "2C_OBJECTIVE_SCHEMA",
+        "2D_METRIC_SCHEMA",
+        "2E_REGISTER_TOP_LEVEL_PROJECTS",
+        "2F_VALIDATE_REGISTRY_AND_COMPLETE_STEP"
+      ],
       "authority_change": "NONE"
     }
   }
