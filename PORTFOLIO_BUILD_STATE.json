@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "5331fd52be6cc71598c85606c0e245e90e2047a6",
+      "last_inspected_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T20:03:04Z",
-      "notes": "Step 16 autonomous software factory verified at 5331fd52be6cc71598c85606c0e245e90e2047a6. Factory writes are limited to isolated factory/ branches and PR creation in portfolio-brain only; downstream repositories remain write-disabled. Executor contains no merge/deploy/default-branch/settings/secrets operation. Current evidence identifies zero engineering work, so no factory work was fabricated."
+      "last_observed_at": "2026-09-25T20:16:08Z",
+      "notes": "Step 17 continuous repair/self-improvement control plane verified at 5d88e6ddc84dfd8e4c2036a1968e874f35b91529. Learning alerts are reproduction-only; verified reproducible failure packets may compile into Step 16 isolated factory work, followed by held-out evaluation, separate audit and zero-regression/zero-authority-violation canary. PROMOTION_ELIGIBLE remains human/integrator gated and no direct promote/merge/deploy surface exists."
     }
   },
   "decisions": [
@@ -1046,6 +1046,75 @@
       "evidence_refs": [
         "tests/test_software_factory.py"
       ]
+    },
+    {
+      "decision_id": "DEC-103",
+      "summary": "Step 17 reconciled REPO-001 from 21b9023a57392f380c73b2fe952c35840f2e2025 to 9533769a669429d2553302df6068b4b1f8099e89 using a targeted delta. Only automation/SCOUT_DIGEST.md changed; pinned architecture/repair component blobs were unchanged and repository revision pins were safely advanced.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "PORTFOLIO_BUILD_STATE.json",
+        "repair/AI_BUSINESS_OS_REPAIR_PIN.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-104",
+      "summary": "Statistical learning alerts may create only NEEDS_REPRODUCTION tasks. READY_FOR_REPAIR requires a FAILURE_PACKET with VERIFIED evidence, reproduction steps, evidence references and a concrete regression-test requirement; sensitive or benchmark-contaminated failures are blocked.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "repair/REPAIR_POLICY.json",
+        "schemas/REPAIR_FAILURE_SCHEMA.json",
+        "repair/repair_engine.py",
+        "tests/test_continuous_repair.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-105",
+      "summary": "Repair implementation must use the Step 16 isolated factory path on REPO-008 and may not target protected workflow/governance/provider/build-state surfaces in v1. A candidate is accepted into held-out evaluation only after the factory reaches independently verified PR_OPEN with exact commit/diff/test identity.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "repair/repair_engine.py",
+        "software_factory/FACTORY_POLICY.json",
+        "repair/CONTINUOUS_REPAIR_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-106",
+      "summary": "Self-improvement verification is role-separated: held-out evaluator differs from the Engineer builder; independent Auditor/Red Team differs from both builder and held-out evaluator; every evaluation binds the exact candidate commit and diff hash.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/REPAIR_EVALUATION_SCHEMA.json",
+        "repair/repair_engine.py",
+        "tests/test_continuous_repair.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-107",
+      "summary": "A repair-specific canary can advance only when it executes at least one check, passes all checks, records zero regressions and zero authority violations. Fail/unknown/regression/authority-violation evidence blocks the repair instead of being averaged away.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "repair/repair_engine.py",
+        "tests/test_continuous_repair.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-108",
+      "summary": "PROMOTION_ELIGIBLE is not promotion. Successful canary evidence creates only a record with automatic_promotion=false, required_approval=INTEGRATOR_APPROVAL and promotion_action=null. Step 17 exposes no promote, merge, deploy or default-branch action.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "repair/repair_engine.py",
+        "repair/CONTINUOUS_REPAIR_CONTRACT.md",
+        "repair/validate_repair.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-109",
+      "summary": "The checked-in repair ledger starts empty because no reproducible Portfolio Brain failure packet has been ingested and Step 10 currently emits no production learning alerts. Daily runtime now emits repair_state.json for continuous detection without fabricating or executing repair work.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "repair/REPAIR_LEDGER.json",
+        "runtime/continuous_runtime.py",
+        "repair/validate_repair.py"
+      ]
     }
   ],
   "blockers": [
@@ -1080,11 +1149,11 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.16.0",
+  "architecture_version": "1.17.0",
   "state_id": "portfolio-brain-master",
   "working_branch": "step17-continuous-repair-20260925",
   "phase": "architecture_build",
-  "current_step": 17,
+  "current_step": 18,
   "completed_steps": [
     0,
     1,
@@ -1102,7 +1171,8 @@
     13,
     14,
     15,
-    16
+    16,
+    17
   ],
   "artifacts": [
     {
@@ -2232,6 +2302,78 @@
       "kind": "step16_ci_validation_extension",
       "step": 16,
       "commit_sha": "74428e98ae660f65b149c0a2845cb2c82d3ba2a5"
+    },
+    {
+      "path": "repair/AI_BUSINESS_OS_REPAIR_PIN.json",
+      "kind": "step17_repair_source_pin",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "repair/REPAIR_POLICY.json",
+      "kind": "step17_repair_policy",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "schemas/REPAIR_FAILURE_SCHEMA.json",
+      "kind": "step17_repair_failure_schema",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "schemas/REPAIR_TASK_SCHEMA.json",
+      "kind": "step17_repair_task_schema",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "schemas/REPAIR_EVALUATION_SCHEMA.json",
+      "kind": "step17_repair_evaluation_schema",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "repair/REPAIR_LEDGER.json",
+      "kind": "step17_repair_ledger",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "repair/repair_engine.py",
+      "kind": "step17_continuous_repair_engine",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "repair/validate_repair.py",
+      "kind": "step17_repair_validator",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "repair/CONTINUOUS_REPAIR_CONTRACT.md",
+      "kind": "step17_repair_contract",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "tests/test_continuous_repair.py",
+      "kind": "step17_repair_regressions",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "runtime/continuous_runtime.py",
+      "kind": "step17_daily_repair_detection_integration",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step17_ci_validation_extension",
+      "step": 17,
+      "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
     }
   ],
   "tests": [
@@ -2438,25 +2580,30 @@
       "status": "PASS",
       "step": 16,
       "evidence": "Initial run 36183287075 failed because the synthetic e2e test substituted AGT-AUDITOR for work explicitly bound to AGT-TESTER. Factory correctly rejected the substitution. Test commit 5331fd52be6cc71598c85606c0e245e90e2047a6 uses the bound verifier and adds a regression that an unbound eligible verifier is rejected; replacement run 36183368241 passed."
+    },
+    {
+      "name": "step17_continuous_repair_ci",
+      "status": "PASS",
+      "step": 17,
+      "evidence": "GitHub Actions foundation-ci run 36184714196 succeeded at exact Step 17 code head 5d88e6ddc84dfd8e4c2036a1968e874f35b91529. Repair validator reported pinned_components=9, seed_failures=0, seed_tasks=0, promotion_eligible=0, automatic_mutation=false and automatic_promotion=false; 223 total regression tests passed."
     }
   ],
   "next_action": {
-    "step": 17,
-    "summary": "WAIT FOR CONTINUE. Step 16 is complete. Next exact numbered step is Step 17 — Continuous repair/self-improvement: connect failure -> learning failure -> repair proposal -> regression test -> isolated implementation -> held-out evaluation -> independent verifier -> canary -> promotion. Do not begin Step 17 until explicit CONTINUE.",
+    "step": 18,
+    "summary": "WAIT FOR CONTINUE. Step 17 is complete. Next exact numbered step is Step 18 — Cross-project intelligence transfer: detect reusable capabilities across projects, propose evidence-backed transfers, require bounded transfer experiments, and claim success only after measurable verified downstream evidence. Do not begin Step 18 until explicit CONTINUE.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Do not repeat Steps 0–16 unless an exact pinned source cursor changed.",
-      "Work on Step 17 only and stop after its verified commit.",
-      "Do not activate Step 8, Step 9 or Step 16 workflows on main yet; recurring/live factory activation remains deferred.",
-      "A repair candidate must start from reproducible evidence-backed failure and include a required regression test.",
-      "Repair implementation must use the Step 16 isolated factory path and cannot modify protected governance/workflow/provider surfaces in v1.",
-      "Builder cannot independently verify, canary or promote its own repair.",
-      "Held-out evaluation and independent verifier must pass before any canary/promotion consideration.",
-      "Canary and promotion remain controlled gates; no AI self-declaration of success is sufficient.",
-      "Keep customer communication, money movement, live trading and other consequential ACT human-gated."
+      "Do not repeat Steps 0–17 unless an exact pinned source cursor changed.",
+      "Work on Step 18 only and stop after its verified commit.",
+      "Do not activate Step 8, Step 9 or Step 16 workflows on main yet; recurring/live activation remains deferred.",
+      "A graph path or shared capability label is a transfer hypothesis, not evidence that transfer worked.",
+      "Require exact source capability provenance, target need evidence, bounded transfer experiment and VERIFIED downstream outcome before GENERATED_VALUE_FOR or equivalent success claims.",
+      "Respect rights/data/authority boundaries when transferring capabilities across projects.",
+      "Cross-project transfer may propose isolated changes but cannot bypass Step 16 factory, Step 17 repair or human-gated ACT boundaries.",
+      "Keep live trading, customer communications, payments and other consequential ACT human-gated."
     ]
   },
-  "updated_at": "2026-09-25T20:08:00Z",
+  "updated_at": "2026-09-25T20:18:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -2911,6 +3058,45 @@
         "identified_current_work_items": 0,
         "checked_in_model_tier_gt0_enabled": false,
         "regression_tests": 209
+      }
+    },
+    "17": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "17A_RECONCILE_PINNED_SOURCE_CURSOR",
+        "17B_PIN_CANONICAL_REPAIR_AND_PROMOTION_SEMANTICS",
+        "17C_REPRODUCTION_FIRST_FAILURE_GATE",
+        "17D_VERIFIED_REPAIR_TASK_AND_REGRESSION_CONTRACT",
+        "17E_STEP16_ISOLATED_FACTORY_REPAIR_BINDING",
+        "17F_HELD_OUT_AND_INDEPENDENT_AUDIT_GATES",
+        "17G_ZERO_REGRESSION_ZERO_AUTHORITY_CANARY",
+        "17H_PROMOTION_ELIGIBLE_HUMAN_GATE",
+        "17I_DAILY_RUNTIME_REPAIR_DETECTION",
+        "17J_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_revision": "9533769a669429d2553302df6068b4b1f8099e89",
+        "pinned_repair_components": 9,
+        "automatic_mutation": false,
+        "automatic_canary": false,
+        "automatic_promotion": false,
+        "repair_repository_id": "REPO-008",
+        "checked_in_failures": 0,
+        "checked_in_repair_tasks": 0,
+        "promotion_eligible_repairs": 0,
+        "builder_agent_id": "AGT-ENGINEER",
+        "heldout_evaluator_agent_ids": [
+          "AGT-TESTER",
+          "AGT-DATA-STEWARD"
+        ],
+        "independent_auditor_agent_ids": [
+          "AGT-AUDITOR",
+          "AGT-RED-TEAM"
+        ],
+        "promotion_required_approval": "INTEGRATOR_APPROVAL",
+        "regression_tests": 223
       }
     }
   }
