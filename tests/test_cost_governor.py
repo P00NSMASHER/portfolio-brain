@@ -164,10 +164,16 @@ class CostGovernorTests(unittest.TestCase):
     def test_tier0_model_path_requires_no_paid_reservation(self):
         route = {"status": "ROUTED", "tier": 0}
         state = load_state()
-        out, decision = reserve_model_execution(state, route, {})
+        out, decision = reserve_model_execution(state, route, {"authority_class": "OBSERVE"})
         self.assertIs(out, state)
         self.assertEqual(decision["status"], "TIER0_NO_SPEND")
         self.assertTrue(decision["can_execute"])
+
+    def test_tier0_act_is_not_cost_authorized(self):
+        route = {"status": "ROUTED", "tier": 0}
+        _, decision = reserve_model_execution(load_state(), route, {"authority_class": "ACT"})
+        self.assertEqual(decision["status"], "BLOCKED_AUTHORITY")
+        self.assertFalse(decision["can_execute"])
 
     def test_non_tier0_model_route_is_blocked_by_zero_checked_in_budget(self):
         route = {
