@@ -103,7 +103,7 @@ def build_dashboard_snapshot():
         "pending_autonomous_work_count":len(sched_receipt["selected_work"]),
         "blocked_action_count":len(sched_receipt["blocked_work"]),
         "learning_observation_count":learning["source_observation_count"],
-        "verified_transfer_outcome_count":len(transfer["outcomes"]),
+        "verified_transfer_outcome_count":transfer["checked_in_outcomes"],
         "checked_in_cost_reservation_count":len(cost["reservations"]),
         "checked_in_measured_model_cost_usd":0.0,
         "estimated_value_presented_as_measured":False
