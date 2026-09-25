@@ -2,7 +2,7 @@
   "schema_version": "1.0.0",
   "integration_id": "SOFTWARE-FACTORY-AI-BUSINESS-OS-001",
   "source_repository": "P00NSMASHER/github-value-hunt-ledger",
-  "source_revision": "9533769a669429d2553302df6068b4b1f8099e89",
+  "source_revision": "c6276c80828d2632d5fee37cdaaf65f1d5b36427",
   "components": {
     "governed_factory": {
       "path": "ai_business_os/software_factory.py",

@@ -12,7 +12,7 @@ def validate_agents():
     reg=load("agents/AGENT_REGISTRY.json");policy=load("agents/AGENT_POLICY.json");seed=load("agents/AGENT_STATE_SEED.json");pin=load("agents/AI_BUSINESS_OS_PERSISTENT_AGENT_PIN.json")
     roles=reg["roles"];by={r["agent_id"]:r for r in roles};expected={"PORTFOLIO_MANAGER","HUNTER","RESEARCHER","PRODUCT_ANALYST","ENGINEER","TESTER","AUDITOR","RED_TEAM","DATA_STEWARD","COMMERCIAL_ANALYST"}
     req(len(roles)==10 and {r["role_key"] for r in roles}==expected,"persistent role set mismatch");req(len(by)==10,"agent IDs must be unique")
-    req(pin["source_revision"]=="9533769a669429d2553302df6068b4b1f8099e89","persistent-agent source revision mismatch")
+    req(pin["source_revision"]=="c6276c80828d2632d5fee37cdaaf65f1d5b36427","persistent-agent source revision mismatch")
     blobs={"durable_runtime":"f200573259bcf29c09fbe9e480df4f983dd50903","worker_contract":"19c9ae71701f6fa5ae9ed56ba29b3a965e4f360f","persistent_worker":"60e41f08508d93b6a6b6c16da25582a8481d536a","persistent_worker_test":"10652da1cd107c8e983f4166b2483c5244824e81","runtime_test":"20c10bf052fb7742bf5ef687a25e2b6b1fcae81b","lease_control_sql":"c419ff6260fe0c0da61b49ba6f153ac62c0efcb8","role_contracts":"0c12935168a72f66da058e1443f136549b025db8","runtime_gateway":"fdc77391ce6ed3e0f6db25aed859aa684e0818f0"}
     for k,v in blobs.items():req(pin["components"][k]["blob_sha"]==v,f"{k} blob mismatch")
     req(pin["copied_source_code"] is False,"canonical persistent-agent source must not be copied");req(all(r["persistent"] and not r["human_act_allowed"] and r["max_autonomy"]!="ACT" for r in roles),"agent authority widened")

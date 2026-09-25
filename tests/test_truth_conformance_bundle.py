@@ -5,7 +5,7 @@ from truth.validate_truth_integration import validate_truth_integration
 class TruthConformanceBundleTests(unittest.TestCase):
     def test_truth_integration_bundle_validates(self):
         result=validate_truth_integration()
-        self.assertEqual(result["source_revision"],"9533769a669429d2553302df6068b4b1f8099e89")
+        self.assertEqual(result["source_revision"],"c6276c80828d2632d5fee37cdaaf65f1d5b36427")
         self.assertEqual(result["source_blob_sha"],"9b3eaa9412ece784c05e9c93dfcea04e1ec96105")
         self.assertEqual(result["verdicts"],4)
         self.assertEqual(result["finding_statuses"],8)

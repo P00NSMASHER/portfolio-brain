@@ -10,7 +10,7 @@ def req(ok,msg):
 def load(p):return json.loads((ROOT/p).read_text())
 def validate_transfer():
     p=policy();pin=load("transfer/AI_BUSINESS_OS_PEER_TRANSFER_PIN.json");ledger=load("transfer/TRANSFER_LEDGER.json")
-    req(pin["source_revision"]=="9533769a669429d2553302df6068b4b1f8099e89","transfer source revision mismatch")
+    req(pin["source_revision"]=="c6276c80828d2632d5fee37cdaaf65f1d5b36427","transfer source revision mismatch")
     expected={"learning_engine":"6ce4b266e24b9f6d8089e32618fa7a5c95bfe89c","learning_engine_contract":"4baf08ed31bb6727ec316ffd79189650cd938f68","learning_engine_tests":"ada39ebadffd047ab5f2de706887747c9fff2795","knowledge_graph":"d0ed2e015dc4593361d7600e48cb680a0df13245","entity_canonicalization":"29a765be3598f83d20f5747518deb8de8f41ffd2"}
     for k,v in expected.items():req(pin["components"][k]["blob_sha"]==v,f"{k} blob mismatch")
     req(pin["copied_source_code"] is False,"canonical transfer source copied");req(p["automatic_downstream_modify"] is False and p["automatic_generated_value_edges"] is False and p["automatic_rights_assumption"] is False,"transfer authority widened")

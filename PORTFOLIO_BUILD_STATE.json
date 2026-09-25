@@ -3,10 +3,10 @@
   "repositories": {
     "REPO-001": {
       "full_name": "P00NSMASHER/github-value-hunt-ledger",
-      "last_inspected_sha": "9533769a669429d2553302df6068b4b1f8099e89",
+      "last_inspected_sha": "c6276c80828d2632d5fee37cdaaf65f1d5b36427",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T20:08:00Z",
-      "notes": "Step 17 prerequisite delta-only reconciliation from 21b9023a57392f380c73b2fe952c35840f2e2025 to 9533769a669429d2553302df6068b4b1f8099e89: 1 commit, only automation/SCOUT_DIGEST.md changed. Pinned Truth, Value Memory, Knowledge Graph, Hunter, Learning, Experiment, Model Router, Persistent Agent, Allocator and Software Factory components remain byte-identical; source revision pins were advanced without semantic changes."
+      "last_observed_at": "2026-09-25T21:06:00Z",
+      "notes": "Step 19 prerequisite delta-only reconciliation from 9533769a669429d2553302df6068b4b1f8099e89 to c6276c80828d2632d5fee37cdaaf65f1d5b36427: 2 commits, only .github/workflows/public-repo-hunter.yml and automation/hunter_schedule.json changed. Existing Portfolio Brain component blobs remain byte-identical and their source revision pins were advanced without semantic changes. The upstream workflow's StarBlox-specific fixed schedule and direct push-to-main behavior were inspected but deliberately not adopted."
     },
     "REPO-002": {
       "full_name": "P00NSMASHER/StarBlox",
@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "a5d4db95645676367848465e21aa34154eb5faab",
+      "last_inspected_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T20:32:38Z",
-      "notes": "Step 18 cross-project intelligence transfer verified at a5d4db95645676367848465e21aa34154eb5faab. Current graph yields 44 provenance-backed transfer hypotheses from four VERIFIED Portfolio Brain capabilities: 40 assessment-ready and 4 PermitPlate-blocked by BLK-001. No transfer outcome or REUSED_BY/GENERATED_VALUE_FOR success edge is fabricated; measurable independently VERIFIED target outcomes are required."
+      "last_observed_at": "2026-09-25T21:05:45Z",
+      "notes": "Step 19 autonomous scheduler verified at b97ab4c46c6a281cc357d49e3d7167c5553ede99. Scheduler supports seven work types, persists a sanitized artifact-backed queue, suppresses duplicates/active leases, and currently selects exactly RESEARCH, HUNT and INTEGRATION assessment while keeping six external-validation experiments approval-blocked."
     }
   },
   "decisions": [
@@ -1115,6 +1115,68 @@
         "runtime/continuous_runtime.py",
         "repair/validate_repair.py"
       ]
+    },
+    {
+      "decision_id": "DEC-110",
+      "summary": "Step 19 reconciled REPO-001 from 9533769a669429d2553302df6068b4b1f8099e89 to c6276c80828d2632d5fee37cdaaf65f1d5b36427 using a targeted two-file delta. The new upstream StarBlox scout schedule/direct-main writer was inspected but its fixed domain schedule and git push-to-main behavior were deliberately not inherited into Portfolio Brain.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "scheduler/AI_BUSINESS_OS_SCHEDULER_PIN.json",
+        "scheduler/SCHEDULER_CONTRACT.md",
+        "PORTFOLIO_BUILD_STATE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-111",
+      "summary": "The autonomous scheduler supports HUNT, EXPERIMENT, REPAIR, TEST, RESEARCH, INTEGRATION and VERIFICATION. Selection uses explicit source/governance/resource gates followed by gate precedence and source Pareto/rank/allocation evidence; no opaque scalar priority score or activity quota is used.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "scheduler/SCHEDULER_POLICY.json",
+        "scheduler/autonomous_scheduler.py",
+        "schemas/SCHEDULED_WORK_SCHEMA.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-112",
+      "summary": "Scheduler state persists outside ChatGPT as the portfolio-scheduler-state Actions artifact. QUEUED/ACTIVE/completed fingerprints suppress duplicate work, one open/new item per agent is enforced, and stale external leases remain held for Step 14 runtime reconciliation rather than being blindly duplicated.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "scheduler/SCHEDULER_STATE_SEED.json",
+        "scheduler/artifact_state.py",
+        "scheduler/autonomous_scheduler.py",
+        "tests/test_autonomous_scheduler.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-113",
+      "summary": "At the Step 19 evidence snapshot, the scheduler enqueues exactly three autonomous work packets: RESEARCH to AGT-RESEARCHER, HUNT to AGT-HUNTER and read-only INTEGRATION assessment to AGT-PRODUCT-ANALYST. No REPAIR, TEST, VERIFICATION or isolated EXPERIMENT work is invented because the required source states are absent.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "scheduler/validate_scheduler.py",
+        "allocator/INITIAL_ALLOCATION_SUMMARY.json",
+        "repair/REPAIR_LEDGER.json",
+        "software_factory/SOFTWARE_FACTORY_LEDGER.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-114",
+      "summary": "The six current external-validation experiments remain visible as BLOCKED_APPROVAL work and never enter the autonomous queue. Customer-communication approval requirements are preserved and no scheduler packet requires ACT authority.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "scheduler/autonomous_scheduler.py",
+        "tests/test_autonomous_scheduler.py",
+        "experiments/INITIAL_EXPERIMENT_SUMMARY.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-115",
+      "summary": "The Step 19 scheduler workflow is staged on the isolated branch and, once promoted later, is configured for hourly self-triggering plus dispatch/manual triggers with contents/actions read-only permissions, serialized state, artifact persistence and a kill switch. It is not active on main yet.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        ".github/workflows/portfolio-autonomous-scheduler.yml",
+        "scheduler/SCHEDULER_POLICY.json",
+        "scheduler/SCHEDULER_CONTRACT.md"
+      ]
     }
   ],
   "blockers": [
@@ -1149,11 +1211,11 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.18.0",
+  "architecture_version": "1.19.0",
   "state_id": "portfolio-brain-master",
-  "working_branch": "step18-cross-project-transfer-20260925",
+  "working_branch": "step19-autonomous-scheduler-20260925",
   "phase": "architecture_build",
-  "current_step": 19,
+  "current_step": 20,
   "completed_steps": [
     0,
     1,
@@ -1173,7 +1235,8 @@
     15,
     16,
     17,
-    18
+    18,
+    19
   ],
   "artifacts": [
     {
@@ -2447,6 +2510,78 @@
       "kind": "step18_ci_validation_extension",
       "step": 18,
       "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "scheduler/AI_BUSINESS_OS_SCHEDULER_PIN.json",
+      "kind": "step19_scheduler_source_pin",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "scheduler/SCHEDULER_POLICY.json",
+      "kind": "step19_scheduler_policy",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "scheduler/KILL_SWITCH.json",
+      "kind": "step19_scheduler_kill_switch",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "scheduler/SCHEDULER_STATE_SEED.json",
+      "kind": "step19_scheduler_state_seed",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "schemas/SCHEDULED_WORK_SCHEMA.json",
+      "kind": "step19_scheduled_work_schema",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "scheduler/autonomous_scheduler.py",
+      "kind": "step19_autonomous_scheduler",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "scheduler/artifact_state.py",
+      "kind": "step19_scheduler_artifact_restore",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "scheduler/validate_scheduler.py",
+      "kind": "step19_scheduler_validator",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "scheduler/SCHEDULER_CONTRACT.md",
+      "kind": "step19_scheduler_contract",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": "tests/test_autonomous_scheduler.py",
+      "kind": "step19_scheduler_regressions",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": ".github/workflows/portfolio-autonomous-scheduler.yml",
+      "kind": "step19_scheduler_workflow",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step19_ci_validation_extension",
+      "step": 19,
+      "commit_sha": "b97ab4c46c6a281cc357d49e3d7167c5553ede99"
     }
   ],
   "tests": [
@@ -2665,25 +2800,31 @@
       "status": "PASS",
       "step": 18,
       "evidence": "GitHub Actions foundation-ci run 36186372443 succeeded at exact Step 18 code head a5d4db95645676367848465e21aa34154eb5faab. Transfer validator reported proposals=44, assessment_ready=40, blocked=4, checked_in_outcomes=0, verified_success_edges=0 and source_capabilities=4; 235 total regression tests passed."
+    },
+    {
+      "name": "step19_autonomous_scheduler_ci",
+      "status": "PASS",
+      "step": 19,
+      "evidence": "GitHub Actions foundation-ci run 36189604512 succeeded at exact Step 19 code head b97ab4c46c6a281cc357d49e3d7167c5553ede99. Scheduler validator reported work_types=7, selected_current=3, blocked_approval=6, queued_agents=3, act_work=0 and max_new_per_cycle=4; 247 total regression tests passed."
     }
   ],
   "next_action": {
-    "step": 19,
-    "summary": "WAIT FOR CONTINUE. Step 18 is complete. Next exact numbered step is Step 19 — Autonomous scheduling: create a persistent work scheduler that continuously chooses hunt, experiment, repair, test, research, integration and verification work from current portfolio state without waiting for ChatGPT. Do not begin Step 19 until explicit CONTINUE.",
+    "step": 20,
+    "summary": "WAIT FOR CONTINUE. Step 19 is complete. Next exact numbered step is Step 20 — Cost governor: prevent runaway AI/API/GitHub compute use with budgets, per-project ceilings, model-call ceilings, retry limits, duplicate suppression, token accounting, job cancellation and kill switches. Do not begin Step 20 until explicit CONTINUE.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Do not repeat Steps 0–18 unless an exact pinned source cursor changed.",
-      "Work on Step 19 only and stop after its verified commit.",
-      "Do not activate Step 8, Step 9 or Step 16 workflows on main yet; recurring/live activation remains deferred.",
-      "Scheduler must select among hunt, experiment, repair, test, research, integration and verification using evidence and current state, not activity quotas.",
-      "Scheduler may enqueue only work whose role, autonomy, resource and governance gates are already satisfied.",
-      "Human-gated ACT may appear as blocked/approval-required work but must not be autonomously executed.",
-      "Scheduler must suppress duplicates, respect leases/active work and preserve STOP/kill switches.",
-      "Cross-project transfer hypotheses remain proposals until verified target outcomes exist.",
-      "Keep live trading, customer communications, payments and other consequential ACT human-gated."
+      "Do not repeat Steps 0–19 unless an exact pinned source cursor changed.",
+      "Work on Step 20 only and stop after its verified commit.",
+      "Do not activate Step 8, Step 9, Step 16 or Step 19 workflows on main yet; recurring/live activation remains deferred.",
+      "Cost controls must fail closed before model/API/compute execution and keep deterministic Tier 0 preferred.",
+      "Budgets need portfolio, project, provider/model, workflow/job and retry dimensions with durable accounting.",
+      "Duplicate suppression and idempotency must prevent accidental repeated spend.",
+      "Cancellation/kill-switch behavior must not require ChatGPT.",
+      "No cost budget may grant ACT, cash movement, customer communication, live trading or deployment authority.",
+      "While BLK-005 is open, store only sanitized non-sensitive accounting metadata/evidence references."
     ]
   },
-  "updated_at": "2026-09-25T20:35:00Z",
+  "updated_at": "2026-09-25T21:08:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -3209,6 +3350,50 @@
         "independent_verifier_required": true,
         "measurable_target_metric_required": true,
         "regression_tests": 235
+      }
+    },
+    "19": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "19A_RECONCILE_UPSTREAM_SCHEDULER_DELTA",
+        "19B_PIN_PRIORITY_LEASE_AND_DUPLICATE_SUPPRESSION_SEMANTICS",
+        "19C_DEFINE_SEVEN_WORK_TYPE_ROLE_AUTHORITY_MAP",
+        "19D_BUILD_EVIDENCE_GATED_CANDIDATE_GENERATORS",
+        "19E_EXPLICIT_GATE_PRECEDENCE_AND_NONSCALAR_SELECTION",
+        "19F_PERSISTENT_QUEUE_DUPLICATE_AND_LEASE_CONTROL",
+        "19G_HUMAN_APPROVAL_BLOCKED_WORK_PRESERVATION",
+        "19H_STAGED_HOURLY_SELF_TRIGGERING_WORKFLOW",
+        "19I_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "activation_status": "STAGED_ON_ISOLATED_BRANCH_NOT_SCHEDULED_ON_DEFAULT_BRANCH",
+      "verified_contract": {
+        "source_revision": "c6276c80828d2632d5fee37cdaaf65f1d5b36427",
+        "work_types": [
+          "HUNT",
+          "EXPERIMENT",
+          "REPAIR",
+          "TEST",
+          "RESEARCH",
+          "INTEGRATION",
+          "VERIFICATION"
+        ],
+        "current_selected_work_types": [
+          "RESEARCH",
+          "HUNT",
+          "INTEGRATION"
+        ],
+        "current_selected_work_count": 3,
+        "blocked_approval_work_count": 6,
+        "current_act_work_count": 0,
+        "max_new_work_per_cycle": 4,
+        "max_open_work_per_agent": 1,
+        "persistent_state_artifact": "portfolio-scheduler-state",
+        "schedule_cron": "23 * * * *",
+        "workflow_contents_write": false,
+        "opaque_priority_score_used": false,
+        "regression_tests": 247
       }
     }
   }

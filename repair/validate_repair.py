@@ -10,7 +10,7 @@ def req(ok,msg):
 def load(p):return json.loads((ROOT/p).read_text())
 def validate_repair():
     p=policy();pin=load("repair/AI_BUSINESS_OS_REPAIR_PIN.json");ledger=load("repair/REPAIR_LEDGER.json")
-    req(pin["source_revision"]=="9533769a669429d2553302df6068b4b1f8099e89","repair source revision mismatch")
+    req(pin["source_revision"]=="c6276c80828d2632d5fee37cdaaf65f1d5b36427","repair source revision mismatch")
     expected={"repair_queue":"eca81c795a130cd467812de5867c26dec1044ef2","repair_intake":"21b513b5347b0ef3b7e027498f437dfb84f699d6","learning_engine":"6ce4b266e24b9f6d8089e32618fa7a5c95bfe89c","skill_eval_intake":"501f5c201588b57f83928461d1aedf0bddb589db","skill_promotion_intake":"417c387bdc9e6b2a77b860964b4f01d364235a59","skill_eval_tool":"adbcc1875ab42aec245cc08994b81735c5eee424","skill_promotion_tool":"78c6526f7980e57ee0012bfa888eb6572a9d89e0","repair_candidate_contract":"de8ebb24706b225c8cacbd2b60889174bcdfb636","repair_queue_tests":"8779c9c8dbc08bb505816cc56f255c97e2d58588"}
     for k,v in expected.items():req(pin["components"][k]["blob_sha"]==v,f"{k} blob mismatch")
     req(pin["copied_source_code"] is False,"canonical repair source copied")

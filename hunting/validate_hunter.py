@@ -14,7 +14,7 @@ def validate_hunter():
     policy=load_policy(); seed=load_seed_state(); validate_state(seed); strategies=load_strategies()
     req(state["repositories"]["REPO-001"]["last_inspected_sha"]==pin["source_revision"],"Hunter source cursor drifted")
     req(pin["copied_source_code"] is False,"canonical Hunter source must not be copied")
-    req(pin["source_revision"]=="9533769a669429d2553302df6068b4b1f8099e89","unexpected Hunter source revision")
+    req(pin["source_revision"]=="c6276c80828d2632d5fee37cdaaf65f1d5b36427","unexpected Hunter source revision")
     expected={
       "business_os_bridge":"185866871c1e3eaa9d8d3aadc700c11c05babc0c",
       "seed_compiler":"6ab65a4f5593601d21d58e9d3a2d771fb070e3bb",
