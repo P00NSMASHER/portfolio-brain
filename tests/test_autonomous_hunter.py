@@ -7,7 +7,7 @@ from hunting.autonomous_hunter import (
 class FakeProvider:
     def __init__(self,results=None,inspection=None):
         self.results=results if results is not None else [{"id":1,"full_name":"public/example","default_branch":"main","private":False}]
-        self.inspection=inspection or {"revision":"a"*40,"tree_sha":"b"*40,"paths":["src/core.py","tests/test_core.py","docs/readme.md"],"truncated":False}
+        self.inspection=inspection or {"revision":"a"*40,"tree_sha":"b"*40,"paths":["src/recoveryworks.py","tests/test_recoveryworks.py","docs/recoveryworks.md"],"truncated":False}
         self.requests=0
     def search(self,q):
         self.requests+=1;return copy.deepcopy(self.results)
