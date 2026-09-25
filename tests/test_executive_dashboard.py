@@ -8,7 +8,8 @@ class ExecutiveDashboardTests(unittest.TestCase):
         self.assertEqual({p["project_id"] for p in self.s["projects"]},{f"PRJ-{i:03d}" for i in range(12)})
     def test_dashboard_grants_no_authority(self):
         self.assertEqual(self.s["authority_class"],"OBSERVE")
-        self.assertNotIn("ACT",render_markdown(self.s).split("No dashboard field grants authority")[0])
+        self.assertIn("No dashboard field grants authority or executes work.",render_markdown(self.s))
+        self.assertTrue(all("authority_granted" not in p for p in self.s["projects"]))
     def test_missing_outcomes_are_not_invented(self):
         self.assertTrue(all(p["recent_measured_outcomes"]==[] for p in self.s["projects"]))
         self.assertTrue(all(p["measured_outcome_status"]=="NONE_IN_CHECKED_IN_VERIFIED_LEDGER" for p in self.s["projects"]))
