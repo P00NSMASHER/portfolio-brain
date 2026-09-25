@@ -2,6 +2,7 @@
 from __future__ import annotations
 import argparse,io,json,os,time,urllib.request,zipfile
 from pathlib import Path
+from runtime.artifact_http import open_url
 ROOT=Path(__file__).resolve().parents[1]
 class RestoreError(RuntimeError):pass
 def policy():return json.loads((ROOT/"notifications"/"NOTIFICATION_POLICY.json").read_text())
@@ -17,7 +18,7 @@ def restore(output:Path):
             used+=1
             req=urllib.request.Request(url,headers={"Accept":"application/vnd.github+json","Authorization":f"Bearer {token}","X-GitHub-Api-Version":"2022-11-28","User-Agent":"portfolio-brain-notifications/1.0"},method="GET")
             try:
-                with urllib.request.urlopen(req,timeout=20) as resp:return resp.read()
+                with open_url(req,timeout=20) as resp:return resp.read()
             except Exception as exc:
                 last=exc
                 if attempt<2:time.sleep(attempt+1)
