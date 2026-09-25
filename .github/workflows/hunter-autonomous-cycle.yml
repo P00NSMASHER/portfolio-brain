@@ -12,7 +12,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: portfolio-hunter-state
+  group: portfolio-cost-governed-autonomy
   cancel-in-progress: false
 
 jobs:
@@ -29,16 +29,48 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Restore cost governor state
+        run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
+      - name: Reserve Hunter job budget
+        id: cost_gate
+        run: >-
+          python -m cost_governor.workflow_gate preflight
+          --state cost_governor/live/cost_state.json
+          --output-dir cost_governor/out
+          --workflow-id hunter-autonomous-cycle
+          --job-id hunt
+          --project-id PRJ-000
+          --estimated-minutes 5
+          --authority OBSERVE
       - name: Restore latest Hunter state
+        if: ${{ steps.cost_gate.outputs.allowed == 'true' }}
         run: python -m hunting.artifact_state --output hunting/live/hunter_state.json
       - name: Run autonomous bounded Hunter cycle
+        if: ${{ steps.cost_gate.outputs.allowed == 'true' }}
         run: python -m hunting.autonomous_hunter --state hunting/live/hunter_state.json --output-dir hunting/out
       - name: Validate state
+        if: ${{ steps.cost_gate.outputs.allowed == 'true' }}
         run: python -c "import json; from hunting.autonomous_hunter import validate_state; validate_state(json.load(open('hunting/out/hunter_state.json')))"
       - name: Upload sanitized Hunter continuation state
+        if: ${{ steps.cost_gate.outputs.allowed == 'true' && success() }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-hunter-state
           path: hunting/out/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Finalize reserved workflow budget
+        if: ${{ always() && steps.cost_gate.outcome == 'success' }}
+        run: >-
+          python -m cost_governor.workflow_gate finalize
+          --state cost_governor/out/cost_state.json
+          --decision cost_governor/out/cost_decision.json
+          --output cost_governor/out/cost_state.json
+      - name: Upload sanitized cost governor state
+        if: ${{ always() && steps.cost_gate.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-cost-governor-state
+          path: cost_governor/out/
           if-no-files-found: error
           retention-days: 30
