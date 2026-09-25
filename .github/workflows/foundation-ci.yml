@@ -2,7 +2,7 @@ name: foundation-ci
 
 on:
   push:
-    branches: ["main", "step1-foundation-20260925"]
+    branches: ["main", "step*-*"]
   pull_request:
   workflow_dispatch:
 
@@ -22,7 +22,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Compile validator
-        run: python -m py_compile tests/validate_foundation.py
+      - name: Compile deterministic validators
+        run: python -m py_compile tests/validate_foundation.py registry/validate_project.py tests/test_project_schema.py
       - name: Validate foundation
         run: python tests/validate_foundation.py
+      - name: Run schema regression tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v
