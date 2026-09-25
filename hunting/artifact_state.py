@@ -3,6 +3,7 @@
 from __future__ import annotations
 import argparse, io, json, os, time, urllib.request, zipfile
 from pathlib import Path
+from runtime.artifact_http import open_url
 ROOT=Path(__file__).resolve().parents[1]
 class RestoreError(RuntimeError): pass
 def policy(): return json.loads((ROOT/"hunting"/"HUNTER_POLICY.json").read_text())
@@ -18,7 +19,7 @@ def restore(output):
             used+=1
             reqq=urllib.request.Request(url,headers={"Accept":"application/vnd.github+json","Authorization":f"Bearer {token}","X-GitHub-Api-Version":"2022-11-28","User-Agent":"portfolio-brain-hunter/1.0"},method="GET")
             try:
-                with urllib.request.urlopen(reqq,timeout=20) as resp:return resp.read()
+                with open_url(reqq,timeout=20) as resp:return resp.read()
             except Exception as exc:
                 last=exc
                 if attempt<p["budgets"]["retry_limit"]:time.sleep(p["budgets"]["retry_backoff_seconds"]*(attempt+1))

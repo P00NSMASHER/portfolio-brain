@@ -9,6 +9,7 @@ import time
 import urllib.request
 import zipfile
 from pathlib import Path
+from runtime.artifact_http import open_url
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -45,7 +46,7 @@ def restore(output: Path) -> str:
                 method="GET",
             )
             try:
-                with urllib.request.urlopen(request, timeout=20) as response:
+                with open_url(request,timeout=20) as response:
                     return response.read()
             except Exception as exc:
                 last = exc
