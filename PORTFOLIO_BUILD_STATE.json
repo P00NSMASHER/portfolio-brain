@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab",
+      "last_inspected_sha": "cdd7adc71472f61a07f3641e9ff414091fc1bc35",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T23:20:00Z",
-      "notes": "Step 24 autonomous learning canary verified at 6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab. The deterministic no-prompt shadow cycle restored runtime/scheduler/cost/notification/learning state, used seven local exact-cursor mirror reads, selected three first-pass work items and zero continuation items, suppressed three scheduler duplicates plus duplicate cost/notifications, used zero paid model/API resources, promoted zero learning records, and recorded zero authority violations."
+      "last_observed_at": "2026-09-25T23:55:00Z",
+      "notes": "Step 25 final autonomous operating mode promoted to main at cdd7adc71472f61a07f3641e9ff414091fc1bc35. Post-promotion foundation-ci run 36202440293 and runtime-event-observe run 36202440452 both passed. Runtime and cost continuation artifacts were uploaded from the promoted main SHA. Seven approved recurring workflows are now present on main under Step 20 cost/kill-switch controls. Interactive ChatGPT and the 15 active ChatGPT tasks are advisory monitoring only, not runtime dependencies."
     }
   },
   "decisions": [
@@ -1444,6 +1444,87 @@
         "canary/CANARY_CONTRACT.md",
         "PORTFOLIO_BUILD_STATE.json"
       ]
+    },
+    {
+      "decision_id": "DEC-143",
+      "summary": "Step 25 release candidate passed exact-head CI before touching main. PR #6 head bf9fa7375c78609c81df3274d57b9e5e88ca44bd passed foundation-ci run 36202388569 with the Step 25 validator and 314 regression tests.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "ci-run:36202388569",
+        "git:portfolio-brain@bf9fa7375c78609c81df3274d57b9e5e88ca44bd",
+        "operations/OPERATING_MODE_POLICY.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-144",
+      "summary": "PR #6 was merged with history preserved, promoting the verified Portfolio Brain architecture to main at cdd7adc71472f61a07f3641e9ff414091fc1bc35. Main and the promotion SHA were identical immediately after merge.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "pr:6",
+        "git:portfolio-brain@cdd7adc71472f61a07f3641e9ff414091fc1bc35"
+      ]
+    },
+    {
+      "decision_id": "DEC-145",
+      "summary": "Post-promotion foundation-ci run 36202440293 succeeded on exact main SHA cdd7adc71472f61a07f3641e9ff414091fc1bc35 with 314 tests, Step 23 hostile regressions, Step 24 canary and Step 25 release validation all green.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "ci-run:36202440293",
+        "git:portfolio-brain@cdd7adc71472f61a07f3641e9ff414091fc1bc35"
+      ]
+    },
+    {
+      "decision_id": "DEC-146",
+      "summary": "Post-promotion runtime-event-observe run 36202440452 succeeded on the promoted main SHA. It restored cost/runtime state, reserved bounded compute, executed and validated the deterministic runtime cycle, committed usage, and uploaded sanitized runtime/cost continuation artifacts.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "ci-run:36202440452",
+        "actions-artifact:10893000178",
+        "actions-artifact:10892880305"
+      ]
+    },
+    {
+      "decision_id": "DEC-147",
+      "summary": "The promoted main head produced durable runtime artifact 10893000178 (sha256:2e5831a531af1617448c4305bfd2d54095ae212b232f55fb11c1494a1d1469a8), cost artifact 10892880305 (sha256:829904cf1a1c187c9c5f0ff036ca7dfa74860a72006123405ee436ea2cf84c6d), and exact-main Step 24 canary artifact 10892253259 (sha256:808f08d225ca1d74223569496d04e5558e4a4e17975dee7a16852a32d7164e90).",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "actions-artifact:10893000178",
+        "actions-artifact:10892880305",
+        "actions-artifact:10892253259"
+      ]
+    },
+    {
+      "decision_id": "DEC-148",
+      "summary": "Seven approved recurring workflows are now present on the default branch: hourly runtime sync, daily learning, weekly synthesis, bounded Hunter, evidence-gated scheduler, cost watchdog and deduplicated notifications. runtime-event-observe is push-driven; runtime-worker and software-factory-candidate remain reusable/nonrecurring.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "operations/OPERATING_MODE_POLICY.json",
+        ".github/workflows/runtime-hourly-sync.yml",
+        ".github/workflows/hunter-autonomous-cycle.yml",
+        ".github/workflows/portfolio-autonomous-scheduler.yml",
+        ".github/workflows/portfolio-cost-watchdog.yml",
+        ".github/workflows/portfolio-notification-cycle.yml"
+      ]
+    },
+    {
+      "decision_id": "DEC-149",
+      "summary": "Portfolio Brain is operational without interactive ChatGPT as an ordinary runtime dependency. The user's 15 active ChatGPT scheduled tasks are an external advisory/monitoring layer only and cannot substitute for GitHub runtime state, cost governance, authority gates or verification.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "operations/OPERATING_MODE_POLICY.json",
+        "operations/OPERATING_MODE_STATUS.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-150",
+      "summary": "Final operating mode introduces no authority expansion: paid/model/API remains deny-by-default at zero checked-in ceilings; customer communication and payments/cash movement remain human-gated; live trading/broker execution remains prohibited; autonomous scheduler has no deploy/merge authority; child-facing consequential changes remain approval-gated.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "operations/OPERATING_MODE_POLICY.json",
+        "cost_governor/COST_GOVERNOR_POLICY.json",
+        "agents/AGENT_POLICY.json",
+        "registry/autonomy_profiles.json"
+      ]
     }
   ],
   "blockers": [
@@ -1478,11 +1559,11 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.24.0",
+  "architecture_version": "1.25.0",
   "state_id": "portfolio-brain-master",
-  "working_branch": "step24-autonomous-learning-canary-20260925",
-  "phase": "architecture_build",
-  "current_step": 25,
+  "working_branch": "main",
+  "phase": "operational",
+  "current_step": null,
   "completed_steps": [
     0,
     1,
@@ -1508,7 +1589,8 @@
     21,
     22,
     23,
-    24
+    24,
+    25
   ],
   "artifacts": [
     {
@@ -3196,6 +3278,60 @@
       "kind": "step24_ci_canary_receipt",
       "step": 24,
       "commit_sha": "6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab"
+    },
+    {
+      "path": "operations/OPERATING_MODE_POLICY.json",
+      "kind": "step25_operating_mode_policy",
+      "step": 25,
+      "commit_sha": "cdd7adc71472f61a07f3641e9ff414091fc1bc35"
+    },
+    {
+      "path": "operations/OPERATING_MODE_STATUS.json",
+      "kind": "step25_operating_mode_status",
+      "step": 25,
+      "commit_sha": "cdd7adc71472f61a07f3641e9ff414091fc1bc35"
+    },
+    {
+      "path": "operations/FINAL_OPERATING_MODE_CONTRACT.md",
+      "kind": "step25_final_operating_contract",
+      "step": 25,
+      "commit_sha": "cdd7adc71472f61a07f3641e9ff414091fc1bc35"
+    },
+    {
+      "path": "operations/validate_operating_mode.py",
+      "kind": "step25_operating_mode_validator",
+      "step": 25,
+      "commit_sha": "cdd7adc71472f61a07f3641e9ff414091fc1bc35"
+    },
+    {
+      "path": "tests/test_operating_mode.py",
+      "kind": "step25_operating_mode_regressions",
+      "step": 25,
+      "commit_sha": "cdd7adc71472f61a07f3641e9ff414091fc1bc35"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step25_final_ci_validation",
+      "step": 25,
+      "commit_sha": "cdd7adc71472f61a07f3641e9ff414091fc1bc35"
+    },
+    {
+      "path": "actions-artifact:10893000178",
+      "kind": "step25_post_promotion_runtime_state",
+      "step": 25,
+      "commit_sha": "cdd7adc71472f61a07f3641e9ff414091fc1bc35"
+    },
+    {
+      "path": "actions-artifact:10892880305",
+      "kind": "step25_post_promotion_cost_state",
+      "step": 25,
+      "commit_sha": "cdd7adc71472f61a07f3641e9ff414091fc1bc35"
+    },
+    {
+      "path": "actions-artifact:10892253259",
+      "kind": "step25_post_promotion_canary",
+      "step": 25,
+      "commit_sha": "cdd7adc71472f61a07f3641e9ff414091fc1bc35"
     }
   ],
   "tests": [
@@ -3450,25 +3586,38 @@
       "status": "PASS",
       "step": 24,
       "evidence": "GitHub Actions foundation-ci run 36200414277 succeeded at exact Step 24 implementation head 6a4d212bbe6ba373ea2bbe16c68eaa2c19224eab. Canary receipt sha256:e7b97e727155e3f7e2fccc0d1594592ca0722a48a067ebda70720ef080384ebc reported runtime_reads=7, first_selected_work=3, continuation_selected_work=0, suppressed_duplicates=3, paid_cost_usd=0.0, model_calls=0, learning_promotions=0 and authority_violations=0. 309 total regression tests passed. Sanitized Actions artifact 10892145046 was uploaded."
+    },
+    {
+      "name": "step25_release_candidate_ci",
+      "status": "PASS",
+      "step": 25,
+      "evidence": "Release candidate head bf9fa7375c78609c81df3274d57b9e5e88ca44bd passed foundation-ci run 36202388569 with Step 25 validation and 314 total regression tests."
+    },
+    {
+      "name": "step25_post_promotion_main_ci",
+      "status": "PASS",
+      "step": 25,
+      "evidence": "Promoted main SHA cdd7adc71472f61a07f3641e9ff414091fc1bc35 passed push-triggered foundation-ci run 36202440293 with 314 tests."
+    },
+    {
+      "name": "step25_post_promotion_runtime_continuity",
+      "status": "PASS",
+      "step": 25,
+      "evidence": "Promoted main SHA cdd7adc71472f61a07f3641e9ff414091fc1bc35 passed runtime-event-observe run 36202440452 and uploaded portfolio-runtime-state artifact 10893000178 plus portfolio-cost-governor-state artifact 10892880305."
     }
   ],
   "next_action": {
-    "step": 25,
-    "summary": "WAIT FOR CONTINUE. Step 24 is complete. Next exact numbered step is Step 25 — Final autonomous operating mode: perform the final release gate, reconcile the verified Step 0–24 architecture, promote only the approved recurring deterministic/autonomous workflows to the default branch under existing kill switches and cost controls, verify durable state continuity after promotion, and record the system as operational without interactive ChatGPT as an ordinary runtime dependency. Do not begin Step 25 until explicit CONTINUE.",
+    "step": null,
+    "summary": "ALL NUMBERED STEPS 0-25 COMPLETE. Portfolio Brain is operational on main under durable GitHub automation, Step 20 cost governance, Step 23 hostile regressions, Step 24 canary evidence, kill switches, duplicate suppression and existing human authority boundaries. Future work is evidence-driven operation, monitoring and maintenance rather than another numbered build step.",
     "preconditions": [
-      "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Do not repeat Steps 0–24 unless an exact pinned source cursor changed.",
-      "Work on Step 25 only and stop after the final verified operating-mode state.",
-      "Use the Step 24 exact canary evidence as the activation prerequisite; do not weaken any Step 23 hostile-examination regression.",
-      "Before promotion, verify default-branch diff, workflow permissions, kill switches, cost ceilings, artifact state names and source-revision pins.",
-      "Keep paid/model/API execution deny-by-default at the checked-in zero ceilings unless a separate explicit authorized policy change exists.",
-      "Activate only workflows already covered by cost governance, durable state, duplicate suppression and kill switches; do not invent new authority during release.",
-      "Consequential ACT, customer communication, payments/cash movement, live trading/broker execution and deployment/merge authority remain human-gated or prohibited exactly as currently defined.",
+      "Do not weaken Step 23 hostile regressions or Step 24 canary invariants.",
+      "Keep paid/model/API execution deny-by-default until a separate explicit authorized policy change is verified.",
+      "Consequential ACT, customer communication, payments/cash movement, live trading/broker execution and autonomous deployment/merge remain human-gated or prohibited.",
       "Preserve BLK-005 sanitized-only persistence while the repository remains public.",
-      "After promotion, require exact-head CI plus a bounded post-promotion state-continuity check before declaring Portfolio Brain operational."
+      "Treat the 15 ChatGPT scheduled tasks as advisory monitoring only; ordinary operation must continue without them."
     ]
   },
-  "updated_at": "2026-09-25T23:20:00Z",
+  "updated_at": "2026-09-25T23:55:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -4242,6 +4391,46 @@
         "interactive_chatgpt_dependency": false,
         "recurring_operating_mode_activated": false,
         "regression_tests": 309
+      }
+    },
+    "25": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "25A_RECONCILE_DEFAULT_BRANCH_DIFF_AND_RELEASE_TOPOLOGY",
+        "25B_DEFINE_FINAL_AUTONOMOUS_OPERATING_MODE_CONTRACT",
+        "25C_VERIFY_RECURRING_WORKFLOWS_PERMISSIONS_COSTS_KILL_SWITCHES_AND_STATE_ARTIFACTS",
+        "25D_VERIFY_STEP23_HOSTILE_AND_STEP24_CANARY_PREREQUISITES",
+        "25E_EXACT_HEAD_RELEASE_CANDIDATE_CI",
+        "25F_PROMOTE_VERIFIED_HISTORY_TO_MAIN",
+        "25G_VERIFY_POST_PROMOTION_FOUNDATION_CI",
+        "25H_VERIFY_POST_PROMOTION_RUNTIME_AND_COST_STATE_CONTINUITY",
+        "25I_RECORD_OPERATIONAL_STATE_AND_NO_CHATGPT_RUNTIME_DEPENDENCY"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "activation_status": "OPERATIONAL_ON_MAIN_POST_PROMOTION_VERIFIED",
+      "verified_contract": {
+        "release_candidate_head": "bf9fa7375c78609c81df3274d57b9e5e88ca44bd",
+        "release_candidate_ci_run_id": 36202388569,
+        "release_candidate_regression_tests": 314,
+        "promoted_main_sha": "cdd7adc71472f61a07f3641e9ff414091fc1bc35",
+        "post_promotion_foundation_ci_run_id": 36202440293,
+        "post_promotion_foundation_regression_tests": 314,
+        "post_promotion_runtime_run_id": 36202440452,
+        "runtime_state_artifact_id": 10893000178,
+        "runtime_state_artifact_digest": "sha256:2e5831a531af1617448c4305bfd2d54095ae212b232f55fb11c1494a1d1469a8",
+        "cost_state_artifact_id": 10892880305,
+        "cost_state_artifact_digest": "sha256:829904cf1a1c187c9c5f0ff036ca7dfa74860a72006123405ee436ea2cf84c6d",
+        "main_canary_artifact_id": 10892253259,
+        "main_canary_artifact_digest": "sha256:808f08d225ca1d74223569496d04e5558e4a4e17975dee7a16852a32d7164e90",
+        "approved_recurring_workflows": 7,
+        "durable_state_artifacts": 5,
+        "enabled_nonzero_models": 0,
+        "paid_model_api_default": "DENY_ZERO_BUDGET",
+        "step23_unresolved_findings": 0,
+        "step24_authority_violations": 0,
+        "operational_without_interactive_chatgpt": true,
+        "chatgpt_advisory_tasks_runtime_dependency": false
       }
     }
   }
