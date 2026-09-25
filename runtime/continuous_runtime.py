@@ -122,14 +122,14 @@ def run(mode: str, *, state_path: Path, output_dir: Path, target_repository_id: 
     disabled,reason=killed()
     at=forced_now or now_iso()
     output_dir.mkdir(parents=True,exist_ok=True)
+    state=load_runtime_state(state_path,now=at)
     if disabled:
         receipt={"schema_version":"1.0.0","cycle_id":"disabled","mode":mode,"started_at":at,"finished_at":at,
                  "status":"DISABLED","reason":reason,"observations":[],"api_requests":0}
         receipt["receipt_hash"]=canonical_hash(receipt)
+        (output_dir/"runtime_state.json").write_text(json.dumps(state,indent=2)+"\n")
         (output_dir/"cycle_receipt.json").write_text(json.dumps(receipt,indent=2)+"\n")
         return receipt
-
-    state=load_runtime_state(state_path,now=at)
     started=time.monotonic()
     target=target_repository_id if mode=="observe" else None
     observations,api_requests=observe(mode,state,target_repository_id=target,finished_at=at,fetch_json=fetch_json)
@@ -145,11 +145,11 @@ def run(mode: str, *, state_path: Path, output_dir: Path, target_repository_id: 
     updated=advance_cycle(state,receipt)
 
     if mode=="daily":
-        snap=daily_snapshot(state,observations,at); snap["snapshot_hash"]=canonical_hash(snap)
+        snap=daily_snapshot(updated,observations,at); snap["snapshot_hash"]=canonical_hash(snap)
         updated["daily_learning_state"]={"generated_at":at,"snapshot_hash":snap["snapshot_hash"]}
         (output_dir/"daily_learning_state.json").write_text(json.dumps(snap,indent=2)+"\n")
     elif mode=="weekly":
-        snap=weekly_snapshot(state,observations,at); snap["snapshot_hash"]=canonical_hash(snap)
+        snap=weekly_snapshot(updated,observations,at); snap["snapshot_hash"]=canonical_hash(snap)
         updated["weekly_synthesis"]={"generated_at":at,"snapshot_hash":snap["snapshot_hash"]}
         (output_dir/"weekly_portfolio_synthesis.json").write_text(json.dumps(snap,indent=2)+"\n")
 
