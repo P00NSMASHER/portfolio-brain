@@ -1,4 +1,5 @@
-import copy, json, os, tempfile, unittest\nfrom unittest.mock import patch
+import copy, json, os, tempfile, unittest
+from unittest.mock import patch
 from pathlib import Path
 from runtime.continuous_runtime import RuntimePolicyError, run
 from runtime.state import bootstrap_state, validate_state
