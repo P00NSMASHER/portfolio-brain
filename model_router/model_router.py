@@ -165,3 +165,30 @@ def value_summary(calls,feedback):
     for b in buckets.values():
         b["mean_verified_outcome_value"]=b["outcome_value_sum"]/b["verified_outcomes"];del b["outcome_value_sum"]
     return dict(sorted(buckets.items()))
+
+def prepare_governed_execution(request, cost_state, *, attempt=1, at=None, registry=None, policy_data=None):
+    """Route first, then require the Step 20 cost boundary before provider execution."""
+    route = route_request(request, registry)
+    if route["status"] != "ROUTED":
+        return cost_state, {
+            "route": route,
+            "cost_decision": None,
+            "cost_gate_passed": False,
+            "authority_granted": False,
+        }
+    from cost_governor.cost_governor import reserve_model_execution
+    next_state, decision = reserve_model_execution(
+        cost_state,
+        route,
+        request,
+        attempt=attempt,
+        at=at,
+        policy_data=policy_data,
+    )
+    return next_state, {
+        "route": route,
+        "cost_decision": decision,
+        "cost_gate_passed": bool(decision.get("can_execute")),
+        "authority_granted": False,
+    }
+
