@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile deterministic Python
-        run: python -m compileall -q registry events adapters truth memory graph runtime hunting learning uncertainty experiments tests
+        run: python -m compileall -q registry events adapters truth memory graph runtime hunting learning uncertainty experiments model_router tests
       - name: Validate foundation
         run: python tests/validate_foundation.py
       - name: Validate Step 2 registry
@@ -46,5 +46,7 @@ jobs:
         run: python -m uncertainty.validate_uncertainty
       - name: Validate Step 12 experiment engine
         run: python -m experiments.validate_experiments
+      - name: Validate Step 13 model router
+        run: python -m model_router.validate_model_router
       - name: Run regression tests
         run: python -m unittest discover -s tests -p "test_*.py" -v

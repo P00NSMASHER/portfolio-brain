@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/MODEL_CALL_RECEIPT_SCHEMA.json",
+  "title": "Portfolio Model Call Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "invocation_id",
+    "request_id",
+    "route_id",
+    "tier",
+    "provider_id",
+    "model_id",
+    "independence_group",
+    "status",
+    "started_at",
+    "completed_at",
+    "input_tokens",
+    "output_tokens",
+    "cost_usd",
+    "cost_basis",
+    "latency_ms",
+    "input_hash",
+    "output_hash",
+    "authority_granted",
+    "evidence_upgraded",
+    "downstream_outcome_ids",
+    "receipt_hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "invocation_id": {
+      "type": "string",
+      "pattern": "^MINV-[A-Z0-9-]{8,}$"
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^MRQ-[A-Z0-9-]{8,}$"
+    },
+    "route_id": {
+      "type": "string",
+      "pattern": "^MRT-[A-Z0-9-]{8,}$"
+    },
+    "tier": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "provider_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "independence_group": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "SUCCESS",
+        "FAILURE",
+        "BLOCKED"
+      ]
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "input_tokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "output_tokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "cost_usd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "cost_basis": {
+      "enum": [
+        "ZERO_TIER0",
+        "PROVIDER_REPORTED",
+        "CONFIGURED_RATE",
+        "LOCAL_MEASURED"
+      ]
+    },
+    "latency_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "input_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "output_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "authority_granted": {
+      "const": false
+    },
+    "evidence_upgraded": {
+      "const": false
+    },
+    "downstream_outcome_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "receipt_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

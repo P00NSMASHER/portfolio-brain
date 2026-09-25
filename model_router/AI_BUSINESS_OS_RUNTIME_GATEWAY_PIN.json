@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0.0",
+  "integration_id": "AI-BUSINESS-OS-RUNTIME-GATEWAY-BOUNDARY-001",
+  "source_repository": "P00NSMASHER/github-value-hunt-ledger",
+  "source_revision": "dcca6215f2439bb55391335fe0513f471c762290",
+  "gateway": {
+    "path": "supabase/functions/ai-business-os-runtime-gateway/index.ts",
+    "blob_sha": "fdc77391ce6ed3e0f6db25aed859aa684e0818f0"
+  },
+  "worker_contract_test": {
+    "path": "ai_business_os/test_runtime_gateway_worker_contract.py",
+    "blob_sha": "51b6136d1dea78e1c950d3fb37ffa1529bcf3984"
+  },
+  "observed_semantics": [
+    "Worker gateway exposes named operations rather than arbitrary SQL.",
+    "Goal activation, worker leasing/submission and human approval decisions are separate operations.",
+    "Approval decisions require a human principal and intent-hash match.",
+    "The inspected gateway is not a model-provider abstraction and is therefore not reused as the model router itself."
+  ],
+  "role": "BOUNDARY_REFERENCE_ONLY"
+}

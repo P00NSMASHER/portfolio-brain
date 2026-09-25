@@ -37,7 +37,7 @@ def validate_uncertainty():
     canary=next(c for c in snapshot["candidates"] if c["uncertainty_id"]=="UNC-CANARY-PRJ-000")
     req(canary["actionability"]=="BLOCKED" and "STEP-24-CANARY-GATE" in canary["hard_blockers"],"canary sequence gate missing")
     source=load("PORTFOLIO_BUILD_STATE.json")["repositories"]["REPO-001"]["last_inspected_sha"]
-    req(source=="c4be1a3e10a92b9255906b1600097fe6371ea929","source cursor not reconciled")
+    req(source=="dcca6215f2439bb55391335fe0513f471c762290","source cursor not reconciled")
     runtime=(ROOT/"runtime/continuous_runtime.py").read_text()
     req("highest_value_uncertainty.json" in runtime and "build_uncertainty_snapshot" in runtime,"daily runtime not connected to uncertainty engine")
     return {"candidates":snapshot["candidate_count"],"eligible":snapshot["eligible_candidate_count"],"pareto_front":len(snapshot["pareto_front_candidate_ids"]),"selected":snapshot["selected_uncertainty_id"],"scalar_score":False}

@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/MODEL_ROUTE_REQUEST_SCHEMA.json",
+  "title": "Portfolio Model Route Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "project_ids",
+    "task_kind",
+    "deterministic_sufficient",
+    "consequence",
+    "data_classification",
+    "authority_class",
+    "requires_independent_adversarial",
+    "builder_independence_group",
+    "max_cost_usd",
+    "max_input_tokens",
+    "max_output_tokens",
+    "provider_allowlist",
+    "evidence_refs"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^MRQ-[A-Z0-9-]{8,}$"
+    },
+    "project_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^PRJ-[0-9]{3,}$"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "task_kind": {
+      "enum": [
+        "HASHING",
+        "SCHEMA_VALIDATION",
+        "STATE_TRANSITION",
+        "AGGREGATION",
+        "ROUTINE_REPORT",
+        "CLASSIFICATION",
+        "EXTRACTION",
+        "SUMMARIZATION",
+        "SIMPLE_DOCUMENTATION",
+        "ARCHITECTURE",
+        "DEBUGGING",
+        "CROSS_PROJECT_SYNTHESIS",
+        "EXPERIMENT_DESIGN",
+        "OPPORTUNITY_REASONING",
+        "ADVERSARIAL_REVIEW",
+        "PROMOTION_VERIFICATION",
+        "SELF_IMPROVEMENT_VERIFICATION",
+        "HIGH_IMPACT_AUDIT"
+      ]
+    },
+    "deterministic_sufficient": {
+      "type": "boolean"
+    },
+    "consequence": {
+      "enum": [
+        "LOW",
+        "MEDIUM",
+        "HIGH",
+        "CRITICAL"
+      ]
+    },
+    "data_classification": {
+      "enum": [
+        "PUBLIC",
+        "SANITIZED",
+        "PRIVATE_REFERENCE_ONLY"
+      ]
+    },
+    "authority_class": {
+      "enum": [
+        "NONE",
+        "OBSERVE",
+        "EXPERIMENT",
+        "MODIFY",
+        "ACT"
+      ]
+    },
+    "requires_independent_adversarial": {
+      "type": "boolean"
+    },
+    "builder_independence_group": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "max_cost_usd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "max_input_tokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "max_output_tokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "provider_allowlist": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    }
+  }
+}

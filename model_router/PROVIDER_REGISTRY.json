@@ -1,0 +1,143 @@
+{
+  "schema_version": "1.0.0",
+  "providers": [
+    {
+      "provider_id": "deterministic",
+      "adapter_kind": "DETERMINISTIC_LOCAL",
+      "enabled": true,
+      "credential_env_var": null,
+      "base_url_env_var": null,
+      "models": [
+        {
+          "model_id": "NONE",
+          "tier": 0,
+          "enabled": true,
+          "independence_group": "deterministic",
+          "supported_data_classifications": [
+            "PUBLIC",
+            "SANITIZED",
+            "PRIVATE_REFERENCE_ONLY"
+          ],
+          "max_input_tokens": 0,
+          "max_output_tokens": 0,
+          "pricing": {
+            "basis": "ZERO_TIER0",
+            "input_usd_per_million_tokens": 0,
+            "output_usd_per_million_tokens": 0,
+            "fixed_call_usd": 0
+          }
+        }
+      ]
+    },
+    {
+      "provider_id": "approved-api-slot",
+      "adapter_kind": "OPENAI_COMPATIBLE_API",
+      "enabled": false,
+      "credential_env_var": "PORTFOLIO_MODEL_API_KEY",
+      "base_url_env_var": "PORTFOLIO_MODEL_BASE_URL",
+      "models": [
+        {
+          "model_id": "UNCONFIGURED_LOW_COST",
+          "tier": 1,
+          "enabled": false,
+          "independence_group": "api-low-cost",
+          "supported_data_classifications": [
+            "PUBLIC",
+            "SANITIZED"
+          ],
+          "max_input_tokens": 0,
+          "max_output_tokens": 0,
+          "pricing": {
+            "basis": "UNCONFIGURED",
+            "input_usd_per_million_tokens": null,
+            "output_usd_per_million_tokens": null,
+            "fixed_call_usd": null
+          }
+        },
+        {
+          "model_id": "UNCONFIGURED_STRONG",
+          "tier": 2,
+          "enabled": false,
+          "independence_group": "api-strong",
+          "supported_data_classifications": [
+            "PUBLIC",
+            "SANITIZED"
+          ],
+          "max_input_tokens": 0,
+          "max_output_tokens": 0,
+          "pricing": {
+            "basis": "UNCONFIGURED",
+            "input_usd_per_million_tokens": null,
+            "output_usd_per_million_tokens": null,
+            "fixed_call_usd": null
+          }
+        },
+        {
+          "model_id": "UNCONFIGURED_ADVERSARIAL",
+          "tier": 3,
+          "enabled": false,
+          "independence_group": "api-adversarial",
+          "supported_data_classifications": [
+            "PUBLIC",
+            "SANITIZED"
+          ],
+          "max_input_tokens": 0,
+          "max_output_tokens": 0,
+          "pricing": {
+            "basis": "UNCONFIGURED",
+            "input_usd_per_million_tokens": null,
+            "output_usd_per_million_tokens": null,
+            "fixed_call_usd": null
+          }
+        }
+      ]
+    },
+    {
+      "provider_id": "self-hosted-slot",
+      "adapter_kind": "SELF_HOSTED",
+      "enabled": false,
+      "credential_env_var": null,
+      "base_url_env_var": "PORTFOLIO_SELF_HOSTED_MODEL_URL",
+      "models": [
+        {
+          "model_id": "UNCONFIGURED_LOCAL_STRONG",
+          "tier": 2,
+          "enabled": false,
+          "independence_group": "self-hosted-strong",
+          "supported_data_classifications": [
+            "PUBLIC",
+            "SANITIZED",
+            "PRIVATE_REFERENCE_ONLY"
+          ],
+          "max_input_tokens": 0,
+          "max_output_tokens": 0,
+          "pricing": {
+            "basis": "UNCONFIGURED",
+            "input_usd_per_million_tokens": null,
+            "output_usd_per_million_tokens": null,
+            "fixed_call_usd": null
+          }
+        },
+        {
+          "model_id": "UNCONFIGURED_LOCAL_ADVERSARIAL",
+          "tier": 3,
+          "enabled": false,
+          "independence_group": "self-hosted-adversarial",
+          "supported_data_classifications": [
+            "PUBLIC",
+            "SANITIZED",
+            "PRIVATE_REFERENCE_ONLY"
+          ],
+          "max_input_tokens": 0,
+          "max_output_tokens": 0,
+          "pricing": {
+            "basis": "UNCONFIGURED",
+            "input_usd_per_million_tokens": null,
+            "output_usd_per_million_tokens": null,
+            "fixed_call_usd": null
+          }
+        }
+      ]
+    }
+  ]
+}
