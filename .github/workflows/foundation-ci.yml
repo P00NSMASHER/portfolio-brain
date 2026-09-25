@@ -23,12 +23,14 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile deterministic Python
-        run: python -m compileall -q registry events adapters tests
+        run: python -m compileall -q registry events adapters truth tests
       - name: Validate foundation
         run: python tests/validate_foundation.py
       - name: Validate Step 2 registry
         run: python -m registry.validate_registry
       - name: Validate Step 4 adapters
         run: python -m adapters.validate_adapters
+      - name: Validate Step 5 truth integration
+        run: python -m truth.validate_truth_integration
       - name: Run regression tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
