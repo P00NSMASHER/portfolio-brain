@@ -38,6 +38,10 @@ class FactoryTests(unittest.TestCase):
         self.enqueue();self.sf.claim("SFW-TEST-0001","AGT-ENGINEER",now=101);self.sf.record_candidate_commit("SFW-TEST-0001","AGT-ENGINEER",commit_sha="b"*40,changed_paths=["src/x.py","tests/test_x.py"],test_commands=["python -m unittest tests.test_x"],test_receipt_hashes=[H("t")],diff_hash=H("d"),now=102)
         with self.assertRaises(SoftwareFactoryError):self.sf.verify("SFW-TEST-0001","AGT-ENGINEER","PASS",report_hash=H("r"),evidence_refs=["test:r"],now=103)
         self.sf.verify("SFW-TEST-0001","AGT-TESTER","PASS",report_hash=H("r"),evidence_refs=["test:r"],now=103);self.assertEqual(self.sf.get("SFW-TEST-0001")["state"],"READY_FOR_PR")
+    def test_unbound_eligible_verifier_is_rejected(self):
+        self.enqueue();self.sf.claim("SFW-TEST-0001","AGT-ENGINEER",now=101);self.sf.record_candidate_commit("SFW-TEST-0001","AGT-ENGINEER",commit_sha="b"*40,changed_paths=["src/x.py"],test_commands=["pytest"],test_receipt_hashes=[H("t")],diff_hash=H("d"),now=102)
+        with self.assertRaises(SoftwareFactoryError):self.sf.verify("SFW-TEST-0001","AGT-AUDITOR","PASS",report_hash=H("r"),evidence_refs=["audit:r"],now=103)
+
     def test_failed_audit_requeues_to_fresh_attempt(self):
         self.enqueue();p1=self.sf.claim("SFW-TEST-0001","AGT-ENGINEER",now=101);self.sf.record_candidate_commit("SFW-TEST-0001","AGT-ENGINEER",commit_sha="b"*40,changed_paths=["src/x.py"],test_commands=["pytest"],test_receipt_hashes=[H("t")],diff_hash=H("d"),now=102);self.sf.verify("SFW-TEST-0001","AGT-TESTER","FAIL",report_hash=H("r"),evidence_refs=["test:r"],now=103);p2=self.sf.claim("SFW-TEST-0001","AGT-ENGINEER",now=104);self.assertNotEqual(p1["branch_name"],p2["branch_name"])
     def test_pr_packet_only_after_pass(self):
@@ -46,7 +50,7 @@ class FactoryTests(unittest.TestCase):
     def test_github_executor_has_only_branch_commit_pr_calls(self):
         self.enqueue();branch=self.sf.claim("SFW-TEST-0001","AGT-ENGINEER",now=101);tr=FakeTransport(self.base);ex=GitHubExecutor("token",transport=tr);ex.execute(branch)
         w=self.sf.get("SFW-TEST-0001");raw=b"print('ok')\n";files=[{"path":"src/x.py","content_b64":base64.b64encode(raw).decode(),"content_sha256":"sha256:"+__import__("hashlib").sha256(raw).hexdigest()}];cp=make_commit_action(w,files,"candidate");commit=ex.execute(cp);self.assertEqual(len(commit["sha"]),40)
-        self.sf.record_candidate_commit("SFW-TEST-0001","AGT-ENGINEER",commit_sha=commit["sha"],changed_paths=["src/x.py"],test_commands=["python -m compileall src"],test_receipt_hashes=[H("t")],diff_hash=H("d"),now=102);self.sf.verify("SFW-TEST-0001","AGT-AUDITOR","PASS",report_hash=H("r"),evidence_refs=["audit:r"],now=103);pp=self.sf.pr_action("SFW-TEST-0001");pr=ex.execute(pp);self.sf.record_pr("SFW-TEST-0001",pr_number=pr["number"],pr_url=pr["html_url"],head_sha=tr.head,now=104);self.assertEqual(self.sf.get("SFW-TEST-0001")["state"],"PR_OPEN")
+        self.sf.record_candidate_commit("SFW-TEST-0001","AGT-ENGINEER",commit_sha=commit["sha"],changed_paths=["src/x.py"],test_commands=["python -m compileall src"],test_receipt_hashes=[H("t")],diff_hash=H("d"),now=102);self.sf.verify("SFW-TEST-0001","AGT-TESTER","PASS",report_hash=H("r"),evidence_refs=["audit:r"],now=103);pp=self.sf.pr_action("SFW-TEST-0001");pr=ex.execute(pp);self.sf.record_pr("SFW-TEST-0001",pr_number=pr["number"],pr_url=pr["html_url"],head_sha=tr.head,now=104);self.assertEqual(self.sf.get("SFW-TEST-0001")["state"],"PR_OPEN")
         self.assertFalse(any("/merge" in url for _,url,_ in tr.calls))
     def test_event_chain_is_tamper_evident(self):
         self.enqueue();self.assertTrue(self.sf.event_chain_valid());self.sf.conn.execute("UPDATE events SET payload_json='{}' WHERE seq=1");self.sf.conn.commit();self.assertFalse(self.sf.event_chain_valid())
