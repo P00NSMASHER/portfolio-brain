@@ -3,6 +3,7 @@
 from __future__ import annotations
 import argparse, io, json, os, time, urllib.request, zipfile
 from pathlib import Path
+from runtime.artifact_http import open_url
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -27,7 +28,7 @@ class BudgetedHTTP:
               "User-Agent":"portfolio-brain-runtime/1.0",
             },method="GET")
             try:
-                with urllib.request.urlopen(req,timeout=20) as response:
+                with open_url(req,timeout=20) as response:
                     return response.read()
             except Exception as exc:
                 last=exc
