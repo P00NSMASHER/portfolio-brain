@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "196daf4d13413f7e1b4a57d69641d0d03e42fc63",
+      "last_inspected_sha": "7c6ffb6f9ec201112b1c6bdd267e901a08ea8b00",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T17:19:15Z",
-      "notes": "Step 6 shared value memory verified at 196daf4d13413f7e1b4a57d69641d0d03e42fc63. Canonical AI Business OS Value Memory remains external/pinned; Portfolio Brain adds shared project/objective/provenance metadata and verified-only outcome learning gates. Ledger intentionally starts empty rather than fabricating verified outcomes."
+      "last_observed_at": "2026-09-25T17:32:20Z",
+      "notes": "Step 7 universal knowledge graph verified at 7c6ffb6f9ec201112b1c6bdd267e901a08ea8b00. Canonical AI Business OS KnowledgeGraph and EntityCanonicalizer remain external/pinned; Portfolio Brain adds a lossless universal semantic envelope, evidence-backed seed graph, and cross-file conformance validation. Repository remains temporarily public; sanitized-only constraint applies."
     }
   },
   "decisions": [
@@ -466,6 +466,58 @@
         "memory/SHARED_VALUE_MEMORY_LEDGER.json",
         "tests/test_shared_memory_bundle.py"
       ]
+    },
+    {
+      "decision_id": "DEC-045",
+      "summary": "Reuse canonical AI Business OS KnowledgeGraph and EntityCanonicalizer through exact source revision/blob pins. Portfolio Brain extends vocabulary with a lossless semantic envelope rather than copying or weakening the canonical graph/canonicalization engines.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "graph/AI_BUSINESS_OS_GRAPH_PIN.json",
+        "graph/GRAPH_CONFORMANCE.json",
+        "graph/universal_graph.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-046",
+      "summary": "Universal graph vocabulary covers the owner-requested 22 node types and all required relationships. Every node and edge requires provenance; graph connectivity and path existence have zero truth-upgrade effect.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "graph/UNIVERSAL_GRAPH_CONTRACT.json",
+        "schemas/GRAPH_NODE_SCHEMA.json",
+        "schemas/GRAPH_EDGE_SCHEMA.json",
+        "tests/test_universal_graph.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-047",
+      "summary": "The initial graph is evidence-conservative: it seeds all 12 registered projects, 8 repository identities, the owner objective, and four already CI-verified Portfolio Brain capabilities, but deliberately creates no CUSTOMER, REVENUE, OPPORTUNITY, or OUTCOME nodes without supporting evidence.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "graph/UNIVERSAL_GRAPH_LEDGER.json",
+        "graph/validate_graph.py",
+        "tests/test_graph_bundle.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-048",
+      "summary": "Identity canonicalization remains reversible and fail-closed. Hard identifier conflicts force KEEP_SEPARATE; ambiguous merges require HUMAN review with provenance; source records and conflicting losing values remain preserved; dependent live relationships gate reversal.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "graph/AI_BUSINESS_OS_GRAPH_PIN.json",
+        "graph/GRAPH_CONFORMANCE.json",
+        "graph/universal_graph.py",
+        "tests/test_universal_graph.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-049",
+      "summary": "Only semantically compatible universal nodes/edges are projected into the canonical upstream graph. Unsupported portfolio semantics remain losslessly in the Portfolio Brain envelope rather than being coerced into a misleading upstream relation.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "graph/universal_graph.py",
+        "graph/UNIVERSAL_GRAPH_CONTRACT.json",
+        "tests/test_graph_bundle.py"
+      ]
     }
   ],
   "blockers": [
@@ -500,11 +552,11 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.6.0",
+  "architecture_version": "1.7.0",
   "state_id": "portfolio-brain-master",
-  "working_branch": "step6-complete-20260925",
+  "working_branch": "step7-universal-knowledge-graph-20260925",
   "phase": "architecture_build",
-  "current_step": 7,
+  "current_step": 8,
   "completed_steps": [
     0,
     1,
@@ -512,7 +564,8 @@
     3,
     4,
     5,
-    6
+    6,
+    7
   ],
   "artifacts": [
     {
@@ -946,6 +999,72 @@
       "kind": "step6_truth_bundle_revision_reconformance_test_update",
       "step": 6,
       "commit_sha": "196daf4d13413f7e1b4a57d69641d0d03e42fc63"
+    },
+    {
+      "path": "schemas/GRAPH_NODE_SCHEMA.json",
+      "kind": "step7_graph_node_schema",
+      "step": 7,
+      "commit_sha": "b74fd6ff147c1a0747d018aea11119f9c1eefb68"
+    },
+    {
+      "path": "schemas/GRAPH_EDGE_SCHEMA.json",
+      "kind": "step7_graph_edge_schema",
+      "step": 7,
+      "commit_sha": "8a01d34d09fe261a069f38a7106d33d49c18c49a"
+    },
+    {
+      "path": "graph/UNIVERSAL_GRAPH_CONTRACT.json",
+      "kind": "step7_universal_graph_contract",
+      "step": 7,
+      "commit_sha": "2e46ea0fc9c909972e3b3fb788e0b1ca45f95d0a"
+    },
+    {
+      "path": "graph/AI_BUSINESS_OS_GRAPH_PIN.json",
+      "kind": "step7_canonical_graph_pin",
+      "step": 7,
+      "commit_sha": "e99c7a04abdc9a19684922e51120c5e191e472fb"
+    },
+    {
+      "path": "graph/universal_graph.py",
+      "kind": "step7_universal_graph_adapter",
+      "step": 7,
+      "commit_sha": "c7df4839ef373638e386e5257ad0d54ce18c1bce"
+    },
+    {
+      "path": "tests/test_universal_graph.py",
+      "kind": "step7_universal_graph_regressions",
+      "step": 7,
+      "commit_sha": "3b012ce106da56b333870f638d7665d0f3cb8c24"
+    },
+    {
+      "path": "graph/UNIVERSAL_GRAPH_LEDGER.json",
+      "kind": "step7_seed_graph_ledger",
+      "step": 7,
+      "commit_sha": "622af8bbb426d29ecc6f2db031b09d66a7ca210a"
+    },
+    {
+      "path": "graph/GRAPH_CONFORMANCE.json",
+      "kind": "step7_graph_conformance",
+      "step": 7,
+      "commit_sha": "37c36560b2b93a4ec06b473c904931c2805636bd"
+    },
+    {
+      "path": "graph/validate_graph.py",
+      "kind": "step7_graph_bundle_validator",
+      "step": 7,
+      "commit_sha": "1a7c0eb9a20959b77cd228f5d03db97f6a836fab"
+    },
+    {
+      "path": "tests/test_graph_bundle.py",
+      "kind": "step7_graph_bundle_tests",
+      "step": 7,
+      "commit_sha": "510c3aec4ab6749e6ae70b1a0d462ce9d79fbb18"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step7_ci_validation_extension",
+      "step": 7,
+      "commit_sha": "7c6ffb6f9ec201112b1c6bdd267e901a08ea8b00"
     }
   ],
   "tests": [
@@ -1068,23 +1187,28 @@
       "status": "PASS",
       "step": 6,
       "evidence": "Initial final run 36166272667 failed only because two Step 5 tests hard-coded the prior repository revision after a byte-identical Truth Engine repin. Expected revision assertions were updated; replacement run 36166341748 passed with unchanged canonical Truth Engine blob."
+    },
+    {
+      "name": "step7_universal_graph_ci",
+      "status": "PASS",
+      "step": 7,
+      "evidence": "GitHub Actions foundation-ci run 36167225218 succeeded at exact Step 7 code head 7c6ffb6f9ec201112b1c6bdd267e901a08ea8b00. Step 7 validator reported 25 nodes, 26 edges, 12 registered projects, 12 upstream-projectable nodes, 4 upstream-projectable edges, matching graph/ledger hash sha256:371d96f4a3c7d164a0791ad29db17d51f3f9b27e93b9d9f6021cafa9dd28241f; 105 total regression tests passed."
     }
   ],
   "next_action": {
-    "step": 7,
-    "summary": "Step 6 complete. Step 7 is authorized by the user's current request: implement the Universal Knowledge Graph connecting projects, capabilities, experiments, outcomes, customers, research and value with provenance-preserving typed nodes/edges. Do not begin Step 8.",
+    "step": 8,
+    "summary": "WAIT FOR CONTINUE. Steps 6 and 7 are complete. Next exact numbered step is Step 8 — Continuous observation runtime: create autonomous GitHub workflows for event-driven observation, hourly synchronization, daily learning-state rebuild, and weekly portfolio synthesis, with no ChatGPT prompting. Do not begin Step 8 until explicit CONTINUE.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Work on Step 7 only; do not begin Step 8.",
-      "Reuse canonical AI Business OS knowledge_graph.py and entity_canonicalization.py through pinned interfaces; do not copy uncontrolled forks.",
-      "Every consequential edge requires provenance; graph connectivity cannot supply missing truth evidence.",
-      "Entity canonicalization must remain reversible and preserve conflicting source records.",
-      "Keep downstream adapters OBSERVE-only and runtime/ACT disabled.",
-      "While BLK-005 is open, store only sanitized non-sensitive graph metadata/references.",
+      "Do not repeat Steps 0–7 unless an exact pinned source cursor changed.",
+      "Work on Step 8 only and stop after its verified commit.",
+      "Before enabling recurring workflows, enforce minimum budgets/quotas, timeout, bounded retries, idempotency, cancellation/kill switch and least-privilege credentials.",
+      "Observation remains read-only; no downstream ACT or direct uncontrolled main writes.",
+      "While BLK-005 is open, store only sanitized non-sensitive runtime receipts/references in this public repository.",
       "REPO-006 remains blocked while BLK-001 is open."
     ]
   },
-  "updated_at": "2026-09-25T17:21:00Z",
+  "updated_at": "2026-09-25T17:34:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -1211,6 +1335,32 @@
         "initial_memories": 0,
         "initial_outcomes": 0,
         "regression_tests": 85
+      }
+    },
+    "7": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "7A_PIN_CANONICAL_GRAPH_AND_CANONICALIZER",
+        "7B_DEFINE_UNIVERSAL_GRAPH_SCHEMAS_AND_VOCABULARY",
+        "7C_LOSSLESS_PORTFOLIO_GRAPH_ADAPTER",
+        "7D_EVIDENCE_BACKED_SEED_GRAPH",
+        "7E_REVERSIBLE_CANONICALIZATION_GATES",
+        "7F_CROSS_FILE_CONFORMANCE_AND_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_revision": "b906d3f12aa9ad1bf443c41ff5281f38f5eeab0a",
+        "knowledge_graph_blob": "d0ed2e015dc4593361d7600e48cb680a0df13245",
+        "entity_canonicalization_blob": "29a765be3598f83d20f5747518deb8de8f41ffd2",
+        "universal_node_types": 22,
+        "required_relationships": 17,
+        "seeded_nodes": 25,
+        "seeded_edges": 26,
+        "registered_projects": 12,
+        "verified_capabilities": 4,
+        "fabricated_commercial_outcomes": 0,
+        "regression_tests": 105
       }
     }
   }
