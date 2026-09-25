@@ -33,6 +33,10 @@ def canonical_hash(value: Any)->str:
     raw=json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
     return "sha256:"+hashlib.sha256(raw).hexdigest()
 
+def _has_verification_anchor(refs: list[str])->bool:
+    prefixes=("ci-run:","event:","evidence:","verification:","test-receipt:")
+    return any(r.startswith(prefixes) or r.startswith("EVT-") or r.startswith("EVD-") for r in refs)
+
 def _time(value: str, field: str)->datetime:
     _require(isinstance(value,str) and value,f"{field} required")
     try: dt=datetime.fromisoformat(value.replace("Z","+00:00"))
@@ -79,6 +83,8 @@ def validate_node(node: dict[str,Any], contract: dict[str,Any]|None=None)->None:
     refs=node["provenance_refs"]; _require(isinstance(refs,list) and refs and len(refs)==len(set(refs)),"provenance_refs required and unique")
     _require(all(isinstance(x,str) and x for x in refs),"invalid provenance_ref")
     _require(node["verification_state"] in TRUTH_STATES,"invalid verification_state")
+    if node["verification_state"]=="VERIFIED":
+        _require(_has_verification_anchor(refs),"VERIFIED graph node requires machine/human verification anchor")
     _require(node["data_classification"] in {"PUBLIC","SANITIZED","PRIVATE_REFERENCE_ONLY"},"invalid data classification")
     _require(node["status"] in NODE_STATUSES,"invalid node status")
     mapping=node["upstream_mapping"]
@@ -116,6 +122,8 @@ def validate_edge(edge: dict[str,Any], nodes_by_id: dict[str,dict[str,Any]], con
     refs=edge["provenance_refs"]; _require(isinstance(refs,list) and refs and len(refs)==len(set(refs)),"edge provenance required and unique")
     _require(all(isinstance(x,str) and x for x in refs),"invalid edge provenance")
     _require(edge["verification_state"] in TRUTH_STATES,"invalid edge verification state")
+    if edge["verification_state"]=="VERIFIED":
+        _require(_has_verification_anchor(refs),"VERIFIED graph edge requires machine/human verification anchor")
     _require(edge["status"] in EDGE_STATUSES,"invalid edge status")
     start=_time(edge["valid_from"],"valid_from")
     end=None if edge["valid_to"] is None else _time(edge["valid_to"],"valid_to")
