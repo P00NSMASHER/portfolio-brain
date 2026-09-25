@@ -99,7 +99,7 @@ def validate_cost_governor():
     req("foundation-ci" not in p["managed_workflow_names"], "foundation CI may not be cost-cancel managed")
 
     router_policy = json.loads((ROOT / "model_router/MODEL_ROUTER_POLICY.json").read_text())
-    req(any("cost governor" in x.lower() for x in router_policy["invariants"]), "model router missing cost-governor execution invariant")
+    req(any("cost governor" in x.lower().replace("-", " ") for x in router_policy["invariants"]), "model router missing cost-governor execution invariant")
 
     return {
         "paid_usd_ceiling": p["portfolio_ceiling"]["cost_usd"],
