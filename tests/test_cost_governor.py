@@ -3,6 +3,7 @@ import os
 import unittest
 from unittest.mock import patch
 
+from model_router.model_router import prepare_governed_execution
 from cost_governor.cancel_managed_jobs import managed_run_ids
 from cost_governor.cost_governor import (
     CostGovernorError,
@@ -196,6 +197,52 @@ class CostGovernorTests(unittest.TestCase):
         _, decision = reserve_model_execution(load_state(), route, request, at=AT)
         self.assertEqual(decision["status"], "BLOCKED_BUDGET")
         self.assertFalse(decision["can_execute"])
+
+    def test_model_router_tier0_path_is_cost_gated_without_granting_authority(self):
+        request = {
+            "schema_version": "1.0.0",
+            "request_id": "MRQ-COST-TIER0",
+            "project_ids": ["PRJ-000"],
+            "task_kind": "SCHEMA_VALIDATION",
+            "deterministic_sufficient": True,
+            "consequence": "LOW",
+            "data_classification": "SANITIZED",
+            "authority_class": "OBSERVE",
+            "requires_independent_adversarial": False,
+            "builder_independence_group": None,
+            "max_cost_usd": 0.0,
+            "max_input_tokens": 0,
+            "max_output_tokens": 0,
+            "provider_allowlist": [],
+            "evidence_refs": ["test:cost-tier0"],
+        }
+        state, guard = prepare_governed_execution(request, load_state(), at=AT)
+        self.assertTrue(guard["cost_gate_passed"])
+        self.assertFalse(guard["authority_granted"])
+        self.assertEqual(guard["cost_decision"]["status"], "TIER0_NO_SPEND")
+        self.assertEqual(state["sequence"], 0)
+
+    def test_model_router_tier0_act_is_blocked_by_cost_boundary(self):
+        request = {
+            "schema_version": "1.0.0",
+            "request_id": "MRQ-COST-ACT",
+            "project_ids": ["PRJ-000"],
+            "task_kind": "SCHEMA_VALIDATION",
+            "deterministic_sufficient": True,
+            "consequence": "HIGH",
+            "data_classification": "SANITIZED",
+            "authority_class": "ACT",
+            "requires_independent_adversarial": False,
+            "builder_independence_group": None,
+            "max_cost_usd": 0.0,
+            "max_input_tokens": 0,
+            "max_output_tokens": 0,
+            "provider_allowlist": [],
+            "evidence_refs": ["test:cost-act"],
+        }
+        _, guard = prepare_governed_execution(request, load_state(), at=AT)
+        self.assertFalse(guard["cost_gate_passed"])
+        self.assertEqual(guard["cost_decision"]["status"], "BLOCKED_AUTHORITY")
 
     def test_cancellation_filter_never_targets_foundation_ci(self):
         runs = [
