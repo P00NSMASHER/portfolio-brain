@@ -16,7 +16,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: portfolio-runtime-state
+  group: portfolio-cost-governed-autonomy
   cancel-in-progress: false
 
 jobs:
@@ -35,9 +35,24 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Restore cost governor state
+        run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
+      - name: Reserve runtime job budget
+        id: cost_gate
+        run: >-
+          python -m cost_governor.workflow_gate preflight
+          --state cost_governor/live/cost_state.json
+          --output-dir cost_governor/out
+          --workflow-id runtime-worker
+          --job-id runtime
+          --project-id PRJ-000
+          --estimated-minutes 5
+          --authority OBSERVE
       - name: Restore latest runtime state
+        if: ${{ steps.cost_gate.outputs.allowed == 'true' }}
         run: python -m runtime.artifact_state --output runtime/live/runtime_state.json
       - name: Execute deterministic runtime cycle
+        if: ${{ steps.cost_gate.outputs.allowed == 'true' }}
         run: >-
           python -m runtime.continuous_runtime
           --mode "$RUNTIME_MODE"
@@ -45,11 +60,28 @@ jobs:
           --output-dir runtime/out
           ${TARGET_REPOSITORY_ID:+--target-repository-id "$TARGET_REPOSITORY_ID"}
       - name: Validate emitted runtime state
+        if: ${{ steps.cost_gate.outputs.allowed == 'true' }}
         run: python -c "import json; from runtime.state import validate_state; validate_state(json.load(open('runtime/out/runtime_state.json')))"
       - name: Upload sanitized continuation state
+        if: ${{ steps.cost_gate.outputs.allowed == 'true' && success() }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-runtime-state
           path: runtime/out/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Finalize reserved workflow budget
+        if: ${{ always() && steps.cost_gate.outcome == 'success' }}
+        run: >-
+          python -m cost_governor.workflow_gate finalize
+          --state cost_governor/out/cost_state.json
+          --decision cost_governor/out/cost_decision.json
+          --output cost_governor/out/cost_state.json
+      - name: Upload sanitized cost governor state
+        if: ${{ always() && steps.cost_gate.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-cost-governor-state
+          path: cost_governor/out/
           if-no-files-found: error
           retention-days: 30
