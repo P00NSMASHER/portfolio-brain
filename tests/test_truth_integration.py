@@ -39,7 +39,7 @@ def receipt(verdict,status):
 class TruthIntegrationTests(unittest.TestCase):
     def test_pin_is_exact_and_source_is_not_copied(self):
         pin=load_pin()
-        self.assertEqual(pin["source_revision"],"5559112ed4dfaa4c690d608b257945e1595560a5")
+        self.assertEqual(pin["source_revision"],"b906d3f12aa9ad1bf443c41ff5281f38f5eeab0a")
         self.assertEqual(pin["source_blob_sha"],"9b3eaa9412ece784c05e9c93dfcea04e1ec96105")
         self.assertFalse(pin["copied_source_code"])
         validate_pin(pin)
