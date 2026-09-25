@@ -90,6 +90,20 @@ def event_record(evidence_id="EVD-TEST-00000001", status="VERIFIED"):
     return record
 
 class EvidenceEventContractTests(unittest.TestCase):
+    def test_json_schemas_are_closed_and_preserve_evidence_states(self):
+        event_schema=json.loads((ROOT/"schemas"/"EVENT_SCHEMA.json").read_text())
+        evidence_schema=json.loads((ROOT/"schemas"/"EVIDENCE_SCHEMA.json").read_text())
+        self.assertFalse(event_schema["additionalProperties"])
+        self.assertFalse(evidence_schema["additionalProperties"])
+        self.assertEqual(
+            set(evidence_schema["properties"]["evidence_state"]["enum"]),
+            {"OBSERVED","VERIFIED","INFERRED","UNKNOWN","CONTRADICTED","STALE","INVALID"},
+        )
+        self.assertEqual(
+            set(event_schema["properties"]["verification_status"]["enum"]),
+            {"OBSERVED","VERIFIED","INFERRED","UNKNOWN","CONTRADICTED","STALE","INVALID"},
+        )
+
     def test_required_event_catalog(self):
         catalog=load_event_type_catalog()
         required={
@@ -212,6 +226,19 @@ class EvidenceEventContractTests(unittest.TestCase):
         evd=evidence_record()
         evt=event_record()
         evt["dependency_event_ids"]=["EVT-MISSING-00000001"]
+        evt["event_hash"]=compute_event_hash(evt)
+        with self.assertRaises(EventValidationError):
+            validate_bundle([evt],[evd])
+
+    def test_missing_inference_basis_fails_bundle(self):
+        evd=evidence_record(state="INFERRED",evidence_type="MODEL_OUTPUT",actor_type="MODEL",actor_id="model-a")
+        evd["verification"].update({
+            "method":"MODEL_INFERENCE",
+            "basis_evidence_ids":["EVD-MISSING-00000001"],
+            "reason":"model synthesis"
+        })
+        evd["evidence_hash"]=compute_evidence_hash(evd)
+        evt=event_record(evidence_id=evd["evidence_id"],status="INFERRED")
         evt["event_hash"]=compute_event_hash(evt)
         with self.assertRaises(EventValidationError):
             validate_bundle([evt],[evd])
