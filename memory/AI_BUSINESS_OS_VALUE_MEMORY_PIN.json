@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0.0",
+  "integration_id": "VALUE-MEMORY-AI-BUSINESS-OS-001",
+  "source_repository": "P00NSMASHER/github-value-hunt-ledger",
+  "source_revision": "b906d3f12aa9ad1bf443c41ff5281f38f5eeab0a",
+  "source_path": "ai_business_os/value_memory.py",
+  "source_blob_sha": "5e6450087e2fe0402ebe0af9ea0443383964a7a8",
+  "source_test_path": "ai_business_os/test_value_memory.py",
+  "source_test_blob_sha": "4bf0cb53a70ce196c9f1398fdf2aecc9980396fa",
+  "integration_mode": "PINNED_INTERFACE_ADAPTER",
+  "copied_source_code": false,
+  "observed_semantics": [
+    "Only independently verified outcomes influence learned value.",
+    "Observer cannot independently verify its own outcome.",
+    "Outcome verification is immutable once decided.",
+    "Verified attribution for one event cannot exceed 1.0 in total.",
+    "Objective-specific memories do not silently generalize to unrelated objectives.",
+    "Untested memories retain a neutral value prior rather than being suppressed.",
+    "Verified outcome value is recency-weighted with a configurable half-life.",
+    "Repeated events for the same memory are deduplicated."
+  ],
+  "drift_policy": {
+    "exact_repository_revision_required": true,
+    "exact_blob_sha_required": true,
+    "on_source_revision_change": "RECONFORM_BEFORE_USE",
+    "on_blob_mismatch": "FAIL_CLOSED"
+  }
+}
