@@ -27,6 +27,6 @@ jobs:
       - name: Validate foundation
         run: python tests/validate_foundation.py
       - name: Validate Step 2 registry
-        run: python registry/validate_registry.py
+        run: python -m registry.validate_registry
       - name: Run regression tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
