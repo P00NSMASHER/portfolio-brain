@@ -1,0 +1,156 @@
+{
+  "schema_version": "1.0.0",
+  "governor_id": "portfolio-cost-governor-v1",
+  "mode": "FAIL_CLOSED_PRE_EXECUTION_RESERVATION",
+  "authority_class": "NONE",
+  "accounting_window": "UTC_CALENDAR_DAY",
+  "state_retention_days": 7,
+  "max_state_records": 2000,
+  "recent_decision_limit": 100,
+  "reservation_ttl_seconds": {
+    "MODEL_CALL": 1800,
+    "API_CALL": 1800,
+    "GITHUB_JOB": 21600
+  },
+  "portfolio_ceiling": {
+    "cost_usd": 0.0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "model_calls": 0,
+    "api_calls": 0,
+    "github_job_starts": 64,
+    "github_runner_minutes": 320
+  },
+  "project_default_ceiling": {
+    "cost_usd": 0.0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "model_calls": 0,
+    "api_calls": 0,
+    "github_job_starts": 32,
+    "github_runner_minutes": 160
+  },
+  "project_overrides": {
+    "PRJ-000": {
+      "cost_usd": 0.0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "model_calls": 0,
+      "api_calls": 0,
+      "github_job_starts": 64,
+      "github_runner_minutes": 320
+    }
+  },
+  "provider_model_default_ceiling": {
+    "cost_usd": 0.0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "model_calls": 0,
+    "api_calls": 0,
+    "github_job_starts": 0,
+    "github_runner_minutes": 0
+  },
+  "provider_model_overrides": {
+    "deterministic::NONE": {
+      "cost_usd": 0.0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "model_calls": 0,
+      "api_calls": 0,
+      "github_job_starts": 0,
+      "github_runner_minutes": 0
+    }
+  },
+  "workflow_job_ceilings": {
+    "runtime-worker::runtime": {
+      "daily_ceiling": {
+        "cost_usd": 0.0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "model_calls": 0,
+        "api_calls": 0,
+        "github_job_starts": 30,
+        "github_runner_minutes": 150
+      },
+      "max_minutes_per_job": 5
+    },
+    "hunter-autonomous-cycle::hunt": {
+      "daily_ceiling": {
+        "cost_usd": 0.0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "model_calls": 0,
+        "api_calls": 0,
+        "github_job_starts": 6,
+        "github_runner_minutes": 30
+      },
+      "max_minutes_per_job": 5
+    },
+    "portfolio-autonomous-scheduler::schedule": {
+      "daily_ceiling": {
+        "cost_usd": 0.0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "model_calls": 0,
+        "api_calls": 0,
+        "github_job_starts": 26,
+        "github_runner_minutes": 130
+      },
+      "max_minutes_per_job": 5
+    },
+    "software-factory-candidate::execute-candidate-action": {
+      "daily_ceiling": {
+        "cost_usd": 0.0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "model_calls": 0,
+        "api_calls": 0,
+        "github_job_starts": 8,
+        "github_runner_minutes": 40
+      },
+      "max_minutes_per_job": 5
+    }
+  },
+  "retry_limits": {
+    "MODEL_CALL": 2,
+    "API_CALL": 2,
+    "GITHUB_JOB": 2
+  },
+  "state_persistence": {
+    "mode": "GITHUB_ACTIONS_ARTIFACT",
+    "artifact_name": "portfolio-cost-governor-state",
+    "retention_days": 30,
+    "seed_file": "cost_governor/COST_STATE_SEED.json",
+    "sanitized_only": true
+  },
+  "kill_switches": {
+    "repository_variable": "PORTFOLIO_SPEND_DISABLED",
+    "file": "cost_governor/COST_KILL_SWITCH.json"
+  },
+  "global_concurrency_group": "portfolio-cost-governed-autonomy",
+  "managed_workflow_names": [
+    "portfolio-autonomous-scheduler",
+    "hunter-autonomous-cycle",
+    "runtime-worker",
+    "runtime-hourly-sync",
+    "runtime-daily-learning",
+    "runtime-weekly-synthesis",
+    "runtime-event-observe",
+    "software-factory-candidate"
+  ],
+  "max_cancellations_per_cycle": 8,
+  "invariants": [
+    "Budget approval never grants OBSERVE, EXPERIMENT, MODIFY or ACT authority.",
+    "Paid/model/API spend is deny-by-default: checked-in portfolio, project and provider/model ceilings are zero until separately changed.",
+    "Every non-deterministic model/API execution requires a durable reservation before invocation.",
+    "Every managed autonomous GitHub job requires a durable reservation before substantive work.",
+    "Portfolio, project, provider/model and workflow/job ceilings are checked independently; the strictest blocking scope wins.",
+    "Active reservations count against ceilings until committed, cancelled or expired.",
+    "Idempotency keys suppress duplicate spend and collisions fail closed.",
+    "Retry groups cannot reset attempt numbers to bypass retry ceilings.",
+    "Actual token and cost usage is committed against the reservation; an overage triggers a hard stop.",
+    "The shared concurrency group serializes autonomous reservations so artifact-backed accounting cannot race.",
+    "Kill switches and hard-stop overages can cancel managed jobs without ChatGPT.",
+    "Only sanitized IDs, hashes, numeric usage and evidence references may be persisted while BLK-005 is open."
+  ]
+}
