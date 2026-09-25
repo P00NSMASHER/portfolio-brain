@@ -29,7 +29,7 @@ def outcome(state="VERIFIED", event="EVT-OUTCOME-0001", fraction=1.0):
 class SharedValueMemoryTests(unittest.TestCase):
     def test_pin_reuses_upstream_engine(self):
         pin=load_pin()
-        self.assertEqual(pin["source_revision"],"b9031219f39502251afd6da92cc89effbbea2f21")
+        self.assertEqual(pin["source_revision"],"c4be1a3e10a92b9255906b1600097fe6371ea929")
         self.assertEqual(pin["source_blob_sha"],"5e6450087e2fe0402ebe0af9ea0443383964a7a8")
         self.assertFalse(pin["copied_source_code"])
 

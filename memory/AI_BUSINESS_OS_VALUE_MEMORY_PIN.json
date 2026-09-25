@@ -2,7 +2,7 @@
   "schema_version": "1.0.0",
   "integration_id": "VALUE-MEMORY-AI-BUSINESS-OS-001",
   "source_repository": "P00NSMASHER/github-value-hunt-ledger",
-  "source_revision": "b9031219f39502251afd6da92cc89effbbea2f21",
+  "source_revision": "c4be1a3e10a92b9255906b1600097fe6371ea929",
   "source_path": "ai_business_os/value_memory.py",
   "source_blob_sha": "5e6450087e2fe0402ebe0af9ea0443383964a7a8",
   "source_test_path": "ai_business_os/test_value_memory.py",
