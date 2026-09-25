@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "d5241e6943b88754104539316222406c1a61e04b",
+      "last_inspected_sha": "a91583b9b733aaa806c1926bc5f69f30acc34a21",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T15:20:07Z",
-      "notes": "Step 2A PROJECT_SCHEMA, deterministic validator, tests, and generalized numbered-step CI verified at d5241e6943b88754104539316222406c1a61e04b. Repository remains temporarily public; sanitized-only constraint applies."
+      "last_observed_at": "2026-09-25T15:29:47Z",
+      "notes": "Step 2 universal registry verified: PROJECT/AUTONOMY/OBJECTIVE/METRIC schemas, 12 stable top-level project records, 12 deny-by-default autonomy profiles, 66 owner-named coverage mappings, and deterministic cross-registry validation. Repository remains temporarily public; sanitized-only constraint applies."
     }
   },
   "decisions": [
@@ -274,6 +274,45 @@
         "registry/validate_project.py",
         "tests/test_project_schema.py"
       ]
+    },
+    {
+      "decision_id": "DEC-025",
+      "summary": "Autonomy registration is descriptive and deny-by-default: runtime_enabled remains false for every Step 2 profile; ACT is HUMAN_APPROVAL_REQUIRED or PROHIBITED, and builders cannot self-approve promotion.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/AUTONOMY_SCHEMA.json",
+        "registry/autonomy_profiles.json",
+        "registry/validate_contracts.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-026",
+      "summary": "Owner-named businesses, products, research streams and infrastructure are covered by canonical stable projects without falsely asserting that every alias, subsystem or concept is an independently validated business. Coverage status is REGISTERED_COVERAGE_ONLY.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "registry/projects.json",
+        "registry/PORTFOLIO_COVERAGE.json",
+        "registry/validate_registry.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-027",
+      "summary": "Objectives and metrics cannot grant execution authority. Objectives require explicit evidence requirements and provenance; metrics require an explicit evidence source and OBSERVED or VERIFIED verification requirement.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/OBJECTIVE_SCHEMA.json",
+        "schemas/METRIC_SCHEMA.json",
+        "registry/validate_contracts.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-028",
+      "summary": "Registry validation runs as a Python package module in CI so package-relative imports resolve from repository root. The initial direct-script invocation failure is permanently covered by exact-head CI.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        ".github/workflows/foundation-ci.yml",
+        "registry/validate_registry.py"
+      ]
     }
   ],
   "blockers": [
@@ -308,14 +347,15 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.1.0",
+  "architecture_version": "1.2.0",
   "state_id": "portfolio-brain-master",
-  "working_branch": "step2-project-schema-20260925",
+  "working_branch": "step2-complete-20260925",
   "phase": "architecture_build",
-  "current_step": 2,
+  "current_step": 3,
   "completed_steps": [
     0,
-    1
+    1,
+    2
   ],
   "artifacts": [
     {
@@ -461,6 +501,84 @@
       "kind": "step2_numbered_branch_ci_extension",
       "step": 2,
       "commit_sha": "d5241e6943b88754104539316222406c1a61e04b"
+    },
+    {
+      "path": "schemas/AUTONOMY_SCHEMA.json",
+      "kind": "step2_autonomy_schema",
+      "step": 2,
+      "commit_sha": "994eef31165dd98aba5fb270bf40f59e99b6c68c"
+    },
+    {
+      "path": "schemas/OBJECTIVE_SCHEMA.json",
+      "kind": "step2_objective_schema",
+      "step": 2,
+      "commit_sha": "8cbe2961ea553db2ca32ffde6f659040a0f427c3"
+    },
+    {
+      "path": "schemas/METRIC_SCHEMA.json",
+      "kind": "step2_metric_schema",
+      "step": 2,
+      "commit_sha": "0072dea1ae1f84df3ff2577d21314d4747ec25a0"
+    },
+    {
+      "path": "registry/validate_contracts.py",
+      "kind": "step2_contract_validators",
+      "step": 2,
+      "commit_sha": "7fafb9fa391551d2c454d43332f53ad6c280614f"
+    },
+    {
+      "path": "tests/test_step2_contracts.py",
+      "kind": "step2_contract_regression_tests",
+      "step": 2,
+      "commit_sha": "cd2e31f0610183a7f8ecc1c5ac5a2a384ae321a9"
+    },
+    {
+      "path": "registry/projects.json",
+      "kind": "step2_universal_project_registry",
+      "step": 2,
+      "commit_sha": "d6291bef645d2e6fce770fb57ff9cc1f6f7c137c"
+    },
+    {
+      "path": "registry/autonomy_profiles.json",
+      "kind": "step2_autonomy_profiles",
+      "step": 2,
+      "commit_sha": "e3b0c025238843f8873fe65faf9f7c33cbdcd869"
+    },
+    {
+      "path": "registry/objectives.json",
+      "kind": "step2_objective_registry",
+      "step": 2,
+      "commit_sha": "eee367c676c8d88d67e4f1aaedfddf938ccef674"
+    },
+    {
+      "path": "registry/metrics.json",
+      "kind": "step2_metric_registry",
+      "step": 2,
+      "commit_sha": "53ba989cc3a600099384cfd6265cd3d9e24f8c3e"
+    },
+    {
+      "path": "registry/PORTFOLIO_COVERAGE.json",
+      "kind": "step2_named_portfolio_coverage",
+      "step": 2,
+      "commit_sha": "1a826d9cb576eaebe68fe81b0e9f86796b7cda26"
+    },
+    {
+      "path": "registry/validate_registry.py",
+      "kind": "step2_cross_registry_validator",
+      "step": 2,
+      "commit_sha": "23f7e87220cc717ea5c3123d1a7ddefcab9e400a"
+    },
+    {
+      "path": "tests/test_registry_bundle.py",
+      "kind": "step2_registry_bundle_tests",
+      "step": 2,
+      "commit_sha": "64f39f9f4fcf175c3b3d4f39df6e4ee3ecf12393"
+    },
+    {
+      "path": "verification/STEP2_VALIDATION_REQUEST.json",
+      "kind": "step2_final_validation_request",
+      "step": 2,
+      "commit_sha": "5a560af370ae239d19e93a6fc1be17dd955e9cee"
     }
   ],
   "tests": [
@@ -541,21 +659,34 @@
       "status": "PASS",
       "step": 2,
       "evidence": "GitHub Actions foundation-ci run 36153439606 succeeded at exact code head d5241e6943b88754104539316222406c1a61e04b. It compiled deterministic validators, revalidated Step 1 foundation, and ran project-schema regression tests."
+    },
+    {
+      "name": "step2_complete_registry_ci",
+      "status": "PASS",
+      "step": 2,
+      "evidence": "GitHub Actions foundation-ci run 36154536556 succeeded at exact code head a91583b9b733aaa806c1926bc5f69f30acc34a21. Foundation validation passed; Step 2 registry validator reported 12 projects, 12 autonomy profiles, 66 coverage items, 2 metrics, 1 objective and 8 repository IDs; 26 regression tests passed."
+    },
+    {
+      "name": "step2_failed_ci_regression_repair",
+      "status": "PASS",
+      "step": 2,
+      "evidence": "Run 36154434501 failed because registry/validate_registry.py was invoked as a direct script and could not resolve the registry package. CI was repaired to invoke python -m registry.validate_registry; replacement run 36154536556 passed."
     }
   ],
   "next_action": {
-    "step": 2,
-    "summary": "WAIT FOR CONTINUE. Step 2A PROJECT_SCHEMA is complete and verified. Next small step: implement AUTONOMY_SCHEMA with deny-by-default permissions, hard human-gated ACT boundaries, and deterministic validator/tests. Do not register or enable runtime adapters yet.",
+    "step": 3,
+    "summary": "WAIT FOR CONTINUE. Step 2 is complete. Next exact numbered step is Step 3 — Universal event/evidence schema: implement the portfolio event bus format and evidence model with deterministic validation and provenance. Do not begin Step 3 until explicit CONTINUE.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Continue only Step 2; do not begin Step 3.",
-      "Reuse stable PRJ-000 through PRJ-011 identities from the inherited registry.",
-      "Keep all downstream adapters, autonomous scheduling, model calls, deployments, writes and ACT disabled.",
+      "Do not repeat Steps 0–2 unless an underlying pinned source changed.",
+      "Work on Step 3 only and stop after its verified commit.",
+      "Keep downstream adapters and all runtime/ACT authority disabled.",
+      "Preserve evidence states OBSERVED, VERIFIED, INFERRED, UNKNOWN, CONTRADICTED, STALE and INVALID.",
       "While BLK-005 is open, store only sanitized non-sensitive material.",
       "Do not integrate REPO-006 while BLK-001 remains open."
     ]
   },
-  "updated_at": "2026-09-25T15:22:00Z",
+  "updated_at": "2026-09-25T15:31:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -569,18 +700,25 @@
       "authority_change": "NONE"
     },
     "2": {
-      "status": "IN_PROGRESS",
+      "status": "COMPLETE",
       "completed_substeps": [
-        "2A_PROJECT_SCHEMA"
-      ],
-      "pending_substeps": [
+        "2A_PROJECT_SCHEMA",
         "2B_AUTONOMY_SCHEMA",
         "2C_OBJECTIVE_SCHEMA",
         "2D_METRIC_SCHEMA",
         "2E_REGISTER_TOP_LEVEL_PROJECTS",
         "2F_VALIDATE_REGISTRY_AND_COMPLETE_STEP"
       ],
-      "authority_change": "NONE"
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_counts": {
+        "projects": 12,
+        "autonomy_profiles": 12,
+        "coverage_items": 66,
+        "objectives": 1,
+        "metrics": 2,
+        "repository_ids": 8
+      }
     }
   }
 }
