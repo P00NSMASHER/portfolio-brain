@@ -1,0 +1,101 @@
+{
+  "schema_version": "1.0.0",
+  "engine_id": "highest-value-uncertainty-v1",
+  "authority_class": "OBSERVE",
+  "policy_effect": "ADVISORY_ONLY",
+  "scalar_score_prohibited": true,
+  "components": {
+    "importance": {
+      "direction": "HIGHER_IS_BETTER",
+      "scale": [
+        0,
+        5
+      ]
+    },
+    "uncertainty": {
+      "direction": "HIGHER_IS_BETTER",
+      "scale": [
+        0,
+        5
+      ]
+    },
+    "test_cost": {
+      "direction": "LOWER_IS_BETTER",
+      "scale": [
+        1,
+        5
+      ]
+    },
+    "time_to_evidence": {
+      "direction": "LOWER_IS_BETTER",
+      "scale": [
+        1,
+        5
+      ]
+    },
+    "reversibility": {
+      "direction": "HIGHER_IS_BETTER",
+      "scale": [
+        0,
+        5
+      ]
+    },
+    "downstream_impact": {
+      "direction": "HIGHER_IS_BETTER",
+      "scale": [
+        0,
+        5
+      ]
+    },
+    "strategic_reuse": {
+      "direction": "HIGHER_IS_BETTER",
+      "scale": [
+        0,
+        5
+      ]
+    },
+    "external_validation_value": {
+      "direction": "HIGHER_IS_BETTER",
+      "scale": [
+        0,
+        5
+      ]
+    }
+  },
+  "ranking": {
+    "method": "PARETO_LAYERS_THEN_EXPLICIT_LEXICOGRAPHIC_TIE_BREAK",
+    "pareto_benefit_components": [
+      "importance",
+      "uncertainty",
+      "reversibility",
+      "downstream_impact",
+      "strategic_reuse",
+      "external_validation_value"
+    ],
+    "pareto_burden_components": [
+      "test_cost",
+      "time_to_evidence"
+    ],
+    "tie_break_order": [
+      "external_validation_value DESC",
+      "importance DESC",
+      "uncertainty DESC",
+      "downstream_impact DESC",
+      "strategic_reuse DESC",
+      "test_cost ASC",
+      "time_to_evidence ASC",
+      "reversibility DESC",
+      "primary_project_id ASC",
+      "uncertainty_id ASC"
+    ]
+  },
+  "rules": [
+    "Every component keeps its ordinal value, basis type, rationale and evidence references.",
+    "Policy-estimated cost/time are not represented as observed facts.",
+    "Blocked questions remain visible but cannot be selected as the next actionable uncertainty.",
+    "Human-gated questions may be selected for decision value, but selection never grants ACT authority.",
+    "Graph absence is an uncertainty signal, not proof that a capability/outcome does not exist.",
+    "External verified outcome gaps receive high external-validation value because real outcomes outrank internal activity.",
+    "No single scalar score, hidden weight sum or repository-count metric determines selection."
+  ]
+}

@@ -15,7 +15,7 @@ def validate_learning():
     state=load("PORTFOLIO_BUILD_STATE.json");pin=load("learning/AI_BUSINESS_OS_LEARNING_ENGINE_PIN.json")
     p=policy();schema=load("schemas/LEARNING_OBSERVATION_SCHEMA.json");ledger=load("learning/LEARNING_OBSERVATION_LEDGER.json")
     req(state["repositories"]["REPO-001"]["last_inspected_sha"]==pin["source_revision"],"learning source cursor drifted")
-    req(pin["source_revision"]=="b906d3f12aa9ad1bf443c41ff5281f38f5eeab0a","unexpected learning source revision")
+    req(pin["source_revision"]=="b9031219f39502251afd6da92cc89effbbea2f21","unexpected learning source revision")
     expected={
       "learning_engine":"6ce4b266e24b9f6d8089e32618fa7a5c95bfe89c",
       "learning_engine_contract":"4baf08ed31bb6727ec316ffd79189650cd938f68",

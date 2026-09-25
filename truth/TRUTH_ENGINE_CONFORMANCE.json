@@ -2,7 +2,7 @@
   "schema_version": "1.0.0",
   "source": {
     "repository": "P00NSMASHER/github-value-hunt-ledger",
-    "revision": "b906d3f12aa9ad1bf443c41ff5281f38f5eeab0a",
+    "revision": "b9031219f39502251afd6da92cc89effbbea2f21",
     "path": "ai_business_os/truth_engine.py",
     "blob_sha": "9b3eaa9412ece784c05e9c93dfcea04e1ec96105",
     "test_path": "ai_business_os/test_truth_engine.py",

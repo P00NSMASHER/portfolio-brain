@@ -2,7 +2,7 @@
   "schema_version": "1.0.0",
   "source": {
     "repository": "P00NSMASHER/github-value-hunt-ledger",
-    "revision": "b906d3f12aa9ad1bf443c41ff5281f38f5eeab0a",
+    "revision": "b9031219f39502251afd6da92cc89effbbea2f21",
     "path": "ai_business_os/value_memory.py",
     "blob_sha": "5e6450087e2fe0402ebe0af9ea0443383964a7a8",
     "test_path": "ai_business_os/test_value_memory.py",

@@ -9,6 +9,7 @@ from typing import Any
 from adapters.github_readonly import GitHubReadOnlyClient, observe_repository
 from runtime.state import advance_cycle, bootstrap_state, canonical_hash, load_json, validate_state
 from learning.continuous_learning import rebuild_from_ledger
+from uncertainty.highest_value_uncertainty import build_snapshot as build_uncertainty_snapshot
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -148,7 +149,10 @@ def run(mode: str, *, state_path: Path, output_dir: Path, target_repository_id: 
     if mode=="daily":
         learning_state=rebuild_from_ledger()
         (output_dir/"portfolio_learning_state.json").write_text(json.dumps(learning_state,indent=2)+"\n")
+        uncertainty_state=build_uncertainty_snapshot(generated_at=at)
+        (output_dir/"highest_value_uncertainty.json").write_text(json.dumps(uncertainty_state,indent=2)+"\n")
         snap=daily_snapshot(updated,observations,at)
+        snap["selected_uncertainty_id"]=uncertainty_state["selected_uncertainty_id"]
         snap["portfolio_learning_state_hash"]=learning_state["state_hash"]
         snap["snapshot_hash"]=canonical_hash(snap)
         updated["daily_learning_state"]={"generated_at":at,"snapshot_hash":snap["snapshot_hash"],"portfolio_learning_state_hash":learning_state["state_hash"]}

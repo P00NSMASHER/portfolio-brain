@@ -2,7 +2,7 @@
   "schema_version": "1.0.0",
   "integration_id": "LEARNING-AI-BUSINESS-OS-001",
   "source_repository": "P00NSMASHER/github-value-hunt-ledger",
-  "source_revision": "b906d3f12aa9ad1bf443c41ff5281f38f5eeab0a",
+  "source_revision": "b9031219f39502251afd6da92cc89effbbea2f21",
   "components": {
     "learning_engine": {
       "path": "production/learning_engine.py",

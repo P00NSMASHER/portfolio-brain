@@ -1,0 +1,465 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/UNCERTAINTY_SCHEMA.json",
+  "title": "Portfolio Highest-Value Uncertainty Candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "uncertainty_id",
+    "question_type",
+    "question",
+    "project_ids",
+    "primary_project_id",
+    "components",
+    "authority_requirement",
+    "actionability",
+    "approval_requirements",
+    "hard_blockers",
+    "evidence_refs",
+    "ranking"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "uncertainty_id": {
+      "type": "string",
+      "pattern": "^UNC-[A-Z0-9-]{6,}$"
+    },
+    "question_type": {
+      "enum": [
+        "EXTERNAL_VALIDATION_GAP",
+        "CAPABILITY_EVIDENCE_GAP",
+        "LEARNING_MEASUREMENT_GAP",
+        "AUTONOMY_CANARY_GAP",
+        "BLOCKED_SOURCE_GAP"
+      ]
+    },
+    "question": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "project_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^PRJ-[0-9]{3,}$"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "primary_project_id": {
+      "type": "string",
+      "pattern": "^PRJ-[0-9]{3,}$"
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "importance",
+        "uncertainty",
+        "test_cost",
+        "time_to_evidence",
+        "reversibility",
+        "downstream_impact",
+        "strategic_reuse",
+        "external_validation_value"
+      ],
+      "properties": {
+        "importance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "basis_type",
+            "rationale",
+            "evidence_refs"
+          ],
+          "properties": {
+            "value": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5
+            },
+            "basis_type": {
+              "enum": [
+                "OBSERVED",
+                "DERIVED",
+                "POLICY_ESTIMATE"
+              ]
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "evidence_refs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "uniqueItems": true,
+              "minItems": 1
+            }
+          }
+        },
+        "uncertainty": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "basis_type",
+            "rationale",
+            "evidence_refs"
+          ],
+          "properties": {
+            "value": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5
+            },
+            "basis_type": {
+              "enum": [
+                "OBSERVED",
+                "DERIVED",
+                "POLICY_ESTIMATE"
+              ]
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "evidence_refs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "uniqueItems": true,
+              "minItems": 1
+            }
+          }
+        },
+        "test_cost": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "basis_type",
+            "rationale",
+            "evidence_refs"
+          ],
+          "properties": {
+            "value": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "basis_type": {
+              "enum": [
+                "OBSERVED",
+                "DERIVED",
+                "POLICY_ESTIMATE"
+              ]
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "evidence_refs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "uniqueItems": true,
+              "minItems": 1
+            }
+          }
+        },
+        "time_to_evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "basis_type",
+            "rationale",
+            "evidence_refs"
+          ],
+          "properties": {
+            "value": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "basis_type": {
+              "enum": [
+                "OBSERVED",
+                "DERIVED",
+                "POLICY_ESTIMATE"
+              ]
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "evidence_refs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "uniqueItems": true,
+              "minItems": 1
+            }
+          }
+        },
+        "reversibility": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "basis_type",
+            "rationale",
+            "evidence_refs"
+          ],
+          "properties": {
+            "value": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5
+            },
+            "basis_type": {
+              "enum": [
+                "OBSERVED",
+                "DERIVED",
+                "POLICY_ESTIMATE"
+              ]
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "evidence_refs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "uniqueItems": true,
+              "minItems": 1
+            }
+          }
+        },
+        "downstream_impact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "basis_type",
+            "rationale",
+            "evidence_refs"
+          ],
+          "properties": {
+            "value": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5
+            },
+            "basis_type": {
+              "enum": [
+                "OBSERVED",
+                "DERIVED",
+                "POLICY_ESTIMATE"
+              ]
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "evidence_refs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "uniqueItems": true,
+              "minItems": 1
+            }
+          }
+        },
+        "strategic_reuse": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "basis_type",
+            "rationale",
+            "evidence_refs"
+          ],
+          "properties": {
+            "value": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5
+            },
+            "basis_type": {
+              "enum": [
+                "OBSERVED",
+                "DERIVED",
+                "POLICY_ESTIMATE"
+              ]
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "evidence_refs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "uniqueItems": true,
+              "minItems": 1
+            }
+          }
+        },
+        "external_validation_value": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "basis_type",
+            "rationale",
+            "evidence_refs"
+          ],
+          "properties": {
+            "value": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5
+            },
+            "basis_type": {
+              "enum": [
+                "OBSERVED",
+                "DERIVED",
+                "POLICY_ESTIMATE"
+              ]
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "evidence_refs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "uniqueItems": true,
+              "minItems": 1
+            }
+          }
+        }
+      }
+    },
+    "authority_requirement": {
+      "enum": [
+        "OBSERVE_ONLY",
+        "BOUNDED_EXPERIMENT",
+        "HUMAN_GATED_ACT"
+      ]
+    },
+    "actionability": {
+      "enum": [
+        "READY_FOR_INFORMATION_GATHERING",
+        "READY_FOR_EXPERIMENT_DESIGN",
+        "HUMAN_APPROVAL_REQUIRED",
+        "BLOCKED"
+      ]
+    },
+    "approval_requirements": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "uniqueItems": true
+    },
+    "hard_blockers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "uniqueItems": true
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "ranking": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eligible",
+        "pareto_layer",
+        "rank_order",
+        "selection_reason"
+      ],
+      "properties": {
+        "eligible": {
+          "type": "boolean"
+        },
+        "pareto_layer": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "rank_order": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "selection_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 1000
+        }
+      }
+    }
+  }
+}
