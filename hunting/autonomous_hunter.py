@@ -53,9 +53,9 @@ def _project_capability_map():
     nodes={n["node_id"]:n for n in ledger["nodes"]}
     result={}
     for edge in ledger["edges"]:
-        if edge["status"]!="ACTIVE" or edge["edge_type"]!="HAS_CAPABILITY": continue
+        if edge["status"]!="ACTIVE" or edge["edge_type"]!="HAS_CAPABILITY" or edge["verification_state"]!="VERIFIED": continue
         source=nodes[edge["source_node_id"]]; target=nodes[edge["target_node_id"]]
-        if source["node_type"]=="PROJECT" and target["node_type"]=="CAPABILITY":
+        if source["node_type"]=="PROJECT" and target["node_type"]=="CAPABILITY" and target["verification_state"]=="VERIFIED":
             result.setdefault(source["canonical_key"],set()).add(target["canonical_key"])
     return result
 
