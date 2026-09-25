@@ -37,7 +37,7 @@ def _project_maps():
     for e in graph["edges"]:
         if e["status"]!="ACTIVE":continue
         s=node_by_id[e["source_node_id"]];t=node_by_id[e["target_node_id"]]
-        if e["edge_type"]=="HAS_CAPABILITY" and s["node_type"]=="PROJECT" and s["canonical_key"] in cap_count:
+        if e["edge_type"]=="HAS_CAPABILITY" and e["verification_state"]=="VERIFIED" and s["node_type"]=="PROJECT" and t["node_type"]=="CAPABILITY" and t["verification_state"]=="VERIFIED" and s["canonical_key"] in cap_count:
             cap_count[s["canonical_key"]]+=1
     for n in graph["nodes"]:
         if n["node_type"] in {"OUTCOME","REVENUE","CUSTOMER"} and n["verification_state"]=="VERIFIED":
