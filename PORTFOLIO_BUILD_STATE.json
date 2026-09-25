@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "c6dd95bce5310a68e9cb18202a52cadffa0ea76d",
+      "last_inspected_sha": "0c77237bac698c87193a0fcf6753e3f836b4052c",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T16:32:59Z",
-      "notes": "Step 4 adapter implementation and validation verified at code head c6dd95bce5310a68e9cb18202a52cadffa0ea76d. The repository adapter cursor intentionally tracks default branch main separately from the isolated build branch."
+      "last_observed_at": "2026-09-25T16:39:36Z",
+      "notes": "Step 5 Truth Engine integration verified at 0c77237bac698c87193a0fcf6753e3f836b4052c. Canonical AI Business OS engine remains external and pinned; Portfolio Brain adds only a conformance/projection adapter. Repository remains temporarily public; sanitized-only constraint applies."
     }
   },
   "decisions": [
@@ -389,6 +389,44 @@
       "evidence_refs": [
         "PORTFOLIO_BUILD_STATE.json"
       ]
+    },
+    {
+      "decision_id": "DEC-037",
+      "summary": "Reuse the canonical AI Business OS Truth Engine through an exact source revision/blob pin and a conformance adapter; do not vendor or fork its evaluator into Portfolio Brain.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "truth/AI_BUSINESS_OS_TRUTH_ENGINE_PIN.json",
+        "truth/TRUTH_ENGINE_CONFORMANCE.json",
+        "truth/truth_adapter.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-038",
+      "summary": "Portfolio truth projection preserves upstream semantics: PROVEN maps to VERIFIED only when all required findings are SATISFIED; CONTESTED/conflicted maps to CONTRADICTED; required stale evidence maps to STALE; NOT_PROVEN and UNKNOWN remain UNKNOWN rather than false.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "truth/truth_adapter.py",
+        "tests/test_truth_integration.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-039",
+      "summary": "Truth integration fails closed on upstream drift: the pinned source revision must equal the durable REPO-001 cursor and the pinned blob identity must match the conformance record before projection is accepted.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "truth/validate_truth_integration.py",
+        "truth/AI_BUSINESS_OS_TRUTH_ENGINE_PIN.json",
+        "PORTFOLIO_BUILD_STATE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-040",
+      "summary": "Repeated assertions, additional same-family support, or model confidence cannot promote a claim to VERIFIED. Evidence independence, admissible authority, freshness, contradiction handling, and the upstream proof verdict remain controlling.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "tests/test_truth_integration.py",
+        "truth/TRUTH_ENGINE_CONFORMANCE.json"
+      ]
     }
   ],
   "blockers": [
@@ -423,17 +461,18 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.4.0",
+  "architecture_version": "1.5.0",
   "state_id": "portfolio-brain-master",
-  "working_branch": "step4-readonly-adapters-20260925",
+  "working_branch": "step5-truth-engine-20260925",
   "phase": "architecture_build",
-  "current_step": 5,
+  "current_step": 6,
   "completed_steps": [
     0,
     1,
     2,
     3,
-    4
+    4,
+    5
   ],
   "artifacts": [
     {
@@ -753,6 +792,48 @@
       "kind": "step4_ci_validation_extension",
       "step": 4,
       "commit_sha": "c6dd95bce5310a68e9cb18202a52cadffa0ea76d"
+    },
+    {
+      "path": "truth/AI_BUSINESS_OS_TRUTH_ENGINE_PIN.json",
+      "kind": "step5_truth_engine_source_pin",
+      "step": 5,
+      "commit_sha": "2e04dbb6801e9bc0cd938580ad4994aa9fdcec50"
+    },
+    {
+      "path": "truth/truth_adapter.py",
+      "kind": "step5_truth_projection_adapter",
+      "step": 5,
+      "commit_sha": "f1d821e59ace45243684288a91c9578dda73417d"
+    },
+    {
+      "path": "truth/TRUTH_ENGINE_CONFORMANCE.json",
+      "kind": "step5_truth_conformance_receipt",
+      "step": 5,
+      "commit_sha": "49d1c12aed5744bc957df45d7d17a762f7b8a8f3"
+    },
+    {
+      "path": "tests/test_truth_integration.py",
+      "kind": "step5_truth_integration_regressions",
+      "step": 5,
+      "commit_sha": "02ee656a0f21237b52ebe2383172b1c0ccd31c30"
+    },
+    {
+      "path": "truth/validate_truth_integration.py",
+      "kind": "step5_truth_cross_file_validator",
+      "step": 5,
+      "commit_sha": "3d490dd131054e13e04746997cb8e17c7efb46b6"
+    },
+    {
+      "path": "tests/test_truth_conformance_bundle.py",
+      "kind": "step5_truth_bundle_tests",
+      "step": 5,
+      "commit_sha": "67fc853b4edfebe2056c6fd2c640ffb97fc13a47"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step5_ci_validation_extension",
+      "step": 5,
+      "commit_sha": "0c77237bac698c87193a0fcf6753e3f836b4052c"
     }
   ],
   "tests": [
@@ -857,23 +938,29 @@
       "status": "PASS",
       "step": 4,
       "evidence": "GitHub Actions foundation-ci run 36161446817 succeeded at exact Step 4 code head c6dd95bce5310a68e9cb18202a52cadffa0ea76d. Step 4 validator reported 8 adapters: 3 changed, 3 unchanged, 1 blocked, 1 initialized, 131 changed paths; 58 total regression tests passed."
+    },
+    {
+      "name": "step5_truth_engine_integration_ci",
+      "status": "PASS",
+      "step": 5,
+      "evidence": "GitHub Actions foundation-ci run 36162139883 succeeded at exact Step 5 code head 0c77237bac698c87193a0fcf6753e3f836b4052c. Step 5 conformance validator pinned source revision 5559112ed4dfaa4c690d608b257945e1595560a5 and blob 9b3eaa9412ece784c05e9c93dfcea04e1ec96105; 72 total regression tests passed."
     }
   ],
   "next_action": {
-    "step": 5,
-    "summary": "WAIT FOR CONTINUE. Step 4 is complete. Next exact numbered step is Step 5 — Truth Engine integration: generalize/reuse the AI Business OS Truth Engine, preserve explicit evidence states, contradiction handling, freshness and provenance, and add deterministic conformance tests. Do not begin Step 5 until explicit CONTINUE.",
+    "step": 6,
+    "summary": "WAIT FOR CONTINUE. Step 5 is complete. Next exact numbered step is Step 6 — Shared value memory: implement portfolio-wide long-term memory where verified outcomes carry more weight than speculative predictions, while preserving provenance and project attribution. Do not begin Step 6 until explicit CONTINUE.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Do not repeat Steps 0–4 unless an exact source cursor changed.",
-      "Work on Step 5 only and stop after its verified commit.",
-      "Reuse the canonical AI Business OS Truth Engine through a pinned adapter/interface; do not copy an uncontrolled fork.",
-      "Do not upgrade repeated assertions or model confidence into VERIFIED evidence.",
+      "Do not repeat Steps 0–5 unless an exact source cursor changed.",
+      "Work on Step 6 only and stop after its verified commit.",
+      "Preserve the Step 5 Truth Engine pin; if REPO-001 source revision changes, reconform before using truth projections.",
+      "Verified outcomes must outweigh speculative predictions without erasing provenance or uncertainty.",
       "Keep downstream adapters OBSERVE-only and runtime/ACT disabled.",
       "While BLK-005 is open, store only sanitized non-sensitive material.",
       "REPO-006 remains blocked and must not be read while BLK-001 is open."
     ]
   },
-  "updated_at": "2026-09-25T16:34:00Z",
+  "updated_at": "2026-09-25T16:41:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -953,6 +1040,32 @@
         "initialized_repositories": 1,
         "changed_paths": 131,
         "regression_tests": 58
+      }
+    },
+    "5": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "5A_PIN_CANONICAL_AI_BUSINESS_OS_TRUTH_ENGINE",
+        "5B_PORTFOLIO_TRUTH_PROJECTION",
+        "5C_CONTRADICTION_AND_FRESHNESS_MAPPING",
+        "5D_SOURCE_CURSOR_DRIFT_GATE",
+        "5E_CONFORMANCE_AND_REGRESSION_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_repository": "P00NSMASHER/github-value-hunt-ledger",
+        "source_revision": "5559112ed4dfaa4c690d608b257945e1595560a5",
+        "source_blob_sha": "9b3eaa9412ece784c05e9c93dfcea04e1ec96105",
+        "upstream_verdicts": 4,
+        "upstream_finding_statuses": 8,
+        "portfolio_projection_states": [
+          "VERIFIED",
+          "CONTRADICTED",
+          "STALE",
+          "UNKNOWN"
+        ],
+        "regression_tests": 72
       }
     }
   }
