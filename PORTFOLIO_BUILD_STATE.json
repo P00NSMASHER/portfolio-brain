@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d",
+      "last_inspected_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T19:43:54Z",
-      "notes": "Step 14 persistent-agent control plane verified at 5b7edadc6545bb3703d2a34c77eba49838e7b21d. Ten stable bounded roles persist identity/work/lease/evidence/state through a deterministic SQLite reference runtime with stale-generation fencing, hash-chained events, snapshots and independent verification. No role has ACT authority; checked-in live model providers remain Tier-0-only."
+      "last_observed_at": "2026-09-25T19:54:08Z",
+      "notes": "Step 15 explainable portfolio allocator verified at cb1bb39f8fa4731e0c50f994a952e27c01bf727c. Nine resource classes use resource-specific Pareto ranking and normalized advisory shares with explicit evidence. Current state actively recommends RESEARCH, HUNTER_RUNS and HUMAN_REVIEW only; engineering/testing/art/API/model/cash remain HOLD rather than receiving unsupported busywork allocations."
     }
   },
   "decisions": [
@@ -931,6 +931,65 @@
         "agents/PERSISTENT_AGENT_CONTRACT.md",
         "PORTFOLIO_BUILD_STATE.json"
       ]
+    },
+    {
+      "decision_id": "DEC-091",
+      "summary": "Step 15 reuses the canonical AI Business OS capital allocator's evidence provenance, freshness, concentration, immutable-plan and governance semantics at source revision 21b9023a57392f380c73b2fe952c35840f2e2025, but deliberately does not reuse a single composite cross-project score as Portfolio Brain's allocation oracle.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "allocator/AI_BUSINESS_OS_CAPITAL_ALLOCATOR_PIN.json",
+        "allocator/PORTFOLIO_ALLOCATOR_CONTRACT.md"
+      ]
+    },
+    {
+      "decision_id": "DEC-092",
+      "summary": "Portfolio allocation covers nine explicit resource classes: MODEL_CALLS, ENGINEERING_CAPACITY, TESTING, RESEARCH, HUNTER_RUNS, ART_PRODUCTION, HUMAN_REVIEW, API_INFRASTRUCTURE and CASH. Because no real resource pool was supplied, checked-in recommendations use normalized basis-point shares only and do not invent hours, dollars, calls or capacity.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "allocator/ALLOCATOR_POLICY.json",
+        "schemas/PORTFOLIO_ALLOCATION_PLAN_SCHEMA.json",
+        "allocator/portfolio_allocator.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-093",
+      "summary": "Current evidence supports active advisory allocation only for RESEARCH, HUNTER_RUNS and HUMAN_REVIEW. The allocator emits 29 project-resource recommendations; PRJ-000 is the top research priority from the learning-measurement gap, while PRJ-001 RecoveryWorks is the top human-review priority because its external-validation uncertainty dominates the other current human-gated candidates.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "allocator/INITIAL_ALLOCATION_SUMMARY.json",
+        "uncertainty/INITIAL_UNCERTAINTY_SUMMARY.json",
+        "tests/test_portfolio_allocator.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-094",
+      "summary": "Current evidence explicitly holds MODEL_CALLS, ENGINEERING_CAPACITY, TESTING, ART_PRODUCTION, API_INFRASTRUCTURE and CASH. Tier 1-3 providers are disabled; no ready isolated synthetic implementation/test demand exists; no art-specific uncertainty exists; no approved infrastructure expansion need exists; and no human-approved concrete cash pool/governance receipt exists.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "allocator/PORTFOLIO_ALLOCATOR_CONTRACT.md",
+        "model_router/PROVIDER_REGISTRY.json",
+        "experiments/INITIAL_EXPERIMENT_SUMMARY.json",
+        "allocator/INITIAL_ALLOCATION_SUMMARY.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-095",
+      "summary": "Allocator ranking is resource-specific: eligible project uncertainties retain their complete eight-component evidence vector, are separated by Pareto layers, converted to normalized shares with explicit public layer weights, and capped at 50% per project. Unallocated share remains HOLD rather than being forced into activity.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "allocator/ALLOCATOR_POLICY.json",
+        "allocator/portfolio_allocator.py",
+        "tests/test_portfolio_allocator.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-096",
+      "summary": "Step 8 daily mode now emits portfolio_allocation_recommendation.json after learning, uncertainty and experiment planning. The output remains advisory and cannot move cash, enable models, send customer communications, deploy software or execute downstream work.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "runtime/continuous_runtime.py",
+        "allocator/PORTFOLIO_ALLOCATOR_CONTRACT.md"
+      ]
     }
   ],
   "blockers": [
@@ -965,11 +1024,11 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.14.0",
+  "architecture_version": "1.15.0",
   "state_id": "portfolio-brain-master",
-  "working_branch": "step14-persistent-agents-20260925",
+  "working_branch": "step15-portfolio-allocator-20260925",
   "phase": "architecture_build",
-  "current_step": 15,
+  "current_step": 16,
   "completed_steps": [
     0,
     1,
@@ -985,7 +1044,8 @@
     11,
     12,
     13,
-    14
+    14,
+    15
   ],
   "artifacts": [
     {
@@ -1983,6 +2043,66 @@
       "kind": "step14_ci_validation_extension",
       "step": 14,
       "commit_sha": "5b7edadc6545bb3703d2a34c77eba49838e7b21d"
+    },
+    {
+      "path": "allocator/AI_BUSINESS_OS_CAPITAL_ALLOCATOR_PIN.json",
+      "kind": "step15_capital_allocator_source_pin",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": "allocator/ALLOCATOR_POLICY.json",
+      "kind": "step15_allocator_policy",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": "schemas/PORTFOLIO_ALLOCATION_PLAN_SCHEMA.json",
+      "kind": "step15_allocation_plan_schema",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": "allocator/portfolio_allocator.py",
+      "kind": "step15_portfolio_allocator",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": "allocator/INITIAL_ALLOCATION_SUMMARY.json",
+      "kind": "step15_initial_allocation_summary",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": "allocator/validate_allocator.py",
+      "kind": "step15_allocator_validator",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": "allocator/PORTFOLIO_ALLOCATOR_CONTRACT.md",
+      "kind": "step15_allocator_contract",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": "tests/test_portfolio_allocator.py",
+      "kind": "step15_allocator_regressions",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": "runtime/continuous_runtime.py",
+      "kind": "step15_daily_allocator_runtime_integration",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step15_ci_validation_extension",
+      "step": 15,
+      "commit_sha": "cb1bb39f8fa4731e0c50f994a952e27c01bf727c"
     }
   ],
   "tests": [
@@ -2171,25 +2291,31 @@
       "status": "PASS",
       "step": 14,
       "evidence": "GitHub Actions foundation-ci run 36181438958 succeeded at exact Step 14 code head 5b7edadc6545bb3703d2a34c77eba49838e7b21d. Agent validator reported roles=10, builder_roles=1, verifier_roles=4, human_act_roles=0, seed_work_items=0 and enabled_nonzero_models=0; 188 total regression tests passed."
+    },
+    {
+      "name": "step15_portfolio_allocator_ci",
+      "status": "PASS",
+      "step": 15,
+      "evidence": "GitHub Actions foundation-ci run 36182464581 succeeded at exact Step 15 code head cb1bb39f8fa4731e0c50f994a952e27c01bf727c. Allocator validator reported 9 resource types, 3 active resources, 6 hold resources, 29 recommendations, cash_share_bps=0, model_call_share_bps=0 and opaque_score=false; 198 total regression tests passed."
     }
   ],
   "next_action": {
-    "step": 15,
-    "summary": "WAIT FOR CONTINUE. Step 14 is complete. Next exact numbered step is Step 15 — Portfolio allocator: allocate scarce resources across projects using evidence while keeping recommendations explainable and retaining component evidence rather than a single opaque score. Do not begin Step 15 until explicit CONTINUE.",
+    "step": 16,
+    "summary": "WAIT FOR CONTINUE. Step 15 is complete. Next exact numbered step is Step 16 — Autonomous software factory: allow bounded agents to identify work, create isolated branches, implement candidate changes, write tests and produce PRs without direct uncontrolled main modification. Do not begin Step 16 until explicit CONTINUE.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Do not repeat Steps 0–14 unless an exact pinned source cursor changed.",
-      "Work on Step 15 only and stop after its verified commit.",
+      "Do not repeat Steps 0–15 unless an exact pinned source cursor changed.",
+      "Work on Step 16 only and stop after its verified commit.",
       "Do not activate Step 8 or Step 9 schedules on main yet; recurring production activation remains deferred.",
-      "Allocator recommendations are advisory and may not create ACT authority.",
-      "Retain component evidence for AI/model calls, engineering capacity, testing, research, Hunter, art, human review, API/infrastructure and eventual cash allocation.",
-      "Verified external outcomes and high-value uncertainty resolution outrank internal activity.",
-      "Do not use a single opaque score.",
-      "Keep checked-in Tier 1-3 model providers disabled until explicitly configured.",
-      "While BLK-005 is open, store only sanitized non-sensitive allocation state/evidence references."
+      "Only the Engineer role may build candidate software; builder cannot verify or promote its own work.",
+      "Software-factory changes must occur on isolated branches with required regression tests and PR evidence.",
+      "No direct uncontrolled main modification or production deployment is permitted.",
+      "Tier 0 deterministic code remains preferred; checked-in Tier 1-3 providers remain disabled.",
+      "Allocation recommendations are advisory and cannot create write/ACT authority.",
+      "Keep customer communication, money movement, live trading and other consequential ACT human-gated."
     ]
   },
-  "updated_at": "2026-09-25T19:45:00Z",
+  "updated_at": "2026-09-25T19:56:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -2563,6 +2689,46 @@
         "stale_lease_generation_fencing": true,
         "append_only_hash_chained_events": true,
         "regression_tests": 188
+      }
+    },
+    "15": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "15A_PIN_EVIDENCE_FIRST_ALLOCATOR_AND_GOVERNANCE_SEMANTICS",
+        "15B_DEFINE_NINE_RESOURCE_ALLOCATION_CONTRACT",
+        "15C_RESOURCE_SPECIFIC_PARETO_RANKING",
+        "15D_NORMALIZED_SHARE_AND_CONCENTRATION_ALLOCATION",
+        "15E_EVIDENCE_GATED_RESOURCE_HOLDS",
+        "15F_DAILY_RUNTIME_ALLOCATION_INTEGRATION",
+        "15G_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_revision": "21b9023a57392f380c73b2fe952c35840f2e2025",
+        "resource_types": 9,
+        "active_resource_types": [
+          "RESEARCH",
+          "HUNTER_RUNS",
+          "HUMAN_REVIEW"
+        ],
+        "hold_resource_types": [
+          "MODEL_CALLS",
+          "ENGINEERING_CAPACITY",
+          "TESTING",
+          "ART_PRODUCTION",
+          "API_INFRASTRUCTURE",
+          "CASH"
+        ],
+        "recommendation_entries": 29,
+        "top_research_project_id": "PRJ-000",
+        "top_human_review_project_id": "PRJ-001",
+        "normalized_share_basis_points": 10000,
+        "max_project_share_basis_points": 5000,
+        "cash_allocated_share_basis_points": 0,
+        "model_calls_allocated_share_basis_points": 0,
+        "opaque_score_used": false,
+        "regression_tests": 198
       }
     }
   }
