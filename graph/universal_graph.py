@@ -238,3 +238,47 @@ def validate_canonicalization_proposal(proposal: dict[str,Any])->None:
         _require(isinstance(refs,list) and refs,"human review provenance required")
     elif proposal["decision"]=="AUTO_MERGE":
         _require(not conflicts,"auto merge cannot have hard conflicts")
+
+
+UPSTREAM_EDGE_CONTRACTS = {
+    "IMPLEMENTS": {("REPO","CAPABILITY"),("DATA","CAPABILITY"),("TECHNOLOGY","CAPABILITY")},
+    "STRENGTHENS": {
+        ("REPO","CAPABILITY"),("DATA","CAPABILITY"),("TECHNOLOGY","CAPABILITY"),
+        ("EXPERIMENT","CAPABILITY"),("EXPERIMENT","PRODUCT"),("EXPERIMENT","BUSINESS"),
+    },
+    "ENABLES": {
+        ("CAPABILITY","PRODUCT"),("CAPABILITY","BUSINESS"),
+        ("TECHNOLOGY","PRODUCT"),("TECHNOLOGY","BUSINESS"),
+    },
+    "USES": {
+        ("PRODUCT","CAPABILITY"),("PRODUCT","TECHNOLOGY"),("PRODUCT","DATA"),
+        ("BUSINESS","CAPABILITY"),("BUSINESS","TECHNOLOGY"),("BUSINESS","DATA"),
+    },
+    "TESTED_BY": {
+        ("CAPABILITY","EXPERIMENT"),("PRODUCT","EXPERIMENT"),("BUSINESS","EXPERIMENT"),
+    },
+    "PRODUCED": {
+        ("EXPERIMENT","OUTCOME"),("PRODUCT","OUTCOME"),("BUSINESS","OUTCOME"),
+    },
+}
+UPSTREAM_BROAD_EDGES={"DEPENDS_ON"}
+
+def upstream_edge_projection(edge: dict[str,Any], nodes_by_id: dict[str,dict[str,Any]])->dict[str,Any]|None:
+    validate_edge(edge,nodes_by_id)
+    source=upstream_node_projection(nodes_by_id[edge["source_node_id"]])
+    target=upstream_node_projection(nodes_by_id[edge["target_node_id"]])
+    if source is None or target is None:
+        return None
+    et=edge["edge_type"]
+    if et in UPSTREAM_BROAD_EDGES:
+        pass
+    elif et not in UPSTREAM_EDGE_CONTRACTS or (source["node_type"],target["node_type"]) not in UPSTREAM_EDGE_CONTRACTS[et]:
+        return None
+    return {
+      "source_node_id":source["node_id"],
+      "edge_type":et,
+      "target_node_id":target["node_id"],
+      "evidence":{"provenance_refs":edge["provenance_refs"],"verification_state":edge["verification_state"]},
+      "attributes":edge["attributes"],
+      "edge_id":edge["edge_id"],
+    }
