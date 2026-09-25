@@ -1,0 +1,27 @@
+name: software-factory-candidate
+
+on:
+  workflow_call:
+    inputs:
+      packet_path:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  execute-candidate-action:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PORTFOLIO_FACTORY_PACKET: ${{ inputs.packet_path }}
+      PORTFOLIO_FACTORY_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Execute bounded candidate action
+        run: python -m software_factory.github_executor

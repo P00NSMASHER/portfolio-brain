@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0.0",
+  "integration_id": "SOFTWARE-FACTORY-AI-BUSINESS-OS-001",
+  "source_repository": "P00NSMASHER/github-value-hunt-ledger",
+  "source_revision": "21b9023a57392f380c73b2fe952c35840f2e2025",
+  "components": {
+    "governed_factory": {
+      "path": "ai_business_os/software_factory.py",
+      "blob_sha": "70baa5a71ea568c3041664fa397e4c09c9c9511f"
+    },
+    "factory_contract": {
+      "path": "ai_business_os/SOFTWARE_FACTORY_CONTRACT.md",
+      "blob_sha": "b71a6c7b6efd907e900bbbe80e6c250939be24bf"
+    },
+    "factory_tests": {
+      "path": "ai_business_os/test_software_factory.py",
+      "blob_sha": "a3d020a42c4f54587811430c6671543528f112c3"
+    },
+    "verification": {
+      "path": "ai_business_os/verification.py",
+      "blob_sha": "556b809feb98554c05c158c93a0b9d98ef2919e1"
+    },
+    "verification_tests": {
+      "path": "ai_business_os/test_verification.py",
+      "blob_sha": "3b194771fe0b72a21fecf934e57d8f6cfefbe0d2"
+    },
+    "governance": {
+      "path": "ai_business_os/governance.py",
+      "blob_sha": "40d278e479830d6f76aca7da22b6893f5d0060a7"
+    },
+    "governance_tests": {
+      "path": "ai_business_os/test_governance.py",
+      "blob_sha": "3a1429ec8d81e92d1043e89c55a7868b226a6fd4"
+    }
+  },
+  "preserved_semantics": [
+    "Every attempt uses a unique isolated branch/workspace.",
+    "Executor submissions bind exact repository, branch, attempt, commit, tests and artifacts.",
+    "Independent verification is required before PR readiness.",
+    "Rejected attempts retry on fresh branches up to a bounded retry limit.",
+    "PR creation is a distinct governed handoff.",
+    "Production merge is a separate higher-authority action and is not part of the candidate executor.",
+    "Lifecycle evidence is retained and content-addressed.",
+    "Kill switches/governance can block release authorization."
+  ],
+  "integration_mode": "PINNED_ISOLATED_BRANCH_AND_VERIFICATION_SEMANTICS",
+  "copied_source_code": false,
+  "drift_policy": {
+    "exact_repository_revision_required": true,
+    "component_blob_shas_required": true,
+    "on_source_revision_change": "TARGETED_DELTA_AND_RECONFORM",
+    "on_component_blob_mismatch": "FAIL_CLOSED"
+  }
+}

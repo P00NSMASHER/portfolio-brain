@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "ledger_id": "portfolio-software-factory",
+  "policy": [
+    "The checked-in ledger starts empty because Step 15 currently allocates no engineering capacity.",
+    "Candidate work is created only from evidence-backed engineering demand or a verified repair task.",
+    "PR_OPEN is the highest state the Step 16 executor may create; merge/deploy remain outside the executor.",
+    "No private patch payloads are stored in this public ledger."
+  ],
+  "work_items": []
+}

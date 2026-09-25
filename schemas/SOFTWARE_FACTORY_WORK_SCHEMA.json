@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/SOFTWARE_FACTORY_WORK_SCHEMA.json",
+  "title": "Portfolio Software Factory Work Item",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "factory_work_id",
+    "project_id",
+    "repository_id",
+    "repository_full_name",
+    "base_branch",
+    "base_sha",
+    "title",
+    "issue_ref",
+    "builder_agent_id",
+    "verifier_agent_id",
+    "state",
+    "attempt",
+    "max_attempts",
+    "branch_name",
+    "commit_sha",
+    "changed_paths",
+    "test_commands",
+    "test_receipt_hashes",
+    "diff_hash",
+    "verification_id",
+    "pr_number",
+    "pr_url",
+    "provenance_refs"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "factory_work_id": {
+      "type": "string",
+      "pattern": "^SFW-[A-Z0-9-]+$"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^PRJ-[0-9]{3,}$"
+    },
+    "repository_id": {
+      "type": "string",
+      "pattern": "^REPO-[0-9]{3,}$"
+    },
+    "repository_full_name": {
+      "type": "string",
+      "pattern": "^[^/]+/[^/]+$"
+    },
+    "base_branch": {
+      "type": "string",
+      "minLength": 1
+    },
+    "base_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "issue_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "builder_agent_id": {
+      "const": "AGT-ENGINEER"
+    },
+    "verifier_agent_id": {
+      "enum": [
+        "AGT-TESTER",
+        "AGT-AUDITOR",
+        "AGT-RED-TEAM"
+      ]
+    },
+    "state": {
+      "enum": [
+        "QUEUED",
+        "RUNNING",
+        "VERIFYING",
+        "READY_FOR_PR",
+        "PR_OPEN",
+        "BLOCKED",
+        "CANCELLED"
+      ]
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "max_attempts": {
+      "const": 3
+    },
+    "branch_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "commit_sha": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "changed_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "maxItems": 50
+    },
+    "test_commands": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "test_receipt_hashes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^sha256:[0-9a-f]{64}$"
+      },
+      "uniqueItems": true
+    },
+    "diff_hash": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "verification_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^SFV-[A-Z0-9-]+$"
+    },
+    "pr_number": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "pr_url": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "provenance_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    }
+  }
+}
