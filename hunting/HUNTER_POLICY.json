@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0.0",
+  "hunter_id": "portfolio-autonomous-hunter-v1",
+  "enabled": true,
+  "authority_class": "OBSERVE",
+  "objective_function": "DISCOVERY_TO_CAPABILITY_TO_EXPERIMENT_TO_VERIFIED_OUTCOME_VALUE",
+  "repository_count_reward": 0,
+  "source_allowlist": [
+    "PUBLIC_GITHUB"
+  ],
+  "public_content_trust": "UNTRUSTED_INPUT_NOT_INSTRUCTION",
+  "candidate_reuse_rights": "NOT_GRANTED_BY_DISCOVERY",
+  "model_calls_allowed": 0,
+  "downstream_writes_allowed": 0,
+  "external_actions_allowed": 0,
+  "budgets": {
+    "max_objectives_per_cycle": 5,
+    "exploration_fraction": 0.2,
+    "max_queries_per_objective": 2,
+    "max_search_results_per_query": 5,
+    "max_candidates_inspected_per_cycle": 20,
+    "max_api_requests_per_cycle": 80,
+    "max_tree_paths_per_candidate": 2000,
+    "max_output_bytes": 5242880,
+    "max_runtime_seconds": 240,
+    "retry_limit": 2,
+    "retry_backoff_seconds": 2
+  },
+  "learning": {
+    "minimum_cycles_before_strategy_adjustment": 5,
+    "minimum_inspections_before_strategy_adjustment": 20,
+    "negative_query_suppression_after": 2,
+    "verified_outcomes_only_for_value_credit": true,
+    "exploration_floor_fraction": 0.2
+  },
+  "state_persistence": {
+    "mode": "GITHUB_ACTIONS_ARTIFACT",
+    "artifact_name": "portfolio-hunter-state",
+    "retention_days": 30,
+    "seed_file": "hunting/HUNTER_STATE_SEED.json",
+    "sanitized_only": true
+  },
+  "kill_switches": {
+    "repository_variable": "PORTFOLIO_HUNTER_DISABLED",
+    "file": "hunting/KILL_SWITCH.json"
+  }
+}

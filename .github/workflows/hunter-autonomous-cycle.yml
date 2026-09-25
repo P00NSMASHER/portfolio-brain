@@ -1,0 +1,44 @@
+name: hunter-autonomous-cycle
+
+on:
+  schedule:
+    - cron: "47 */6 * * *"
+  repository_dispatch:
+    types: ["portfolio_hunt"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: portfolio-hunter-state
+  cancel-in-progress: false
+
+jobs:
+  hunt:
+    if: ${{ vars.PORTFOLIO_HUNTER_DISABLED != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PORTFOLIO_HUNTER_DISABLED: ${{ vars.PORTFOLIO_HUNTER_DISABLED }}
+      PORTFOLIO_GITHUB_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Restore latest Hunter state
+        run: python -m hunting.artifact_state --output hunting/live/hunter_state.json
+      - name: Run autonomous bounded Hunter cycle
+        run: python -m hunting.autonomous_hunter --state hunting/live/hunter_state.json --output-dir hunting/out
+      - name: Validate state
+        run: python -c "import json; from hunting.autonomous_hunter import validate_state; validate_state(json.load(open('hunting/out/hunter_state.json')))"
+      - name: Upload sanitized Hunter continuation state
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-hunter-state
+          path: hunting/out/
+          if-no-files-found: error
+          retention-days: 30

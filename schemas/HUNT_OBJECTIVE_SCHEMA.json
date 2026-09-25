@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/HUNT_OBJECTIVE_SCHEMA.json",
+  "title": "Portfolio Hunter Objective",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "objective_id",
+    "gap_id",
+    "project_ids",
+    "need_type",
+    "capability_key",
+    "strategy_id",
+    "exploration",
+    "priority_components",
+    "queries",
+    "acceptance_target",
+    "stop_conditions",
+    "authority_class"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "objective_id": {
+      "type": "string",
+      "pattern": "^HOBJ-[A-Z0-9-]{8,}$"
+    },
+    "gap_id": {
+      "type": "string",
+      "pattern": "^HGAP-[A-Z0-9-]{8,}$"
+    },
+    "project_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^PRJ-[0-9]{3,}$"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "need_type": {
+      "enum": [
+        "UNMAPPED_CAPABILITY_COVERAGE",
+        "CAPABILITY_EVIDENCE_GAP",
+        "EXPLORATION"
+      ]
+    },
+    "capability_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "strategy_id": {
+      "type": "string",
+      "pattern": "^STRAT:.+"
+    },
+    "exploration": {
+      "type": "boolean"
+    },
+    "priority_components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "importance",
+        "uncertainty",
+        "downstream_reuse",
+        "external_validation_value",
+        "dead_end_penalty"
+      ],
+      "properties": {
+        "importance": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "uncertainty": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "downstream_reuse": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "external_validation_value": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "dead_end_penalty": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        }
+      }
+    },
+    "queries": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "acceptance_target": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "stop_conditions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "authority_class": {
+      "const": "OBSERVE"
+    }
+  }
+}
