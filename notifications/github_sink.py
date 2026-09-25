@@ -12,16 +12,21 @@ TITLES={
 "VERIFIED_POSITIVE_OUTCOME":"Verified positive outcome",
 "PORTFOLIO_STATE_CHANGED":"Portfolio decision state changed",
 }
+def _safe(value):
+    raw=str(value)[:300]
+    return "".join(ch if ch.isalnum() or ch in "._:/@+#=-" else "_" for ch in raw)
+def _command_data(value):
+    return str(value).replace("%","%25").replace("\r","%0D").replace("\n","%0A")
 def _message(a):
-    projects=",".join(a.get("project_ids") or ["PORTFOLIO"])
-    entities=",".join(a.get("entity_refs",[])[:8])
-    return f"severity={a['severity']} projects={projects} entities={entities} evidence_refs={len(a.get('evidence_refs',[]))}"
+    projects=",".join(_safe(x) for x in (a.get("project_ids") or ["PORTFOLIO"]))
+    entities=",".join(_safe(x) for x in a.get("entity_refs",[])[:8])
+    return f"severity={_safe(a['severity'])} projects={projects} entities={entities} evidence_refs={len(a.get('evidence_refs',[]))}"
 def emit(alerts):
     summary=["# Portfolio Brain alerts",""]
     for a in alerts:
         title=TITLES.get(a["kind"],a["kind"]);msg=_message(a)
         level="error" if a["severity"]=="CRITICAL" else "warning" if a["severity"]=="HIGH" else "notice"
-        print(f"::{level} title={title}::{msg}")
+        print(f"::{level} title={title}::{_command_data(msg)}")
         summary.append(f"- **{a['severity']} — {title}** — {msg}")
     if not alerts:summary.append("- No alerts emitted this cycle.")
     path=os.environ.get("GITHUB_STEP_SUMMARY")
