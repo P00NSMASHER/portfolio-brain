@@ -1,16 +1,33 @@
 # Portfolio Brain
 
-Private autonomous portfolio intelligence control plane for PRJ-000.
+Autonomous portfolio intelligence control plane for PRJ-000.
 
-This Step 1 foundation is intentionally non-operational. Nothing here grants downstream write authority, schedules autonomous work, invokes a model, deploys infrastructure, contacts customers, moves money, or trades.
+**Status: OPERATIONAL.** Steps 0–25 are complete. Ordinary operation runs through GitHub automation and durable machine-readable state; interactive ChatGPT is not a runtime dependency.
 
-## Foundation
+## Operating mode
 
-- `FOUNDATION_SKELETON.json` declares the intended top-level architecture.
-- `registry/PROJECT_REGISTRATION_CONTRACT.json` is the deny-by-default Step 1 registration contract.
-- `docs/ARCHITECTURE_CONTRACT.md` defines hard evidence and authority boundaries.
-- `tests/validate_foundation.py` is the deterministic foundation validator.
-- `.github/workflows/foundation-ci.yml` runs read-only bounded validation.
-- `PORTFOLIO_BUILD_STATE.json` is the durable master cursor.
+Portfolio Brain can autonomously:
 
-Empty implementation directories are represented by the skeleton manifest until their numbered build step creates real content.
+- observe registered repositories through bounded read-only adapters;
+- rebuild deterministic learning, uncertainty, experiment and allocation state;
+- run bounded public Hunter searches;
+- select evidence-gated work with duplicate/lease suppression;
+- enforce cost, retry and kill-switch limits; and
+- produce deduplicated evidence-gated notifications.
+
+The checked-in paid/model/API budget remains zero and no non-Tier-0 model is enabled.
+
+## Permanent authority boundaries
+
+Autonomous operation does **not** grant customer communication, payment/cash movement, live trading or brokerage execution, deployment, merge authority, secret changes, or unapproved consequential child-facing changes. Those remain human-gated or prohibited.
+
+Because this repository is currently public, persistent state remains sanitized-only. Private customer/operational payloads, credentials, secrets and sensitive evidence bodies are not stored here.
+
+## Evidence
+
+- `PORTFOLIO_BUILD_STATE.json` — durable Steps 0–25 build/operating record.
+- `operations/OPERATING_MODE_POLICY.json` — approved autonomous operating mode.
+- `operations/OPERATING_MODE_STATUS.json` — post-promotion verification evidence.
+- `hostile/ATTACK_MATRIX.json` — Step 23 adversarial threat coverage.
+- `canary/CANARY_CONTRACT.md` — Step 24 no-prompt canary contract.
+- `.github/workflows/foundation-ci.yml` — deterministic full-chain validation.

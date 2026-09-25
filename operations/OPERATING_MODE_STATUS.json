@@ -1,14 +1,33 @@
 {
   "schema_version": "1.0.0",
   "operating_mode_id": "portfolio-brain-autonomous-operating-mode-v1",
-  "status": "RELEASE_CANDIDATE",
+  "status": "OPERATIONAL",
   "candidate_branch": "step25-final-autonomous-operating-mode-20260925",
   "candidate_source_head": "8891764144dbcaccb8683d3f28a7db45bef52aba",
   "target_branch": "main",
-  "promoted_main_sha": null,
-  "final_ci_run_id": null,
-  "post_promotion_runtime_run_id": null,
-  "post_promotion_runtime_artifacts": [],
+  "promoted_main_sha": "cdd7adc71472f61a07f3641e9ff414091fc1bc35",
+  "final_ci_run_id": 36202440293,
+  "post_promotion_runtime_run_id": 36202440452,
+  "post_promotion_runtime_artifacts": [
+    {
+      "artifact_id": 10893000178,
+      "name": "portfolio-runtime-state",
+      "digest": "sha256:2e5831a531af1617448c4305bfd2d54095ae212b232f55fb11c1494a1d1469a8"
+    },
+    {
+      "artifact_id": 10892880305,
+      "name": "portfolio-cost-governor-state",
+      "digest": "sha256:829904cf1a1c187c9c5f0ff036ca7dfa74860a72006123405ee436ea2cf84c6d"
+    },
+    {
+      "artifact_id": 10892253259,
+      "name": "portfolio-step24-canary-cdd7adc71472f61a07f3641e9ff414091fc1bc35",
+      "digest": "sha256:808f08d225ca1d74223569496d04e5558e4a4e17975dee7a16852a32d7164e90"
+    }
+  ],
   "authority_change": "NONE",
-  "operational_without_interactive_chatgpt": null
+  "operational_without_interactive_chatgpt": true,
+  "release_candidate_head": "bf9fa7375c78609c81df3274d57b9e5e88ca44bd",
+  "release_candidate_ci_run_id": 36202388569,
+  "external_chatgpt_tasks_role": "ADVISORY_MONITORING_ONLY_NOT_RUNTIME_DEPENDENCY"
 }

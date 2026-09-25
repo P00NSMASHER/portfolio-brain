@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "operating_mode_id": "portfolio-brain-autonomous-operating-mode-v1",
-  "release_phase": "STEP25_FINAL_RELEASE_CANDIDATE",
+  "release_phase": "STEP25_OPERATIONAL",
   "default_branch": "main",
   "mode": "AUTONOMOUS_OBSERVE_LEARN_HUNT_SCHEDULE_NOTIFY",
   "interactive_chatgpt_runtime_dependency": false,
