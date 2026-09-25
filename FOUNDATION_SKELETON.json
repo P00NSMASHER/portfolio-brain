@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0.0",
+  "project_id": "PRJ-000",
+  "repository_target": "P00NSMASHER/portfolio-brain",
+  "staging_root": null,
+  "materialization_status": "MATERIALIZED_FOUNDATION",
+  "authority_change": "NONE",
+  "directories": [
+    "registry","schemas","events","adapters","truth","memory","graph","hunting",
+    "learning","experiments","uncertainty","allocator","agents","model_router",
+    "software_factory","verification","repair","governance","runtime","reports",
+    "dashboard","tests",".github/workflows"
+  ],
+  "adapter_names": [
+    "hunter","recoveryworks","freight","permitplate","capturebrief","starblox",
+    "abvm","trading_research"
+  ],
+  "invariants": [
+    "Downstream repositories remain independent.",
+    "All downstream adapters are disabled by default.",
+    "No schedule, model call, deployment, customer action, payment, trading action, or downstream write is enabled by this foundation.",
+    "PORTFOLIO_BUILD_STATE.json is the durable numbered-step cursor.",
+    "Private operational/customer payloads are referenced, not copied into public repository state."
+  ]
+}
