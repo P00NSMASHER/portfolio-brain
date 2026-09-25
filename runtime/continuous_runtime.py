@@ -8,6 +8,7 @@ from typing import Any
 
 from adapters.github_readonly import GitHubReadOnlyClient, observe_repository
 from runtime.state import advance_cycle, bootstrap_state, canonical_hash, load_json, validate_state
+from learning.continuous_learning import rebuild_from_ledger
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -145,8 +146,12 @@ def run(mode: str, *, state_path: Path, output_dir: Path, target_repository_id: 
     updated=advance_cycle(state,receipt)
 
     if mode=="daily":
-        snap=daily_snapshot(updated,observations,at); snap["snapshot_hash"]=canonical_hash(snap)
-        updated["daily_learning_state"]={"generated_at":at,"snapshot_hash":snap["snapshot_hash"]}
+        learning_state=rebuild_from_ledger()
+        (output_dir/"portfolio_learning_state.json").write_text(json.dumps(learning_state,indent=2)+"\n")
+        snap=daily_snapshot(updated,observations,at)
+        snap["portfolio_learning_state_hash"]=learning_state["state_hash"]
+        snap["snapshot_hash"]=canonical_hash(snap)
+        updated["daily_learning_state"]={"generated_at":at,"snapshot_hash":snap["snapshot_hash"],"portfolio_learning_state_hash":learning_state["state_hash"]}
         (output_dir/"daily_learning_state.json").write_text(json.dumps(snap,indent=2)+"\n")
     elif mode=="weekly":
         snap=weekly_snapshot(updated,observations,at); snap["snapshot_hash"]=canonical_hash(snap)

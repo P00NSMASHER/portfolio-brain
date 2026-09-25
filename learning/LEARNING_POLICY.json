@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0.0",
+  "learning_engine_id": "portfolio-continuous-learning-v1",
+  "mode": "OBSERVE_FIRST_ADVISORY",
+  "policy_effect": "NONE",
+  "automatic_policy_promotion": false,
+  "domains": [
+    "SEARCH",
+    "ENGINEERING",
+    "TEST",
+    "REGRESSION",
+    "PRODUCT",
+    "CUSTOMER",
+    "EXPERIMENT",
+    "MODEL",
+    "RESOURCE"
+  ],
+  "phases": [
+    "TRAIN",
+    "CONFIRM",
+    "EVALUATION_ONLY"
+  ],
+  "measurement_qualities": [
+    "PROSPECTIVE",
+    "BENCHMARK",
+    "RETROSPECTIVE",
+    "INTERNAL_ACTIVITY"
+  ],
+  "signal_classes": [
+    "INTERNAL_ACTIVITY",
+    "VERIFIED_TECHNICAL",
+    "VERIFIED_EXTERNAL_VALUE",
+    "COST_RESOURCE"
+  ],
+  "reward_weights": {
+    "INTERNAL_ACTIVITY": 0,
+    "VERIFIED_TECHNICAL": 0.5,
+    "VERIFIED_EXTERNAL_VALUE": 1,
+    "COST_RESOURCE": 0.4
+  },
+  "q_config": {
+    "alpha": 0.15,
+    "gamma": 0,
+    "q_floor": -1,
+    "q_ceiling": 1
+  },
+  "promotion_gate": {
+    "minimum_train_observations": 5,
+    "minimum_train_sample_size": 20,
+    "minimum_confirm_observations": 2,
+    "minimum_confirm_sample_size": 6,
+    "minimum_confirm_mean_reward": 0,
+    "minimum_confirm_min_reward": 0,
+    "minimum_confirm_positive_observations": 1
+  },
+  "invariants": [
+    "Only VERIFIED TRAIN observations with PROSPECTIVE or BENCHMARK measurement quality may update Q-values.",
+    "CONFIRM observations never update Q-values and exist only to test generalization.",
+    "EVALUATION_ONLY observations never update Q-values or promotion support.",
+    "RETROSPECTIVE and INTERNAL_ACTIVITY observations never update Q-values.",
+    "INFERRED, OBSERVED, UNKNOWN, CONTRADICTED, STALE and INVALID observations never update Q-values.",
+    "VERIFIED_EXTERNAL_VALUE has greater reward weight than VERIFIED_TECHNICAL or COST_RESOURCE.",
+    "INTERNAL_ACTIVITY has zero reward weight.",
+    "Global and project-scoped memory keys are distinct.",
+    "Learning records remain advisory until the train and independent confirm gates pass.",
+    "No learning result can override governance, STOP, truth, or authority gates."
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0.0",
+  "integration_id": "LEARNING-AI-BUSINESS-OS-001",
+  "source_repository": "P00NSMASHER/github-value-hunt-ledger",
+  "source_revision": "b906d3f12aa9ad1bf443c41ff5281f38f5eeab0a",
+  "components": {
+    "learning_engine": {
+      "path": "production/learning_engine.py",
+      "blob_sha": "6ce4b266e24b9f6d8089e32618fa7a5c95bfe89c"
+    },
+    "learning_engine_contract": {
+      "path": "production/LEARNING_ENGINE.md",
+      "blob_sha": "4baf08ed31bb6727ec316ffd79189650cd938f68"
+    },
+    "learning_state_compiler": {
+      "path": "tools/ti_learning_state.py",
+      "blob_sha": "03b49f8097430a874d4ae61947e4d9411e815150"
+    },
+    "search_move_learning": {
+      "path": "tools/ti_search_move_learning.py",
+      "blob_sha": "89f9b38fb18484bc6c00ac20fd451f29e09f2aa8"
+    },
+    "repair_queue": {
+      "path": "production/repair_queue.py",
+      "blob_sha": "eca81c795a130cd467812de5867c26dec1044ef2"
+    },
+    "learning_tests": {
+      "path": "tests/test_ti_learning_engine.py",
+      "blob_sha": "ada39ebadffd047ab5f2de706887747c9fff2795"
+    }
+  },
+  "preserved_semantics": [
+    "Learning is advisory and does not itself grant execution authority.",
+    "Unknown denominators remain unknown and are never imputed.",
+    "Objective-conditioned/contextual memory prevents silent cross-domain generalization.",
+    "Only train-partition experience updates value memory; confirm and evaluation-only partitions do not train.",
+    "Policy consideration requires minimum train evidence plus independent confirm evidence.",
+    "Single anecdotes do not establish strategy superiority.",
+    "Failures eligible for repair require reproducibility and evidence.",
+    "Realized revenue/customer value and verified downstream outcomes outrank repository popularity or internal activity.",
+    "Overfit and confirm-regression signals remain explicit rather than being averaged away."
+  ],
+  "integration_mode": "PINNED_LEARNING_SEMANTICS_PLUS_PORTFOLIO_NORMALIZATION",
+  "copied_source_code": false,
+  "drift_policy": {
+    "exact_repository_revision_required": true,
+    "component_blob_shas_required": true,
+    "on_source_revision_change": "TARGETED_DELTA_AND_RECONFORM",
+    "on_component_blob_mismatch": "FAIL_CLOSED"
+  }
+}
