@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529",
+      "last_inspected_sha": "a5d4db95645676367848465e21aa34154eb5faab",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T20:16:08Z",
-      "notes": "Step 17 continuous repair/self-improvement control plane verified at 5d88e6ddc84dfd8e4c2036a1968e874f35b91529. Learning alerts are reproduction-only; verified reproducible failure packets may compile into Step 16 isolated factory work, followed by held-out evaluation, separate audit and zero-regression/zero-authority-violation canary. PROMOTION_ELIGIBLE remains human/integrator gated and no direct promote/merge/deploy surface exists."
+      "last_observed_at": "2026-09-25T20:32:38Z",
+      "notes": "Step 18 cross-project intelligence transfer verified at a5d4db95645676367848465e21aa34154eb5faab. Current graph yields 44 provenance-backed transfer hypotheses from four VERIFIED Portfolio Brain capabilities: 40 assessment-ready and 4 PermitPlate-blocked by BLK-001. No transfer outcome or REUSED_BY/GENERATED_VALUE_FOR success edge is fabricated; measurable independently VERIFIED target outcomes are required."
     }
   },
   "decisions": [
@@ -1149,11 +1149,11 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.17.0",
+  "architecture_version": "1.18.0",
   "state_id": "portfolio-brain-master",
-  "working_branch": "step17-continuous-repair-20260925",
+  "working_branch": "step18-cross-project-transfer-20260925",
   "phase": "architecture_build",
-  "current_step": 18,
+  "current_step": 19,
   "completed_steps": [
     0,
     1,
@@ -1172,7 +1172,8 @@
     14,
     15,
     16,
-    17
+    17,
+    18
   ],
   "artifacts": [
     {
@@ -2374,6 +2375,78 @@
       "kind": "step17_ci_validation_extension",
       "step": 17,
       "commit_sha": "5d88e6ddc84dfd8e4c2036a1968e874f35b91529"
+    },
+    {
+      "path": "transfer/AI_BUSINESS_OS_PEER_TRANSFER_PIN.json",
+      "kind": "step18_peer_transfer_source_pin",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "transfer/TRANSFER_POLICY.json",
+      "kind": "step18_transfer_policy",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "transfer/CAPABILITY_TRANSFER_RULES.json",
+      "kind": "step18_transfer_applicability_rules",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "schemas/CAPABILITY_TRANSFER_PROPOSAL_SCHEMA.json",
+      "kind": "step18_transfer_proposal_schema",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "schemas/CAPABILITY_TRANSFER_OUTCOME_SCHEMA.json",
+      "kind": "step18_transfer_outcome_schema",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "transfer/TRANSFER_LEDGER.json",
+      "kind": "step18_transfer_outcome_ledger",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "transfer/cross_project_transfer.py",
+      "kind": "step18_cross_project_transfer_engine",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "transfer/validate_transfer.py",
+      "kind": "step18_transfer_validator",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "transfer/CROSS_PROJECT_TRANSFER_CONTRACT.md",
+      "kind": "step18_transfer_contract",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "tests/test_cross_project_transfer.py",
+      "kind": "step18_transfer_regressions",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": "runtime/continuous_runtime.py",
+      "kind": "step18_daily_transfer_runtime_integration",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step18_ci_validation_extension",
+      "step": 18,
+      "commit_sha": "a5d4db95645676367848465e21aa34154eb5faab"
     }
   ],
   "tests": [
@@ -2586,24 +2659,31 @@
       "status": "PASS",
       "step": 17,
       "evidence": "GitHub Actions foundation-ci run 36184714196 succeeded at exact Step 17 code head 5d88e6ddc84dfd8e4c2036a1968e874f35b91529. Repair validator reported pinned_components=9, seed_failures=0, seed_tasks=0, promotion_eligible=0, automatic_mutation=false and automatic_promotion=false; 223 total regression tests passed."
+    },
+    {
+      "name": "step18_cross_project_transfer_ci",
+      "status": "PASS",
+      "step": 18,
+      "evidence": "GitHub Actions foundation-ci run 36186372443 succeeded at exact Step 18 code head a5d4db95645676367848465e21aa34154eb5faab. Transfer validator reported proposals=44, assessment_ready=40, blocked=4, checked_in_outcomes=0, verified_success_edges=0 and source_capabilities=4; 235 total regression tests passed."
     }
   ],
   "next_action": {
-    "step": 18,
-    "summary": "WAIT FOR CONTINUE. Step 17 is complete. Next exact numbered step is Step 18 — Cross-project intelligence transfer: detect reusable capabilities across projects, propose evidence-backed transfers, require bounded transfer experiments, and claim success only after measurable verified downstream evidence. Do not begin Step 18 until explicit CONTINUE.",
+    "step": 19,
+    "summary": "WAIT FOR CONTINUE. Step 18 is complete. Next exact numbered step is Step 19 — Autonomous scheduling: create a persistent work scheduler that continuously chooses hunt, experiment, repair, test, research, integration and verification work from current portfolio state without waiting for ChatGPT. Do not begin Step 19 until explicit CONTINUE.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Do not repeat Steps 0–17 unless an exact pinned source cursor changed.",
-      "Work on Step 18 only and stop after its verified commit.",
+      "Do not repeat Steps 0–18 unless an exact pinned source cursor changed.",
+      "Work on Step 19 only and stop after its verified commit.",
       "Do not activate Step 8, Step 9 or Step 16 workflows on main yet; recurring/live activation remains deferred.",
-      "A graph path or shared capability label is a transfer hypothesis, not evidence that transfer worked.",
-      "Require exact source capability provenance, target need evidence, bounded transfer experiment and VERIFIED downstream outcome before GENERATED_VALUE_FOR or equivalent success claims.",
-      "Respect rights/data/authority boundaries when transferring capabilities across projects.",
-      "Cross-project transfer may propose isolated changes but cannot bypass Step 16 factory, Step 17 repair or human-gated ACT boundaries.",
+      "Scheduler must select among hunt, experiment, repair, test, research, integration and verification using evidence and current state, not activity quotas.",
+      "Scheduler may enqueue only work whose role, autonomy, resource and governance gates are already satisfied.",
+      "Human-gated ACT may appear as blocked/approval-required work but must not be autonomously executed.",
+      "Scheduler must suppress duplicates, respect leases/active work and preserve STOP/kill switches.",
+      "Cross-project transfer hypotheses remain proposals until verified target outcomes exist.",
       "Keep live trading, customer communications, payments and other consequential ACT human-gated."
     ]
   },
-  "updated_at": "2026-09-25T20:18:00Z",
+  "updated_at": "2026-09-25T20:35:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -3097,6 +3177,38 @@
         ],
         "promotion_required_approval": "INTEGRATOR_APPROVAL",
         "regression_tests": 223
+      }
+    },
+    "18": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "18A_PIN_PEER_TRANSFER_AND_GRAPH_SEMANTICS",
+        "18B_VERIFIED_SOURCE_CAPABILITY_AND_TARGET_NEED_GATES",
+        "18C_MACHINE_READABLE_TRANSFER_APPLICABILITY_RULES",
+        "18D_BOUNDED_OBSERVE_ONLY_TRANSFER_EXPERIMENT_CONTRACT",
+        "18E_RIGHTS_FACTORY_AND_ACT_BOUNDARIES",
+        "18F_VERIFIED_MEASURABLE_TARGET_OUTCOME_GATE",
+        "18G_REUSED_BY_AND_GENERATED_VALUE_EDGE_CANDIDATES",
+        "18H_DAILY_RUNTIME_TRANSFER_INTEGRATION",
+        "18I_REQUESTED_PATTERN_SYNTHETIC_REGRESSIONS",
+        "18J_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_revision": "9533769a669429d2553302df6068b4b1f8099e89",
+        "verified_source_capabilities": 4,
+        "current_transfer_hypotheses": 44,
+        "assessment_ready": 40,
+        "blocked": 4,
+        "checked_in_transfer_outcomes": 0,
+        "verified_success_edge_candidates": 0,
+        "automatic_downstream_modify": false,
+        "automatic_generated_value_edges": false,
+        "rights_review_required": true,
+        "independent_verifier_required": true,
+        "measurable_target_metric_required": true,
+        "regression_tests": 235
       }
     }
   }
