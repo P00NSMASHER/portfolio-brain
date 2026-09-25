@@ -99,6 +99,7 @@ def execute_canary(output_dir):
         forced_now=T1,
     )
     runtime_state_1=_load_json(first/"runtime"/"runtime_state.json");validate_runtime_state(runtime_state_1)
+    _write(checkpoint/"runtime_state.json",runtime_state_1)
     req(runtime_receipt_1["status"]=="PASS","runtime canary failed")
     req(runtime_receipt_1["api_requests"]<=policy["max_runtime_api_reads"],"runtime mirror read budget exceeded")
     req(all(o["status"] in {"UNCHANGED","BLOCKED"} for o in runtime_receipt_1["observations"]),"canary unexpectedly discovered source changes")
