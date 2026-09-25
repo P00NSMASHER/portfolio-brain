@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "f1bb345325ba8caf181701969814096e39b2e30f",
+      "last_inspected_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T18:58:47Z",
-      "notes": "Step 12 bounded experiment engine verified at f1bb345325ba8caf181701969814096e39b2e30f. It converts all Step 11 uncertainties into explicit plans with authority, cost, rollback and outcome gates. The selected RecoveryWorks external-validation plan is complete but HUMAN_APPROVAL_REQUIRED and has zero autonomous messages/spend/writes/model calls."
+      "last_observed_at": "2026-09-25T19:11:22Z",
+      "notes": "Step 13 deterministic-first, provider-agnostic model router verified at 18de5db7471cbaa2936cd9bf476217f7bd197723. Checked-in configuration enables Tier 0 only; Tier 1-3 provider slots are disabled and contain no secrets. Routing records sanitized usage/cost hashes and only VERIFIED downstream feedback may contribute to later routing value."
     }
   },
   "decisions": [
@@ -812,6 +812,64 @@
         "runtime/continuous_runtime.py",
         "experiments/EXPERIMENT_ENGINE_CONTRACT.md"
       ]
+    },
+    {
+      "decision_id": "DEC-079",
+      "summary": "Step 13 reconciled REPO-001 from c4be1a3e10a92b9255906b1600097fe6371ea929 to dcca6215f2439bb55391335fe0513f471c762290 using a targeted delta. HUNTER-06/HUNTER-07 plus the runtime gateway/worker-contract test changed; existing Truth, Value Memory, Graph, Hunter, Learning and Experiment component blobs remained unchanged and were repinned without semantic changes.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "PORTFOLIO_BUILD_STATE.json",
+        "model_router/AI_BUSINESS_OS_RUNTIME_GATEWAY_PIN.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-080",
+      "summary": "Model routing is deterministic-first. Tier 0 is mandatory whenever deterministic code is sufficient unless independent adversarial verification is explicitly required. Tier 1 handles cheap extraction/classification/summarization, Tier 2 strong reasoning, and Tier 3 independent adversarial verification.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "model_router/MODEL_ROUTER_POLICY.json",
+        "model_router/model_router.py",
+        "tests/test_model_router.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-081",
+      "summary": "The checked-in provider registry enables only deterministic Tier 0. API and self-hosted Tier 1-3 slots are disabled, carry only environment-variable names rather than secrets, and cannot route until an explicit provider/model plus finite pre-call pricing is configured.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "model_router/PROVIDER_REGISTRY.json",
+        "model_router/MODEL_ROUTER_CONTRACT.md",
+        "model_router/validate_model_router.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-082",
+      "summary": "Tier 3 adversarial routing requires explicit builder independence context and a verifier model from a different independence group. If no independent eligible verifier exists within data/token/cost boundaries, routing fails closed.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "model_router/model_router.py",
+        "tests/test_model_router.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-083",
+      "summary": "Model-call receipts can never grant authority or upgrade evidence state. They record provider/model/tier, token usage, cost/cost basis, latency and input/output hashes without prompt content. Only VERIFIED downstream outcome feedback contributes to model-routing value summaries.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/MODEL_CALL_RECEIPT_SCHEMA.json",
+        "schemas/MODEL_OUTCOME_FEEDBACK_SCHEMA.json",
+        "model_router/model_router.py",
+        "model_router/MODEL_ROUTING_LEDGER.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-084",
+      "summary": "The inspected AI Business OS runtime gateway remains a named-operation/approval boundary rather than the model router: worker operations are named, arbitrary SQL is absent, and human approval decisions are separately intent-bound. Portfolio Brain keeps provider routing separate from authority/approval operations.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "model_router/AI_BUSINESS_OS_RUNTIME_GATEWAY_PIN.json",
+        "model_router/MODEL_ROUTER_CONTRACT.md"
+      ]
     }
   ],
   "blockers": [
@@ -846,11 +904,11 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.12.0",
+  "architecture_version": "1.13.0",
   "state_id": "portfolio-brain-master",
   "working_branch": "step13-model-router-20260925",
   "phase": "architecture_build",
-  "current_step": 13,
+  "current_step": 14,
   "completed_steps": [
     0,
     1,
@@ -864,7 +922,8 @@
     9,
     10,
     11,
-    12
+    12,
+    13
   ],
   "artifacts": [
     {
@@ -1718,6 +1777,78 @@
       "kind": "step12_ci_validation_extension",
       "step": 12,
       "commit_sha": "f1bb345325ba8caf181701969814096e39b2e30f"
+    },
+    {
+      "path": "model_router/MODEL_ROUTER_POLICY.json",
+      "kind": "step13_model_router_policy",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "model_router/PROVIDER_REGISTRY.json",
+      "kind": "step13_provider_registry",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "model_router/AI_BUSINESS_OS_RUNTIME_GATEWAY_PIN.json",
+      "kind": "step13_runtime_gateway_boundary_pin",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "schemas/MODEL_ROUTE_REQUEST_SCHEMA.json",
+      "kind": "step13_model_route_request_schema",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "schemas/MODEL_CALL_RECEIPT_SCHEMA.json",
+      "kind": "step13_model_call_receipt_schema",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "schemas/MODEL_OUTCOME_FEEDBACK_SCHEMA.json",
+      "kind": "step13_model_outcome_feedback_schema",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "model_router/MODEL_ROUTING_LEDGER.json",
+      "kind": "step13_model_routing_ledger",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "model_router/model_router.py",
+      "kind": "step13_model_router",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "model_router/validate_model_router.py",
+      "kind": "step13_model_router_validator",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "model_router/MODEL_ROUTER_CONTRACT.md",
+      "kind": "step13_model_router_contract",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": "tests/test_model_router.py",
+      "kind": "step13_model_router_regressions",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step13_ci_validation_extension",
+      "step": 13,
+      "commit_sha": "18de5db7471cbaa2936cd9bf476217f7bd197723"
     }
   ],
   "tests": [
@@ -1894,25 +2025,30 @@
       "status": "PASS",
       "step": 12,
       "evidence": "Initial Step 12 run 36176704610 failed because a blocked human-gated uncertainty was validated as if HUMAN_APPROVAL_REQUIRED were the only allowed state. Repair commits 0c5411c142aa61d7ac10a83238c225b27f5d6f43 and f1bb345325ba8caf181701969814096e39b2e30f made explicit blockers more restrictive than approval and added a regression; replacement run 36176812095 passed."
+    },
+    {
+      "name": "step13_model_router_ci",
+      "status": "PASS",
+      "step": 13,
+      "evidence": "GitHub Actions foundation-ci run 36178117494 succeeded at exact Step 13 code head 18de5db7471cbaa2936cd9bf476217f7bd197723. Model-router validator reported 4 tiers, deterministic Tier 0 provider, enabled_nonzero_models=0, checked_in_calls=0 and checked_in_outcomes=0; 176 total regression tests passed."
     }
   ],
   "next_action": {
-    "step": 13,
-    "summary": "WAIT FOR CONTINUE. Step 12 is complete. Next exact numbered step is Step 13 — Model router: implement deterministic/cheap/strong/adversarial intelligence routing and record model cost plus downstream outcomes, with Tier 0 deterministic code preferred whenever sufficient. Do not begin Step 13 until explicit CONTINUE.",
+    "step": 14,
+    "summary": "WAIT FOR CONTINUE. Step 13 is complete. Next exact numbered step is Step 14 — Persistent agents: implement bounded persistent roles for Portfolio Manager, Hunter, Researcher, Product Analyst, Engineer, Tester, Auditor, Red Team, Data Steward and Commercial Analyst, persisting identity, work, evidence and state. Do not begin Step 14 until explicit CONTINUE.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Do not repeat Steps 0–12 unless an exact pinned source cursor changed.",
-      "Work on Step 13 only and stop after its verified commit.",
+      "Do not repeat Steps 0–13 unless an exact pinned source cursor changed.",
+      "Work on Step 14 only and stop after its verified commit.",
       "Do not activate Step 8 or Step 9 schedules on main yet; recurring production activation remains deferred.",
-      "Tier 0 deterministic code is preferred whenever sufficient.",
-      "Model calls cannot grant authority or upgrade evidence state.",
-      "Tier 3/adversarial verification must remain independent from the builder for consequential promotion decisions.",
-      "Record provider/model identity, cost/usage and eventual downstream outcome so routing can later learn from value rather than model prestige.",
-      "Keep human-gated ACT, live trading, payments and customer communications outside autonomous model authority.",
-      "While BLK-005 is open, store only sanitized non-sensitive model-routing metadata/evidence references."
+      "Agents inherit autonomy ceilings and cannot create authority for themselves.",
+      "Builder and verifier roles must remain separable for consequential work.",
+      "Use Tier 0 deterministic routing when sufficient; checked-in Tier 1-3 providers remain disabled until explicitly configured.",
+      "Persist agent identity, leases/work, evidence and resumable state without storing private payloads in this public repository.",
+      "Keep customer communications, payments, live trading and other consequential ACT human-gated."
     ]
   },
-  "updated_at": "2026-09-25T19:08:00Z",
+  "updated_at": "2026-09-25T19:13:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -2224,6 +2360,35 @@
         "autonomous_downstream_writes_max": 0,
         "definitive_outcome_requires_verified_independent_verifier": true,
         "regression_tests": 164
+      }
+    },
+    "13": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "13A_RECONCILE_PINNED_SOURCE_CURSOR",
+        "13B_DETERMINISTIC_FIRST_TIER_CONTRACT",
+        "13C_PROVIDER_AGNOSTIC_REGISTRY",
+        "13D_COST_DATA_AND_TOKEN_BOUNDED_ROUTING",
+        "13E_TIER3_INDEPENDENT_ADVERSARIAL_GATE",
+        "13F_USAGE_COST_AND_OUTCOME_RECEIPTS",
+        "13G_VERIFIED_OUTCOME_ROUTING_VALUE_TELEMETRY",
+        "13H_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_revision": "dcca6215f2439bb55391335fe0513f471c762290",
+        "tiers": 4,
+        "deterministic_tier": 0,
+        "checked_in_enabled_nonzero_models": 0,
+        "checked_in_model_calls": 0,
+        "checked_in_model_outcomes": 0,
+        "paid_api_spend_enabled": false,
+        "tier3_independence_required": true,
+        "model_can_grant_authority": false,
+        "model_can_upgrade_evidence": false,
+        "routing_value_feedback_requires_verified_outcome": true,
+        "regression_tests": 176
       }
     }
   }
