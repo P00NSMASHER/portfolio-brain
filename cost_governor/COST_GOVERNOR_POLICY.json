@@ -121,6 +121,18 @@
         "github_runner_minutes": 8
       },
       "max_minutes_per_job": 2
+    },
+    "step24-autonomous-learning-canary::canary": {
+      "daily_ceiling": {
+        "cost_usd": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "model_calls": 0,
+        "api_calls": 0,
+        "github_job_starts": 1,
+        "github_runner_minutes": 5
+      },
+      "max_minutes_per_job": 5
     }
   },
   "retry_limits": {
