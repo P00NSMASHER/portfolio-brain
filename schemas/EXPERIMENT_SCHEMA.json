@@ -1,0 +1,306 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/EXPERIMENT_SCHEMA.json",
+  "title": "Portfolio Bounded Experiment Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "experiment_id",
+    "semantic_revision",
+    "uncertainty_id",
+    "project_ids",
+    "primary_project_id",
+    "status",
+    "execution_mode",
+    "authority_requirement",
+    "autonomous_execution_allowed",
+    "approval_requirements",
+    "hard_blockers",
+    "inherited_hard_boundaries",
+    "hypothesis",
+    "inputs",
+    "baseline",
+    "success_condition",
+    "failure_condition",
+    "inconclusive_condition",
+    "evidence_requirements",
+    "cost_boundary",
+    "rollback",
+    "outcome_recording",
+    "uncertainty_components",
+    "provenance_refs",
+    "experiment_hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "experiment_id": {
+      "type": "string",
+      "pattern": "^PEXP-[A-Z0-9]{16}$"
+    },
+    "semantic_revision": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "uncertainty_id": {
+      "type": "string",
+      "pattern": "^UNC-[A-Z0-9-]+$"
+    },
+    "project_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^PRJ-[0-9]{3,}$"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "primary_project_id": {
+      "type": "string",
+      "pattern": "^PRJ-[0-9]{3,}$"
+    },
+    "status": {
+      "enum": [
+        "READY_FOR_ISOLATED_EXECUTION",
+        "HUMAN_APPROVAL_REQUIRED",
+        "BLOCKED"
+      ]
+    },
+    "execution_mode": {
+      "enum": [
+        "READ_ONLY_EVIDENCE_ACQUISITION",
+        "ISOLATED_SYNTHETIC_TEST",
+        "HUMAN_GATED_EXTERNAL_VALIDATION",
+        "BLOCKED"
+      ]
+    },
+    "authority_requirement": {
+      "enum": [
+        "OBSERVE_ONLY",
+        "BOUNDED_EXPERIMENT",
+        "HUMAN_GATED_ACT"
+      ]
+    },
+    "autonomous_execution_allowed": {
+      "type": "boolean"
+    },
+    "approval_requirements": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "hard_blockers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "inherited_hard_boundaries": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "hypothesis": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200
+    },
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "ref",
+          "required"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "UNCERTAINTY_EVIDENCE",
+              "PROJECT_REGISTRY",
+              "HUMAN_APPROVAL",
+              "PRIVATE_EXTERNAL_TARGET_REFERENCE"
+            ]
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "required": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "baseline": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200
+    },
+    "success_condition": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200
+    },
+    "failure_condition": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200
+    },
+    "inconclusive_condition": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200
+    },
+    "evidence_requirements": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "cost_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "test_cost_ordinal",
+        "time_to_evidence_ordinal",
+        "basis_type",
+        "autonomous_cash_spend_usd_max",
+        "model_calls_max",
+        "external_messages_max",
+        "downstream_writes_max",
+        "runtime_seconds_max"
+      ],
+      "properties": {
+        "test_cost_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "time_to_evidence_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "basis_type": {
+          "const": "POLICY_ESTIMATE"
+        },
+        "autonomous_cash_spend_usd_max": {
+          "const": 0
+        },
+        "model_calls_max": {
+          "const": 0
+        },
+        "external_messages_max": {
+          "const": 0
+        },
+        "downstream_writes_max": {
+          "const": 0
+        },
+        "runtime_seconds_max": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300
+        }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "steps"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "NO_SIDE_EFFECTS",
+            "DISCARD_ISOLATED_ARTIFACTS",
+            "HUMAN_CONTROLLED_RECOVERY"
+          ]
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        }
+      }
+    },
+    "outcome_recording": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ledger",
+        "definitive_evidence_state",
+        "independent_verifier_required",
+        "allowed_results"
+      ],
+      "properties": {
+        "ledger": {
+          "const": "experiments/EXPERIMENT_OUTCOME_LEDGER.json"
+        },
+        "definitive_evidence_state": {
+          "const": "VERIFIED"
+        },
+        "independent_verifier_required": {
+          "const": true
+        },
+        "allowed_results": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "PASSED",
+              "FAILED",
+              "INCONCLUSIVE",
+              "INVALID",
+              "ABORTED"
+            ]
+          },
+          "uniqueItems": true,
+          "minItems": 5,
+          "maxItems": 5
+        }
+      }
+    },
+    "uncertainty_components": {
+      "type": "object"
+    },
+    "provenance_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "experiment_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

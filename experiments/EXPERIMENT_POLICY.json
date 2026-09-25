@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0.0",
+  "engine_id": "portfolio-experiment-engine-v1",
+  "mode": "PLAN_AND_GATE_ONLY",
+  "automatic_external_act": false,
+  "automatic_downstream_modify": false,
+  "automatic_cash_spend": false,
+  "automatic_model_calls": false,
+  "execution_modes": [
+    "READ_ONLY_EVIDENCE_ACQUISITION",
+    "ISOLATED_SYNTHETIC_TEST",
+    "HUMAN_GATED_EXTERNAL_VALIDATION",
+    "BLOCKED"
+  ],
+  "plan_statuses": [
+    "READY_FOR_ISOLATED_EXECUTION",
+    "HUMAN_APPROVAL_REQUIRED",
+    "BLOCKED"
+  ],
+  "outcome_results": [
+    "PASSED",
+    "FAILED",
+    "INCONCLUSIVE",
+    "INVALID",
+    "ABORTED"
+  ],
+  "hard_resource_ceiling": {
+    "autonomous_cash_spend_usd_max": 0,
+    "model_calls_max": 0,
+    "external_messages_max": 0,
+    "downstream_writes_max": 0,
+    "runtime_seconds_max": 300
+  },
+  "invariants": [
+    "Experiment planning never grants authority that the source uncertainty did not have.",
+    "HUMAN_GATED_ACT uncertainties are planned but never autonomously executed.",
+    "Blocked uncertainties remain blocked.",
+    "Every plan preserves the complete Step 11 uncertainty component vector and evidence references.",
+    "Test-cost and time-to-evidence remain policy estimates, not observed facts.",
+    "Every plan has explicit hypothesis, inputs, baseline, success, failure, inconclusive, evidence, cost, rollback and outcome-recording fields.",
+    "Definitive PASSED or FAILED outcomes require VERIFIED evidence and an independent verifier.",
+    "No planned experiment may authorize live trading, brokerage orders, customer messages, payments, deployment, or downstream writes by itself."
+  ]
+}
