@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "2463d5c9403cdce2854a58183f42f1b08b532bb4",
+      "last_inspected_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T18:20:01Z",
-      "notes": "Step 9 autonomous Hunter verified at 2463d5c9403cdce2854a58183f42f1b08b532bb4. The Hunter is OBSERVE-only, public-GitHub-only, exact-revision and structure-inspection based, with durable dedupe/negative knowledge, protected exploration, experiment proposals and verified-outcome-only value feedback. Scheduled activation remains staged on the isolated branch."
+      "last_observed_at": "2026-09-25T18:26:36Z",
+      "notes": "Step 10 continuous portfolio learning engine verified at 304cc7005ded511463d98b125f3de00d5b27ccc7. Nine domains share one evidence-aware, replayable advisory learner with TRAIN/CONFIRM/EVALUATION_ONLY separation, scope isolation, verified-outcome weighting and no automatic policy promotion."
     }
   },
   "decisions": [
@@ -631,6 +631,65 @@
         ".github/workflows/hunter-autonomous-cycle.yml",
         "PORTFOLIO_BUILD_STATE.json"
       ]
+    },
+    {
+      "decision_id": "DEC-061",
+      "summary": "Reuse the canonical Hunter production learning architecture through exact source/component pins: bounded value memory, learning-state compiler, search-move learning, repair queue and regression tests. Portfolio Brain generalizes those semantics across nine domains rather than creating separate incompatible learners.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "learning/AI_BUSINESS_OS_LEARNING_ENGINE_PIN.json",
+        "learning/CONTINUOUS_LEARNING_CONTRACT.md",
+        "learning/continuous_learning.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-062",
+      "summary": "Portfolio learning domains are SEARCH, ENGINEERING, TEST, REGRESSION, PRODUCT, CUSTOMER, EXPERIMENT, MODEL and RESOURCE. Global and project-scoped memory keys are distinct, preventing success in one project or objective from silently generalizing to unrelated work.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "learning/LEARNING_POLICY.json",
+        "schemas/LEARNING_OBSERVATION_SCHEMA.json",
+        "tests/test_continuous_learning.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-063",
+      "summary": "Only VERIFIED TRAIN observations with PROSPECTIVE or BENCHMARK quality and nonzero value-bearing signal class may update learned Q-values. CONFIRM gates generalization but never trains; EVALUATION_ONLY, retrospective, internal-activity, inferred, observed, unknown, contradicted, stale and invalid signals receive zero learned-value credit.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "learning/continuous_learning.py",
+        "learning/LEARNING_POLICY.json",
+        "tests/test_continuous_learning.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-064",
+      "summary": "Reward evidence ordering is explicit: VERIFIED_EXTERNAL_VALUE has weight 1.0, VERIFIED_TECHNICAL 0.5, COST_RESOURCE 0.4 and INTERNAL_ACTIVITY 0.0. Verified customer value therefore outranks internal commits/tests/activity, while speculative predictions cannot train value.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "learning/LEARNING_POLICY.json",
+        "learning/continuous_learning.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-065",
+      "summary": "No single anecdote can promote a learning prior. Policy consideration requires at least 5 TRAIN observations/20 samples plus 2 independent CONFIRM observations/6 samples with nonnegative confirmation behavior and at least one positive confirmation. Negative confirmation is surfaced as an overfit/regression alert.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "learning/LEARNING_POLICY.json",
+        "learning/continuous_learning.py",
+        "tests/test_continuous_learning.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-066",
+      "summary": "The production learning-observation ledger begins empty instead of reconstructing historical learning evidence from prose. Step 8 daily mode now deterministically emits portfolio_learning_state.json from this ledger; future verified observation producers can feed the same engine without changing its evidence rules.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "learning/LEARNING_OBSERVATION_LEDGER.json",
+        "runtime/continuous_runtime.py",
+        "learning/validate_learning.py"
+      ]
     }
   ],
   "blockers": [
@@ -665,11 +724,11 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.9.0",
+  "architecture_version": "1.10.0",
   "state_id": "portfolio-brain-master",
-  "working_branch": "step9-autonomous-hunter-20260925",
+  "working_branch": "step10-continuous-learning-engine-20260925",
   "phase": "architecture_build",
-  "current_step": 10,
+  "current_step": 11,
   "completed_steps": [
     0,
     1,
@@ -680,7 +739,8 @@
     6,
     7,
     8,
-    9
+    9,
+    10
   ],
   "artifacts": [
     {
@@ -1348,6 +1408,66 @@
       "kind": "step9_ci_validation_extension",
       "step": 9,
       "commit_sha": "aa4f0c0e17a4b9431473ab8889619201049fdc97"
+    },
+    {
+      "path": "learning/AI_BUSINESS_OS_LEARNING_ENGINE_PIN.json",
+      "kind": "step10_canonical_learning_pin",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": "learning/LEARNING_POLICY.json",
+      "kind": "step10_learning_policy",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": "schemas/LEARNING_OBSERVATION_SCHEMA.json",
+      "kind": "step10_learning_observation_schema",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": "learning/LEARNING_OBSERVATION_LEDGER.json",
+      "kind": "step10_learning_observation_ledger",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": "learning/continuous_learning.py",
+      "kind": "step10_continuous_learning_engine",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": "learning/validate_learning.py",
+      "kind": "step10_learning_validator",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": "learning/CONTINUOUS_LEARNING_CONTRACT.md",
+      "kind": "step10_learning_contract",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": "tests/test_continuous_learning.py",
+      "kind": "step10_learning_regressions",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": "runtime/continuous_runtime.py",
+      "kind": "step10_daily_learning_runtime_integration",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step10_ci_validation_extension",
+      "step": 10,
+      "commit_sha": "304cc7005ded511463d98b125f3de00d5b27ccc7"
     }
   ],
   "tests": [
@@ -1500,24 +1620,31 @@
       "status": "PASS",
       "step": 9,
       "evidence": "Initial Step 9 run 36172644005 correctly rejected a generic synthetic candidate because its paths had no structural signal for the target capability. The synthetic fixture was repaired to represent capability-relevant exact-revision source/test paths; replacement run 36172720088 passed without weakening the retention gate."
+    },
+    {
+      "name": "step10_continuous_learning_ci",
+      "status": "PASS",
+      "step": 10,
+      "evidence": "GitHub Actions foundation-ci run 36173436527 succeeded at exact Step 10 code head 304cc7005ded511463d98b125f3de00d5b27ccc7. Learning validator reported 9 domains, 6 pinned canonical learning components, source_observations=0, eligible_records=0 and policy_effect=NONE; 142 total regression tests passed."
     }
   ],
   "next_action": {
-    "step": 10,
-    "summary": "WAIT FOR CONTINUE. Step 9 is complete. Next exact numbered step is Step 10 — Continuous learning engine: generalize the current Hunter learning architecture across searches, engineering, tests, regressions, products, customers, experiments, model performance and resource usage. Do not begin Step 10 until explicit CONTINUE.",
+    "step": 11,
+    "summary": "WAIT FOR CONTINUE. Step 10 is complete. Next exact numbered step is Step 11 — Highest-value uncertainty engine: determine what unresolved question the portfolio should learn next, prioritizing cheap decisive experiments using importance, uncertainty, test cost, time to evidence, reversibility, downstream impact, strategic reuse and external-validation value. Do not begin Step 11 until explicit CONTINUE.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Do not repeat Steps 0–9 unless an exact pinned source cursor changed.",
-      "Work on Step 10 only and stop after its verified commit.",
+      "Do not repeat Steps 0–10 unless an exact pinned source cursor changed.",
+      "Work on Step 11 only and stop after its verified commit.",
       "Do not activate Step 8 or Step 9 schedules on main yet; recurring production activation remains deferred.",
-      "Learning must preserve evidence quality, denominators and uncertainty; no single anecdote may promote a global policy.",
-      "Verified real outcomes outrank internal activity and speculative predictions.",
+      "The uncertainty engine must keep component evidence rather than collapsing decisions into one opaque score.",
+      "Prefer cheap decisive experiments over additional feature construction when they resolve more decision value.",
+      "Learning state is advisory and cannot override truth, governance, STOP or authority gates.",
       "Keep downstream writes and ACT disabled.",
-      "While BLK-005 is open, store only sanitized non-sensitive learning state/evidence references.",
+      "While BLK-005 is open, store only sanitized non-sensitive uncertainty state/evidence references.",
       "REPO-006 remains blocked while BLK-001 is open."
     ]
   },
-  "updated_at": "2026-09-25T18:22:00Z",
+  "updated_at": "2026-09-25T18:28:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -1735,6 +1862,37 @@
         "external_actions_allowed": 0,
         "verified_outcomes_only_for_value_credit": true,
         "regression_tests": 127
+      }
+    },
+    "10": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "10A_PIN_CANONICAL_HUNTER_LEARNING_ARCHITECTURE",
+        "10B_UNIVERSAL_NINE_DOMAIN_OBSERVATION_CONTRACT",
+        "10C_EVIDENCE_WEIGHTED_REPLAYABLE_VALUE_LEARNING",
+        "10D_TRAIN_CONFIRM_EVALUATION_ISOLATION",
+        "10E_SCOPE_AND_GENERALIZATION_GATES",
+        "10F_OVERFIT_AND_REGRESSION_ALERTS",
+        "10G_DAILY_RUNTIME_LEARNING_REBUILD_INTEGRATION",
+        "10H_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "verified_contract": {
+        "source_revision": "b906d3f12aa9ad1bf443c41ff5281f38f5eeab0a",
+        "pinned_learning_components": 6,
+        "learning_domains": 9,
+        "production_observations": 0,
+        "eligible_policy_records": 0,
+        "automatic_policy_promotion": false,
+        "external_value_weight": 1,
+        "verified_technical_weight": 0.5,
+        "internal_activity_weight": 0,
+        "minimum_train_observations": 5,
+        "minimum_train_sample_size": 20,
+        "minimum_confirm_observations": 2,
+        "minimum_confirm_sample_size": 6,
+        "regression_tests": 142
       }
     }
   }
