@@ -8,7 +8,7 @@ class SharedMemoryBundleTests(unittest.TestCase):
     def test_bundle_validates(self):
         result=validate_shared_value_memory()
         self.assertTrue(result["verified_learning_only"])
-        self.assertEqual(result["source_revision"],"c4be1a3e10a92b9255906b1600097fe6371ea929")
+        self.assertEqual(result["source_revision"],"dcca6215f2439bb55391335fe0513f471c762290")
         self.assertEqual(result["source_blob_sha"],"5e6450087e2fe0402ebe0af9ea0443383964a7a8")
 
     def test_ledger_starts_without_fabricated_outcomes(self):
