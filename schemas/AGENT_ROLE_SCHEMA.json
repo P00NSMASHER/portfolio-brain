@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/AGENT_ROLE_SCHEMA.json",
+  "title": "Portfolio Persistent Agent Role",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "agent_id",
+    "role_key",
+    "display_name",
+    "status",
+    "parent_agent_id",
+    "persistent",
+    "max_autonomy",
+    "allowed_goal_types",
+    "builder_eligible",
+    "verifier_eligible",
+    "verification_goal_types",
+    "independence_group",
+    "max_model_tier",
+    "human_act_allowed",
+    "allowed_data_classifications",
+    "can_delegate"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "agent_id": {
+      "type": "string",
+      "pattern": "^AGT-[A-Z0-9-]+$"
+    },
+    "role_key": {
+      "enum": [
+        "PORTFOLIO_MANAGER",
+        "HUNTER",
+        "RESEARCHER",
+        "PRODUCT_ANALYST",
+        "ENGINEER",
+        "TESTER",
+        "AUDITOR",
+        "RED_TEAM",
+        "DATA_STEWARD",
+        "COMMERCIAL_ANALYST"
+      ]
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "status": {
+      "enum": [
+        "ACTIVE",
+        "PAUSED",
+        "RETIRED"
+      ]
+    },
+    "parent_agent_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^AGT-[A-Z0-9-]+$"
+    },
+    "persistent": {
+      "const": true
+    },
+    "max_autonomy": {
+      "enum": [
+        "OBSERVE",
+        "EXPERIMENT",
+        "MODIFY"
+      ]
+    },
+    "allowed_goal_types": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z0-9_]+$"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "builder_eligible": {
+      "type": "boolean"
+    },
+    "verifier_eligible": {
+      "type": "boolean"
+    },
+    "verification_goal_types": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(\\\\*|[A-Z0-9_]+)$"
+      },
+      "uniqueItems": true
+    },
+    "independence_group": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]+$"
+    },
+    "max_model_tier": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "human_act_allowed": {
+      "const": false
+    },
+    "allowed_data_classifications": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "PUBLIC",
+          "SANITIZED",
+          "PRIVATE_REFERENCE_ONLY"
+        ]
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "can_delegate": {
+      "type": "boolean"
+    }
+  }
+}

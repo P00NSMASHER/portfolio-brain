@@ -1,0 +1,275 @@
+{
+  "schema_version": "1.0.0",
+  "roles": [
+    {
+      "schema_version": "1.0.0",
+      "status": "ACTIVE",
+      "persistent": true,
+      "human_act_allowed": false,
+      "allowed_data_classifications": [
+        "PUBLIC",
+        "SANITIZED",
+        "PRIVATE_REFERENCE_ONLY"
+      ],
+      "agent_id": "AGT-PORTFOLIO-MANAGER",
+      "role_key": "PORTFOLIO_MANAGER",
+      "display_name": "Portfolio Manager",
+      "parent_agent_id": null,
+      "max_autonomy": "EXPERIMENT",
+      "allowed_goal_types": [
+        "PORTFOLIO_PRIORITIZATION",
+        "PORTFOLIO_SYNTHESIS",
+        "WORK_COORDINATION"
+      ],
+      "builder_eligible": false,
+      "verifier_eligible": false,
+      "verification_goal_types": [],
+      "independence_group": "management",
+      "max_model_tier": 2,
+      "can_delegate": true
+    },
+    {
+      "schema_version": "1.0.0",
+      "status": "ACTIVE",
+      "persistent": true,
+      "human_act_allowed": false,
+      "allowed_data_classifications": [
+        "PUBLIC",
+        "SANITIZED",
+        "PRIVATE_REFERENCE_ONLY"
+      ],
+      "agent_id": "AGT-HUNTER",
+      "role_key": "HUNTER",
+      "display_name": "Hunter",
+      "parent_agent_id": "AGT-PORTFOLIO-MANAGER",
+      "max_autonomy": "OBSERVE",
+      "allowed_goal_types": [
+        "PUBLIC_HUNT"
+      ],
+      "builder_eligible": false,
+      "verifier_eligible": false,
+      "verification_goal_types": [],
+      "independence_group": "discovery",
+      "max_model_tier": 1,
+      "can_delegate": false
+    },
+    {
+      "schema_version": "1.0.0",
+      "status": "ACTIVE",
+      "persistent": true,
+      "human_act_allowed": false,
+      "allowed_data_classifications": [
+        "PUBLIC",
+        "SANITIZED",
+        "PRIVATE_REFERENCE_ONLY"
+      ],
+      "agent_id": "AGT-RESEARCHER",
+      "role_key": "RESEARCHER",
+      "display_name": "Researcher",
+      "parent_agent_id": "AGT-PORTFOLIO-MANAGER",
+      "max_autonomy": "EXPERIMENT",
+      "allowed_goal_types": [
+        "RESEARCH_EVIDENCE"
+      ],
+      "builder_eligible": false,
+      "verifier_eligible": false,
+      "verification_goal_types": [],
+      "independence_group": "research",
+      "max_model_tier": 2,
+      "can_delegate": false
+    },
+    {
+      "schema_version": "1.0.0",
+      "status": "ACTIVE",
+      "persistent": true,
+      "human_act_allowed": false,
+      "allowed_data_classifications": [
+        "PUBLIC",
+        "SANITIZED",
+        "PRIVATE_REFERENCE_ONLY"
+      ],
+      "agent_id": "AGT-PRODUCT-ANALYST",
+      "role_key": "PRODUCT_ANALYST",
+      "display_name": "Product Analyst",
+      "parent_agent_id": "AGT-PORTFOLIO-MANAGER",
+      "max_autonomy": "EXPERIMENT",
+      "allowed_goal_types": [
+        "PRODUCT_ANALYSIS",
+        "EXPERIMENT_DESIGN"
+      ],
+      "builder_eligible": false,
+      "verifier_eligible": false,
+      "verification_goal_types": [],
+      "independence_group": "product",
+      "max_model_tier": 2,
+      "can_delegate": false
+    },
+    {
+      "schema_version": "1.0.0",
+      "status": "ACTIVE",
+      "persistent": true,
+      "human_act_allowed": false,
+      "allowed_data_classifications": [
+        "PUBLIC",
+        "SANITIZED",
+        "PRIVATE_REFERENCE_ONLY"
+      ],
+      "agent_id": "AGT-ENGINEER",
+      "role_key": "ENGINEER",
+      "display_name": "Engineer",
+      "parent_agent_id": "AGT-PORTFOLIO-MANAGER",
+      "max_autonomy": "MODIFY",
+      "allowed_goal_types": [
+        "ISOLATED_IMPLEMENTATION"
+      ],
+      "builder_eligible": true,
+      "verifier_eligible": false,
+      "verification_goal_types": [],
+      "independence_group": "engineering",
+      "max_model_tier": 2,
+      "can_delegate": false
+    },
+    {
+      "schema_version": "1.0.0",
+      "status": "ACTIVE",
+      "persistent": true,
+      "human_act_allowed": false,
+      "allowed_data_classifications": [
+        "PUBLIC",
+        "SANITIZED",
+        "PRIVATE_REFERENCE_ONLY"
+      ],
+      "agent_id": "AGT-TESTER",
+      "role_key": "TESTER",
+      "display_name": "Tester",
+      "parent_agent_id": "AGT-PORTFOLIO-MANAGER",
+      "max_autonomy": "EXPERIMENT",
+      "allowed_goal_types": [
+        "TEST_EXECUTION",
+        "REGRESSION_VALIDATION"
+      ],
+      "builder_eligible": false,
+      "verifier_eligible": true,
+      "verification_goal_types": [
+        "ISOLATED_IMPLEMENTATION",
+        "TEST_EXECUTION",
+        "REGRESSION_VALIDATION"
+      ],
+      "independence_group": "testing",
+      "max_model_tier": 1,
+      "can_delegate": false
+    },
+    {
+      "schema_version": "1.0.0",
+      "status": "ACTIVE",
+      "persistent": true,
+      "human_act_allowed": false,
+      "allowed_data_classifications": [
+        "PUBLIC",
+        "SANITIZED",
+        "PRIVATE_REFERENCE_ONLY"
+      ],
+      "agent_id": "AGT-AUDITOR",
+      "role_key": "AUDITOR",
+      "display_name": "Auditor",
+      "parent_agent_id": "AGT-PORTFOLIO-MANAGER",
+      "max_autonomy": "EXPERIMENT",
+      "allowed_goal_types": [
+        "INDEPENDENT_AUDIT",
+        "PROMOTION_VERIFICATION"
+      ],
+      "builder_eligible": false,
+      "verifier_eligible": true,
+      "verification_goal_types": [
+        "*"
+      ],
+      "independence_group": "audit",
+      "max_model_tier": 3,
+      "can_delegate": false
+    },
+    {
+      "schema_version": "1.0.0",
+      "status": "ACTIVE",
+      "persistent": true,
+      "human_act_allowed": false,
+      "allowed_data_classifications": [
+        "PUBLIC",
+        "SANITIZED",
+        "PRIVATE_REFERENCE_ONLY"
+      ],
+      "agent_id": "AGT-RED-TEAM",
+      "role_key": "RED_TEAM",
+      "display_name": "Red Team",
+      "parent_agent_id": "AGT-PORTFOLIO-MANAGER",
+      "max_autonomy": "EXPERIMENT",
+      "allowed_goal_types": [
+        "ADVERSARIAL_REVIEW"
+      ],
+      "builder_eligible": false,
+      "verifier_eligible": true,
+      "verification_goal_types": [
+        "ISOLATED_IMPLEMENTATION",
+        "PROMOTION_VERIFICATION",
+        "INDEPENDENT_AUDIT"
+      ],
+      "independence_group": "red_team",
+      "max_model_tier": 3,
+      "can_delegate": false
+    },
+    {
+      "schema_version": "1.0.0",
+      "status": "ACTIVE",
+      "persistent": true,
+      "human_act_allowed": false,
+      "allowed_data_classifications": [
+        "PUBLIC",
+        "SANITIZED",
+        "PRIVATE_REFERENCE_ONLY"
+      ],
+      "agent_id": "AGT-DATA-STEWARD",
+      "role_key": "DATA_STEWARD",
+      "display_name": "Data Steward",
+      "parent_agent_id": "AGT-PORTFOLIO-MANAGER",
+      "max_autonomy": "EXPERIMENT",
+      "allowed_goal_types": [
+        "DATA_VALIDATION",
+        "PROVENANCE_RECONCILIATION"
+      ],
+      "builder_eligible": false,
+      "verifier_eligible": true,
+      "verification_goal_types": [
+        "DATA_VALIDATION",
+        "PROVENANCE_RECONCILIATION"
+      ],
+      "independence_group": "data",
+      "max_model_tier": 1,
+      "can_delegate": false
+    },
+    {
+      "schema_version": "1.0.0",
+      "status": "ACTIVE",
+      "persistent": true,
+      "human_act_allowed": false,
+      "allowed_data_classifications": [
+        "PUBLIC",
+        "SANITIZED",
+        "PRIVATE_REFERENCE_ONLY"
+      ],
+      "agent_id": "AGT-COMMERCIAL-ANALYST",
+      "role_key": "COMMERCIAL_ANALYST",
+      "display_name": "Commercial Analyst",
+      "parent_agent_id": "AGT-PORTFOLIO-MANAGER",
+      "max_autonomy": "OBSERVE",
+      "allowed_goal_types": [
+        "COMMERCIAL_ANALYSIS",
+        "EXTERNAL_EVIDENCE_ANALYSIS"
+      ],
+      "builder_eligible": false,
+      "verifier_eligible": false,
+      "verification_goal_types": [],
+      "independence_group": "commercial",
+      "max_model_tier": 2,
+      "can_delegate": false
+    }
+  ]
+}

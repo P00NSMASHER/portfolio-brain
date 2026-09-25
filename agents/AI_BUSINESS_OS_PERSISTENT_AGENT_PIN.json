@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0.0",
+  "integration_id": "PERSISTENT-AGENTS-AI-BUSINESS-OS-001",
+  "source_repository": "P00NSMASHER/github-value-hunt-ledger",
+  "source_revision": "21b9023a57392f380c73b2fe952c35840f2e2025",
+  "components": {
+    "durable_runtime": {
+      "path": "ai_business_os/persistent_agents/runtime.py",
+      "blob_sha": "f200573259bcf29c09fbe9e480df4f983dd50903"
+    },
+    "worker_contract": {
+      "path": "ai_business_os/persistent_agents/WORKER_CONTRACT.md",
+      "blob_sha": "19c9ae71701f6fa5ae9ed56ba29b3a965e4f360f"
+    },
+    "persistent_worker": {
+      "path": "ai_business_os/persistent_workers.py",
+      "blob_sha": "60e41f08508d93b6a6b6c16da25582a8481d536a"
+    },
+    "persistent_worker_test": {
+      "path": "ai_business_os/test_persistent_workers.py",
+      "blob_sha": "10652da1cd107c8e983f4166b2483c5244824e81"
+    },
+    "runtime_test": {
+      "path": "ai_business_os/persistent_agents/test_runtime.py",
+      "blob_sha": "20c10bf052fb7742bf5ef687a25e2b6b1fcae81b"
+    },
+    "lease_control_sql": {
+      "path": "supabase/migrations/ai_business_os/20260925151646_add_ai_business_os_persistent_worker_control_v1.sql",
+      "blob_sha": "c419ff6260fe0c0da61b49ba6f153ac62c0efcb8"
+    },
+    "role_contracts": {
+      "path": "production/ROLE_CONTRACTS.md",
+      "blob_sha": "0c12935168a72f66da058e1443f136549b025db8"
+    },
+    "runtime_gateway": {
+      "path": "supabase/functions/ai-business-os-runtime-gateway/index.ts",
+      "blob_sha": "fdc77391ce6ed3e0f6db25aed859aa684e0818f0"
+    }
+  },
+  "preserved_semantics": [
+    "Durable stable agent identity and role.",
+    "Explicit durable work/goal state.",
+    "Heartbeats and generation-based stale-lease fencing.",
+    "Expired work requeues instead of allowing stale completion.",
+    "Material events are append-only and hash chained.",
+    "Snapshots/rollback preserve historical events.",
+    "Worker submission produces evidence for verification but cannot mark work COMPLETE.",
+    "Manager/executor/auditor identities are distinct in verification contracts.",
+    "Named worker/gateway operations are used instead of arbitrary execution surfaces.",
+    "Memory and persisted state are not authority."
+  ],
+  "integration_mode": "PINNED_PERSISTENCE_AND_LEASE_SEMANTICS",
+  "copied_source_code": false,
+  "drift_policy": {
+    "exact_repository_revision_required": true,
+    "component_blob_shas_required": true,
+    "on_source_revision_change": "TARGETED_DELTA_AND_RECONFORM",
+    "on_component_blob_mismatch": "FAIL_CLOSED"
+  }
+}

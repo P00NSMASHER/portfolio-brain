@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio-brain.local/schemas/AGENT_VERIFICATION_SCHEMA.json",
+  "title": "Portfolio Agent Verification Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "verification_id",
+    "work_id",
+    "builder_agent_id",
+    "verifier_agent_id",
+    "verdict",
+    "report_hash",
+    "evidence_refs"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "verification_id": {
+      "type": "string",
+      "pattern": "^AVER-[A-Z0-9-]+$"
+    },
+    "work_id": {
+      "type": "string",
+      "pattern": "^AWORK-[A-Z0-9-]+$"
+    },
+    "builder_agent_id": {
+      "type": "string",
+      "pattern": "^AGT-[A-Z0-9-]+$"
+    },
+    "verifier_agent_id": {
+      "type": "string",
+      "pattern": "^AGT-[A-Z0-9-]+$"
+    },
+    "verdict": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "UNKNOWN"
+      ]
+    },
+    "report_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    }
+  }
+}

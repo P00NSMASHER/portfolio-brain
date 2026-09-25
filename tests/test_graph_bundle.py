@@ -21,7 +21,7 @@ class GraphBundleTests(unittest.TestCase):
         self.assertTrue(result["ledger_hash"].startswith("sha256:"))
 
     def test_exact_canonical_source_blobs_are_pinned(self):
-        self.assertEqual(self.pin["source_revision"],"dcca6215f2439bb55391335fe0513f471c762290")
+        self.assertEqual(self.pin["source_revision"],"21b9023a57392f380c73b2fe952c35840f2e2025")
         self.assertEqual(self.pin["knowledge_graph"]["blob_sha"],"d0ed2e015dc4593361d7600e48cb680a0df13245")
         self.assertEqual(self.pin["entity_canonicalization"]["blob_sha"],"29a765be3598f83d20f5747518deb8de8f41ffd2")
         self.assertFalse(self.pin["copied_source_code"])

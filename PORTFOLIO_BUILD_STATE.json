@@ -3,10 +3,10 @@
   "repositories": {
     "REPO-001": {
       "full_name": "P00NSMASHER/github-value-hunt-ledger",
-      "last_inspected_sha": "dcca6215f2439bb55391335fe0513f471c762290",
+      "last_inspected_sha": "21b9023a57392f380c73b2fe952c35840f2e2025",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T19:08:00Z",
-      "notes": "Step 13 prerequisite delta-only reconciliation from c4be1a3e10a92b9255906b1600097fe6371ea929 to dcca6215f2439bb55391335fe0513f471c762290: 10 commits, four changed paths — HUNTER-06/HUNTER-07 scout state plus the AI Business OS runtime gateway and its worker contract test. Existing Truth/Memory/Graph/Hunter/Learning/Experiment component blobs are unchanged. Runtime gateway changes were inspected as a named-operation/approval boundary; no existing model router was found."
+      "last_observed_at": "2026-09-25T19:20:00Z",
+      "notes": "Step 14 prerequisite delta-only reconciliation from dcca6215f2439bb55391335fe0513f471c762290 to 21b9023a57392f380c73b2fe952c35840f2e2025: 7 commits, only intelligence/scout_queue/HUNTER-08.json through HUNTER-14.json changed. Pinned Truth, Value Memory, Knowledge Graph, Hunter, Learning, Experiment and Model Router components remain byte-identical; source revision pins were advanced without semantic changes."
     },
     "REPO-002": {
       "full_name": "P00NSMASHER/StarBlox",
@@ -906,7 +906,7 @@
   ],
   "architecture_version": "1.13.0",
   "state_id": "portfolio-brain-master",
-  "working_branch": "step13-model-router-20260925",
+  "working_branch": "step14-persistent-agents-20260925",
   "phase": "architecture_build",
   "current_step": 14,
   "completed_steps": [
@@ -2048,7 +2048,7 @@
       "Keep customer communications, payments, live trading and other consequential ACT human-gated."
     ]
   },
-  "updated_at": "2026-09-25T19:13:00Z",
+  "updated_at": "2026-09-25T19:20:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",

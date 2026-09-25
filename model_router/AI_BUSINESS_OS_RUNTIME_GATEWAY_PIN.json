@@ -2,7 +2,7 @@
   "schema_version": "1.0.0",
   "integration_id": "AI-BUSINESS-OS-RUNTIME-GATEWAY-BOUNDARY-001",
   "source_repository": "P00NSMASHER/github-value-hunt-ledger",
-  "source_revision": "dcca6215f2439bb55391335fe0513f471c762290",
+  "source_revision": "21b9023a57392f380c73b2fe952c35840f2e2025",
   "gateway": {
     "path": "supabase/functions/ai-business-os-runtime-gateway/index.ts",
     "blob_sha": "fdc77391ce6ed3e0f6db25aed859aa684e0818f0"

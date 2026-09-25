@@ -2,7 +2,7 @@
   "schema_version": "1.0.0",
   "integration_id": "GRAPH-AI-BUSINESS-OS-001",
   "source_repository": "P00NSMASHER/github-value-hunt-ledger",
-  "source_revision": "dcca6215f2439bb55391335fe0513f471c762290",
+  "source_revision": "21b9023a57392f380c73b2fe952c35840f2e2025",
   "knowledge_graph": {
     "path": "ai_business_os/knowledge_graph.py",
     "blob_sha": "d0ed2e015dc4593361d7600e48cb680a0df13245",
