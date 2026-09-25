@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "b745dff130b5a7185945ebaab948fee761f5be81",
+      "last_inspected_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T22:59:00Z",
-      "notes": "Step 22 notification/escalation layer verified at b745dff130b5a7185945ebaab948fee761f5be81. Current checked-in state produces two aggregated HIGH alerts (human approval queue and open human-decision blockers); unchanged conditions are fingerprint-deduplicated and cooldown-suppressed, delivery is GitHub Actions annotations/summary only, and the staged notification cycle is cost-governed."
+      "last_observed_at": "2026-09-25T23:11:00Z",
+      "notes": "Step 23 hostile examination verified at c03779b83e4aac47058c76a16be2549fbf1e17aa. Seventeen adversarial scenarios were exercised; four concrete weaknesses were fixed (unverified capability-gap suppression, VERIFIED graph provenance laundering, GitHub Actions workflow-command injection, retry identity reset), all other scenarios remained blocked by existing controls, and no recurring workflow was activated."
     }
   },
   "decisions": [
@@ -1328,6 +1328,64 @@
         "notifications/artifact_state.py",
         "schemas/ALERT_SCHEMA.json"
       ]
+    },
+    {
+      "decision_id": "DEC-131",
+      "summary": "Step 23 hostile examination covers 17 threat classes: prompt injection/malicious repositories, graph/evidence/memory poisoning, reward gaming, self-approval, verification circularity, privilege escalation, provider/cost/retry/action failure, secret/private-data leakage, autonomous deployment/merge, unauthorized contact, child-safety bypass and financial/trading bypass.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "hostile/ATTACK_MATRIX.json",
+        "hostile/HOSTILE_EXAMINATION_REPORT.md",
+        "tests/test_hostile_examination.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-132",
+      "summary": "Capability coverage can no longer be poisoned by an active but unverified graph edge. Hunter and highest-value uncertainty now count only VERIFIED HAS_CAPABILITY edges whose target capability node is also VERIFIED.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "hunting/autonomous_hunter.py",
+        "uncertainty/highest_value_uncertainty.py",
+        "tests/test_hostile_examination.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-133",
+      "summary": "VERIFIED graph nodes and edges now require a machine/human verification anchor such as CI, event, evidence, verification or test-receipt provenance. Arbitrary provenance text cannot launder a graph claim into VERIFIED.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "graph/universal_graph.py",
+        "tests/test_hostile_examination.py",
+        "tests/test_universal_graph.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-134",
+      "summary": "GitHub Actions notification output now sanitizes entity/project fields and escapes workflow-command data so persisted or hostile alert text cannot inject a second Actions command.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "notifications/github_sink.py",
+        "tests/test_hostile_examination.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-135",
+      "summary": "Cost-governor retry and idempotency identities are now bound to the immutable model route or GitHub run/job identity. Renaming a retry group cannot restart the bounded retry sequence; generic API calls require an explicit stable api-operation identity.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "cost_governor/cost_governor.py",
+        "tests/test_hostile_examination.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-136",
+      "summary": "Hostile examination introduced no authority expansion and activated no recurring workflows. Existing protections for self-verification, ACT escalation, provider failure, private-data storage, deployment/merge, customer contact, child-facing consequential changes and live trading all remained fail-closed under regression.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "hostile/ATTACK_MATRIX.json",
+        "hostile/validate_hostile_examination.py",
+        ".github/workflows/foundation-ci.yml"
+      ]
     }
   ],
   "blockers": [
@@ -1362,11 +1420,11 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.22.0",
+  "architecture_version": "1.23.0",
   "state_id": "portfolio-brain-master",
-  "working_branch": "step22-notification-escalation-20260925",
+  "working_branch": "step23-hostile-examination-20260925",
   "phase": "architecture_build",
-  "current_step": 23,
+  "current_step": 24,
   "completed_steps": [
     0,
     1,
@@ -1390,7 +1448,8 @@
     19,
     20,
     21,
-    22
+    22,
+    23
   ],
   "artifacts": [
     {
@@ -2964,6 +3023,72 @@
       "kind": "step22_ci_validation_extension",
       "step": 22,
       "commit_sha": "b745dff130b5a7185945ebaab948fee761f5be81"
+    },
+    {
+      "path": "hostile/ATTACK_MATRIX.json",
+      "kind": "step23_hostile_attack_matrix",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "hostile/HOSTILE_EXAMINATION_REPORT.md",
+      "kind": "step23_hostile_report",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "hostile/validate_hostile_examination.py",
+      "kind": "step23_hostile_validator",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "tests/test_hostile_examination.py",
+      "kind": "step23_hostile_regressions",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "graph/universal_graph.py",
+      "kind": "step23_graph_provenance_hardening",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "hunting/autonomous_hunter.py",
+      "kind": "step23_hunter_graph_poisoning_fix",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "uncertainty/highest_value_uncertainty.py",
+      "kind": "step23_uncertainty_graph_poisoning_fix",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "notifications/github_sink.py",
+      "kind": "step23_workflow_command_injection_fix",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "cost_governor/cost_governor.py",
+      "kind": "step23_retry_identity_hardening",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": "tests/test_universal_graph.py",
+      "kind": "step23_verified_graph_fixture_hardening",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step23_ci_validation_extension",
+      "step": 23,
+      "commit_sha": "c03779b83e4aac47058c76a16be2549fbf1e17aa"
     }
   ],
   "tests": [
@@ -3206,23 +3331,30 @@
       "status": "PASS",
       "step": 22,
       "evidence": "GitHub Actions foundation-ci run 36198962231 succeeded at exact Step 22 implementation head b745dff130b5a7185945ebaab948fee761f5be81. Step 22 validator passed and 290 total regression tests passed; Steps 1-21 validators remained green."
+    },
+    {
+      "name": "step23_hostile_examination_ci",
+      "status": "PASS",
+      "step": 23,
+      "evidence": "GitHub Actions foundation-ci run 36199773915 succeeded at exact Step 23 implementation head c03779b83e4aac47058c76a16be2549fbf1e17aa. Step 23 hostile validator passed, all 17 hostile scenarios were resolved/blocked, and 301 total regression tests passed; Steps 1-22 validators remained green."
     }
   ],
   "next_action": {
-    "step": 23,
-    "summary": "WAIT FOR CONTINUE. Step 22 is complete. Next exact numbered step is Step 23 — Hostile examination: adversarially attack the Portfolio Brain architecture and runtime boundaries, convert meaningful failures into permanent regression tests, patch the system, and verify the exact hardened head. Do not begin Step 23 until explicit CONTINUE.",
+    "step": 24,
+    "summary": "WAIT FOR CONTINUE. Step 23 is complete. Next exact numbered step is Step 24 — Autonomous learning canary: execute one fully bounded no-prompt autonomous cycle across durable state restoration, observation/research scheduling, cost governance, notification evaluation and learning-state rebuild; prove deterministic continuation, zero duplicate work, zero authority violations and durable evidence receipts before final operating-mode activation. Do not begin Step 24 until explicit CONTINUE.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Do not repeat Steps 0–22 unless an exact pinned source cursor changed.",
-      "Work on Step 23 only and stop after its verified commit.",
-      "Attack prompt injection, malicious repositories, reward/metric gaming, self-approval, evidence/memory/graph poisoning, verification circularity, privilege escalation, provider failure, cost/retry/action failures, secrets/data corruption, autonomous deployment, unauthorized contact, child-safety bypasses, and financial/trading bypasses.",
-      "Every meaningful hostile finding must either be blocked by an existing invariant with evidence or produce the smallest safe fix plus a permanent regression test.",
-      "Do not activate recurring Step 8, 9, 16, 19, 20 or 22 workflows on main during hostile examination.",
-      "Keep consequential ACT, customer communication, cash movement, live trading, deployment and merges human-gated/prohibited as already defined.",
-      "Preserve BLK-005 sanitized-only persistence while the repository remains public."
+      "Do not repeat Steps 0–23 unless an exact pinned source cursor changed.",
+      "Work on Step 24 only and stop after its verified commit.",
+      "Run a bounded canary/shadow cycle only; do not yet enable final recurring autonomous operating mode on main.",
+      "The canary must restore durable runtime/scheduler/cost/notification state and complete without interactive ChatGPT as an execution dependency.",
+      "Use deterministic/Tier-0 paths only under the checked-in zero paid-model/API budgets.",
+      "Prove no duplicate work, no budget overrun, no unverified learning promotion and zero authority violations.",
+      "No customer communication, payment, cash movement, live trading, deployment, merge or other consequential ACT may occur.",
+      "Persist only sanitized canary state/evidence while BLK-005 remains open."
     ]
   },
-  "updated_at": "2026-09-25T22:59:00Z",
+  "updated_at": "2026-09-25T23:11:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -3910,6 +4042,38 @@
         "notification_authority": "NONE",
         "arbitrary_outbound_webhooks": false,
         "regression_tests": 290
+      }
+    },
+    "23": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "23A_DEFINE_17_SCENARIO_HOSTILE_THREAT_MATRIX",
+        "23B_ATTACK_PROMPT_INJECTION_AND_MALICIOUS_REPOSITORY_BOUNDARIES",
+        "23C_FIX_UNVERIFIED_CAPABILITY_GRAPH_POISONING",
+        "23D_FIX_VERIFIED_GRAPH_PROVENANCE_LAUNDERING",
+        "23E_FIX_GITHUB_WORKFLOW_COMMAND_INJECTION",
+        "23F_FIX_COST_RETRY_IDENTITY_RESET",
+        "23G_RETEST_REWARD_SELF_APPROVAL_AND_VERIFICATION_CIRCULARITY",
+        "23H_RETEST_PRIVILEGE_PROVIDER_PRIVATE_DATA_DEPLOY_CONTACT_CHILD_AND_TRADING_BOUNDARIES",
+        "23I_REGRESSION_AND_EXACT_HEAD_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "NONE",
+      "activation_status": "HARDENED_ON_ISOLATED_BRANCH_NO_RECURRING_ACTIVATION",
+      "verified_contract": {
+        "implementation_head": "c03779b83e4aac47058c76a16be2549fbf1e17aa",
+        "ci_run_id": 36199773915,
+        "hostile_scenarios": 17,
+        "fixed_step23": 4,
+        "blocked_by_existing_controls": 13,
+        "unresolved_findings": 0,
+        "graph_capability_requires_verified_edge_and_node": true,
+        "verified_graph_requires_verification_anchor": true,
+        "notification_command_injection_hardened": true,
+        "retry_identity_bound_to_route_or_run": true,
+        "authority_change": "NONE",
+        "recurring_workflows_activated": false,
+        "regression_tests": 301
       }
     }
   }
