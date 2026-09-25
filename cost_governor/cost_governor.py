@@ -47,6 +47,11 @@ def canon(v: Any) -> str:
 def hashv(v: Any) -> str:
     return "sha256:" + hashlib.sha256(canon(v).encode()).hexdigest()
 
+def request_hashv(request: dict[str, Any]) -> str:
+    body = copy.deepcopy(request)
+    body.pop("requested_at", None)
+    return hashv(body)
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -248,7 +253,7 @@ def _decision(request: dict[str, Any], at: str, status: str, reasons: list[str],
         "schema_version": "1.0.0",
         "decision_id": "CGD-" + hashlib.sha256((request["request_id"] + "\0" + at + "\0" + status).encode()).hexdigest()[:20].upper(),
         "request_id": request["request_id"],
-        "request_hash": hashv(request),
+        "request_hash": request_hashv(request),
         "status": status,
         "reason_codes": list(dict.fromkeys(reasons)),
         "reservation_id": reservation_id,
@@ -275,7 +280,7 @@ def preflight(state: dict[str, Any], request: dict[str, Any], *, at: str | None 
     at = at or request["requested_at"] or now_iso()
     _time(at, "at")
     out = _expire_and_compact(state, at, p)
-    request_hash = hashv(request)
+    request_hash = request_hashv(request)
 
     existing = next((row for row in out["reservations"] if row["idempotency_key"] == request["idempotency_key"]), None)
     if existing is not None:
