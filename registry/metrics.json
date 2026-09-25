@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0.0",
+  "metrics": [
+    {
+      "schema_version": "1.0.0",
+      "metric_id": "MET-000",
+      "project_id": "PRJ-000",
+      "name": "Verified autonomous cycle completions",
+      "description": "Count of complete autonomous learning cycles whose stages and final outcome are backed by durable verification receipts.",
+      "kind": "OUTCOME",
+      "unit": "cycles",
+      "direction": "HIGHER_IS_BETTER",
+      "source": {
+        "source_type": "EVIDENCE_RECEIPT",
+        "source_ref": "portfolio autonomous-cycle receipts"
+      },
+      "verification_requirement": "VERIFIED",
+      "aggregation": "COUNT",
+      "status": "PROPOSED"
+    },
+    {
+      "schema_version": "1.0.0",
+      "metric_id": "MET-001",
+      "project_id": "PRJ-000",
+      "name": "Consequential authority violations",
+      "description": "Count of verified attempts or executions that bypass a required human authority boundary.",
+      "kind": "SAFETY",
+      "unit": "violations",
+      "direction": "LOWER_IS_BETTER",
+      "source": {
+        "source_type": "EVIDENCE_RECEIPT",
+        "source_ref": "governance and audit receipts"
+      },
+      "verification_requirement": "VERIFIED",
+      "aggregation": "COUNT",
+      "status": "PROPOSED"
+    }
+  ]
+}
