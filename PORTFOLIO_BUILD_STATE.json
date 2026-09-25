@@ -3,59 +3,59 @@
   "repositories": {
     "REPO-001": {
       "full_name": "P00NSMASHER/github-value-hunt-ledger",
-      "last_inspected_sha": "b7e4a7505f0406b0a80716eab9c09d81df8a2ecb",
+      "last_inspected_sha": "5559112ed4dfaa4c690d608b257945e1595560a5",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T11:14:18.539884Z",
-      "notes": "Targeted delta inspected from b47f95caa658a9b12536cc9946d81d51f944c6ac: 42 commits, 33 changed paths. See docs/PORTFOLIO_STEP0_EVIDENCE.json; source inspection does not establish live deployment."
+      "last_observed_at": "2026-09-25T16:16:00Z",
+      "notes": "Step 4 delta-only observation from prior cursor: 35 commits, 104 changed paths. Path/stat metadata persisted; unchanged content was not reread."
     },
     "REPO-002": {
       "full_name": "P00NSMASHER/StarBlox",
-      "last_inspected_sha": "8ebe583f6dae6a832bae2f4987c6919db41eaf5e",
-      "inspection_status": "UNCHANGED",
-      "last_observed_at": "2026-09-25T08:27:30Z",
-      "notes": " Retained from prework; not re-observed in master Step 0 resume."
+      "last_inspected_sha": "094fe7bc6d61151a8bfec7b236bb68e8c236b834",
+      "inspection_status": "INSPECTED",
+      "last_observed_at": "2026-09-25T16:16:00Z",
+      "notes": "Step 4 delta-only observation from prior cursor: 32 commits, 21 changed paths. Path/stat metadata persisted; unchanged content was not reread."
     },
     "REPO-003": {
       "full_name": "P00NSMASHER/abvmschoolstarworld",
       "last_inspected_sha": "a15c7c2214a065707123e9b8ab8ac51a42240345",
-      "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T11:14:18.539884Z",
-      "notes": "Targeted delta inspected from 2b78aed7695374b35ad207c43bec9d61486d056a: 49 commits, 17 changed paths. See docs/PORTFOLIO_STEP0_EVIDENCE.json; source inspection does not establish live deployment."
+      "inspection_status": "UNCHANGED",
+      "last_observed_at": "2026-09-25T16:16:00Z",
+      "notes": "Step 4 exact HEAD matched stored cursor; compare/content reread skipped."
     },
     "REPO-004": {
       "full_name": "P00NSMASHER/trading-platform",
-      "last_inspected_sha": "579730f1abb595579de199277a95a8c89f733d0f",
-      "inspection_status": "UNCHANGED",
-      "last_observed_at": "2026-09-25T08:27:30Z",
-      "notes": "Research/surveillance only; no autonomous trading authority. Retained from prework; not re-observed in master Step 0 resume."
+      "last_inspected_sha": "f9be7d5537d38bef24a5b0f99022c5d5885988d1",
+      "inspection_status": "INSPECTED",
+      "last_observed_at": "2026-09-25T16:16:00Z",
+      "notes": "Step 4 delta-only observation from prior cursor: 2 commits, 6 changed paths. Research-only authority unchanged; no trading execution authority."
     },
     "REPO-005": {
       "full_name": "P00NSMASHER/permitplate-nyc",
       "last_inspected_sha": "7c9a8fc4dd9fa12275d336beb8eb10732718666a",
       "inspection_status": "UNCHANGED",
-      "last_observed_at": "2026-09-25T08:27:30Z",
-      "notes": " Retained from prework; not re-observed in master Step 0 resume."
+      "last_observed_at": "2026-09-25T16:16:00Z",
+      "notes": "Step 4 exact HEAD matched stored cursor; compare/content reread skipped."
     },
     "REPO-006": {
       "full_name": "P00NSMASHER/permitplate-state",
       "last_inspected_sha": "c64fe06a22c3826c9ad3a7b85a4f911a6e589c19",
       "inspection_status": "UNCHANGED",
       "last_observed_at": "2026-09-25T08:27:30Z",
-      "notes": "Current GitHub metadata confirms public visibility. Durable architecture treats this repository as sensitive operational state, so visibility/access requires explicit human review before Portfolio Brain integration. Retained from prework; not re-observed in master Step 0 resume."
+      "notes": "Step 4 adapter is registered but disabled by BLK-001. No network read was performed and the historical cursor was not advanced."
     },
     "REPO-007": {
       "full_name": "P00NSMASHER/capturebrief",
       "last_inspected_sha": "3b5867c422cbf9da08d02f1b9c6e7c8afa5b42ba",
       "inspection_status": "UNCHANGED",
-      "last_observed_at": "2026-09-25T08:27:30Z",
-      "notes": " Retained from prework; not re-observed in master Step 0 resume."
+      "last_observed_at": "2026-09-25T16:16:00Z",
+      "notes": "Step 4 exact HEAD matched stored cursor; compare/content reread skipped."
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "77fbf807b4af3d73ca73f95e69bf8ab4978c9ae3",
+      "last_inspected_sha": "c6dd95bce5310a68e9cb18202a52cadffa0ea76d",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T16:22:50Z",
-      "notes": "Step 3 universal event/evidence contracts verified at 77fbf807b4af3d73ca73f95e69bf8ab4978c9ae3: deterministic evidence/event hashes, source-event idempotency, explicit seven-state evidence semantics, provenance links, dependency/causal validation, and private-reference payload restrictions. Repository remains temporarily public; sanitized-only constraint applies."
+      "last_observed_at": "2026-09-25T16:32:59Z",
+      "notes": "Step 4 adapter implementation and validation verified at code head c6dd95bce5310a68e9cb18202a52cadffa0ea76d. The repository adapter cursor intentionally tracks default branch main separately from the isolated build branch."
     }
   },
   "decisions": [
@@ -352,6 +352,43 @@
         "events/validate_event.py",
         "tests/test_event_evidence_schema.py"
       ]
+    },
+    {
+      "decision_id": "DEC-033",
+      "summary": "Repository adapters are OBSERVE-only and use exact source-SHA cursors. Unchanged sources perform one HEAD resolution and skip compare/content rereads; changed sources compare only prior cursor SHA to current head; blocked sources perform zero reads and do not advance.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "schemas/ADAPTER_SCHEMA.json",
+        "adapters/ADAPTER_REGISTRY.json",
+        "adapters/github_readonly.py",
+        "tests/test_readonly_adapters.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-034",
+      "summary": "Repository observation cursors are source-ref-specific and separate from architecture build-branch state. REPO-008 therefore tracks main in the adapter cursor while PORTFOLIO_BUILD_STATE.json tracks the isolated working branch used for the numbered build.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "adapters/cursors/repositories.json",
+        "PORTFOLIO_BUILD_STATE.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-035",
+      "summary": "The initial Step 4 observation captured three changed repositories (67 commits, 131 changed paths total), three unchanged repositories with zero content rereads, one blocked repository with zero network reads, and one initialized default-branch cursor.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "adapters/observations/INITIAL_STEP4_OBSERVATION.json",
+        "adapters/validate_adapters.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-036",
+      "summary": "An additional accessible private repository was minimally checked for relevance; no README or code-search evidence established a portfolio mapping. It was not added to the durable adapter set, and no private content or identifying metadata was persisted in the public Portfolio Brain repository. Reconsider only after relevance is evidenced or the control repository becomes private.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "PORTFOLIO_BUILD_STATE.json"
+      ]
     }
   ],
   "blockers": [
@@ -386,16 +423,17 @@
       "requires_human_decision": true
     }
   ],
-  "architecture_version": "1.3.0",
+  "architecture_version": "1.4.0",
   "state_id": "portfolio-brain-master",
-  "working_branch": "step3-complete-20260925",
+  "working_branch": "step4-readonly-adapters-20260925",
   "phase": "architecture_build",
-  "current_step": 4,
+  "current_step": 5,
   "completed_steps": [
     0,
     1,
     2,
-    3
+    3,
+    4
   ],
   "artifacts": [
     {
@@ -661,6 +699,60 @@
       "kind": "step3_final_validation_request",
       "step": 3,
       "commit_sha": "77fbf807b4af3d73ca73f95e69bf8ab4978c9ae3"
+    },
+    {
+      "path": "schemas/ADAPTER_SCHEMA.json",
+      "kind": "step4_adapter_schema",
+      "step": 4,
+      "commit_sha": "7c234950db1cfbed3e09d7701e00d9570f2026e3"
+    },
+    {
+      "path": "adapters/ADAPTER_REGISTRY.json",
+      "kind": "step4_adapter_registry",
+      "step": 4,
+      "commit_sha": "8f6c385b399c3d3cd030811878f5de2b8317b083"
+    },
+    {
+      "path": "adapters/cursors/repositories.json",
+      "kind": "step4_repository_cursors",
+      "step": 4,
+      "commit_sha": "05ab0ee785634e210289e02fe68799d6bea95bac"
+    },
+    {
+      "path": "adapters/github_readonly.py",
+      "kind": "step4_github_readonly_adapter",
+      "step": 4,
+      "commit_sha": "7acfd6b19ab7adfb4f43ca898cf6bf89e3e7df14"
+    },
+    {
+      "path": "tests/test_readonly_adapters.py",
+      "kind": "step4_adapter_behavior_tests",
+      "step": 4,
+      "commit_sha": "95fa6eadfa0cf84ad0aa96e0dbfb810ef6e1eca9"
+    },
+    {
+      "path": "adapters/observations/INITIAL_STEP4_OBSERVATION.json",
+      "kind": "step4_initial_delta_observation",
+      "step": 4,
+      "commit_sha": "46db9b2d7c9c51d584a633ac3b4cb372ee874fac"
+    },
+    {
+      "path": "adapters/validate_adapters.py",
+      "kind": "step4_adapter_bundle_validator",
+      "step": 4,
+      "commit_sha": "b6fcdcf90d9b2d3f03311f4c7c67ed870b457456"
+    },
+    {
+      "path": "tests/test_adapter_bundle.py",
+      "kind": "step4_adapter_bundle_tests",
+      "step": 4,
+      "commit_sha": "bd4a3c1fb244627ff75f683fdc8632023ca2f188"
+    },
+    {
+      "path": ".github/workflows/foundation-ci.yml",
+      "kind": "step4_ci_validation_extension",
+      "step": 4,
+      "commit_sha": "c6dd95bce5310a68e9cb18202a52cadffa0ea76d"
     }
   ],
   "tests": [
@@ -759,22 +851,29 @@
       "status": "PASS",
       "step": 3,
       "evidence": "GitHub Actions foundation-ci run 36160359255 succeeded at exact Step 3 code head 77fbf807b4af3d73ca73f95e69bf8ab4978c9ae3. Step 1 foundation and Step 2 registry remained green; 44 total regression tests passed, including event/evidence provenance, hashing, idempotency, state, privacy and reference-integrity regressions."
+    },
+    {
+      "name": "step4_readonly_adapter_ci",
+      "status": "PASS",
+      "step": 4,
+      "evidence": "GitHub Actions foundation-ci run 36161446817 succeeded at exact Step 4 code head c6dd95bce5310a68e9cb18202a52cadffa0ea76d. Step 4 validator reported 8 adapters: 3 changed, 3 unchanged, 1 blocked, 1 initialized, 131 changed paths; 58 total regression tests passed."
     }
   ],
   "next_action": {
-    "step": 4,
-    "summary": "WAIT FOR CONTINUE. Step 3 is complete. Next exact numbered step is Step 4 — Read-only adapters: connect current repositories for observation only and persist source deltas/cursors so unchanged sources are not repeatedly reread. Do not begin Step 4 until explicit CONTINUE.",
+    "step": 5,
+    "summary": "WAIT FOR CONTINUE. Step 4 is complete. Next exact numbered step is Step 5 — Truth Engine integration: generalize/reuse the AI Business OS Truth Engine, preserve explicit evidence states, contradiction handling, freshness and provenance, and add deterministic conformance tests. Do not begin Step 5 until explicit CONTINUE.",
     "preconditions": [
       "Read this root PORTFOLIO_BUILD_STATE.json first.",
-      "Do not repeat Steps 0–3 unless a pinned source changed.",
-      "Work on Step 4 only and stop after its verified commit.",
-      "Adapters are OBSERVE-only; no downstream writes, deployments, model calls or ACT.",
-      "Persist exact source revision/cursor and ingest deltas rather than rescanning unchanged sources.",
-      "While BLK-005 is open, store only sanitized non-sensitive receipts/references in this public repository.",
-      "REPO-006 remains blocked and must not be read or integrated while BLK-001 is open."
+      "Do not repeat Steps 0–4 unless an exact source cursor changed.",
+      "Work on Step 5 only and stop after its verified commit.",
+      "Reuse the canonical AI Business OS Truth Engine through a pinned adapter/interface; do not copy an uncontrolled fork.",
+      "Do not upgrade repeated assertions or model confidence into VERIFIED evidence.",
+      "Keep downstream adapters OBSERVE-only and runtime/ACT disabled.",
+      "While BLK-005 is open, store only sanitized non-sensitive material.",
+      "REPO-006 remains blocked and must not be read while BLK-001 is open."
     ]
   },
-  "updated_at": "2026-09-25T16:24:00Z",
+  "updated_at": "2026-09-25T16:34:00Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -832,6 +931,28 @@
         "canonical_event_types": 26,
         "final_code_ci_run": 36160359255,
         "total_regression_tests": 44
+      }
+    },
+    "4": {
+      "status": "COMPLETE",
+      "completed_substeps": [
+        "4A_HEAD_ONLY_RECONCILIATION",
+        "4B_READ_ONLY_ADAPTER_SCHEMA_AND_REGISTRY",
+        "4C_EXACT_SHA_CURSOR_STORE",
+        "4D_DELTA_ONLY_GITHUB_ADAPTER",
+        "4E_INITIAL_OBSERVATION_RECEIPT",
+        "4F_CROSS_FILE_VALIDATION_AND_CI"
+      ],
+      "pending_substeps": [],
+      "authority_change": "OBSERVE_ONLY",
+      "verified_counts": {
+        "durable_adapters": 8,
+        "changed_repositories": 3,
+        "unchanged_repositories": 3,
+        "blocked_repositories": 1,
+        "initialized_repositories": 1,
+        "changed_paths": 131,
+        "regression_tests": 58
       }
     }
   }
