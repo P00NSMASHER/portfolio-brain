@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0.0",
+  "step": 7,
+  "purpose": "Bind final Step 7 verification to a clean concurrency key.",
+  "source_head": "7c6ffb6f9ec201112b1c6bdd267e901a08ea8b00",
+  "expected_invariants": {
+    "universal_node_types": 22,
+    "required_relationship_types": 17,
+    "seeded_nodes": 25,
+    "seeded_edges": 26,
+    "canonical_knowledge_graph_blob": "d0ed2e015dc4593361d7600e48cb680a0df13245",
+    "canonical_entity_canonicalization_blob": "29a765be3598f83d20f5747518deb8de8f41ffd2",
+    "fabricated_customer_nodes": 0,
+    "fabricated_revenue_nodes": 0,
+    "fabricated_opportunity_nodes": 0,
+    "fabricated_outcome_nodes": 0,
+    "graph_connectivity_truth_effect": "NONE",
+    "ambiguous_canonicalization": "HUMAN_REVIEW_REQUIRED",
+    "canonicalization_reversible": true
+  },
+  "authority_change": "NONE"
+}
