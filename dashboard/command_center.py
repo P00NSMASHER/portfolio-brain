@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Any
 
 from dashboard.executive_dashboard import build_dashboard_snapshot
+from dashboard.history_state import load_state as load_history_state, public_history
+from dashboard.operational_telemetry import build_operational_telemetry
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -114,6 +116,14 @@ def build_command_center_snapshot() -> dict[str, Any]:
     action_policy = load_json("action_engine/ACTION_POLICY.json")
     action_ledger = load_json("action_engine/GMAIL_GATEWAY_LEDGER.json")
     model_registry = load_json("model_router/PROVIDER_REGISTRY.json")
+    telemetry = build_operational_telemetry()
+    history_public_path = ROOT / "dashboard" / "out" / "history.json"
+    if history_public_path.exists():
+        history = json.loads(history_public_path.read_text(encoding="utf-8"))
+    else:
+        history_state_path = ROOT / "dashboard" / "live" / "history_state.json"
+        history = public_history(load_history_state(history_state_path if history_state_path.exists() else None))
+    heartbeat_by_agent = {row["agent_id"]: row for row in telemetry["agents"]["agents"]}
 
     state_by_agent = agent_state["agents"]
     agents = []
@@ -131,6 +141,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
                 "source_workflow": state.get("source_workflow"),
                 "source_run_id": state.get("source_run_id"),
                 "recent_work_ids": state.get("recent_work_ids", []),
+                "heartbeat_health": heartbeat_by_agent.get(role["agent_id"], {}).get("heartbeat_health", "NEVER"),
+                "heartbeat_age_minutes": heartbeat_by_agent.get(role["agent_id"], {}).get("heartbeat_age_minutes"),
                 "max_autonomy": role["max_autonomy"],
                 "builder_eligible": role["builder_eligible"],
                 "verifier_eligible": role["verifier_eligible"],
@@ -206,7 +218,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
 
     snapshot = {
         "schema_version": "1.0.0",
-        "command_center_id": "portfolio-brain-command-center-v3",
+        "command_center_id": "portfolio-brain-command-center-v4",
         "authority_class": "OBSERVE",
         "mutation_capability": "NONE",
         "network_capability": "NONE",
@@ -267,6 +279,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
         "agents": agents,
         "workflows": workflows,
         "state_sources": state_sources,
+        "telemetry": telemetry,
+        "history": history,
         "runtime": {
             "sequence": None if runtime_state is None else runtime_state.get("sequence"),
             "updated_at": None if runtime_state is None else runtime_state.get("updated_at"),
