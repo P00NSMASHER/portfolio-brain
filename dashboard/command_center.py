@@ -21,8 +21,60 @@ from dashboard.executive_dashboard import build_dashboard_snapshot
 ROOT = Path(__file__).resolve().parents[1]
 
 
+LIVE_ROOT = ROOT / "dashboard" / "live"
+
+
 def load_json(path: str) -> dict[str, Any]:
     return json.loads((ROOT / path).read_text())
+
+
+def load_live_json(filename: str, fallback_path: str) -> dict[str, Any]:
+    live = LIVE_ROOT / filename
+    if live.exists():
+        return json.loads(live.read_text(encoding="utf-8"))
+    return load_json(fallback_path)
+
+
+def load_state_sources() -> dict[str, Any]:
+    receipt = LIVE_ROOT / "state_sources.json"
+    if receipt.exists():
+        data = json.loads(receipt.read_text(encoding="utf-8"))
+    else:
+        data = {
+            "schema_version":"1.0.0",
+            "bridge_id":"portfolio-command-center-live-state-v1",
+            "authority_class":"OBSERVE",
+            "mutation_capability":"NONE",
+            "generated_at":None,
+            "bridge_status":"FALLBACK",
+            "sources":{},
+        }
+    seeds = {
+        "runtime":"adapters/cursors/repositories.json",
+        "scheduler":"scheduler/SCHEDULER_STATE_SEED.json",
+        "hunter":"hunting/HUNTER_STATE_SEED.json",
+        "cost":"cost_governor/COST_STATE_SEED.json",
+        "notifications":"notifications/NOTIFICATION_STATE_SEED.json",
+        "agents":"agents/AGENT_STATE_SEED.json",
+    }
+    for name, ref in seeds.items():
+        data["sources"].setdefault(name, {
+            "status":"FALLBACK",
+            "source_kind":"CHECKED_IN_SEED",
+            "source_ref":ref,
+            "restore_status":"NOT_RESTORED",
+            "source_run_id":None,
+            "source_head_sha":None,
+            "artifact_id":None,
+            "artifact_created_at":None,
+            "artifact_expires_at":None,
+            "age_minutes":None,
+            "stale_after_minutes":None,
+            "state_sequence":None,
+            "state_updated_at":None,
+            "error_class":None,
+        })
+    return data
 
 
 def canon(value: Any) -> str:
@@ -50,11 +102,14 @@ def build_command_center_snapshot() -> dict[str, Any]:
     sprint = load_json("operations/VALIDATION_SPRINT_STATE.json")
     agent_registry = load_json("agents/AGENT_REGISTRY.json")
     agent_state = load_json("agents/AGENT_STATE_SEED.json")
-    hunter_state = load_json("hunting/HUNTER_STATE_SEED.json")
+    state_sources = load_state_sources()
+    hunter_state = load_live_json("hunter_state.json","hunting/HUNTER_STATE_SEED.json")
     cost_policy = load_json("cost_governor/COST_GOVERNOR_POLICY.json")
-    cost_state = load_json("cost_governor/COST_STATE_SEED.json")
+    cost_state = load_live_json("cost_state.json","cost_governor/COST_STATE_SEED.json")
     notification_policy = load_json("notifications/NOTIFICATION_POLICY.json")
-    notification_state = load_json("notifications/NOTIFICATION_STATE_SEED.json")
+    notification_state = load_live_json("notification_state.json","notifications/NOTIFICATION_STATE_SEED.json")
+    runtime_state_path = LIVE_ROOT / "runtime_state.json"
+    runtime_state = json.loads(runtime_state_path.read_text(encoding="utf-8")) if runtime_state_path.exists() else None
     optimization = load_json("operations/POST_RESTRICTION_OPTIMIZATION_STATUS.json")
     action_policy = load_json("action_engine/ACTION_POLICY.json")
     action_ledger = load_json("action_engine/GMAIL_GATEWAY_LEDGER.json")
@@ -147,11 +202,11 @@ def build_command_center_snapshot() -> dict[str, Any]:
 
     snapshot = {
         "schema_version": "1.0.0",
-        "command_center_id": "portfolio-brain-command-center-v2",
+        "command_center_id": "portfolio-brain-command-center-v3",
         "authority_class": "OBSERVE",
         "mutation_capability": "NONE",
         "network_capability": "NONE",
-        "data_boundary": "SANITIZED_CHECKED_IN_STATE_ONLY",
+        "data_boundary": "SANITIZED_CHECKED_IN_AND_DURABLE_ARTIFACT_STATE",
         "source_dashboard_hash": executive["snapshot_hash"],
         "system": {
             "status": operating["status"],
@@ -164,6 +219,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "active_agent_count": active_agents,
             "workflow_count": len(workflows),
             "engaged_kill_switch_count": engaged_switches,
+            "live_state_bridge_status": state_sources["bridge_status"],
         },
         "validation_sprint": {
             "sprint_id": sprint["sprint_id"],
@@ -206,6 +262,14 @@ def build_command_center_snapshot() -> dict[str, Any]:
         "projects": executive["projects"],
         "agents": agents,
         "workflows": workflows,
+        "state_sources": state_sources,
+        "runtime": {
+            "sequence": None if runtime_state is None else runtime_state.get("sequence"),
+            "updated_at": None if runtime_state is None else runtime_state.get("updated_at"),
+            "last_cycle_id": None if runtime_state is None else runtime_state.get("last_cycle_id"),
+            "recent_cycle_count": 0 if runtime_state is None else len(runtime_state.get("recent_cycles", [])),
+            "repository_count": 0 if runtime_state is None else len(runtime_state.get("repositories", {})),
+        },
         "hunter": {
             "sequence": hunter_state["sequence"],
             "updated_at": hunter_state["updated_at"],
@@ -279,6 +343,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
                     "action_engine/ACTION_POLICY.json",
                     "action_engine/GMAIL_GATEWAY_LEDGER.json",
                     "model_router/PROVIDER_REGISTRY.json",
+                    "dashboard/live/state_sources.json",
                 ]
             )
         ),
