@@ -64,6 +64,8 @@ jobs:
         run: python -m cost_governor.validate_cost_governor
       - name: Validate Step 21 executive dashboard
         run: python -m dashboard.validate_dashboard
+      - name: Validate read-only command center v2
+        run: python -m dashboard.validate_command_center
       - name: Validate Step 22 notification and escalation layer
         run: python -m notifications.validate_notifications
       - name: Validate Gmail action gateway
