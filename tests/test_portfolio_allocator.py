@@ -22,11 +22,15 @@ class PortfolioAllocatorTests(unittest.TestCase):
         for key in ["ENGINEERING_CAPACITY","TESTING","ART_PRODUCTION","API_INFRASTRUCTURE"]:
             self.assertEqual(self.by[key]["allocated_share_basis_points"],0)
 
-    def test_recoveryworks_is_top_human_review_priority_but_not_approved(self):
-        r=self.by["HUMAN_REVIEW"]["recommendations"][0]
-        self.assertEqual(r["project_id"],"PRJ-001")
-        self.assertEqual(r["authority_requirement"],"HUMAN_GATED_ACT")
-        self.assertEqual(r["actionability"],"HUMAN_APPROVAL_REQUIRED")
+    def test_human_review_is_reserved_for_child_facing_human_gated_work(self):
+        recs=self.by["HUMAN_REVIEW"]["recommendations"]
+        self.assertTrue(recs)
+        self.assertTrue(all(r["project_id"] in {"PRJ-005","PRJ-006"} for r in recs))
+        self.assertTrue(all(r["authority_requirement"]=="HUMAN_GATED_ACT" for r in recs))
+        self.assertTrue(all(r["actionability"]=="HUMAN_APPROVAL_REQUIRED" for r in recs))
+
+    def test_recoveryworks_bounded_validation_receives_model_capacity(self):
+        self.assertTrue(any(r["project_id"]=="PRJ-001" and r["authority_requirement"]=="BOUNDED_ACT" for r in self.by["MODEL_CALLS"]["recommendations"]))
 
     def test_learning_measurement_is_top_research_priority(self):
         self.assertEqual(self.by["RESEARCH"]["recommendations"][0]["project_id"],"PRJ-000")
