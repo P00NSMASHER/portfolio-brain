@@ -1104,10 +1104,10 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
 }}
 </style>
 </head>
-<body>
+<body data-design="apple-inspired-v4-1">
 <div class="shell">
 <aside>
-  <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Command Center v4</small></div></div>
+  <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Command Center v4.1</small></div></div>
   <nav>
     <a href="#overview">Overview</a><a href="#live-state">Live State</a><a href="#operations">Operations</a><a href="#trends">Trends</a><a href="#alerts">Attention</a><a href="#projects">Portfolio</a>
     <a href="#agents">Agent Fleet</a><a href="#actions">Action Engine</a><a href="#hunter">Hunter</a>
