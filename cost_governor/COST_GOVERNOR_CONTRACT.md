@@ -6,7 +6,7 @@ Step 20 is a fail-closed execution boundary. It does not decide what work is val
 
 Every non-Tier-0 model/API invocation and every managed autonomous GitHub job must reserve its worst-case usage before substantive execution. Active reservations count against the same ceilings as committed usage. A reservation is identified by a deterministic idempotency key and retry group.
 
-The checked-in paid/model/API ceilings are zero. Enabling a provider or model elsewhere is therefore insufficient to spend money or tokens; a separate policy change is required.
+The checked-in paid/model/API ceilings are finite and nonnegative. Enabling a provider or model is still insufficient to spend money or tokens: provider readiness, routing, authority, idempotency, retry, and pre-execution reservation gates must all pass independently.
 
 ## Independent budget scopes
 
@@ -37,6 +37,8 @@ Artifact-backed accounting is serialized through the shared `portfolio-cost-gove
 ## Kill switches and cancellation
 
 `cost_governor/COST_KILL_SWITCH.json` and the `PORTFOLIO_SPEND_DISABLED` repository variable can force a hard stop. The staged watchdog has `actions: write` only so it can cancel queued/in-progress managed autonomous runs when a kill switch or current-day overage is present. It never cancels foundation CI and cannot grant execution authority.
+
+The watchdog polls hourly. Managed jobs are capped at five minutes, so quarter-hour polling could not reliably interrupt most jobs before completion and created 96 control-plane runs per day. Hourly polling retains an independent kill-switch backstop at 24 runs per day; preflight reservation checks and per-job timeouts remain the primary synchronous controls.
 
 ## Authority boundary
 

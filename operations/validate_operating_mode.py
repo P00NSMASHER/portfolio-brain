@@ -99,7 +99,7 @@ def validate_operating_mode():
       "runtime-weekly-synthesis":"17 10 * * 1",
       "hunter-autonomous-cycle":"47 */6 * * *",
       "portfolio-autonomous-scheduler":"23 * * * *",
-      "portfolio-cost-watchdog":"*/15 * * * *",
+      "portfolio-cost-watchdog":"53 * * * *",
       "portfolio-notification-cycle":"7 */6 * * *",
     }
     req(set(p["approved_recurring_workflows"])==set(expected),"approved recurring workflow set changed")

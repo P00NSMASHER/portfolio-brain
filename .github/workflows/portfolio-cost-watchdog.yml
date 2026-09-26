@@ -2,7 +2,10 @@ name: portfolio-cost-watchdog
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    # Managed autonomous jobs are capped at five minutes, so sub-hour polling
+    # cannot reliably interrupt them before completion. Hourly enforcement keeps
+    # the independent kill-switch backstop while cutting control-plane starts 75%.
+    - cron: "53 * * * *"
   workflow_dispatch:
 
 permissions:

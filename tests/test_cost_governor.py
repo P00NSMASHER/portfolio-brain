@@ -41,6 +41,12 @@ def github_request(*, run_id="100", attempt=1, minutes=5, workflow="portfolio-au
 
 
 class CostGovernorTests(unittest.TestCase):
+    def test_watchdog_polling_is_hourly_not_quarter_hourly(self):
+        workflow = (ROOT / ".github/workflows/portfolio-cost-watchdog.yml").read_text()
+        self.assertIn('cron: "53 * * * *"',workflow)
+        self.assertNotIn('cron: "*/15 * * * *"',workflow)
+        self.assertIn("actions: write",workflow)
+
     def test_command_center_hourly_refresh_is_cost_governed(self):
         workflow = (ROOT / ".github/workflows/command-center-pages.yml").read_text()
         self.assertIn('cron: "37 * * * *"',workflow)

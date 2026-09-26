@@ -30,6 +30,24 @@ def _add(dst: dict[str, float], src: dict[str, Any] | None) -> None:
 def _day(value: str | None) -> str | None:
     return value[:10] if isinstance(value, str) and len(value) >= 10 else None
 
+def _nominal_daily_runs(cron: str | None) -> int | None:
+    """Return the exact daily run count for supported all-day cron forms."""
+    if not isinstance(cron, str):
+        return None
+    fields = cron.split()
+    if len(fields) != 5 or fields[2:] != ["*", "*", "*"]:
+        return None
+    minute, hour = fields[:2]
+    if hour != "*":
+        return None
+    if minute.isdigit() and 0 <= int(minute) <= 59:
+        return 24
+    if minute.startswith("*/") and minute[2:].isdigit():
+        interval = int(minute[2:])
+        if interval > 0 and 60 % interval == 0:
+            return 24 * (60 // interval)
+    return None
+
 def _provider_attempt_failure(row: dict[str, Any]) -> bool:
     return any(
         isinstance(ref, str) and ref.startswith("provider-attempt:")
@@ -67,6 +85,10 @@ def build_sentinel_snapshot(
     for row in cost_state.get("reservations", []):
         status = row.get("status", "UNKNOWN")
         reservation_status_counts[status] += 1
+        # Durable state intentionally retains several days of history, while all
+        # budget ceilings are scoped to the current UTC calendar day.
+        if _day(row.get("created_at")) != today:
+            continue
         if status in {"COMMITTED", "OVERAGE"}:
             _add(committed, row.get("actual_usage"))
         elif status == "RESERVED":
@@ -131,7 +153,7 @@ def build_sentinel_snapshot(
     timeout_match = re.search(r'timeout-minutes:\s*(\d+)', watchdog_text)
     cron = cron_match.group(1) if cron_match else None
     timeout_minutes = int(timeout_match.group(1)) if timeout_match else None
-    nominal_runs = 96 if cron == "*/15 * * * *" else None
+    nominal_runs = _nominal_daily_runs(cron)
 
     readiness = provider_health.get("status", "UNKNOWN")
     if readiness == "READY":

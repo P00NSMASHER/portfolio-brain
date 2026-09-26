@@ -29,8 +29,8 @@
       "purpose": "evidence-gated persistent work selection"
     },
     "portfolio-cost-watchdog": {
-      "cron": "*/15 * * * *",
-      "purpose": "kill-switch and overage enforcement"
+      "cron": "53 * * * *",
+      "purpose": "hourly kill-switch and overage backstop; synchronous preflight and timeouts remain primary"
     },
     "portfolio-notification-cycle": {
       "cron": "7 */6 * * *",
