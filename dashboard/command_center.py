@@ -21,8 +21,60 @@ from dashboard.executive_dashboard import build_dashboard_snapshot
 ROOT = Path(__file__).resolve().parents[1]
 
 
+LIVE_ROOT = ROOT / "dashboard" / "live"
+
+
 def load_json(path: str) -> dict[str, Any]:
     return json.loads((ROOT / path).read_text())
+
+
+def load_live_json(filename: str, fallback_path: str) -> dict[str, Any]:
+    live = LIVE_ROOT / filename
+    if live.exists():
+        return json.loads(live.read_text(encoding="utf-8"))
+    return load_json(fallback_path)
+
+
+def load_state_sources() -> dict[str, Any]:
+    receipt = LIVE_ROOT / "state_sources.json"
+    if receipt.exists():
+        data = json.loads(receipt.read_text(encoding="utf-8"))
+    else:
+        data = {
+            "schema_version":"1.0.0",
+            "bridge_id":"portfolio-command-center-live-state-v1",
+            "authority_class":"OBSERVE",
+            "mutation_capability":"NONE",
+            "generated_at":None,
+            "bridge_status":"FALLBACK",
+            "sources":{},
+        }
+    seeds = {
+        "runtime":"adapters/cursors/repositories.json",
+        "scheduler":"scheduler/SCHEDULER_STATE_SEED.json",
+        "hunter":"hunting/HUNTER_STATE_SEED.json",
+        "cost":"cost_governor/COST_STATE_SEED.json",
+        "notifications":"notifications/NOTIFICATION_STATE_SEED.json",
+        "agents":"agents/AGENT_STATE_SEED.json",
+    }
+    for name, ref in seeds.items():
+        data["sources"].setdefault(name, {
+            "status":"FALLBACK",
+            "source_kind":"CHECKED_IN_SEED",
+            "source_ref":ref,
+            "restore_status":"NOT_RESTORED",
+            "source_run_id":None,
+            "source_head_sha":None,
+            "artifact_id":None,
+            "artifact_created_at":None,
+            "artifact_expires_at":None,
+            "age_minutes":None,
+            "stale_after_minutes":None,
+            "state_sequence":None,
+            "state_updated_at":None,
+            "error_class":None,
+        })
+    return data
 
 
 def canon(value: Any) -> str:
@@ -50,11 +102,14 @@ def build_command_center_snapshot() -> dict[str, Any]:
     sprint = load_json("operations/VALIDATION_SPRINT_STATE.json")
     agent_registry = load_json("agents/AGENT_REGISTRY.json")
     agent_state = load_json("agents/AGENT_STATE_SEED.json")
-    hunter_state = load_json("hunting/HUNTER_STATE_SEED.json")
+    state_sources = load_state_sources()
+    hunter_state = load_live_json("hunter_state.json","hunting/HUNTER_STATE_SEED.json")
     cost_policy = load_json("cost_governor/COST_GOVERNOR_POLICY.json")
-    cost_state = load_json("cost_governor/COST_STATE_SEED.json")
+    cost_state = load_live_json("cost_state.json","cost_governor/COST_STATE_SEED.json")
     notification_policy = load_json("notifications/NOTIFICATION_POLICY.json")
-    notification_state = load_json("notifications/NOTIFICATION_STATE_SEED.json")
+    notification_state = load_live_json("notification_state.json","notifications/NOTIFICATION_STATE_SEED.json")
+    runtime_state_path = LIVE_ROOT / "runtime_state.json"
+    runtime_state = json.loads(runtime_state_path.read_text(encoding="utf-8")) if runtime_state_path.exists() else None
     optimization = load_json("operations/POST_RESTRICTION_OPTIMIZATION_STATUS.json")
     action_policy = load_json("action_engine/ACTION_POLICY.json")
     action_ledger = load_json("action_engine/GMAIL_GATEWAY_LEDGER.json")
@@ -147,11 +202,11 @@ def build_command_center_snapshot() -> dict[str, Any]:
 
     snapshot = {
         "schema_version": "1.0.0",
-        "command_center_id": "portfolio-brain-command-center-v2",
+        "command_center_id": "portfolio-brain-command-center-v3",
         "authority_class": "OBSERVE",
         "mutation_capability": "NONE",
         "network_capability": "NONE",
-        "data_boundary": "SANITIZED_CHECKED_IN_STATE_ONLY",
+        "data_boundary": "SANITIZED_CHECKED_IN_AND_DURABLE_ARTIFACT_STATE",
         "source_dashboard_hash": executive["snapshot_hash"],
         "system": {
             "status": operating["status"],
@@ -164,6 +219,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "active_agent_count": active_agents,
             "workflow_count": len(workflows),
             "engaged_kill_switch_count": engaged_switches,
+            "live_state_bridge_status": state_sources["bridge_status"],
         },
         "validation_sprint": {
             "sprint_id": sprint["sprint_id"],
@@ -206,6 +262,14 @@ def build_command_center_snapshot() -> dict[str, Any]:
         "projects": executive["projects"],
         "agents": agents,
         "workflows": workflows,
+        "state_sources": state_sources,
+        "runtime": {
+            "sequence": None if runtime_state is None else runtime_state.get("sequence"),
+            "updated_at": None if runtime_state is None else runtime_state.get("updated_at"),
+            "last_cycle_id": None if runtime_state is None else runtime_state.get("last_cycle_id"),
+            "recent_cycle_count": 0 if runtime_state is None else len(runtime_state.get("recent_cycles", [])),
+            "repository_count": 0 if runtime_state is None else len(runtime_state.get("repositories", {})),
+        },
         "hunter": {
             "sequence": hunter_state["sequence"],
             "updated_at": hunter_state["updated_at"],
@@ -279,6 +343,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
                     "action_engine/ACTION_POLICY.json",
                     "action_engine/GMAIL_GATEWAY_LEDGER.json",
                     "model_router/PROVIDER_REGISTRY.json",
+                    "dashboard/live/state_sources.json",
                 ]
             )
         ),
@@ -297,11 +362,11 @@ def _badge(text: str, tone: str = "neutral") -> str:
 
 def _status_tone(value: str) -> str:
     upper = value.upper()
-    if upper in {"OPERATIONAL", "ACTIVE", "VERIFIED_FIXED", "RUNNING"}:
+    if upper in {"OPERATIONAL", "ACTIVE", "VERIFIED_FIXED", "RUNNING", "LIVE"}:
         return "good"
     if upper in {"BLOCKED", "CRITICAL", "HIGH", "ENGAGED", "DISABLED"}:
         return "bad"
-    if upper in {"EVIDENCE_GAPS", "MEDIUM", "ACTIVE_RESEARCH_ONLY", "IN_DEVELOPMENT"}:
+    if upper in {"EVIDENCE_GAPS", "MEDIUM", "ACTIVE_RESEARCH_ONLY", "IN_DEVELOPMENT", "STALE", "FALLBACK", "DEGRADED"}:
         return "warn"
     return "neutral"
 
@@ -315,6 +380,22 @@ def render_html(snapshot: dict[str, Any]) -> str:
     optimization = snapshot["optimization"]
     action_engine = snapshot["action_engine"]
     model_router = snapshot["model_router"]
+    source_bundle = snapshot["state_sources"]
+    sources = source_bundle["sources"]
+
+    def source_badge(name: str) -> str:
+        status = sources[name]["status"]
+        return _badge(status, _status_tone(status))
+
+    def source_detail(name: str) -> str:
+        src = sources[name]
+        created = src.get("artifact_created_at") or "seed/no artifact"
+        run = src.get("source_run_id")
+        run_text = "—" if run is None else str(run)
+        age = src.get("age_minutes")
+        age_text = "—" if age is None else f"{age} min"
+        return f"artifact {created} · run {run_text} · age {age_text}"
+
 
     alert_rows = "".join(
         f"""
@@ -389,6 +470,30 @@ def render_html(snapshot: dict[str, Any]) -> str:
         for name, stats in snapshot["hunter"]["strategy_stats"].items()
     )
 
+    source_labels = {
+        "runtime":"Runtime",
+        "scheduler":"Scheduler",
+        "hunter":"Hunter",
+        "cost":"Cost Governor",
+        "notifications":"Notifications",
+        "agents":"Agent Fleet",
+    }
+    source_rows = "".join(
+        f"""
+        <tr>
+          <td><strong>{_e(source_labels[name])}</strong><span class="sub">{_e(src.get("source_kind"))}</span></td>
+          <td>{_badge(src["status"], _status_tone(src["status"]))}</td>
+          <td class="num">{_e(src.get("state_sequence") if src.get("state_sequence") is not None else "—")}</td>
+          <td>{_e(src.get("artifact_created_at") or "—")}</td>
+          <td>{_e(src.get("source_run_id") or "—")}</td>
+          <td class="num">{_e(src.get("age_minutes") if src.get("age_minutes") is not None else "—")}</td>
+          <td class="wrap"><code>{_e(src.get("source_ref") or "—")}</code></td>
+        </tr>
+        """
+        for name, src in sources.items()
+        if name in source_labels
+    )
+
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -444,9 +549,9 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
 <body>
 <div class="shell">
 <aside>
-  <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Command Center v2</small></div></div>
+  <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Command Center v3</small></div></div>
   <nav>
-    <a href="#overview">Overview</a><a href="#alerts">Attention</a><a href="#projects">Portfolio</a>
+    <a href="#overview">Overview</a><a href="#live-state">Live State</a><a href="#alerts">Attention</a><a href="#projects">Portfolio</a>
     <a href="#agents">Agent Fleet</a><a href="#actions">Action Engine</a><a href="#hunter">Hunter</a>
     <a href="#cost">Cost & Models</a><a href="#workflows">Workflows</a><a href="#boundary">Authority Boundary</a>
   </nav>
@@ -468,19 +573,31 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
   <section class="grid kpis">
     <div class="card kpi"><div class="label">Projects</div><div class="value">{system["project_count"]}</div><div class="hint">{len([p for p in snapshot["projects"] if p["lifecycle_status"] == "ACTIVE"])} active</div></div>
     <div class="card kpi"><div class="label">Agents</div><div class="value">{system["active_agent_count"]}/{system["agent_count"]}</div><div class="hint">active registry roles</div></div>
-    <div class="card kpi"><div class="label">Runnable work</div><div class="value">{portfolio["pending_autonomous_work_count"]}</div><div class="hint">scheduler-selected</div></div>
+    <div class="card kpi"><div class="label">Open work</div><div class="value">{portfolio["pending_autonomous_work_count"]}</div><div class="hint">{_e(sources["scheduler"]["status"].lower())} scheduler queue</div></div>
     <div class="card kpi"><div class="label">Blocked work</div><div class="value">{portfolio["blocked_action_count"]}</div><div class="hint">human/authority gated</div></div>
     <div class="card kpi"><div class="label">Verified outcomes</div><div class="value">{sprint["scorecard"]["verified_external_outcomes_since_start"]}</div><div class="hint">historical baseline</div></div>
     <div class="card kpi"><div class="label">Paid model budget</div><div class="value">USD {cost["portfolio_ceiling"]["cost_usd"]:.2f}</div><div class="hint">{cost["portfolio_ceiling"]["model_calls"]} model calls authorized</div></div>
   </section>
 
+  <section class="card" id="live-state" style="margin-bottom:14px">
+    <div class="section-head">
+      <div><h2>Live State Bridge</h2><p>Newest validated durable state is restored before publication; seeds are explicit fallback only.</p></div>
+      {_badge(source_bundle["bridge_status"], _status_tone(source_bundle["bridge_status"]))}
+    </div>
+    <p>Bridge generated: {_e(source_bundle.get("generated_at") or "local fallback mode")}</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Subsystem</th><th>Status</th><th class="num">Seq</th><th>Artifact time</th><th>Source run</th><th class="num">Age min</th><th>Source</th></tr></thead>
+      <tbody>{source_rows}</tbody>
+    </table></div>
+  </section>
+
   <section class="grid two">
     <div class="card" id="alerts">
-      <div class="section-head"><div><h2>Attention Queue</h2><p>Derived from checked-in evidence, not subjective scoring.</p></div>{_badge(f'{len(snapshot["alerts"])} signals',"neutral")}</div>
+      <div class="section-head"><div><h2>Attention Queue</h2><p>Derived from evidence plus {_e(sources["notifications"]["status"].lower())} notification state.</p></div>{source_badge("notifications")}</div>
       {alert_rows}
     </div>
     <div class="card">
-      <div class="section-head"><div><h2>Operating Mode</h2><p>{_e(optimization["optimization_id"])}</p></div>{_badge(optimization["status"],_status_tone(optimization["status"]))}</div>
+      <div class="section-head"><div><h2>Operating Mode</h2><p>{_e(optimization["optimization_id"])} · {_e(source_detail("runtime"))}</p></div>{source_badge("runtime")}</div>
       <p>Continuous optimization is active. The former validation sprint is {_e(sprint["status"].lower())} and carries no active freeze or stop date.</p>
       <div class="callout"><strong>Next admissible action</strong><p>{_e(sprint["next_admissible_action"])}</p></div>
       <p><strong>Architecture freeze:</strong> {_e("ACTIVE" if optimization["validation_architecture_freeze"] else "LIFTED")} &nbsp; <strong>Policy:</strong> {_e(sprint["architecture_change_policy"])}</p>
@@ -490,8 +607,8 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
 
   <section class="card" id="projects" style="margin-top:14px">
     <div class="section-head">
-      <div><h2>Portfolio Grid</h2><p>Lifecycle, evidence health, uncertainty, and scheduler state.</p></div>
-      <input class="search" id="projectSearch" placeholder="Filter projects…" oninput="filterProjects(this.value)">
+      <div><h2>Portfolio Grid</h2><p>Lifecycle, evidence health, uncertainty, and scheduler state · {_e(source_detail("scheduler"))}</p></div>
+      <div>{source_badge("scheduler")} <input class="search" id="projectSearch" placeholder="Filter projects…" oninput="filterProjects(this.value)"></div>
     </div>
     <div class="table-wrap"><table>
       <thead><tr><th>Project</th><th>Lifecycle</th><th>Evidence health</th><th>Current bottleneck</th><th class="num">Pending</th><th class="num">Blocked</th><th class="num">Uncertainties</th></tr></thead>
@@ -501,7 +618,7 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
 
   <section class="grid two" style="margin-top:14px">
     <div class="card" id="agents">
-      <div class="section-head"><div><h2>Agent Fleet</h2><p>Persistent roles and maximum authorized autonomy.</p></div>{_badge(f'{system["active_agent_count"]} active',"good")}</div>
+      <div class="section-head"><div><h2>Agent Fleet</h2><p>Persistent roles and maximum authorized autonomy · {_e(source_detail("agents"))}</p></div>{source_badge("agents")}</div>
       <div class="table-wrap"><table>
         <thead><tr><th>Agent</th><th>Status</th><th>Max autonomy</th><th>Builder</th><th>Verifier</th><th>Tier</th><th>Heartbeat basis</th></tr></thead>
         <tbody>{agent_rows}</tbody>
@@ -524,20 +641,20 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
 
   <section class="grid two" style="margin-top:14px">
     <div class="card" id="hunter">
-      <div class="section-head"><div><h2>Hunter Intelligence Loop</h2><p>Checked-in seed/artifact-backed discovery state.</p></div>{_badge(f'{snapshot["hunter"]["recent_cycle_count"]} seed cycles',"neutral")}</div>
+      <div class="section-head"><div><h2>Hunter Intelligence Loop</h2><p>{_e(source_detail("hunter"))}</p></div>{source_badge("hunter")}</div>
       <div class="table-wrap"><table>
         <thead><tr><th>Strategy</th><th class="num">Cycles</th><th class="num">Queries</th><th class="num">Candidates</th><th class="num">Retained</th><th class="num">Verified value</th></tr></thead>
         <tbody>{strategy_rows}</tbody>
       </table></div>
     </div>
     <div class="card" id="cost">
-      <div class="section-head"><div><h2>Cost Governor</h2><p>{_e(cost["mode"])}</p></div>{_badge(f'USD {cost["portfolio_ceiling"]["cost_usd"]}/day',"good")}</div>
+      <div class="section-head"><div><h2>Cost Governor</h2><p>{_e(cost["mode"])} · {_e(source_detail("cost"))}</p></div>{source_badge("cost")}</div>
       <table><tbody>
         <tr><td>Daily GitHub job starts</td><td class="num">{cost["portfolio_ceiling"]["github_job_starts"]}</td></tr>
         <tr><td>Daily runner minutes</td><td class="num">{cost["portfolio_ceiling"]["github_runner_minutes"]}</td></tr>
         <tr><td>Paid model calls</td><td class="num">{cost["portfolio_ceiling"]["model_calls"]}</td></tr>
         <tr><td>API calls</td><td class="num">{cost["portfolio_ceiling"]["api_calls"]}</td></tr>
-        <tr><td>Active reservations in checked-in seed</td><td class="num">{cost["reservation_count"]}</td></tr>
+        <tr><td>Active durable reservations</td><td class="num">{cost["reservation_count"]}</td></tr>
       </tbody></table>
       <div class="section-head" style="margin-top:16px"><h2>Kill Switches</h2>{_badge(f'{system["engaged_kill_switch_count"]} engaged', "bad" if system["engaged_kill_switch_count"] else "good")}</div>
       <div class="switches">{kill_rows}</div>

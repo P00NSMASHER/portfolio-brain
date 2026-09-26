@@ -89,6 +89,7 @@ def restore_latest_valid_state(
     max_archive_bytes: int,
     max_state_bytes: int,
     validator: Callable[[dict[str, Any]], None] | None = None,
+    metadata_output: Path | None = None,
 ) -> str:
     candidates = [
         item
@@ -97,6 +98,17 @@ def restore_latest_valid_state(
         and str((item.get("workflow_run") or {}).get("id")) != str(current_run)
     ]
     if not candidates:
+        if metadata_output is not None:
+            _atomic_write(metadata_output, (json.dumps({
+                "schema_version":"1.0.0",
+                "restore_status":"NO_PRIOR_ARTIFACT",
+                "artifact_id":None,
+                "artifact_name":None,
+                "artifact_created_at":None,
+                "artifact_expires_at":None,
+                "source_run_id":None,
+                "source_head_sha":None,
+            },sort_keys=True)+"\n").encode("utf-8"))
         return "NO_PRIOR_ARTIFACT"
     candidates.sort(key=lambda item: (item.get("created_at", ""), item.get("id", 0)), reverse=True)
     rejected = 0
@@ -119,5 +131,18 @@ def restore_latest_valid_state(
             rejected += 1
             continue
         _atomic_write(output, payload)
-        return "RESTORED" if rejected == 0 else f"RESTORED_AFTER_REJECTING_{rejected}_INVALID"
+        status="RESTORED" if rejected == 0 else f"RESTORED_AFTER_REJECTING_{rejected}_INVALID"
+        if metadata_output is not None:
+            workflow_run=item.get("workflow_run") or {}
+            _atomic_write(metadata_output, (json.dumps({
+                "schema_version":"1.0.0",
+                "restore_status":status,
+                "artifact_id":item.get("id"),
+                "artifact_name":item.get("name"),
+                "artifact_created_at":item.get("created_at"),
+                "artifact_expires_at":item.get("expires_at"),
+                "source_run_id":workflow_run.get("id"),
+                "source_head_sha":workflow_run.get("head_sha"),
+            },sort_keys=True)+"\n").encode("utf-8"))
+        return status
     raise InvalidStateArtifact("no valid prior state artifact found")

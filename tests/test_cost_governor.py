@@ -39,11 +39,19 @@ def github_request(*, run_id="100", attempt=1, minutes=5, workflow="portfolio-au
 
 
 class CostGovernorTests(unittest.TestCase):
-    def test_command_center_rebuilds_only_for_changes_or_manual_dispatch(self):
+    def test_command_center_hourly_refresh_is_cost_governed(self):
         workflow = (ROOT / ".github/workflows/command-center-pages.yml").read_text()
-        self.assertNotIn("\n  schedule:", workflow)
-        self.assertIn("workflow_dispatch:", workflow)
-        self.assertIn("\n  push:", workflow)
+        self.assertIn('cron: "37 * * * *"',workflow)
+        self.assertIn("workflow_dispatch:",workflow)
+        self.assertIn("\n  push:",workflow)
+        self.assertIn("portfolio-cost-governed-autonomy",workflow)
+        self.assertIn("cost_governor.workflow_gate preflight",workflow)
+        self.assertIn("cost_governor.workflow_gate finalize",workflow)
+        self.assertIn("actions: read",workflow)
+        self.assertNotIn("contents: write",workflow)
+        p=policy()
+        self.assertIn("command-center-pages",p["managed_workflow_names"])
+        self.assertIn("command-center-pages::publish",p["workflow_job_ceilings"])
 
     def test_checked_in_paid_budget_is_finite_and_nonzero(self):
         p = policy()
