@@ -11,6 +11,6 @@ Step 23 attacked Portfolio Brain as if public repositories, persisted artifacts,
 
 ## Existing controls survived hostile examination
 
-Prompt injection/malicious public repositories remain data-only in Hunter; private repositories fail closed; unverified reward signals cannot train value; builders cannot self-verify; circular evidence fails; agents cannot obtain ACT; disabled model providers fail closed; cost overages/kill switches hard-stop execution; private-reference state rejects raw payloads; the factory cannot merge/deploy; customer communication stays approval-gated; child-facing consequential changes remain approval-gated; and PRJ-007 remains research-only with trading/broker execution prohibited.
+Prompt injection/malicious public repositories remain data-only in Hunter; private repositories fail closed; unverified reward signals cannot train value; builders cannot self-verify; circular evidence fails; agents cannot obtain ACT; disabled model providers fail closed; cost overages/kill switches hard-stop execution; private-reference state rejects raw payloads; the factory cannot merge/deploy; customer communication is no longer globally prohibited but remains non-executable without an explicit bounded channel executor; child-facing consequential changes remain approval-gated; and PRJ-007 remains research-only with trading/broker execution prohibited.
 
 Every scenario in `hostile/ATTACK_MATRIX.json` is permanently tied to a regression or invariant. No recurring autonomous workflow is activated by Step 23.
