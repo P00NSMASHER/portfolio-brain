@@ -5,6 +5,7 @@ import argparse, hashlib, json, os, time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
 
 from adapters.github_readonly import GitHubReadOnlyClient, observe_repository
 from runtime.state import advance_cycle, bootstrap_state, canonical_hash, load_json, validate_state
@@ -18,6 +19,12 @@ from transfer.cross_project_transfer import build_transfer_state
 ROOT=Path(__file__).resolve().parents[1]
 
 class RuntimePolicyError(RuntimeError): pass
+
+def _retryable_fetch_error(exc: Exception)->bool:
+    """Retry only failures that can plausibly clear without source changes."""
+    if isinstance(exc,HTTPError):
+        return exc.code in {408,429} or 500<=exc.code<600
+    return isinstance(exc,(URLError,TimeoutError,ConnectionError))
 
 def now_iso()->str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
@@ -44,7 +51,10 @@ class RequestBudget:
             try: return self.fetch(url)
             except Exception as exc:
                 last=exc
-                if attempt<self.retries: time.sleep(self.backoff*(attempt+1))
+                if attempt<self.retries and _retryable_fetch_error(exc):
+                    time.sleep(self.backoff*(attempt+1))
+                    continue
+                break
         raise RuntimePolicyError(f"GitHub read failed after bounded retries: {last}")
 
 def load_runtime_state(path: Path, *, now: str)->dict[str,Any]:

@@ -1,7 +1,8 @@
 import copy, json, os, tempfile, unittest
 from unittest.mock import patch
 from pathlib import Path
-from runtime.continuous_runtime import RuntimePolicyError, run
+from urllib.error import HTTPError, URLError
+from runtime.continuous_runtime import RequestBudget, RuntimePolicyError, run
 from runtime.state import bootstrap_state, validate_state
 from runtime.validate_runtime import validate_runtime
 
@@ -30,6 +31,38 @@ def current_heads():
     return {by[rid]:item["cursor_sha"] for rid,item in curs.items() if rid!="REPO-006"}
 
 class RuntimeTests(unittest.TestCase):
+    def test_permanent_github_error_is_not_retried(self):
+        calls=[]
+        def missing(url):
+            calls.append(url)
+            raise HTTPError(url,404,"not found",None,None)
+        budget=RequestBudget(missing,limit=10,retries=2,backoff=0)
+        with self.assertRaises(RuntimePolicyError):budget("https://api.github.com/repos/example/missing")
+        self.assertEqual(len(calls),1)
+        self.assertEqual(budget.used,1)
+
+    def test_transient_github_error_uses_bounded_retry(self):
+        calls=[]
+        def temporary(url):
+            calls.append(url)
+            if len(calls)<3:raise URLError("temporary network failure")
+            return {"sha":"f"*40}
+        budget=RequestBudget(temporary,limit=10,retries=2,backoff=0)
+        self.assertEqual(budget("https://api.github.com/repos/example/repo"),{"sha":"f"*40})
+        self.assertEqual(len(calls),3)
+        self.assertEqual(budget.used,3)
+
+    def test_github_server_error_uses_bounded_retry(self):
+        calls=[]
+        def unavailable(url):
+            calls.append(url)
+            if len(calls)<2:raise HTTPError(url,503,"service unavailable",None,None)
+            return {"sha":"e"*40}
+        budget=RequestBudget(unavailable,limit=10,retries=2,backoff=0)
+        self.assertEqual(budget("https://api.github.com/repos/example/repo"),{"sha":"e"*40})
+        self.assertEqual(len(calls),2)
+        self.assertEqual(budget.used,2)
+
     def test_static_runtime_contract(self):
         result=validate_runtime()
         self.assertEqual(result["workflows"],5)
