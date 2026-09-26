@@ -176,8 +176,11 @@ def _verified_outcomes() -> tuple[int,dict[str,int]]:
 
 
 def build_operational_telemetry(*, at: str | None=None) -> dict[str,Any]:
-    at=at or load_json(LIVE/"state_sources.json").get("generated_at") if (LIVE/"state_sources.json").exists() else at
-    at=at or _iso_now()
+    if at is None and (LIVE/"state_sources.json").exists():
+        at=load_json(LIVE/"state_sources.json").get("generated_at")
+    # Local/static validation has no live-state receipt. Use a deterministic
+    # epoch rather than wall-clock time so repeated renders hash identically.
+    at=at or "1970-01-01T00:00:00Z"
     now=_time(at);assert now is not None
     scheduler=live_json("scheduler_state.json","scheduler/SCHEDULER_STATE_SEED.json")
     hunter=live_json("hunter_state.json","hunting/HUNTER_STATE_SEED.json")
