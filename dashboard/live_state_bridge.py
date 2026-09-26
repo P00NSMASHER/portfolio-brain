@@ -31,6 +31,7 @@ STALE_AFTER_MINUTES = {
     "hunter": 450,
     "cost": 60,
     "notifications": 450,
+    "provider": 1560,
     "agents": 180,
 }
 
@@ -39,6 +40,7 @@ SEEDS = {
     "hunter": "hunting/HUNTER_STATE_SEED.json",
     "cost": "cost_governor/COST_STATE_SEED.json",
     "notifications": "notifications/NOTIFICATION_STATE_SEED.json",
+    "provider": "runtime/PROVIDER_HEALTH_SEED.json",
     "agents": "agents/AGENT_HEARTBEAT_STATE_SEED.json",
 }
 
@@ -74,6 +76,7 @@ def _state_filename(name: str) -> str:
         "hunter": "hunter_state.json",
         "cost": "cost_state.json",
         "notifications": "notification_state.json",
+        "provider": "provider_health.json",
         "agents": "agent_heartbeat_state.json",
     }[name]
 
@@ -117,7 +120,12 @@ def build_live_state(
         error_class = None
         try:
             if name == "runtime":
-                restore_status = restorer(output=state_path, metadata_output=metadata_path)
+                restore_status = restorer(
+                    output=state_path,
+                    metadata_output=metadata_path,
+                    provider_health_output=output_dir / _state_filename("provider"),
+                    provider_health_metadata_output=metadata_dir / "provider.json",
+                )
             else:
                 restore_status = restorer(state_path, metadata_path)
         except Exception as exc:
@@ -159,6 +167,30 @@ def build_live_state(
             "state_updated_at": state.get("updated_at"),
             "error_class": error_class,
         }
+
+    provider_path=output_dir/_state_filename("provider")
+    provider_metadata_path=metadata_dir/"provider.json"
+    provider_metadata=json.loads(provider_metadata_path.read_text(encoding="utf-8")) if provider_metadata_path.exists() else {}
+    provider_restore_status=provider_metadata.get("restore_status","NO_VALID_PROVIDER_HEALTH_ARTIFACT")
+    if provider_restore_status.startswith("RESTORED") and provider_path.exists():
+        provider_freshness,provider_age=_classify(provider_metadata,now=now,stale_after_minutes=STALE_AFTER_MINUTES["provider"])
+        provider_ref=provider_metadata.get("artifact_name")
+        provider_kind="GITHUB_ACTIONS_ARTIFACT"
+    else:
+        provider_ref=_fallback("provider",provider_path,now=now)
+        provider_kind="CHECKED_IN_SEED"
+        provider_freshness="FALLBACK"
+        provider_age=None
+    provider_state=json.loads(provider_path.read_text(encoding="utf-8"))
+    sources["provider"]={
+      "status":provider_freshness,"source_kind":provider_kind,"source_ref":provider_ref,
+      "restore_status":provider_restore_status,"source_run_id":provider_metadata.get("source_run_id"),
+      "source_head_sha":provider_metadata.get("source_head_sha"),"artifact_id":provider_metadata.get("artifact_id"),
+      "artifact_created_at":provider_metadata.get("artifact_created_at"),
+      "artifact_expires_at":provider_metadata.get("artifact_expires_at"),"age_minutes":provider_age,
+      "stale_after_minutes":STALE_AFTER_MINUTES["provider"],"state_sequence":provider_state.get("sequence"),
+      "state_updated_at":provider_state.get("updated_at"),"error_class":None,
+    }
 
     statuses = {item["status"] for item in sources.values()}
     if statuses == {"LIVE"}:
