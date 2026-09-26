@@ -213,3 +213,22 @@ def sanitized_receipt(row):
       "created_at":row["created_at"],"completed_at":row["completed_at"],"remote_ref":row["remote_ref"],
       "evidence_refs":row["evidence_refs"]
     }
+
+def main():
+    import argparse
+    ap=argparse.ArgumentParser()
+    ap.add_argument("--state",required=True);ap.add_argument("--request",required=True);ap.add_argument("--output-dir",required=True)
+    a=ap.parse_args()
+    state=load_state(a.state)
+    request=json.loads(Path(a.request).read_text())
+    next_state,decision,row=execute_email(state,request)
+    out=Path(a.output_dir);out.mkdir(parents=True,exist_ok=True)
+    (out/"action_state.json").write_text(json.dumps(next_state,indent=2)+"\n")
+    (out/"action_decision.json").write_text(json.dumps(decision,indent=2)+"\n")
+    if row is not None:
+        (out/"action_receipt.json").write_text(json.dumps(sanitized_receipt(row),indent=2)+"\n")
+    print(json.dumps({"action_id":request["action_id"],"status":decision["status"],"executed":row is not None and row["status"]=="SENT"}))
+    if decision["status"] in {"BLOCKED_KILL_SWITCH","BLOCKED_RATE_LIMIT","BLOCKED_RETRY_LIMIT","TRANSPORT_FAILED"}:
+        raise SystemExit(3)
+
+if __name__=="__main__":main()
