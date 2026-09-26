@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[1]
 
 
 class LiveStateBridgeTests(unittest.TestCase):
-    def fake_restorer(self, name, created_at, run_id, sequence=7):
+    def fake_restorer(self, name, created_at, run_id, sequence=7, include_provider=True):
         def restore(*args, **kwargs):
             output = kwargs.get("output") or args[0]
             metadata_output = kwargs.get("metadata_output")
@@ -39,7 +39,7 @@ class LiveStateBridgeTests(unittest.TestCase):
             })+"\n")
             provider_output=kwargs.get("provider_health_output")
             provider_metadata=kwargs.get("provider_health_metadata_output")
-            if name=="runtime" and provider_output is not None and provider_metadata is not None:
+            if name=="runtime" and include_provider and provider_output is not None and provider_metadata is not None:
                 Path(provider_output).write_text(json.dumps({
                   "schema_version":"1.0.0","state_id":"portfolio-provider-readiness-state",
                   "sequence":sequence,"updated_at":created_at,"mode":"daily","status":"READY",
@@ -79,6 +79,27 @@ class LiveStateBridgeTests(unittest.TestCase):
         self.assertEqual(receipt["sources"]["agents"]["status"],"LIVE")
         self.assertEqual(receipt["sources"]["scheduler"]["source_run_id"],102)
         self.assertEqual(receipt["sources"]["scheduler"]["artifact_created_at"],"2026-09-26T17:20:00Z")
+
+    def test_optional_observability_fallback_does_not_degrade_healthy_core(self):
+        now=datetime(2026,9,26,18,0,tzinfo=timezone.utc)
+        def missing(*args, **kwargs):
+            return "NO_PRIOR_ARTIFACT"
+        restorers={
+            "runtime":self.fake_restorer("runtime","2026-09-26T17:30:00Z",101,include_provider=False),
+            "scheduler":self.fake_restorer("scheduler","2026-09-26T17:20:00Z",102),
+            "hunter":self.fake_restorer("hunter","2026-09-26T17:10:00Z",103),
+            "cost":self.fake_restorer("cost-governor","2026-09-26T17:45:00Z",104),
+            "notifications":self.fake_restorer("notification","2026-09-26T17:00:00Z",105),
+            "agents":missing,
+        }
+        with tempfile.TemporaryDirectory() as td, patch.dict(bridge.RESTORERS,restorers,clear=True):
+            root=Path(td)
+            receipt=bridge.build_live_state(output_dir=root/"live",receipt_path=root/"receipt.json",now=now)
+        self.assertEqual(receipt["bridge_status"],"LIVE")
+        self.assertEqual(receipt["sources"]["agents"]["status"],"FALLBACK")
+        self.assertEqual(receipt["sources"]["provider"]["status"],"FALLBACK")
+        self.assertEqual(set(receipt["health_sources"]),{"runtime","scheduler","hunter","cost","notifications"})
+        self.assertEqual(set(receipt["optional_observability_sources"]),{"agents","provider"})
 
     def test_pages_workflow_restores_live_state_hourly_before_publish(self):
         workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text()
