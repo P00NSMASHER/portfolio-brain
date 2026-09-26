@@ -24,6 +24,7 @@ Artifacts are operational continuation state, not truth evidence by themselves. 
 - Model calls are prohibited in Step 8.
 - All four autonomous triggers share the same serialized concurrency group.
 - Per-cycle repository/API/file/output/time budgets are finite.
+- Durable-state restore skips an unavailable or invalid newest artifact and uses only the next fully validated predecessor; if no candidate validates, restore fails closed without a partial state write.
 - HTTP reads use bounded retries.
 - A repository variable `PORTFOLIO_RUNTIME_DISABLED=true` or the checked-in file kill switch disables execution.
 - Runtime output is sanitized metadata/references only while this repository remains public.

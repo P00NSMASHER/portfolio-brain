@@ -45,7 +45,8 @@ class ArtifactStateIntegrityTests(unittest.TestCase):
         ]}
 
     def restore(self,data,payloads,output,metadata_output=None):
-        return restore_latest_valid_state(data,current_run="99",expected_head_branch="main",download=payloads.__getitem__,output=output,member_name="runtime_state.json",expected_state_id="portfolio-runtime-state",max_archive_bytes=10000,max_state_bytes=1000,metadata_output=metadata_output)
+        download=payloads if callable(payloads) else payloads.__getitem__
+        return restore_latest_valid_state(data,current_run="99",expected_head_branch="main",download=download,output=output,member_name="runtime_state.json",expected_state_id="portfolio-runtime-state",max_archive_bytes=10000,max_state_bytes=1000,metadata_output=metadata_output)
 
     def test_corrupt_newest_falls_back_to_newest_valid_predecessor(self):
         with tempfile.TemporaryDirectory() as td:
@@ -53,6 +54,27 @@ class ArtifactStateIntegrityTests(unittest.TestCase):
             status=self.restore(self.candidates(),{"new":b"not-a-zip","old":artifact("runtime_state.json",self.state(4))},output)
             self.assertEqual(status,"RESTORED_AFTER_REJECTING_1_INVALID")
             self.assertEqual(json.loads(output.read_text())["sequence"],4)
+
+    def test_unavailable_newest_falls_back_to_newest_valid_predecessor(self):
+        with tempfile.TemporaryDirectory() as td:
+            output=Path(td)/"runtime_state.json"
+            downloads=[]
+            def download(url):
+                downloads.append(url)
+                if url=="new":
+                    raise OSError("archive disappeared after listing")
+                return artifact("runtime_state.json",self.state(6))
+            status=self.restore(self.candidates(),download,output)
+            self.assertEqual(status,"RESTORED_AFTER_REJECTING_1_INVALID")
+            self.assertEqual(json.loads(output.read_text())["sequence"],6)
+            self.assertEqual(downloads,["new","old"])
+
+    def test_all_unavailable_candidates_fail_closed_without_partial_state(self):
+        with tempfile.TemporaryDirectory() as td:
+            output=Path(td)/"runtime_state.json"
+            with self.assertRaises(InvalidStateArtifact):
+                self.restore(self.candidates(),lambda _url: (_ for _ in ()).throw(OSError("gone")),output)
+            self.assertFalse(output.exists())
 
     def test_metadata_receipt_points_to_exact_valid_artifact(self):
         with tempfile.TemporaryDirectory() as td:

@@ -122,7 +122,16 @@ def restore_latest_valid_state(
         if not isinstance(url, str) or not url:
             rejected += 1
             continue
-        raw = download(url)
+        try:
+            raw = download(url)
+        except Exception:
+            # GitHub can briefly retain an unexpired artifact record after its
+            # archive becomes unavailable. Treat that candidate exactly like
+            # an invalid archive and continue to the next validated
+            # predecessor. If every candidate is unavailable, restoration
+            # still fails closed below.
+            rejected += 1
+            continue
         try:
             payload = _validated_payload(
                 raw,
