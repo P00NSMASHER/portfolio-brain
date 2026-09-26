@@ -63,7 +63,7 @@
   "connector_gateways": {
     "gmail": {
       "provider": "CHATGPT_GMAIL_CONNECTOR",
-      "account": "jayp19386@gmail.com",
+      "account": "PRIMARY_GMAIL_CONNECTOR",
       "executor_task_id": "6ab377c25df08191a6e2aa1537d9d2ef",
       "planner_task_id": "6ab377be3184819186a3075f37a530b8",
       "status": "CONFIGURED_IN_POLICY_PENDING_LIVE_GATEWAY_PROOF"
