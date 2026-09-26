@@ -56,7 +56,14 @@ class CommandCenterHistoryTests(unittest.TestCase):
         self.assertEqual(row["completed_work_delta"],3)
         self.assertEqual(row["sent_actions_delta"],2)
         self.assertEqual(row["verified_outcomes_delta"],1)
-        self.assertNotIn("score",str(pub).lower())
+        def assert_no_score_fields(value):
+            if isinstance(value,dict):
+                self.assertFalse({"score","weighted_score","composite_score"} & set(value))
+                for child in value.values():assert_no_score_fields(child)
+            elif isinstance(value,list):
+                for child in value:assert_no_score_fields(child)
+        assert_no_score_fields(pub)
+        self.assertIn("not a score",pub["momentum_definition"].lower())
 
 
 if __name__=="__main__":
