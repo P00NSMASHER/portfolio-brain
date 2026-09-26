@@ -33,7 +33,7 @@ def restore(output:Path,metadata_output:Path|None=None)->str:
         raise RestoreError(str(last))
     data=json.loads(get(f"https://api.github.com/repos/{repo}/actions/artifacts?name={ARTIFACT_NAME}&per_page=100").decode())
     return restore_latest_valid_state(
-      data,current_run=run,download=get,output=output,
+      data,current_run=run,expected_head_branch=os.environ.get("GITHUB_REF_NAME"),download=get,output=output,
       member_name="history_state.json",expected_state_id="portfolio-command-center-history",
       max_archive_bytes=5_242_880,max_state_bytes=5_242_880,validator=validate_state,
       metadata_output=metadata_output,
