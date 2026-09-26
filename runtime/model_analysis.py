@@ -178,6 +178,8 @@ def run_model_analysis(mode:str,*,runtime_out:Path,cost_state_path:Path,output_d
             status_name="SKIPPED_DUPLICATE_PACKET"
         elif exc.retryable:
             status_name="DEFERRED_PROVIDER_RETRY"
+        elif exc.status_code==429 and (exc.provider_code=="billing_not_active" or exc.provider_type=="billing_not_active"):
+            status_name="BLOCKED_PROVIDER_BILLING"
         elif exc.status_code==429 and (exc.provider_code in {
             "credit_balance_exhausted","organization_spend_limit_exceeded",
             "project_spend_limit_exceeded","organization_usage_limit_exceeded","insufficient_quota"
