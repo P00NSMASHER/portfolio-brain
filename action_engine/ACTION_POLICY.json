@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "engine_id": "portfolio-bounded-action-engine-v1",
-  "mode": "BOUNDED_CHANNEL_EXECUTION",
+  "mode": "CHATGPT_GMAIL_CONNECTOR_GATEWAY",
   "enabled": true,
   "authority_class": "ACT",
   "allowed_project_ids": [
@@ -21,12 +21,11 @@
       "min_seconds_between_same_recipient": 3600,
       "max_subject_chars": 200,
       "max_body_chars": 12000,
-      "credential_env": {
-        "host": "PORTFOLIO_EMAIL_SMTP_HOST",
-        "port": "PORTFOLIO_EMAIL_SMTP_PORT",
-        "username": "PORTFOLIO_EMAIL_SMTP_USER",
-        "password": "PORTFOLIO_EMAIL_SMTP_PASSWORD",
-        "sender": "PORTFOLIO_EMAIL_FROM"
+      "private_queue": {
+        "mode": "GMAIL_DRAFT",
+        "internal_subject_prefix": "[PB:",
+        "planner_label": "PortfolioBrain/Ready",
+        "sent_label": "PortfolioBrain/Sent"
       }
     }
   },
@@ -44,14 +43,12 @@
     "CONSEQUENTIAL_CHILD_FACING_CHANGE"
   ],
   "state_persistence": {
-    "mode": "GITHUB_ACTIONS_ARTIFACT",
-    "artifact_name": "portfolio-action-engine-state",
-    "retention_days": 30,
-    "seed_file": "action_engine/ACTION_STATE_SEED.json",
+    "mode": "SANITIZED_GITHUB_LEDGER_PLUS_GMAIL_SENT_SOURCE_OF_TRUTH",
+    "ledger_file": "action_engine/GMAIL_GATEWAY_LEDGER.json",
+    "gmail_sent_label": "PortfolioBrain/Sent",
     "sanitized_only": true
   },
   "kill_switches": {
-    "repository_variable": "PORTFOLIO_ACTIONS_DISABLED",
     "file": "action_engine/KILL_SWITCH.json"
   },
   "retry_limit": 2,
@@ -59,10 +56,14 @@
     "Only explicitly allowlisted project/action pairs may execute.",
     "Raw recipients, subjects and message bodies are never persisted in durable action state.",
     "Every action has a deterministic idempotency key and duplicate execution is suppressed.",
-    "Daily and per-recipient rate limits are checked before transport invocation.",
-    "Missing channel credentials block execution before any side effect.",
-    "Action receipts store hashes, counters, timestamps, action IDs and remote references only.",
+    "Daily and per-recipient rate limits are checked against Gmail/Sanitized ledger state before Gmail send.",
+    "The authenticated Gmail connector profile must exactly match jayp19386@gmail.com before any Gmail mutation.",
+    "GitHub action receipts store hashes, counters, timestamps and action IDs only; Gmail message/thread IDs are hashed before persistence.",
     "Payments, money movement, legal/regulatory communications, claims/disputes, destructive deletion, private disclosure, live trading/broker execution and consequential child-facing changes are outside this executor.",
-    "The action kill switch overrides all allowlists."
-  ]
+    "The action kill switch overrides all allowlists.",
+    "Raw recipients, draft bodies, subjects, Gmail message IDs and Gmail thread IDs remain inside the connected Gmail account and ChatGPT connector execution context.",
+    "GitHub Actions contains no SMTP transport or Gmail credential path."
+  ],
+  "execution_provider": "CHATGPT_GMAIL_CONNECTOR",
+  "gmail_account": "jayp19386@gmail.com"
 }

@@ -7,7 +7,8 @@ class OperatingModeTests(unittest.TestCase):
     def test_operational_contract_passes(self):
         result=validate_operating_mode()
         self.assertEqual(result["approved_recurring_workflows"],7)
-        self.assertEqual(result["durable_state_artifacts"],6)
+        self.assertEqual(result["durable_state_artifacts"],5)
+        self.assertEqual(result["gmail_gateway_account"],"jayp19386@gmail.com")
         self.assertEqual(result["enabled_nonzero_models"],3)
         self.assertFalse(result["interactive_chatgpt_runtime_dependency"])
         self.assertEqual(result["release_status"],"OPERATIONAL")
@@ -29,20 +30,20 @@ class OperatingModeTests(unittest.TestCase):
         self.assertIn("LIVE_MARKET_TRADING_AND_BROKERAGE_EXECUTION_PROHIBITED",boundaries)
         self.assertIn("DEPLOYMENT_AND_MERGE_NOT_GRANTED_TO_AUTONOMOUS_SCHEDULER",boundaries)
 
-    def test_action_worker_is_reusable_only_and_private_input_bound(self):
-        body=(ROOT/".github/workflows/portfolio-action-worker.yml").read_text().lower()
-        self.assertIn("workflow_call",body)
-        self.assertNotIn("schedule:",body)
-        self.assertNotIn("workflow_dispatch:",body)
-        self.assertIn("action_request_json",body)
-        self.assertIn("portfolio-action-engine-state",body)
+    def test_gmail_gateway_is_connector_bound_and_no_smtp_worker_exists(self):
+        p=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
+        gmail=p["external_connector_gateways"]["gmail"]
+        self.assertEqual(gmail["provider"],"CHATGPT_GMAIL_CONNECTOR")
+        self.assertEqual(gmail["account"],"jayp19386@gmail.com")
+        self.assertEqual(gmail["execution_task_id"],"6ab377c25df08191a6e2aa1537d9d2ef")
+        self.assertFalse((ROOT/".github/workflows/portfolio-action-worker.yml").exists())
 
     def test_chatgpt_tasks_are_advisory_not_runtime_dependency(self):
         p=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
         s=json.loads((ROOT/"operations/OPERATING_MODE_STATUS.json").read_text())
         self.assertFalse(p["interactive_chatgpt_runtime_dependency"])
         self.assertTrue(s["operational_without_interactive_chatgpt"])
-        self.assertEqual(s["external_chatgpt_tasks_role"],"ADVISORY_MONITORING_ONLY_NOT_RUNTIME_DEPENDENCY")
+        self.assertEqual(s["external_chatgpt_tasks_role"],"BOUNDED_GMAIL_GATEWAY_PLUS_ADVISORY_MONITORING")
 
     def test_post_promotion_evidence_is_recorded(self):
         s=json.loads((ROOT/"operations/OPERATING_MODE_STATUS.json").read_text())
