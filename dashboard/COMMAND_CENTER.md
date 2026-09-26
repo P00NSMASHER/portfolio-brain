@@ -127,3 +127,8 @@ Command Center v4.1 uses an Apple-inspired product-site presentation while remai
 - reduced-motion support for accessibility.
 
 The redesign changes presentation only. Data sources, public read-only authority, live-state provenance, operator-console separation, cost governance, and action boundaries are unchanged.
+
+
+## Runtime health recovery
+
+A runtime-health recovery pass fixed per-workflow GitHub compute starvation without changing the portfolio-wide paid-model/API ceiling. The command center should treat provider/agent observability as optional to core bridge health while still surfacing their own status explicitly. The first post-fix daily reasoning run produced fresh runtime and agent artifacts and a live provider-readiness result.
