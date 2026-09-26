@@ -1,12 +1,13 @@
 {
   "schema_version": "1.0.0",
   "resource_plan_count": 9,
-  "active_resource_count": 3,
-  "hold_resource_count": 6,
+  "active_resource_count": 4,
+  "hold_resource_count": 5,
   "recommendation_entry_count": 29,
   "active_resource_types": [
     "HUMAN_REVIEW",
     "HUNTER_RUNS",
+    "MODEL_CALLS",
     "RESEARCH"
   ],
   "hold_resource_types": [
@@ -14,13 +15,12 @@
     "ART_PRODUCTION",
     "CASH",
     "ENGINEERING_CAPACITY",
-    "MODEL_CALLS",
     "TESTING"
   ],
   "top_research_project_id": "PRJ-000",
   "top_hunter_project_id": "PRJ-001",
   "top_human_review_project_id": "PRJ-001",
   "cash_allocated_share_basis_points": 0,
-  "model_calls_allocated_share_basis_points": 0,
+  "model_calls_allocated_share_basis_points": 10000,
   "opaque_score_used": false
 }
