@@ -53,6 +53,8 @@ def validate_state(state: dict[str,Any])->None:
         if set(item)!={"source_ref","cursor_sha","status","observed_at"}:
             raise RuntimeStateError(f"{rid} runtime cursor fields changed")
         sha=item["cursor_sha"]
+        if not isinstance(item["source_ref"],str) or not item["source_ref"]:
+            raise RuntimeStateError(f"{rid} source_ref is missing")
         if not isinstance(sha,str) or len(sha)!=40:
             raise RuntimeStateError(f"{rid} cursor is not exact SHA")
         int(sha,16)
@@ -80,6 +82,8 @@ def advance_cycle(state: dict[str,Any], receipt: dict[str,Any])->dict[str,Any]:
     for obs in receipt.get("observations",[]):
         rid=obs["repository_id"]
         if obs["status"] in {"CHANGED","UNCHANGED","INITIALIZED"} and obs.get("current_sha"):
+            if obs.get("source_ref") != updated["repositories"][rid]["source_ref"]:
+                raise RuntimeStateError(f"{rid} observation source_ref does not match durable cursor")
             updated["repositories"][rid]["cursor_sha"]=obs["current_sha"]
             updated["repositories"][rid]["status"]="CURRENT"
             updated["repositories"][rid]["observed_at"]=receipt["finished_at"]

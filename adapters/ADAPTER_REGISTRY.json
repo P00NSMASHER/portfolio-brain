@@ -6,7 +6,9 @@
     "Unchanged exact SHAs are skipped without content reread.",
     "A changed repository is compared from prior cursor SHA to current source HEAD before any deeper inspection.",
     "Blocked adapters perform no network read and do not advance their cursor.",
-    "Cursor advancement occurs only after a successful observation receipt."
+    "Cursor advancement occurs only after a successful observation receipt.",
+    "Every cursor and observation is bound to the adapter's configured source ref.",
+    "Non-fast-forward or incomplete GitHub comparisons fail closed and never advance a cursor."
   ],
   "adapters": [
     {

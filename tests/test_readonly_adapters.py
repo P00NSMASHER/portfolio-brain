@@ -29,7 +29,7 @@ class ReadOnlyAdapterTests(unittest.TestCase):
     def test_unchanged_source_skips_compare(self):
         sha="a"*40
         fake=FakeGitHub(sha)
-        receipt=observe_repository(BASE_ADAPTER,{"cursor_sha":sha},fetch_json=fake,observed_at="2026-09-25T16:00:00Z")
+        receipt=observe_repository(BASE_ADAPTER,{"source_ref":"main","cursor_sha":sha},fetch_json=fake,observed_at="2026-09-25T16:00:00Z")
         self.assertEqual(receipt["status"],"UNCHANGED")
         self.assertEqual(receipt["network_reads"],1)
         self.assertEqual(len(fake.urls),1)
@@ -37,19 +37,21 @@ class ReadOnlyAdapterTests(unittest.TestCase):
     def test_changed_source_compares_only_cursor_to_head(self):
         old="a"*40; new="b"*40
         fake=FakeGitHub(new,{"status":"ahead","ahead_by":2,"behind_by":0,"total_commits":2,"files":[{"filename":"a.py","status":"modified","additions":2,"deletions":1,"changes":3}]})
-        receipt=observe_repository(BASE_ADAPTER,{"cursor_sha":old},fetch_json=fake,observed_at="2026-09-25T16:00:00Z")
+        receipt=observe_repository(BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},fetch_json=fake,observed_at="2026-09-25T16:00:00Z")
         self.assertEqual(receipt["status"],"CHANGED")
         self.assertEqual(receipt["prior_sha"],old)
         self.assertEqual(receipt["current_sha"],new)
         self.assertEqual(receipt["network_reads"],2)
         self.assertIn(f"/compare/{old}...{new}",fake.urls[-1])
         self.assertEqual(receipt["compare"]["files"][0]["path"],"a.py")
+        self.assertTrue(receipt["compare"]["files_complete"])
+        self.assertEqual(receipt["source_ref"],"main")
 
     def test_blocked_adapter_performs_zero_network_reads(self):
         adapter=copy.deepcopy(BASE_ADAPTER)
         adapter.update({"enabled":False,"blocked_by":"BLK-001"})
         fake=FakeGitHub("b"*40)
-        prior={"cursor_sha":"a"*40}
+        prior={"source_ref":"main","cursor_sha":"a"*40}
         receipt=observe_repository(adapter,prior,fetch_json=fake,observed_at="2026-09-25T16:00:00Z")
         self.assertEqual(receipt["status"],"BLOCKED")
         self.assertEqual(receipt["network_reads"],0)
@@ -79,15 +81,44 @@ class ReadOnlyAdapterTests(unittest.TestCase):
     def test_cursor_advances_only_from_valid_observation(self):
         receipt={"status":"ERROR","current_sha":"b"*40}
         with self.assertRaises(AdapterError):
-            next_cursor(receipt,{"cursor_sha":"a"*40})
+            next_cursor(receipt,{"source_ref":"main","cursor_sha":"a"*40})
 
     def test_receipt_hash_changes_if_delta_changes(self):
         old="a"*40; new="b"*40
         f1=FakeGitHub(new,{"status":"ahead","ahead_by":1,"behind_by":0,"total_commits":1,"files":[]})
         f2=FakeGitHub(new,{"status":"ahead","ahead_by":2,"behind_by":0,"total_commits":2,"files":[]})
-        r1=observe_repository(BASE_ADAPTER,{"cursor_sha":old},fetch_json=f1,observed_at="2026-09-25T16:00:00Z")
-        r2=observe_repository(BASE_ADAPTER,{"cursor_sha":old},fetch_json=f2,observed_at="2026-09-25T16:00:00Z")
+        r1=observe_repository(BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},fetch_json=f1,observed_at="2026-09-25T16:00:00Z")
+        r2=observe_repository(BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},fetch_json=f2,observed_at="2026-09-25T16:00:00Z")
         self.assertNotEqual(r1["receipt_hash"],r2["receipt_hash"])
+
+    def test_cursor_is_bound_to_configured_source_ref(self):
+        with self.assertRaisesRegex(AdapterError,"source_ref"):
+            observe_repository(
+                BASE_ADAPTER,
+                {"source_ref":"release","cursor_sha":"a"*40},
+                fetch_json=FakeGitHub("b"*40),
+                observed_at="2026-09-25T16:00:00Z",
+            )
+
+    def test_next_cursor_preserves_observed_ref_instead_of_hardcoding_main(self):
+        adapter=copy.deepcopy(BASE_ADAPTER)
+        adapter["source_ref_policy"]["ref"]="release"
+        sha="c"*40
+        receipt=observe_repository(adapter,None,fetch_json=FakeGitHub(sha),observed_at="2026-09-25T16:00:00Z")
+        self.assertEqual(next_cursor(receipt,None)["source_ref"],"release")
+
+    def test_non_fast_forward_compare_fails_closed(self):
+        old="a"*40; new="b"*40
+        fake=FakeGitHub(new,{"status":"diverged","ahead_by":1,"behind_by":1,"total_commits":1,"files":[]})
+        with self.assertRaisesRegex(AdapterError,"not a fast-forward"):
+            observe_repository(BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},fetch_json=fake,observed_at="2026-09-25T16:00:00Z")
+
+    def test_github_compare_file_cap_fails_closed(self):
+        old="a"*40; new="b"*40
+        files=[{"filename":f"f{i}.py","status":"modified","additions":1,"deletions":0,"changes":1} for i in range(300)]
+        fake=FakeGitHub(new,{"status":"ahead","ahead_by":1,"behind_by":0,"total_commits":1,"files":files})
+        with self.assertRaisesRegex(AdapterError,"300-file"):
+            observe_repository(BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},fetch_json=fake,observed_at="2026-09-25T16:00:00Z")
 
 if __name__=="__main__":
     unittest.main()

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 
-from adapters.github_readonly import GitHubReadOnlyClient, observe_repository
+from adapters.github_readonly import AdapterError, GitHubReadOnlyClient, observe_repository
 from runtime.state import advance_cycle, bootstrap_state, canonical_hash, load_json, validate_state
 from learning.continuous_learning import rebuild_from_ledger
 from uncertainty.highest_value_uncertainty import build_snapshot as build_uncertainty_snapshot
@@ -93,7 +93,10 @@ def observe(mode: str, state: dict[str,Any], *, target_repository_id: str|None, 
     observations=[]; total_files=0
     for rid in ids:
         adapter=by_id[rid]
-        obs=observe_repository(adapter,_repo_cursor(state,rid),fetch_json=budgeted,observed_at=finished_at)
+        try:
+            obs=observe_repository(adapter,_repo_cursor(state,rid),fetch_json=budgeted,observed_at=finished_at)
+        except AdapterError as exc:
+            raise RuntimePolicyError(f"repository observation failed closed for {rid}: {exc}") from exc
         obs=_sanitize_observation(obs,budgets["max_changed_files_per_repository"])
         if obs.get("compare"):
             total_files+=len(obs["compare"].get("files",[]))
