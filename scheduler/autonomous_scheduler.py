@@ -103,6 +103,12 @@ def generate_candidates(context):
                 pareto=u["ranking"]["pareto_layer"],rank=u["ranking"]["rank_order"],share=(alloc["HUMAN_REVIEW"].get(u["uncertainty_id"]) or {}).get("share_basis_points"),
                 approvals=exp["approval_requirements"],blockers=exp["hard_blockers"],reason="Experiment is high-value but HUMAN_GATED_ACT; scheduler may surface it for review but cannot execute it.",
                 evidence_refs=[*u["evidence_refs"],f"experiment:{exp['experiment_id']}"]))
+        elif exp["status"]=="READY_FOR_BOUNDED_EXECUTION" and exp["execution_mode"]=="BOUNDED_EXTERNAL_VALIDATION":
+            u=unc_by[exp["uncertainty_id"]]
+            candidates.append(_candidate("EXPERIMENT",exp["experiment_id"],exp["project_ids"],"AGT-COMMERCIAL-ANALYST","EXTERNAL_EVIDENCE_ANALYSIS","OBSERVE","HIGH",
+                pareto=u["ranking"]["pareto_layer"],rank=u["ranking"]["rank_order"],
+                reason="Bounded commercial validation is ready; scheduler prepares evidence work while action_engine independently gates channel ACT.",
+                evidence_refs=[*u["evidence_refs"],f"experiment:{exp['experiment_id']}","action-policy:action_engine/ACTION_POLICY.json"]))
         elif exp["status"]=="READY_FOR_ISOLATED_EXECUTION" and exp["execution_mode"]=="ISOLATED_SYNTHETIC_TEST":
             u=unc_by[exp["uncertainty_id"]]
             candidates.append(_candidate("EXPERIMENT",exp["experiment_id"],exp["project_ids"],"AGT-PRODUCT-ANALYST","EXPERIMENT_DESIGN","EXPERIMENT","HIGH",
