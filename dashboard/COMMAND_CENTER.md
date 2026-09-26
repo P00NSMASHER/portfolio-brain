@@ -59,3 +59,14 @@ Validation fails closed if the command center widens authority, gains mutation/n
 - Data boundary: SANITIZED_CHECKED_IN_STATE_ONLY
 
 The underlying Portfolio Brain may have separately authorized model/API execution and bounded ACT pathways. Those remain governed by their own policies, rate limits, kill switches, provider gates, evidence requirements, and ledgers.
+
+
+## Publication
+
+GitHub Pages is enabled for this repository and the command-center publication workflow is configured to publish from GitHub Actions.
+
+Expected production URL:
+
+    https://p00nsmasher.github.io/portfolio-brain/
+
+The site rebuilds on relevant main-branch changes and on the hourly publication schedule. Public artifacts remain subject to dashboard.validate_publication before deployment.
