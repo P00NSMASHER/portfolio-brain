@@ -89,6 +89,24 @@ def event_record(evidence_id="EVD-TEST-00000001", status="VERIFIED"):
     record["event_hash"]=compute_event_hash(record)
     return record
 
+def inferred_evidence(evidence_id, basis_id, *, project_id="PRJ-000", observed_at="2026-09-25T15:00:01Z"):
+    record=evidence_record(
+        evidence_id=evidence_id,
+        state="INFERRED",
+        evidence_type="MODEL_OUTPUT",
+        actor_type="MODEL",
+        actor_id="model-a",
+    )
+    record["project_id"]=project_id
+    record["observed_at"]=observed_at
+    record["verification"].update({
+        "method":"MODEL_INFERENCE",
+        "basis_evidence_ids":[basis_id],
+        "reason":"model synthesis",
+    })
+    record["evidence_hash"]=compute_evidence_hash(record)
+    return record
+
 class EvidenceEventContractTests(unittest.TestCase):
     def test_json_schemas_are_closed_and_preserve_evidence_states(self):
         event_schema=json.loads((ROOT/"schemas"/"EVENT_SCHEMA.json").read_text())
@@ -242,6 +260,59 @@ class EvidenceEventContractTests(unittest.TestCase):
         evt["event_hash"]=compute_event_hash(evt)
         with self.assertRaises(EventValidationError):
             validate_bundle([evt],[evd])
+
+    def test_inference_lineage_cycle_fails_bundle(self):
+        first=inferred_evidence("EVD-CYCLE-00000001","EVD-CYCLE-00000002")
+        second=inferred_evidence("EVD-CYCLE-00000002","EVD-CYCLE-00000001")
+        with self.assertRaisesRegex(EventValidationError,"lineage cycle"):
+            validate_bundle([], [first,second])
+
+    def test_inference_requires_observed_or_verified_lineage_root(self):
+        unknown=evidence_record(
+            evidence_id="EVD-UNKNOWN-00000001",
+            state="UNKNOWN",
+            evidence_type="SYSTEM_OBSERVATION",
+        )
+        unknown["verification"]["reason"]="source unavailable"
+        unknown["evidence_hash"]=compute_evidence_hash(unknown)
+        inferred=inferred_evidence("EVD-INFERRED-00000001",unknown["evidence_id"])
+        with self.assertRaisesRegex(EventValidationError,"OBSERVED or VERIFIED lineage root"):
+            validate_bundle([], [unknown,inferred])
+
+    def test_cross_project_inference_basis_requires_explicit_bridge(self):
+        basis=evidence_record(evidence_id="EVD-BASIS-00000001")
+        inferred=inferred_evidence(
+            "EVD-INFERRED-00000001",
+            basis["evidence_id"],
+            project_id="PRJ-001",
+        )
+        with self.assertRaisesRegex(EventValidationError,"cross-project basis evidence"):
+            validate_bundle([], [basis,inferred])
+
+    def test_inference_cannot_depend_on_future_evidence(self):
+        basis=evidence_record(evidence_id="EVD-BASIS-00000001")
+        basis["observed_at"]="2026-09-25T15:00:02Z"
+        basis["evidence_hash"]=compute_evidence_hash(basis)
+        inferred=inferred_evidence(
+            "EVD-INFERRED-00000001",
+            basis["evidence_id"],
+            observed_at="2026-09-25T15:00:01Z",
+        )
+        with self.assertRaisesRegex(EventValidationError,"observed after dependent evidence"):
+            validate_bundle([], [basis,inferred])
+
+    def test_multi_hop_inference_with_verified_root_is_valid(self):
+        root=evidence_record(evidence_id="EVD-BASIS-00000001")
+        first=inferred_evidence("EVD-INFERRED-00000001",root["evidence_id"])
+        second=inferred_evidence(
+            "EVD-INFERRED-00000002",
+            first["evidence_id"],
+            observed_at="2026-09-25T15:00:02Z",
+        )
+        self.assertEqual(
+            validate_bundle([], [root,first,second]),
+            {"events":0,"evidence":3},
+        )
 
 if __name__=="__main__":
     unittest.main()

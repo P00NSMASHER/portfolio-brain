@@ -244,6 +244,55 @@ def validate_event(record: dict[str, Any], evidence_by_id: dict[str, dict[str, A
         elif status == "INVALID":
             _require("INVALID" in states, "INVALID event requires linked invalid evidence")
 
+def _validate_evidence_lineage(evidence_by_id: dict[str, dict[str, Any]]) -> None:
+    """Validate inference lineage as a project-scoped, causal DAG with usable roots."""
+    visiting: set[str] = set()
+    visited: set[str] = set()
+    roots_by_id: dict[str, set[str]] = {}
+
+    def visit(evidence_id: str) -> set[str]:
+        _require(evidence_id not in visiting, f"evidence lineage cycle detected: {evidence_id}")
+        if evidence_id in visited:
+            return roots_by_id[evidence_id]
+
+        visiting.add(evidence_id)
+        item = evidence_by_id[evidence_id]
+        basis_ids = item["verification"]["basis_evidence_ids"]
+        roots: set[str] = set()
+        for basis_id in basis_ids:
+            _require(basis_id in evidence_by_id, f"missing basis evidence: {basis_id}")
+            basis = evidence_by_id[basis_id]
+            _require(
+                basis["project_id"] == item["project_id"],
+                f"cross-project basis evidence not allowed without explicit bridge: {basis_id}",
+            )
+            _require(
+                _parse_time(basis["observed_at"], "basis.observed_at")
+                <= _parse_time(item["observed_at"], "observed_at"),
+                f"basis evidence cannot be observed after dependent evidence: {basis_id}",
+            )
+            roots.update(visit(basis_id))
+
+        if not basis_ids:
+            roots.add(evidence_id)
+
+        visiting.remove(evidence_id)
+        visited.add(evidence_id)
+        roots_by_id[evidence_id] = roots
+
+        if item["evidence_state"] == "INFERRED":
+            _require(
+                any(
+                    evidence_by_id[root_id]["evidence_state"] in {"OBSERVED", "VERIFIED"}
+                    for root_id in roots
+                ),
+                f"INFERRED evidence requires an OBSERVED or VERIFIED lineage root: {evidence_id}",
+            )
+        return roots
+
+    for evidence_id in evidence_by_id:
+        visit(evidence_id)
+
 def validate_bundle(events: Iterable[dict[str, Any]], evidence: Iterable[dict[str, Any]]) -> dict[str, int]:
     evidence_list = list(evidence)
     event_list = list(events)
@@ -270,9 +319,7 @@ def validate_bundle(events: Iterable[dict[str, Any]], evidence: Iterable[dict[st
         idempotency.add(item["idempotency_key"])
         event_hashes.add(item["event_hash"])
 
-    for evidence_item in evidence_list:
-        for basis_id in evidence_item["verification"]["basis_evidence_ids"]:
-            _require(basis_id in evidence_by_id, f"missing basis evidence: {basis_id}")
+    _validate_evidence_lineage(evidence_by_id)
 
     for item in event_list:
         for dependency in item["dependency_event_ids"]:
