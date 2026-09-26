@@ -39,5 +39,8 @@
     "Emergency stop cancels currently queued/in-progress managed autonomous runs but does not silently rewrite persistent policy.",
     "Pause, resume, budget, and approval persistence are proposed through a pull request; main is never directly modified by those operations.",
     "The operator console cannot send customer communications, move money, place trades, change secrets, or disclose private payloads."
+  ],
+  "allowed_approval_actors": [
+    "P00NSMASHER"
   ]
 }
