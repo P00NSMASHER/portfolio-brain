@@ -56,6 +56,7 @@ def load_state_sources() -> dict[str, Any]:
         "hunter":"hunting/HUNTER_STATE_SEED.json",
         "cost":"cost_governor/COST_STATE_SEED.json",
         "notifications":"notifications/NOTIFICATION_STATE_SEED.json",
+        "provider":"model_router/PROVIDER_HEALTH_SEED.json",
         "agents":"agents/AGENT_STATE_SEED.json",
     }
     for name, ref in seeds.items():
