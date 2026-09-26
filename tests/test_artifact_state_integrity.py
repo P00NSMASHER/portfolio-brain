@@ -39,12 +39,12 @@ class ArtifactStateIntegrityTests(unittest.TestCase):
 
     def candidates(self):
         return {"artifacts":[
-            {"id":2,"name":"portfolio-runtime-state","created_at":"2026-09-26T17:00:00Z","expires_at":"2026-10-26T17:00:00Z","archive_download_url":"new","workflow_run":{"id":20,"head_sha":"2"*40}},
-            {"id":1,"name":"portfolio-runtime-state","created_at":"2026-09-26T16:00:00Z","expires_at":"2026-10-26T16:00:00Z","archive_download_url":"old","workflow_run":{"id":10,"head_sha":"1"*40}},
+            {"id":2,"name":"portfolio-runtime-state","created_at":"2026-09-26T17:00:00Z","expires_at":"2026-10-26T17:00:00Z","archive_download_url":"new","workflow_run":{"id":20,"head_branch":"main","head_sha":"2"*40}},
+            {"id":1,"name":"portfolio-runtime-state","created_at":"2026-09-26T16:00:00Z","expires_at":"2026-10-26T16:00:00Z","archive_download_url":"old","workflow_run":{"id":10,"head_branch":"main","head_sha":"1"*40}},
         ]}
 
     def restore(self,data,payloads,output,metadata_output=None):
-        return restore_latest_valid_state(data,current_run="99",download=payloads.__getitem__,output=output,member_name="runtime_state.json",expected_state_id="portfolio-runtime-state",max_archive_bytes=10000,max_state_bytes=1000,metadata_output=metadata_output)
+        return restore_latest_valid_state(data,current_run="99",expected_head_branch="main",download=payloads.__getitem__,output=output,member_name="runtime_state.json",expected_state_id="portfolio-runtime-state",max_archive_bytes=10000,max_state_bytes=1000,metadata_output=metadata_output)
 
     def test_corrupt_newest_falls_back_to_newest_valid_predecessor(self):
         with tempfile.TemporaryDirectory() as td:
@@ -76,15 +76,37 @@ class ArtifactStateIntegrityTests(unittest.TestCase):
 
     def test_current_run_and_expired_artifacts_are_ignored(self):
         data={"artifacts":[
-            {"id":3,"created_at":"2026-09-26T18:00:00Z","archive_download_url":"current","workflow_run":{"id":99}},
-            {"id":2,"created_at":"2026-09-26T17:00:00Z","archive_download_url":"expired","expired":True,"workflow_run":{"id":20}},
-            {"id":1,"created_at":"2026-09-26T16:00:00Z","archive_download_url":"valid","workflow_run":{"id":10}},
+            {"id":3,"created_at":"2026-09-26T18:00:00Z","archive_download_url":"current","workflow_run":{"id":99,"head_branch":"main"}},
+            {"id":2,"created_at":"2026-09-26T17:00:00Z","archive_download_url":"expired","expired":True,"workflow_run":{"id":20,"head_branch":"main"}},
+            {"id":1,"created_at":"2026-09-26T16:00:00Z","archive_download_url":"valid","workflow_run":{"id":10,"head_branch":"main"}},
         ]}
         with tempfile.TemporaryDirectory() as td:
             output=Path(td)/"runtime_state.json"
             status=self.restore(data,{"valid":artifact("runtime_state.json",self.state(7))},output)
             self.assertEqual(status,"RESTORED")
             self.assertEqual(json.loads(output.read_text())["sequence"],7)
+
+    def test_newer_artifact_from_other_branch_is_ignored(self):
+        data={"artifacts":[
+            {"id":3,"created_at":"2026-09-26T18:00:00Z","archive_download_url":"feature","workflow_run":{"id":30,"head_branch":"feature/runtime-test"}},
+            {"id":2,"created_at":"2026-09-26T17:00:00Z","archive_download_url":"main","workflow_run":{"id":20,"head_branch":"main"}},
+        ]}
+        downloads=[]
+        payloads={"feature":artifact("runtime_state.json",self.state(99)),"main":artifact("runtime_state.json",self.state(8))}
+        def download(url):
+            downloads.append(url)
+            return payloads[url]
+        with tempfile.TemporaryDirectory() as td:
+            output=Path(td)/"runtime_state.json"
+            status=restore_latest_valid_state(
+                data,current_run="99",expected_head_branch="main",download=download,
+                output=output,member_name="runtime_state.json",
+                expected_state_id="portfolio-runtime-state",
+                max_archive_bytes=10000,max_state_bytes=1000,
+            )
+            self.assertEqual(status,"RESTORED")
+            self.assertEqual(json.loads(output.read_text())["sequence"],8)
+            self.assertEqual(downloads,["main"])
 
 
 if __name__=="__main__":unittest.main()

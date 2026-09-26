@@ -28,7 +28,7 @@ def restore(output:Path,metadata_output=None):
     name=policy()["state_persistence"]["artifact_name"]
     data=json.loads(get(f"https://api.github.com/repos/{repo}/actions/artifacts?name={name}&per_page=100").decode())
     max_bytes=policy()["state_persistence"].get("max_artifact_bytes",5_242_880)
-    return restore_latest_valid_state(data,current_run=run,download=get,output=output,member_name="notification_state.json",expected_state_id="portfolio-notification-state",max_archive_bytes=max_bytes,max_state_bytes=max_bytes,validator=validate_state,metadata_output=metadata_output)
+    return restore_latest_valid_state(data,current_run=run,expected_head_branch=os.environ.get("GITHUB_REF_NAME"),download=get,output=output,member_name="notification_state.json",expected_state_id="portfolio-notification-state",max_archive_bytes=max_bytes,max_state_bytes=max_bytes,validator=validate_state,metadata_output=metadata_output)
 def main():
     ap=argparse.ArgumentParser();ap.add_argument("--output",required=True);ap.add_argument("--metadata-output",default=None);a=ap.parse_args();print(restore(Path(a.output),None if a.metadata_output is None else Path(a.metadata_output)))
 if __name__=="__main__":main()

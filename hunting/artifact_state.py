@@ -28,7 +28,7 @@ def restore(output,metadata_output=None):
         raise RestoreError(str(last))
     data=json.loads(get(f"https://api.github.com/repos/{repo}/actions/artifacts?name={p['state_persistence']['artifact_name']}&per_page=100").decode())
     max_bytes=p["budgets"]["max_output_bytes"]
-    return restore_latest_valid_state(data,current_run=run,download=get,output=Path(output),member_name="hunter_state.json",expected_state_id="portfolio-hunter-state",max_archive_bytes=max_bytes,max_state_bytes=max_bytes,validator=validate_state,metadata_output=metadata_output)
+    return restore_latest_valid_state(data,current_run=run,expected_head_branch=os.environ.get("GITHUB_REF_NAME"),download=get,output=Path(output),member_name="hunter_state.json",expected_state_id="portfolio-hunter-state",max_archive_bytes=max_bytes,max_state_bytes=max_bytes,validator=validate_state,metadata_output=metadata_output)
 def main():
     ap=argparse.ArgumentParser();ap.add_argument("--output",required=True);ap.add_argument("--metadata-output",default=None);a=ap.parse_args();print(restore(Path(a.output),None if a.metadata_output is None else Path(a.metadata_output)))
 if __name__=="__main__":main()

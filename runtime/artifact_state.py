@@ -53,7 +53,8 @@ def restore(*, output: Path, metadata_output: Path | None = None)->str:
     url=f"https://api.github.com/repos/{repository}/actions/artifacts?name={p['state_persistence']['artifact_name']}&per_page=100"
     data=http.json(url)
     return restore_latest_valid_state(
-        data,current_run=current_run,download=http.bytes,output=output,
+        data,current_run=current_run,expected_head_branch=os.environ.get("GITHUB_REF_NAME"),
+        download=http.bytes,output=output,
         member_name="runtime_state.json",expected_state_id="portfolio-runtime-state",
         max_archive_bytes=budgets["max_output_bytes"],max_state_bytes=budgets["max_output_bytes"],
         validator=validate_state,metadata_output=metadata_output,

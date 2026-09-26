@@ -58,7 +58,8 @@ def restore(output: Path, metadata_output: Path | None = None) -> str:
     data = json.loads(get(f"https://api.github.com/repos/{repo}/actions/artifacts?name={name}&per_page=100").decode())
     max_bytes = p["state_persistence"].get("max_artifact_bytes", 5_242_880)
     return restore_latest_valid_state(
-        data,current_run=run,download=get,output=output,
+        data,current_run=run,expected_head_branch=os.environ.get("GITHUB_REF_NAME"),
+        download=get,output=output,
         member_name="cost_state.json",expected_state_id="portfolio-cost-governor-state",
         max_archive_bytes=max_bytes,max_state_bytes=max_bytes,
         validator=validate_state,metadata_output=metadata_output,
