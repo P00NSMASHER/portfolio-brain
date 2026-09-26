@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from agents.heartbeat_state import heartbeat,seed_state,validate_state
 from dashboard.history_state import append_point,daily_trends,project_momentum,validate_state as validate_history
-from operator.operator_console import validate_approval_ledger
+from operator_console.operator_console import validate_approval_ledger
 from scheduler.autonomous_scheduler import _owner_approval
 import scheduler.autonomous_scheduler as scheduler_module
 
@@ -20,8 +20,11 @@ def telemetry(at="2026-09-26T18:00:00Z",completed=2,actions=1,cost=1.5,hunter=5,
     project_activity["PRJ-001"].update({"open_work":1,"completed_work":completed,"sent_actions":actions,"verified_outcomes":verified})
     return {
       "generated_at":at,
-      "queue":{"open_total":1,"counts":{"QUEUED":1,"ACTIVE":0,"COMPLETE":completed,"CANCELLED":0}},
-      "cost":{"usage_today":{"cost_usd":cost,"model_calls":actions,"api_calls":0,"github_runner_minutes":10}},
+      "queue":{"open_total":1,"counts":{"QUEUED":1,"ACTIVE":0,"COMPLETE":completed,"CANCELLED":0},"completed_fingerprint_count":completed},
+      "cost":{
+        "actual_usage_today":{"cost_usd":cost,"model_calls":actions,"api_calls":0,"github_runner_minutes":10},
+        "budget_accounted_usage_today":{"cost_usd":cost,"model_calls":actions,"api_calls":0,"github_runner_minutes":10}
+      },
       "hunter":{"totals":{"candidates":hunter,"retained":2}},
       "actions":{"total_sent":actions},
       "failures":{"count":failures},
@@ -98,13 +101,18 @@ class CommandCenterV4Tests(unittest.TestCase):
           "approved_at":"2026-09-26T18:00:00Z","status":"ACTIVE","reason_hash":"sha256:"+"1"*64
         }]}
         with tempfile.TemporaryDirectory() as td:
-            root=Path(td);(root/"operator").mkdir();(root/"operator"/"OWNER_APPROVALS.json").write_text(json.dumps(ledger))
+            root=Path(td);(root/"operator_console").mkdir()
+            (root/"operator_console"/"OWNER_APPROVALS.json").write_text(json.dumps(ledger))
+            (root/"operator_console"/"OPERATOR_POLICY.json").write_text(json.dumps({"allowed_approval_actors":["P00NSMASHER"]}))
             exp={"experiment_id":"EXP-1","project_ids":["PRJ-008"],"approval_requirements":["CUSTOMER_COMMUNICATION"]}
             u={"uncertainty_id":"UNC-1"}
             with patch.object(scheduler_module,"ROOT",root):
                 self.assertEqual(_owner_approval(exp,u)["approval_id"],"OAPR-"+"B"*20)
                 bad=copy.deepcopy(exp);bad["project_ids"]=["PRJ-009"]
                 self.assertIsNone(_owner_approval(bad,u))
+                bad_actor=copy.deepcopy(ledger);bad_actor["approvals"][0]["approved_by"]="OTHER"
+                (root/"operator_console"/"OWNER_APPROVALS.json").write_text(json.dumps(bad_actor))
+                self.assertIsNone(_owner_approval(exp,u))
 
     def test_operator_console_is_owner_only_manual_and_not_public_ui(self):
         workflow=(ROOT/".github/workflows/operator-console.yml").read_text()
