@@ -647,52 +647,461 @@ def render_html(snapshot: dict[str, Any]) -> str:
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <title>Portfolio Brain Command Center</title>
 <style>
 :root {{
-  color-scheme: dark;
-  --bg:#071018;--panel:#0d1823;--panel2:#111f2c;--line:#203345;--text:#e8f0f7;
-  --muted:#8da0b3;--cyan:#67e8f9;--green:#5ee6a8;--amber:#f7c76d;--red:#ff7f8f;
-  --blue:#82aaff;--shadow:0 16px 42px rgba(0,0,0,.26);
+  color-scheme: light dark;
+  --page:#f5f5f7;
+  --page-2:#ffffff;
+  --surface:rgba(255,255,255,.82);
+  --surface-solid:#ffffff;
+  --surface-soft:rgba(248,248,250,.86);
+  --glass:rgba(250,250,252,.76);
+  --line:rgba(0,0,0,.08);
+  --line-strong:rgba(0,0,0,.13);
+  --text:#1d1d1f;
+  --muted:#6e6e73;
+  --faint:#a1a1a6;
+  --blue:#0071e3;
+  --blue-2:#2997ff;
+  --green:#16893e;
+  --amber:#ad6a00;
+  --red:#d70015;
+  --cyan:#007c91;
+  --shadow:0 22px 70px rgba(0,0,0,.08);
+  --shadow-soft:0 8px 30px rgba(0,0,0,.055);
+  --radius-xl:32px;
+  --radius-lg:24px;
+  --radius-md:18px;
+  --nav-h:58px;
+}}
+@media (prefers-color-scheme:dark){{
+  :root{{
+    --page:#000000;
+    --page-2:#0a0a0a;
+    --surface:rgba(28,28,30,.78);
+    --surface-solid:#1c1c1e;
+    --surface-soft:rgba(44,44,46,.64);
+    --glass:rgba(20,20,22,.72);
+    --line:rgba(255,255,255,.10);
+    --line-strong:rgba(255,255,255,.16);
+    --text:#f5f5f7;
+    --muted:#a1a1a6;
+    --faint:#6e6e73;
+    --blue:#2997ff;
+    --blue-2:#64d2ff;
+    --green:#30d158;
+    --amber:#ffd60a;
+    --red:#ff453a;
+    --cyan:#64d2ff;
+    --shadow:0 28px 90px rgba(0,0,0,.35);
+    --shadow-soft:0 10px 36px rgba(0,0,0,.26);
+  }}
 }}
 *{{box-sizing:border-box}}
-body{{margin:0;background:radial-gradient(circle at 20% 0%,#10263a 0,#071018 36rem);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text)}}
-a{{color:inherit}} code{{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#b8c8d8;font-size:.78rem}}
-.shell{{display:grid;grid-template-columns:230px minmax(0,1fr);min-height:100vh}}
-aside{{position:sticky;top:0;height:100vh;padding:24px 18px;border-right:1px solid var(--line);background:rgba(5,14,22,.9);backdrop-filter:blur(14px)}}
-.brand{{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.04em}}
-.logo{{width:34px;height:34px;border-radius:11px;background:linear-gradient(145deg,var(--cyan),var(--blue));box-shadow:0 0 26px rgba(103,232,249,.28)}}
-.brand small{{display:block;color:var(--muted);font-weight:600;letter-spacing:0;margin-top:2px}}
-nav{{display:grid;gap:6px;margin-top:30px}}
-nav a{{text-decoration:none;color:var(--muted);padding:9px 10px;border-radius:9px;font-size:.9rem}}
-nav a:hover{{color:var(--text);background:#102233}}
-.readonly{{position:absolute;bottom:22px;left:18px;right:18px;border:1px solid #214358;background:#0b1c29;padding:12px;border-radius:12px;color:var(--muted);font-size:.78rem}}
-.readonly strong{{display:block;color:var(--cyan);margin-bottom:4px}}
-main{{padding:28px;max-width:1600px;width:100%;margin:0 auto}}
-.topbar{{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:22px}}
-h1{{font-size:1.8rem;margin:0 0 6px}} h2{{font-size:1rem;margin:0}} p{{color:var(--muted);margin:.35rem 0;line-height:1.5}}
-.actions{{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}}
-button{{border:1px solid var(--line);background:#0c1b28;color:var(--text);padding:9px 12px;border-radius:9px;cursor:pointer}}
-button:hover{{border-color:#3e6680}}
-.grid{{display:grid;gap:14px}} .kpis{{grid-template-columns:repeat(6,minmax(0,1fr));margin-bottom:14px}}
-.card{{background:linear-gradient(180deg,rgba(17,31,44,.96),rgba(12,24,35,.96));border:1px solid var(--line);border-radius:15px;padding:16px;box-shadow:var(--shadow)}}
-.kpi .label{{font-size:.76rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}} .kpi .value{{font-size:1.75rem;font-weight:800;margin-top:7px}} .kpi .hint{{font-size:.76rem;color:var(--muted);margin-top:5px}}
-.two{{grid-template-columns:minmax(0,1.7fr) minmax(320px,.8fr)}} .three{{grid-template-columns:repeat(3,minmax(0,1fr))}}
-.section-head{{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:12px}}
-.section-head p{{font-size:.8rem}}
-.badge{{display:inline-flex;align-items:center;white-space:nowrap;border:1px solid #314557;border-radius:999px;padding:3px 8px;font-size:.7rem;font-weight:750;letter-spacing:.04em}}
-.badge.good{{color:var(--green);border-color:#225944;background:#0d2b21}} .badge.warn{{color:var(--amber);border-color:#5a4927;background:#2a2110}} .badge.bad{{color:var(--red);border-color:#60303a;background:#2b141a}} .badge.neutral{{color:#aebed0;background:#121e29}}
-table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:left;color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;padding:9px 8px;border-bottom:1px solid var(--line)}} td{{padding:10px 8px;border-bottom:1px solid rgba(32,51,69,.65);vertical-align:top}} tr:last-child td{{border-bottom:0}} .sub{{display:block;color:var(--muted);font-size:.72rem;margin-top:3px}} .num{{text-align:right;font-variant-numeric:tabular-nums}} .wrap{{max-width:460px;line-height:1.35}}
-.search{{width:260px;max-width:100%;background:#091620;border:1px solid var(--line);color:var(--text);padding:8px 10px;border-radius:9px}}
-.alert-row{{display:grid;grid-template-columns:70px minmax(0,1fr) auto;gap:12px;align-items:start;padding:11px 0;border-bottom:1px solid var(--line)}} .alert-row:last-child{{border-bottom:0}} .alert-row span:not(.badge){{display:block;color:var(--muted);font-size:.8rem;margin-top:3px}}
-.switches{{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}} .switch-card{{border:1px solid var(--line);padding:11px;border-radius:11px;min-width:0}} .switch-card strong,.switch-card span{{display:block}} .switch-card span{{color:var(--muted);font-size:.72rem;margin:2px 0 6px}} .switch-dot{{width:9px;height:9px;border-radius:50%;float:right;margin-top:4px}} .switch-dot.on{{background:var(--green);box-shadow:0 0 14px rgba(94,230,168,.55)}} .switch-dot.off{{background:var(--red);box-shadow:0 0 14px rgba(255,127,143,.5)}}
-.callout{{border:1px solid #2e5268;background:#0b202d;border-radius:12px;padding:14px}} .callout strong{{color:var(--cyan)}} ul{{margin:.6rem 0 0;padding-left:18px;color:var(--muted)}} li{{margin:.38rem 0;line-height:1.35}}
-.progress{{height:8px;border-radius:999px;background:#08121b;overflow:hidden;border:1px solid #1f3445;margin:11px 0}} .progress span{{display:block;height:100%;background:linear-gradient(90deg,var(--cyan),var(--blue));width:0%}}
-.mono{{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}} .footer{{color:var(--muted);font-size:.72rem;text-align:center;padding:28px 0 8px}}
-.empty{{color:var(--muted);padding:12px 0}}
-@media(max-width:1100px){{.kpis{{grid-template-columns:repeat(3,1fr)}}.two,.three{{grid-template-columns:1fr}}.switches{{grid-template-columns:repeat(2,1fr)}}}}
-@media(max-width:760px){{.shell{{display:block}}aside{{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line)}}nav,.readonly{{display:none}}main{{padding:18px}}.topbar{{display:block}}.actions{{justify-content:flex-start;margin-top:12px}}.kpis{{grid-template-columns:repeat(2,1fr)}}.switches{{grid-template-columns:1fr}}.table-wrap{{overflow:auto}}.alert-row{{grid-template-columns:1fr}}}}
+html{{scroll-behavior:smooth;background:var(--page)}}
+body{{
+  margin:0;
+  min-height:100vh;
+  color:var(--text);
+  background:
+    radial-gradient(900px 540px at 14% -10%,rgba(0,113,227,.10),transparent 64%),
+    radial-gradient(760px 520px at 88% 8%,rgba(100,210,255,.09),transparent 62%),
+    linear-gradient(180deg,var(--page-2) 0,var(--page) 22rem,var(--page) 100%);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  letter-spacing:-.012em;
+}}
+::selection{{background:rgba(0,113,227,.18)}}
+a{{color:inherit}}
+code{{
+  font-family:"SFMono-Regular",ui-monospace,Menlo,Monaco,Consolas,monospace;
+  color:var(--muted);
+  font-size:.74rem;
+  overflow-wrap:anywhere;
+}}
+.shell{{display:block;min-height:100vh}}
+aside{{
+  position:sticky;
+  top:0;
+  z-index:100;
+  height:var(--nav-h);
+  display:flex;
+  align-items:center;
+  gap:22px;
+  padding:0 max(22px,calc((100vw - 1480px)/2));
+  border-bottom:1px solid var(--line);
+  background:var(--glass);
+  -webkit-backdrop-filter:saturate(180%) blur(24px);
+  backdrop-filter:saturate(180%) blur(24px);
+}}
+.brand{{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:max-content;
+  font-size:.82rem;
+  font-weight:650;
+  letter-spacing:-.01em;
+}}
+.logo{{
+  width:28px;height:28px;border-radius:9px;
+  display:grid;place-items:center;
+  background:linear-gradient(145deg,#0a84ff,#64d2ff);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 6px 18px rgba(0,113,227,.22);
+}}
+.logo::after{{content:"PB";color:#fff;font-size:.57rem;font-weight:800;letter-spacing:-.04em}}
+.brand small{{display:none}}
+nav{{
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  min-width:0;
+}}
+nav a{{
+  text-decoration:none;
+  color:var(--muted);
+  padding:7px 10px;
+  border-radius:999px;
+  font-size:.73rem;
+  font-weight:520;
+  white-space:nowrap;
+  transition:color .2s ease,background .2s ease,transform .2s ease;
+}}
+nav a:hover{{color:var(--text);background:var(--surface-soft);transform:translateY(-1px)}}
+.readonly{{
+  min-width:max-content;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  padding:6px 10px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  color:var(--muted);
+  background:var(--surface-soft);
+  font-size:.68rem;
+  font-weight:560;
+}}
+.readonly strong{{color:var(--green);font-weight:700}}
+.readonly strong::before{{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:6px;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 12%,transparent)}}
+main{{
+  width:min(1480px,calc(100% - 48px));
+  margin:0 auto;
+  padding:0 0 72px;
+}}
+.topbar{{
+  position:relative;
+  min-height:460px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:end;
+  gap:40px;
+  padding:94px 22px 54px;
+  margin-bottom:18px;
+  overflow:hidden;
+}}
+.topbar::before{{
+  content:"";
+  position:absolute;
+  width:520px;height:520px;
+  right:-130px;top:-170px;
+  border-radius:50%;
+  background:radial-gradient(circle at 35% 35%,rgba(41,151,255,.23),rgba(100,210,255,.09) 38%,transparent 70%);
+  filter:blur(4px);
+  pointer-events:none;
+}}
+.topbar::after{{
+  content:"";
+  position:absolute;
+  width:430px;height:220px;
+  left:12%;bottom:-130px;
+  border-radius:50%;
+  background:radial-gradient(ellipse,rgba(94,92,230,.11),transparent 67%);
+  filter:blur(18px);
+  pointer-events:none;
+}}
+.hero-copy{{position:relative;z-index:1;max-width:980px}}
+.eyebrow{{
+  display:flex;align-items:center;gap:9px;
+  margin-bottom:18px;
+  color:var(--muted);
+  font-size:.78rem;font-weight:650;
+  letter-spacing:.08em;text-transform:uppercase;
+}}
+.signal-dot{{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 5px color-mix(in srgb,var(--green) 12%,transparent)}}
+h1{{
+  max-width:1050px;
+  margin:0;
+  font-size:clamp(3.6rem,7vw,7.2rem);
+  line-height:.91;
+  letter-spacing:-.065em;
+  font-weight:720;
+}}
+h2{{
+  margin:0;
+  font-size:clamp(1.35rem,2vw,2rem);
+  line-height:1.05;
+  letter-spacing:-.035em;
+  font-weight:650;
+}}
+p{{color:var(--muted);margin:.45rem 0;line-height:1.48}}
+.hero-lede{{
+  max-width:760px;
+  margin-top:24px;
+  font-size:clamp(1.08rem,1.6vw,1.42rem);
+  line-height:1.42;
+  letter-spacing:-.025em;
+}}
+.hero-badges{{display:flex;flex-wrap:wrap;gap:7px;margin-top:24px}}
+.actions{{
+  position:relative;z-index:1;
+  display:flex;gap:8px;flex-wrap:wrap;
+  justify-content:flex-end;
+  align-self:end;
+  padding-bottom:6px;
+}}
+button{{
+  appearance:none;
+  border:0;
+  background:var(--text);
+  color:var(--page);
+  padding:11px 17px;
+  border-radius:999px;
+  font:inherit;
+  font-size:.82rem;
+  font-weight:620;
+  cursor:pointer;
+  box-shadow:var(--shadow-soft);
+  transition:transform .22s ease,opacity .22s ease,box-shadow .22s ease;
+}}
+button+button{{background:var(--surface-solid);color:var(--text);border:1px solid var(--line)}}
+button:hover{{transform:translateY(-2px);box-shadow:0 12px 34px rgba(0,0,0,.12)}}
+button:active{{transform:translateY(0) scale(.985)}}
+.grid{{display:grid;gap:18px}}
+.kpis{{
+  grid-template-columns:repeat(12,minmax(0,1fr));
+  margin-bottom:22px;
+}}
+.kpi{{grid-column:span 2;min-height:188px;display:flex;flex-direction:column;justify-content:space-between}}
+.kpi:nth-child(1),.kpi:nth-child(2){{grid-column:span 3}}
+.kpi:nth-child(5),.kpi:nth-child(6){{grid-column:span 3}}
+.card{{
+  position:relative;
+  overflow:hidden;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:var(--radius-xl);
+  padding:28px;
+  box-shadow:var(--shadow-soft);
+  -webkit-backdrop-filter:blur(24px) saturate(135%);
+  backdrop-filter:blur(24px) saturate(135%);
+  transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s ease,border-color .28s ease;
+}}
+.card::before{{
+  content:"";
+  position:absolute;inset:0 0 auto 0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.7),transparent);
+  opacity:.72;pointer-events:none;
+}}
+.card:hover{{transform:translateY(-2px);box-shadow:var(--shadow);border-color:var(--line-strong)}}
+.kpi::after{{
+  content:"";
+  position:absolute;
+  width:150px;height:150px;
+  right:-58px;bottom:-72px;border-radius:50%;
+  background:radial-gradient(circle,rgba(41,151,255,.11),transparent 68%);
+  pointer-events:none;
+}}
+.kpi:nth-child(4)::after{{background:radial-gradient(circle,rgba(215,0,21,.09),transparent 68%)}}
+.kpi:nth-child(5)::after{{background:radial-gradient(circle,rgba(48,209,88,.10),transparent 68%)}}
+.kpi .label{{
+  font-size:.72rem;
+  text-transform:uppercase;
+  letter-spacing:.085em;
+  color:var(--muted);
+  font-weight:650;
+}}
+.kpi .value{{
+  margin-top:18px;
+  font-size:clamp(2.25rem,3.3vw,4.2rem);
+  line-height:.92;
+  letter-spacing:-.06em;
+  font-weight:680;
+}}
+.kpi .hint{{font-size:.78rem;color:var(--muted);margin-top:14px}}
+.two{{grid-template-columns:minmax(0,1.35fr) minmax(360px,.85fr)}}
+.three{{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.section-head{{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:18px;
+  margin-bottom:22px;
+}}
+.section-head p{{font-size:.86rem;max-width:760px;margin-top:7px}}
+.badge{{
+  display:inline-flex;align-items:center;
+  white-space:nowrap;
+  border:0;
+  border-radius:999px;
+  padding:6px 10px;
+  font-size:.66rem;
+  font-weight:690;
+  letter-spacing:.035em;
+  background:var(--surface-soft);
+  color:var(--muted);
+  box-shadow:inset 0 0 0 1px var(--line);
+}}
+.badge.good{{color:var(--green);background:color-mix(in srgb,var(--green) 9%,var(--surface-solid))}}
+.badge.warn{{color:var(--amber);background:color-mix(in srgb,var(--amber) 9%,var(--surface-solid))}}
+.badge.bad{{color:var(--red);background:color-mix(in srgb,var(--red) 9%,var(--surface-solid))}}
+.badge.neutral{{color:var(--muted)}}
+.table-wrap{{
+  width:100%;
+  overflow:auto;
+  border:1px solid var(--line);
+  border-radius:20px;
+  background:color-mix(in srgb,var(--surface-solid) 76%,transparent);
+}}
+table{{width:100%;border-collapse:separate;border-spacing:0;font-size:.82rem}}
+th{{
+  position:sticky;top:0;
+  z-index:2;
+  text-align:left;
+  color:var(--muted);
+  background:color-mix(in srgb,var(--surface-solid) 94%,transparent);
+  -webkit-backdrop-filter:blur(16px);
+  backdrop-filter:blur(16px);
+  font-size:.65rem;
+  font-weight:690;
+  text-transform:uppercase;
+  letter-spacing:.07em;
+  padding:12px 14px;
+  border-bottom:1px solid var(--line);
+}}
+td{{padding:14px;border-bottom:1px solid var(--line);vertical-align:top}}
+tbody tr:last-child td{{border-bottom:0}}
+tbody tr{{transition:background .18s ease}}
+tbody tr:hover{{background:color-mix(in srgb,var(--blue) 4%,transparent)}}
+.sub{{display:block;color:var(--muted);font-size:.7rem;margin-top:4px}}
+.num{{text-align:right;font-variant-numeric:tabular-nums}}
+.wrap{{max-width:520px;line-height:1.38}}
+.search{{
+  width:270px;max-width:100%;
+  appearance:none;
+  background:var(--surface-soft);
+  border:1px solid var(--line);
+  color:var(--text);
+  padding:10px 14px;
+  border-radius:999px;
+  outline:none;
+  font:inherit;font-size:.8rem;
+  transition:border .2s ease,box-shadow .2s ease,background .2s ease;
+}}
+.search:focus{{border-color:var(--blue);box-shadow:0 0 0 4px color-mix(in srgb,var(--blue) 12%,transparent);background:var(--surface-solid)}}
+.alert-row{{
+  display:grid;grid-template-columns:70px minmax(0,1fr) auto;
+  gap:16px;align-items:start;
+  padding:16px 0;border-bottom:1px solid var(--line);
+}}
+.alert-row:last-child{{border-bottom:0}}
+.alert-row span:not(.badge){{display:block;color:var(--muted);font-size:.82rem;margin-top:5px;line-height:1.45}}
+.switches{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}}
+.switch-card{{
+  min-width:0;
+  border:1px solid var(--line);
+  background:var(--surface-soft);
+  padding:14px;
+  border-radius:17px;
+}}
+.switch-card strong,.switch-card span{{display:block}}
+.switch-card span{{color:var(--muted);font-size:.7rem;margin:3px 0 7px}}
+.switch-dot{{width:9px;height:9px;border-radius:50%;float:right;margin-top:4px}}
+.switch-dot.on{{background:var(--green);box-shadow:0 0 0 4px color-mix(in srgb,var(--green) 12%,transparent)}}
+.switch-dot.off{{background:var(--red);box-shadow:0 0 0 4px color-mix(in srgb,var(--red) 12%,transparent)}}
+.callout{{
+  min-height:124px;
+  border:1px solid var(--line);
+  background:linear-gradient(145deg,var(--surface-soft),color-mix(in srgb,var(--blue) 3%,var(--surface-solid)));
+  border-radius:22px;
+  padding:20px;
+}}
+.callout strong{{color:var(--text);font-size:.88rem}}
+.callout p{{font-size:.86rem;margin-top:8px}}
+ul{{margin:.7rem 0 0;padding-left:19px;color:var(--muted)}}
+li{{margin:.45rem 0;line-height:1.42}}
+.progress{{height:7px;border-radius:999px;background:var(--surface-soft);overflow:hidden;border:1px solid var(--line);margin:11px 0}}
+.progress span{{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--blue-2));width:0%}}
+.mono{{font-family:"SFMono-Regular",ui-monospace,Menlo,monospace}}
+.footer{{color:var(--muted);font-size:.7rem;text-align:center;padding:52px 0 10px}}
+.empty{{color:var(--muted);padding:20px 14px}}
+section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
+#live-state{{background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--blue) 4%,var(--surface-solid)))}}
+#operations{{background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--cyan) 3%,var(--surface-solid)))}}
+#trends{{background:linear-gradient(145deg,var(--surface),color-mix(in srgb,#af52de 4%,var(--surface-solid)))}}
+#boundary .card:first-child{{background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--green) 4%,var(--surface-solid)))}}
+#boundary .card:last-child{{background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--red) 3%,var(--surface-solid)))}}
+@keyframes rise{{from{{opacity:0;transform:translateY(14px)}}to{{opacity:1;transform:none}}}}
+.topbar,.kpis,.card{{animation:rise .62s cubic-bezier(.2,.8,.2,1) both}}
+.kpis{{animation-delay:.04s}}
+.card:nth-of-type(2){{animation-delay:.07s}}
+@media(prefers-reduced-motion:reduce){{
+  html{{scroll-behavior:auto}}
+  *,*::before,*::after{{animation:none!important;transition:none!important}}
+}}
+@media(max-width:1220px){{
+  aside{{padding:0 18px;gap:12px}}
+  nav{{justify-content:flex-start;overflow-x:auto;scrollbar-width:none}}
+  nav::-webkit-scrollbar{{display:none}}
+  nav a{{font-size:.7rem}}
+  .readonly{{display:none}}
+  .kpi{{grid-column:span 4}}
+  .kpi:nth-child(1),.kpi:nth-child(2),.kpi:nth-child(5),.kpi:nth-child(6){{grid-column:span 4}}
+  .two{{grid-template-columns:1fr}}
+}}
+@media(max-width:820px){{
+  :root{{--nav-h:52px;--radius-xl:24px}}
+  aside{{padding:0 14px}}
+  .brand{{font-size:.75rem}}
+  .logo{{width:25px;height:25px;border-radius:8px}}
+  main{{width:min(100% - 24px,1480px);padding-bottom:46px}}
+  .topbar{{min-height:390px;display:block;padding:72px 10px 34px}}
+  h1{{font-size:clamp(3.25rem,16vw,5.6rem)}}
+  .hero-lede{{font-size:1.05rem;max-width:92%}}
+  .actions{{justify-content:flex-start;margin-top:28px}}
+  .kpis{{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}}
+  .kpi,.kpi:nth-child(n){{grid-column:span 1;min-height:158px;padding:20px}}
+  .kpi .value{{font-size:2.5rem}}
+  .card{{padding:21px;border-radius:24px}}
+  .three{{grid-template-columns:1fr}}
+  .switches{{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .section-head{{display:block}}
+  .section-head>.badge{{margin-top:12px}}
+  .table-wrap{{margin-left:-4px;margin-right:-4px;width:calc(100% + 8px)}}
+  th,td{{padding:12px 11px}}
+  .alert-row{{grid-template-columns:1fr;gap:7px}}
+  .search{{margin-top:12px;width:100%}}
+}}
+@media(max-width:520px){{
+  nav a{{padding:7px 8px}}
+  .brand div:last-child{{font-size:0}}
+  .brand div:last-child::after{{content:"Brain";font-size:.72rem}}
+  .topbar{{min-height:350px;padding-top:62px}}
+  .eyebrow{{font-size:.66rem}}
+  h1{{font-size:clamp(2.9rem,17vw,4.5rem)}}
+  .hero-lede{{font-size:.98rem}}
+  .kpis{{grid-template-columns:1fr 1fr}}
+  .kpi{{min-height:145px}}
+  .kpi .label{{font-size:.65rem}}
+  .kpi .value{{font-size:2.15rem}}
+  .switches{{grid-template-columns:1fr}}
+}}
 </style>
 </head>
 <body>
@@ -704,18 +1113,19 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
     <a href="#agents">Agent Fleet</a><a href="#actions">Action Engine</a><a href="#hunter">Hunter</a>
     <a href="#cost">Cost & Models</a><a href="#workflows">Workflows</a><a href="#boundary">Authority Boundary</a>
   </nav>
-  <div class="readonly"><strong>OBSERVE ONLY</strong>No control on this screen can widen authority or mutate Portfolio Brain state.</div>
+  <div class="readonly"><strong>Read only</strong><span>Public command center</span></div>
 </aside>
 <main>
   <header class="topbar" id="overview">
-    <div>
+    <div class="hero-copy">
+      <div class="eyebrow"><span class="signal-dot"></span>Portfolio Intelligence System</div>
       <h1>Portfolio Brain Command Center</h1>
-      <p>Evidence-backed operational view of the autonomous portfolio control plane.</p>
-      <div>{_badge(system["status"], _status_tone(system["status"]))} {_badge("READ ONLY", "neutral")} {_badge(snapshot["data_boundary"], "neutral")}</div>
+      <p class="hero-lede">A live, evidence-backed view of your autonomous portfolio — work, agents, spend, outcomes, and operating boundaries in one place.</p>
+      <div class="hero-badges">{_badge(system["status"], _status_tone(system["status"]))} {_badge("READ ONLY", "neutral")} {_badge(snapshot["data_boundary"], "neutral")}</div>
     </div>
     <div class="actions">
-      <button type="button" onclick="location.reload()">Refresh view</button>
-      <button type="button" onclick="navigator.clipboard && navigator.clipboard.writeText(document.getElementById('snapshotHash').textContent)">Copy snapshot hash</button>
+      <button type="button" onclick="location.reload()">Refresh</button>
+      <button type="button" onclick="navigator.clipboard && navigator.clipboard.writeText(document.getElementById('snapshotHash').textContent)">Copy hash</button>
     </div>
   </header>
 
