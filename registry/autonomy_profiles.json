@@ -6,7 +6,7 @@
       "autonomy_profile_id": "AUT-000",
       "project_id": "PRJ-000",
       "default_policy": "DENY",
-      "runtime_enabled": false,
+      "runtime_enabled": true,
       "permissions": {
         "OBSERVE": {
           "decision": "ALLOWED",
@@ -59,7 +59,7 @@
       "autonomy_profile_id": "AUT-001",
       "project_id": "PRJ-001",
       "default_policy": "DENY",
-      "runtime_enabled": false,
+      "runtime_enabled": true,
       "permissions": {
         "OBSERVE": {
           "decision": "ALLOWED",
@@ -112,7 +112,7 @@
       "autonomy_profile_id": "AUT-002",
       "project_id": "PRJ-002",
       "default_policy": "DENY",
-      "runtime_enabled": false,
+      "runtime_enabled": true,
       "permissions": {
         "OBSERVE": {
           "decision": "ALLOWED",
@@ -165,7 +165,7 @@
       "autonomy_profile_id": "AUT-003",
       "project_id": "PRJ-003",
       "default_policy": "DENY",
-      "runtime_enabled": false,
+      "runtime_enabled": true,
       "permissions": {
         "OBSERVE": {
           "decision": "ALLOWED",
@@ -218,7 +218,7 @@
       "autonomy_profile_id": "AUT-004",
       "project_id": "PRJ-004",
       "default_policy": "DENY",
-      "runtime_enabled": false,
+      "runtime_enabled": true,
       "permissions": {
         "OBSERVE": {
           "decision": "ALLOWED",
@@ -271,7 +271,7 @@
       "autonomy_profile_id": "AUT-005",
       "project_id": "PRJ-005",
       "default_policy": "DENY",
-      "runtime_enabled": false,
+      "runtime_enabled": true,
       "permissions": {
         "OBSERVE": {
           "decision": "ALLOWED",
@@ -324,7 +324,7 @@
       "autonomy_profile_id": "AUT-006",
       "project_id": "PRJ-006",
       "default_policy": "DENY",
-      "runtime_enabled": false,
+      "runtime_enabled": true,
       "permissions": {
         "OBSERVE": {
           "decision": "ALLOWED",
@@ -377,7 +377,7 @@
       "autonomy_profile_id": "AUT-007",
       "project_id": "PRJ-007",
       "default_policy": "DENY",
-      "runtime_enabled": false,
+      "runtime_enabled": true,
       "permissions": {
         "OBSERVE": {
           "decision": "ALLOWED",
@@ -434,7 +434,7 @@
       "autonomy_profile_id": "AUT-008",
       "project_id": "PRJ-008",
       "default_policy": "DENY",
-      "runtime_enabled": false,
+      "runtime_enabled": true,
       "permissions": {
         "OBSERVE": {
           "decision": "ALLOWED",
@@ -487,7 +487,7 @@
       "autonomy_profile_id": "AUT-009",
       "project_id": "PRJ-009",
       "default_policy": "DENY",
-      "runtime_enabled": false,
+      "runtime_enabled": true,
       "permissions": {
         "OBSERVE": {
           "decision": "ALLOWED",
@@ -540,7 +540,7 @@
       "autonomy_profile_id": "AUT-010",
       "project_id": "PRJ-010",
       "default_policy": "DENY",
-      "runtime_enabled": false,
+      "runtime_enabled": true,
       "permissions": {
         "OBSERVE": {
           "decision": "ALLOWED",
@@ -593,7 +593,7 @@
       "autonomy_profile_id": "AUT-011",
       "project_id": "PRJ-011",
       "default_policy": "DENY",
-      "runtime_enabled": false,
+      "runtime_enabled": true,
       "permissions": {
         "OBSERVE": {
           "decision": "ALLOWED",

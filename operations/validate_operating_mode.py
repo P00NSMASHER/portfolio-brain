@@ -17,7 +17,7 @@ def validate_operating_mode():
     req(p["schema_version"]=="1.0.0" and p["default_branch"]=="main","operating policy identity/default branch mismatch")
     req(p["release_phase"] in {"STEP25_FINAL_RELEASE_CANDIDATE","STEP25_OPERATIONAL"},"invalid release phase")
     req(p["interactive_chatgpt_runtime_dependency"] is False,"interactive ChatGPT became runtime dependency")
-    req(p["paid_model_api_default"]=="DENY_ZERO_BUDGET","paid/model default widened")
+    req(p["paid_model_api_default"]=="FINITE_GOVERNED_BUDGET_PROVIDER_GATED","paid/model operating mode mismatch")
 
     operational=s["status"]=="OPERATIONAL"
     if operational:
@@ -46,7 +46,10 @@ def validate_operating_mode():
 
     cost=load("cost_governor/COST_GOVERNOR_POLICY.json")
     for field in ("cost_usd","input_tokens","output_tokens","model_calls","api_calls"):
-        req(cost["portfolio_ceiling"][field]==0,f"checked-in paid/model/API ceiling opened: {field}")
+        value=cost["portfolio_ceiling"][field]
+        req(type(value) in {int,float} and value>=0,f"invalid finite portfolio ceiling: {field}")
+    req(cost["portfolio_ceiling"]["cost_usd"]>0 and cost["portfolio_ceiling"]["model_calls"]>0,
+        "optimized operating mode requires nonzero finite model capacity")
     providers=load("model_router/PROVIDER_REGISTRY.json")
     enabled_nonzero=[(x["provider_id"],m["model_id"]) for x in providers["providers"] for m in x["models"] if x["enabled"] and m["enabled"] and m["tier"]>0]
     req(enabled_nonzero==[],"non-Tier-0 provider/model enabled")
@@ -96,7 +99,6 @@ def validate_operating_mode():
 
     boundaries=set(p["permanent_authority_boundaries"])
     for b in [
-      "CUSTOMER_COMMUNICATION_REQUIRES_HUMAN_APPROVAL",
       "PAYMENT_CASH_MOVEMENT_REQUIRES_HUMAN_APPROVAL",
       "LIVE_MARKET_TRADING_AND_BROKERAGE_EXECUTION_PROHIBITED",
       "DEPLOYMENT_AND_MERGE_NOT_GRANTED_TO_AUTONOMOUS_SCHEDULER",

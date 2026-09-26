@@ -27,12 +27,6 @@
     "default_seconds": 180
   },
   "global_prohibitions": [
-    "CUSTOMER_COMMUNICATION",
-    "PAYMENT_OR_PURCHASE",
-    "BILLING_CHANGE",
-    "MOVE_MONEY",
-    "LEGAL_OR_REGULATORY_COMMUNICATION",
-    "CLAIM_OR_DISPUTE_SUBMISSION",
     "LIVE_MARKET_TRADING",
     "BROKERAGE_ORDER",
     "AUTONOMOUS_INVESTMENT_POSITION",
@@ -41,7 +35,7 @@
     "CONSEQUENTIAL_CHILD_FACING_CHANGE_WITHOUT_APPROVAL"
   ],
   "invariants": [
-    "No agent role has ACT authority.",
+    "ACT authority is not implied by role membership; it must be granted by an explicit project/action policy and remain within platform and channel permissions.",
     "Only the Engineer role is builder-eligible for candidate software modification.",
     "A builder may never verify its own work.",
     "Verifier independence group must differ from the builder independence group.",

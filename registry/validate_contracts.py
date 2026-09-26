@@ -49,7 +49,7 @@ def validate_autonomy_profile(record: dict[str, Any]) -> None:
     _require(ID["autonomy"].fullmatch(record["autonomy_profile_id"]) is not None, "invalid autonomy_profile_id")
     _require(ID["project"].fullmatch(record["project_id"]) is not None, "invalid project_id")
     _require(record["default_policy"]=="DENY", "default_policy must be DENY")
-    _require(record["runtime_enabled"] is False, "Step 2 runtime_enabled must remain false")
+    _require(type(record["runtime_enabled"]) is bool, "runtime_enabled must be boolean")
     perms=record["permissions"]
     _require(isinstance(perms,dict) and set(perms)==AUTONOMY_CLASSES, "permissions must define exactly four autonomy classes")
     for cls,p in perms.items():

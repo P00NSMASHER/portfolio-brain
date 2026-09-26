@@ -31,9 +31,9 @@ class RegistryBundleTests(unittest.TestCase):
             by_project[profile["project_id"]]=profile
         self.assertEqual({p["project_id"] for p in self.projects},set(by_project))
 
-    def test_no_runtime_or_external_act_enabled(self):
+    def test_all_project_runtimes_enabled_without_self_approval(self):
         for profile in self.profiles:
-            self.assertFalse(profile["runtime_enabled"])
+            self.assertTrue(profile["runtime_enabled"])
             self.assertIn(profile["permissions"]["ACT"]["decision"],{"HUMAN_APPROVAL_REQUIRED","PROHIBITED"})
             self.assertFalse(profile["separation_of_duties"]["builder_may_self_approve"])
 

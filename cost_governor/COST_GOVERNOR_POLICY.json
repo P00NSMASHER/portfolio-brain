@@ -13,40 +13,40 @@
     "GITHUB_JOB": 21600
   },
   "portfolio_ceiling": {
-    "cost_usd": 0,
-    "input_tokens": 0,
-    "output_tokens": 0,
-    "model_calls": 0,
-    "api_calls": 0,
-    "github_job_starts": 64,
-    "github_runner_minutes": 320
+    "cost_usd": 10,
+    "input_tokens": 1000000,
+    "output_tokens": 250000,
+    "model_calls": 40,
+    "api_calls": 80,
+    "github_job_starts": 96,
+    "github_runner_minutes": 480
   },
   "project_default_ceiling": {
-    "cost_usd": 0,
-    "input_tokens": 0,
-    "output_tokens": 0,
-    "model_calls": 0,
-    "api_calls": 0,
-    "github_job_starts": 32,
-    "github_runner_minutes": 160
+    "cost_usd": 3,
+    "input_tokens": 300000,
+    "output_tokens": 75000,
+    "model_calls": 12,
+    "api_calls": 24,
+    "github_job_starts": 40,
+    "github_runner_minutes": 200
   },
   "project_overrides": {
     "PRJ-000": {
-      "cost_usd": 0,
-      "input_tokens": 0,
-      "output_tokens": 0,
-      "model_calls": 0,
-      "api_calls": 0,
-      "github_job_starts": 64,
-      "github_runner_minutes": 320
+      "cost_usd": 5,
+      "input_tokens": 500000,
+      "output_tokens": 125000,
+      "model_calls": 20,
+      "api_calls": 40,
+      "github_job_starts": 72,
+      "github_runner_minutes": 360
     }
   },
   "provider_model_default_ceiling": {
-    "cost_usd": 0,
-    "input_tokens": 0,
-    "output_tokens": 0,
-    "model_calls": 0,
-    "api_calls": 0,
+    "cost_usd": 5,
+    "input_tokens": 500000,
+    "output_tokens": 125000,
+    "model_calls": 20,
+    "api_calls": 20,
     "github_job_starts": 0,
     "github_runner_minutes": 0
   },
@@ -166,7 +166,7 @@
   "max_cancellations_per_cycle": 8,
   "invariants": [
     "Budget approval never grants OBSERVE, EXPERIMENT, MODIFY or ACT authority.",
-    "Paid/model/API spend is deny-by-default: checked-in portfolio, project and provider/model ceilings are zero until separately changed.",
+    "Paid/model/API execution is finite-budget, reservation-gated, provider-gated, idempotent and kill-switch controlled; disabled providers still cannot execute.",
     "Every non-deterministic model/API execution requires a durable reservation before invocation.",
     "Every managed autonomous GitHub job requires a durable reservation before substantive work.",
     "Portfolio, project, provider/model and workflow/job ceilings are checked independently; the strictest blocking scope wins.",

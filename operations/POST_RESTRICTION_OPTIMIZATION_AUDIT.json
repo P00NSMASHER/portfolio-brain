@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0.0",
+  "optimization_id": "OPT-PORTFOLIO-BRAIN-20260925",
+  "audited_head": "7bcd65e7f37bb3fb94bf672a5da9ef867d10b283",
+  "objective": "Increase autonomous intelligence and execution throughput after removal of prior user-imposed restrictions while preserving security, evidence integrity, bounded cost, privacy, and high-risk safety controls.",
+  "findings": [
+    {
+      "id": "OPT-F01",
+      "severity": "HIGH",
+      "finding": "All project autonomy profiles had runtime_enabled=false even though Step 25 declared the system operational.",
+      "action": "Enable runtime for all 12 registered projects; retain per-action autonomy decisions."
+    },
+    {
+      "id": "OPT-F02",
+      "severity": "HIGH",
+      "finding": "Cost governor validator hardcoded paid/model/API ceilings to exactly zero, making model router tiers 1-3 impossible even after provider configuration.",
+      "action": "Replace zero-only validation with finite nonnegative budgets and modest portfolio/project/provider ceilings."
+    },
+    {
+      "id": "OPT-F03",
+      "severity": "HIGH",
+      "finding": "Scheduler throughput was capped at four new items per cycle and one open item per agent; implementation hardcoded one-per-agent despite a policy field.",
+      "action": "Raise cycle capacity to eight, open-work capacity to two per agent, and make code honor the configured per-agent ceiling."
+    },
+    {
+      "id": "OPT-F04",
+      "severity": "MEDIUM",
+      "finding": "Agent policy globally prohibited several ordinary business action classes inherited from prior user restrictions.",
+      "action": "Remove obsolete business-action global bans while retaining live-trading, destructive deletion, private disclosure, and consequential child-safety prohibitions."
+    },
+    {
+      "id": "OPT-F05",
+      "severity": "MEDIUM",
+      "finding": "Temporary validation sprint still encoded architecture freeze, outreach lock, and zero-budget assumptions after those restrictions were withdrawn.",
+      "action": "Supersede the sprint policy and preserve its measurements as historical baseline only."
+    },
+    {
+      "id": "OPT-F06",
+      "severity": "HIGH",
+      "finding": "Tier 1-3 provider slots remain unconfigured and disabled, so finite model budget alone does not activate AI reasoning.",
+      "action": "Next optimization gate: add explicit provider/model configuration with exact model IDs, token limits, rates, credentials, and independent adversarial route."
+    },
+    {
+      "id": "OPT-F07",
+      "severity": "MEDIUM",
+      "finding": "Experiment engine remains plan-and-gate only and has no direct low-risk external action executor.",
+      "action": "Next optimization gate: implement bounded action executor with channel-specific permissions, idempotency, evidence receipts, rate limits, and rollback."
+    }
+  ],
+  "retained_non_user_controls": [
+    "pre-execution cost reservations and kill switches",
+    "independent verification and builder/verifier separation",
+    "evidence provenance, hashes, idempotency, durable state and replay safety",
+    "live market trading/broker execution prohibition",
+    "destructive data deletion prohibition",
+    "private information disclosure prohibition",
+    "consequential child-facing change approval protection",
+    "public-repository sanitized persistence boundary"
+  ]
+}

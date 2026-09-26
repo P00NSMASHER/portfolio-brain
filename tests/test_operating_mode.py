@@ -20,10 +20,10 @@ class OperatingModeTests(unittest.TestCase):
           "portfolio-cost-watchdog","portfolio-notification-cycle"
         })
 
-    def test_no_autonomous_customer_payment_trading_deploy_merge_authority(self):
+    def test_high_risk_payment_trading_deploy_merge_boundaries_remain(self):
         p=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
         boundaries=set(p["permanent_authority_boundaries"])
-        self.assertIn("CUSTOMER_COMMUNICATION_REQUIRES_HUMAN_APPROVAL",boundaries)
+        self.assertNotIn("CUSTOMER_COMMUNICATION_REQUIRES_HUMAN_APPROVAL",boundaries)
         self.assertIn("PAYMENT_CASH_MOVEMENT_REQUIRES_HUMAN_APPROVAL",boundaries)
         self.assertIn("LIVE_MARKET_TRADING_AND_BROKERAGE_EXECUTION_PROHIBITED",boundaries)
         self.assertIn("DEPLOYMENT_AND_MERGE_NOT_GRANTED_TO_AUTONOMOUS_SCHEDULER",boundaries)

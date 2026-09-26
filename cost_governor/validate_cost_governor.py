@@ -31,7 +31,10 @@ def validate_cost_governor():
     req(p["mode"] == "FAIL_CLOSED_PRE_EXECUTION_RESERVATION", "cost governor mode changed")
     req(p["authority_class"] == "NONE", "cost governor authority widened")
     for field in ("cost_usd", "input_tokens", "output_tokens", "model_calls", "api_calls"):
-        req(p["portfolio_ceiling"][field] == 0, f"checked-in paid/model budget opened: {field}")
+        value=p["portfolio_ceiling"][field]
+        req(type(value) in {int,float} and value>=0, f"invalid finite paid/model budget: {field}")
+    req(p["portfolio_ceiling"]["cost_usd"]>0 and p["portfolio_ceiling"]["model_calls"]>0,
+        "optimized cost governor requires finite nonzero model capacity")
     req(p["global_concurrency_group"] == "portfolio-cost-governed-autonomy", "global cost serialization changed")
 
     at = "2026-09-25T12:00:00Z"

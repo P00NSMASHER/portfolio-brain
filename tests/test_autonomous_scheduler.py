@@ -3,10 +3,12 @@ from unittest.mock import patch
 from scheduler.autonomous_scheduler import _candidate,build_context,load_state,mark_work,schedule_cycle
 
 class SchedulerTests(unittest.TestCase):
-    def test_current_cycle_selects_research_hunt_integration_only(self):
+    def test_current_cycle_includes_research_hunt_integration_with_bounded_parallelism(self):
         state,receipt=schedule_cycle(load_state(),build_context(),at="2026-09-25T20:40:00Z")
-        self.assertEqual({w["work_type"] for w in receipt["selected_work"]},{"RESEARCH","HUNT","INTEGRATION"})
-        self.assertEqual(len(state["work_items"]),3)
+        types={w["work_type"] for w in receipt["selected_work"]}
+        self.assertTrue({"RESEARCH","HUNT","INTEGRATION"}<=types)
+        self.assertGreaterEqual(len(state["work_items"]),3)
+        self.assertLessEqual(len(state["work_items"]),8)
 
     def test_human_gated_external_validation_is_blocked_not_queued(self):
         _,receipt=schedule_cycle(load_state(),build_context(),at="2026-09-25T20:40:00Z")
@@ -20,9 +22,9 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(r2["selected_work"],[])
         self.assertGreater(len(r2["suppressed_duplicates"]),0)
 
-    def test_per_agent_open_work_limit_prevents_second_product_analyst_item(self):
+    def test_per_agent_open_work_limit_is_two(self):
         _,r=schedule_cycle(load_state(),build_context(),at="2026-09-25T20:40:00Z")
-        self.assertEqual(sum(1 for w in r["selected_work"] if w["assigned_agent_id"]=="AGT-PRODUCT-ANALYST"),1)
+        self.assertLessEqual(sum(1 for w in r["selected_work"] if w["assigned_agent_id"]=="AGT-PRODUCT-ANALYST"),2)
 
     def test_verification_precedes_discovery_when_factory_work_exists(self):
         ctx=build_context(factory_work_items=[{

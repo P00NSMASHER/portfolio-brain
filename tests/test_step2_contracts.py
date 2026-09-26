@@ -54,8 +54,10 @@ class Step2ContractTests(unittest.TestCase):
         bad=copy.deepcopy(AUT); bad["default_policy"]="ALLOW"
         with self.assertRaises(ContractValidationError): validate_autonomy_profile(bad)
 
-    def test_runtime_cannot_be_enabled_in_step2(self):
-        bad=copy.deepcopy(AUT); bad["runtime_enabled"]=True
+    def test_runtime_enabled_is_boolean_and_can_be_true_operationally(self):
+        enabled=copy.deepcopy(AUT); enabled["runtime_enabled"]=True
+        validate_autonomy_profile(enabled)
+        bad=copy.deepcopy(AUT); bad["runtime_enabled"]="yes"
         with self.assertRaises(ContractValidationError): validate_autonomy_profile(bad)
 
     def test_act_cannot_be_autonomously_allowed(self):

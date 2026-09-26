@@ -155,8 +155,13 @@ def _work_packet(c,created_at,state="QUEUED"):
 def _nonterminal_fingerprints(state):
     return {w["fingerprint"] for w in state["work_items"] if w["state"] in {"QUEUED","ACTIVE"}}
 
-def _open_agents(state):
-    return {w["assigned_agent_id"] for w in state["work_items"] if w["state"] in {"QUEUED","ACTIVE"}}
+def _open_agent_counts(state):
+    counts={}
+    for w in state["work_items"]:
+        if w["state"] in {"QUEUED","ACTIVE"}:
+            agent=w["assigned_agent_id"]
+            counts[agent]=counts.get(agent,0)+1
+    return counts
 
 def schedule_cycle(state,context=None,*,at=None):
     validate_state(state);at=at or now_iso();disabled,reason=killed()
@@ -164,7 +169,7 @@ def schedule_cycle(state,context=None,*,at=None):
         receipt={"schema_version":"1.0.0","cycle_id":"disabled","status":"DISABLED","reason":reason,"finished_at":at,"selected_work":[],"blocked_work":[],"suppressed_duplicates":[],"stale_lease_holds":[]}
         return state,receipt
     context=context or build_context();candidates,blocked=generate_candidates(context)
-    completed=set(state["completed_fingerprints"]);open_fp=_nonterminal_fingerprints(state);open_agents=_open_agents(state)
+    completed=set(state["completed_fingerprints"]);open_fp=_nonterminal_fingerprints(state);open_counts=_open_agent_counts(state)
     suppressed=[];stale=[];eligible=[]
     for c in candidates:
         ok,why=_role_valid(c)
@@ -179,12 +184,13 @@ def schedule_cycle(state,context=None,*,at=None):
             try: expired=float(w["lease_expires_at"])<=datetime.fromisoformat(at.replace("Z","+00:00")).timestamp()
             except Exception: expired=False
             if expired:stale.append(w["fingerprint"])
-    selected=[];new_agents=set()
+    selected=[];new_counts={}
+    per_agent_limit=policy()["max_open_work_per_agent"]
     for c in sorted(eligible,key=_sort_key):
         if len(selected)>=policy()["max_new_work_per_cycle"]:break
         agent=c["assigned_agent_id"]
-        if agent in open_agents or agent in new_agents:continue
-        selected.append(_work_packet(c,at));new_agents.add(agent)
+        if open_counts.get(agent,0)+new_counts.get(agent,0)>=per_agent_limit:continue
+        selected.append(_work_packet(c,at));new_counts[agent]=new_counts.get(agent,0)+1
     new_state=json.loads(json.dumps(state))
     new_state["sequence"]+=1;new_state["updated_at"]=at
     new_state["work_items"]=[*new_state["work_items"],*selected]

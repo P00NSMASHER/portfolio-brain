@@ -20,7 +20,7 @@ def validate_canary(output_dir=None):
         req(r["network_mode"]=="LOCAL_CURSOR_MIRROR_ONLY","canary network mode widened")
         first=r["first_cycle"];cont=r["continuation"]
         req(first["runtime_status"]=="PASS" and first["runtime_api_reads"]<=8,"runtime canary boundary failed")
-        req(first["scheduler_selected_count"]==3 and first["scheduler_selected_work_types"]==["HUNT","INTEGRATION","RESEARCH"],"first scheduler selection drifted")
+        req(3<=first["scheduler_selected_count"]<=8 and {"HUNT","INTEGRATION","RESEARCH"}<=set(first["scheduler_selected_work_types"]),"first scheduler selection drifted")
         req(first["scheduler_blocked_approval_count"]==6,"human approval queue drifted")
         req(first["paid_cost_usd"]==0.0 and first["model_calls"]==0 and r["paid_model_api_used"] is False,"paid/model usage occurred")
         req(first["learning_eligible_records"]==0,"unverified learning promotion occurred")
