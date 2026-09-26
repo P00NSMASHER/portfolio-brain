@@ -58,9 +58,11 @@ def _payload_from_archive(raw:bytes)->dict[str,Any]|None:
     if len(raw)>runtime_policy()["budgets"]["max_output_bytes"]: return None
     with zipfile.ZipFile(BytesIO(raw)) as z:
         names=set(z.namelist())
-        for name in ("daily_model_analysis.json","daily_model_analysis_status.json"):
-            if name in names:
-                try:return json.loads(z.read(name).decode("utf-8"))
+        preferred=("daily_model_analysis.json","daily_model_analysis_status.json","weekly_model_analysis.json","weekly_model_analysis_status.json")
+        for target in preferred:
+            match=next((name for name in names if name==target or name.endswith("/"+target)),None)
+            if match is not None:
+                try:return json.loads(z.read(match).decode("utf-8"))
                 except Exception:return None
     return None
 
@@ -72,7 +74,7 @@ def restore(*, output:Path, metadata_output:Path|None=None)->str:
     if not token or not repository:return "NO_ACTIONS_CONTEXT"
     p=runtime_policy();b=p["budgets"]
     http=BudgetedHTTP(token,max_requests=min(8,b["max_api_requests_per_cycle"]),retries=b["retry_limit"],backoff=b["retry_backoff_seconds"])
-    data=http.json(f"https://api.github.com/repos/{repository}/actions/artifacts?name={p['state_persistence']['artifact_name']}&per_page=100")
+    data=http.json(f"https://api.github.com/repos/{repository}/actions/artifacts?name=portfolio-provider-health-state&per_page=100")
     candidates=[x for x in data.get("artifacts",[]) if not x.get("expired") and str((x.get("workflow_run") or {}).get("id"))!=str(current_run) and (branch is None or (x.get("workflow_run") or {}).get("head_branch")==branch)]
     candidates.sort(key=lambda x:(x.get("created_at",""),x.get("id",0)),reverse=True)
     for item in candidates:
