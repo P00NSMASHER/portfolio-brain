@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Governed OpenAI Responses API execution for Portfolio Brain."""
 from __future__ import annotations
-import hashlib,json,os,time,urllib.request
+import hashlib,json,os,random,time,urllib.request
+from urllib.error import HTTPError,URLError
 from datetime import datetime,timezone
 from typing import Any,Callable
 
@@ -10,7 +11,16 @@ from model_router.model_router import (
     ModelRouterError,hashv,prepare_governed_execution,provider_registry,validate_call_receipt
 )
 
-class OpenAIExecutorError(ValueError):pass
+class OpenAIExecutorError(ValueError):
+    def __init__(self,message,*,status_code=None,provider_code=None,provider_type=None,retryable=False,retry_after=None,gate_status=None,reason_codes=None):
+        super().__init__(message)
+        self.status_code=status_code
+        self.provider_code=provider_code
+        self.provider_type=provider_type
+        self.retryable=bool(retryable)
+        self.retry_after=retry_after
+        self.gate_status=gate_status
+        self.reason_codes=list(reason_codes or [])
 
 def _now():
     return datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
@@ -40,10 +50,74 @@ def _extract_output_text(data:dict[str,Any])->str:
     if not parts:raise OpenAIExecutorError("Responses API returned no output text")
     return "\n".join(parts)
 
+NON_RETRYABLE_429_CODES={
+    "credit_balance_exhausted","organization_spend_limit_exceeded",
+    "project_spend_limit_exceeded","organization_usage_limit_exceeded","insufficient_quota"
+}
+NON_RETRYABLE_429_TYPES={"insufficient_quota"}
+
+def _parse_http_error(exc:HTTPError):
+    raw=b""
+    try: raw=exc.read()
+    except Exception: pass
+    data={}
+    if raw:
+        try: data=json.loads(raw.decode("utf-8","replace"))
+        except Exception: data={}
+    err=data.get("error") if isinstance(data,dict) else {}
+    if not isinstance(err,dict):err={}
+    code=err.get("code");typ=err.get("type")
+    retry_after=None
+    value=exc.headers.get("Retry-After") if exc.headers else None
+    if value is not None:
+        try:
+            parsed=float(value)
+            if parsed>=0:retry_after=parsed
+        except (TypeError,ValueError):pass
+    if code in NON_RETRYABLE_429_CODES or typ in NON_RETRYABLE_429_TYPES:
+        retryable=False
+    elif exc.code==429:
+        retryable=(code in {"slow_down","rate_limit_exceeded"} or typ=="rate_limit_error" or (code is None and typ is None))
+    elif exc.code==503:
+        retryable=(code in {"server_is_overloaded",None} or typ in {"service_unavailable_error",None})
+    else:
+        retryable=exc.code in {500,502,504}
+    return code,typ,retry_after,retryable
+
 def _default_transport(url:str,headers:dict[str,str],payload:bytes,timeout:int)->dict[str,Any]:
     req=urllib.request.Request(url,data=payload,headers=headers,method="POST")
-    with urllib.request.urlopen(req,timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    max_attempts=3
+    for attempt in range(max_attempts):
+        try:
+            with urllib.request.urlopen(req,timeout=timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except HTTPError as exc:
+            code,typ,retry_after,retryable=_parse_http_error(exc)
+            if not retryable:
+                raise OpenAIExecutorError(
+                    f"provider_http_{exc.code}:{code or typ or 'unknown'}",
+                    status_code=exc.code,provider_code=code,provider_type=typ,retryable=False,retry_after=retry_after
+                ) from exc
+            if attempt>=max_attempts-1:
+                raise OpenAIExecutorError(
+                    f"provider_retry_exhausted_http_{exc.code}:{code or typ or 'unknown'}",
+                    status_code=exc.code,provider_code=code,provider_type=typ,retryable=True,retry_after=retry_after
+                ) from exc
+            if retry_after is not None:
+                if retry_after>30:
+                    raise OpenAIExecutorError(
+                        f"provider_retry_deferred_http_{exc.code}:{code or typ or 'unknown'}",
+                        status_code=exc.code,provider_code=code,provider_type=typ,retryable=True,retry_after=retry_after
+                    ) from exc
+                delay=retry_after+random.uniform(0.0,0.5)
+            else:
+                delay=(2**attempt)+random.uniform(0.0,0.5)
+            time.sleep(delay)
+        except URLError as exc:
+            if attempt>=max_attempts-1:
+                raise OpenAIExecutorError("provider_network_retry_exhausted",retryable=True) from exc
+            time.sleep((2**attempt)+random.uniform(0.0,0.5))
+    raise OpenAIExecutorError("provider_transport_unreachable",retryable=True)
 
 def _actual_cost(model:dict[str,Any],input_tokens:int,output_tokens:int)->float:
     p=model["pricing"]
@@ -70,7 +144,13 @@ def execute_openai(
     credential_env=provider.get("credential_env_var")
     key=(os.environ.get(credential_env,"").strip() if credential_env else "")
     if not key:raise OpenAIExecutorError(f"missing credential environment variable: {credential_env}")
-    if not guard["cost_gate_passed"]:raise OpenAIExecutorError("cost governor blocked model execution")
+    if not guard["cost_gate_passed"]:
+        decision=guard.get("cost_decision") or {}
+        raise OpenAIExecutorError(
+            "cost governor blocked model execution",
+            gate_status=decision.get("status"),
+            reason_codes=decision.get("reason_codes") or []
+        )
 
     started=at or _now()
     payload=json.dumps({
