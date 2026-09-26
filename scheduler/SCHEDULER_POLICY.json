@@ -88,6 +88,7 @@
     "Only work whose target agent goal type and autonomy ceiling already allow it may enter QUEUED.",
     "ACT work remains subject to the applicable project/action policy; scheduler throughput limits do not grant authority.",
     "Open/leased work suppresses duplicate scheduling.",
+    "Completed or cancelled immutable source fingerprints remain suppressed; retry requires a new source identity.",
     "An expired external lease is not blindly duplicated; it awaits agent-runtime reconciliation.",
     "Verified repair/verification/test gates outrank new discovery work because they unblock already-started evidence chains.",
     "Step 15 resource HOLD prevents ordinary engineering/testing/model/art/cash work from being invented.",

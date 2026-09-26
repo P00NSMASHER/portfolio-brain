@@ -70,6 +70,14 @@ class SchedulerTests(unittest.TestCase):
         _,r2=schedule_cycle(state,build_context(),at="2026-09-25T21:40:00Z")
         self.assertIn(fp,r2["suppressed_duplicates"])
 
+    def test_cancelled_fingerprint_does_not_churn_back_into_queue(self):
+        state=load_state();state,r=schedule_cycle(state,build_context(),at="2026-09-25T20:40:00Z")
+        fp=r["selected_work"][0]["fingerprint"];state=mark_work(state,fp,"CANCELLED")
+        self.assertIn(fp,state["completed_fingerprints"])
+        _,r2=schedule_cycle(state,build_context(),at="2026-09-25T20:41:00Z")
+        self.assertIn(fp,r2["suppressed_duplicates"])
+        self.assertNotIn(fp,[w["fingerprint"] for w in r2["selected_work"]])
+
     def test_terminal_history_is_compacted_before_new_work_is_added(self):
         state=load_state();state,receipt=schedule_cycle(state,build_context(),at="2026-09-25T20:40:00Z")
         template=copy.deepcopy(receipt["selected_work"][0])

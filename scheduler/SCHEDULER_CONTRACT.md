@@ -14,7 +14,7 @@ Current evidence may enqueue bounded RESEARCH, HUNT, INTEGRATION, and external-v
 
 ## Persistence and duplicate control
 
-Scheduler state is restored from the GitHub Actions artifact portfolio-scheduler-state. QUEUED or ACTIVE fingerprints suppress duplicates. Completed fingerprints remain suppressed until the immutable source identity changes. If an external lease appears expired, the scheduler does not create overlapping replacement work; the Step 14 agent runtime must reconcile the lease generation first.
+Scheduler state is restored from the GitHub Actions artifact portfolio-scheduler-state. QUEUED or ACTIVE fingerprints suppress duplicates. COMPLETE and CANCELLED are terminal dispositions for the same immutable source identity, so both remain suppressed until that source identity changes. A retry therefore requires a materially new source reference and receives a new fingerprint instead of silently recreating unchanged work. If an external lease appears expired, the scheduler does not create overlapping replacement work; the Step 14 agent runtime must reconcile the lease generation first.
 
 ## Activation and authority
 

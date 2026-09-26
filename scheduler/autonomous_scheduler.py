@@ -231,7 +231,11 @@ def mark_work(state,fingerprint,new_state_name):
     out=json.loads(json.dumps(state));matches=[w for w in out["work_items"] if w["fingerprint"]==fingerprint];req(len(matches)==1,"scheduler work fingerprint missing/duplicate")
     work=matches[0];allowed={"QUEUED":{"ACTIVE","CANCELLED"},"ACTIVE":{"COMPLETE","CANCELLED"}}
     req(new_state_name in allowed.get(work["state"],set()),"invalid scheduler work state transition");work["state"]=new_state_name
-    if new_state_name=="COMPLETE" and fingerprint not in out["completed_fingerprints"]:out["completed_fingerprints"].append(fingerprint)
+    # COMPLETE and CANCELLED are both terminal dispositions for this immutable
+    # source identity.  Persist either fingerprint so an unchanged candidate
+    # cannot churn back into the queue on the next scheduler cycle.  A real
+    # retry must be backed by a new source_ref, which produces a new fingerprint.
+    if new_state_name in {"COMPLETE","CANCELLED"} and fingerprint not in out["completed_fingerprints"]:out["completed_fingerprints"].append(fingerprint)
     validate_state(out);return out
 
 def main():
