@@ -20,6 +20,10 @@ The release permits only policy-bounded customer email through the action-engine
 
 Paid/model/API execution remains deny-by-default because the checked-in provider registry has no enabled non-Tier-0 model and Step 20 paid/token/model/API ceilings remain zero.
 
+## Governed no-work outcomes
+
+For recurring OBSERVE lanes, a cost-governor denial or engaged kill switch is an expected, auditable no-work outcome. Every downstream action remains skipped, but the workflow reports a notice instead of a false operational failure. Modification-capable software-factory execution remains fail-closed with a nonzero workflow result when its gate denies authority.
+
 ## Runtime independence
 
 Ordinary operation is GitHub-hosted and machine-readable. Interactive ChatGPT and the user's 15 scheduled ChatGPT tasks may monitor and analyze the system, but the operating loop does not require them to execute.

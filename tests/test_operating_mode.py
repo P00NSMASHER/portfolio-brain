@@ -7,6 +7,7 @@ class OperatingModeTests(unittest.TestCase):
     def test_operational_contract_passes(self):
         result=validate_operating_mode()
         self.assertEqual(result["approved_recurring_workflows"],7)
+        self.assertEqual(result["neutral_no_work_workflows"],5)
         self.assertEqual(result["durable_state_artifacts"],5)
         self.assertEqual(result["gmail_gateway_account_ref"],"PRIMARY_GMAIL_CONNECTOR")
         self.assertEqual(result["enabled_nonzero_models"],3)
@@ -21,6 +22,18 @@ class OperatingModeTests(unittest.TestCase):
           "hunter-autonomous-cycle","portfolio-autonomous-scheduler",
           "portfolio-cost-watchdog","portfolio-notification-cycle"
         })
+
+    def test_expected_cost_denials_are_neutral_for_recurring_observe_lanes(self):
+        for name in [
+            "runtime-worker","hunter-autonomous-cycle","portfolio-autonomous-scheduler",
+            "portfolio-notification-cycle","command-center-pages",
+        ]:
+            body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
+            self.assertIn("steps.cost.outputs.allowed != 'true'",body,name)
+            self.assertNotIn("run: exit 3",body,name)
+
+        factory=(ROOT/".github/workflows/software-factory-candidate.yml").read_text().lower()
+        self.assertIn("run: exit 3",factory)
 
     def test_high_risk_payment_trading_deploy_merge_boundaries_remain(self):
         p=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())

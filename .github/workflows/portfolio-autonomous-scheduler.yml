@@ -74,6 +74,7 @@ jobs:
           path: cost_governor/out/
           if-no-files-found: error
           retention-days: 30
-      - name: Fail closed when cost gate blocks
+      - name: Report governed no-work outcome
         if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
-        run: exit 3
+        run: |
+          echo "::notice title=Portfolio scheduler skipped::Cost governor status: ${{ steps.cost.outputs.decision_status }}"

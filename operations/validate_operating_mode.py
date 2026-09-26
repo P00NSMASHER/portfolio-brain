@@ -69,14 +69,23 @@ def validate_operating_mode():
     for name,cron in expected.items():
         body=(ROOT/".github/workflows"/f"{name}.yml").read_text()
         req(cron in body,f"{name} cron mismatch")
+    neutral_no_work_workflows=[
+      "runtime-worker","hunter-autonomous-cycle","portfolio-autonomous-scheduler",
+      "portfolio-notification-cycle","command-center-pages"
+    ]
     for name in ["hunter-autonomous-cycle","portfolio-autonomous-scheduler","portfolio-notification-cycle"]:
         body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
         req("portfolio-cost-governed-autonomy" in body and "cost_governor.workflow_gate preflight" in body,f"{name} is not cost governed")
     worker=(ROOT/".github/workflows/runtime-worker.yml").read_text().lower()
     req("portfolio-cost-governed-autonomy" in worker and "cost_governor.workflow_gate preflight" in worker,"runtime worker is not cost governed")
+    for name in neutral_no_work_workflows:
+        body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
+        req("steps.cost.outputs.allowed != 'true'" in body,f"{name} lacks governed no-work reporting")
+        req("run: exit 3" not in body,f"{name} turns an expected cost denial into a workflow failure")
     factory=(ROOT/".github/workflows/software-factory-candidate.yml").read_text().lower()
     req("workflow_call" in factory and "schedule:" not in factory,"software factory unexpectedly recurring")
     req("cost_governor.workflow_gate preflight" in factory,"software factory is not cost governed")
+    req("run: exit 3" in factory,"software factory must fail closed when modification authority is denied")
     event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text().lower()
     req("push:" in event and 'branches: ["main"]' in event,"main push observer missing")
     watchdog=(ROOT/".github/workflows/portfolio-cost-watchdog.yml").read_text().lower()
@@ -115,6 +124,7 @@ def validate_operating_mode():
 
     return {
       "approved_recurring_workflows":len(expected),
+      "neutral_no_work_workflows":len(neutral_no_work_workflows),
       "durable_state_artifacts":len(p["durable_state_artifacts"]),
       "gmail_gateway_account_ref":gmail["account_ref"],
       "enabled_nonzero_models":len(enabled_nonzero),
