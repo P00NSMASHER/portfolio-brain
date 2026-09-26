@@ -1,7 +1,9 @@
-# 7-Day Operational Validation Sprint — Superseded
+# Historical Validation Sprint — Retired
 
-This temporary validation sprint was superseded on September 25, 2026 by the post-restriction Portfolio Brain optimization program.
+This file is retained only as historical baseline evidence.
 
-The prior architecture freeze, email/outreach locks, and zero paid-model/API rule are no longer active Portfolio Brain policy. Historical measurements remain useful as baseline evidence only.
+The September 25 validation sprint and its former architecture freeze are **retired**. There is no active week-long freeze, October 2 stop gate, or sprint-level restriction on Portfolio Brain development.
 
-Current optimization authority and limits are defined by the live operating-mode, cost-governor, agent, scheduler, experiment, and project policies on the active branch/default branch.
+Current operation follows `operations/OPERATING_MODE_POLICY.json`, live uncertainty/experiment/allocation state, cost governance, provider routing, and the active connector gateways.
+
+Portfolio Brain should continuously observe, learn, reason, experiment, repair, integrate, and improve within the live operating policies.
