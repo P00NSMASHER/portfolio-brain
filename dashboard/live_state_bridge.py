@@ -18,6 +18,7 @@ from typing import Any, Callable
 from cost_governor.artifact_state import restore as restore_cost
 from hunting.artifact_state import restore as restore_hunter
 from notifications.artifact_state import restore as restore_notifications
+from model_router.provider_health_state import restore as restore_provider_health
 from runtime.artifact_state import restore as restore_runtime
 from runtime.state import bootstrap_state, validate_state as validate_runtime_state
 from scheduler.artifact_state import restore as restore_scheduler
@@ -30,6 +31,7 @@ STALE_AFTER_MINUTES = {
     "hunter": 450,
     "cost": 60,
     "notifications": 450,
+    "provider": 180,
 }
 
 SEEDS = {
@@ -37,6 +39,7 @@ SEEDS = {
     "hunter": "hunting/HUNTER_STATE_SEED.json",
     "cost": "cost_governor/COST_STATE_SEED.json",
     "notifications": "notifications/NOTIFICATION_STATE_SEED.json",
+    "provider": "model_router/PROVIDER_HEALTH_SEED.json",
 }
 
 RESTORERS: dict[str, Callable[..., str]] = {
@@ -45,6 +48,7 @@ RESTORERS: dict[str, Callable[..., str]] = {
     "hunter": restore_hunter,
     "cost": restore_cost,
     "notifications": restore_notifications,
+    "provider": restore_provider_health,
 }
 
 
@@ -70,6 +74,7 @@ def _state_filename(name: str) -> str:
         "hunter": "hunter_state.json",
         "cost": "cost_state.json",
         "notifications": "notification_state.json",
+        "provider": "provider_health.json",
     }[name]
 
 
