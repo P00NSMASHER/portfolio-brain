@@ -34,6 +34,8 @@ class RuntimeTests(unittest.TestCase):
         result=validate_runtime()
         self.assertEqual(result["workflows"],5)
         self.assertEqual(result["model_calls"],0)
+        self.assertEqual(result["governed_daily_model_calls"],1)
+        self.assertEqual(result["governed_weekly_model_calls"],1)
         self.assertEqual(result["downstream_writes"],0)
 
     def test_bootstrap_state_is_valid_and_blocked_repo_preserved(self):
@@ -81,7 +83,7 @@ class RuntimeTests(unittest.TestCase):
             state=json.loads((Path(td)/"out"/"runtime_state.json").read_text())
             self.assertEqual(state["sequence"],0)
 
-    def test_daily_rebuild_is_deterministic_and_no_model_needed(self):
+    def test_daily_deterministic_core_rebuild_remains_model_independent(self):
         fake=FakeGitHub(current_heads())
         with tempfile.TemporaryDirectory() as td:
             run("daily",state_path=Path(td)/"none.json",output_dir=Path(td)/"out",
