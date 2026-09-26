@@ -10,11 +10,12 @@ class SchedulerTests(unittest.TestCase):
         self.assertGreaterEqual(len(state["work_items"]),3)
         self.assertLessEqual(len(state["work_items"]),8)
 
-    def test_human_gated_external_validation_is_blocked_not_queued(self):
+    def test_child_facing_external_validation_remains_blocked_while_commercial_is_queued(self):
         _,receipt=schedule_cycle(load_state(),build_context(),at="2026-09-25T20:40:00Z")
-        self.assertEqual(len(receipt["blocked_work"]),6)
+        self.assertEqual(len(receipt["blocked_work"]),2)
         self.assertTrue(all(w["state"]=="BLOCKED_APPROVAL" for w in receipt["blocked_work"]))
-        self.assertTrue(all(w["required_authority"]=="NONE" for w in receipt["blocked_work"]))
+        self.assertTrue(all("CONSEQUENTIAL_CHILD_FACING_CHANGE" in w["approval_requirements"] for w in receipt["blocked_work"]))
+        self.assertTrue(any(w["work_type"]=="EXPERIMENT" and w["assigned_agent_id"]=="AGT-COMMERCIAL-ANALYST" for w in receipt["selected_work"]))
 
     def test_second_cycle_suppresses_duplicates(self):
         state,r1=schedule_cycle(load_state(),build_context(),at="2026-09-25T20:40:00Z")
