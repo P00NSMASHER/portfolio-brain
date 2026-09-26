@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from agents.heartbeat_state import heartbeat,seed_state,validate_state
 from dashboard.history_state import append_point,daily_trends,project_momentum,validate_state as validate_history
+from dashboard.command_center import build_command_center_snapshot,render_html
 from operator_console.operator_console import validate_approval_ledger
 from scheduler.autonomous_scheduler import _owner_approval
 import scheduler.autonomous_scheduler as scheduler_module
@@ -125,7 +126,9 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertIn("EMERGENCY_STOP",workflow)
         self.assertIn("PROPOSE_BUDGET",workflow)
         self.assertIn("PROPOSE_APPROVAL",workflow)
-        public=(ROOT/"dashboard/command_center.py").read_text().lower()
+        snapshot=build_command_center_snapshot()
+        self.assertNotIn("operator-console.yml",snapshot["workflows"])
+        public=render_html(snapshot).lower()
         self.assertNotIn("operator-console.yml",public)
         self.assertNotIn("operator console",public)
 
