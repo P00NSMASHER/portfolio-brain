@@ -9,7 +9,7 @@
   "max_model_calls": 0,
   "max_paid_cost_usd": 0,
   "max_runtime_api_reads": 8,
-  "max_selected_scheduler_work": 4,
+  "max_selected_scheduler_work": 8,
   "expected_first_selected_work_types": [
     "HUNT",
     "INTEGRATION",
