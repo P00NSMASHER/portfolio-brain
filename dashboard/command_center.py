@@ -690,8 +690,8 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
     <div class="card kpi"><div class="label">Agents</div><div class="value">{system["active_agent_count"]}/{system["agent_count"]}</div><div class="hint">active registry roles</div></div>
     <div class="card kpi"><div class="label">Open work</div><div class="value">{portfolio["pending_autonomous_work_count"]}</div><div class="hint">{_e(sources["scheduler"]["status"].lower())} scheduler queue</div></div>
     <div class="card kpi"><div class="label">Blocked work</div><div class="value">{portfolio["blocked_action_count"]}</div><div class="hint">human/authority gated</div></div>
-    <div class="card kpi"><div class="label">Verified outcomes</div><div class="value">{sprint["scorecard"]["verified_external_outcomes_since_start"]}</div><div class="hint">historical baseline</div></div>
-    <div class="card kpi"><div class="label">Paid model budget</div><div class="value">USD {cost["portfolio_ceiling"]["cost_usd"]:.2f}</div><div class="hint">{cost["portfolio_ceiling"]["model_calls"]} model calls authorized</div></div>
+    <div class="card kpi"><div class="label">Verified outcomes</div><div class="value">{telemetry["verified_external_outcomes"]}</div><div class="hint">verified durable evidence</div></div>
+    <div class="card kpi"><div class="label">Paid model spend</div><div class="value">USD {_e(round(telemetry["cost"]["usage_today"]["cost_usd"],2))}</div><div class="hint">of USD {cost["portfolio_ceiling"]["cost_usd"]:.2f} today</div></div>
   </section>
 
   <section class="card" id="live-state" style="margin-bottom:14px">
@@ -703,6 +703,55 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
     <div class="table-wrap"><table>
       <thead><tr><th>Subsystem</th><th>Status</th><th class="num">Seq</th><th>Artifact time</th><th>Source run</th><th class="num">Age min</th><th>Source</th></tr></thead>
       <tbody>{source_rows}</tbody>
+    </table></div>
+  </section>
+
+  <section class="card" id="operations" style="margin-bottom:14px">
+    <div class="section-head">
+      <div><h2>Operational Telemetry</h2><p>Durable queue, actual governed usage, actions, failures, and successful-cycle evidence.</p></div>
+      {_badge("LIVE DATA" if source_bundle["bridge_status"]=="LIVE" else source_bundle["bridge_status"], _status_tone(source_bundle["bridge_status"]))}
+    </div>
+    <div class="grid three">
+      <div class="callout"><strong>Queue</strong><p>Queued {telemetry["queue"]["counts"]["QUEUED"]} · Active {telemetry["queue"]["counts"]["ACTIVE"]} · Complete {telemetry["queue"]["counts"]["COMPLETE"]} · Cancelled {telemetry["queue"]["counts"]["CANCELLED"]}</p></div>
+      <div class="callout"><strong>Last successful autonomous cycle</strong><p>{_e(last_cycle_text)}</p></div>
+      <div class="callout"><strong>Failures</strong><p>{telemetry["failures"]["count"]} durable failure signal(s) currently represented.</p></div>
+    </div>
+    <div class="section-head" style="margin-top:16px"><div><h2>Durable Work Queue</h2><p>Newest 32 scheduler work records.</p></div>{source_badge("scheduler")}</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Work</th><th>State</th><th>Type</th><th>Agent</th><th>Projects</th><th>Created</th></tr></thead>
+      <tbody>{queue_rows}</tbody>
+    </table></div>
+  </section>
+
+  <section class="grid two" style="margin-bottom:14px">
+    <div class="card">
+      <div class="section-head"><div><h2>Actual Cost / Capacity Today</h2><p>Durable reservations using cost-governor accounting semantics.</p></div>{source_badge("cost")}</div>
+      <table><thead><tr><th>Resource</th><th class="num">Used</th><th class="num">Ceiling</th><th class="num">Utilization</th></tr></thead><tbody>{usage_rows}</tbody></table>
+    </div>
+    <div class="card">
+      <div class="section-head"><div><h2>Recent External Actions</h2><p>Sanitized action receipts only.</p></div>{_badge(f'{telemetry["actions"]["total_sent"]} total',"neutral")}</div>
+      <div class="table-wrap"><table><thead><tr><th>Action</th><th>Project</th><th>Type</th><th>Status</th><th>Sent</th></tr></thead><tbody>{action_rows}</tbody></table></div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-bottom:14px">
+    <div class="section-head"><div><h2>Failure Stream</h2><p>Cancelled scheduler work, cost overages, and active failure-class alerts.</p></div>{_badge(str(telemetry["failures"]["count"]), "bad" if telemetry["failures"]["count"] else "good")}</div>
+    <div class="table-wrap"><table><thead><tr><th>Kind</th><th>Reference</th><th>Projects</th><th>Observed</th></tr></thead><tbody>{failure_rows}</tbody></table></div>
+  </section>
+
+  <section class="card" id="trends" style="margin-bottom:14px">
+    <div class="section-head">
+      <div><h2>History & Trends</h2><p>{history["point_count"]} hourly snapshot point(s). Daily values are evidence-derived; project momentum is signals, not a score.</p></div>
+      {_badge(f'seq {history["sequence"]}',"neutral")}
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Day</th><th class="num">Completed</th><th class="num">Cost USD</th><th class="num">Model calls</th><th class="num">Hunter candidates</th><th class="num">Actions</th><th class="num">Failures</th><th class="num">Verified outcomes</th></tr></thead>
+      <tbody>{daily_rows}</tbody>
+    </table></div>
+    <div class="section-head" style="margin-top:16px"><div><h2>24h Project Momentum Signals</h2><p>{_e(history["momentum_definition"])}</p></div></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Project</th><th class="num">Open work</th><th class="num">Completed Δ</th><th class="num">Actions Δ</th><th class="num">Verified Δ</th><th class="num">Cancelled Δ</th></tr></thead>
+      <tbody>{momentum_rows}</tbody>
     </table></div>
   </section>
 
@@ -735,7 +784,7 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
     <div class="card" id="agents">
       <div class="section-head"><div><h2>Agent Fleet</h2><p>Persistent roles and maximum authorized autonomy · {_e(source_detail("agents"))}</p></div>{source_badge("agents")}</div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Agent</th><th>Status</th><th>Max autonomy</th><th>Builder</th><th>Verifier</th><th>Tier</th><th>Heartbeat basis</th></tr></thead>
+        <thead><tr><th>Agent</th><th>Heartbeat</th><th class="num">Age min</th><th>Last activity</th><th>Source</th><th>Max autonomy</th><th class="num">Tier</th></tr></thead>
         <tbody>{agent_rows}</tbody>
       </table></div>
     </div>
@@ -765,11 +814,11 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
     <div class="card" id="cost">
       <div class="section-head"><div><h2>Cost Governor</h2><p>{_e(cost["mode"])} · {_e(source_detail("cost"))}</p></div>{source_badge("cost")}</div>
       <table><tbody>
-        <tr><td>Daily GitHub job starts</td><td class="num">{cost["portfolio_ceiling"]["github_job_starts"]}</td></tr>
-        <tr><td>Daily runner minutes</td><td class="num">{cost["portfolio_ceiling"]["github_runner_minutes"]}</td></tr>
-        <tr><td>Paid model calls</td><td class="num">{cost["portfolio_ceiling"]["model_calls"]}</td></tr>
-        <tr><td>API calls</td><td class="num">{cost["portfolio_ceiling"]["api_calls"]}</td></tr>
-        <tr><td>Active durable reservations</td><td class="num">{cost["reservation_count"]}</td></tr>
+        <tr><td>Cost used today</td><td class="num">USD {_e(round(telemetry["cost"]["usage_today"]["cost_usd"],4))}</td></tr>
+        <tr><td>Model calls today</td><td class="num">{telemetry["cost"]["usage_today"]["model_calls"]}</td></tr>
+        <tr><td>API calls today</td><td class="num">{telemetry["cost"]["usage_today"]["api_calls"]}</td></tr>
+        <tr><td>Runner minutes today</td><td class="num">{telemetry["cost"]["usage_today"]["github_runner_minutes"]}</td></tr>
+        <tr><td>Durable reservations</td><td class="num">{cost["reservation_count"]}</td></tr>
       </tbody></table>
       <div class="section-head" style="margin-top:16px"><h2>Kill Switches</h2>{_badge(f'{system["engaged_kill_switch_count"]} engaged', "bad" if system["engaged_kill_switch_count"] else "good")}</div>
       <div class="switches">{kill_rows}</div>
