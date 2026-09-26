@@ -5,6 +5,13 @@ on:
     branches: ["main"]
     paths-ignore:
       - "runtime/TRIGGER_DAILY_REASONING"
+      - "dashboard/**"
+      - "tests/**"
+      - "operator_console/**"
+      - "cost_governor/**"
+      - ".github/workflows/command-center-pages.yml"
+      - ".github/workflows/foundation-ci.yml"
+      - ".github/workflows/runtime-event-observe.yml"
   repository_dispatch:
     types: ["portfolio_observe"]
   workflow_dispatch:
