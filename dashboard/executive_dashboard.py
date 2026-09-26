@@ -12,7 +12,12 @@ from transfer.cross_project_transfer import build_transfer_state
 from uncertainty.highest_value_uncertainty import build_snapshot as build_uncertainty_snapshot
 
 ROOT=Path(__file__).resolve().parents[1]
+LIVE_ROOT=ROOT/"dashboard"/"live"
 def load(p):return json.loads((ROOT/p).read_text())
+def live_path(name):return LIVE_ROOT/name
+def live_json(name,fallback):
+    p=live_path(name)
+    return json.loads(p.read_text()) if p.exists() else load(fallback)
 def canon(v):return json.dumps(v,sort_keys=True,separators=(",",":"),ensure_ascii=False)
 def hashv(v):return "sha256:"+hashlib.sha256(canon(v).encode()).hexdigest()
 
@@ -33,8 +38,14 @@ def build_dashboard_snapshot():
     allocation=build_allocation_snapshot(unc,experiments)
     learning=rebuild_from_ledger()
     transfer=build_transfer_state(unc)
-    sched_state,sched_receipt=schedule_cycle(load_state(),build_context(),at="2026-09-25T22:30:00Z")
-    cost=load("cost_governor/COST_STATE_SEED.json")
+    live_scheduler=live_path("scheduler_state.json").exists()
+    scheduler_state=load_state(str(live_path("scheduler_state.json"))) if live_scheduler else load_state()
+    scheduler_at=scheduler_state.get("updated_at") or "2026-09-25T22:30:00Z"
+    _,sched_receipt=schedule_cycle(scheduler_state,build_context(),at=scheduler_at)
+    open_scheduler_work=[w for w in scheduler_state["work_items"] if w["state"] in {"QUEUED","ACTIVE"}]
+    visible_scheduler_work=open_scheduler_work if live_scheduler else sched_receipt["selected_work"]
+    live_cost=live_path("cost_state.json").exists()
+    cost=live_json("cost_state.json","cost_governor/COST_STATE_SEED.json")
     unc_by_project={p["project_id"]:[] for p in projects}
     for u in unc["candidates"]:
         for pid in u["project_ids"]:
@@ -51,7 +62,7 @@ def build_dashboard_snapshot():
                     "evidence_refs":rec["evidence_refs"]
                 })
     selected_by_project={p["project_id"]:[] for p in projects}
-    for w in sched_receipt["selected_work"]:
+    for w in visible_scheduler_work:
         for pid in w["project_ids"]:
             if pid in selected_by_project:selected_by_project[pid].append({"work_type":w["work_type"],"work_id":w["scheduler_work_id"],"state":w["state"],"evidence_refs":w["evidence_refs"]})
     blocked_by_project={p["project_id"]:[] for p in projects}
@@ -94,17 +105,20 @@ def build_dashboard_snapshot():
         rows.append(row)
     snapshot={
       "schema_version":"1.0.0","dashboard_id":"portfolio-executive-dashboard-v1",
-      "authority_class":"OBSERVE","generated_from_checked_in_state":True,
+      "authority_class":"OBSERVE","generated_from_checked_in_state":not (live_scheduler or live_cost),
+      "state_basis":{"scheduler":"LIVE_ARTIFACT" if live_scheduler else "CHECKED_IN_SEED","cost":"LIVE_ARTIFACT" if live_cost else "CHECKED_IN_SEED"},
       "project_count":len(rows),"projects":rows,
       "portfolio":{
         "highest_value_uncertainty_id":unc["selected_uncertainty_id"],
         "active_resource_types":sorted([p["resource_type"] for p in allocation["plans"] if p["status"]=="ACTIVE_RECOMMENDATION"]),
         "hold_resource_types":sorted([p["resource_type"] for p in allocation["plans"] if p["status"]!="ACTIVE_RECOMMENDATION"]),
-        "pending_autonomous_work_count":len(sched_receipt["selected_work"]),
+        "pending_autonomous_work_count":len(visible_scheduler_work),
+        "newly_selectable_work_count":len(sched_receipt["selected_work"]),
         "blocked_action_count":len(sched_receipt["blocked_work"]),
         "learning_observation_count":learning["source_observation_count"],
         "verified_transfer_outcome_count":transfer["checked_in_outcomes"],
         "checked_in_cost_reservation_count":len(cost["reservations"]),
+        "cost_state_sequence":cost.get("sequence",0),
         "checked_in_measured_model_cost_usd":0.0,
         "estimated_value_presented_as_measured":False
       },
@@ -113,7 +127,7 @@ def build_dashboard_snapshot():
         "estimated_value":"Policy estimates or hypotheses remain explicitly labeled and are never promoted to measured results.",
         "unknown":"Missing evidence remains UNKNOWN/NONE rather than being inferred."
       },
-      "evidence_refs":["registry/projects.json","uncertainty/INITIAL_UNCERTAINTY_SUMMARY.json","experiments/INITIAL_EXPERIMENT_SUMMARY.json","allocator/INITIAL_ALLOCATION_SUMMARY.json","learning/LEARNING_OBSERVATION_LEDGER.json","transfer/TRANSFER_LEDGER.json","scheduler/SCHEDULER_STATE_SEED.json","cost_governor/COST_STATE_SEED.json"]
+      "evidence_refs":["registry/projects.json","uncertainty/INITIAL_UNCERTAINTY_SUMMARY.json","experiments/INITIAL_EXPERIMENT_SUMMARY.json","allocator/INITIAL_ALLOCATION_SUMMARY.json","learning/LEARNING_OBSERVATION_LEDGER.json","transfer/TRANSFER_LEDGER.json","dashboard/live/scheduler_state.json" if live_scheduler else "scheduler/SCHEDULER_STATE_SEED.json","dashboard/live/cost_state.json" if live_cost else "cost_governor/COST_STATE_SEED.json"]
     }
     snapshot["snapshot_hash"]=hashv(snapshot)
     return snapshot

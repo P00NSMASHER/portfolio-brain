@@ -21,16 +21,19 @@ def validate_command_center() -> dict[str, object]:
     page = render_html(snapshot)
     lower = page.lower()
 
-    require(snapshot["command_center_id"] == "portfolio-brain-command-center-v2", "unexpected command-center id")
+    require(snapshot["command_center_id"] == "portfolio-brain-command-center-v3", "unexpected command-center id")
     require(snapshot["authority_class"] == "OBSERVE", "command center widened authority")
     require(snapshot["mutation_capability"] == "NONE", "command center gained mutation capability")
     require(snapshot["network_capability"] == "NONE", "command center gained outbound network capability")
-    require(snapshot["data_boundary"] == "SANITIZED_CHECKED_IN_STATE_ONLY", "data boundary widened")
+    require(snapshot["data_boundary"] == "SANITIZED_CHECKED_IN_AND_DURABLE_ARTIFACT_STATE", "data boundary widened")
 
     require(snapshot["system"]["project_count"] == len(snapshot["projects"]), "project coverage mismatch")
     require(snapshot["system"]["project_count"] == 12, "registered project coverage drifted")
     require(snapshot["system"]["agent_count"] == len(snapshot["agents"]), "agent coverage mismatch")
     require(snapshot["system"]["agent_count"] == 10, "persistent agent registry drifted")
+    require(set(snapshot["state_sources"]["sources"]) >= {"runtime","scheduler","hunter","cost","notifications","agents"}, "live-state source coverage incomplete")
+    require(snapshot["state_sources"]["bridge_status"] in {"LIVE","STALE","DEGRADED","FALLBACK"}, "invalid live-state bridge status")
+    require(all(src["status"] in {"LIVE","STALE","FALLBACK"} for src in snapshot["state_sources"]["sources"].values()), "invalid subsystem freshness status")
     require(all(a["human_act_allowed"] is False for a in snapshot["agents"]), "agent human-ACT boundary drifted")
 
     require(snapshot["optimization"]["validation_architecture_freeze"] is False, "unrestricted optimization state unexpectedly refrozen")
@@ -58,6 +61,7 @@ def validate_command_center() -> dict[str, object]:
 
     require(snapshot["snapshot_hash"].startswith("sha256:"), "snapshot hash missing")
     require("Portfolio Brain Command Center" in page, "command-center title missing")
+    require("Live State Bridge" in page, "live-state bridge panel missing")
     require("OBSERVE ONLY" in page, "read-only label missing")
     require("Bounded Action Engine" in page, "action-engine panel missing")
     require("Enabled Model Routes" in page, "model-route panel missing")
@@ -92,4 +96,4 @@ def validate_command_center() -> dict[str, object]:
 
 
 if __name__ == "__main__":
-    print("portfolio-brain command center v2: PASS", json.dumps(validate_command_center(), sort_keys=True))
+    print("portfolio-brain command center v3: PASS", json.dumps(validate_command_center(), sort_keys=True))

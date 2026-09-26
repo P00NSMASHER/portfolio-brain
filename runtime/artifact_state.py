@@ -41,7 +41,7 @@ class BudgetedHTTP:
     def bytes(self,url: str)->bytes:
         return self._request(url)
 
-def restore(*, output: Path)->str:
+def restore(*, output: Path, metadata_output: Path | None = None)->str:
     token=os.environ.get("GITHUB_TOKEN") or os.environ.get("PORTFOLIO_GITHUB_TOKEN")
     repository=os.environ.get("GITHUB_REPOSITORY")
     current_run=os.environ.get("GITHUB_RUN_ID")
@@ -56,11 +56,11 @@ def restore(*, output: Path)->str:
         data,current_run=current_run,download=http.bytes,output=output,
         member_name="runtime_state.json",expected_state_id="portfolio-runtime-state",
         max_archive_bytes=budgets["max_output_bytes"],max_state_bytes=budgets["max_output_bytes"],
-        validator=validate_state,
+        validator=validate_state,metadata_output=metadata_output,
     )
 
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument("--output",required=True)
+    ap=argparse.ArgumentParser(); ap.add_argument("--output",required=True);ap.add_argument("--metadata-output",default=None)
     args=ap.parse_args()
-    print(restore(output=Path(args.output)))
+    print(restore(output=Path(args.output),metadata_output=None if args.metadata_output is None else Path(args.metadata_output)))
 if __name__=="__main__": main()

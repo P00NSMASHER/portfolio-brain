@@ -39,12 +39,12 @@ class ArtifactStateIntegrityTests(unittest.TestCase):
 
     def candidates(self):
         return {"artifacts":[
-            {"id":2,"created_at":"2026-09-26T17:00:00Z","archive_download_url":"new","workflow_run":{"id":20}},
-            {"id":1,"created_at":"2026-09-26T16:00:00Z","archive_download_url":"old","workflow_run":{"id":10}},
+            {"id":2,"name":"portfolio-runtime-state","created_at":"2026-09-26T17:00:00Z","expires_at":"2026-10-26T17:00:00Z","archive_download_url":"new","workflow_run":{"id":20,"head_sha":"2"*40}},
+            {"id":1,"name":"portfolio-runtime-state","created_at":"2026-09-26T16:00:00Z","expires_at":"2026-10-26T16:00:00Z","archive_download_url":"old","workflow_run":{"id":10,"head_sha":"1"*40}},
         ]}
 
-    def restore(self,data,payloads,output):
-        return restore_latest_valid_state(data,current_run="99",download=payloads.__getitem__,output=output,member_name="runtime_state.json",expected_state_id="portfolio-runtime-state",max_archive_bytes=10000,max_state_bytes=1000)
+    def restore(self,data,payloads,output,metadata_output=None):
+        return restore_latest_valid_state(data,current_run="99",download=payloads.__getitem__,output=output,member_name="runtime_state.json",expected_state_id="portfolio-runtime-state",max_archive_bytes=10000,max_state_bytes=1000,metadata_output=metadata_output)
 
     def test_corrupt_newest_falls_back_to_newest_valid_predecessor(self):
         with tempfile.TemporaryDirectory() as td:
@@ -52,6 +52,18 @@ class ArtifactStateIntegrityTests(unittest.TestCase):
             status=self.restore(self.candidates(),{"new":b"not-a-zip","old":artifact("runtime_state.json",self.state(4))},output)
             self.assertEqual(status,"RESTORED_AFTER_REJECTING_1_INVALID")
             self.assertEqual(json.loads(output.read_text())["sequence"],4)
+
+    def test_metadata_receipt_points_to_exact_valid_artifact(self):
+        with tempfile.TemporaryDirectory() as td:
+            output=Path(td)/"runtime_state.json"
+            metadata=Path(td)/"restore.json"
+            status=self.restore(self.candidates(),{"new":b"bad","old":artifact("runtime_state.json",self.state(9))},output,metadata)
+            self.assertEqual(status,"RESTORED_AFTER_REJECTING_1_INVALID")
+            receipt=json.loads(metadata.read_text())
+            self.assertEqual(receipt["artifact_id"],1)
+            self.assertEqual(receipt["source_run_id"],10)
+            self.assertEqual(receipt["source_head_sha"],"1"*40)
+            self.assertEqual(receipt["artifact_created_at"],"2026-09-26T16:00:00Z")
 
     def test_identity_mismatch_and_duplicate_member_are_rejected(self):
         with tempfile.TemporaryDirectory() as td:

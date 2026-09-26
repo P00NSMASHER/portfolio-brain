@@ -19,7 +19,7 @@ class RestoreError(RuntimeError):
 def policy():
     return json.loads((ROOT / "cost_governor" / "COST_GOVERNOR_POLICY.json").read_text())
 
-def restore(output: Path) -> str:
+def restore(output: Path, metadata_output: Path | None = None) -> str:
     token = os.environ.get("GITHUB_TOKEN")
     repo = os.environ.get("GITHUB_REPOSITORY")
     run = os.environ.get("GITHUB_RUN_ID")
@@ -61,14 +61,15 @@ def restore(output: Path) -> str:
         data,current_run=run,download=get,output=output,
         member_name="cost_state.json",expected_state_id="portfolio-cost-governor-state",
         max_archive_bytes=max_bytes,max_state_bytes=max_bytes,
-        validator=validate_state,
+        validator=validate_state,metadata_output=metadata_output,
     )
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True)
+    parser.add_argument("--metadata-output", default=None)
     args = parser.parse_args()
-    print(restore(Path(args.output)))
+    print(restore(Path(args.output), None if args.metadata_output is None else Path(args.metadata_output)))
 
 if __name__ == "__main__":
     main()

@@ -82,6 +82,7 @@ def validate_cost_governor():
         "hunter-autonomous-cycle": ROOT / ".github/workflows/hunter-autonomous-cycle.yml",
         "software-factory-candidate": ROOT / ".github/workflows/software-factory-candidate.yml",
         "portfolio-notification-cycle": ROOT / ".github/workflows/portfolio-notification-cycle.yml",
+        "command-center-pages": ROOT / ".github/workflows/command-center-pages.yml",
     }
     for name, path in governed_workflows.items():
         body = path.read_text().lower()
@@ -95,11 +96,13 @@ def validate_cost_governor():
         ]:
             req(text in body, f"{name} cost integration missing: {text}")
 
-    command_center = (ROOT / ".github/workflows/command-center-pages.yml").read_text()
-    req(
-        "\n  schedule:" not in command_center,
-        "command center must remain change-driven; periodic unchanged rebuilds waste runner capacity",
-    )
+    command_center = (ROOT / ".github/workflows/command-center-pages.yml").read_text().lower()
+    req('cron: "37 * * * *"' in command_center,"hourly command-center refresh schedule missing")
+    req("actions: read" in command_center and "pages: write" in command_center,"command-center read/deploy permissions incomplete")
+    req("contents: write" not in command_center and "actions: write" not in command_center,"command-center publication write authority widened")
+    req("dashboard.live_state_bridge" in command_center,"command-center live-state restore missing")
+    req("command-center-pages::publish" in p["workflow_job_ceilings"],"command-center publication lacks cost ceiling")
+    req("command-center-pages" in p["managed_workflow_names"],"command-center publication is not cost managed")
     scheduler = governed_workflows["portfolio-autonomous-scheduler"].read_text().lower()
     req("contents: write" not in scheduler and "actions: write" not in scheduler, "scheduler write authority widened")
 
