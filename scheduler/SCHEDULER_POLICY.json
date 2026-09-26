@@ -2,7 +2,7 @@
   "schema_version": "1.0.0",
   "scheduler_id": "portfolio-autonomous-scheduler-v1",
   "mode": "EVIDENCE_GATED_PERSISTENT_QUEUE",
-  "authority_class": "OBSERVE",
+  "authority_class": "MODIFY",
   "enabled": true,
   "work_types": [
     "HUNT",
@@ -22,9 +22,9 @@
     "HUNT": 5,
     "INTEGRATION": 6
   },
-  "max_new_work_per_cycle": 4,
-  "max_open_work_per_agent": 1,
-  "max_queue_items": 32,
+  "max_new_work_per_cycle": 8,
+  "max_open_work_per_agent": 2,
+  "max_queue_items": 64,
   "stale_external_lease_policy": "SUPPRESS_DUPLICATE_UNTIL_AGENT_RUNTIME_RECONCILES",
   "role_map": {
     "HUNT": {
@@ -80,13 +80,13 @@
     "preserve live or stale external leases; scheduler never creates overlapping replacement work",
     "sort by explicit gate precedence",
     "within a gate sort by source Pareto layer, source rank, allocation share, source identity",
-    "enqueue at most one new item per agent and at most four per cycle"
+    "enqueue up to the configured per-agent open-work ceiling and at most eight new items per cycle"
   ],
   "invariants": [
     "The scheduler never uses an opaque scalar priority score.",
     "No work is created solely to satisfy a quota or keep an agent busy.",
     "Only work whose target agent goal type and autonomy ceiling already allow it may enter QUEUED.",
-    "Human-gated ACT is reported as BLOCKED_APPROVAL and never enters the autonomous queue.",
+    "ACT work remains subject to the applicable project/action policy; scheduler throughput limits do not grant authority.",
     "Open/leased work suppresses duplicate scheduling.",
     "An expired external lease is not blindly duplicated; it awaits agent-runtime reconciliation.",
     "Verified repair/verification/test gates outrank new discovery work because they unblock already-started evidence chains.",
