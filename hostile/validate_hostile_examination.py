@@ -23,7 +23,7 @@ def validate_hostile():
     req(experiments["automatic_external_act"] is True,"bounded external ACT path is not enabled")
     actions=json.loads((ROOT/"action_engine/ACTION_POLICY.json").read_text())
     req(actions["mode"]=="CHATGPT_GMAIL_CONNECTOR_GATEWAY" and actions["execution_provider"]=="CHATGPT_GMAIL_CONNECTOR","Gmail gateway mode/provider mismatch")
-    req(actions["gmail_account"]=="jayp19386@gmail.com","Gmail gateway account drifted")
+    req(actions["gmail_account_ref"]=="PRIMARY_GMAIL_CONNECTOR","Gmail gateway account drifted")
     req(set(actions["allowed_actions"])=={"CUSTOMER_EMAIL"},"action gateway widened beyond approved channel")
     req(set(actions["allowed_project_ids"])=={"PRJ-001","PRJ-002","PRJ-003","PRJ-004"},"action project allowlist drifted")
     req({"MOVE_MONEY","PAYMENT_OR_PURCHASE","LIVE_MARKET_TRADING","BROKERAGE_ORDER","PRIVATE_INFORMATION_DISCLOSURE","CONSEQUENTIAL_CHILD_FACING_CHANGE"}<=set(actions["prohibited_action_types"]),"high-risk action boundary missing")
