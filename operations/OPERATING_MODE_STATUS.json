@@ -29,7 +29,7 @@
   "operational_without_interactive_chatgpt": true,
   "release_candidate_head": "bf9fa7375c78609c81df3274d57b9e5e88ca44bd",
   "release_candidate_ci_run_id": 36202388569,
-  "external_chatgpt_tasks_role": "ADVISORY_MONITORING_ONLY_NOT_RUNTIME_DEPENDENCY",
+  "external_chatgpt_tasks_role": "BOUNDED_GMAIL_GATEWAY_PLUS_ADVISORY_MONITORING",
   "operational_hotfixes": [
     {
       "hotfix_id": "OHF-001",
@@ -59,5 +59,14 @@
       ],
       "status": "VERIFIED_FIXED"
     }
-  ]
+  ],
+  "connector_gateways": {
+    "gmail": {
+      "provider": "CHATGPT_GMAIL_CONNECTOR",
+      "account": "jayp19386@gmail.com",
+      "executor_task_id": "6ab377c25df08191a6e2aa1537d9d2ef",
+      "planner_task_id": "6ab377be3184819186a3075f37a530b8",
+      "status": "CONFIGURED_IN_POLICY_PENDING_LIVE_GATEWAY_PROOF"
+    }
+  }
 }
