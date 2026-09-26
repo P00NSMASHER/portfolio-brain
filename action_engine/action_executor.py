@@ -197,8 +197,9 @@ def execute_email(state,request,*,at=None,transport:Callable[[dict[str,Any],dict
       "action_id":request["action_id"],"idempotency_key":request["idempotency_key"],"attempt":attempt,"project_id":request["project_id"],
       "action_type":request["action_type"],"target_hash":_target_hash(request["target"]),
       "payload_hash":_payload_hash(request["subject"],request["body"],request["campaign_id"]),
-      "status":status,"created_at":started,"completed_at":completed,"remote_ref":remote_ref,
-      "evidence_refs":[*request["evidence_refs"],f"campaign:{request['campaign_id']}"]
+      "status":status,"created_at":started,"completed_at":completed,
+      "remote_ref":None if remote_ref is None else "sha256:"+hashlib.sha256(str(remote_ref).encode()).hexdigest(),
+      "evidence_refs":[*request["evidence_refs"],"campaign-hash:sha256:"+hashlib.sha256(request["campaign_id"].encode()).hexdigest()]
     }
     next_state=copy.deepcopy(next_state);next_state["executions"].append(row);next_state["sequence"]+=1;next_state["updated_at"]=completed
     if status=="FAILED":
