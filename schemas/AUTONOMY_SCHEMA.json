@@ -2,62 +2,105 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://portfolio-brain.local/schemas/AUTONOMY_SCHEMA.json",
   "title": "Portfolio Brain Autonomy Profile",
-  "description": "Deny-by-default authority ceiling. Profiles describe allowed bounds; they do not activate runtime capabilities.",
+  "description": "Deny-by-default authority ceiling with explicit bounded operational paths.",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema_version","autonomy_profile_id","project_id","default_policy",
-    "runtime_enabled","permissions","human_approval_required_for",
-    "hard_prohibitions","separation_of_duties"
+    "schema_version",
+    "autonomy_profile_id",
+    "project_id",
+    "default_policy",
+    "runtime_enabled",
+    "permissions",
+    "human_approval_required_for",
+    "hard_prohibitions",
+    "separation_of_duties"
   ],
   "properties": {
-    "schema_version": {"const": "1.0.0"},
-    "autonomy_profile_id": {"type": "string","pattern": "^AUT-[0-9]{3,}$"},
-    "project_id": {"type": "string","pattern": "^PRJ-[0-9]{3,}$"},
-    "default_policy": {"const": "DENY"},
-    "runtime_enabled": {"const": false},
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "autonomy_profile_id": {
+      "type": "string",
+      "pattern": "^AUT-[0-9]{3,}$"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^PRJ-[0-9]{3,}$"
+    },
+    "default_policy": {
+      "const": "DENY"
+    },
+    "runtime_enabled": {
+      "type": "boolean"
+    },
     "permissions": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["OBSERVE","EXPERIMENT","MODIFY","ACT"],
+      "required": [
+        "OBSERVE",
+        "EXPERIMENT",
+        "MODIFY",
+        "ACT"
+      ],
       "properties": {
-        "OBSERVE": {"$ref": "#/$defs/permission"},
-        "EXPERIMENT": {"$ref": "#/$defs/permission"},
-        "MODIFY": {"$ref": "#/$defs/permission"},
-        "ACT": {"$ref": "#/$defs/permission"}
+        "OBSERVE": {
+          "$ref": "#/$defs/permission"
+        },
+        "EXPERIMENT": {
+          "$ref": "#/$defs/permission"
+        },
+        "MODIFY": {
+          "$ref": "#/$defs/permission"
+        },
+        "ACT": {
+          "$ref": "#/$defs/permission"
+        }
       }
     },
     "human_approval_required_for": {
       "type": "array",
-      "items": {"enum": [
-        "PRODUCTION_DEPLOYMENT_MEANINGFUL_RISK",
-        "CUSTOMER_COMMUNICATION",
-        "CLAIM_OR_DISPUTE_SUBMISSION",
-        "LEGAL_OR_REGULATORY_COMMUNICATION",
-        "PAYMENT_OR_PURCHASE",
-        "BILLING_CHANGE",
-        "MOVE_MONEY",
-        "DESTRUCTIVE_DATA_DELETION",
-        "PRIVATE_INFORMATION_DISCLOSURE",
-        "CONSEQUENTIAL_CHILD_FACING_CHANGE",
-        "LIVE_MARKET_TRADING",
-        "BROKERAGE_ORDER",
-        "AUTONOMOUS_INVESTMENT_POSITION"
-      ]},
+      "items": {
+        "enum": [
+          "PRODUCTION_DEPLOYMENT_MEANINGFUL_RISK",
+          "CUSTOMER_COMMUNICATION",
+          "CLAIM_OR_DISPUTE_SUBMISSION",
+          "LEGAL_OR_REGULATORY_COMMUNICATION",
+          "PAYMENT_OR_PURCHASE",
+          "BILLING_CHANGE",
+          "MOVE_MONEY",
+          "DESTRUCTIVE_DATA_DELETION",
+          "PRIVATE_INFORMATION_DISCLOSURE",
+          "CONSEQUENTIAL_CHILD_FACING_CHANGE",
+          "LIVE_MARKET_TRADING",
+          "BROKERAGE_ORDER",
+          "AUTONOMOUS_INVESTMENT_POSITION"
+        ]
+      },
       "uniqueItems": true
     },
     "hard_prohibitions": {
       "type": "array",
-      "items": {"type": "string","pattern": "^[A-Z0-9_]+$"},
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z0-9_]+$"
+      },
       "uniqueItems": true
     },
     "separation_of_duties": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["builder_may_self_approve","independent_verifier_required_for_promotion"],
+      "required": [
+        "builder_may_self_approve",
+        "independent_verifier_required_for_promotion"
+      ],
       "properties": {
-        "builder_may_self_approve": {"const": false},
-        "independent_verifier_required_for_promotion": {"const": true}
+        "builder_may_self_approve": {
+          "const": false
+        },
+        "independent_verifier_required_for_promotion": {
+          "const": true
+        }
       }
     }
   },
@@ -65,15 +108,27 @@
     "permission": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["decision","conditions"],
+      "required": [
+        "decision",
+        "conditions"
+      ],
       "properties": {
-        "decision": {"enum": [
-          "ALLOWED","BOUNDED","ISOLATED_BRANCH_ONLY",
-          "HUMAN_APPROVAL_REQUIRED","PROHIBITED"
-        ]},
+        "decision": {
+          "enum": [
+            "ALLOWED",
+            "BOUNDED",
+            "ISOLATED_BRANCH_ONLY",
+            "HUMAN_APPROVAL_REQUIRED",
+            "PROHIBITED"
+          ]
+        },
         "conditions": {
           "type": "array",
-          "items": {"type": "string","minLength": 1,"maxLength": 300},
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
           "uniqueItems": true
         }
       }
