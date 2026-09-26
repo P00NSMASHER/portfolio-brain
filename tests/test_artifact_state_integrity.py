@@ -27,7 +27,8 @@ class ArtifactStateIntegrityTests(unittest.TestCase):
         for relative in [
             "runtime/artifact_state.py","cost_governor/artifact_state.py",
             "scheduler/artifact_state.py","notifications/artifact_state.py",
-            "hunting/artifact_state.py",
+            "hunting/artifact_state.py","agents/artifact_state.py",
+            "dashboard/history_artifact_state.py",
         ]:
             body=(ROOT/relative).read_text()
             self.assertIn("from runtime.artifact_restore import restore_latest_valid_state",body,relative)
