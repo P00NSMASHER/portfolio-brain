@@ -14,7 +14,7 @@ class OperatorConsoleTests(unittest.TestCase):
     def test_workflow_is_owner_gated_and_not_part_of_public_pages(self):
         workflow=(ROOT/".github/workflows/operator-console.yml").read_text()
         self.assertIn("github.actor == github.repository_owner",workflow)
-        self.assertIn("environment: portfolio-operator",workflow)
+        self.assertNotIn("environment:",workflow)
         self.assertIn("actions: write",workflow)
         self.assertIn("pull-requests: write",workflow)
         self.assertIn("operator_console.operator_console",workflow)
