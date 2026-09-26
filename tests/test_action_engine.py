@@ -40,7 +40,9 @@ class ActionEngineTests(unittest.TestCase):
         self.assertNotIn("buyer@example.com",raw)
         self.assertNotIn("Would you like",raw)
         self.assertNotIn("Free audit",raw)
-        self.assertIn("remote-123",raw)
+        self.assertNotIn("remote-123",raw)
+        self.assertIn("sha256:",row["remote_ref"])
+        self.assertNotIn("test-campaign",raw)
 
     def test_successful_duplicate_is_suppressed(self):
         calls=[]
