@@ -167,6 +167,33 @@ def validate_request(r: dict[str, Any]) -> None:
         req(usage["github_job_starts"] == 1 and usage["github_runner_minutes"] > 0, "GitHub job usage invalid")
         req(all(usage[x] == 0 for x in ("cost_usd", "input_tokens", "output_tokens", "model_calls", "api_calls")), "GitHub job cannot reserve model/API usage")
 
+def validate_decision_record(d: dict[str, Any]) -> None:
+    required = {
+        "schema_version", "decision_id", "request_id", "request_hash", "status",
+        "reason_codes", "reservation_id", "can_execute", "authority_granted",
+        "decided_at", "decision_hash",
+    }
+    req(isinstance(d, dict) and set(d) == required, "cost decision fields changed")
+    req(d["schema_version"] == "1.0.0", "cost decision schema mismatch")
+    req(isinstance(d["decision_id"], str) and d["decision_id"].startswith("CGD-") and len(d["decision_id"]) == 24, "cost decision id invalid")
+    req(isinstance(d["request_id"], str) and d["request_id"].startswith("CGR-"), "cost decision request id invalid")
+    req(isinstance(d["request_hash"], str) and d["request_hash"].startswith("sha256:") and len(d["request_hash"]) == 71, "cost decision request hash invalid")
+    statuses = {
+        "RESERVED", "DUPLICATE_SUPPRESSED", "BLOCKED_IDEMPOTENCY_COLLISION",
+        "BLOCKED_KILL_SWITCH", "BLOCKED_AUTHORITY", "BLOCKED_RETRY_LIMIT",
+        "BLOCKED_BUDGET", "COMMITTED", "HARD_STOP_OVERAGE",
+    }
+    req(d["status"] in statuses, "unknown cost decision status")
+    req(isinstance(d["reason_codes"], list) and d["reason_codes"] and len(d["reason_codes"]) == len(set(d["reason_codes"])), "cost decision reasons invalid")
+    req(all(isinstance(x, str) and x for x in d["reason_codes"]), "cost decision reason invalid")
+    if d["reservation_id"] is not None:
+        req(isinstance(d["reservation_id"], str) and d["reservation_id"].startswith("CRES-") and len(d["reservation_id"]) == 25, "cost decision reservation id invalid")
+    req(d["can_execute"] is (d["status"] == "RESERVED"), "cost decision execution flag mismatch")
+    req(d["authority_granted"] is False, "cost decision may not grant authority")
+    _time(d["decided_at"], "cost decision decided_at")
+    core = {k: v for k, v in d.items() if k != "decision_hash"}
+    req(d["decision_hash"] == hashv(core), "cost decision hash mismatch")
+
 def validate_state(state: dict[str, Any], p: dict[str, Any] | None = None) -> None:
     p = p or policy()
     required = {"schema_version", "state_id", "sequence", "updated_at", "reservations", "recent_decisions"}
@@ -199,6 +226,14 @@ def validate_state(state: dict[str, Any], p: dict[str, Any] | None = None) -> No
         if row["committed_at"] is not None:
             _time(row["committed_at"], "reservation committed_at")
         req(isinstance(row["evidence_refs"], list) and all(isinstance(x, str) for x in row["evidence_refs"]), "reservation evidence refs invalid")
+    seen_decisions: set[str] = set()
+    seen_decision_hashes: set[str] = set()
+    for decision in state["recent_decisions"]:
+        validate_decision_record(decision)
+        req(decision["decision_id"] not in seen_decisions, "duplicate cost decision id")
+        seen_decisions.add(decision["decision_id"])
+        req(decision["decision_hash"] not in seen_decision_hashes, "duplicate cost decision hash")
+        seen_decision_hashes.add(decision["decision_hash"])
 
 def load_state(path: str | Path | None = None) -> dict[str, Any]:
     if path is not None and Path(path).exists():
@@ -277,6 +312,9 @@ def _decision(request: dict[str, Any], at: str, status: str, reasons: list[str],
     return {**core, "decision_hash": hashv(core)}
 
 def _append_decision(state: dict[str, Any], decision: dict[str, Any], p: dict[str, Any]) -> None:
+    validate_decision_record(decision)
+    if any(row["decision_hash"] == decision["decision_hash"] for row in state["recent_decisions"]):
+        return
     state["recent_decisions"] = ([*state["recent_decisions"], decision])[-p["recent_decision_limit"]:]
 
 def _finish_state(state: dict[str, Any], at: str, p: dict[str, Any]) -> dict[str, Any]:

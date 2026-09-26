@@ -16,7 +16,9 @@ from cost_governor.cost_governor import (
     policy,
     preflight,
     reserve_model_execution,
+    validate_decision_record,
     validate_request,
+    validate_state,
     zero_usage,
 )
 
@@ -67,6 +69,28 @@ class CostGovernorTests(unittest.TestCase):
         self.assertTrue(decision["can_execute"])
         self.assertFalse(decision["authority_granted"])
         self.assertEqual(len(state["reservations"]), 1)
+        validate_decision_record(state["recent_decisions"][0])
+
+    def test_cost_decision_history_rejects_hash_tampering(self):
+        state, _ = preflight(load_state(), github_request(), at=AT)
+        poisoned = copy.deepcopy(state)
+        poisoned["recent_decisions"][0]["reason_codes"] = ["FORGED_ALLOW"]
+        with self.assertRaisesRegex(CostGovernorError, "cost decision hash mismatch"):
+            validate_state(poisoned)
+
+    def test_cost_decision_history_cannot_grant_authority(self):
+        state, _ = preflight(load_state(), github_request(), at=AT)
+        poisoned = copy.deepcopy(state)
+        poisoned["recent_decisions"][0]["authority_granted"] = True
+        with self.assertRaisesRegex(CostGovernorError, "may not grant authority"):
+            validate_state(poisoned)
+
+    def test_exact_duplicate_decision_record_is_not_appended_twice(self):
+        request = github_request()
+        state, _ = preflight(load_state(), request, at=AT)
+        state, _ = preflight(state, request, at=AT)
+        state, _ = preflight(state, request, at=AT)
+        self.assertEqual(len(state["recent_decisions"]), 2)
 
     def test_exact_duplicate_is_suppressed(self):
         request = github_request()
