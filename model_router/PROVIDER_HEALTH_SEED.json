@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "state_id": "portfolio-provider-health-state",
+  "sequence": 0,
+  "updated_at": null,
+  "readiness": "UNPROBED",
+  "source_status": "NO_PROVIDER_PROBE",
+  "credential_state": "UNKNOWN",
+  "provider_id": "openai",
+  "model_id": null,
+  "provider_code": null,
+  "provider_type": null,
+  "retryable": false,
+  "budget_domain_blocked": false,
+  "provider_domain_blocked": false,
+  "reason_codes": []
+}
