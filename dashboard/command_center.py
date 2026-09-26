@@ -57,7 +57,7 @@ def load_state_sources() -> dict[str, Any]:
         "hunter":"hunting/HUNTER_STATE_SEED.json",
         "cost":"cost_governor/COST_STATE_SEED.json",
         "notifications":"notifications/NOTIFICATION_STATE_SEED.json",
-        "agents":"agents/AGENT_STATE_SEED.json",
+        "agents":"agents/AGENT_HEARTBEAT_STATE_SEED.json",
     }
     for name, ref in seeds.items():
         data["sources"].setdefault(name, {
@@ -382,9 +382,9 @@ def _status_tone(value: str) -> str:
     upper = value.upper()
     if upper in {"OPERATIONAL", "ACTIVE", "VERIFIED_FIXED", "RUNNING", "LIVE"}:
         return "good"
-    if upper in {"BLOCKED", "CRITICAL", "HIGH", "ENGAGED", "DISABLED"}:
+    if upper in {"BLOCKED", "CRITICAL", "HIGH", "ENGAGED", "DISABLED", "OFFLINE"}:
         return "bad"
-    if upper in {"EVIDENCE_GAPS", "MEDIUM", "ACTIVE_RESEARCH_ONLY", "IN_DEVELOPMENT", "STALE", "FALLBACK", "DEGRADED"}:
+    if upper in {"EVIDENCE_GAPS", "MEDIUM", "ACTIVE_RESEARCH_ONLY", "IN_DEVELOPMENT", "STALE", "FALLBACK", "DEGRADED", "NEVER"}:
         return "warn"
     return "neutral"
 
@@ -562,6 +562,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
         f"""
         <tr>
           <td>{_e(label)}</td>
+          <td class="num">{_e(telemetry["cost"]["utilization"][key]["actual"])}</td>
           <td class="num">{_e(telemetry["cost"]["utilization"][key]["used"])}</td>
           <td class="num">{_e(telemetry["cost"]["utilization"][key]["ceiling"])}</td>
           <td class="num">{_e(round(100*telemetry["cost"]["utilization"][key]["fraction"],1))}%</td>
@@ -691,7 +692,7 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
     <div class="card kpi"><div class="label">Open work</div><div class="value">{portfolio["pending_autonomous_work_count"]}</div><div class="hint">{_e(sources["scheduler"]["status"].lower())} scheduler queue</div></div>
     <div class="card kpi"><div class="label">Blocked work</div><div class="value">{portfolio["blocked_action_count"]}</div><div class="hint">human/authority gated</div></div>
     <div class="card kpi"><div class="label">Verified outcomes</div><div class="value">{telemetry["verified_external_outcomes"]}</div><div class="hint">verified durable evidence</div></div>
-    <div class="card kpi"><div class="label">Paid model spend</div><div class="value">USD {_e(round(telemetry["cost"]["usage_today"]["cost_usd"],2))}</div><div class="hint">of USD {cost["portfolio_ceiling"]["cost_usd"]:.2f} today</div></div>
+    <div class="card kpi"><div class="label">Paid model spend</div><div class="value">USD {_e(round(telemetry["cost"]["actual_usage_today"]["cost_usd"],2))}</div><div class="hint">actual committed · USD {cost["portfolio_ceiling"]["cost_usd"]:.2f} ceiling</div></div>
   </section>
 
   <section class="card" id="live-state" style="margin-bottom:14px">
@@ -725,8 +726,8 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
 
   <section class="grid two" style="margin-bottom:14px">
     <div class="card">
-      <div class="section-head"><div><h2>Actual Cost / Capacity Today</h2><p>Durable reservations using cost-governor accounting semantics.</p></div>{source_badge("cost")}</div>
-      <table><thead><tr><th>Resource</th><th class="num">Used</th><th class="num">Ceiling</th><th class="num">Utilization</th></tr></thead><tbody>{usage_rows}</tbody></table>
+      <div class="section-head"><div><h2>Cost / Capacity Today</h2><p>Actual = committed measured usage. Accounted = conservative governor usage including active/expired reservations.</p></div>{source_badge("cost")}</div>
+      <table><thead><tr><th>Resource</th><th class="num">Actual</th><th class="num">Accounted</th><th class="num">Ceiling</th><th class="num">Utilization</th></tr></thead><tbody>{usage_rows}</tbody></table>
     </div>
     <div class="card">
       <div class="section-head"><div><h2>Recent External Actions</h2><p>Sanitized action receipts only.</p></div>{_badge(f'{telemetry["actions"]["total_sent"]} total',"neutral")}</div>
@@ -814,10 +815,10 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
     <div class="card" id="cost">
       <div class="section-head"><div><h2>Cost Governor</h2><p>{_e(cost["mode"])} · {_e(source_detail("cost"))}</p></div>{source_badge("cost")}</div>
       <table><tbody>
-        <tr><td>Cost used today</td><td class="num">USD {_e(round(telemetry["cost"]["usage_today"]["cost_usd"],4))}</td></tr>
-        <tr><td>Model calls today</td><td class="num">{telemetry["cost"]["usage_today"]["model_calls"]}</td></tr>
-        <tr><td>API calls today</td><td class="num">{telemetry["cost"]["usage_today"]["api_calls"]}</td></tr>
-        <tr><td>Runner minutes today</td><td class="num">{telemetry["cost"]["usage_today"]["github_runner_minutes"]}</td></tr>
+        <tr><td>Actual cost today</td><td class="num">USD {_e(round(telemetry["cost"]["actual_usage_today"]["cost_usd"],4))}</td></tr>
+        <tr><td>Actual model calls today</td><td class="num">{telemetry["cost"]["actual_usage_today"]["model_calls"]}</td></tr>
+        <tr><td>Actual API calls today</td><td class="num">{telemetry["cost"]["actual_usage_today"]["api_calls"]}</td></tr>
+        <tr><td>Actual runner minutes today</td><td class="num">{telemetry["cost"]["actual_usage_today"]["github_runner_minutes"]}</td></tr>
         <tr><td>Durable reservations</td><td class="num">{cost["reservation_count"]}</td></tr>
       </tbody></table>
       <div class="section-head" style="margin-top:16px"><h2>Kill Switches</h2>{_badge(f'{system["engaged_kill_switch_count"]} engaged', "bad" if system["engaged_kill_switch_count"] else "good")}</div>
