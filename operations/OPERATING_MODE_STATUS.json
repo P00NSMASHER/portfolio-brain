@@ -29,5 +29,35 @@
   "operational_without_interactive_chatgpt": true,
   "release_candidate_head": "bf9fa7375c78609c81df3274d57b9e5e88ca44bd",
   "release_candidate_ci_run_id": 36202388569,
-  "external_chatgpt_tasks_role": "ADVISORY_MONITORING_ONLY_NOT_RUNTIME_DEPENDENCY"
+  "external_chatgpt_tasks_role": "ADVISORY_MONITORING_ONLY_NOT_RUNTIME_DEPENDENCY",
+  "operational_hotfixes": [
+    {
+      "hotfix_id": "OHF-001",
+      "detected_on_main_sha": "721c23fdc83db967958294f218ed81402df7ae38",
+      "failed_runtime_run_id": 36202795298,
+      "failure_class": "CROSS_HOST_ARTIFACT_REDIRECT_AUTHORIZATION",
+      "symptom": "GitHub Actions artifact restore received HTTP 401 after following the artifact archive redirect.",
+      "repair": "Strip GitHub Authorization from cross-host artifact redirects while preserving same-host API authentication.",
+      "hotfix_pr_number": 8,
+      "hotfix_candidate_sha": "19434ac5bb05a132f80a238dc115ef9609d0d1b1",
+      "hotfix_candidate_ci_run_id": 36203066782,
+      "hotfix_candidate_regression_tests": 317,
+      "repaired_main_sha": "242a707919f2e0f82e77574fe24d954ad6c24960",
+      "post_hotfix_foundation_ci_run_id": 36203104743,
+      "post_hotfix_runtime_run_id": 36203104907,
+      "post_hotfix_runtime_artifacts": [
+        {
+          "artifact_id": 10892059877,
+          "name": "portfolio-runtime-state",
+          "digest": "sha256:d1a4bf938376ca73fdda2f7b4e84eba312e5c1dcdd8936a3e545596d8cb863a5"
+        },
+        {
+          "artifact_id": 10892174433,
+          "name": "portfolio-cost-governor-state",
+          "digest": "sha256:89c444b8e7a4f7ad54ca003108278481d6646bb33a0b07644566eb5cec82eea0"
+        }
+      ],
+      "status": "VERIFIED_FIXED"
+    }
+  ]
 }
