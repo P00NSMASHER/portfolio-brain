@@ -18,7 +18,7 @@ def validate_actions():
     prohibited=set(p["prohibited_action_types"])
     for x in ["MOVE_MONEY","PAYMENT_OR_PURCHASE","LIVE_MARKET_TRADING","BROKERAGE_ORDER","PRIVATE_INFORMATION_DISCLOSURE","CONSEQUENTIAL_CHILD_FACING_CHANGE"]:
         req(x in prohibited,f"high-risk action protection missing: {x}")
-    request=make_email_request(project_id="PRJ-001",target="validator@example.com",subject="Validation","body="Synthetic bounded action validation.",campaign_id="validator",evidence_refs=["validator:actions"],requested_at="2026-09-26T04:00:00Z")
+    request=make_email_request(project_id="PRJ-001",target="validator@example.com",subject="Validation",body="Synthetic bounded action validation.",campaign_id="validator",evidence_refs=["validator:actions"],requested_at="2026-09-26T04:00:00Z")
     state,d=preflight(load_state(),request,at="2026-09-26T04:00:00Z")
     req(d["status"]=="APPROVED_BOUNDED_ACTION" and d["can_execute"],"bounded action preflight failed")
     env={
