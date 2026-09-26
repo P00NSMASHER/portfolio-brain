@@ -8,7 +8,9 @@
     "PRJ-001",
     "PRJ-002",
     "PRJ-003",
-    "PRJ-004"
+    "PRJ-004",
+    "PRJ-005",
+    "PRJ-006"
   ],
   "allowed_actions": {
     "CUSTOMER_EMAIL": {
@@ -62,8 +64,32 @@
     "Payments, money movement, legal/regulatory communications, claims/disputes, destructive deletion, private disclosure, live trading/broker execution and consequential child-facing changes are outside this executor.",
     "The action kill switch overrides all allowlists.",
     "Raw recipients, draft bodies, subjects, Gmail message IDs and Gmail thread IDs remain inside the connected Gmail account and ChatGPT connector execution context.",
-    "GitHub Actions contains no SMTP transport or Gmail credential path."
+    "GitHub Actions contains no SMTP transport or Gmail credential path.",
+    "Education-product external validation may target only a VERIFIED_ADULT_STAKEHOLDER and remains limited to non-child-facing, non-production, non-child-data validation.",
+    "PRJ-005 and PRJ-006 each have a one-message-per-UTC-day project ceiling in addition to the global and per-recipient limits."
   ],
   "execution_provider": "CHATGPT_GMAIL_CONNECTOR",
-  "gmail_account_ref": "PRIMARY_GMAIL_CONNECTOR"
+  "gmail_account_ref": "PRIMARY_GMAIL_CONNECTOR",
+  "project_constraints": {
+    "PRJ-005": {
+      "CUSTOMER_EMAIL": {
+        "required_target_classification": "VERIFIED_ADULT_STAKEHOLDER",
+        "max_per_project_per_utc_day": 1,
+        "direct_minor_contact_allowed": false,
+        "child_data_collection_allowed": false,
+        "consequential_child_facing_change_allowed": false,
+        "policy_ref": "action_engine/EDUCATION_VALIDATION_POLICY.json"
+      }
+    },
+    "PRJ-006": {
+      "CUSTOMER_EMAIL": {
+        "required_target_classification": "VERIFIED_ADULT_STAKEHOLDER",
+        "max_per_project_per_utc_day": 1,
+        "direct_minor_contact_allowed": false,
+        "child_data_collection_allowed": false,
+        "consequential_child_facing_change_allowed": false,
+        "policy_ref": "action_engine/EDUCATION_VALIDATION_POLICY.json"
+      }
+    }
+  }
 }
