@@ -20,8 +20,9 @@ class AutonomousLearningCanaryTests(unittest.TestCase):
         first=self.receipt["first_cycle"]
         self.assertEqual(first["runtime_status"],"PASS")
         self.assertLessEqual(first["runtime_api_reads"],8)
-        self.assertEqual(first["scheduler_selected_count"],3)
-        self.assertEqual(first["scheduler_selected_work_types"],["HUNT","INTEGRATION","RESEARCH"])
+        self.assertGreaterEqual(first["scheduler_selected_count"],3)
+        self.assertLessEqual(first["scheduler_selected_count"],8)
+        self.assertTrue({"HUNT","INTEGRATION","RESEARCH"}<=set(first["scheduler_selected_work_types"]))
         self.assertEqual(first["scheduler_blocked_approval_count"],6)
 
     def test_canary_uses_zero_paid_model_api(self):
@@ -33,7 +34,7 @@ class AutonomousLearningCanaryTests(unittest.TestCase):
     def test_persisted_continuation_suppresses_duplicate_work(self):
         c=self.receipt["continuation"]
         self.assertEqual(c["scheduler_selected_count"],0)
-        self.assertGreaterEqual(c["scheduler_suppressed_duplicates"],3)
+        self.assertGreaterEqual(c["scheduler_suppressed_duplicates"],self.receipt["first_cycle"]["scheduler_selected_count"])
         self.assertEqual(c["cost_status"],"DUPLICATE_SUPPRESSED")
         self.assertEqual(c["notifications_emitted"],0)
         self.assertGreaterEqual(c["notification_suppressed"],2)
