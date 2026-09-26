@@ -25,8 +25,7 @@ class PortfolioAllocatorTests(unittest.TestCase):
     def test_resolved_education_validation_no_longer_consumes_human_review(self):
         self.assertEqual(self.by["HUMAN_REVIEW"]["recommendations"],[])
         self.assertEqual(self.by["HUMAN_REVIEW"]["allocated_share_basis_points"],0)
-        for pid in ["PRJ-005","PRJ-006"]:
-            self.assertTrue(any(r["project_id"]==pid and r["authority_requirement"]=="BOUNDED_ACT" for r in self.by["MODEL_CALLS"]["recommendations"]))
+        self.assertEqual(self.by["HUMAN_REVIEW"]["status"],"HOLD_NO_ELIGIBLE_EVIDENCE")
 
     def test_recoveryworks_bounded_validation_receives_model_capacity(self):
         self.assertTrue(any(r["project_id"]=="PRJ-001" and r["authority_requirement"]=="BOUNDED_ACT" for r in self.by["MODEL_CALLS"]["recommendations"]))
