@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0.0",
+  "optimization_id": "OPT-PORTFOLIO-BRAIN-20260925",
+  "status": "MERGED_AND_PRODUCTION_VERIFIED",
+  "merged_pr": 10,
+  "optimized_code_head": "c96b986ece90fa41591dbeb832c0baaaae259baf",
+  "foundation_ci": {
+    "run_id": 36215529880,
+    "conclusion": "success",
+    "regression_tests": 317,
+    "canary_artifact": {
+      "id": 10896779716,
+      "digest": "sha256:a9a77edca8ef1019602644c713976bd0d18dbba6b9e3f64b2fb337e539ab873f"
+    }
+  },
+  "runtime_verification": {
+    "run_id": 36215530149,
+    "conclusion": "success",
+    "runtime_state_artifact": {
+      "id": 10896849440,
+      "digest": "sha256:0924d847bee609525fd60fa236ded24cfb03eec84b7ae1b8f85c9ad69af19329"
+    },
+    "cost_state_artifact": {
+      "id": 10897880048,
+      "digest": "sha256:3b41b05f752420d28b61cb71d29abee8579cb209b782380139aba672bcbc0bfa"
+    }
+  },
+  "before": {
+    "project_runtimes_enabled": 0,
+    "scheduler_max_new_per_cycle": 4,
+    "scheduler_max_open_per_agent": 1,
+    "paid_model_api_budget_usd_per_day": 0,
+    "paid_model_calls_per_day": 0,
+    "validation_architecture_freeze": true,
+    "customer_communication_global_agent_prohibition": true
+  },
+  "after": {
+    "project_runtimes_enabled": 12,
+    "scheduler_max_new_per_cycle": 8,
+    "scheduler_max_open_per_agent": 2,
+    "observed_canary_first_cycle_selected_work": 6,
+    "paid_model_api_budget_usd_per_day": 10,
+    "paid_model_calls_per_day": 40,
+    "validation_architecture_freeze": false,
+    "customer_communication_global_agent_prohibition": false,
+    "enabled_nonzero_model_routes": 0
+  },
+  "controls_retained": [
+    "pre-execution cost reservations",
+    "provider/model route eligibility gates",
+    "kill switches and overage hard stops",
+    "independent builder/verifier separation",
+    "evidence provenance/hash/idempotency",
+    "durable state continuity",
+    "private-payload redaction while repository is public",
+    "live trading/broker execution prohibition",
+    "destructive data deletion prohibition",
+    "private information disclosure prohibition",
+    "consequential child-facing change protection"
+  ],
+  "remaining_high_value_gates": [
+    {
+      "id": "OPT-NEXT-001",
+      "summary": "Configure at least one real Tier 1/2 model provider/model with exact model ID, token limits, pricing, credential path, and execution adapter. Finite budget now exists but all non-Tier-0 routes remain disabled."
+    },
+    {
+      "id": "OPT-NEXT-002",
+      "summary": "Implement a bounded external-action executor with channel-specific policy, rate limits, idempotency, receipts, rollback/disable controls, and separate high-risk action classes. Experiment engine remains plan-and-gate only for external ACT."
+    }
+  ]
+}
