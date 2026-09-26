@@ -43,9 +43,22 @@ jobs:
           --project-id PRJ-000
           --estimated-minutes 5
           --authority MODIFY
+      - name: Restore latest agent heartbeat state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: python -m agents.artifact_state --output agents/live/agent_heartbeat_state.json
       - name: Execute bounded candidate action
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m software_factory.github_executor
+      - name: Heartbeat Engineer
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: >-
+          python -m agents.heartbeat_state
+          --state agents/live/agent_heartbeat_state.json
+          --output agents/out/agent_heartbeat_state.json
+          --agent-id AGT-ENGINEER
+          --activity-kind SOFTWARE_FACTORY_ACTION
+          --source-workflow software-factory-candidate
+          --source-run-id "${GITHUB_RUN_ID}"
       - name: Commit conservative factory compute usage
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: >-
@@ -54,6 +67,14 @@ jobs:
           --decision cost_governor/out/cost_decision.json
           --output cost_governor/out/cost_state.json
       - name: Upload sanitized cost-governor continuation state
+      - name: Upload sanitized agent heartbeat state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-agent-heartbeat-state
+          path: agents/out/agent_heartbeat_state.json
+          if-no-files-found: error
+          retention-days: 30
         if: ${{ always() && hashFiles('cost_governor/out/cost_state.json') != '' }}
         uses: actions/upload-artifact@v4
         with:
