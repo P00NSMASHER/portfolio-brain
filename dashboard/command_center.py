@@ -1113,7 +1113,7 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
     <a href="#agents">Agent Fleet</a><a href="#actions">Action Engine</a><a href="#hunter">Hunter</a>
     <a href="#cost">Cost & Models</a><a href="#workflows">Workflows</a><a href="#boundary">Authority Boundary</a>
   </nav>
-  <div class="readonly"><strong>Read only</strong><span>Public command center</span></div>
+  <div class="readonly"><strong>OBSERVE ONLY</strong><span>Public command center</span></div>
 </aside>
 <main>
   <header class="topbar" id="overview">
