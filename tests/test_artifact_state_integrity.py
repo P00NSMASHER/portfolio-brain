@@ -32,6 +32,7 @@ class ArtifactStateIntegrityTests(unittest.TestCase):
             body=(ROOT/relative).read_text()
             self.assertIn("from runtime.artifact_restore import restore_latest_valid_state",body,relative)
             self.assertIn("restore_latest_valid_state(",body,relative)
+            self.assertIn('expected_head_branch=os.environ.get("GITHUB_REF_NAME")',body,relative)
             self.assertNotIn("write_bytes(",body,relative)
 
     def state(self,sequence=1,state_id="portfolio-runtime-state"):
