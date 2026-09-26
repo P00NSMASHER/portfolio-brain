@@ -40,27 +40,39 @@ def target_hash(target):return _sha(target.strip().casefold())
 def payload_hash(subject,body,campaign_id):return _sha(subject+"\0"+body+"\0"+campaign_id)
 def _safe_ref(x):return isinstance(x,str) and 1<=len(x)<=240 and "\n" not in x and "\r" not in x and "@" not in x
 
-def make_email_request(*,project_id,target,subject,body,campaign_id,evidence_refs,consequence="LOW",requested_at=None):
+def make_email_request(*,project_id,target,subject,body,campaign_id,evidence_refs,consequence="LOW",target_classification=None,requested_at=None):
     requested_at=requested_at or _now();target=target.strip()
+    project_constraint=policy().get("project_constraints",{}).get(project_id,{}).get("CUSTOMER_EMAIL",{})
+    if target_classification is None and not project_constraint.get("required_target_classification"):
+        target_classification="BUSINESS_CONTACT"
     th=target_hash(target);ph=payload_hash(subject,body,campaign_id)
     idem="action:"+hashlib.sha256((project_id+"\0CUSTOMER_EMAIL\0"+th+"\0"+ph).encode()).hexdigest()
     action_id="PACT-"+hashlib.sha256(idem.encode()).hexdigest()[:20].upper()
     out={
       "schema_version":"1.0.0","action_id":action_id,"idempotency_key":idem,
       "project_id":project_id,"action_type":"CUSTOMER_EMAIL","consequence":consequence,
+      "target_classification":target_classification,
       "target":target,"subject":subject,"body":body,"campaign_id":campaign_id,
       "evidence_refs":list(evidence_refs),"requested_at":requested_at
     }
     validate_request(out);return out
 
 def validate_request(r):
-    required={"schema_version","action_id","idempotency_key","project_id","action_type","consequence","target","subject","body","campaign_id","evidence_refs","requested_at"}
+    required={"schema_version","action_id","idempotency_key","project_id","action_type","consequence","target_classification","target","subject","body","campaign_id","evidence_refs","requested_at"}
     req(isinstance(r,dict) and set(r)==required,"action request fields changed")
     req(r["schema_version"]=="1.0.0","action request schema mismatch")
     req(r["project_id"] in policy()["allowed_project_ids"],"project not allowed for bounded actions")
     req(r["action_type"] in policy()["allowed_actions"],"action type not allowlisted")
     cfg=policy()["allowed_actions"][r["action_type"]]
     req(r["consequence"] in cfg["allowed_consequences"],"action consequence exceeds bounded policy")
+    project_constraint=policy().get("project_constraints",{}).get(r["project_id"],{}).get(r["action_type"],{})
+    required_target_classification=project_constraint.get("required_target_classification")
+    req(isinstance(r["target_classification"],str) and r["target_classification"],"target classification required")
+    if required_target_classification:
+        req(r["target_classification"]==required_target_classification,"education validation requires verified adult stakeholder target")
+        req(project_constraint.get("direct_minor_contact_allowed") is False,"education project minor-contact boundary missing")
+        req(project_constraint.get("child_data_collection_allowed") is False,"education project child-data boundary missing")
+        req(project_constraint.get("consequential_child_facing_change_allowed") is False,"education project child-facing boundary missing")
     req(EMAIL_RE.fullmatch(r["target"].strip()) is not None,"invalid email target")
     req(isinstance(r["subject"],str) and 1<=len(r["subject"])<=cfg["max_subject_chars"] and "\n" not in r["subject"] and "\r" not in r["subject"],"invalid subject")
     req(isinstance(r["body"],str) and 1<=len(r["body"])<=cfg["max_body_chars"],"invalid body")
@@ -105,15 +117,24 @@ def preflight(ledger,request,*,at=None,gmail_sent_today_count=0,gmail_target_sen
     if any(x["idempotency_key"]==request["idempotency_key"] for x in ledger["executions"]):
         return {"status":"DUPLICATE_SUPPRESSED","can_execute":False,"reason_codes":["EXISTING_SANITIZED_LEDGER_EXECUTION"]}
     cfg=policy()["allowed_actions"][request["action_type"]]
+    project_constraint=policy().get("project_constraints",{}).get(request["project_id"],{}).get(request["action_type"],{})
     today=_day(at);th=target_hash(request["target"])
     ledger_today=[x for x in ledger["executions"] if _day(x["sent_at"])==today]
     total=max(len(ledger_today),int(gmail_sent_today_count))
     if total>=cfg["max_per_utc_day"]:
         return {"status":"BLOCKED_RATE_LIMIT","can_execute":False,"reason_codes":["DAILY_ACTION_LIMIT"]}
+    project_limit=project_constraint.get("max_per_project_per_utc_day")
+    if project_limit is not None:
+        project_total=sum(1 for x in ledger_today if x["project_id"]==request["project_id"])
+        if project_total>=int(project_limit):
+            return {"status":"BLOCKED_RATE_LIMIT","can_execute":False,"reason_codes":["PROJECT_DAILY_ACTION_LIMIT"]}
     target_total=max(sum(1 for x in ledger_today if x["target_hash"]==th),int(gmail_target_sent_today_count))
     if target_total>=cfg["max_per_recipient_per_utc_day"]:
         return {"status":"BLOCKED_RATE_LIMIT","can_execute":False,"reason_codes":["RECIPIENT_DAILY_LIMIT"]}
-    return {"status":"APPROVED_GMAIL_CONNECTOR_ACTION","can_execute":True,"reason_codes":["PROJECT_ALLOWLIST","GMAIL_DUPLICATE_CHECK_REQUIRED","RATE_LIMITS_PASS"]}
+    reasons=["PROJECT_ALLOWLIST","GMAIL_DUPLICATE_CHECK_REQUIRED","RATE_LIMITS_PASS"]
+    if project_constraint.get("required_target_classification"):
+        reasons.append("VERIFIED_ADULT_STAKEHOLDER_ONLY")
+    return {"status":"APPROVED_GMAIL_CONNECTOR_ACTION","can_execute":True,"reason_codes":reasons}
 
 def record_gmail_send(ledger,request,*,gmail_message_id,gmail_thread_id,sent_at=None,evidence_refs=None):
     validate_ledger(ledger);validate_request(request)
