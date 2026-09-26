@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
   "ledger_id": "portfolio-gmail-gateway-ledger",
-  "sequence": 1,
-  "updated_at": "2026-09-26T14:50:49Z",
+  "sequence": 2,
+  "updated_at": "2026-09-26T16:57:50Z",
   "executions": [
     {
       "action_id": "PACT-7472E0C3D059F4FBD602",
@@ -20,6 +20,24 @@
         "gmail-connector:primary",
         "experiment:UNC-EXTERNAL-PRJ-001",
         "proof:live-gateway-20260926"
+      ]
+    },
+    {
+      "action_id": "PACT-983341B0B484231497B3",
+      "idempotency_key": "action:82aba25ad83c2d7414cae1e850e3ca5389d1d6033c95891aab2c09b9d255decb",
+      "project_id": "PRJ-001",
+      "action_type": "CUSTOMER_EMAIL",
+      "target_hash": "sha256:59ccf04091824bf76433b40086886da9c5e15a654c724ee2e85607ac17638305",
+      "payload_hash": "sha256:d034db7593d84a22c248c6a57b10b3bf53dbba4db2b20109cea8bfbe77e15919",
+      "campaign_hash": "sha256:70413ea2440662660b600fd18b2af8e9cc154dc18f36c2f87e8d31b211303901",
+      "gmail_message_hash": "sha256:c6596bbe713fbcc7c96c9405bcbb77b6d398e16102fea4b9e660c9a952cf5619",
+      "gmail_thread_hash": "sha256:aec43d12cac71f303016c6f67fbe082c0d406ffd90d3c25ebb4ce80bbfb391b8",
+      "status": "SENT",
+      "sent_at": "2026-09-26T16:57:50Z",
+      "evidence_refs": [
+        "gmail-connector:primary",
+        "experiment:UNC-EXTERNAL-PRJ-001",
+        "proof:bounded-followup-20260926-2"
       ]
     }
   ]
