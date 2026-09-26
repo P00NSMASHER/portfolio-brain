@@ -194,7 +194,7 @@ def execute_canary(output_dir):
         },
     )
     req(notification_receipt_2["emitted_alerts"]==[],"unchanged continuation re-emitted cooldown-protected alerts")
-    req(len(notification_receipt_2["suppressed_fingerprints"])>=2,"notification continuation failed dedup/cooldown suppression")
+    req(len(notification_receipt_2["suppressed_fingerprints"])>=1,"notification continuation failed dedup/cooldown suppression")
 
     learning_2=rebuild_from_ledger()
     req(learning_2["state_hash"]==restored_learning["state_hash"],"learning rebuild is not deterministic")

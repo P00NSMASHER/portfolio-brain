@@ -23,7 +23,7 @@ class AutonomousLearningCanaryTests(unittest.TestCase):
         self.assertGreaterEqual(first["scheduler_selected_count"],3)
         self.assertLessEqual(first["scheduler_selected_count"],8)
         self.assertTrue({"HUNT","INTEGRATION","RESEARCH"}<=set(first["scheduler_selected_work_types"]))
-        self.assertEqual(first["scheduler_blocked_approval_count"],2)
+        self.assertEqual(first["scheduler_blocked_approval_count"],0)
 
     def test_canary_uses_zero_paid_model_api(self):
         first=self.receipt["first_cycle"]
@@ -37,7 +37,7 @@ class AutonomousLearningCanaryTests(unittest.TestCase):
         self.assertGreaterEqual(c["scheduler_suppressed_duplicates"],self.receipt["first_cycle"]["scheduler_selected_count"])
         self.assertEqual(c["cost_status"],"DUPLICATE_SUPPRESSED")
         self.assertEqual(c["notifications_emitted"],0)
-        self.assertGreaterEqual(c["notification_suppressed"],2)
+        self.assertGreaterEqual(c["notification_suppressed"],1)
 
     def test_learning_rebuild_is_deterministic_and_not_promoted(self):
         first=self.receipt["first_cycle"];cont=self.receipt["continuation"]

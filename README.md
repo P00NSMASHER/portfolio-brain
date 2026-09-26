@@ -19,7 +19,7 @@ The checked-in paid/model/API budget remains zero and no non-Tier-0 model is ena
 
 ## Permanent authority boundaries
 
-Autonomous operation does **not** grant customer communication, payment/cash movement, live trading or brokerage execution, deployment, merge authority, secret changes, or unapproved consequential child-facing changes. Those remain human-gated or prohibited.
+Autonomous operation allows only narrowly bounded customer email through the action-engine policy. Education-product validation is limited to verified adult stakeholders and cannot contact minors, collect child data, or make consequential child-facing changes. Payment/cash movement, live trading or brokerage execution, deployment, merge authority, secret changes, and unapproved consequential child-facing changes remain human-gated or prohibited.
 
 Because this repository is currently public, persistent state remains sanitized-only. Private customer/operational payloads, credentials, secrets and sensitive evidence bodies are not stored here.
 

@@ -10,9 +10,9 @@ class PortfolioAllocatorTests(unittest.TestCase):
     def test_nine_resources_are_explicit(self):
         self.assertEqual(set(self.by),{"MODEL_CALLS","ENGINEERING_CAPACITY","TESTING","RESEARCH","HUNTER_RUNS","ART_PRODUCTION","HUMAN_REVIEW","API_INFRASTRUCTURE","CASH"})
 
-    def test_current_evidence_allocates_model_research_hunter_and_human_review(self):
+    def test_current_evidence_allocates_model_research_and_hunter(self):
         active={k for k,v in self.by.items() if v["status"]=="ACTIVE_RECOMMENDATION"}
-        self.assertEqual(active,{"MODEL_CALLS","RESEARCH","HUNTER_RUNS","HUMAN_REVIEW"})
+        self.assertEqual(active,{"MODEL_CALLS","RESEARCH","HUNTER_RUNS"})
 
     def test_cash_remains_unallocated_while_model_calls_are_bounded(self):
         self.assertEqual(self.by["CASH"]["allocated_share_basis_points"],0)
@@ -22,12 +22,10 @@ class PortfolioAllocatorTests(unittest.TestCase):
         for key in ["ENGINEERING_CAPACITY","TESTING","ART_PRODUCTION","API_INFRASTRUCTURE"]:
             self.assertEqual(self.by[key]["allocated_share_basis_points"],0)
 
-    def test_human_review_is_reserved_for_child_facing_human_gated_work(self):
-        recs=self.by["HUMAN_REVIEW"]["recommendations"]
-        self.assertTrue(recs)
-        self.assertTrue(all(r["project_id"] in {"PRJ-005","PRJ-006"} for r in recs))
-        self.assertTrue(all(r["authority_requirement"]=="HUMAN_GATED_ACT" for r in recs))
-        self.assertTrue(all(r["actionability"]=="HUMAN_APPROVAL_REQUIRED" for r in recs))
+    def test_resolved_education_validation_no_longer_consumes_human_review(self):
+        self.assertEqual(self.by["HUMAN_REVIEW"]["recommendations"],[])
+        self.assertEqual(self.by["HUMAN_REVIEW"]["allocated_share_basis_points"],0)
+        self.assertEqual(self.by["HUMAN_REVIEW"]["status"],"HOLD_NO_ELIGIBLE_EVIDENCE")
 
     def test_recoveryworks_bounded_validation_receives_model_capacity(self):
         self.assertTrue(any(r["project_id"]=="PRJ-001" and r["authority_requirement"]=="BOUNDED_ACT" for r in self.by["MODEL_CALLS"]["recommendations"]))

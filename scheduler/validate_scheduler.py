@@ -21,8 +21,7 @@ def validate_scheduler():
     selected=receipt["selected_work"];types={w["work_type"] for w in selected}
     req(3<=len(selected)<=p["max_new_work_per_cycle"] and {"RESEARCH","HUNT","INTEGRATION"}<=types,"unexpected current selected work")
     req({"AGT-RESEARCHER","AGT-HUNTER","AGT-PRODUCT-ANALYST"}<={w["assigned_agent_id"] for w in selected},"unexpected current agent assignment")
-    req(len(receipt["blocked_work"])==2 and all(w["state"]=="BLOCKED_APPROVAL" for w in receipt["blocked_work"]),"child-facing human-gated work not preserved as blocked approval")
-    req(all("CONSEQUENTIAL_CHILD_FACING_CHANGE" in w["approval_requirements"] for w in receipt["blocked_work"]),"blocked child-facing experiments missing approval")
+    req(receipt["blocked_work"]==[],"adult-only education validation still appears in blocked work")
     req(not any(w["required_authority"]=="ACT" for w in [*selected,*receipt["blocked_work"]]),"scheduler created ACT work")
     req(not any(w["work_type"] in {"REPAIR","TEST","VERIFICATION"} for w in selected),"scheduler invented gated repair/test/verification work")
     req(any(w["work_type"]=="EXPERIMENT" and w["assigned_agent_id"]=="AGT-COMMERCIAL-ANALYST" for w in selected),"bounded commercial experiment prep not queued")
@@ -33,5 +32,5 @@ def validate_scheduler():
     for forbidden in ["contents: write","pull-requests: write","deployments: write","id-token: write","git push","gh pr","openai","anthropic"]:
         req(forbidden not in wf,f"forbidden scheduler workflow capability: {forbidden}")
     req("git push origin head:main" not in (ROOT/"scheduler/SCHEDULER_CONTRACT.md").read_text().lower(),"upstream direct-main behavior adopted")
-    return {"work_types":7,"selected_current":len(selected),"blocked_approval":2,"queued_agents":len({w["assigned_agent_id"] for w in selected}),"act_work":0,"max_new_per_cycle":p["max_new_work_per_cycle"]}
+    return {"work_types":7,"selected_current":len(selected),"blocked_approval":0,"queued_agents":len({w["assigned_agent_id"] for w in selected}),"act_work":0,"max_new_per_cycle":p["max_new_work_per_cycle"]}
 if __name__=="__main__":print("portfolio-brain Step 19 scheduler: PASS",json.dumps(validate_scheduler(),sort_keys=True))

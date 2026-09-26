@@ -66,9 +66,16 @@ def generate_candidates():
         if p["registration_state"]!="REGISTERED" or p["lifecycle_status"] in {"PAUSED","RETIRED"}:continue
         if p["project_type"] in {"BUSINESS","PRODUCT"} and commercial[pid]==0:
             business=p["project_type"]=="BUSINESS"
-            bounded_commercial=pid in {"PRJ-001","PRJ-002","PRJ-003","PRJ-004"}
+            education_validation=load("action_engine/EDUCATION_VALIDATION_POLICY.json")
+            bounded_education=(
+                education_validation.get("enabled") is True
+                and pid in education_validation.get("allowed_project_ids",[])
+                and "education" in p["categories"]
+            )
+            bounded_commercial=pid in {"PRJ-001","PRJ-002","PRJ-003","PRJ-004"} or bounded_education
             approvals=[] if bounded_commercial else ["CUSTOMER_COMMUNICATION"]
-            if "education" in p["categories"]:approvals.append("CONSEQUENTIAL_CHILD_FACING_CHANGE")
+            if "education" in p["categories"] and not bounded_education:
+                approvals.append("CONSEQUENTIAL_CHILD_FACING_CHANGE")
             comps={
               "importance":component(5 if business else 4,"DERIVED","Active business/product lacks a verified external outcome in the current graph.",f"registry:{pid}","graph:no-verified-commercial-node"),
               "uncertainty":component(5,"DERIVED","No verified customer/revenue/outcome node is currently linked to this project.",f"graph:project:{pid}","graph:no-verified-commercial-node"),
@@ -82,12 +89,19 @@ def generate_candidates():
             candidates.append(_candidate(
               f"UNC-EXTERNAL-{pid}",
               "EXTERNAL_VALIDATION_GAP",
-              f"What is the smallest reversible external validation that can produce the first VERIFIED customer/value outcome for {p['canonical_name']}?",
+              (
+                f"What is the smallest reversible adult-stakeholder external validation that can produce the first VERIFIED customer/value outcome for {p['canonical_name']} without direct child contact, child-data collection, or a child-facing product change?"
+                if bounded_education else
+                f"What is the smallest reversible external validation that can produce the first VERIFIED customer/value outcome for {p['canonical_name']}?"
+              ),
               [pid],comps,
               "BOUNDED_ACT" if bounded_commercial else "HUMAN_GATED_ACT",
               "READY_FOR_BOUNDED_EXTERNAL_EXECUTION" if bounded_commercial else "HUMAN_APPROVAL_REQUIRED",
               approvals,[],
-              [f"registry:{pid}","graph:no-verified-commercial-node","learning:external-value-weight"]
+              [
+                f"registry:{pid}","graph:no-verified-commercial-node","learning:external-value-weight",
+                *(["action-policy:action_engine/EDUCATION_VALIDATION_POLICY.json"] if bounded_education else [])
+              ]
             ))
     # Structural capability-evidence gaps. Absence is explicitly not proof of missing capability.
     for p in projects:

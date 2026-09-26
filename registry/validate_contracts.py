@@ -62,10 +62,15 @@ def validate_autonomy_profile(record: dict[str, Any]) -> None:
     _unique_strings(record["hard_prohibitions"], "hard_prohibitions")
     sod=record["separation_of_duties"]
     _require(sod=={"builder_may_self_approve":False,"independent_verifier_required_for_promotion":True}, "separation of duties must remain fail-closed")
-    bounded_act_projects={"PRJ-001","PRJ-002","PRJ-003","PRJ-004"}
+    bounded_act_projects={"PRJ-001","PRJ-002","PRJ-003","PRJ-004","PRJ-005","PRJ-006"}
     if perms["ACT"]["decision"]=="BOUNDED":
-        _require(record["project_id"] in bounded_act_projects,"bounded ACT limited to approved commercial projects")
-        _require("CUSTOMER_COMMUNICATION" not in gates,"bounded commercial ACT cannot also require customer-communication approval")
+        _require(record["project_id"] in bounded_act_projects,"bounded ACT limited to approved projects")
+        _require("CUSTOMER_COMMUNICATION" not in gates,"bounded ACT cannot also require customer-communication approval")
+        if record["project_id"] in {"PRJ-005","PRJ-006"}:
+            _require("CONSEQUENTIAL_CHILD_FACING_CHANGE" in gates,"education bounded ACT must retain child-facing human gate")
+            joined=" ".join(perms["ACT"]["conditions"])
+            _require("VERIFIED_ADULT_STAKEHOLDER" in joined,"education bounded ACT missing verified-adult target condition")
+            _require("minor" in joined.lower() and "child-data" in joined.lower(),"education bounded ACT missing child-safety conditions")
     else:
         _require(perms["ACT"]["decision"] in {"HUMAN_APPROVAL_REQUIRED","PROHIBITED"},"unbounded ACT is not allowed")
 

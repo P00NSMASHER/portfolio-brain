@@ -10,7 +10,7 @@ class ExperimentEngineTests(unittest.TestCase):
 
     def test_all_uncertainties_become_explicit_plans(self):
         self.assertEqual(self.portfolio["plan_count"],20)
-        self.assertEqual(self.portfolio["status_counts"],{"READY_FOR_ISOLATED_EXECUTION":12,"READY_FOR_BOUNDED_EXECUTION":4,"HUMAN_APPROVAL_REQUIRED":2,"BLOCKED":2})
+        self.assertEqual(self.portfolio["status_counts"],{"READY_FOR_ISOLATED_EXECUTION":12,"READY_FOR_BOUNDED_EXECUTION":6,"HUMAN_APPROVAL_REQUIRED":0,"BLOCKED":2})
         for p in self.portfolio["plans"]:validate_plan(p)
 
     def test_selected_recoveryworks_plan_is_bounded_external_execution(self):
@@ -62,9 +62,15 @@ class ExperimentEngineTests(unittest.TestCase):
         self.assertFalse(p["autonomous_execution_allowed"])
         self.assertIn("BLK-001",p["hard_blockers"])
 
-    def test_child_facing_approvals_are_inherited(self):
+    def test_education_external_validation_is_bounded_and_adult_only(self):
         for uid in ["UNC-EXTERNAL-PRJ-005","UNC-EXTERNAL-PRJ-006"]:
-            self.assertIn("CONSEQUENTIAL_CHILD_FACING_CHANGE",self.by_unc[uid]["approval_requirements"])
+            p=self.by_unc[uid]
+            self.assertEqual(p["status"],"READY_FOR_BOUNDED_EXECUTION")
+            self.assertEqual(p["execution_mode"],"BOUNDED_EXTERNAL_VALIDATION")
+            self.assertEqual(p["approval_requirements"],[])
+            self.assertTrue(p["autonomous_execution_allowed"])
+            self.assertEqual(p["cost_boundary"]["external_messages_max"],1)
+            self.assertIn("action-policy:action_engine/EDUCATION_VALIDATION_POLICY.json",p["provenance_refs"])
 
     def test_market_research_plan_preserves_no_trading_boundaries(self):
         p=self.by_unc["UNC-CAPABILITY-PRJ-007"]
