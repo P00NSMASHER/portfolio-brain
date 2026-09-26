@@ -126,7 +126,7 @@ def record_gmail_send(ledger,request,*,gmail_message_id,gmail_thread_id,sent_at=
       "target_hash":target_hash(request["target"]),"payload_hash":payload_hash(request["subject"],request["body"],request["campaign_id"]),
       "campaign_hash":_sha(request["campaign_id"]),"gmail_message_hash":_sha(gmail_message_id),"gmail_thread_hash":_sha(gmail_thread_id),
       "status":"SENT","sent_at":sent_at,
-      "evidence_refs":list(dict.fromkeys([*request["evidence_refs"],*(evidence_refs or []),"gmail-connector:jayp19386"]))
+      "evidence_refs":list(dict.fromkeys([*request["evidence_refs"],*(evidence_refs or []),"gmail-connector:primary"]))
     }
     req(all(_safe_ref(x) for x in row["evidence_refs"]),"receipt evidence ref unsafe")
     out=copy.deepcopy(ledger);out["executions"].append(row);out["sequence"]+=1;out["updated_at"]=sent_at

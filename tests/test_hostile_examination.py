@@ -102,7 +102,7 @@ class HostileExaminationTests(unittest.TestCase):
     def test_gmail_gateway_has_no_smtp_transport_surface(self):
         policy=json.loads((ROOT/"action_engine/ACTION_POLICY.json").read_text())
         self.assertEqual(policy["execution_provider"],"CHATGPT_GMAIL_CONNECTOR")
-        self.assertEqual(policy["gmail_account"],"jayp19386@gmail.com")
+        self.assertEqual(policy["gmail_account_ref"],"PRIMARY_GMAIL_CONNECTOR")
         src=(ROOT/"action_engine/action_executor.py").read_text()
         self.assertNotIn("smtplib",src)
         self.assertNotIn("SMTP_",src)

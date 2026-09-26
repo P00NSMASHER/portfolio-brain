@@ -102,13 +102,13 @@
   "external_connector_gateways": {
     "gmail": {
       "provider": "CHATGPT_GMAIL_CONNECTOR",
-      "account": "jayp19386@gmail.com",
       "execution_task_id": "6ab377c25df08191a6e2aa1537d9d2ef",
       "planner_task_id": "6ab377be3184819186a3075f37a530b8",
       "policy_file": "action_engine/ACTION_POLICY.json",
       "ledger_file": "action_engine/GMAIL_GATEWAY_LEDGER.json",
       "kill_switch_file": "action_engine/KILL_SWITCH.json",
-      "private_queue": "GMAIL_DRAFTS"
+      "private_queue": "GMAIL_DRAFTS",
+      "account_ref": "PRIMARY_GMAIL_CONNECTOR"
     }
   }
 }

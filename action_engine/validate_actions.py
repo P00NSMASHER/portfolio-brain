@@ -12,7 +12,7 @@ def req(ok,msg):
 def validate_actions():
     p=policy()
     req(p["mode"]=="CHATGPT_GMAIL_CONNECTOR_GATEWAY" and p["execution_provider"]=="CHATGPT_GMAIL_CONNECTOR","Gmail gateway mode mismatch")
-    req(p["gmail_account"]=="jayp19386@gmail.com","wrong Gmail account bound")
+    req(p["gmail_account_ref"]=="PRIMARY_GMAIL_CONNECTOR","wrong Gmail connector alias")
     req(set(p["allowed_project_ids"])=={"PRJ-001","PRJ-002","PRJ-003","PRJ-004"},"commercial project set changed")
     req(set(p["allowed_actions"])=={"CUSTOMER_EMAIL"},"unexpected action channel")
     req("credential_env" not in p["allowed_actions"]["CUSTOMER_EMAIL"],"SMTP credentials remain in Gmail gateway policy")
@@ -26,7 +26,7 @@ def validate_actions():
         req(forbidden not in raw,"private Gmail data leaked into ledger")
     d2=preflight(out,request,at="2026-09-26T13:00:00Z")
     req(d2["status"]=="DUPLICATE_SUPPRESSED","sanitized-ledger duplicate suppression failed")
-    return {"provider":"CHATGPT_GMAIL_CONNECTOR","gmail_account":"jayp19386@gmail.com","allowed_projects":4,"allowed_channels":1,"daily_email_limit":p["allowed_actions"]["CUSTOMER_EMAIL"]["max_per_utc_day"],"private_payload_persisted":False,"duplicate_suppression":True}
+    return {"provider":"CHATGPT_GMAIL_CONNECTOR","gmail_account_ref":"PRIMARY_GMAIL_CONNECTOR","allowed_projects":4,"allowed_channels":1,"daily_email_limit":p["allowed_actions"]["CUSTOMER_EMAIL"]["max_per_utc_day"],"private_payload_persisted":False,"duplicate_suppression":True}
 
 if __name__=="__main__":
     print("portfolio-brain Gmail action gateway: PASS",json.dumps(validate_actions(),sort_keys=True))
