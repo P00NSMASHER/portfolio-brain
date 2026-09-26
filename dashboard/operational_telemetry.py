@@ -65,6 +65,16 @@ def usage_today(cost_state: dict[str,Any], *, at: str) -> dict[str,Any]:
         if usage is not None:_add_usage(total,usage)
     return total
 
+def actual_usage_today(cost_state: dict[str,Any], *, at: str) -> dict[str,Any]:
+    now=_time(at);assert now is not None
+    day=now.date();total=_zero_usage()
+    for row in cost_state["reservations"]:
+        created=_time(row["created_at"])
+        if created is None or created.date()!=day:continue
+        if row["status"] in {"COMMITTED","OVERAGE"} and row["actual_usage"] is not None:
+            _add_usage(total,row["actual_usage"])
+    return total
+
 
 def _age_minutes(value: str | None, at: datetime) -> float | None:
     dt=_time(value)
@@ -182,13 +192,15 @@ def build_operational_telemetry(*, at: str | None=None) -> dict[str,Any]:
 
     queue=_queue(scheduler)
     agent_view=_agents(agents,at=now)
-    used=usage_today(cost,at=at)
+    accounted=usage_today(cost,at=at)
+    actual=actual_usage_today(cost,at=at)
     ceilings=cost_policy["portfolio_ceiling"]
     utilization={
         key:{
-            "used":used[key],
+            "used":accounted[key],
+            "actual":actual[key],
             "ceiling":ceilings[key],
-            "fraction":0 if ceilings[key]==0 else round(used[key]/ceilings[key],4),
+            "fraction":0 if ceilings[key]==0 else round(accounted[key]/ceilings[key],4),
         } for key in USAGE_FIELDS
     }
 
@@ -240,7 +252,8 @@ def build_operational_telemetry(*, at: str | None=None) -> dict[str,Any]:
         "cost":{
             "state_sequence":cost["sequence"],
             "state_updated_at":cost["updated_at"],
-            "usage_today":used,
+            "actual_usage_today":actual,
+            "budget_accounted_usage_today":accounted,
             "utilization":utilization,
             "recent_decisions":cost["recent_decisions"][-20:],
             "recent_reservations":[
