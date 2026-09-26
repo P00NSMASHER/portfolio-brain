@@ -46,11 +46,16 @@ class UncertaintyEngineTests(unittest.TestCase):
             self.assertEqual(c["components"]["test_cost"]["basis_type"],"POLICY_ESTIMATE")
             self.assertEqual(c["components"]["time_to_evidence"]["basis_type"],"POLICY_ESTIMATE")
 
-    def test_child_facing_external_questions_remain_human_gated(self):
+    def test_education_external_questions_use_adult_only_bounded_path(self):
         cs={c["uncertainty_id"]:c for c in generate_candidates()}
         for uid in ["UNC-EXTERNAL-PRJ-005","UNC-EXTERNAL-PRJ-006"]:
-            self.assertEqual(cs[uid]["actionability"],"HUMAN_APPROVAL_REQUIRED")
-            self.assertIn("CONSEQUENTIAL_CHILD_FACING_CHANGE",cs[uid]["approval_requirements"])
+            c=cs[uid]
+            self.assertEqual(c["authority_requirement"],"BOUNDED_ACT")
+            self.assertEqual(c["actionability"],"READY_FOR_BOUNDED_EXTERNAL_EXECUTION")
+            self.assertEqual(c["approval_requirements"],[])
+            self.assertIn("adult-stakeholder",c["question"])
+            self.assertIn("without direct child contact",c["question"])
+            self.assertIn("action-policy:action_engine/EDUCATION_VALIDATION_POLICY.json",c["evidence_refs"])
 
     def test_canary_cannot_jump_to_step24(self):
         c=next(c for c in generate_candidates() if c["uncertainty_id"]=="UNC-CANARY-PRJ-000")
