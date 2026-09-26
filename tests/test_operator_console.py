@@ -55,6 +55,9 @@ class OperatorConsoleTests(unittest.TestCase):
             (root/"operator_console/OWNER_APPROVALS.json").write_text(json.dumps({
                 "schema_version":"1.0.0","ledger_id":"portfolio-owner-approvals","approvals":[]
             }))
+            (root/"operator_console/OPERATOR_POLICY.json").write_text(json.dumps({
+                "allowed_approval_actors":["P00NSMASHER"]
+            }))
             with patch.object(console,"ROOT",root):
                 row=console.prepare_approval(
                     source_ref="EXP-TEST",project_id="PRJ-005",approval_code="CONSEQUENTIAL_CHILD_FACING_CHANGE",
