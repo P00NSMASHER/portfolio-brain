@@ -1,0 +1,7 @@
+Portfolio Brain daily reasoning trigger.
+
+Updating this file on main intentionally triggers runtime-daily-learning.
+The triggered workflow remains bounded by the runtime policy, model router,
+Step-20 cost governor, provider secret, and kill switches.
+
+trigger_revision: 2026-09-26T15:53:00Z

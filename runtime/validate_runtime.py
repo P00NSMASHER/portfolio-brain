@@ -47,6 +47,7 @@ def validate_runtime()->dict:
     for value in forbidden: req(value.lower() not in combined,f"forbidden workflow capability: {value}")
     req("17 * * * *" in texts[names[2]],"hourly schedule missing")
     req("37 9 * * *" in texts[names[3]],"daily schedule missing")
+    req("runtime/TRIGGER_DAILY_REASONING" in texts[names[3]] and "push:" in texts[names[3]],"daily manual kick path missing")
     req("17 10 * * 1" in texts[names[4]],"weekly schedule missing")
     req("PORTFOLIO_MODEL_API_KEY" in texts[names[3]] and "portfolio_model_api_key" in texts[names[3]],"daily model secret handoff missing")
     req("PORTFOLIO_MODEL_API_KEY" in texts[names[4]] and "portfolio_model_api_key" in texts[names[4]],"weekly model secret handoff missing")
