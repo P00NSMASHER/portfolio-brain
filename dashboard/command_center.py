@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from dashboard.executive_dashboard import build_dashboard_snapshot
+from cost_governor.sentinel import build_sentinel_snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -114,6 +115,13 @@ def build_command_center_snapshot() -> dict[str, Any]:
     action_policy = load_json("action_engine/ACTION_POLICY.json")
     action_ledger = load_json("action_engine/GMAIL_GATEWAY_LEDGER.json")
     model_registry = load_json("model_router/PROVIDER_REGISTRY.json")
+    model_ledger = load_json("model_router/MODEL_ROUTING_LEDGER.json")
+    provider_health = load_live_json("provider_health.json","model_router/PROVIDER_HEALTH_SEED.json")
+    sentinel = build_sentinel_snapshot(
+        cost_policy=cost_policy,cost_state=cost_state,provider_registry=model_registry,
+        model_ledger=model_ledger,action_policy=action_policy,action_ledger=action_ledger,
+        provider_health=provider_health,
+    )
 
     state_by_agent = {a["agent_id"]: a for a in agent_state["agents"]}
     agents = []
@@ -188,6 +196,15 @@ def build_command_center_snapshot() -> dict[str, Any]:
                 "title": "Finite paid model/API budget is enabled",
                 "detail": f'Portfolio ceiling is USD {portfolio_ceiling["cost_usd"]}/day with {portfolio_ceiling["model_calls"]} model calls and {len(enabled_model_routes)} enabled non-Tier-0 model routes.',
                 "evidence_ref": "cost_governor/COST_GOVERNOR_POLICY.json",
+            }
+        )
+    if provider_health["readiness"] not in {"READY","UNPROBED","DUPLICATE_SUPPRESSED"}:
+        alerts.append(
+            {
+                "severity": "MEDIUM" if provider_health["provider_domain_blocked"] else "INFO",
+                "title": "Model provider readiness requires attention" if provider_health["provider_domain_blocked"] else "Model budget gate is active",
+                "detail": f'Provider readiness={provider_health["readiness"]}; budget_blocked={provider_health["budget_domain_blocked"]}; provider_blocked={provider_health["provider_domain_blocked"]}.',
+                "evidence_ref": "dashboard/live/provider_health.json",
             }
         )
     if sent_actions:
@@ -284,6 +301,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "reservation_count": len(cost_state["reservations"]),
             "recent_decision_count": len(cost_state["recent_decisions"]),
             "managed_workflow_names": cost_policy["managed_workflow_names"],
+            "sentinel": sentinel,
         },
         "notifications": {
             "mode": notification_policy["mode"],
@@ -295,6 +313,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
         "model_router": {
             "enabled_non_tier0_routes": enabled_model_routes,
             "enabled_non_tier0_route_count": len(enabled_model_routes),
+            "provider_health": provider_health,
+            "model_efficiency": sentinel["model_efficiency"],
         },
         "action_engine": {
             "enabled": action_policy["enabled"],
@@ -308,6 +328,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "prohibited_action_types": action_policy["prohibited_action_types"],
             "execution_provider": action_policy["execution_provider"],
             "gmail_account_ref": action_policy["gmail_account_ref"],
+            "gateway_health": sentinel["gmail_gateway"],
         },
         "kill_switches": kill_switches,
         "alerts": alerts,
@@ -343,6 +364,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
                     "action_engine/ACTION_POLICY.json",
                     "action_engine/GMAIL_GATEWAY_LEDGER.json",
                     "model_router/PROVIDER_REGISTRY.json",
+                    "model_router/MODEL_ROUTING_LEDGER.json",
+                    "model_router/PROVIDER_HEALTH_SEED.json",
                     "dashboard/live/state_sources.json",
                 ]
             )
@@ -362,11 +385,11 @@ def _badge(text: str, tone: str = "neutral") -> str:
 
 def _status_tone(value: str) -> str:
     upper = value.upper()
-    if upper in {"OPERATIONAL", "ACTIVE", "VERIFIED_FIXED", "RUNNING", "LIVE"}:
+    if upper in {"OPERATIONAL", "ACTIVE", "VERIFIED_FIXED", "RUNNING", "LIVE", "READY"}:
         return "good"
-    if upper in {"BLOCKED", "CRITICAL", "HIGH", "ENGAGED", "DISABLED"}:
+    if upper in {"BLOCKED", "CRITICAL", "HIGH", "ENGAGED", "DISABLED", "PROVIDER_ERROR"}:
         return "bad"
-    if upper in {"EVIDENCE_GAPS", "MEDIUM", "ACTIVE_RESEARCH_ONLY", "IN_DEVELOPMENT", "STALE", "FALLBACK", "DEGRADED"}:
+    if upper in {"EVIDENCE_GAPS", "MEDIUM", "ACTIVE_RESEARCH_ONLY", "IN_DEVELOPMENT", "STALE", "FALLBACK", "DEGRADED", "MISSING_CREDENTIAL", "BILLING_NOT_ACTIVE", "QUOTA_EXHAUSTED", "RATE_LIMITED", "BUDGET_BLOCKED", "UNPROBED"}:
         return "warn"
     return "neutral"
 
@@ -476,6 +499,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
         "hunter":"Hunter",
         "cost":"Cost Governor",
         "notifications":"Notifications",
+        "provider":"Model Provider",
         "agents":"Agent Fleet",
     }
     source_rows = "".join(
