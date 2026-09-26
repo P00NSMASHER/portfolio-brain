@@ -76,6 +76,8 @@ def validate_command_center() -> dict[str, object]:
     require("font-family:-apple-system" in page, "native system typography stack missing")
     require("-webkit-backdrop-filter" in page and "border-radius:var(--radius-xl)" in page, "premium glass/card design contract missing")
     require("Durable Work Queue" in page, "durable queue panel missing")
+    require("project-mobile-card" in page and "project-desktop" in page and "projectCards" in page, "responsive project-card portfolio view missing")
+    require("<details class=\"project-bottleneck\">" in page, "mobile project bottleneck disclosure missing")
     require("OBSERVE ONLY" in page, "read-only label missing")
     require("Bounded Action Engine" in page, "action-engine panel missing")
     require("Enabled Model Routes" in page, "model-route panel missing")
