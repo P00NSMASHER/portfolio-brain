@@ -73,8 +73,8 @@ def _resource_candidates(resource,uncertainty,experiments):
     by_unc={c["uncertainty_id"]:c for c in uncertainty["candidates"]}
     plans=experiments["plans"]
     if resource=="MODEL_CALLS":
-        ids=[p["uncertainty_id"] for p in plans if p["status"]=="READY_FOR_ISOLATED_EXECUTION"]
-        return [by_unc[x] for x in ids],"Enabled Tier 1-3 routes create bounded reasoning capacity for eligible experiments and evidence synthesis."
+        ids=[p["uncertainty_id"] for p in plans if p["status"] in {"READY_FOR_ISOLATED_EXECUTION","READY_FOR_BOUNDED_EXECUTION"}]
+        return [by_unc[x] for x in ids],"Enabled Tier 1-3 routes create bounded reasoning capacity for isolated and bounded external experiments plus evidence synthesis."
     if resource=="RESEARCH":
         ids=[p["uncertainty_id"] for p in plans if p["status"]=="READY_FOR_ISOLATED_EXECUTION" and p["execution_mode"]=="READ_ONLY_EVIDENCE_ACQUISITION"]
         return [by_unc[x] for x in ids],"Read-only evidence acquisition is an evidence-backed research demand."
