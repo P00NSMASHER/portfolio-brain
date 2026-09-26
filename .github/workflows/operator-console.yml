@@ -86,7 +86,6 @@ concurrency:
 jobs:
   operate:
     if: ${{ github.actor == github.repository_owner }}
-    environment: portfolio-operator
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
