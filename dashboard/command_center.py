@@ -475,11 +475,13 @@ def render_html(snapshot: dict[str, Any]) -> str:
     ) or '<div class="empty">No derived command-center alerts.</div>'
 
     project_rows = []
+    project_cards = []
     for p in snapshot["projects"]:
         bottleneck = (p["highest_value_uncertainty"] or {}).get("question") or "No ranked uncertainty"
+        search_text = _e((p["project_id"] + " " + p["name"] + " " + p["project_type"] + " " + p["lifecycle_status"] + " " + p["health"]).lower())
         project_rows.append(
             f"""
-            <tr data-project="{_e((p["project_id"] + " " + p["name"] + " " + p["project_type"]).lower())}">
+            <tr data-project="{search_text}">
               <td><strong>{_e(p["project_id"])}</strong><span class="sub">{_e(p["name"])}</span></td>
               <td>{_badge(p["lifecycle_status"], _status_tone(p["lifecycle_status"]))}</td>
               <td>{_badge(p["health"], _status_tone(p["health"]))}</td>
@@ -488,6 +490,31 @@ def render_html(snapshot: dict[str, Any]) -> str:
               <td class="num">{len(p["blocked_actions"])}</td>
               <td class="num">{p["evidence_coverage"]["uncertainty_candidates"]}</td>
             </tr>
+            """
+        )
+        project_cards.append(
+            f"""
+            <article class="project-mobile-card" data-project="{search_text}">
+              <div class="project-mobile-top">
+                <div class="project-mobile-title">
+                  <strong>{_e(p["project_id"])}</strong>
+                  <span>{_e(p["name"])}</span>
+                </div>
+                <div class="project-mobile-badges">
+                  {_badge(p["lifecycle_status"], _status_tone(p["lifecycle_status"]))}
+                  {_badge(p["health"], _status_tone(p["health"]))}
+                </div>
+              </div>
+              <div class="project-mobile-stats">
+                <div><span>Open work</span><strong>{len(p["pending_autonomous_work"])}</strong></div>
+                <div><span>Blocked</span><strong>{len(p["blocked_actions"])}</strong></div>
+                <div><span>Uncertainties</span><strong>{p["evidence_coverage"]["uncertainty_candidates"]}</strong></div>
+              </div>
+              <details class="project-bottleneck">
+                <summary>Current bottleneck</summary>
+                <p>{_e(bottleneck)}</p>
+              </details>
+            </article>
             """
         )
 
@@ -1095,6 +1122,24 @@ tbody tr:hover{{background:color-mix(in srgb,var(--blue) 4%,transparent)}}
 .source-mobile-specs span{{display:block;color:var(--muted);font-size:.62rem;text-transform:uppercase;letter-spacing:.05em}}
 .source-mobile-specs strong{{display:block;margin-top:4px;font-size:.8rem;overflow-wrap:anywhere}}
 .source-mobile-time{{margin-top:12px;color:var(--muted);font-size:.72rem}}
+.project-mobile{{display:none}}
+.project-mobile-card{{border:1px solid var(--line);border-radius:22px;background:var(--surface-soft);padding:18px}}
+.project-mobile-top{{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}}
+.project-mobile-title{{min-width:0}}
+.project-mobile-title strong{{display:block;font-size:1rem;letter-spacing:-.025em}}
+.project-mobile-title span{{display:block;margin-top:4px;color:var(--muted);font-size:.86rem;line-height:1.3}}
+.project-mobile-badges{{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:58%}}
+.project-mobile-badges .badge{{max-width:100%;overflow:hidden;text-overflow:ellipsis}}
+.project-mobile-stats{{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}}
+.project-mobile-stats>div{{min-width:0;border:1px solid var(--line);background:color-mix(in srgb,var(--surface-solid) 72%,transparent);border-radius:15px;padding:11px}}
+.project-mobile-stats span{{display:block;color:var(--muted);font-size:.6rem;text-transform:uppercase;letter-spacing:.05em}}
+.project-mobile-stats strong{{display:block;margin-top:5px;font-size:1rem;font-variant-numeric:tabular-nums}}
+.project-bottleneck{{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}}
+.project-bottleneck summary{{cursor:pointer;list-style:none;color:var(--blue);font-size:.78rem;font-weight:620}}
+.project-bottleneck summary::-webkit-details-marker{{display:none}}
+.project-bottleneck summary::after{{content:"+";float:right;font-size:1rem;line-height:.9;color:var(--muted)}}
+.project-bottleneck[open] summary::after{{content:"–"}}
+.project-bottleneck p{{margin:10px 0 0;font-size:.82rem;line-height:1.45}}
 ul{{margin:.7rem 0 0;padding-left:19px;color:var(--muted)}}
 li{{margin:.45rem 0;line-height:1.42}}
 .progress{{height:7px;border-radius:999px;background:var(--surface-soft);overflow:hidden;border:1px solid var(--line);margin:11px 0}}
@@ -1147,6 +1192,8 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
   .table-wrap{{margin-left:-4px;margin-right:-4px;width:calc(100% + 8px)}}
   .source-desktop{{display:none}}
   .source-mobile{{display:grid;gap:10px}}
+  .project-desktop{{display:none}}
+  .project-mobile{{display:grid;gap:10px}}
   .callout{{min-height:0;padding:18px}}
   .cycle-callout{{min-height:0}}
   .spec-grid{{grid-template-columns:1fr}}
@@ -1291,10 +1338,11 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       <div><h2>Portfolio Grid</h2><p>Lifecycle, evidence health, uncertainty, and scheduler state · {_e(source_detail("scheduler"))}</p></div>
       <div>{source_badge("scheduler")} <input class="search" id="projectSearch" placeholder="Filter projects…" oninput="filterProjects(this.value)"></div>
     </div>
-    <div class="table-wrap"><table>
+    <div class="table-wrap project-desktop"><table>
       <thead><tr><th>Project</th><th>Lifecycle</th><th>Evidence health</th><th>Current bottleneck</th><th class="num">Pending</th><th class="num">Blocked</th><th class="num">Uncertainties</th></tr></thead>
       <tbody id="projectRows">{''.join(project_rows)}</tbody>
     </table></div>
+    <div id="projectCards" class="project-mobile">{''.join(project_cards)}</div>
   </section>
 
   <section class="grid two" style="margin-top:14px">
@@ -1407,8 +1455,8 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
 <script>
 function filterProjects(q) {{
   q = (q || "").toLowerCase().trim();
-  document.querySelectorAll("#projectRows tr").forEach(function(row) {{
-    row.style.display = row.dataset.project.indexOf(q) >= 0 ? "" : "none";
+  document.querySelectorAll("#projectRows tr, #projectCards .project-mobile-card").forEach(function(item) {{
+    item.style.display = item.dataset.project.indexOf(q) >= 0 ? "" : "none";
   }});
 }}
 </script>
