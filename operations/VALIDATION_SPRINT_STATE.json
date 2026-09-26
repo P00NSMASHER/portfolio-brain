@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0.0",
+  "sprint_id": "OPS-VALIDATION-20260925",
+  "status": "ACTIVE",
+  "purpose": "Prove Portfolio Brain produces one independently verifiable real-world outcome without weakening authority, cost, privacy, or durability controls.",
+  "started_at": "2026-09-25T20:09:00-04:00",
+  "target_end_at": "2026-10-02T20:09:00-04:00",
+  "architecture_freeze_until": "2026-09-27T20:09:00-04:00",
+  "architecture_change_policy": "VERIFIED_BREAK_FIX_ONLY",
+  "primary_commercial_track": "freightrecovery",
+  "secondary_commercial_track": "capturebrief",
+  "exit_gate": "ONE_VERIFIED_EXTERNAL_OUTCOME_THROUGH_PORTFOLIO_BRAIN",
+  "operating_baseline": {
+    "portfolio_brain_status": "OPERATIONAL",
+    "architecture_version": "1.25.0",
+    "main_sha": "bfbe5f9a09f1a47d72cf348fcc0a1e6b797b7763",
+    "latest_regression_tests": 317,
+    "approved_recurring_workflows": 7,
+    "enabled_nonzero_models": 0,
+    "paid_model_api_default": "DENY_ZERO_BUDGET",
+    "step23_unresolved_findings": 0,
+    "step24_authority_violations": 0
+  },
+  "commercial_baseline": {
+    "freightrecovery_first_contact_threads_sent": 18,
+    "freightrecovery_human_replies": 0,
+    "freightrecovery_related_auto_replies_observed": 1,
+    "freightrecovery_live_checkout_sessions": 0,
+    "freightrecovery_live_payment_intents": 0,
+    "followup_to_existing_contacts_allowed": false,
+    "outbound_state": "LOCKED_UNTIL_GENUINE_REPLY_OR_SEPARATE_EXPLICIT_AUTHORIZATION_FOR_NEW_FIRST_CONTACT"
+  },
+  "primary_uncertainty": {
+    "question": "Can the current FreightRecovery free-audit offer produce a genuine buyer engagement and a verifiable audit/recovery outcome?",
+    "current_evidence": "NO_GENUINE_REPLY_OR_PAYMENT_YET",
+    "next_admissible_action": "Monitor existing contacted cohort for genuine replies; keep audit intake/delivery readiness measurable; do not send or draft new email without explicit authorization.",
+    "stop_condition": "A genuine buyer response creates an authorized bounded audit path, or the sprint window closes with no verified external outcome."
+  },
+  "scorecard": {
+    "successful_autonomous_cycles_since_start": 0,
+    "failed_autonomous_cycles_since_start": 0,
+    "duplicate_work_prevented_since_start": 0,
+    "authority_violations_since_start": 0,
+    "paid_model_api_cost_usd_since_start": 0,
+    "verified_learning_observations_since_start": 0,
+    "verified_external_outcomes_since_start": 0,
+    "genuine_freightrecovery_replies_since_start": 0,
+    "paid_freightrecovery_outcomes_since_start": 0
+  },
+  "guardrails": [
+    "No follow-up to an existing contact without a genuine human reply.",
+    "No new email drafting or sending without explicit user authorization.",
+    "No customer communication, money movement, trading, deployment, merge, or consequential child-facing ACT by autonomous Portfolio Brain.",
+    "No paid/model/API budget expansion during the validation sprint without separate explicit authorization.",
+    "While the repository is public, store sanitized counts/hashes/references only; no customer identities, message bodies, credentials, or private operational payloads."
+  ],
+  "evidence_refs": [
+    "portfolio-brain:main@bfbe5f9a09f1a47d72cf348fcc0a1e6b797b7763",
+    "github-value-hunt-ledger:COMMERCIAL_EVIDENCE_SPRINT.md@c6276c80828d2632d5fee37cdaaf65f1d5b36427",
+    "gmail:sanitized-freightrecovery-thread-count-check",
+    "stripe:freightrecovery-live-zero-checkout-zero-payment-intents"
+  ]
+}
