@@ -1,28 +1,31 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-09-26T16:53:30Z",
+  "generated_at": "2026-09-26T18:20:09Z",
   "provider": "CHATGPT_SCHEDULED_FALLBACK",
-  "source_main_sha": "957aeae510773c6b9c02592d8b1c3725a9e45a48",
+  "source_main_sha": "e3bb7f79b6d42ad294516cd5df5e50893e87a057",
   "trigger_reason": "OPENAI_API_BILLING_NOT_ACTIVE",
   "authority_granted": false,
   "evidence_upgraded": false,
-  "top_bottleneck": "Portfolio Brain still lacks a VERIFIED external customer/value outcome. PRJ-001 has one sanitized live Gmail action receipt, but no verified commercial response/outcome has been ingested yet. Direct API reasoning is continuity-blocked by billing_not_active, not by architecture.",
+  "top_bottleneck": "Portfolio Brain has proven bounded Gmail execution for PRJ-001 twice, but still has no recorded experiment outcome or production learning observation. The highest-value bottleneck is now closing the customer-response-to-sanitized-outcome loop without treating sends, silence, or model advice as customer value.",
   "next_actions": [
-    "Keep PRJ-001 as the highest-value external-validation lane and continue bounded, high-quality Gmail experiments through the existing planner/gateway while deduplicating recipients and honoring the current action policy.",
-    "Treat the first genuine positive, negative, or qualified customer reply as external evidence; ingest it into the outcome/learning path instead of treating silence or internal activity as value.",
-    "Continue Hunter, scheduler, runtime, repair, transfer, dashboard, and Gmail execution without waiting for API billing. Restore Terra/Sol as the preferred advisory layer automatically once API billing becomes active."
+    "Hold PRJ-001 at the current bounded cohort long enough to observe genuine replies; classify only new human responses through the Gmail gateway and keep silence INCONCLUSIVE.",
+    "Map the first genuine response into sanitized OBSERVED evidence and an INCONCLUSIVE experiment outcome unless independent verification supports a definitive result; never persist private message content or identifiers.",
+    "Instrument sanitized Gmail execution receipts as INTERNAL_ACTIVITY learning observations so delivery/execution health can improve without being mislabeled as VERIFIED_EXTERNAL_VALUE."
   ],
-  "experiment_improvement": "Vary one commercial hypothesis at a time while preserving the same bounded-action controls: message framing/recipient segment should be explicit experiment dimensions, and response class should be measured as VERIFIED external evidence only when directly observed.",
-  "reuse_opportunity": "Reuse the Gmail planner/gateway + external-outcome classification pattern for CaptureBrief and PermitPlate after PRJ-001 produces a measured response, rather than building separate outreach infrastructure.",
+  "experiment_improvement": "Predeclare a response window and vary exactly one dimension per cohort—recipient segment or message framing, not both. Compare response class and qualification rate only after the window closes, with silence retained as INCONCLUSIVE.",
+  "reuse_opportunity": "Reuse the PRJ-001 response classification, sanitization, and independent-verification path for Freight Recovery, PermitPlate, and CaptureBrief instead of creating project-specific outreach or outcome pipelines.",
   "risks": [
-    "OpenAI API project currently returns billing_not_active, so Terra/Sol cannot execute until API billing is activated.",
-    "One successful Gmail send is execution proof, not customer-value proof.",
-    "Public-repository persistence must remain sanitized; private Gmail/customer payloads stay in connector context only."
+    "OpenAI API reasoning remains unavailable because provider billing is inactive; this fallback is advisory continuity only.",
+    "Two successful sends prove execution, not customer interest, product value, or revenue potential.",
+    "Empty outcome and learning ledgers leave prioritization dependent on structural evidence and policy estimates rather than measured production signals.",
+    "Further messages before a declared observation window closes could reduce signal quality and create avoidable duplicate-contact risk."
   ],
   "evidence_refs": [
-    "runtime-daily-learning:36256962506",
+    "runtime-daily-learning:36257214964",
+    "runtime-status:sha256:45ee0cc91fe58749ad6d15b3a0895b6f30b4c8110b3f77bf4df46be87bb950cd",
     "action_engine/GMAIL_GATEWAY_LEDGER.json",
-    "operations/OPERATING_MODE_POLICY.json",
-    "runtime/RUNTIME_POLICY.json"
+    "experiments/EXPERIMENT_OUTCOME_LEDGER.json",
+    "learning/LEARNING_OBSERVATION_LEDGER.json",
+    "uncertainty:UNC-EXTERNAL-PRJ-001"
   ]
 }
