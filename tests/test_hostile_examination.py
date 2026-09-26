@@ -98,6 +98,16 @@ class HostileExaminationTests(unittest.TestCase):
         self.assertIn("MOVE_MONEY",policy["prohibited_action_types"])
         self.assertIn("LIVE_MARKET_TRADING",policy["prohibited_action_types"])
 
+
+    def test_gmail_gateway_has_no_smtp_transport_surface(self):
+        policy=json.loads((ROOT/"action_engine/ACTION_POLICY.json").read_text())
+        self.assertEqual(policy["execution_provider"],"CHATGPT_GMAIL_CONNECTOR")
+        self.assertEqual(policy["gmail_account"],"jayp19386@gmail.com")
+        src=(ROOT/"action_engine/action_executor.py").read_text()
+        self.assertNotIn("smtplib",src)
+        self.assertNotIn("SMTP_",src)
+        self.assertFalse((ROOT/".github/workflows/portfolio-action-worker.yml").exists())
+
     def test_market_research_act_remains_prohibited(self):
         profiles=json.loads((ROOT/"registry/autonomy_profiles.json").read_text())["profiles"]
         p=next(x for x in profiles if x["project_id"]=="PRJ-007")
