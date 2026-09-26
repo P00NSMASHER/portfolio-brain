@@ -292,15 +292,16 @@
           ]
         },
         "ACT": {
-          "decision": "HUMAN_APPROVAL_REQUIRED",
+          "decision": "BOUNDED",
           "conditions": [
-            "Consequential external action requires explicit human approval."
+            "Adult-stakeholder customer email may execute only through action_engine/ACTION_POLICY.json and action_engine/EDUCATION_VALIDATION_POLICY.json.",
+            "Target classification must be VERIFIED_ADULT_STAKEHOLDER.",
+            "Direct minor contact, child-data collection, consequential child-facing changes, production changes, payments, legal/regulatory communication, private disclosure, and other non-allowlisted ACT remain prohibited or human-gated."
           ]
         }
       },
       "human_approval_required_for": [
         "PRODUCTION_DEPLOYMENT_MEANINGFUL_RISK",
-        "CUSTOMER_COMMUNICATION",
         "CLAIM_OR_DISPUTE_SUBMISSION",
         "LEGAL_OR_REGULATORY_COMMUNICATION",
         "PAYMENT_OR_PURCHASE",
@@ -345,15 +346,16 @@
           ]
         },
         "ACT": {
-          "decision": "HUMAN_APPROVAL_REQUIRED",
+          "decision": "BOUNDED",
           "conditions": [
-            "Consequential external action requires explicit human approval."
+            "Adult-stakeholder customer email may execute only through action_engine/ACTION_POLICY.json and action_engine/EDUCATION_VALIDATION_POLICY.json.",
+            "Target classification must be VERIFIED_ADULT_STAKEHOLDER.",
+            "Direct minor contact, child-data collection, consequential child-facing changes, production changes, payments, legal/regulatory communication, private disclosure, and other non-allowlisted ACT remain prohibited or human-gated."
           ]
         }
       },
       "human_approval_required_for": [
         "PRODUCTION_DEPLOYMENT_MEANINGFUL_RISK",
-        "CUSTOMER_COMMUNICATION",
         "CLAIM_OR_DISPUTE_SUBMISSION",
         "LEGAL_OR_REGULATORY_COMMUNICATION",
         "PAYMENT_OR_PURCHASE",
