@@ -415,6 +415,8 @@ def _status_tone(value: str) -> str:
         return "bad"
     if upper in {"EVIDENCE_GAPS", "MEDIUM", "ACTIVE_RESEARCH_ONLY", "IN_DEVELOPMENT", "STALE", "FALLBACK", "DEGRADED", "RATE_LIMITED", "UNKNOWN"}:
         return "warn"
+    if upper in {"NOT TESTED", "WARMING UP"}:
+        return "neutral"
     return "neutral"
 
 
@@ -436,18 +438,29 @@ def render_html(snapshot: dict[str, Any]) -> str:
     history = snapshot["history"]
     project_names = {p["project_id"]: p["name"] for p in snapshot["projects"]}
 
+    def compact_timestamp(value: str | None) -> str:
+        if not value:
+            return "not observed"
+        return value.replace("T"," ")[:16] + " UTC"
+
+    def source_status_label(name: str) -> str:
+        src = sources[name]
+        status = src["status"]
+        if status == "FALLBACK" and name == "provider" and provider_readiness["status"] == "UNKNOWN":
+            return "NOT TESTED"
+        if status == "FALLBACK" and name == "agents" and src.get("state_sequence") in {None,0}:
+            return "WARMING UP"
+        return status
+
     def source_badge(name: str) -> str:
-        status = sources[name]["status"]
-        return _badge(status, _status_tone(status))
+        label = source_status_label(name)
+        return _badge(label, _status_tone(label))
 
     def source_detail(name: str) -> str:
         src = sources[name]
-        created = src.get("artifact_created_at") or "seed/no artifact"
-        run = src.get("source_run_id")
-        run_text = "—" if run is None else str(run)
         age = src.get("age_minutes")
         age_text = "—" if age is None else f"{age} min"
-        return f"artifact {created} · run {run_text} · age {age_text}"
+        return f"{source_status_label(name).lower()} · {compact_timestamp(src.get('artifact_created_at'))} · age {age_text}"
 
 
     alert_rows = "".join(
@@ -536,13 +549,32 @@ def render_html(snapshot: dict[str, Any]) -> str:
         f"""
         <tr>
           <td><strong>{_e(source_labels[name])}</strong><span class="sub">{_e(src.get("source_kind"))}</span></td>
-          <td>{_badge(src["status"], _status_tone(src["status"]))}</td>
+          <td>{source_badge(name)}</td>
           <td class="num">{_e(src.get("state_sequence") if src.get("state_sequence") is not None else "—")}</td>
           <td>{_e(src.get("artifact_created_at") or "—")}</td>
           <td>{_e(src.get("source_run_id") or "—")}</td>
           <td class="num">{_e(src.get("age_minutes") if src.get("age_minutes") is not None else "—")}</td>
           <td class="wrap"><code>{_e(src.get("source_ref") or "—")}</code></td>
         </tr>
+        """
+        for name, src in sources.items()
+        if name in source_labels
+    )
+
+    source_cards = "".join(
+        f"""
+        <div class="source-mobile-card">
+          <div class="source-mobile-head">
+            <div><strong>{_e(source_labels[name])}</strong><span class="sub">{_e(src.get("source_kind"))}</span></div>
+            {source_badge(name)}
+          </div>
+          <div class="source-mobile-specs">
+            <div><span>Sequence</span><strong>{_e(src.get("state_sequence") if src.get("state_sequence") is not None else "—")}</strong></div>
+            <div><span>Age</span><strong>{_e(str(src.get("age_minutes")) + " min" if src.get("age_minutes") is not None else "—")}</strong></div>
+            <div><span>Source run</span><strong>{_e(src.get("source_run_id") or "—")}</strong></div>
+          </div>
+          <div class="source-mobile-time">{_e(compact_timestamp(src.get("artifact_created_at")))}</div>
+        </div>
         """
         for name, src in sources.items()
         if name in source_labels
@@ -639,9 +671,15 @@ def render_html(snapshot: dict[str, Any]) -> str:
     )
 
     last_cycle = telemetry["cycles"]["latest_overall"]
-    last_cycle_text = "No successful durable cycle recorded." if last_cycle is None else (
-        f'{last_cycle["subsystem"]} · {last_cycle["cycle_id"]} · {last_cycle["finished_at"]}'
-    )
+    if last_cycle is None:
+        last_cycle_title = "No successful cycle yet"
+        last_cycle_meta = "Waiting for durable runtime evidence."
+        last_cycle_id = ""
+    else:
+        last_cycle_title = str(last_cycle["subsystem"]).replace("_"," ").title()
+        last_cycle_meta = "Successful · " + compact_timestamp(last_cycle["finished_at"])
+        raw_cycle_id = str(last_cycle["cycle_id"])
+        last_cycle_id = raw_cycle_id if len(raw_cycle_id) <= 22 else raw_cycle_id[:19] + "…"
 
     return f"""<!doctype html>
 <html lang="en">
@@ -763,7 +801,12 @@ nav{{
   justify-content:center;
   gap:4px;
   min-width:0;
+  overflow-x:auto;
+  scrollbar-width:none;
+  scroll-snap-type:x proximity;
+  -webkit-overflow-scrolling:touch;
 }}
+nav::-webkit-scrollbar{{display:none}}
 nav a{{
   text-decoration:none;
   color:var(--muted);
@@ -773,6 +816,7 @@ nav a{{
   font-weight:520;
   white-space:nowrap;
   transition:color .2s ease,background .2s ease,transform .2s ease;
+  scroll-snap-align:start;
 }}
 nav a:hover{{color:var(--text);background:var(--surface-soft);transform:translateY(-1px)}}
 .readonly{{
@@ -965,6 +1009,7 @@ button:active{{transform:translateY(0) scale(.985)}}
 .table-wrap{{
   width:100%;
   overflow:auto;
+  -webkit-overflow-scrolling:touch;
   border:1px solid var(--line);
   border-radius:20px;
   background:color-mix(in srgb,var(--surface-solid) 76%,transparent);
@@ -1034,6 +1079,22 @@ tbody tr:hover{{background:color-mix(in srgb,var(--blue) 4%,transparent)}}
 }}
 .callout strong{{color:var(--text);font-size:.88rem}}
 .callout p{{font-size:.86rem;margin-top:8px}}
+.callout-value{{display:block;margin-top:16px;font-size:1.3rem;font-weight:660;letter-spacing:-.035em}}
+.callout-meta{{display:block;margin-top:7px;color:var(--muted);font-size:.8rem;line-height:1.4}}
+.cycle-id{{display:block;margin-top:8px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.break-anywhere{{overflow-wrap:anywhere;word-break:break-word;white-space:normal}}
+.spec-grid{{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}}
+.spec-item{{min-width:0;padding:14px 15px;border:1px solid var(--line);border-radius:17px;background:var(--surface-soft)}}
+.spec-item>span{{display:block;color:var(--muted);font-size:.66rem;font-weight:670;text-transform:uppercase;letter-spacing:.055em;margin-bottom:6px}}
+.spec-item>strong,.spec-item>code{{display:block;font-size:.82rem;line-height:1.4}}
+.source-mobile{{display:none}}
+.source-mobile-card{{border:1px solid var(--line);border-radius:20px;background:var(--surface-soft);padding:16px}}
+.source-mobile-head{{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}}
+.source-mobile-specs{{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}}
+.source-mobile-specs>div{{min-width:0}}
+.source-mobile-specs span{{display:block;color:var(--muted);font-size:.62rem;text-transform:uppercase;letter-spacing:.05em}}
+.source-mobile-specs strong{{display:block;margin-top:4px;font-size:.8rem;overflow-wrap:anywhere}}
+.source-mobile-time{{margin-top:12px;color:var(--muted);font-size:.72rem}}
 ul{{margin:.7rem 0 0;padding-left:19px;color:var(--muted)}}
 li{{margin:.45rem 0;line-height:1.42}}
 .progress{{height:7px;border-radius:999px;background:var(--surface-soft);overflow:hidden;border:1px solid var(--line);margin:11px 0}}
@@ -1067,7 +1128,7 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
 }}
 @media(max-width:820px){{
   :root{{--nav-h:52px;--radius-xl:24px}}
-  aside{{padding:0 14px}}
+  aside{{padding:0 12px;gap:8px}}
   .brand{{font-size:.75rem}}
   .logo{{width:25px;height:25px;border-radius:8px}}
   main{{width:min(100% - 24px,1480px);padding-bottom:46px}}
@@ -1084,12 +1145,19 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
   .section-head{{display:block}}
   .section-head>.badge{{margin-top:12px}}
   .table-wrap{{margin-left:-4px;margin-right:-4px;width:calc(100% + 8px)}}
+  .source-desktop{{display:none}}
+  .source-mobile{{display:grid;gap:10px}}
+  .callout{{min-height:0;padding:18px}}
+  .cycle-callout{{min-height:0}}
+  .spec-grid{{grid-template-columns:1fr}}
+  .spec-item{{padding:13px 14px}}
   th,td{{padding:12px 11px}}
   .alert-row{{grid-template-columns:1fr;gap:7px}}
   .search{{margin-top:12px;width:100%}}
 }}
 @media(max-width:520px){{
-  nav a{{padding:7px 8px}}
+  nav{{gap:0;padding-right:18px}}
+  nav a{{padding:7px 7px;font-size:.68rem}}
   .brand div:last-child{{font-size:0}}
   .brand div:last-child::after{{content:"Brain";font-size:.72rem}}
   .topbar{{min-height:350px;padding-top:62px}}
@@ -1109,9 +1177,9 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
 <aside>
   <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Command Center v4.1</small></div></div>
   <nav>
-    <a href="#overview">Overview</a><a href="#live-state">Live State</a><a href="#operations">Operations</a><a href="#trends">Trends</a><a href="#alerts">Attention</a><a href="#projects">Portfolio</a>
-    <a href="#agents">Agent Fleet</a><a href="#actions">Action Engine</a><a href="#hunter">Hunter</a>
-    <a href="#cost">Cost & Models</a><a href="#workflows">Workflows</a><a href="#boundary">Authority Boundary</a>
+    <a href="#overview">Overview</a><a href="#live-state">Live</a><a href="#operations">Ops</a><a href="#trends">Trends</a><a href="#alerts">Alerts</a><a href="#projects">Portfolio</a>
+    <a href="#agents">Agents</a><a href="#actions">Actions</a><a href="#hunter">Hunter</a>
+    <a href="#cost">Cost</a><a href="#workflows">Workflows</a><a href="#boundary">Boundaries</a>
   </nav>
   <div class="readonly"><strong>OBSERVE ONLY</strong><span>Public command center</span></div>
 </aside>
@@ -1144,10 +1212,11 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       {_badge(source_bundle["bridge_status"], _status_tone(source_bundle["bridge_status"]))}
     </div>
     <p>Bridge generated: {_e(source_bundle.get("generated_at") or "local fallback mode")}</p>
-    <div class="table-wrap"><table>
+    <div class="table-wrap source-desktop"><table>
       <thead><tr><th>Subsystem</th><th>Status</th><th class="num">Seq</th><th>Artifact time</th><th>Source run</th><th class="num">Age min</th><th>Source</th></tr></thead>
       <tbody>{source_rows}</tbody>
     </table></div>
+    <div class="source-mobile">{source_cards}</div>
   </section>
 
   <section class="card" id="operations" style="margin-bottom:14px">
@@ -1157,7 +1226,7 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
     </div>
     <div class="grid three">
       <div class="callout"><strong>Queue</strong><p>Queued {telemetry["queue"]["counts"]["QUEUED"]} · Active {telemetry["queue"]["counts"]["ACTIVE"]} · Complete {telemetry["queue"]["counts"]["COMPLETE"]} · Cancelled {telemetry["queue"]["counts"]["CANCELLED"]}</p></div>
-      <div class="callout"><strong>Last successful autonomous cycle</strong><p>{_e(last_cycle_text)}</p></div>
+      <div class="callout cycle-callout"><strong>Last successful autonomous cycle</strong><span class="callout-value">{_e(last_cycle_title)}</span><span class="callout-meta">{_e(last_cycle_meta)}</span>{('<code class="cycle-id">'+_e(last_cycle_id)+'</code>') if last_cycle_id else ''}</div>
       <div class="callout"><strong>Failures</strong><p>{telemetry["failures"]["count"]} durable failure signal(s) currently represented.</p></div>
     </div>
     <div class="section-head" style="margin-top:16px"><div><h2>Durable Work Queue</h2><p>Newest 32 scheduler work records.</p></div>{source_badge("scheduler")}</div>
@@ -1208,8 +1277,12 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       <div class="section-head"><div><h2>Operating Mode</h2><p>{_e(optimization["optimization_id"])} · {_e(source_detail("runtime"))}</p></div>{source_badge("runtime")}</div>
       <p>Continuous optimization is active. The former validation sprint is {_e(sprint["status"].lower())} and carries no active freeze or stop date.</p>
       <div class="callout"><strong>Next admissible action</strong><p>{_e(sprint["next_admissible_action"])}</p></div>
-      <p><strong>Architecture freeze:</strong> {_e("ACTIVE" if optimization["validation_architecture_freeze"] else "LIFTED")} &nbsp; <strong>Policy:</strong> {_e(sprint["architecture_change_policy"])}</p>
-      <p><strong>Runtime:</strong> {_e(optimization["project_runtimes_enabled"])} projects enabled &nbsp; <strong>Scheduler:</strong> {_e(optimization["scheduler_max_new_per_cycle"])} new/cycle, {_e(optimization["scheduler_max_open_per_agent"])} open/agent</p>
+      <div class="spec-grid">
+        <div class="spec-item"><span>Architecture freeze</span><strong>{_e("ACTIVE" if optimization["validation_architecture_freeze"] else "LIFTED")}</strong></div>
+        <div class="spec-item"><span>Policy</span><code class="break-anywhere">{_e(sprint["architecture_change_policy"])}</code></div>
+        <div class="spec-item"><span>Runtime</span><strong>{_e(optimization["project_runtimes_enabled"])} projects enabled</strong></div>
+        <div class="spec-item"><span>Scheduler</span><strong>{_e(optimization["scheduler_max_new_per_cycle"])} new/cycle · {_e(optimization["scheduler_max_open_per_agent"])} open/agent</strong></div>
+      </div>
     </div>
   </section>
 
