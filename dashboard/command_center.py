@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from dashboard.executive_dashboard import build_dashboard_snapshot
+from cost_governor.sentinel import build_sentinel_snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -115,7 +116,17 @@ def build_command_center_snapshot() -> dict[str, Any]:
     action_policy = load_json("action_engine/ACTION_POLICY.json")
     action_ledger = load_json("action_engine/GMAIL_GATEWAY_LEDGER.json")
     model_registry = load_json("model_router/PROVIDER_REGISTRY.json")
+    model_ledger = load_json("model_router/MODEL_ROUTING_LEDGER.json")
     provider_health = load_live_json("provider_health.json", "runtime/PROVIDER_HEALTH_SEED.json")
+    sentinel = build_sentinel_snapshot(
+        cost_policy=cost_policy,
+        cost_state=cost_state,
+        provider_registry=model_registry,
+        model_ledger=model_ledger,
+        action_policy=action_policy,
+        action_ledger=action_ledger,
+        provider_health=provider_health,
+    )
 
     state_by_agent = {a["agent_id"]: a for a in agent_state["agents"]}
     agents = []
@@ -295,6 +306,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "reservation_count": len(cost_state["reservations"]),
             "recent_decision_count": len(cost_state["recent_decisions"]),
             "managed_workflow_names": cost_policy["managed_workflow_names"],
+            "sentinel": sentinel,
         },
         "notifications": {
             "mode": notification_policy["mode"],
@@ -307,6 +319,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "enabled_non_tier0_routes": enabled_model_routes,
             "enabled_non_tier0_route_count": len(enabled_model_routes),
             "provider_readiness": provider_health,
+            "model_efficiency": sentinel["model_efficiency"],
         },
         "action_engine": {
             "enabled": action_policy["enabled"],
@@ -320,6 +333,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "prohibited_action_types": action_policy["prohibited_action_types"],
             "execution_provider": action_policy["execution_provider"],
             "gmail_account_ref": action_policy["gmail_account_ref"],
+            "gateway_health": sentinel["gmail_gateway"],
         },
         "kill_switches": kill_switches,
         "alerts": alerts,
@@ -355,6 +369,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
                     "action_engine/ACTION_POLICY.json",
                     "action_engine/GMAIL_GATEWAY_LEDGER.json",
                     "model_router/PROVIDER_REGISTRY.json",
+                    "model_router/MODEL_ROUTING_LEDGER.json",
                     "runtime/PROVIDER_HEALTH_SEED.json",
                     "runtime/provider_health.py",
                     "dashboard/live/state_sources.json",
@@ -395,6 +410,8 @@ def render_html(snapshot: dict[str, Any]) -> str:
     action_engine = snapshot["action_engine"]
     model_router = snapshot["model_router"]
     provider_readiness = model_router["provider_readiness"]
+    sentinel = cost["sentinel"]
+    gateway_health = action_engine["gateway_health"]
     source_bundle = snapshot["state_sources"]
     sources = source_bundle["sources"]
 
@@ -671,6 +688,9 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
         <tr><td>Paid model calls</td><td class="num">{cost["portfolio_ceiling"]["model_calls"]}</td></tr>
         <tr><td>API calls</td><td class="num">{cost["portfolio_ceiling"]["api_calls"]}</td></tr>
         <tr><td>Active durable reservations</td><td class="num">{cost["reservation_count"]}</td></tr>
+        <tr><td>Committed model/API spend</td><td class="num">${sentinel["budget"]["committed_usage"]["cost_usd"]:.4f}</td></tr>
+        <tr><td>Governed runner minutes committed</td><td class="num">{int(sentinel["github"]["governed_job_usage"]["committed_runner_minutes"])}</td></tr>
+        <tr><td>Watchdog max control-plane minutes/day</td><td class="num">{_e(sentinel["github"]["watchdog_control_plane_overhead"]["nominal_max_runner_minutes_per_day"])}</td></tr>
       </tbody></table>
       <div class="section-head" style="margin-top:16px"><h2>Kill Switches</h2>{_badge(f'{system["engaged_kill_switch_count"]} engaged', "bad" if system["engaged_kill_switch_count"] else "good")}</div>
       <div class="switches">{kill_rows}</div>
@@ -695,8 +715,11 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
         <tr><td>Email max / UTC day</td><td class="num">{action_engine["customer_email_max_per_utc_day"]}</td></tr>
         <tr><td>Sanitized executions</td><td class="num">{action_engine["execution_count"]}</td></tr>
         <tr><td>Sent receipts</td><td class="num">{action_engine["sent_count"]}</td></tr>
+        <tr><td>Today headroom</td><td class="num">{gateway_health["daily_headroom"]}</td></tr>
+        <tr><td>Duplicate receipt issues</td><td class="num">{gateway_health["duplicate_receipt_count"]}</td></tr>
       </tbody></table>
       <p><strong>Execution provider:</strong> {_e(action_engine["execution_provider"])} via {_e(action_engine["gmail_account_ref"])}</p>
+      <p><strong>Accounting:</strong> {_e(gateway_health["accounting_domain"])} · excluded from model/GitHub spend.</p>
       <p>This panel is observational. The command center cannot invoke the ACT gateway.</p>
     </div>
     <div class="card">
