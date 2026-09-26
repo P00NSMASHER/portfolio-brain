@@ -71,6 +71,8 @@ def _conditions(c,project):
 
 def _mode_and_status(c):
     if c["actionability"]=="BLOCKED":return "BLOCKED","BLOCKED",False
+    if c["authority_requirement"]=="BOUNDED_ACT" and c["actionability"]=="READY_FOR_BOUNDED_EXTERNAL_EXECUTION":
+        return "BOUNDED_EXTERNAL_VALIDATION","READY_FOR_BOUNDED_EXECUTION",True
     if c["authority_requirement"]=="HUMAN_GATED_ACT" or c["actionability"]=="HUMAN_APPROVAL_REQUIRED":
         return "HUMAN_GATED_EXTERNAL_VALIDATION","HUMAN_APPROVAL_REQUIRED",False
     if c["authority_requirement"]=="BOUNDED_EXPERIMENT":
@@ -82,6 +84,8 @@ def _rollback(mode,status):
         return {"mode":"NO_SIDE_EFFECTS","steps":["Do not initiate any external action before explicit approval.","If approval is not present, leave the experiment in planning state."]}
     if status=="BLOCKED":
         return {"mode":"NO_SIDE_EFFECTS","steps":["Preserve the blocker and do not execute.","Rebuild the plan only after the blocking evidence/state changes."]}
+    if status=="READY_FOR_BOUNDED_EXECUTION":
+        return {"mode":"STOP_CHANNEL_AND_SUPPRESS_DUPLICATE","steps":["Disable the action kill switch or channel credentials to stop execution.","Retain the sanitized action receipt and idempotency state; never resend the same payload after success."]}
     if mode=="ISOLATED_SYNTHETIC_TEST":
         return {"mode":"DISCARD_ISOLATED_ARTIFACTS","steps":["Run only in an isolated/synthetic environment.","On failure, discard candidate artifacts and retain the evidence receipt."]}
     return {"mode":"NO_SIDE_EFFECTS","steps":["Perform read-only evidence acquisition only.","Persist only sanitized references/receipts; no downstream mutation requires rollback."]}
@@ -96,6 +100,11 @@ def plan_from_uncertainty(c):
         inputs += [
           {"kind":"HUMAN_APPROVAL","ref":"explicit-approval-required-at-execution","required":True},
           {"kind":"PRIVATE_EXTERNAL_TARGET_REFERENCE","ref":"private-reference-required-at-execution","required":True}
+        ]
+    elif status=="READY_FOR_BOUNDED_EXECUTION":
+        inputs += [
+          {"kind":"PRIVATE_EXTERNAL_TARGET_REFERENCE","ref":"private-reference-required-at-execution","required":True},
+          {"kind":"ACTION_POLICY","ref":"action_engine/ACTION_POLICY.json","required":True}
         ]
     hard=sorted({b for pid in c["project_ids"] for b in projects[pid].get("hard_boundaries",[])})
     cost=c["components"]["test_cost"];tte=c["components"]["time_to_evidence"]
@@ -116,7 +125,11 @@ def plan_from_uncertainty(c):
       ],
       "cost_boundary":{
         "test_cost_ordinal":cost["value"],"time_to_evidence_ordinal":tte["value"],"basis_type":"POLICY_ESTIMATE",
-        **policy()["hard_resource_ceiling"]
+        **({
+          **policy()["hard_resource_ceiling"],
+          "external_messages_max":policy()["hard_resource_ceiling"]["external_messages_max"] if mode=="BOUNDED_EXTERNAL_VALIDATION" else 0,
+          "model_calls_max":policy()["hard_resource_ceiling"]["model_calls_max"] if status in {"READY_FOR_ISOLATED_EXECUTION","READY_FOR_BOUNDED_EXECUTION"} else 0
+        })
       },
       "rollback":_rollback(mode,status),
       "outcome_recording":{
@@ -142,16 +155,26 @@ def validate_plan(plan):
     req(isinstance(plan,dict) and set(plan)==required,"experiment plan fields changed")
     req(plan["status"] in policy()["plan_statuses"],"invalid experiment status")
     req(plan["execution_mode"] in policy()["execution_modes"],"invalid execution mode")
-    if plan["status"]!="READY_FOR_ISOLATED_EXECUTION":req(plan["autonomous_execution_allowed"] is False,"gated/blocked experiment cannot be autonomous")
+    if plan["status"] not in {"READY_FOR_ISOLATED_EXECUTION","READY_FOR_BOUNDED_EXECUTION"}:
+        req(plan["autonomous_execution_allowed"] is False,"gated/blocked experiment cannot be autonomous")
     if plan["authority_requirement"]=="HUMAN_GATED_ACT":
         req(plan["status"] in {"HUMAN_APPROVAL_REQUIRED","BLOCKED"},"human-gated ACT must remain approval-required or more restrictive BLOCKED")
         req(plan["approval_requirements"] or plan["hard_blockers"],"human-gated ACT requires approval requirements or an explicit blocker")
         if plan["status"]=="BLOCKED":
             req(plan["hard_blockers"],"blocked human-gated ACT requires explicit blocker")
+    if plan["authority_requirement"]=="BOUNDED_ACT":
+        req(plan["status"] in {"READY_FOR_BOUNDED_EXECUTION","BLOCKED"},"bounded ACT must use bounded execution status")
+        req(plan["execution_mode"] in {"BOUNDED_EXTERNAL_VALIDATION","BLOCKED"},"bounded ACT execution mode mismatch")
+        req("CUSTOMER_COMMUNICATION" not in plan["approval_requirements"],"bounded customer communication still approval-gated")
     if "NO_AUTONOMOUS_TRADING" in plan["inherited_hard_boundaries"]:
         req(plan["authority_requirement"]!="HUMAN_GATED_ACT","trading research plan cannot create ACT authority")
     c=plan["cost_boundary"]
-    req(c["autonomous_cash_spend_usd_max"]==0 and c["model_calls_max"]==0 and c["external_messages_max"]==0 and c["downstream_writes_max"]==0,"resource authority widened")
+    req(c["autonomous_cash_spend_usd_max"]==0 and c["downstream_writes_max"]==0,"cash/write authority widened")
+    req(0<=c["model_calls_max"]<=policy()["hard_resource_ceiling"]["model_calls_max"],"model-call ceiling invalid")
+    if plan["execution_mode"]=="BOUNDED_EXTERNAL_VALIDATION":
+        req(0<c["external_messages_max"]<=policy()["hard_resource_ceiling"]["external_messages_max"],"bounded external message ceiling missing")
+    else:
+        req(c["external_messages_max"]==0,"non-external experiment gained message authority")
     req(c["basis_type"]=="POLICY_ESTIMATE","cost basis changed")
     copy_plan=dict(plan);given=copy_plan.pop("experiment_hash")
     req(given==hashv(copy_plan),"experiment_hash mismatch")
