@@ -46,9 +46,22 @@ jobs:
       - name: Restore latest Hunter state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m hunting.artifact_state --output hunting/live/hunter_state.json
+      - name: Restore latest agent heartbeat state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: python -m agents.artifact_state --output agents/live/agent_heartbeat_state.json
       - name: Run autonomous bounded Hunter cycle
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m hunting.autonomous_hunter --state hunting/live/hunter_state.json --output-dir hunting/out
+      - name: Heartbeat Hunter
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: >-
+          python -m agents.heartbeat_state
+          --state agents/live/agent_heartbeat_state.json
+          --output agents/out/agent_heartbeat_state.json
+          --agent-id AGT-HUNTER
+          --activity-kind HUNTER_CYCLE
+          --source-workflow hunter-autonomous-cycle
+          --source-run-id "${GITHUB_RUN_ID}"
       - name: Validate state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -c "import json; from hunting.autonomous_hunter import validate_state; validate_state(json.load(open('hunting/out/hunter_state.json')))"
@@ -65,6 +78,14 @@ jobs:
         with:
           name: portfolio-hunter-state
           path: hunting/out/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload sanitized agent heartbeat state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-agent-heartbeat-state
+          path: agents/out/agent_heartbeat_state.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload sanitized cost-governor continuation state

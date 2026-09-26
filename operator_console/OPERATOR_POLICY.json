@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0.0",
+  "console_id": "portfolio-operator-console-v1",
+  "mode": "GITHUB_OWNER_AUTHENTICATED_MANUAL_CONTROL",
+  "actor_gate": "github.actor == github.repository_owner",
+  "public_pages_exposed": false,
+  "operations": [
+    "STATUS",
+    "EVIDENCE_REPORT",
+    "CANCEL_QUEUE_ITEM",
+    "RERUN_WORKFLOW",
+    "EMERGENCY_STOP",
+    "PROPOSE_PAUSE",
+    "PROPOSE_RESUME",
+    "PROPOSE_BUDGET",
+    "PROPOSE_APPROVAL"
+  ],
+  "queue_mutation": {
+    "allowed_transition": "QUEUED_OR_ACTIVE_TO_CANCELLED_ONLY",
+    "persistent_state_artifact": "portfolio-scheduler-state",
+    "scheduler_quiescence_required": true
+  },
+  "policy_mutation": {
+    "mode": "PULL_REQUEST_ONLY",
+    "direct_main_write": false,
+    "ci_required_before_merge": true
+  },
+  "approval_persistence": {
+    "file": "operator_console/OWNER_APPROVALS.json",
+    "reason_persistence": "SHA256_ONLY",
+    "private_payloads_allowed": false
+  },
+  "invariants": [
+    "The public GitHub Pages command center remains OBSERVE-only and contains no operator controls.",
+    "Only the repository owner may run the operator workflow.",
+    "Status and evidence reports contain sanitized state only.",
+    "Workflow reruns are restricted to an explicit allowlist.",
+    "Queue cancellation requires an exact SWORK identifier and a quiescent scheduler.",
+    "Emergency stop cancels currently queued/in-progress managed autonomous runs but does not silently rewrite persistent policy.",
+    "Pause, resume, budget, and approval persistence are proposed through a pull request; main is never directly modified by those operations.",
+    "The operator console cannot send customer communications, move money, place trades, change secrets, or disclose private payloads."
+  ],
+  "allowed_approval_actors": [
+    "P00NSMASHER"
+  ]
+}

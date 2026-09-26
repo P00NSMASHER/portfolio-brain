@@ -64,6 +64,7 @@ class LiveStateBridgeTests(unittest.TestCase):
             "hunter":self.fake_restorer("hunter","2026-09-26T09:00:00Z",103),
             "cost":self.fake_restorer("cost-governor","2026-09-26T17:45:00Z",104),
             "notifications":self.fake_restorer("notification","2026-09-26T17:00:00Z",105),
+            "agents":self.fake_restorer("agent-heartbeat","2026-09-26T17:50:00Z",106),
         }
         with tempfile.TemporaryDirectory() as td, patch.dict(bridge.RESTORERS,restorers,clear=True):
             root=Path(td)
@@ -75,6 +76,7 @@ class LiveStateBridgeTests(unittest.TestCase):
         self.assertEqual(receipt["sources"]["cost"]["status"],"LIVE")
         self.assertEqual(receipt["sources"]["notifications"]["status"],"LIVE")
         self.assertEqual(receipt["sources"]["provider"]["status"],"LIVE")
+        self.assertEqual(receipt["sources"]["agents"]["status"],"LIVE")
         self.assertEqual(receipt["sources"]["scheduler"]["source_run_id"],102)
         self.assertEqual(receipt["sources"]["scheduler"]["artifact_created_at"],"2026-09-26T17:20:00Z")
 

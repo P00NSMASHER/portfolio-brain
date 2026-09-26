@@ -1,0 +1,244 @@
+name: operator-console
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Authenticated operator operation"
+        required: true
+        type: choice
+        options:
+          - STATUS
+          - EVIDENCE_REPORT
+          - CANCEL_QUEUE_ITEM
+          - RERUN_WORKFLOW
+          - EMERGENCY_STOP
+          - PROPOSE_PAUSE
+          - PROPOSE_RESUME
+          - PROPOSE_BUDGET
+          - PROPOSE_APPROVAL
+      subsystem:
+        description: "Kill-switch subsystem for pause/resume"
+        required: false
+        default: runtime
+        type: choice
+        options: [runtime, scheduler, hunter, notifications, spend, action]
+      workflow:
+        description: "Workflow for RERUN_WORKFLOW"
+        required: false
+        default: command-center-pages.yml
+        type: choice
+        options:
+          - command-center-pages.yml
+          - portfolio-autonomous-scheduler.yml
+          - hunter-autonomous-cycle.yml
+          - portfolio-notification-cycle.yml
+          - runtime-hourly-sync.yml
+          - runtime-daily-learning.yml
+          - runtime-weekly-synthesis.yml
+      work_id:
+        description: "Exact scheduler work ID for CANCEL_QUEUE_ITEM"
+        required: false
+        type: string
+      cost_usd:
+        description: "Portfolio daily paid-model/API USD ceiling"
+        required: false
+        default: "10"
+        type: string
+      model_calls:
+        description: "Portfolio daily model-call ceiling"
+        required: false
+        default: "40"
+        type: string
+      api_calls:
+        description: "Portfolio daily API-call ceiling"
+        required: false
+        default: "80"
+        type: string
+      source_ref:
+        description: "Exact uncertainty/experiment/work source ref for approval"
+        required: false
+        type: string
+      project_id:
+        description: "Project for approval"
+        required: false
+        default: PRJ-000
+        type: choice
+        options: [PRJ-000, PRJ-001, PRJ-002, PRJ-003, PRJ-004, PRJ-005, PRJ-006, PRJ-007, PRJ-008, PRJ-009, PRJ-010, PRJ-011]
+      approval_code:
+        description: "Exact approval requirement code"
+        required: false
+        type: string
+      reason:
+        description: "Non-sensitive operator rationale; only its hash is persisted"
+        required: false
+        type: string
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: portfolio-operator-console
+  cancel-in-progress: false
+
+jobs:
+  operate:
+    if: ${{ github.actor == github.repository_owner }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+      OPERATION: ${{ inputs.operation }}
+      REASON: ${{ inputs.reason }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Initialize private operator workspace
+        run: mkdir -p operator/out dashboard/live dashboard/out scheduler/live scheduler/out
+
+      - name: Restore live state for read/cancel operations
+        if: ${{ inputs.operation == 'STATUS' || inputs.operation == 'EVIDENCE_REPORT' || inputs.operation == 'CANCEL_QUEUE_ITEM' }}
+        run: |
+          python -m dashboard.live_state_bridge --output-dir dashboard/live --receipt dashboard/live/state_sources.json
+          python -m dashboard.history_artifact_state --output dashboard/live/history_state.json --metadata-output dashboard/live/history_restore.json || true
+
+      - name: Build operator status/evidence report
+        if: ${{ inputs.operation == 'STATUS' || inputs.operation == 'EVIDENCE_REPORT' }}
+        run: |
+          python -m operator_console.operator_console report --output-json operator/out/operator-report.json --output-md operator/out/operator-report.md
+          cat operator/out/operator-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload private operator report
+        if: ${{ inputs.operation == 'STATUS' || inputs.operation == 'EVIDENCE_REPORT' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-operator-report-${{ github.run_id }}
+          path: operator/out/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Verify scheduler is quiescent before queue mutation
+        if: ${{ inputs.operation == 'CANCEL_QUEUE_ITEM' }}
+        run: |
+          gh run list --workflow portfolio-autonomous-scheduler.yml --limit 20 --json status,databaseId > operator/out/scheduler-runs.json
+          python - <<'PY'
+          import json,sys
+          runs=json.load(open("operator/out/scheduler-runs.json"))
+          active=[x for x in runs if x["status"] in {"queued","in_progress"}]
+          if active:
+              print("Scheduler is active; retry queue cancellation after its run finishes.",file=sys.stderr)
+              raise SystemExit(4)
+          PY
+
+      - name: Cancel exact queue item
+        if: ${{ inputs.operation == 'CANCEL_QUEUE_ITEM' }}
+        run: |
+          test -n "${{ inputs.work_id }}"
+          python -m operator_console.operator_console cancel-work \
+            --state dashboard/live/scheduler_state.json \
+            --output scheduler/out/scheduler_state.json \
+            --work-id "${{ inputs.work_id }}" | tee operator/out/cancel-result.json
+
+      - name: Upload operator-updated scheduler state
+        if: ${{ inputs.operation == 'CANCEL_QUEUE_ITEM' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-scheduler-state
+          path: scheduler/out/scheduler_state.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Rerun allowlisted workflow
+        if: ${{ inputs.operation == 'RERUN_WORKFLOW' }}
+        run: |
+          case "${{ inputs.workflow }}" in
+            command-center-pages.yml|portfolio-autonomous-scheduler.yml|hunter-autonomous-cycle.yml|portfolio-notification-cycle.yml|runtime-hourly-sync.yml|runtime-daily-learning.yml|runtime-weekly-synthesis.yml) ;;
+            *) echo "workflow not allowlisted"; exit 2 ;;
+          esac
+          gh workflow run "${{ inputs.workflow }}" --ref main
+          echo "Triggered ${{ inputs.workflow }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Emergency stop active managed runs
+        if: ${{ inputs.operation == 'EMERGENCY_STOP' }}
+        run: |
+          gh run list --limit 100 --json databaseId,name,status > operator/out/runs.json
+          python - <<'PY' > operator/out/cancel-ids.txt
+          import json
+          from cost_governor.cost_governor import policy
+          runs=json.load(open("operator/out/runs.json"))
+          managed=set(policy()["managed_workflow_names"])
+          for row in runs:
+              if row["status"] in {"queued","in_progress"} and row["name"] in managed:
+                  print(row["databaseId"])
+          PY
+          while read -r run_id; do
+            test -z "$run_id" || gh run cancel "$run_id" || true
+          done < operator/out/cancel-ids.txt
+          echo "Emergency cancellation requested for all active managed autonomous runs." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prepare pause proposal
+        if: ${{ inputs.operation == 'PROPOSE_PAUSE' }}
+        run: |
+          python -m operator_console.operator_console prepare-kill-switch \
+            --subsystem "${{ inputs.subsystem }}" --disabled true \
+            --actor "${GITHUB_ACTOR}" --reason "$REASON" | tee operator/out/proposal-result.json
+
+      - name: Prepare resume proposal
+        if: ${{ inputs.operation == 'PROPOSE_RESUME' }}
+        run: |
+          python -m operator_console.operator_console prepare-kill-switch \
+            --subsystem "${{ inputs.subsystem }}" --disabled false \
+            --actor "${GITHUB_ACTOR}" --reason "$REASON" | tee operator/out/proposal-result.json
+
+      - name: Prepare budget proposal
+        if: ${{ inputs.operation == 'PROPOSE_BUDGET' }}
+        run: |
+          python -m operator_console.operator_console prepare-budget \
+            --cost-usd "${{ inputs.cost_usd }}" \
+            --model-calls "${{ inputs.model_calls }}" \
+            --api-calls "${{ inputs.api_calls }}" \
+            --reason "$REASON" | tee operator/out/proposal-result.json
+
+      - name: Prepare approval proposal
+        if: ${{ inputs.operation == 'PROPOSE_APPROVAL' }}
+        run: |
+          test -n "${{ inputs.source_ref }}"
+          test -n "${{ inputs.approval_code }}"
+          python -m operator_console.operator_console prepare-approval \
+            --source-ref "${{ inputs.source_ref }}" \
+            --project-id "${{ inputs.project_id }}" \
+            --approval-code "${{ inputs.approval_code }}" \
+            --actor "${GITHUB_ACTOR}" --reason "$REASON" | tee operator/out/proposal-result.json
+
+      - name: Create reviewed policy-change PR
+        if: ${{ inputs.operation == 'PROPOSE_PAUSE' || inputs.operation == 'PROPOSE_RESUME' || inputs.operation == 'PROPOSE_BUDGET' || inputs.operation == 'PROPOSE_APPROVAL' }}
+        run: |
+          git config user.name "Portfolio Brain Operator"
+          git config user.email "operator@users.noreply.github.com"
+          branch="operator/run-${GITHUB_RUN_ID}"
+          git checkout -b "$branch"
+          git add runtime/KILL_SWITCH.json scheduler/KILL_SWITCH.json hunting/KILL_SWITCH.json notifications/KILL_SWITCH.json cost_governor/COST_KILL_SWITCH.json action_engine/KILL_SWITCH.json cost_governor/COST_GOVERNOR_POLICY.json operator_console/OWNER_APPROVALS.json
+          git diff --cached --quiet && { echo "No policy change produced"; exit 3; }
+          git commit -m "operator: ${OPERATION,,}"
+          git push origin "$branch"
+          gh pr create \
+            --base main --head "$branch" \
+            --title "Operator console: ${OPERATION}" \
+            --body "Owner-authenticated operator proposal from run ${GITHUB_RUN_ID}. Public persistence contains sanitized policy fields and reason hashes only. Review CI before merge."
+          echo "Policy change proposed as a PR; main was not modified directly." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload operator receipt
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-operator-receipt-${{ github.run_id }}
+          path: operator/out/
+          if-no-files-found: ignore
+          retention-days: 7
