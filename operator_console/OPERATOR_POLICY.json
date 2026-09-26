@@ -26,7 +26,7 @@
     "ci_required_before_merge": true
   },
   "approval_persistence": {
-    "file": "operator/OWNER_APPROVALS.json",
+    "file": "operator_console/OWNER_APPROVALS.json",
     "reason_persistence": "SHA256_ONLY",
     "private_payloads_allowed": false
   },
