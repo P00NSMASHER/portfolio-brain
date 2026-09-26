@@ -400,6 +400,9 @@ def render_html(snapshot: dict[str, Any]) -> str:
     model_router = snapshot["model_router"]
     source_bundle = snapshot["state_sources"]
     sources = source_bundle["sources"]
+    telemetry = snapshot["telemetry"]
+    history = snapshot["history"]
+    project_names = {p["project_id"]:p["name"] for p in snapshot["projects"]}
 
     def source_badge(name: str) -> str:
         status = sources[name]["status"]
@@ -447,12 +450,12 @@ def render_html(snapshot: dict[str, Any]) -> str:
         f"""
         <tr>
           <td><strong>{_e(a["name"])}</strong><span class="sub">{_e(a["agent_id"])}</span></td>
-          <td>{_badge(a["status"], _status_tone(a["status"]))}</td>
+          <td>{_badge(a["heartbeat_health"], _status_tone(a["heartbeat_health"]))}</td>
+          <td class="num">{_e(a["heartbeat_age_minutes"] if a["heartbeat_age_minutes"] is not None else "—")}</td>
+          <td>{_e(a["last_activity_kind"] or "—")}</td>
+          <td>{_e(a["source_workflow"] or "—")}<span class="sub">run {_e(a["source_run_id"] or "—")}</span></td>
           <td>{_badge(a["max_autonomy"], "neutral")}</td>
-          <td>{_e("yes" if a["builder_eligible"] else "no")}</td>
-          <td>{_e("yes" if a["verifier_eligible"] else "no")}</td>
-          <td>{_e(a["max_model_tier"])}</td>
-          <td>{_e(a["last_heartbeat_at"] or "seed / artifact-backed runtime")}</td>
+          <td class="num">{_e(a["max_model_tier"])}</td>
         </tr>
         """
         for a in snapshot["agents"]
@@ -512,6 +515,100 @@ def render_html(snapshot: dict[str, Any]) -> str:
         if name in source_labels
     )
 
+    queue_rows = "".join(
+        f"""
+        <tr>
+          <td><strong>{_e(w["work_id"])}</strong><span class="sub">{_e(w["source_ref"] or "")}</span></td>
+          <td>{_badge(w["state"], _status_tone(w["state"]))}</td>
+          <td>{_e(w["work_type"])}</td>
+          <td>{_e(w["assigned_agent_id"])}</td>
+          <td>{_e(", ".join(w["project_ids"]))}</td>
+          <td>{_e(w["created_at"] or "—")}</td>
+        </tr>
+        """
+        for w in telemetry["queue"]["items"]
+    ) or '<tr><td colspan="6" class="empty">No durable scheduler work items.</td></tr>'
+
+    action_rows = "".join(
+        f"""
+        <tr>
+          <td><strong>{_e(a["action_id"])}</strong></td>
+          <td>{_e(project_names.get(a["project_id"],a["project_id"]))}</td>
+          <td>{_e(a["action_type"])}</td>
+          <td>{_badge(a["status"], _status_tone(a["status"]))}</td>
+          <td>{_e(a["sent_at"])}</td>
+        </tr>
+        """
+        for a in telemetry["actions"]["recent"][:10]
+    ) or '<tr><td colspan="5" class="empty">No sanitized action receipts.</td></tr>'
+
+    failure_rows = "".join(
+        f"""
+        <tr>
+          <td>{_badge(f["kind"], "bad")}</td>
+          <td>{_e(f.get("ref") or "—")}</td>
+          <td>{_e(", ".join(f.get("project_ids") or []))}</td>
+          <td>{_e(f.get("at") or "—")}</td>
+        </tr>
+        """
+        for f in telemetry["failures"]["recent"][:10]
+    ) or '<tr><td colspan="4" class="empty">No current failure records in durable telemetry.</td></tr>'
+
+    usage_order = [
+        ("cost_usd","USD"),("model_calls","Model calls"),("api_calls","API calls"),
+        ("github_job_starts","GitHub jobs"),("github_runner_minutes","Runner minutes"),
+    ]
+    usage_rows = "".join(
+        f"""
+        <tr>
+          <td>{_e(label)}</td>
+          <td class="num">{_e(telemetry["cost"]["utilization"][key]["used"])}</td>
+          <td class="num">{_e(telemetry["cost"]["utilization"][key]["ceiling"])}</td>
+          <td class="num">{_e(round(100*telemetry["cost"]["utilization"][key]["fraction"],1))}%</td>
+        </tr>
+        """ for key,label in usage_order
+    )
+
+    daily_rows = "".join(
+        f"""
+        <tr>
+          <td>{_e(d["day"])}</td>
+          <td class="num">{d["completed_work"]}</td>
+          <td class="num">{_e(d["cost_usd"])}</td>
+          <td class="num">{d["model_calls"]}</td>
+          <td class="num">{d["hunter_candidates"]}</td>
+          <td class="num">{d["action_executions"]}</td>
+          <td class="num">{d["new_failures"]}</td>
+          <td class="num">{d["verified_external_outcomes"]}</td>
+        </tr>
+        """ for d in history["daily"]
+    ) or '<tr><td colspan="8" class="empty">History begins with this deployment; daily trends will accumulate automatically.</td></tr>'
+
+    momentum_sorted = sorted(
+        history["project_momentum"],
+        key=lambda x:(
+            -x["verified_outcomes_delta"],-x["completed_work_delta"],-x["sent_actions_delta"],
+            -x["open_work"],x["project_id"]
+        ),
+    )
+    momentum_rows = "".join(
+        f"""
+        <tr>
+          <td><strong>{_e(m["project_id"])}</strong><span class="sub">{_e(project_names.get(m["project_id"],""))}</span></td>
+          <td class="num">{m["open_work"]}</td>
+          <td class="num">{m["completed_work_delta"]}</td>
+          <td class="num">{m["sent_actions_delta"]}</td>
+          <td class="num">{m["verified_outcomes_delta"]}</td>
+          <td class="num">{m["cancelled_work_delta"]}</td>
+        </tr>
+        """ for m in momentum_sorted
+    )
+
+    last_cycle = telemetry["cycles"]["latest_overall"]
+    last_cycle_text = "No successful durable cycle recorded." if last_cycle is None else (
+        f'{last_cycle["subsystem"]} · {last_cycle["cycle_id"]} · {last_cycle["finished_at"]}'
+    )
+
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -567,9 +664,9 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
 <body>
 <div class="shell">
 <aside>
-  <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Command Center v3</small></div></div>
+  <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Command Center v4</small></div></div>
   <nav>
-    <a href="#overview">Overview</a><a href="#live-state">Live State</a><a href="#alerts">Attention</a><a href="#projects">Portfolio</a>
+    <a href="#overview">Overview</a><a href="#live-state">Live State</a><a href="#operations">Operations</a><a href="#trends">Trends</a><a href="#alerts">Attention</a><a href="#projects">Portfolio</a>
     <a href="#agents">Agent Fleet</a><a href="#actions">Action Engine</a><a href="#hunter">Hunter</a>
     <a href="#cost">Cost & Models</a><a href="#workflows">Workflows</a><a href="#boundary">Authority Boundary</a>
   </nav>
