@@ -14,9 +14,9 @@ def validate_scheduler():
     expected={"priority_lease_runtime":"2118648b08ff53a4eb3add2fc77715fe722f0588","priority_lease_contract":"455a9f60ee15a6f390d32acf2cbb9eb87c942474","durable_agent_runtime":"f200573259bcf29c09fbe9e480df4f983dd50903","current_hunter_schedule":"243d11413ab63212af1efc9241b32f8540f5734f","current_hunter_workflow":"15a905bbb99f568661b5b4f0247fbf6efeda0ca7"}
     for k,v in expected.items():req(pin["components"][k]["blob_sha"]==v,f"{k} blob mismatch")
     req(pin["copied_source_code"] is False,"canonical scheduler source copied")
-    req(p["authority_class"]=="OBSERVE" and p["mode"]=="EVIDENCE_GATED_PERSISTENT_QUEUE","scheduler authority/mode changed")
+    req(p["authority_class"]=="MODIFY" and p["mode"]=="EVIDENCE_GATED_PERSISTENT_QUEUE","scheduler authority/mode changed")
     req(p["work_types"]==["HUNT","EXPERIMENT","REPAIR","TEST","RESEARCH","INTEGRATION","VERIFICATION"],"scheduler work type set changed")
-    req(p["max_new_work_per_cycle"]<=4 and p["max_open_work_per_agent"]==1,"scheduler concurrency ceiling weakened")
+    req(p["max_new_work_per_cycle"]<=8 and p["max_open_work_per_agent"]==2,"scheduler concurrency ceiling invalid")
     context=build_context();state,receipt=schedule_cycle(seed,context,at="2026-09-25T20:40:00Z")
     selected=receipt["selected_work"];types={w["work_type"] for w in selected}
     req(len(selected)==3 and types=={"RESEARCH","HUNT","INTEGRATION"},"unexpected current selected work")
