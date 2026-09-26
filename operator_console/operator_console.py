@@ -40,6 +40,8 @@ def _safe_text(value:str,field:str,max_len:int=240)->str:
 
 
 def _reason_hash(reason:str)->str:
+    req(isinstance(reason,str) and 1<=len(reason)<=500,"operator reason must be 1-500 characters")
+    req("\n" not in reason and "\r" not in reason,"operator reason must be one line")
     return "sha256:"+hashlib.sha256(reason.encode()).hexdigest()
 
 
