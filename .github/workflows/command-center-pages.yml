@@ -77,8 +77,19 @@ jobs:
           cp dashboard/live/state_sources.json public/state-sources.json
           touch public/.nojekyll
           printf '%s\n' "${GITHUB_SHA}" > public/source-commit.txt
-      - name: Upload validated preview artifact
+      - name: Detect material command-center change
         if: ${{ steps.cost.outputs.allowed == 'true' }}
+        id: publication_gate
+        shell: bash
+        run: |
+          owner="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          repo="${GITHUB_REPOSITORY#*/}"
+          curl -fsSL --max-time 10 "https://${owner}.github.io/${repo}/snapshot.json" -o /tmp/previous-snapshot.json || true
+          should_publish="$(python -m dashboard.publication_gate --current public/snapshot.json --previous /tmp/previous-snapshot.json)"
+          echo "should_publish=${should_publish}" >> "$GITHUB_OUTPUT"
+          echo "Material publication required: ${should_publish}"
+      - name: Upload validated preview artifact
+        if: ${{ steps.cost.outputs.allowed == 'true' && steps.publication_gate.outputs.should_publish == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-command-center-preview-${{ github.sha }}
@@ -86,21 +97,21 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - name: Configure Pages
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.cost.outputs.allowed == 'true' && steps.publication_gate.outputs.should_publish == 'true' }}
         id: pages
         continue-on-error: true
         uses: actions/configure-pages@v5
       - name: Upload Pages artifact
-        if: ${{ steps.cost.outputs.allowed == 'true' && steps.pages.outcome == 'success' }}
+        if: ${{ steps.cost.outputs.allowed == 'true' && steps.publication_gate.outputs.should_publish == 'true' && steps.pages.outcome == 'success' }}
         uses: actions/upload-pages-artifact@v4
         with:
           path: public
       - name: Deploy command center
-        if: ${{ steps.cost.outputs.allowed == 'true' && steps.pages.outcome == 'success' }}
+        if: ${{ steps.cost.outputs.allowed == 'true' && steps.publication_gate.outputs.should_publish == 'true' && steps.pages.outcome == 'success' }}
         id: deployment
         uses: actions/deploy-pages@v4
       - name: Explain disabled Pages
-        if: ${{ steps.cost.outputs.allowed == 'true' && steps.pages.outcome != 'success' }}
+        if: ${{ steps.cost.outputs.allowed == 'true' && steps.publication_gate.outputs.should_publish == 'true' && steps.pages.outcome != 'success' }}
         run: |
           echo "::notice title=Portfolio Brain Command Center::Static command center validated and uploaded as an artifact. GitHub Pages is not yet enabled for Actions in repository Settings > Pages."
       - name: Commit conservative command-center compute usage
