@@ -117,11 +117,11 @@ def build_command_center_snapshot() -> dict[str, Any]:
                 "evidence_ref": "dashboard/executive_dashboard.py",
             }
         )
-    if scorecard["verified_external_outcomes_since_start"] == 0:
+    if sprint["status"] not in {"RETIRED","SUPERSEDED_BY_POST_RESTRICTION_OPTIMIZATION"} and scorecard["verified_external_outcomes_since_start"] == 0:
         alerts.append(
             {
                 "severity": "MEDIUM",
-                "title": "Validation sprint still needs an external outcome",
+                "title": "Active validation cycle still needs an external outcome",
                 "detail": sprint["exit_gate"],
                 "evidence_ref": "operations/VALIDATION_SPRINT_STATE.json",
             }
@@ -470,7 +470,7 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
     <div class="card kpi"><div class="label">Agents</div><div class="value">{system["active_agent_count"]}/{system["agent_count"]}</div><div class="hint">active registry roles</div></div>
     <div class="card kpi"><div class="label">Runnable work</div><div class="value">{portfolio["pending_autonomous_work_count"]}</div><div class="hint">scheduler-selected</div></div>
     <div class="card kpi"><div class="label">Blocked work</div><div class="value">{portfolio["blocked_action_count"]}</div><div class="hint">human/authority gated</div></div>
-    <div class="card kpi"><div class="label">Verified outcomes</div><div class="value">{sprint["scorecard"]["verified_external_outcomes_since_start"]}</div><div class="hint">validation sprint</div></div>
+    <div class="card kpi"><div class="label">Verified outcomes</div><div class="value">{sprint["scorecard"]["verified_external_outcomes_since_start"]}</div><div class="hint">historical baseline</div></div>
     <div class="card kpi"><div class="label">Paid model budget</div><div class="value">USD {cost["portfolio_ceiling"]["cost_usd"]:.2f}</div><div class="hint">{cost["portfolio_ceiling"]["model_calls"]} model calls authorized</div></div>
   </section>
 
@@ -481,7 +481,7 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
     </div>
     <div class="card">
       <div class="section-head"><div><h2>Operating Mode</h2><p>{_e(optimization["optimization_id"])}</p></div>{_badge(optimization["status"],_status_tone(optimization["status"]))}</div>
-      <p>Post-restriction optimization is active. The prior validation sprint is {_e(sprint["status"].lower())}.</p>
+      <p>Continuous optimization is active. The former validation sprint is {_e(sprint["status"].lower())} and carries no active freeze or stop date.</p>
       <div class="callout"><strong>Next admissible action</strong><p>{_e(sprint["next_admissible_action"])}</p></div>
       <p><strong>Architecture freeze:</strong> {_e("ACTIVE" if optimization["validation_architecture_freeze"] else "LIFTED")} &nbsp; <strong>Policy:</strong> {_e(sprint["architecture_change_policy"])}</p>
       <p><strong>Runtime:</strong> {_e(optimization["project_runtimes_enabled"])} projects enabled &nbsp; <strong>Scheduler:</strong> {_e(optimization["scheduler_max_new_per_cycle"])} new/cycle, {_e(optimization["scheduler_max_open_per_agent"])} open/agent</p>
