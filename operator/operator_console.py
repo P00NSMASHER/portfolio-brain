@@ -137,13 +137,14 @@ def operator_report(*,output_json:str,output_md:str)->dict[str,Any]:
       "authority_class":"OBSERVE","telemetry":telemetry,"history":history,"state_sources":sources,
     }
     write_json(output_json,report)
-    q=telemetry["queue"]["counts"];u=telemetry["cost"]["usage_today"];cycle=telemetry["cycles"]["latest_overall"]
+    q=telemetry["queue"]["counts"];actual=telemetry["cost"]["actual_usage_today"];accounted=telemetry["cost"]["budget_accounted_usage_today"];cycle=telemetry["cycles"]["latest_overall"]
     lines=[
       "# Portfolio Brain Operator Report","",
       f"Generated: {report['generated_at']}",
       f"Live-state bridge: {sources.get('bridge_status','UNKNOWN')}",
       f"Queue: QUEUED {q['QUEUED']} | ACTIVE {q['ACTIVE']} | COMPLETE {q['COMPLETE']} | CANCELLED {q['CANCELLED']}",
-      f"Cost today: USD {u['cost_usd']:.4f} | model calls {u['model_calls']} | API calls {u['api_calls']} | runner minutes {u['github_runner_minutes']}",
+      f"Actual today: USD {actual['cost_usd']:.4f} | model calls {actual['model_calls']} | API calls {actual['api_calls']} | runner minutes {actual['github_runner_minutes']}",
+      f"Governor-accounted today: USD {accounted['cost_usd']:.4f} | model calls {accounted['model_calls']} | API calls {accounted['api_calls']} | runner minutes {accounted['github_runner_minutes']}",
       f"Actions sent: {telemetry['actions']['total_sent']} | failures: {telemetry['failures']['count']} | verified outcomes: {telemetry['verified_external_outcomes']}",
       "Last successful cycle: "+("NONE" if cycle is None else f"{cycle['subsystem']} {cycle['cycle_id']} {cycle['finished_at']}"),
       "","## Agent heartbeats","",
