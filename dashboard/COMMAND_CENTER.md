@@ -10,7 +10,7 @@ It observes the unrestricted post-optimization architecture, including the finit
 - scheduler-selected and blocked work;
 - the persistent agent fleet and maximum autonomy;
 - current post-restriction optimization state;
-- architecture-freeze status and current optimization policy;
+- historical validation-sprint status and the current no-freeze continuous-optimization policy;
 - Hunter strategy state;
 - cost-governor ceilings and reservations;
 - enabled non-Tier-0 model routes;
@@ -18,6 +18,8 @@ It observes the unrestricted post-optimization architecture, including the finit
 - runtime, scheduler, Hunter, notification, spend, and action-engine kill switches;
 - autonomous GitHub workflow coverage;
 - a deterministic snapshot hash.
+
+The former week-long validation sprint is retired; it is historical evidence only and imposes no active freeze or stop date.
 
 The action-engine panel is observational. It cannot send Gmail, execute ACT, change allowlists, alter rate limits, change model routes, spend budget, merge, deploy, trade, move money, or mutate Portfolio Brain.
 
