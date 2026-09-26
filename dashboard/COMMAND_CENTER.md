@@ -68,19 +68,26 @@ The Pages workflow runs:
 
     python -m dashboard.live_state_bridge --output-dir dashboard/live --receipt dashboard/live/state_sources.json
 
-The bridge restores five durable state classes:
+The bridge restores six durable state classes:
 
 - runtime — stale after 150 minutes;
 - scheduler — stale after 150 minutes;
 - Hunter — stale after 450 minutes;
 - cost governor — stale after 60 minutes;
-- notifications — stale after 450 minutes.
-
-The Agent Fleet currently has no separate durable artifact stream, so its state is explicitly labeled FALLBACK from agents/AGENT_STATE_SEED.json rather than being presented as live.
+- notifications — stale after 450 minutes;
+- agent heartbeat state — stale after 180 minutes.
 
 The bridge never writes portfolio state back to GitHub. It only restores sanitized artifacts into the ephemeral Pages build workspace.
 
-Persistent role activity now has its own sanitized `portfolio-agent-heartbeat-state` artifact. Heartbeats are emitted only when mapped workflows actually execute: Portfolio Manager for scheduler cycles, Hunter for Hunter cycles, Data Steward for runtime observation, and Engineer for software-factory actions. Roles without observed workflow activity remain NEVER/STALE rather than being invented as healthy.
+Persistent role activity has its own sanitized `portfolio-agent-heartbeat-state` artifact. Heartbeats are emitted only when mapped workflows actually execute: Portfolio Manager for scheduler cycles, Hunter for Hunter cycles, Data Steward for runtime observation, and Engineer for software-factory actions. Roles without observed workflow activity remain NEVER/STALE rather than being invented as healthy.
+
+## Operational telemetry
+
+The v4 operations surface exposes the durable scheduler queue and states, agent heartbeat evidence, actual committed cost/model/API usage, conservative budget-accounted usage, sanitized external action receipts, failure-class signals, last successful autonomous cycles, and live-state source ages. Actual usage and governor-accounted usage are shown separately so reservations are never mislabeled as measured spend.
+
+## Authenticated control plane
+
+The public Pages UI remains read-only and intentionally omits the authenticated control workflow. Manual operations live in `.github/workflows/operator-console.yml` and are owner-gated. Persistent pause/resume, budget, and owner-approval changes are proposed through pull requests; queue cancellation and emergency run cancellation operate only through the authenticated GitHub Actions workflow. See `operator_console/OPERATOR_CONSOLE.md`.
 
 ## History & trends
 
