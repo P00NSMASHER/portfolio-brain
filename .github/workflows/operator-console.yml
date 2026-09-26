@@ -124,6 +124,19 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Verify scheduler is quiescent before queue mutation
+        if: ${{ inputs.operation == 'CANCEL_QUEUE_ITEM' }}
+        run: |
+          gh run list --workflow portfolio-autonomous-scheduler.yml --limit 20 --json status,databaseId > operator/out/scheduler-runs.json
+          python - <<'PY'
+          import json,sys
+          runs=json.load(open("operator/out/scheduler-runs.json"))
+          active=[x for x in runs if x["status"] in {"queued","in_progress"}]
+          if active:
+              print("Scheduler is active; retry queue cancellation after its run finishes.",file=sys.stderr)
+              raise SystemExit(4)
+          PY
+
       - name: Cancel exact queue item
         if: ${{ inputs.operation == 'CANCEL_QUEUE_ITEM' }}
         run: |
