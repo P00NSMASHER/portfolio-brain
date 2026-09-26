@@ -74,10 +74,6 @@ def validate_operating_mode():
         req("portfolio-cost-governed-autonomy" in body and "cost_governor.workflow_gate preflight" in body,f"{name} is not cost governed")
     worker=(ROOT/".github/workflows/runtime-worker.yml").read_text().lower()
     req("portfolio-cost-governed-autonomy" in worker and "cost_governor.workflow_gate preflight" in worker,"runtime worker is not cost governed")
-    action_worker=(ROOT/".github/workflows/portfolio-action-worker.yml").read_text().lower()
-    req("workflow_call" in action_worker and "schedule:" not in action_worker and "workflow_dispatch:" not in action_worker,"action worker must remain private reusable-only")
-    req("cost_governor.workflow_gate preflight" in action_worker and "portfolio-cost-governed-autonomy" in action_worker,"action worker is not cost governed")
-    req("action_request_json" in action_worker and "portfolio-action-engine-state" in action_worker,"action worker private input/state binding missing")
     factory=(ROOT/".github/workflows/software-factory-candidate.yml").read_text().lower()
     req("workflow_call" in factory and "schedule:" not in factory,"software factory unexpectedly recurring")
     req("cost_governor.workflow_gate preflight" in factory,"software factory is not cost governed")
@@ -91,18 +87,24 @@ def validate_operating_mode():
     req(p["durable_state_artifacts"]=={
       "runtime":"portfolio-runtime-state","hunter":"portfolio-hunter-state",
       "scheduler":"portfolio-scheduler-state","cost":"portfolio-cost-governor-state",
-      "notifications":"portfolio-notification-state","actions":"portfolio-action-engine-state"
+      "notifications":"portfolio-notification-state"
     },"durable artifact names changed")
 
     kill_files={
       "runtime":"runtime/KILL_SWITCH.json","hunter":"hunting/KILL_SWITCH.json",
       "scheduler":"scheduler/KILL_SWITCH.json","cost":"cost_governor/COST_KILL_SWITCH.json",
-      "notifications":"notifications/KILL_SWITCH.json","actions":"action_engine/KILL_SWITCH.json"
+      "notifications":"notifications/KILL_SWITCH.json"
     }
     for name,path in kill_files.items():
         data=load(path);key="spend_disabled" if name=="cost" else "disabled"
         req(data.get(key) is False,f"checked-in {name} kill switch unexpectedly active")
 
+    gmail=p.get("external_connector_gateways",{}).get("gmail",{})
+    req(gmail.get("provider")=="CHATGPT_GMAIL_CONNECTOR" and gmail.get("account")=="jayp19386@gmail.com","Gmail connector gateway binding missing")
+    req(gmail.get("execution_task_id")=="6ab377c25df08191a6e2aa1537d9d2ef","Gmail gateway executor task mismatch")
+    req(gmail.get("planner_task_id")=="6ab377be3184819186a3075f37a530b8","Gmail gateway planner task mismatch")
+    req(load("action_engine/KILL_SWITCH.json").get("disabled") is False,"checked-in Gmail action kill switch unexpectedly active")
+    req(not (ROOT/".github/workflows/portfolio-action-worker.yml").exists(),"obsolete SMTP action worker still present")
     boundaries=set(p["permanent_authority_boundaries"])
     for b in [
       "PAYMENT_CASH_MOVEMENT_REQUIRES_HUMAN_APPROVAL",
@@ -114,6 +116,7 @@ def validate_operating_mode():
     return {
       "approved_recurring_workflows":len(expected),
       "durable_state_artifacts":len(p["durable_state_artifacts"]),
+      "gmail_gateway_account":gmail["account"],
       "enabled_nonzero_models":len(enabled_nonzero),
       "step23_unresolved":step23["unresolved_findings"],
       "step24_authority_violations":step24["authority_violations"],
