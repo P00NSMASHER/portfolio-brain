@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0.0",
+  "console_id": "portfolio-operator-console-v1",
+  "mode": "GITHUB_AUTHENTICATED_MANUAL_CONTROL",
+  "allowed_actors": [
+    "P00NSMASHER"
+  ],
+  "allowed_operations": [
+    "STATUS",
+    "REFRESH_COMMAND_CENTER",
+    "RUN_SCHEDULER",
+    "RUN_HUNTER",
+    "RUN_RUNTIME_HOURLY",
+    "RUN_NOTIFICATIONS",
+    "STOP_RUNNING_AUTONOMY",
+    "CANCEL_QUEUE_ITEM",
+    "PROPOSE_KILL_SWITCH",
+    "PROPOSE_BUDGET_CHANGE"
+  ],
+  "workflow_dispatch_map": {
+    "REFRESH_COMMAND_CENTER": "command-center-pages.yml",
+    "RUN_SCHEDULER": "portfolio-autonomous-scheduler.yml",
+    "RUN_HUNTER": "hunter-autonomous-cycle.yml",
+    "RUN_RUNTIME_HOURLY": "runtime-hourly-sync.yml",
+    "RUN_NOTIFICATIONS": "portfolio-notification-cycle.yml"
+  },
+  "kill_switch_targets": {
+    "runtime": {
+      "path": "runtime/KILL_SWITCH.json",
+      "field": "disabled"
+    },
+    "scheduler": {
+      "path": "scheduler/KILL_SWITCH.json",
+      "field": "disabled"
+    },
+    "hunter": {
+      "path": "hunting/KILL_SWITCH.json",
+      "field": "disabled"
+    },
+    "notifications": {
+      "path": "notifications/KILL_SWITCH.json",
+      "field": "disabled"
+    },
+    "spend": {
+      "path": "cost_governor/COST_KILL_SWITCH.json",
+      "field": "spend_disabled"
+    },
+    "action_engine": {
+      "path": "action_engine/KILL_SWITCH.json",
+      "field": "disabled"
+    }
+  },
+  "budget_proposal_limits": {
+    "cost_usd_max": 100,
+    "model_calls_max": 1000
+  },
+  "invariants": [
+    "Only explicitly allowlisted GitHub actors may use the operator console.",
+    "The operator console is never published to GitHub Pages.",
+    "Workflow reruns use only fixed allowlisted workflow files on main.",
+    "Queue cancellation may only transition an existing QUEUED or ACTIVE scheduler work item to CANCELLED.",
+    "Persistent kill-switch and budget changes are proposed on a branch and pull request; the console never bypasses main branch review or CI.",
+    "Emergency stop may cancel currently queued/in-progress managed autonomy but does not silently rewrite persistent policy.",
+    "No operator-console operation sends customer communications, moves money, trades, changes secrets, or exposes private payloads."
+  ]
+}
