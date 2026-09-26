@@ -112,7 +112,7 @@ jobs:
       - name: Build operator status/evidence report
         if: ${{ inputs.operation == 'STATUS' || inputs.operation == 'EVIDENCE_REPORT' }}
         run: |
-          python -m operator.operator_console report --output-json operator/out/operator-report.json --output-md operator/out/operator-report.md
+          python -m operator_console.operator_console report --output-json operator/out/operator-report.json --output-md operator/out/operator-report.md
           cat operator/out/operator-report.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload private operator report
@@ -141,7 +141,7 @@ jobs:
         if: ${{ inputs.operation == 'CANCEL_QUEUE_ITEM' }}
         run: |
           test -n "${{ inputs.work_id }}"
-          python -m operator.operator_console cancel-work \
+          python -m operator_console.operator_console cancel-work \
             --state dashboard/live/scheduler_state.json \
             --output scheduler/out/scheduler_state.json \
             --work-id "${{ inputs.work_id }}" | tee operator/out/cancel-result.json
@@ -186,21 +186,21 @@ jobs:
       - name: Prepare pause proposal
         if: ${{ inputs.operation == 'PROPOSE_PAUSE' }}
         run: |
-          python -m operator.operator_console prepare-kill-switch \
+          python -m operator_console.operator_console prepare-kill-switch \
             --subsystem "${{ inputs.subsystem }}" --disabled true \
             --actor "${GITHUB_ACTOR}" --reason "$REASON" | tee operator/out/proposal-result.json
 
       - name: Prepare resume proposal
         if: ${{ inputs.operation == 'PROPOSE_RESUME' }}
         run: |
-          python -m operator.operator_console prepare-kill-switch \
+          python -m operator_console.operator_console prepare-kill-switch \
             --subsystem "${{ inputs.subsystem }}" --disabled false \
             --actor "${GITHUB_ACTOR}" --reason "$REASON" | tee operator/out/proposal-result.json
 
       - name: Prepare budget proposal
         if: ${{ inputs.operation == 'PROPOSE_BUDGET' }}
         run: |
-          python -m operator.operator_console prepare-budget \
+          python -m operator_console.operator_console prepare-budget \
             --cost-usd "${{ inputs.cost_usd }}" \
             --model-calls "${{ inputs.model_calls }}" \
             --api-calls "${{ inputs.api_calls }}" \
@@ -211,7 +211,7 @@ jobs:
         run: |
           test -n "${{ inputs.source_ref }}"
           test -n "${{ inputs.approval_code }}"
-          python -m operator.operator_console prepare-approval \
+          python -m operator_console.operator_console prepare-approval \
             --source-ref "${{ inputs.source_ref }}" \
             --project-id "${{ inputs.project_id }}" \
             --approval-code "${{ inputs.approval_code }}" \
@@ -224,7 +224,7 @@ jobs:
           git config user.email "operator@users.noreply.github.com"
           branch="operator/run-${GITHUB_RUN_ID}"
           git checkout -b "$branch"
-          git add runtime/KILL_SWITCH.json scheduler/KILL_SWITCH.json hunting/KILL_SWITCH.json notifications/KILL_SWITCH.json cost_governor/COST_KILL_SWITCH.json action_engine/KILL_SWITCH.json cost_governor/COST_GOVERNOR_POLICY.json operator/OWNER_APPROVALS.json
+          git add runtime/KILL_SWITCH.json scheduler/KILL_SWITCH.json hunting/KILL_SWITCH.json notifications/KILL_SWITCH.json cost_governor/COST_KILL_SWITCH.json action_engine/KILL_SWITCH.json cost_governor/COST_GOVERNOR_POLICY.json operator_console/OWNER_APPROVALS.json
           git diff --cached --quiet && { echo "No policy change produced"; exit 3; }
           git commit -m "operator: ${OPERATION,,}"
           git push origin "$branch"
