@@ -8,7 +8,7 @@ The first pass:
 
 1. bootstraps/restores sanitized runtime, scheduler, cost, notification and learning state;
 2. executes one deterministic daily runtime cycle;
-3. schedules bounded research/Hunter/integration work while preserving human-gated experiments as blocked;
+3. schedules bounded research/Hunter/integration and eligible experiment-preparation work while preserving any genuinely human-gated work as blocked; adult-only education validation itself remains outside the shadow canary's external-action surface;
 4. obtains and commits a Step 20 cost reservation with zero paid model/API usage;
 5. evaluates Step 22 notifications;
 6. rebuilds Step 10 learning state without fabricating observations or promotions;
