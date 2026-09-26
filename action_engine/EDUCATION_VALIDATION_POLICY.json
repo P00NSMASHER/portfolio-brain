@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0.0",
+  "policy_id": "adult-only-education-validation-v1",
+  "enabled": true,
+  "allowed_project_ids": [
+    "PRJ-005",
+    "PRJ-006"
+  ],
+  "allowed_action_type": "CUSTOMER_EMAIL",
+  "required_target_classification": "VERIFIED_ADULT_STAKEHOLDER",
+  "approval_basis": "OWNER_APPROVED_ADULT_ONLY_EXTERNAL_VALIDATION",
+  "external_messages_max_per_experiment": 1,
+  "direct_minor_contact_allowed": false,
+  "child_data_collection_allowed": false,
+  "consequential_child_facing_change_allowed": false,
+  "production_change_allowed": false,
+  "private_child_data_allowed": false,
+  "invariants": [
+    "Only verified adult stakeholders such as parents, guardians, teachers, school staff, or other adult product evaluators may be contacted.",
+    "No direct communication with a minor is permitted.",
+    "No child personal data, health data, school records, credentials, precise location, or other private child information may be requested or stored.",
+    "No experiment may alter a child-facing production experience, curriculum, game economy, school workflow, or educational content.",
+    "The bounded validation is limited to one external message per experiment and remains subject to action-engine rate limits, idempotency, kill switches, and evidence requirements.",
+    "Consequential child-facing changes remain human-approval required and outside the bounded action engine."
+  ]
+}
