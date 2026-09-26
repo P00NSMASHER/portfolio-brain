@@ -70,6 +70,31 @@ class SchedulerTests(unittest.TestCase):
         _,r2=schedule_cycle(state,build_context(),at="2026-09-25T21:40:00Z")
         self.assertIn(fp,r2["suppressed_duplicates"])
 
+    def test_terminal_history_is_compacted_before_new_work_is_added(self):
+        state=load_state();state,receipt=schedule_cycle(state,build_context(),at="2026-09-25T20:40:00Z")
+        template=copy.deepcopy(receipt["selected_work"][0])
+        state["work_items"]=[]
+        for index in range(64):
+            work=copy.deepcopy(template);work["fingerprint"]=f"sha256:terminal-{index:02d}";work["state"]="CANCELLED"
+            state["work_items"].append(work)
+        updated,next_receipt=schedule_cycle(state,build_context(),at="2026-09-25T21:40:00Z")
+        self.assertGreater(len(next_receipt["selected_work"]),0)
+        self.assertEqual(len(next_receipt["compacted_terminal_work"]),len(next_receipt["selected_work"]))
+        self.assertEqual(len(updated["work_items"]),64)
+        self.assertTrue(all(w["fingerprint"] not in next_receipt["compacted_terminal_work"] for w in updated["work_items"]))
+
+    def test_selection_respects_remaining_open_queue_capacity(self):
+        state=load_state();state,receipt=schedule_cycle(state,build_context(),at="2026-09-25T20:40:00Z")
+        template=copy.deepcopy(receipt["selected_work"][0])
+        state["work_items"]=[]
+        for index in range(63):
+            work=copy.deepcopy(template);work["fingerprint"]=f"sha256:active-{index:02d}";work["state"]="ACTIVE";work["assigned_agent_id"]="AGT-ENGINEER"
+            state["work_items"].append(work)
+        updated,next_receipt=schedule_cycle(state,build_context(),at="2026-09-25T21:40:00Z")
+        self.assertEqual(len(next_receipt["selected_work"]),1)
+        self.assertEqual(len(updated["work_items"]),64)
+        self.assertEqual(next_receipt["compacted_terminal_work"],[])
+
     def test_kill_switch_environment_disables_cycle(self):
         with patch.dict(os.environ,{"PORTFOLIO_SCHEDULER_DISABLED":"true"}):
             state,r=schedule_cycle(load_state(),build_context(),at="2026-09-25T20:40:00Z")

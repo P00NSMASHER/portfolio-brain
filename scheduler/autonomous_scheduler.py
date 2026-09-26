@@ -169,6 +169,18 @@ def _open_agent_counts(state):
             counts[agent]=counts.get(agent,0)+1
     return counts
 
+def _compact_terminal_history(work_items,*,incoming_count,max_items):
+    """Retain every open item and only the newest terminal history that fits."""
+    open_states={"QUEUED","ACTIVE"}
+    open_count=sum(1 for w in work_items if w["state"] in open_states)
+    req(open_count+incoming_count<=max_items,"scheduler open queue capacity exceeded")
+    terminal_capacity=max_items-open_count-incoming_count
+    terminal_indices=[i for i,w in enumerate(work_items) if w["state"] not in open_states]
+    keep_terminal=set(terminal_indices[-terminal_capacity:]) if terminal_capacity else set()
+    retained=[w for i,w in enumerate(work_items) if w["state"] in open_states or i in keep_terminal]
+    evicted=[w["fingerprint"] for i,w in enumerate(work_items) if w["state"] not in open_states and i not in keep_terminal]
+    return retained,evicted
+
 def schedule_cycle(state,context=None,*,at=None):
     validate_state(state);at=at or now_iso();disabled,reason=killed()
     if disabled:
@@ -191,22 +203,24 @@ def schedule_cycle(state,context=None,*,at=None):
             except Exception: expired=False
             if expired:stale.append(w["fingerprint"])
     selected=[];new_counts={}
-    per_agent_limit=policy()["max_open_work_per_agent"]
+    scheduler_policy=policy();per_agent_limit=scheduler_policy["max_open_work_per_agent"]
+    open_capacity=scheduler_policy["max_queue_items"]-sum(open_counts.values())
+    selection_limit=min(scheduler_policy["max_new_work_per_cycle"],open_capacity)
     for c in sorted(eligible,key=_sort_key):
-        if len(selected)>=policy()["max_new_work_per_cycle"]:break
+        if len(selected)>=selection_limit:break
         agent=c["assigned_agent_id"]
         if open_counts.get(agent,0)+new_counts.get(agent,0)>=per_agent_limit:continue
         selected.append(_work_packet(c,at));new_counts[agent]=new_counts.get(agent,0)+1
     new_state=json.loads(json.dumps(state))
     new_state["sequence"]+=1;new_state["updated_at"]=at
-    new_state["work_items"]=[*new_state["work_items"],*selected]
-    req(len(new_state["work_items"])<=policy()["max_queue_items"],"scheduler queue capacity exceeded")
-    cycle_seed={"prior_sequence":state["sequence"],"selected":[w["fingerprint"] for w in selected],"blocked":[b["fingerprint"] for b in blocked],"suppressed":sorted(suppressed)}
+    retained,compacted=_compact_terminal_history(new_state["work_items"],incoming_count=len(selected),max_items=scheduler_policy["max_queue_items"])
+    new_state["work_items"]=[*retained,*selected]
+    cycle_seed={"prior_sequence":state["sequence"],"selected":[w["fingerprint"] for w in selected],"blocked":[b["fingerprint"] for b in blocked],"suppressed":sorted(suppressed),"compacted":compacted}
     cid="sched-"+hashlib.sha256(canon(cycle_seed).encode()).hexdigest()[:24]
     receipt={"schema_version":"1.0.0","cycle_id":cid,"status":"PASS","reason":None,"finished_at":at,
              "candidate_count":len(candidates),"selected_work":selected,
              "blocked_work":[_work_packet(b,at,"BLOCKED_APPROVAL" if b["approval_requirements"] else "BLOCKED_POLICY") for b in blocked],
-             "suppressed_duplicates":sorted(suppressed),"stale_lease_holds":sorted(stale),
+             "suppressed_duplicates":sorted(suppressed),"stale_lease_holds":sorted(stale),"compacted_terminal_work":compacted,
              "selection_method":"EXPLICIT_GATE_PRECEDENCE_THEN_SOURCE_PARETO_RANK_ALLOCATION_SHARE_NO_SCALAR_SCORE"}
     receipt["receipt_hash"]=hashv(receipt)
     new_state["recent_cycles"]=([*new_state["recent_cycles"],{"cycle_id":cid,"finished_at":at,"receipt_hash":receipt["receipt_hash"],"selected_count":len(selected)}])[-20:]
