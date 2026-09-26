@@ -86,9 +86,15 @@ class SharedValueMemoryTests(unittest.TestCase):
         b=copy.deepcopy(a); b["outcome_id"]="MOUT-PORTFOLIO-0002"; b["memory_id"]="MEM-PORTFOLIO-0002"; b["attribution_fraction"]=0.5
         with self.assertRaises(SharedMemoryError): validate_credit_conservation([a,b])
 
+    def test_duplicate_event_cannot_be_replayed_into_same_memory(self):
+        a=outcome(event="EVT-OUTCOME-0003",fraction=0.5)
+        b=copy.deepcopy(a); b["outcome_id"]="MOUT-PORTFOLIO-0002"; b["attribution_fraction"]=0.5
+        with self.assertRaisesRegex(SharedMemoryError,"duplicate event for memory"):
+            validate_credit_conservation([a,b])
+
     def test_unverified_observations_do_not_consume_verified_credit(self):
-        a=outcome(event="EVT-OUTCOME-0003",fraction=1.0)
-        b=copy.deepcopy(a); b["outcome_id"]="MOUT-PORTFOLIO-0002"; b["evidence_state"]="OBSERVED"; b["verifier_actor_id"]=None; b["verification_report_hash"]=None; b["verified_at"]=None
+        a=outcome(event="EVT-OUTCOME-0004",fraction=1.0)
+        b=copy.deepcopy(a); b["outcome_id"]="MOUT-PORTFOLIO-0002"; b["memory_id"]="MEM-PORTFOLIO-0002"; b["evidence_state"]="OBSERVED"; b["verifier_actor_id"]=None; b["verification_report_hash"]=None; b["verified_at"]=None
         validate_credit_conservation([a,b])
 
     def test_verified_positive_summary_outweighs_neutral_speculation(self):

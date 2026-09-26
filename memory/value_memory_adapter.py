@@ -181,8 +181,13 @@ def verified_outcome_calls(memory: dict[str,Any], outcome: dict[str,Any])->dict[
 
 def validate_credit_conservation(outcomes: list[dict[str,Any]])->None:
     totals={}
+    memory_events=set()
     for outcome in outcomes:
         validate_outcome(outcome)
+        memory_event=(outcome["memory_id"],outcome["event_id"])
+        _require(memory_event not in memory_events,
+                 f"duplicate event for memory: {outcome['memory_id']}::{outcome['event_id']}")
+        memory_events.add(memory_event)
         if outcome["evidence_state"]!="VERIFIED": continue
         totals[outcome["event_id"]]=totals.get(outcome["event_id"],0.0)+float(outcome["attribution_fraction"])
     for event_id,total in totals.items():
