@@ -62,7 +62,12 @@ def validate_autonomy_profile(record: dict[str, Any]) -> None:
     _unique_strings(record["hard_prohibitions"], "hard_prohibitions")
     sod=record["separation_of_duties"]
     _require(sod=={"builder_may_self_approve":False,"independent_verifier_required_for_promotion":True}, "separation of duties must remain fail-closed")
-    _require(perms["ACT"]["decision"] in {"HUMAN_APPROVAL_REQUIRED","PROHIBITED"}, "ACT cannot be autonomously enabled in Step 2")
+    bounded_act_projects={"PRJ-001","PRJ-002","PRJ-003","PRJ-004"}
+    if perms["ACT"]["decision"]=="BOUNDED":
+        _require(record["project_id"] in bounded_act_projects,"bounded ACT limited to approved commercial projects")
+        _require("CUSTOMER_COMMUNICATION" not in gates,"bounded commercial ACT cannot also require customer-communication approval")
+    else:
+        _require(perms["ACT"]["decision"] in {"HUMAN_APPROVAL_REQUIRED","PROHIBITED"},"unbounded ACT is not allowed")
 
 def validate_objective(record: dict[str, Any]) -> None:
     required={"schema_version","objective_id","project_id","title","statement","status","priority","success_conditions","constraints","evidence_requirements","provenance"}

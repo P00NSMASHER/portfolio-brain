@@ -34,7 +34,11 @@ class RegistryBundleTests(unittest.TestCase):
     def test_all_project_runtimes_enabled_without_self_approval(self):
         for profile in self.profiles:
             self.assertTrue(profile["runtime_enabled"])
-            self.assertIn(profile["permissions"]["ACT"]["decision"],{"HUMAN_APPROVAL_REQUIRED","PROHIBITED"})
+            if profile["project_id"] in {"PRJ-001","PRJ-002","PRJ-003","PRJ-004"}:
+                self.assertEqual(profile["permissions"]["ACT"]["decision"],"BOUNDED")
+                self.assertNotIn("CUSTOMER_COMMUNICATION",profile["human_approval_required_for"])
+            else:
+                self.assertIn(profile["permissions"]["ACT"]["decision"],{"HUMAN_APPROVAL_REQUIRED","PROHIBITED"})
             self.assertFalse(profile["separation_of_duties"]["builder_may_self_approve"])
 
     def test_no_repository_adapter_is_enabled_in_step2(self):

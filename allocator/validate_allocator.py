@@ -40,8 +40,10 @@ def validate_allocator():
     req(by["MODEL_CALLS"]["allocated_share_basis_points"]>0 and by["MODEL_CALLS"]["status"]=="ACTIVE_RECOMMENDATION","enabled model capacity was not allocated")
     req(by["ENGINEERING_CAPACITY"]["allocated_share_basis_points"]==0 and by["TESTING"]["allocated_share_basis_points"]==0,"build/test activity allocated without experiment demand")
     req(by["ART_PRODUCTION"]["allocated_share_basis_points"]==0,"art allocated without art-specific evidence")
-    req(by["HUMAN_REVIEW"]["recommendations"][0]["project_id"]=="PRJ-001","highest-value external validation did not lead human-review priority")
-    req(by["HUMAN_REVIEW"]["recommendations"][0]["authority_requirement"]=="HUMAN_GATED_ACT","human review recommendation lost authority boundary")
+    req(by["HUMAN_REVIEW"]["recommendations"],"human-review queue unexpectedly empty")
+    req(all(r["authority_requirement"]=="HUMAN_GATED_ACT" for r in by["HUMAN_REVIEW"]["recommendations"]),"human review contains non-human-gated work")
+    req(all(r["project_id"] in {"PRJ-005","PRJ-006"} for r in by["HUMAN_REVIEW"]["recommendations"]),"human review contains bounded commercial work")
+    req(any(r["project_id"]=="PRJ-001" for r in by["MODEL_CALLS"]["recommendations"]),"RecoveryWorks bounded validation missing model allocation")
     runtime=(ROOT/"runtime/continuous_runtime.py").read_text()
     req("portfolio_allocation_recommendation.json" in runtime and "build_allocation_snapshot" in runtime,"daily runtime not connected to allocator")
     return {"resource_types":9,"active_resources":snap["active_resource_count"],"hold_resources":snap["hold_resource_count"],"recommendations":snap["recommendation_entry_count"],"cash_share_bps":0,"model_call_share_bps":by["MODEL_CALLS"]["allocated_share_basis_points"],"opaque_score":False}

@@ -386,6 +386,7 @@
       "enum": [
         "OBSERVE_ONLY",
         "BOUNDED_EXPERIMENT",
+        "BOUNDED_ACT",
         "HUMAN_GATED_ACT"
       ]
     },
@@ -393,6 +394,7 @@
       "enum": [
         "READY_FOR_INFORMATION_GATHERING",
         "READY_FOR_EXPERIMENT_DESIGN",
+        "READY_FOR_BOUNDED_EXTERNAL_EXECUTION",
         "HUMAN_APPROVAL_REQUIRED",
         "BLOCKED"
       ]

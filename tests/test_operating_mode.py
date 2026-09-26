@@ -7,6 +7,7 @@ class OperatingModeTests(unittest.TestCase):
     def test_operational_contract_passes(self):
         result=validate_operating_mode()
         self.assertEqual(result["approved_recurring_workflows"],7)
+        self.assertEqual(result["durable_state_artifacts"],6)
         self.assertEqual(result["enabled_nonzero_models"],3)
         self.assertFalse(result["interactive_chatgpt_runtime_dependency"])
         self.assertEqual(result["release_status"],"OPERATIONAL")
@@ -27,6 +28,14 @@ class OperatingModeTests(unittest.TestCase):
         self.assertIn("PAYMENT_CASH_MOVEMENT_REQUIRES_HUMAN_APPROVAL",boundaries)
         self.assertIn("LIVE_MARKET_TRADING_AND_BROKERAGE_EXECUTION_PROHIBITED",boundaries)
         self.assertIn("DEPLOYMENT_AND_MERGE_NOT_GRANTED_TO_AUTONOMOUS_SCHEDULER",boundaries)
+
+    def test_action_worker_is_reusable_only_and_private_input_bound(self):
+        body=(ROOT/".github/workflows/portfolio-action-worker.yml").read_text().lower()
+        self.assertIn("workflow_call",body)
+        self.assertNotIn("schedule:",body)
+        self.assertNotIn("workflow_dispatch:",body)
+        self.assertIn("action_request_json",body)
+        self.assertIn("portfolio-action-engine-state",body)
 
     def test_chatgpt_tasks_are_advisory_not_runtime_dependency(self):
         p=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())

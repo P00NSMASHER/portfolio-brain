@@ -51,6 +51,10 @@
     "software-factory-candidate": {
       "trigger": "workflow_call",
       "purpose": "isolated branch/commit/PR candidate execution only"
+    },
+    "portfolio-action-worker": {
+      "trigger": "workflow_call",
+      "purpose": "cost-governed bounded commercial channel execution from secret private action requests"
     }
   },
   "durable_state_artifacts": {
@@ -58,14 +62,16 @@
     "hunter": "portfolio-hunter-state",
     "scheduler": "portfolio-scheduler-state",
     "cost": "portfolio-cost-governor-state",
-    "notifications": "portfolio-notification-state"
+    "notifications": "portfolio-notification-state",
+    "actions": "portfolio-action-engine-state"
   },
   "kill_switches": [
     "PORTFOLIO_RUNTIME_DISABLED",
     "PORTFOLIO_HUNTER_DISABLED",
     "PORTFOLIO_SCHEDULER_DISABLED",
     "PORTFOLIO_SPEND_DISABLED",
-    "PORTFOLIO_NOTIFICATION_DISABLED"
+    "PORTFOLIO_NOTIFICATION_DISABLED",
+    "PORTFOLIO_ACTIONS_DISABLED"
   ],
   "activation_prerequisites": {
     "step23_unresolved_hostile_findings": 0,
@@ -96,7 +102,7 @@
     "Recurring autonomous operation is GitHub-hosted and governed by durable state, explicit budgets, idempotency, leases, kill switches and evidence boundaries.",
     "The Step 23 hostile regression suite and Step 24 canary remain mandatory release evidence.",
     "Paid model/API execution remains provider-gated and requires finite pre-execution cost reservations under the Step 20 governor.",
-    "No recurring workflow may grant consequential ACT, contact customers, move money, trade, deploy or merge.",
+    "Recurring workflows do not directly execute customer ACT; the reusable action worker may execute only allowlisted bounded commercial email through action-engine policy and private secret inputs.",
     "While BLK-005 remains open, GitHub persistence is sanitized-only."
   ]
 }

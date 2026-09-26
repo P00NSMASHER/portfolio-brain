@@ -11,7 +11,7 @@ def validate_dashboard():
     req(s["authority_class"]=="OBSERVE","dashboard authority widened")
     req(s["project_count"]==12 and len(s["projects"])==12,"dashboard project coverage incomplete")
     req(3<=s["portfolio"]["pending_autonomous_work_count"]<=8,"current autonomous queue outside optimized bounds")
-    req(s["portfolio"]["blocked_action_count"]==6,"current blocked work drifted")
+    req(s["portfolio"]["blocked_action_count"]==2,"current blocked child-facing work drifted")
     req(s["portfolio"]["learning_observation_count"]==0,"dashboard invented learning observations")
     req(s["portfolio"]["verified_transfer_outcome_count"]==0,"dashboard invented transfer outcomes")
     req(s["portfolio"]["checked_in_measured_model_cost_usd"]==0.0,"dashboard invented model cost")
@@ -20,5 +20,5 @@ def validate_dashboard():
     req(all(p["health_basis"]=="EVIDENCE_COVERAGE_NOT_SUBJECTIVE_SCORE" for p in s["projects"]),"subjective health scoring introduced")
     req("MEASURED RESULT is distinct from ESTIMATED VALUE" in md,"measurement labeling missing")
     req("No dashboard field grants authority or executes work." in md,"authority disclaimer missing")
-    return {"projects":12,"pending_work":s["portfolio"]["pending_autonomous_work_count"],"blocked_actions":6,"measured_outcomes":0,"measured_model_cost_usd":0.0,"authority":"OBSERVE"}
+    return {"projects":12,"pending_work":s["portfolio"]["pending_autonomous_work_count"],"blocked_actions":2,"measured_outcomes":0,"measured_model_cost_usd":0.0,"authority":"OBSERVE"}
 if __name__=="__main__":print("portfolio-brain Step 21 executive dashboard: PASS",json.dumps(validate_dashboard(),sort_keys=True))

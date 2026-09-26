@@ -6,6 +6,7 @@ from unittest.mock import patch
 import hunting.autonomous_hunter as hunter
 import uncertainty.highest_value_uncertainty as uncertainty
 from cost_governor.cost_governor import CostGovernorError,load_state as load_cost_state,make_github_job_request,preflight
+from action_engine.action_executor import ActionEngineError,make_email_request
 from graph.universal_graph import UniversalGraphError,validate_graph,validate_node
 from model_router.model_router import provider_registry,route_request
 from notifications.github_sink import emit
@@ -87,6 +88,15 @@ class HostileExaminationTests(unittest.TestCase):
                 provider["enabled"]=False
         route=route_request(req,reg)
         self.assertEqual(route["status"],"BLOCKED_NO_ELIGIBLE_PROVIDER")
+
+
+    def test_bounded_contact_rejects_child_project_and_high_risk_types_absent(self):
+        with self.assertRaises(ActionEngineError):
+            make_email_request(project_id="PRJ-005",target="adult@example.com",subject="x",body="y",campaign_id="hostile",evidence_refs=["hostile:action"],requested_at="2026-09-26T04:00:00Z")
+        policy=json.loads((ROOT/"action_engine/ACTION_POLICY.json").read_text())
+        self.assertEqual(set(policy["allowed_actions"]),{"CUSTOMER_EMAIL"})
+        self.assertIn("MOVE_MONEY",policy["prohibited_action_types"])
+        self.assertIn("LIVE_MARKET_TRADING",policy["prohibited_action_types"])
 
     def test_market_research_act_remains_prohibited(self):
         profiles=json.loads((ROOT/"registry/autonomy_profiles.json").read_text())["profiles"]

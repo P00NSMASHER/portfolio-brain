@@ -74,6 +74,10 @@ def validate_operating_mode():
         req("portfolio-cost-governed-autonomy" in body and "cost_governor.workflow_gate preflight" in body,f"{name} is not cost governed")
     worker=(ROOT/".github/workflows/runtime-worker.yml").read_text().lower()
     req("portfolio-cost-governed-autonomy" in worker and "cost_governor.workflow_gate preflight" in worker,"runtime worker is not cost governed")
+    action_worker=(ROOT/".github/workflows/portfolio-action-worker.yml").read_text().lower()
+    req("workflow_call" in action_worker and "schedule:" not in action_worker and "workflow_dispatch:" not in action_worker,"action worker must remain private reusable-only")
+    req("cost_governor.workflow_gate preflight" in action_worker and "portfolio-cost-governed-autonomy" in action_worker,"action worker is not cost governed")
+    req("action_request_json" in action_worker and "portfolio-action-engine-state" in action_worker,"action worker private input/state binding missing")
     factory=(ROOT/".github/workflows/software-factory-candidate.yml").read_text().lower()
     req("workflow_call" in factory and "schedule:" not in factory,"software factory unexpectedly recurring")
     req("cost_governor.workflow_gate preflight" in factory,"software factory is not cost governed")
@@ -87,13 +91,13 @@ def validate_operating_mode():
     req(p["durable_state_artifacts"]=={
       "runtime":"portfolio-runtime-state","hunter":"portfolio-hunter-state",
       "scheduler":"portfolio-scheduler-state","cost":"portfolio-cost-governor-state",
-      "notifications":"portfolio-notification-state"
+      "notifications":"portfolio-notification-state","actions":"portfolio-action-engine-state"
     },"durable artifact names changed")
 
     kill_files={
       "runtime":"runtime/KILL_SWITCH.json","hunter":"hunting/KILL_SWITCH.json",
       "scheduler":"scheduler/KILL_SWITCH.json","cost":"cost_governor/COST_KILL_SWITCH.json",
-      "notifications":"notifications/KILL_SWITCH.json"
+      "notifications":"notifications/KILL_SWITCH.json","actions":"action_engine/KILL_SWITCH.json"
     }
     for name,path in kill_files.items():
         data=load(path);key="spend_disabled" if name=="cost" else "disabled"

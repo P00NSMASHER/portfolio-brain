@@ -10,17 +10,18 @@ class ExperimentEngineTests(unittest.TestCase):
 
     def test_all_uncertainties_become_explicit_plans(self):
         self.assertEqual(self.portfolio["plan_count"],20)
-        self.assertEqual(self.portfolio["status_counts"],{"READY_FOR_ISOLATED_EXECUTION":12,"HUMAN_APPROVAL_REQUIRED":6,"BLOCKED":2})
+        self.assertEqual(self.portfolio["status_counts"],{"READY_FOR_ISOLATED_EXECUTION":12,"READY_FOR_BOUNDED_EXECUTION":4,"HUMAN_APPROVAL_REQUIRED":2,"BLOCKED":2})
         for p in self.portfolio["plans"]:validate_plan(p)
 
-    def test_selected_recoveryworks_plan_is_complete_but_human_gated(self):
+    def test_selected_recoveryworks_plan_is_bounded_external_execution(self):
         p=self.by_unc["UNC-EXTERNAL-PRJ-001"]
-        self.assertEqual(p["status"],"HUMAN_APPROVAL_REQUIRED")
-        self.assertFalse(p["autonomous_execution_allowed"])
-        self.assertIn("CUSTOMER_COMMUNICATION",p["approval_requirements"])
+        self.assertEqual(p["status"],"READY_FOR_BOUNDED_EXECUTION")
+        self.assertTrue(p["autonomous_execution_allowed"])
+        self.assertEqual(p["execution_mode"],"BOUNDED_EXTERNAL_VALIDATION")
+        self.assertNotIn("CUSTOMER_COMMUNICATION",p["approval_requirements"])
         for key in ["hypothesis","baseline","success_condition","failure_condition","inconclusive_condition"]:
             self.assertTrue(p[key])
-        self.assertEqual(p["cost_boundary"]["external_messages_max"],0)
+        self.assertEqual(p["cost_boundary"]["external_messages_max"],1)
         self.assertEqual(p["cost_boundary"]["autonomous_cash_spend_usd_max"],0)
 
     def test_plan_preserves_full_uncertainty_vector_without_score(self):
@@ -37,10 +38,16 @@ class ExperimentEngineTests(unittest.TestCase):
             self.assertEqual(p["cost_boundary"]["test_cost_ordinal"],p["uncertainty_components"]["test_cost"]["value"])
             self.assertEqual(p["cost_boundary"]["time_to_evidence_ordinal"],p["uncertainty_components"]["time_to_evidence"]["value"])
 
-    def test_ready_plans_have_zero_act_spend_and_write_authority(self):
+    def test_ready_plans_keep_cash_and_writes_zero_and_bound_messages_models(self):
         for p in self.portfolio["plans"]:
             c=p["cost_boundary"]
-            self.assertEqual((c["autonomous_cash_spend_usd_max"],c["model_calls_max"],c["external_messages_max"],c["downstream_writes_max"]),(0,0,0,0))
+            self.assertEqual(c["autonomous_cash_spend_usd_max"],0)
+            self.assertEqual(c["downstream_writes_max"],0)
+            self.assertLessEqual(c["model_calls_max"],2)
+            if p["execution_mode"]=="BOUNDED_EXTERNAL_VALIDATION":
+                self.assertEqual(c["external_messages_max"],1)
+            else:
+                self.assertEqual(c["external_messages_max"],0)
 
     def test_blocked_canary_and_source_remain_blocked(self):
         for uid in ["UNC-CANARY-PRJ-000","UNC-BLOCKER-PRJ-003"]:

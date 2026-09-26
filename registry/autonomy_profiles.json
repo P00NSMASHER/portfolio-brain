@@ -80,15 +80,15 @@
           ]
         },
         "ACT": {
-          "decision": "HUMAN_APPROVAL_REQUIRED",
+          "decision": "BOUNDED",
           "conditions": [
-            "Consequential external action requires explicit human approval."
+            "Customer email may execute only through action_engine/ACTION_POLICY.json and its idempotency, rate-limit, credential, evidence and kill-switch gates.",
+            "Payments, billing changes, money movement, legal/regulatory communication, claims/disputes, destructive deletion and private disclosure remain separately gated."
           ]
         }
       },
       "human_approval_required_for": [
         "PRODUCTION_DEPLOYMENT_MEANINGFUL_RISK",
-        "CUSTOMER_COMMUNICATION",
         "CLAIM_OR_DISPUTE_SUBMISSION",
         "LEGAL_OR_REGULATORY_COMMUNICATION",
         "PAYMENT_OR_PURCHASE",
@@ -133,15 +133,15 @@
           ]
         },
         "ACT": {
-          "decision": "HUMAN_APPROVAL_REQUIRED",
+          "decision": "BOUNDED",
           "conditions": [
-            "Consequential external action requires explicit human approval."
+            "Customer email may execute only through action_engine/ACTION_POLICY.json and its idempotency, rate-limit, credential, evidence and kill-switch gates.",
+            "Payments, billing changes, money movement, legal/regulatory communication, claims/disputes, destructive deletion and private disclosure remain separately gated."
           ]
         }
       },
       "human_approval_required_for": [
         "PRODUCTION_DEPLOYMENT_MEANINGFUL_RISK",
-        "CUSTOMER_COMMUNICATION",
         "CLAIM_OR_DISPUTE_SUBMISSION",
         "LEGAL_OR_REGULATORY_COMMUNICATION",
         "PAYMENT_OR_PURCHASE",
@@ -186,15 +186,15 @@
           ]
         },
         "ACT": {
-          "decision": "HUMAN_APPROVAL_REQUIRED",
+          "decision": "BOUNDED",
           "conditions": [
-            "Consequential external action requires explicit human approval."
+            "Customer email may execute only through action_engine/ACTION_POLICY.json and its idempotency, rate-limit, credential, evidence and kill-switch gates.",
+            "Payments, billing changes, money movement, legal/regulatory communication, claims/disputes, destructive deletion and private disclosure remain separately gated."
           ]
         }
       },
       "human_approval_required_for": [
         "PRODUCTION_DEPLOYMENT_MEANINGFUL_RISK",
-        "CUSTOMER_COMMUNICATION",
         "CLAIM_OR_DISPUTE_SUBMISSION",
         "LEGAL_OR_REGULATORY_COMMUNICATION",
         "PAYMENT_OR_PURCHASE",
@@ -239,15 +239,15 @@
           ]
         },
         "ACT": {
-          "decision": "HUMAN_APPROVAL_REQUIRED",
+          "decision": "BOUNDED",
           "conditions": [
-            "Consequential external action requires explicit human approval."
+            "Customer email may execute only through action_engine/ACTION_POLICY.json and its idempotency, rate-limit, credential, evidence and kill-switch gates.",
+            "Payments, billing changes, money movement, legal/regulatory communication, claims/disputes, destructive deletion and private disclosure remain separately gated."
           ]
         }
       },
       "human_approval_required_for": [
         "PRODUCTION_DEPLOYMENT_MEANINGFUL_RISK",
-        "CUSTOMER_COMMUNICATION",
         "CLAIM_OR_DISPUTE_SUBMISSION",
         "LEGAL_OR_REGULATORY_COMMUNICATION",
         "PAYMENT_OR_PURCHASE",

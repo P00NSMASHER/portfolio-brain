@@ -5,7 +5,9 @@ class UncertaintyEngineTests(unittest.TestCase):
     def test_current_selected_question_is_external_validation_for_recoveryworks(self):
         s=build_snapshot()
         self.assertEqual(s["selected_uncertainty_id"],"UNC-EXTERNAL-PRJ-001")
-        self.assertEqual(s["selected_authority_requirement"],"HUMAN_GATED_ACT")
+        self.assertEqual(s["selected_authority_requirement"],"BOUNDED_ACT")
+        self.assertEqual(s["selected_actionability"],"READY_FOR_BOUNDED_EXTERNAL_EXECUTION")
+        self.assertNotIn("CUSTOMER_COMMUNICATION",s["selected_approval_requirements"])
 
     def test_all_candidates_keep_all_eight_components_and_no_scalar_score(self):
         for c in generate_candidates():

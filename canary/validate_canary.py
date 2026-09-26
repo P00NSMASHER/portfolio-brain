@@ -21,7 +21,7 @@ def validate_canary(output_dir=None):
         first=r["first_cycle"];cont=r["continuation"]
         req(first["runtime_status"]=="PASS" and first["runtime_api_reads"]<=8,"runtime canary boundary failed")
         req(3<=first["scheduler_selected_count"]<=8 and {"HUNT","INTEGRATION","RESEARCH"}<=set(first["scheduler_selected_work_types"]),"first scheduler selection drifted")
-        req(first["scheduler_blocked_approval_count"]==6,"human approval queue drifted")
+        req(first["scheduler_blocked_approval_count"]==2,"child-facing approval queue drifted")
         req(first["paid_cost_usd"]==0.0 and first["model_calls"]==0 and r["paid_model_api_used"] is False,"paid/model usage occurred")
         req(first["learning_eligible_records"]==0,"unverified learning promotion occurred")
         req(cont["scheduler_selected_count"]==0 and cont["scheduler_suppressed_duplicates"]>=3,"duplicate scheduler work was not suppressed")

@@ -160,6 +160,18 @@
         "github_runner_minutes": 5
       },
       "max_minutes_per_job": 5
+    },
+    "portfolio-action-worker::execute": {
+      "daily_ceiling": {
+        "cost_usd": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "model_calls": 0,
+        "api_calls": 0,
+        "github_job_starts": 25,
+        "github_runner_minutes": 125
+      },
+      "max_minutes_per_job": 5
     }
   },
   "retry_limits": {
@@ -188,7 +200,8 @@
     "runtime-weekly-synthesis",
     "runtime-event-observe",
     "software-factory-candidate",
-    "portfolio-notification-cycle"
+    "portfolio-notification-cycle",
+    "portfolio-action-worker"
   ],
   "max_cancellations_per_cycle": 8,
   "invariants": [

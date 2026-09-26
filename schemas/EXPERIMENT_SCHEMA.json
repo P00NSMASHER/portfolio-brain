@@ -64,6 +64,7 @@
     "status": {
       "enum": [
         "READY_FOR_ISOLATED_EXECUTION",
+        "READY_FOR_BOUNDED_EXECUTION",
         "HUMAN_APPROVAL_REQUIRED",
         "BLOCKED"
       ]
@@ -72,6 +73,7 @@
       "enum": [
         "READ_ONLY_EVIDENCE_ACQUISITION",
         "ISOLATED_SYNTHETIC_TEST",
+        "BOUNDED_EXTERNAL_VALIDATION",
         "HUMAN_GATED_EXTERNAL_VALIDATION",
         "BLOCKED"
       ]
@@ -80,6 +82,7 @@
       "enum": [
         "OBSERVE_ONLY",
         "BOUNDED_EXPERIMENT",
+        "BOUNDED_ACT",
         "HUMAN_GATED_ACT"
       ]
     },
@@ -132,7 +135,8 @@
               "UNCERTAINTY_EVIDENCE",
               "PROJECT_REGISTRY",
               "HUMAN_APPROVAL",
-              "PRIVATE_EXTERNAL_TARGET_REFERENCE"
+              "PRIVATE_EXTERNAL_TARGET_REFERENCE",
+              "ACTION_POLICY"
             ]
           },
           "ref": {
@@ -207,10 +211,14 @@
           "const": 0
         },
         "model_calls_max": {
-          "const": 0
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
         },
         "external_messages_max": {
-          "const": 0
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
         },
         "downstream_writes_max": {
           "const": 0
@@ -234,7 +242,8 @@
           "enum": [
             "NO_SIDE_EFFECTS",
             "DISCARD_ISOLATED_ARTIFACTS",
-            "HUMAN_CONTROLLED_RECOVERY"
+            "HUMAN_CONTROLLED_RECOVERY",
+            "STOP_CHANNEL_AND_SUPPRESS_DUPLICATE"
           ]
         },
         "steps": {
