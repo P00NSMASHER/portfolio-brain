@@ -41,8 +41,11 @@ def validate_hostile():
     req("git push origin main" not in operator and "git push origin head:main" not in operator,"operator console may not directly push main")
     req("gh pr create" in operator,"persistent operator policy changes must use reviewed PRs")
     req("cancel_queue_item" not in operator,"operator queue mutation must use validated helper rather than embedded state editing")
-    public=(ROOT/"dashboard/command_center.py").read_text().lower()
-    req("operator-console.yml" not in public and "operator console" not in public,"private operator console leaked into public dashboard")
+    public_source=(ROOT/"dashboard/command_center.py").read_text().lower()
+    req('p.name != "operator-console.yml"' in public_source,"private operator workflow exclusion missing")
+    from dashboard.command_center import build_command_center_snapshot,render_html
+    public_page=render_html(build_command_center_snapshot()).lower()
+    req("operator-console.yml" not in public_page and "operator console" not in public_page,"authenticated operator control leaked into public dashboard")
     factory=json.loads((ROOT/"software_factory/FACTORY_POLICY.json").read_text())
     req("MERGE_PR" in factory["absent_operations"] and "DEPLOY" in factory["absent_operations"],"factory deployment/merge surface widened")
     hunter=(ROOT/"hunting/autonomous_hunter.py").read_text()
