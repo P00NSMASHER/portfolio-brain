@@ -64,6 +64,20 @@ jobs:
           python -m dashboard.live_state_bridge
           --output-dir dashboard/live
           --receipt dashboard/live/state_sources.json
+      - name: Restore command-center history
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: >-
+          python -m dashboard.history_artifact_state
+          --output dashboard/live/history_state.json
+          --metadata-output dashboard/live/history_restore.json
+      - name: Append sanitized telemetry history
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: >-
+          python -m dashboard.history_state
+          --state dashboard/live/history_state.json
+          --output dashboard/out/history_state.json
+          --public-output dashboard/out/history.json
+          --source-commit "${GITHUB_SHA}"
       - name: Validate public command center
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m dashboard.validate_publication
@@ -75,6 +89,7 @@ jobs:
             --write-html public/index.html \
             --write-json public/snapshot.json
           cp dashboard/live/state_sources.json public/state-sources.json
+          cp dashboard/out/history.json public/history.json
           touch public/.nojekyll
           printf '%s\n' "${GITHUB_SHA}" > public/source-commit.txt
       - name: Upload validated preview artifact
@@ -85,6 +100,14 @@ jobs:
           path: public
           if-no-files-found: error
           retention-days: 7
+      - name: Upload sanitized command-center history
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-command-center-history
+          path: dashboard/out/history_state.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Configure Pages
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         id: pages
