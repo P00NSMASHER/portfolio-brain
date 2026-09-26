@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Any
 
 from dashboard.executive_dashboard import build_dashboard_snapshot
+from dashboard.history_state import load_state as load_history_state, public_history
+from dashboard.operational_telemetry import build_operational_telemetry
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -55,8 +57,7 @@ def load_state_sources() -> dict[str, Any]:
         "hunter":"hunting/HUNTER_STATE_SEED.json",
         "cost":"cost_governor/COST_STATE_SEED.json",
         "notifications":"notifications/NOTIFICATION_STATE_SEED.json",
-        "agents":"agents/AGENT_STATE_SEED.json",
-        "provider":"runtime/PROVIDER_HEALTH_SEED.json",
+        "agents":"agents/AGENT_HEARTBEAT_STATE_SEED.json",
     }
     for name, ref in seeds.items():
         data["sources"].setdefault(name, {
@@ -102,7 +103,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
     operating = load_json("operations/OPERATING_MODE_STATUS.json")
     sprint = load_json("operations/VALIDATION_SPRINT_STATE.json")
     agent_registry = load_json("agents/AGENT_REGISTRY.json")
-    agent_state = load_json("agents/AGENT_STATE_SEED.json")
+    agent_state = load_live_json("agent_heartbeat_state.json","agents/AGENT_HEARTBEAT_STATE_SEED.json")
     state_sources = load_state_sources()
     hunter_state = load_live_json("hunter_state.json","hunting/HUNTER_STATE_SEED.json")
     cost_policy = load_json("cost_governor/COST_GOVERNOR_POLICY.json")
@@ -115,9 +116,16 @@ def build_command_center_snapshot() -> dict[str, Any]:
     action_policy = load_json("action_engine/ACTION_POLICY.json")
     action_ledger = load_json("action_engine/GMAIL_GATEWAY_LEDGER.json")
     model_registry = load_json("model_router/PROVIDER_REGISTRY.json")
-    provider_health = load_live_json("provider_health.json", "runtime/PROVIDER_HEALTH_SEED.json")
+    telemetry = build_operational_telemetry()
+    history_public_path = ROOT / "dashboard" / "out" / "history.json"
+    if history_public_path.exists():
+        history = json.loads(history_public_path.read_text(encoding="utf-8"))
+    else:
+        history_state_path = ROOT / "dashboard" / "live" / "history_state.json"
+        history = public_history(load_history_state(history_state_path if history_state_path.exists() else None))
+    heartbeat_by_agent = {row["agent_id"]: row for row in telemetry["agents"]["agents"]}
 
-    state_by_agent = {a["agent_id"]: a for a in agent_state["agents"]}
+    state_by_agent = agent_state["agents"]
     agents = []
     for role in agent_registry["roles"]:
         state = state_by_agent.get(role["agent_id"], {})
@@ -127,8 +135,14 @@ def build_command_center_snapshot() -> dict[str, Any]:
                 "name": role["display_name"],
                 "role_key": role["role_key"],
                 "status": state.get("status", role.get("status", "UNKNOWN")),
-                "generation": state.get("generation"),
+                "generation": 1,
                 "last_heartbeat_at": state.get("last_heartbeat_at"),
+                "last_activity_kind": state.get("last_activity_kind"),
+                "source_workflow": state.get("source_workflow"),
+                "source_run_id": state.get("source_run_id"),
+                "recent_work_ids": state.get("recent_work_ids", []),
+                "heartbeat_health": heartbeat_by_agent.get(role["agent_id"], {}).get("heartbeat_health", "NEVER"),
+                "heartbeat_age_minutes": heartbeat_by_agent.get(role["agent_id"], {}).get("heartbeat_age_minutes"),
                 "max_autonomy": role["max_autonomy"],
                 "builder_eligible": role["builder_eligible"],
                 "verifier_eligible": role["verifier_eligible"],
@@ -137,7 +151,10 @@ def build_command_center_snapshot() -> dict[str, Any]:
             }
         )
 
-    workflows = sorted(p.name for p in (ROOT / ".github" / "workflows").glob("*.yml"))
+    workflows = sorted(
+        p.name for p in (ROOT / ".github" / "workflows").glob("*.yml")
+        if p.name != "operator-console.yml"
+    )
     kill_switches = [
         _kill_switch("Runtime", "runtime/KILL_SWITCH.json"),
         _kill_switch("Scheduler", "scheduler/KILL_SWITCH.json"),
@@ -190,15 +207,6 @@ def build_command_center_snapshot() -> dict[str, Any]:
                 "title": "Finite paid model/API budget is enabled",
                 "detail": f'Portfolio ceiling is USD {portfolio_ceiling["cost_usd"]}/day with {portfolio_ceiling["model_calls"]} model calls and {len(enabled_model_routes)} enabled non-Tier-0 model routes.',
                 "evidence_ref": "cost_governor/COST_GOVERNOR_POLICY.json",
-            }
-        )
-    if provider_health["status"] not in {"READY", "UNKNOWN"}:
-        alerts.append(
-            {
-                "severity": "HIGH" if provider_health["status"] in {"MISSING_CREDENTIAL", "BILLING_NOT_ACTIVE", "QUOTA_EXHAUSTED"} else "MEDIUM",
-                "title": "Model provider is not ready",
-                "detail": f'{provider_health["status"]}: internal cost status is {provider_health.get("cost_gate_status") or "not blocked"}.',
-                "evidence_ref": "runtime/provider_health.py",
             }
         )
     if sent_actions:
@@ -274,6 +282,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
         "agents": agents,
         "workflows": workflows,
         "state_sources": state_sources,
+        "telemetry": telemetry,
+        "history": history,
         "runtime": {
             "sequence": None if runtime_state is None else runtime_state.get("sequence"),
             "updated_at": None if runtime_state is None else runtime_state.get("updated_at"),
@@ -306,7 +316,6 @@ def build_command_center_snapshot() -> dict[str, Any]:
         "model_router": {
             "enabled_non_tier0_routes": enabled_model_routes,
             "enabled_non_tier0_route_count": len(enabled_model_routes),
-            "provider_readiness": provider_health,
         },
         "action_engine": {
             "enabled": action_policy["enabled"],
@@ -345,7 +354,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
                     "operations/OPERATING_MODE_STATUS.json",
                     "operations/VALIDATION_SPRINT_STATE.json",
                     "agents/AGENT_REGISTRY.json",
-                    "agents/AGENT_STATE_SEED.json",
+                    "agents/AGENT_HEARTBEAT_STATE_SEED.json",
                     "hunting/HUNTER_STATE_SEED.json",
                     "cost_governor/COST_GOVERNOR_POLICY.json",
                     "cost_governor/COST_STATE_SEED.json",
@@ -355,8 +364,6 @@ def build_command_center_snapshot() -> dict[str, Any]:
                     "action_engine/ACTION_POLICY.json",
                     "action_engine/GMAIL_GATEWAY_LEDGER.json",
                     "model_router/PROVIDER_REGISTRY.json",
-                    "runtime/PROVIDER_HEALTH_SEED.json",
-                    "runtime/provider_health.py",
                     "dashboard/live/state_sources.json",
                 ]
             )
@@ -376,11 +383,11 @@ def _badge(text: str, tone: str = "neutral") -> str:
 
 def _status_tone(value: str) -> str:
     upper = value.upper()
-    if upper in {"OPERATIONAL", "ACTIVE", "VERIFIED_FIXED", "RUNNING", "LIVE", "READY"}:
+    if upper in {"OPERATIONAL", "ACTIVE", "VERIFIED_FIXED", "RUNNING", "LIVE"}:
         return "good"
-    if upper in {"BLOCKED", "CRITICAL", "HIGH", "ENGAGED", "DISABLED", "MISSING_CREDENTIAL", "BILLING_NOT_ACTIVE", "QUOTA_EXHAUSTED", "BUDGET_BLOCKED", "PROVIDER_ERROR"}:
+    if upper in {"BLOCKED", "CRITICAL", "HIGH", "ENGAGED", "DISABLED", "OFFLINE"}:
         return "bad"
-    if upper in {"EVIDENCE_GAPS", "MEDIUM", "ACTIVE_RESEARCH_ONLY", "IN_DEVELOPMENT", "STALE", "FALLBACK", "DEGRADED", "RATE_LIMITED", "UNKNOWN"}:
+    if upper in {"EVIDENCE_GAPS", "MEDIUM", "ACTIVE_RESEARCH_ONLY", "IN_DEVELOPMENT", "STALE", "FALLBACK", "DEGRADED", "NEVER"}:
         return "warn"
     return "neutral"
 
@@ -394,9 +401,11 @@ def render_html(snapshot: dict[str, Any]) -> str:
     optimization = snapshot["optimization"]
     action_engine = snapshot["action_engine"]
     model_router = snapshot["model_router"]
-    provider_readiness = model_router["provider_readiness"]
     source_bundle = snapshot["state_sources"]
     sources = source_bundle["sources"]
+    telemetry = snapshot["telemetry"]
+    history = snapshot["history"]
+    project_names = {p["project_id"]:p["name"] for p in snapshot["projects"]}
 
     def source_badge(name: str) -> str:
         status = sources[name]["status"]
@@ -444,12 +453,12 @@ def render_html(snapshot: dict[str, Any]) -> str:
         f"""
         <tr>
           <td><strong>{_e(a["name"])}</strong><span class="sub">{_e(a["agent_id"])}</span></td>
-          <td>{_badge(a["status"], _status_tone(a["status"]))}</td>
+          <td>{_badge(a["heartbeat_health"], _status_tone(a["heartbeat_health"]))}</td>
+          <td class="num">{_e(a["heartbeat_age_minutes"] if a["heartbeat_age_minutes"] is not None else "—")}</td>
+          <td>{_e(a["last_activity_kind"] or "—")}</td>
+          <td>{_e(a["source_workflow"] or "—")}<span class="sub">run {_e(a["source_run_id"] or "—")}</span></td>
           <td>{_badge(a["max_autonomy"], "neutral")}</td>
-          <td>{_e("yes" if a["builder_eligible"] else "no")}</td>
-          <td>{_e("yes" if a["verifier_eligible"] else "no")}</td>
-          <td>{_e(a["max_model_tier"])}</td>
-          <td>{_e(a["last_heartbeat_at"] or "seed / artifact-backed runtime")}</td>
+          <td class="num">{_e(a["max_model_tier"])}</td>
         </tr>
         """
         for a in snapshot["agents"]
@@ -492,7 +501,6 @@ def render_html(snapshot: dict[str, Any]) -> str:
         "cost":"Cost Governor",
         "notifications":"Notifications",
         "agents":"Agent Fleet",
-        "provider":"Model Provider",
     }
     source_rows = "".join(
         f"""
@@ -508,6 +516,101 @@ def render_html(snapshot: dict[str, Any]) -> str:
         """
         for name, src in sources.items()
         if name in source_labels
+    )
+
+    queue_rows = "".join(
+        f"""
+        <tr>
+          <td><strong>{_e(w["work_id"])}</strong><span class="sub">{_e(w["source_ref"] or "")}</span></td>
+          <td>{_badge(w["state"], _status_tone(w["state"]))}</td>
+          <td>{_e(w["work_type"])}</td>
+          <td>{_e(w["assigned_agent_id"])}</td>
+          <td>{_e(", ".join(w["project_ids"]))}</td>
+          <td>{_e(w["created_at"] or "—")}</td>
+        </tr>
+        """
+        for w in telemetry["queue"]["items"]
+    ) or '<tr><td colspan="6" class="empty">No durable scheduler work items.</td></tr>'
+
+    action_rows = "".join(
+        f"""
+        <tr>
+          <td><strong>{_e(a["action_id"])}</strong></td>
+          <td>{_e(project_names.get(a["project_id"],a["project_id"]))}</td>
+          <td>{_e(a["action_type"])}</td>
+          <td>{_badge(a["status"], _status_tone(a["status"]))}</td>
+          <td>{_e(a["sent_at"])}</td>
+        </tr>
+        """
+        for a in telemetry["actions"]["recent"][:10]
+    ) or '<tr><td colspan="5" class="empty">No sanitized action receipts.</td></tr>'
+
+    failure_rows = "".join(
+        f"""
+        <tr>
+          <td>{_badge(f["kind"], "bad")}</td>
+          <td>{_e(f.get("ref") or "—")}</td>
+          <td>{_e(", ".join(f.get("project_ids") or []))}</td>
+          <td>{_e(f.get("at") or "—")}</td>
+        </tr>
+        """
+        for f in telemetry["failures"]["recent"][:10]
+    ) or '<tr><td colspan="4" class="empty">No current failure records in durable telemetry.</td></tr>'
+
+    usage_order = [
+        ("cost_usd","USD"),("model_calls","Model calls"),("api_calls","API calls"),
+        ("github_job_starts","GitHub jobs"),("github_runner_minutes","Runner minutes"),
+    ]
+    usage_rows = "".join(
+        f"""
+        <tr>
+          <td>{_e(label)}</td>
+          <td class="num">{_e(telemetry["cost"]["utilization"][key]["actual"])}</td>
+          <td class="num">{_e(telemetry["cost"]["utilization"][key]["used"])}</td>
+          <td class="num">{_e(telemetry["cost"]["utilization"][key]["ceiling"])}</td>
+          <td class="num">{_e(round(100*telemetry["cost"]["utilization"][key]["fraction"],1))}%</td>
+        </tr>
+        """ for key,label in usage_order
+    )
+
+    daily_rows = "".join(
+        f"""
+        <tr>
+          <td>{_e(d["day"])}</td>
+          <td class="num">{d["completed_work"]}</td>
+          <td class="num">{_e(d["cost_usd"])}</td>
+          <td class="num">{d["model_calls"]}</td>
+          <td class="num">{d["hunter_candidates"]}</td>
+          <td class="num">{d["action_executions"]}</td>
+          <td class="num">{d["new_failures"]}</td>
+          <td class="num">{d["verified_external_outcomes"]}</td>
+        </tr>
+        """ for d in history["daily"]
+    ) or '<tr><td colspan="8" class="empty">History begins with this deployment; daily trends will accumulate automatically.</td></tr>'
+
+    momentum_sorted = sorted(
+        history["project_momentum"],
+        key=lambda x:(
+            -x["verified_outcomes_delta"],-x["completed_work_delta"],-x["sent_actions_delta"],
+            -x["open_work"],x["project_id"]
+        ),
+    )
+    momentum_rows = "".join(
+        f"""
+        <tr>
+          <td><strong>{_e(m["project_id"])}</strong><span class="sub">{_e(project_names.get(m["project_id"],""))}</span></td>
+          <td class="num">{m["open_work"]}</td>
+          <td class="num">{m["completed_work_delta"]}</td>
+          <td class="num">{m["sent_actions_delta"]}</td>
+          <td class="num">{m["verified_outcomes_delta"]}</td>
+          <td class="num">{m["cancelled_work_delta"]}</td>
+        </tr>
+        """ for m in momentum_sorted
+    )
+
+    last_cycle = telemetry["cycles"]["latest_overall"]
+    last_cycle_text = "No successful durable cycle recorded." if last_cycle is None else (
+        f'{last_cycle["subsystem"]} · {last_cycle["cycle_id"]} · {last_cycle["finished_at"]}'
     )
 
     return f"""<!doctype html>
@@ -565,9 +668,9 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
 <body>
 <div class="shell">
 <aside>
-  <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Command Center v3</small></div></div>
+  <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Command Center v4</small></div></div>
   <nav>
-    <a href="#overview">Overview</a><a href="#live-state">Live State</a><a href="#alerts">Attention</a><a href="#projects">Portfolio</a>
+    <a href="#overview">Overview</a><a href="#live-state">Live State</a><a href="#operations">Operations</a><a href="#trends">Trends</a><a href="#alerts">Attention</a><a href="#projects">Portfolio</a>
     <a href="#agents">Agent Fleet</a><a href="#actions">Action Engine</a><a href="#hunter">Hunter</a>
     <a href="#cost">Cost & Models</a><a href="#workflows">Workflows</a><a href="#boundary">Authority Boundary</a>
   </nav>
@@ -591,8 +694,8 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
     <div class="card kpi"><div class="label">Agents</div><div class="value">{system["active_agent_count"]}/{system["agent_count"]}</div><div class="hint">active registry roles</div></div>
     <div class="card kpi"><div class="label">Open work</div><div class="value">{portfolio["pending_autonomous_work_count"]}</div><div class="hint">{_e(sources["scheduler"]["status"].lower())} scheduler queue</div></div>
     <div class="card kpi"><div class="label">Blocked work</div><div class="value">{portfolio["blocked_action_count"]}</div><div class="hint">human/authority gated</div></div>
-    <div class="card kpi"><div class="label">Verified outcomes</div><div class="value">{sprint["scorecard"]["verified_external_outcomes_since_start"]}</div><div class="hint">historical baseline</div></div>
-    <div class="card kpi"><div class="label">Paid model budget</div><div class="value">USD {cost["portfolio_ceiling"]["cost_usd"]:.2f}</div><div class="hint">{cost["portfolio_ceiling"]["model_calls"]} model calls authorized</div></div>
+    <div class="card kpi"><div class="label">Verified outcomes</div><div class="value">{telemetry["verified_external_outcomes"]}</div><div class="hint">verified durable evidence</div></div>
+    <div class="card kpi"><div class="label">Paid model spend</div><div class="value">USD {_e(round(telemetry["cost"]["actual_usage_today"]["cost_usd"],2))}</div><div class="hint">actual committed · USD {cost["portfolio_ceiling"]["cost_usd"]:.2f} ceiling</div></div>
   </section>
 
   <section class="card" id="live-state" style="margin-bottom:14px">
@@ -604,6 +707,55 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
     <div class="table-wrap"><table>
       <thead><tr><th>Subsystem</th><th>Status</th><th class="num">Seq</th><th>Artifact time</th><th>Source run</th><th class="num">Age min</th><th>Source</th></tr></thead>
       <tbody>{source_rows}</tbody>
+    </table></div>
+  </section>
+
+  <section class="card" id="operations" style="margin-bottom:14px">
+    <div class="section-head">
+      <div><h2>Operational Telemetry</h2><p>Durable queue, actual governed usage, actions, failures, and successful-cycle evidence.</p></div>
+      {_badge("LIVE DATA" if source_bundle["bridge_status"]=="LIVE" else source_bundle["bridge_status"], _status_tone(source_bundle["bridge_status"]))}
+    </div>
+    <div class="grid three">
+      <div class="callout"><strong>Queue</strong><p>Queued {telemetry["queue"]["counts"]["QUEUED"]} · Active {telemetry["queue"]["counts"]["ACTIVE"]} · Complete {telemetry["queue"]["counts"]["COMPLETE"]} · Cancelled {telemetry["queue"]["counts"]["CANCELLED"]}</p></div>
+      <div class="callout"><strong>Last successful autonomous cycle</strong><p>{_e(last_cycle_text)}</p></div>
+      <div class="callout"><strong>Failures</strong><p>{telemetry["failures"]["count"]} durable failure signal(s) currently represented.</p></div>
+    </div>
+    <div class="section-head" style="margin-top:16px"><div><h2>Durable Work Queue</h2><p>Newest 32 scheduler work records.</p></div>{source_badge("scheduler")}</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Work</th><th>State</th><th>Type</th><th>Agent</th><th>Projects</th><th>Created</th></tr></thead>
+      <tbody>{queue_rows}</tbody>
+    </table></div>
+  </section>
+
+  <section class="grid two" style="margin-bottom:14px">
+    <div class="card">
+      <div class="section-head"><div><h2>Cost / Capacity Today</h2><p>Actual = committed measured usage. Accounted = conservative governor usage including active/expired reservations.</p></div>{source_badge("cost")}</div>
+      <table><thead><tr><th>Resource</th><th class="num">Actual</th><th class="num">Accounted</th><th class="num">Ceiling</th><th class="num">Utilization</th></tr></thead><tbody>{usage_rows}</tbody></table>
+    </div>
+    <div class="card">
+      <div class="section-head"><div><h2>Recent External Actions</h2><p>Sanitized action receipts only.</p></div>{_badge(f'{telemetry["actions"]["total_sent"]} total',"neutral")}</div>
+      <div class="table-wrap"><table><thead><tr><th>Action</th><th>Project</th><th>Type</th><th>Status</th><th>Sent</th></tr></thead><tbody>{action_rows}</tbody></table></div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-bottom:14px">
+    <div class="section-head"><div><h2>Failure Stream</h2><p>Cancelled scheduler work, cost overages, and active failure-class alerts.</p></div>{_badge(str(telemetry["failures"]["count"]), "bad" if telemetry["failures"]["count"] else "good")}</div>
+    <div class="table-wrap"><table><thead><tr><th>Kind</th><th>Reference</th><th>Projects</th><th>Observed</th></tr></thead><tbody>{failure_rows}</tbody></table></div>
+  </section>
+
+  <section class="card" id="trends" style="margin-bottom:14px">
+    <div class="section-head">
+      <div><h2>History & Trends</h2><p>{history["point_count"]} hourly snapshot point(s). Daily values are evidence-derived; project momentum is signals, not a score.</p></div>
+      {_badge(f'seq {history["sequence"]}',"neutral")}
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Day</th><th class="num">Completed</th><th class="num">Cost USD</th><th class="num">Model calls</th><th class="num">Hunter candidates</th><th class="num">Actions</th><th class="num">Failures</th><th class="num">Verified outcomes</th></tr></thead>
+      <tbody>{daily_rows}</tbody>
+    </table></div>
+    <div class="section-head" style="margin-top:16px"><div><h2>24h Project Momentum Signals</h2><p>{_e(history["momentum_definition"])}</p></div></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Project</th><th class="num">Open work</th><th class="num">Completed Δ</th><th class="num">Actions Δ</th><th class="num">Verified Δ</th><th class="num">Cancelled Δ</th></tr></thead>
+      <tbody>{momentum_rows}</tbody>
     </table></div>
   </section>
 
@@ -636,7 +788,7 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
     <div class="card" id="agents">
       <div class="section-head"><div><h2>Agent Fleet</h2><p>Persistent roles and maximum authorized autonomy · {_e(source_detail("agents"))}</p></div>{source_badge("agents")}</div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Agent</th><th>Status</th><th>Max autonomy</th><th>Builder</th><th>Verifier</th><th>Tier</th><th>Heartbeat basis</th></tr></thead>
+        <thead><tr><th>Agent</th><th>Heartbeat</th><th class="num">Age min</th><th>Last activity</th><th>Source</th><th>Max autonomy</th><th class="num">Tier</th></tr></thead>
         <tbody>{agent_rows}</tbody>
       </table></div>
     </div>
@@ -666,23 +818,16 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
     <div class="card" id="cost">
       <div class="section-head"><div><h2>Cost Governor</h2><p>{_e(cost["mode"])} · {_e(source_detail("cost"))}</p></div>{source_badge("cost")}</div>
       <table><tbody>
-        <tr><td>Daily GitHub job starts</td><td class="num">{cost["portfolio_ceiling"]["github_job_starts"]}</td></tr>
-        <tr><td>Daily runner minutes</td><td class="num">{cost["portfolio_ceiling"]["github_runner_minutes"]}</td></tr>
-        <tr><td>Paid model calls</td><td class="num">{cost["portfolio_ceiling"]["model_calls"]}</td></tr>
-        <tr><td>API calls</td><td class="num">{cost["portfolio_ceiling"]["api_calls"]}</td></tr>
-        <tr><td>Active durable reservations</td><td class="num">{cost["reservation_count"]}</td></tr>
+        <tr><td>Actual cost today</td><td class="num">USD {_e(round(telemetry["cost"]["actual_usage_today"]["cost_usd"],4))}</td></tr>
+        <tr><td>Actual model calls today</td><td class="num">{telemetry["cost"]["actual_usage_today"]["model_calls"]}</td></tr>
+        <tr><td>Actual API calls today</td><td class="num">{telemetry["cost"]["actual_usage_today"]["api_calls"]}</td></tr>
+        <tr><td>Actual runner minutes today</td><td class="num">{telemetry["cost"]["actual_usage_today"]["github_runner_minutes"]}</td></tr>
+        <tr><td>Durable reservations</td><td class="num">{cost["reservation_count"]}</td></tr>
       </tbody></table>
       <div class="section-head" style="margin-top:16px"><h2>Kill Switches</h2>{_badge(f'{system["engaged_kill_switch_count"]} engaged', "bad" if system["engaged_kill_switch_count"] else "good")}</div>
       <div class="switches">{kill_rows}</div>
       <div class="section-head" style="margin-top:16px"><h2>Enabled Model Routes</h2>{_badge(f'{model_router["enabled_non_tier0_route_count"]} non-Tier-0',"good")}</div>
       <ul>{''.join(f'<li><code>{_e(m["provider_id"])}::{_e(m["model_id"])}</code> — Tier {_e(m["tier"])}</li>' for m in model_router["enabled_non_tier0_routes"])}</ul>
-      <div class="section-head" style="margin-top:16px"><h2>Provider Readiness</h2>{_badge(provider_readiness["status"],_status_tone(provider_readiness["status"]))}</div>
-      <table><tbody>
-        <tr><td>Provider/model</td><td class="num">{_e((provider_readiness.get("provider_id") or "—") + "::" + (provider_readiness.get("model_id") or "—"))}</td></tr>
-        <tr><td>Latest governed analysis</td><td class="num">{_e(provider_readiness["source_analysis_status"])}</td></tr>
-        <tr><td>Internal cost gate</td><td class="num">{_e(provider_readiness.get("cost_gate_status") or "not blocked")}</td></tr>
-        <tr><td>Retryable</td><td class="num">{_e(provider_readiness["retryable"])}</td></tr>
-      </tbody></table>
     </div>
   </section>
 
