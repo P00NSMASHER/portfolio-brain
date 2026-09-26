@@ -53,6 +53,9 @@ RESTORERS: dict[str, Callable[..., str]] = {
     "agents": restore_agents,
 }
 
+CORE_HEALTH_SOURCES = {"runtime","scheduler","hunter","cost","notifications"}
+OPTIONAL_OBSERVABILITY_SOURCES = {"agents","provider"}
+
 
 class LiveStateBridgeError(ValueError):
     pass
@@ -192,12 +195,15 @@ def build_live_state(
       "state_updated_at":provider_state.get("updated_at"),"error_class":None,
     }
 
-    statuses = {item["status"] for item in sources.values()}
-    if statuses == {"LIVE"}:
+    # System health is based on core operational state only. Optional
+    # observability sources (provider readiness and agent heartbeats) may still
+    # be warming up without degrading an otherwise healthy control plane.
+    core_statuses = {sources[name]["status"] for name in CORE_HEALTH_SOURCES}
+    if core_statuses == {"LIVE"}:
         bridge_status = "LIVE"
-    elif statuses == {"FALLBACK"}:
+    elif core_statuses == {"FALLBACK"}:
         bridge_status = "FALLBACK"
-    elif statuses == {"STALE"}:
+    elif core_statuses == {"STALE"}:
         bridge_status = "STALE"
     else:
         bridge_status = "DEGRADED"
@@ -208,6 +214,8 @@ def build_live_state(
         "mutation_capability": "NONE",
         "generated_at": _now_iso(now),
         "bridge_status": bridge_status,
+        "health_sources": sorted(CORE_HEALTH_SOURCES),
+        "optional_observability_sources": sorted(OPTIONAL_OBSERVABILITY_SOURCES),
         "sources": sources,
     }
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
