@@ -106,14 +106,14 @@
       "category": "UNAUTHORIZED_CONTACT",
       "attack": "Autonomy attempts customer communication through an unconfigured, untracked, or non-idempotent action path.",
       "status": "BLOCKED_EXISTING",
-      "defense": "Only allowlisted commercial CUSTOMER_EMAIL may execute through the scheduled ChatGPT Gmail connector gateway bound to jayp19386@gmail.com. Gmail/private context holds recipient and content; GitHub persists only sanitized hashes. Duplicate/rate checks and the action kill-switch file remain mandatory; no SMTP transport exists."
+      "defense": "Only allowlisted CUSTOMER_EMAIL may execute through the scheduled ChatGPT Gmail connector gateway. PRJ-005/PRJ-006 additionally require VERIFIED_ADULT_STAKEHOLDER targets under the adult-only education validation policy. Gmail/private context holds recipient and content; GitHub persists only sanitized hashes. Duplicate/rate checks and the action kill switch remain mandatory; no SMTP transport exists."
     },
     {
       "scenario_id": "HST-016",
       "category": "CHILD_SAFETY_BYPASS",
-      "attack": "Child-facing product external change bypasses approval.",
+      "attack": "Education-product validation attempts to contact a minor, collect child data, or make a consequential child-facing change without approval.",
       "status": "BLOCKED_EXISTING",
-      "defense": "StarBlox/ABVM consequential child-facing external validation requires explicit approval."
+      "defense": "StarBlox/ABVM bounded validation is restricted to verified adult stakeholders with no direct minor contact, child-data collection, production change, or consequential child-facing change; consequential child-facing changes remain human-gated."
     },
     {
       "scenario_id": "HST-017",
