@@ -3,6 +3,8 @@ name: runtime-event-observe
 on:
   push:
     branches: ["main"]
+    paths-ignore:
+      - "runtime/TRIGGER_DAILY_REASONING"
   repository_dispatch:
     types: ["portfolio_observe"]
   workflow_dispatch:

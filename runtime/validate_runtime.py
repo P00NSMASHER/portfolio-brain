@@ -56,6 +56,8 @@ def validate_runtime()->dict:
     req("PORTFOLIO_MODEL_API_KEY" in texts[names[3]] and "portfolio_model_api_key" in texts[names[3]],"daily model secret handoff missing")
     req("PORTFOLIO_MODEL_API_KEY" in texts[names[4]] and "portfolio_model_api_key" in texts[names[4]],"weekly model secret handoff missing")
     req("repository_dispatch:" in texts[names[1]] and "push:" in texts[names[1]],"event triggers missing")
+    req("paths-ignore:" in texts[names[1]] and "runtime/TRIGGER_DAILY_REASONING" in texts[names[1]],
+        "daily reasoning trigger must not also launch event-observe")
     return {"workflows":5,"model_calls":0,"governed_daily_model_calls":1,"governed_weekly_model_calls":1,
             "downstream_writes":0,"external_actions":0,
             "max_api_requests":b["max_api_requests_per_cycle"],"max_runtime_seconds":b["max_runtime_seconds"]}
