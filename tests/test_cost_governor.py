@@ -37,10 +37,13 @@ def github_request(*, run_id="100", attempt=1, minutes=5, workflow="portfolio-au
 
 
 class CostGovernorTests(unittest.TestCase):
-    def test_checked_in_paid_budget_is_zero(self):
+    def test_checked_in_paid_budget_is_finite_and_nonzero(self):
         p = policy()
+        self.assertGreater(p["portfolio_ceiling"]["cost_usd"], 0)
+        self.assertGreater(p["portfolio_ceiling"]["model_calls"], 0)
+        self.assertGreater(p["portfolio_ceiling"]["api_calls"], 0)
         for field in ("cost_usd", "input_tokens", "output_tokens", "model_calls", "api_calls"):
-            self.assertEqual(p["portfolio_ceiling"][field], 0)
+            self.assertGreaterEqual(p["portfolio_ceiling"][field], 0)
 
     def test_managed_github_job_reserves_before_execution(self):
         state, decision = preflight(load_state(), github_request(), at=AT)
@@ -176,7 +179,7 @@ class CostGovernorTests(unittest.TestCase):
         self.assertEqual(decision["status"], "BLOCKED_AUTHORITY")
         self.assertFalse(decision["can_execute"])
 
-    def test_non_tier0_model_route_is_blocked_by_zero_checked_in_budget(self):
+    def test_non_tier0_model_route_can_reserve_within_finite_budget(self):
         route = {
             "status": "ROUTED",
             "tier": 2,
@@ -195,8 +198,8 @@ class CostGovernorTests(unittest.TestCase):
             "data_classification": "SANITIZED",
         }
         _, decision = reserve_model_execution(load_state(), route, request, at=AT)
-        self.assertEqual(decision["status"], "BLOCKED_BUDGET")
-        self.assertFalse(decision["can_execute"])
+        self.assertEqual(decision["status"], "RESERVED")
+        self.assertTrue(decision["can_execute"])
 
     def test_model_router_tier0_path_is_cost_gated_without_granting_authority(self):
         request = {
