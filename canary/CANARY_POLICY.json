@@ -16,7 +16,7 @@
     "INTEGRATION",
     "RESEARCH"
   ],
-  "expected_blocked_approval_count": 2,
+  "expected_blocked_approval_count": 0,
   "continuation_requires_zero_new_selected_work": true,
   "continuation_requires_duplicate_suppression": true,
   "learning_promotion_allowed": false,
@@ -44,7 +44,7 @@
     "The canary uses only Tier-0 deterministic logic and zero paid model/API budget.",
     "The scheduler may surface human-gated work but the canary never executes it.",
     "The first cycle may enqueue bounded observe/research/commercial-experiment preparation work; the shadow canary performs no external action and continuation must enqueue no duplicate work.",
-    "Notification evaluation may emit GitHub-local alerts but cannot satisfy approvals or perform consequential ACT.",
+    "Notification evaluation may emit GitHub-local alerts but cannot satisfy approvals or perform consequential ACT; adult-only education validation remains external to the shadow canary.",
     "Learning rebuild may summarize evidence but cannot promote unverified observations or change authority.",
     "All persisted canary artifacts are sanitized state and receipt metadata only."
   ]
