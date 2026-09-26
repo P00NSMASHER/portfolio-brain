@@ -11,6 +11,7 @@
   "max_runtime_api_reads": 8,
   "max_selected_scheduler_work": 8,
   "expected_first_selected_work_types": [
+    "EXPERIMENT",
     "HUNT",
     "INTEGRATION",
     "RESEARCH"
@@ -42,7 +43,7 @@
     "The canary executes from deterministic local state and exact persisted cursor identities without live web/model/API access.",
     "The canary uses only Tier-0 deterministic logic and zero paid model/API budget.",
     "The scheduler may surface human-gated work but the canary never executes it.",
-    "The first cycle may enqueue bounded observe/research work; continuation from persisted state must enqueue no duplicate work.",
+    "The first cycle may enqueue bounded observe/research/commercial-experiment preparation work; the shadow canary performs no external action and continuation must enqueue no duplicate work.",
     "Notification evaluation may emit GitHub-local alerts but cannot satisfy approvals or perform consequential ACT.",
     "Learning rebuild may summarize evidence but cannot promote unverified observations or change authority.",
     "All persisted canary artifacts are sanitized state and receipt metadata only."
