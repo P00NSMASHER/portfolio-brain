@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "request_id": "command-center-post-runtime-recovery-refresh-2026-09-26",
+  "requested_at": "2026-09-26T22:54:00Z",
+  "reason": "Publish fresh runtime/provider health after runtime sub-budget starvation recovery and mobile command-center fixes.",
+  "expected_effect": [
+    "restore newest runtime artifact",
+    "restore newest provider-readiness artifact",
+    "restore newest agent-heartbeat artifact",
+    "rebuild mobile-safe command center",
+    "publish updated state-sources and snapshot"
+  ],
+  "authority_class": "OBSERVE",
+  "mutation_scope": "TRIGGER_ONLY"
+}
