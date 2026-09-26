@@ -40,7 +40,8 @@ def validate_hostile():
     req("\n  schedule:" not in operator,"operator console must not run on a schedule")
     req("git push origin main" not in operator and "git push origin head:main" not in operator,"operator console may not directly push main")
     req("gh pr create" in operator,"persistent operator policy changes must use reviewed PRs")
-    req("cancel_queue_item" not in operator,"operator queue mutation must use validated helper rather than embedded state editing")
+    req("python -m operator_console.operator_console cancel-work" in operator,"operator queue mutation must use validated helper")
+    req("mark_work(" not in operator and "scheduler_state.json').write" not in operator and 'scheduler_state.json").write' not in operator,"operator workflow may not embed scheduler-state mutation logic")
     public_source=(ROOT/"dashboard/command_center.py").read_text().lower()
     req('p.name != "operator-console.yml"' in public_source,"private operator workflow exclusion missing")
     from dashboard.command_center import build_command_center_snapshot,render_html
