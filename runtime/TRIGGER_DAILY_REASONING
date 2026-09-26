@@ -4,5 +4,5 @@ Updating this file on main intentionally triggers runtime-daily-learning.
 The triggered workflow remains bounded by the runtime policy, model router,
 Step-20 cost governor, provider secret, and kill switches.
 
-trigger_revision: runtime-health-recovery-2
-reason: rerun daily provider-readiness analysis after runtime sub-budget starvation fix
+trigger_revision: billing-activated-provider-proof-1
+reason: verify OpenAI provider readiness after API billing was funded by the owner
