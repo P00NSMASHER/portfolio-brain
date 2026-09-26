@@ -107,7 +107,7 @@ jobs:
           name: portfolio-command-center-history
           path: dashboard/out/history_state.json
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
       - name: Configure Pages
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         id: pages
