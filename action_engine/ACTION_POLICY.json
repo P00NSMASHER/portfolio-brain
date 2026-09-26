@@ -57,7 +57,7 @@
     "Raw recipients, subjects and message bodies are never persisted in durable action state.",
     "Every action has a deterministic idempotency key and duplicate execution is suppressed.",
     "Daily and per-recipient rate limits are checked against Gmail/Sanitized ledger state before Gmail send.",
-    "The authenticated Gmail connector profile must exactly match jayp19386@gmail.com before any Gmail mutation.",
+    "The authenticated Gmail connector profile is verified privately by the scheduled gateway before any Gmail mutation; the public repo stores only the PRIMARY_GMAIL_CONNECTOR alias.",
     "GitHub action receipts store hashes, counters, timestamps and action IDs only; Gmail message/thread IDs are hashed before persistence.",
     "Payments, money movement, legal/regulatory communications, claims/disputes, destructive deletion, private disclosure, live trading/broker execution and consequential child-facing changes are outside this executor.",
     "The action kill switch overrides all allowlists.",
@@ -65,5 +65,5 @@
     "GitHub Actions contains no SMTP transport or Gmail credential path."
   ],
   "execution_provider": "CHATGPT_GMAIL_CONNECTOR",
-  "gmail_account": "jayp19386@gmail.com"
+  "gmail_account_ref": "PRIMARY_GMAIL_CONNECTOR"
 }
