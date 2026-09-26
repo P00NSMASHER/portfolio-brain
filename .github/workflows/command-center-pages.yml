@@ -27,30 +27,48 @@ permissions:
   id-token: write
 
 concurrency:
-  group: portfolio-brain-command-center-pages
-  cancel-in-progress: true
+  group: portfolio-cost-governed-autonomy
+  cancel-in-progress: false
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     env:
       GITHUB_TOKEN: ${{ github.token }}
-    outputs:
-      pages_configured: ${{ steps.pages.outcome }}
+      PORTFOLIO_SPEND_DISABLED: ${{ vars.PORTFOLIO_SPEND_DISABLED }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Restore latest cost-governor state
+        run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
+      - name: Reserve bounded command-center compute
+        id: cost
+        run: >-
+          python -m cost_governor.workflow_gate preflight
+          --state cost_governor/live/cost_state.json
+          --output-dir cost_governor/out
+          --workflow-id command-center-pages
+          --job-id publish
+          --project-id PRJ-000
+          --estimated-minutes 5
+          --authority OBSERVE
       - name: Restore latest durable command-center state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: >-
           python -m dashboard.live_state_bridge
           --output-dir dashboard/live
           --receipt dashboard/live/state_sources.json
       - name: Validate public command center
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m dashboard.validate_publication
       - name: Build static command center
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: |
           mkdir -p public
           python -m dashboard.command_center \
@@ -60,6 +78,7 @@ jobs:
           touch public/.nojekyll
           printf '%s\n' "${GITHUB_SHA}" > public/source-commit.txt
       - name: Upload validated preview artifact
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-command-center-preview-${{ github.sha }}
@@ -67,28 +86,38 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - name: Configure Pages
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
         id: pages
         continue-on-error: true
         uses: actions/configure-pages@v5
       - name: Upload Pages artifact
-        if: steps.pages.outcome == 'success'
+        if: ${{ steps.cost.outputs.allowed == 'true' && steps.pages.outcome == 'success' }}
         uses: actions/upload-pages-artifact@v4
         with:
           path: public
-      - name: Explain disabled Pages
-        if: steps.pages.outcome != 'success'
-        run: |
-          echo "::notice title=Portfolio Brain Command Center::Static command center validated and uploaded as an artifact. GitHub Pages is not yet enabled for Actions in repository Settings > Pages."
-
-  deploy:
-    if: needs.build.outputs.pages_configured == 'success'
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    timeout-minutes: 5
-    steps:
       - name: Deploy command center
+        if: ${{ steps.cost.outputs.allowed == 'true' && steps.pages.outcome == 'success' }}
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Explain disabled Pages
+        if: ${{ steps.cost.outputs.allowed == 'true' && steps.pages.outcome != 'success' }}
+        run: |
+          echo "::notice title=Portfolio Brain Command Center::Static command center validated and uploaded as an artifact. GitHub Pages is not yet enabled for Actions in repository Settings > Pages."
+      - name: Commit conservative command-center compute usage
+        if: ${{ always() && steps.cost.outputs.allowed == 'true' }}
+        run: >-
+          python -m cost_governor.workflow_gate finalize
+          --state cost_governor/out/cost_state.json
+          --decision cost_governor/out/cost_decision.json
+          --output cost_governor/out/cost_state.json
+      - name: Upload sanitized cost-governor continuation state
+        if: ${{ always() && hashFiles('cost_governor/out/cost_state.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-cost-governor-state
+          path: cost_governor/out/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Fail closed when cost gate blocks
+        if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
+        run: exit 3
