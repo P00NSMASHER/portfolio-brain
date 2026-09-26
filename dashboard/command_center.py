@@ -403,6 +403,9 @@ def render_html(snapshot: dict[str, Any]) -> str:
     optimization = snapshot["optimization"]
     action_engine = snapshot["action_engine"]
     model_router = snapshot["model_router"]
+    sentinel = cost["sentinel"]
+    provider_health = model_router["provider_health"]
+    gateway_health = action_engine["gateway_health"]
     source_bundle = snapshot["state_sources"]
     sources = source_bundle["sources"]
 
@@ -679,10 +682,14 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
         <tr><td>Paid model calls</td><td class="num">{cost["portfolio_ceiling"]["model_calls"]}</td></tr>
         <tr><td>API calls</td><td class="num">{cost["portfolio_ceiling"]["api_calls"]}</td></tr>
         <tr><td>Active durable reservations</td><td class="num">{cost["reservation_count"]}</td></tr>
+        <tr><td>Committed spend</td><td class="num">${sentinel["budget"]["committed_usage"]["cost_usd"]:.4f}</td></tr>
+        <tr><td>Committed runner minutes</td><td class="num">{int(sentinel["github"]["governed_job_usage"]["committed_runner_minutes"])}</td></tr>
+        <tr><td>Watchdog max control-plane minutes/day</td><td class="num">{_e(sentinel["github"]["watchdog_control_plane_overhead"]["nominal_max_runner_minutes_per_day"])}</td></tr>
       </tbody></table>
       <div class="section-head" style="margin-top:16px"><h2>Kill Switches</h2>{_badge(f'{system["engaged_kill_switch_count"]} engaged', "bad" if system["engaged_kill_switch_count"] else "good")}</div>
       <div class="switches">{kill_rows}</div>
-      <div class="section-head" style="margin-top:16px"><h2>Enabled Model Routes</h2>{_badge(f'{model_router["enabled_non_tier0_route_count"]} non-Tier-0',"good")}</div>
+      <div class="section-head" style="margin-top:16px"><h2>Enabled Model Routes</h2>{_badge(provider_health["readiness"],_status_tone(provider_health["readiness"]))}</div>
+      <p><strong>Readiness:</strong> {_e(provider_health["readiness"])} · credential {_e(provider_health["credential_state"])} · provider block {_e(provider_health["provider_domain_blocked"])} · budget block {_e(provider_health["budget_domain_blocked"])}</p>
       <ul>{''.join(f'<li><code>{_e(m["provider_id"])}::{_e(m["model_id"])}</code> — Tier {_e(m["tier"])}</li>' for m in model_router["enabled_non_tier0_routes"])}</ul>
     </div>
   </section>
@@ -696,8 +703,11 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
         <tr><td>Email max / UTC day</td><td class="num">{action_engine["customer_email_max_per_utc_day"]}</td></tr>
         <tr><td>Sanitized executions</td><td class="num">{action_engine["execution_count"]}</td></tr>
         <tr><td>Sent receipts</td><td class="num">{action_engine["sent_count"]}</td></tr>
+        <tr><td>Today headroom</td><td class="num">{gateway_health["daily_headroom"]}</td></tr>
+        <tr><td>Duplicate receipt issues</td><td class="num">{gateway_health["duplicate_receipt_count"]}</td></tr>
       </tbody></table>
       <p><strong>Execution provider:</strong> {_e(action_engine["execution_provider"])} via {_e(action_engine["gmail_account_ref"])}</p>
+      <p><strong>Accounting domain:</strong> {_e(gateway_health["accounting_domain"])} — excluded from model/GitHub spend.</p>
       <p>This panel is observational. The command center cannot invoke the ACT gateway.</p>
     </div>
     <div class="card">
