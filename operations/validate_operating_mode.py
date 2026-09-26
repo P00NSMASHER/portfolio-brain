@@ -100,7 +100,7 @@ def validate_operating_mode():
         req(data.get(key) is False,f"checked-in {name} kill switch unexpectedly active")
 
     gmail=p.get("external_connector_gateways",{}).get("gmail",{})
-    req(gmail.get("provider")=="CHATGPT_GMAIL_CONNECTOR" and gmail.get("account")=="jayp19386@gmail.com","Gmail connector gateway binding missing")
+    req(gmail.get("provider")=="CHATGPT_GMAIL_CONNECTOR" and gmail.get("account_ref")=="PRIMARY_GMAIL_CONNECTOR","Gmail connector gateway binding missing")
     req(gmail.get("execution_task_id")=="6ab377c25df08191a6e2aa1537d9d2ef","Gmail gateway executor task mismatch")
     req(gmail.get("planner_task_id")=="6ab377be3184819186a3075f37a530b8","Gmail gateway planner task mismatch")
     req(load("action_engine/KILL_SWITCH.json").get("disabled") is False,"checked-in Gmail action kill switch unexpectedly active")
@@ -116,7 +116,7 @@ def validate_operating_mode():
     return {
       "approved_recurring_workflows":len(expected),
       "durable_state_artifacts":len(p["durable_state_artifacts"]),
-      "gmail_gateway_account":gmail["account"],
+      "gmail_gateway_account_ref":gmail["account_ref"],
       "enabled_nonzero_models":len(enabled_nonzero),
       "step23_unresolved":step23["unresolved_findings"],
       "step24_authority_violations":step24["authority_violations"],
