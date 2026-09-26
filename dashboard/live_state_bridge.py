@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from agents.artifact_state import restore as restore_agents
 from cost_governor.artifact_state import restore as restore_cost
 from hunting.artifact_state import restore as restore_hunter
 from notifications.artifact_state import restore as restore_notifications
@@ -30,6 +31,7 @@ STALE_AFTER_MINUTES = {
     "hunter": 450,
     "cost": 60,
     "notifications": 450,
+    "agents": 180,
 }
 
 SEEDS = {
@@ -37,6 +39,7 @@ SEEDS = {
     "hunter": "hunting/HUNTER_STATE_SEED.json",
     "cost": "cost_governor/COST_STATE_SEED.json",
     "notifications": "notifications/NOTIFICATION_STATE_SEED.json",
+    "agents": "agents/AGENT_HEARTBEAT_STATE_SEED.json",
 }
 
 RESTORERS: dict[str, Callable[..., str]] = {
@@ -45,6 +48,7 @@ RESTORERS: dict[str, Callable[..., str]] = {
     "hunter": restore_hunter,
     "cost": restore_cost,
     "notifications": restore_notifications,
+    "agents": restore_agents,
 }
 
 
@@ -70,6 +74,7 @@ def _state_filename(name: str) -> str:
         "hunter": "hunter_state.json",
         "cost": "cost_state.json",
         "notifications": "notification_state.json",
+        "agents": "agent_heartbeat_state.json",
     }[name]
 
 
