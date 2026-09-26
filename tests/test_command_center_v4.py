@@ -4,10 +4,13 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from agents.heartbeat_state import heartbeat,seed_state,validate_state
 from dashboard.history_state import append_point,daily_trends,project_momentum,validate_state as validate_history
 from operator.operator_console import validate_approval_ledger
+from scheduler.autonomous_scheduler import _owner_approval
+import scheduler.autonomous_scheduler as scheduler_module
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -87,6 +90,21 @@ class CommandCenterV4Tests(unittest.TestCase):
         validate_approval_ledger(doc)
         bad=copy.deepcopy(doc);bad["approvals"][0]["approved_by"]="user@example.com"
         with self.assertRaises(Exception):validate_approval_ledger(bad)
+
+    def test_exact_owner_approval_unlocks_only_matching_prep_source(self):
+        ledger={"schema_version":"1.0.0","ledger_id":"portfolio-owner-approvals","approvals":[{
+          "approval_id":"OAPR-"+"B"*20,"source_ref":"EXP-1","project_ids":["PRJ-008"],
+          "approval_requirements":["CUSTOMER_COMMUNICATION"],"approved_by":"P00NSMASHER",
+          "approved_at":"2026-09-26T18:00:00Z","status":"ACTIVE","reason_hash":"sha256:"+"1"*64
+        }]}
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);(root/"operator").mkdir();(root/"operator"/"OWNER_APPROVALS.json").write_text(json.dumps(ledger))
+            exp={"experiment_id":"EXP-1","project_ids":["PRJ-008"],"approval_requirements":["CUSTOMER_COMMUNICATION"]}
+            u={"uncertainty_id":"UNC-1"}
+            with patch.object(scheduler_module,"ROOT",root):
+                self.assertEqual(_owner_approval(exp,u)["approval_id"],"OAPR-"+"B"*20)
+                bad=copy.deepcopy(exp);bad["project_ids"]=["PRJ-009"]
+                self.assertIsNone(_owner_approval(bad,u))
 
     def test_operator_console_is_owner_only_manual_and_not_public_ui(self):
         workflow=(ROOT/".github/workflows/operator-console.yml").read_text()
