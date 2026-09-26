@@ -5,10 +5,47 @@ from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 SHA40=re.compile(r"^[0-9a-f]{40}$")
+ISO_Z=re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$")
+EMAIL=re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+RAW_CONNECTOR_ID=re.compile(r"(?<![0-9a-f])[0-9a-f]{16,32}(?![0-9a-f])",re.I)
 class OperatingModeValidationError(ValueError):pass
 def req(ok,msg):
     if not ok:raise OperatingModeValidationError(msg)
 def load(p):return json.loads((ROOT/p).read_text())
+
+def validate_reasoning_fallback(data=None):
+    d=load("operations/CHATGPT_REASONING_FALLBACK.json") if data is None else data
+    expected={
+      "schema_version","generated_at","provider","source_main_sha","trigger_reason",
+      "authority_granted","evidence_upgraded","top_bottleneck","next_actions",
+      "experiment_improvement","reuse_opportunity","risks","evidence_refs"
+    }
+    req(type(d) is dict and set(d)==expected,"reasoning fallback fields changed")
+    req(d["schema_version"]=="1.0.0","reasoning fallback schema mismatch")
+    req(d["provider"]=="CHATGPT_SCHEDULED_FALLBACK","reasoning fallback provider mismatch")
+    req(d["authority_granted"] is False,"reasoning fallback granted authority")
+    req(d["evidence_upgraded"] is False,"reasoning fallback upgraded evidence")
+    req(SHA40.fullmatch(d["source_main_sha"] or "") is not None,"reasoning fallback source SHA invalid")
+    req(ISO_Z.fullmatch(d["generated_at"] or "") is not None,"reasoning fallback timestamp invalid")
+    req(d["trigger_reason"] in {
+      "OPENAI_API_BILLING_NOT_ACTIVE","OPENAI_API_QUOTA_EXHAUSTED",
+      "OPENAI_API_THROTTLED","OPENAI_API_CREDENTIAL_MISSING",
+      "GOVERNED_MODEL_ANALYSIS_DEFERRED"
+    },"reasoning fallback trigger is not an approved continuity condition")
+    for field in ("top_bottleneck","experiment_improvement","reuse_opportunity"):
+        req(type(d[field]) is str and 1<=len(d[field])<=1200,f"reasoning fallback {field} invalid")
+    req(type(d["next_actions"]) is list and len(d["next_actions"])==3,"reasoning fallback must contain exactly three actions")
+    req(type(d["risks"]) is list and 1<=len(d["risks"])<=12,"reasoning fallback risks invalid")
+    req(type(d["evidence_refs"]) is list and 1<=len(d["evidence_refs"])<=24,"reasoning fallback evidence refs invalid")
+    for field in ("next_actions","risks","evidence_refs"):
+        req(all(type(x) is str and 1<=len(x)<=500 for x in d[field]),f"reasoning fallback {field} entry invalid")
+        req(len(d[field])==len(set(d[field])),f"reasoning fallback {field} contains duplicates")
+    raw=json.dumps(d,sort_keys=True,ensure_ascii=False)
+    req(EMAIL.search(raw) is None,"reasoning fallback contains an email address")
+    req(RAW_CONNECTOR_ID.search(raw) is None,"reasoning fallback contains a raw connector identifier")
+    forbidden=("gmail_message_id","gmail_thread_id","message_id","thread_id","draft_id","recipient","sender","subject","body","connector_id")
+    req(not any(re.search(rf'"{re.escape(token)}"\s*:',raw,re.I) for token in forbidden),"reasoning fallback contains a private connector field")
+    return {"provider":d["provider"],"authority_granted":False,"evidence_upgraded":False}
 
 def validate_operating_mode():
     p=load("operations/OPERATING_MODE_POLICY.json")
@@ -122,6 +159,7 @@ def validate_operating_mode():
       "CHILD_FACING_CONSEQUENTIAL_CHANGES_REQUIRE_APPROVAL"
     ]:req(b in boundaries,f"authority boundary missing: {b}")
 
+    fallback=validate_reasoning_fallback()
     return {
       "approved_recurring_workflows":len(expected),
       "neutral_no_work_workflows":len(neutral_no_work_workflows),
@@ -132,6 +170,9 @@ def validate_operating_mode():
       "step24_authority_violations":step24["authority_violations"],
       "step24_paid_cost_usd":step24["paid_cost_usd"],
       "interactive_chatgpt_runtime_dependency":False,
+      "reasoning_fallback_provider":fallback["provider"],
+      "reasoning_fallback_authority_granted":fallback["authority_granted"],
+      "reasoning_fallback_evidence_upgraded":fallback["evidence_upgraded"],
       "release_status":s["status"],
       "promoted_main_sha":s["promoted_main_sha"]
     }
