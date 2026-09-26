@@ -12,13 +12,15 @@ from model_router.model_router import (
 )
 
 class OpenAIExecutorError(ValueError):
-    def __init__(self,message,*,status_code=None,provider_code=None,provider_type=None,retryable=False,retry_after=None):
+    def __init__(self,message,*,status_code=None,provider_code=None,provider_type=None,retryable=False,retry_after=None,gate_status=None,reason_codes=None):
         super().__init__(message)
         self.status_code=status_code
         self.provider_code=provider_code
         self.provider_type=provider_type
         self.retryable=bool(retryable)
         self.retry_after=retry_after
+        self.gate_status=gate_status
+        self.reason_codes=list(reason_codes or [])
 
 def _now():
     return datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
@@ -52,6 +54,7 @@ NON_RETRYABLE_429_CODES={
     "credit_balance_exhausted","organization_spend_limit_exceeded",
     "project_spend_limit_exceeded","organization_usage_limit_exceeded","insufficient_quota"
 }
+NON_RETRYABLE_429_TYPES={"insufficient_quota"}
 
 def _parse_http_error(exc:HTTPError):
     raw=b""
@@ -71,7 +74,14 @@ def _parse_http_error(exc:HTTPError):
             parsed=float(value)
             if parsed>=0:retry_after=parsed
         except (TypeError,ValueError):pass
-    retryable=exc.code in {429,500,502,503,504} and code not in NON_RETRYABLE_429_CODES
+    if code in NON_RETRYABLE_429_CODES or typ in NON_RETRYABLE_429_TYPES:
+        retryable=False
+    elif exc.code==429:
+        retryable=(code in {"slow_down","rate_limit_exceeded"} or typ=="rate_limit_error" or (code is None and typ is None))
+    elif exc.code==503:
+        retryable=(code in {"server_is_overloaded",None} or typ in {"service_unavailable_error",None})
+    else:
+        retryable=exc.code in {500,502,504}
     return code,typ,retry_after,retryable
 
 def _default_transport(url:str,headers:dict[str,str],payload:bytes,timeout:int)->dict[str,Any]:
@@ -134,7 +144,13 @@ def execute_openai(
     credential_env=provider.get("credential_env_var")
     key=(os.environ.get(credential_env,"").strip() if credential_env else "")
     if not key:raise OpenAIExecutorError(f"missing credential environment variable: {credential_env}")
-    if not guard["cost_gate_passed"]:raise OpenAIExecutorError("cost governor blocked model execution")
+    if not guard["cost_gate_passed"]:
+        decision=guard.get("cost_decision") or {}
+        raise OpenAIExecutorError(
+            "cost governor blocked model execution",
+            gate_status=decision.get("status"),
+            reason_codes=decision.get("reason_codes") or []
+        )
 
     started=at or _now()
     payload=json.dumps({
