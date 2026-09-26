@@ -60,6 +60,7 @@ def restore(output: Path, metadata_output: Path | None = None) -> str:
     return restore_latest_valid_state(
         data,
         current_run=run,
+        expected_head_branch=os.environ.get("GITHUB_REF_NAME"),
         download=get,
         output=output,
         member_name="agent_heartbeat_state.json",
