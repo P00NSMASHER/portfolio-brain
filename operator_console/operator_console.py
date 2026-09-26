@@ -81,6 +81,8 @@ def validate_approval_ledger(doc:dict[str,Any])->None:
 def prepare_approval(*,source_ref:str,project_id:str,approval_code:str,actor:str,reason:str,at:str|None=None)->dict[str,Any]:
     source_ref=_safe_text(source_ref,"source_ref");project_id=_safe_text(project_id,"project_id")
     approval_code=_safe_text(approval_code,"approval_code");actor=_safe_text(actor,"actor")
+    operator_policy=load_json("operator_console/OPERATOR_POLICY.json")
+    req(actor in set(operator_policy.get("allowed_approval_actors") or []),"actor is not allowed to persist owner approval")
     req(project_id in {f"PRJ-{i:03d}" for i in range(12)},"unknown project")
     path=ROOT/"operator_console"/"OWNER_APPROVALS.json";doc=json.loads(path.read_text());validate_approval_ledger(doc)
     at=at or _now()
