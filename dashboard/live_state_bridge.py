@@ -156,7 +156,14 @@ def build_live_state(
         }
 
     statuses = {item["status"] for item in sources.values()}
-    bridge_status = "LIVE" if statuses == {"LIVE"} else ("DEGRADED" if "FALLBACK" in statuses else "STALE")
+    if statuses == {"LIVE"}:
+        bridge_status = "LIVE"
+    elif statuses == {"FALLBACK"}:
+        bridge_status = "FALLBACK"
+    elif statuses == {"STALE"}:
+        bridge_status = "STALE"
+    else:
+        bridge_status = "DEGRADED"
     receipt = {
         "schema_version": "1.0.0",
         "bridge_id": "portfolio-command-center-live-state-v1",
