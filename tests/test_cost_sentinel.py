@@ -103,6 +103,63 @@ class CostSentinelTests(unittest.TestCase):
         self.assertEqual(row["successful_calls"],1)
         self.assertEqual(row["failed_provider_attempts"],0)
 
+    def test_expired_reservation_is_included_in_effective_budget_usage(self):
+        usage={
+            "cost_usd":1.5,"input_tokens":2000,"output_tokens":400,
+            "model_calls":1,"api_calls":1,
+            "github_job_starts":0,"github_runner_minutes":0,
+        }
+        snapshot = build_sentinel_snapshot(
+            cost_policy={"portfolio_ceiling":{
+                "cost_usd":10,"input_tokens":10000,"output_tokens":5000,
+                "model_calls":5,"api_calls":5,
+                "github_job_starts":10,"github_runner_minutes":50,
+            }},
+            cost_state={"reservations":[{
+                "created_at":"2026-09-26T10:00:00Z","expires_at":"2026-09-26T10:30:00Z",
+                "status":"EXPIRED","resource_kind":"MODEL_CALL",
+                "provider_id":"openai","model_id":"gpt-5.6-terra",
+                "actual_usage":None,"estimated_usage":usage,"evidence_refs":[],
+            }]},
+            provider_registry={"providers":[]},
+            model_ledger={"calls":[],"outcomes":[]},
+            action_policy={"allowed_actions":{"CUSTOMER_EMAIL":{"max_per_utc_day":25}}},
+            action_ledger={"executions":[]},
+            provider_health={"status":"READY"},
+            at="2026-09-26T20:00:00Z",
+        )
+        budget=snapshot["budget"]
+        self.assertEqual(budget["committed_usage"]["cost_usd"],0)
+        self.assertEqual(budget["active_reserved_usage"]["cost_usd"],0)
+        self.assertEqual(budget["fail_closed_expired_usage"]["cost_usd"],1.5)
+        self.assertEqual(budget["effective_budget_usage"]["cost_usd"],1.5)
+        self.assertEqual(budget["remaining_headroom"]["cost_usd"],8.5)
+
+    def test_elapsed_active_reservation_is_classified_as_fail_closed(self):
+        usage={
+            "cost_usd":0,"input_tokens":0,"output_tokens":0,
+            "model_calls":0,"api_calls":0,
+            "github_job_starts":1,"github_runner_minutes":5,
+        }
+        snapshot = build_sentinel_snapshot(
+            cost_policy={"portfolio_ceiling":usage},
+            cost_state={"reservations":[{
+                "created_at":"2026-09-26T10:00:00Z","expires_at":"2026-09-26T10:30:00Z",
+                "status":"RESERVED","resource_kind":"GITHUB_JOB",
+                "provider_id":None,"model_id":None,
+                "actual_usage":None,"estimated_usage":usage,"evidence_refs":[],
+            }]},
+            provider_registry={"providers":[]},
+            model_ledger={"calls":[],"outcomes":[]},
+            action_policy={"allowed_actions":{"CUSTOMER_EMAIL":{"max_per_utc_day":25}}},
+            action_ledger={"executions":[]},
+            provider_health={"status":"READY"},
+            at="2026-09-26T20:00:00Z",
+        )
+        self.assertEqual(snapshot["budget"]["active_reserved_usage"]["github_job_starts"],0)
+        self.assertEqual(snapshot["budget"]["fail_closed_expired_usage"]["github_job_starts"],1)
+        self.assertEqual(snapshot["budget"]["remaining_headroom"]["github_job_starts"],0)
+
     def test_watchdog_hourly_cadence_reports_reduced_control_plane_overhead(self):
         snapshot = build_sentinel_snapshot(
             cost_policy={"portfolio_ceiling":{"cost_usd":10}},

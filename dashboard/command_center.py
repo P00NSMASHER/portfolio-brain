@@ -1341,6 +1341,8 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
         <tr><td>API calls</td><td class="num">{cost["portfolio_ceiling"]["api_calls"]}</td></tr>
         <tr><td>Active durable reservations</td><td class="num">{cost["reservation_count"]}</td></tr>
         <tr><td>Committed model/API spend</td><td class="num">${sentinel["budget"]["committed_usage"]["cost_usd"]:.4f}</td></tr>
+        <tr><td>Fail-closed expired reservation spend</td><td class="num">${sentinel["budget"]["fail_closed_expired_usage"]["cost_usd"]:.4f}</td></tr>
+        <tr><td>Effective budget-accounted spend</td><td class="num">${sentinel["budget"]["effective_budget_usage"]["cost_usd"]:.4f}</td></tr>
         <tr><td>Governed runner minutes committed</td><td class="num">{int(sentinel["github"]["governed_job_usage"]["committed_runner_minutes"])}</td></tr>
         <tr><td>Watchdog max control-plane minutes/day</td><td class="num">{_e(sentinel["github"]["watchdog_control_plane_overhead"]["nominal_max_runner_minutes_per_day"])}</td></tr>
       </tbody></table>

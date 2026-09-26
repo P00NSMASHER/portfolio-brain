@@ -30,6 +30,19 @@ def _add(dst: dict[str, float], src: dict[str, Any] | None) -> None:
 def _day(value: str | None) -> str | None:
     return value[:10] if isinstance(value, str) and len(value) >= 10 else None
 
+def _at_or_before(value: str | None, now: str) -> bool:
+    """Return whether an ISO timestamp has elapsed; malformed state stays fail closed."""
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        timestamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        current = datetime.fromisoformat(now.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return True
+    if timestamp.tzinfo is None or current.tzinfo is None:
+        return True
+    return timestamp.astimezone(timezone.utc) <= current.astimezone(timezone.utc)
+
 def _nominal_daily_runs(cron: str | None) -> int | None:
     """Return the exact daily run count for supported all-day cron forms."""
     if not isinstance(cron, str):
@@ -78,6 +91,7 @@ def build_sentinel_snapshot(
 
     committed = _zero()
     reserved = _zero()
+    fail_closed_expired = _zero()
     reservation_status_counts: Counter[str] = Counter()
     model_usage: dict[str, dict[str, float]] = defaultdict(_zero)
     failed_attempts: Counter[str] = Counter()
@@ -91,6 +105,13 @@ def build_sentinel_snapshot(
             continue
         if status in {"COMMITTED", "OVERAGE"}:
             _add(committed, row.get("actual_usage"))
+        elif status == "EXPIRED" or (
+            status == "RESERVED" and _at_or_before(row.get("expires_at"), now)
+        ):
+            # Keep dashboard accounting in exact parity with the governor. A
+            # crashed/unknown execution is charged at its reserved maximum for
+            # the rest of its UTC accounting day, even after its lease expires.
+            _add(fail_closed_expired, row.get("estimated_usage"))
         elif status == "RESERVED":
             _add(reserved, row.get("estimated_usage"))
 
@@ -100,6 +121,16 @@ def build_sentinel_snapshot(
                 _add(model_usage[key], row.get("actual_usage"))
             if _provider_attempt_failure(row):
                 failed_attempts[key] += 1
+
+    effective = _zero()
+    _add(effective, committed)
+    _add(effective, reserved)
+    _add(effective, fail_closed_expired)
+    ceiling = cost_policy["portfolio_ceiling"]
+    remaining_headroom = {
+        field: max(0.0, float(ceiling.get(field, 0) or 0) - effective[field])
+        for field in USAGE_FIELDS
+    }
 
     verified_outcomes = sum(
         1
@@ -168,9 +199,12 @@ def build_sentinel_snapshot(
         "sentinel_id": "portfolio-cost-governor-sentinel-v1",
         "accounting_day_utc": today,
         "budget": {
-            "portfolio_ceiling": cost_policy["portfolio_ceiling"],
+            "portfolio_ceiling": ceiling,
             "committed_usage": committed,
             "active_reserved_usage": reserved,
+            "fail_closed_expired_usage": fail_closed_expired,
+            "effective_budget_usage": effective,
+            "remaining_headroom": remaining_headroom,
             "reservation_status_counts": dict(sorted(reservation_status_counts.items())),
         },
         "provider_readiness": {
