@@ -18,8 +18,8 @@
     "output_tokens": 250000,
     "model_calls": 40,
     "api_calls": 80,
-    "github_job_starts": 96,
-    "github_runner_minutes": 480
+    "github_job_starts": 120,
+    "github_runner_minutes": 600
   },
   "project_default_ceiling": {
     "cost_usd": 3,
@@ -37,8 +37,8 @@
       "output_tokens": 125000,
       "model_calls": 20,
       "api_calls": 40,
-      "github_job_starts": 72,
-      "github_runner_minutes": 360
+      "github_job_starts": 112,
+      "github_runner_minutes": 560
     }
   },
   "provider_model_default_ceiling": {
@@ -160,6 +160,18 @@
         "github_runner_minutes": 5
       },
       "max_minutes_per_job": 5
+    },
+    "command-center-pages::publish": {
+      "daily_ceiling": {
+        "cost_usd": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "model_calls": 0,
+        "api_calls": 0,
+        "github_job_starts": 30,
+        "github_runner_minutes": 150
+      },
+      "max_minutes_per_job": 5
     }
   },
   "retry_limits": {
@@ -188,7 +200,8 @@
     "runtime-weekly-synthesis",
     "runtime-event-observe",
     "software-factory-candidate",
-    "portfolio-notification-cycle"
+    "portfolio-notification-cycle",
+    "command-center-pages"
   ],
   "max_cancellations_per_cycle": 8,
   "invariants": [
@@ -203,6 +216,7 @@
     "Actual token and cost usage is committed against the reservation; an overage triggers a hard stop.",
     "The shared concurrency group serializes autonomous reservations so artifact-backed accounting cannot race.",
     "Kill switches and hard-stop overages can cancel managed jobs without ChatGPT.",
-    "Only sanitized IDs, hashes, numeric usage and evidence references may be persisted while BLK-005 is open."
+    "Only sanitized IDs, hashes, numeric usage and evidence references may be persisted while BLK-005 is open.",
+    "Hourly command-center publication is cost-governed and shares the global autonomous GitHub-job concurrency/budget boundary."
   ]
 }
