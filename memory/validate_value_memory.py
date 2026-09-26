@@ -41,6 +41,9 @@ def validate_shared_value_memory()->dict[str,object]:
     require(semantics=={
       "independently_verified_outcomes_only":"REQUIRED",
       "observer_verifier_separation":"REQUIRED",
+      "registered_active_actors_only":"REQUIRED",
+      "verifier_eligibility":"REQUIRED",
+      "independence_group_separation":"REQUIRED",
       "immutable_verification_decision":"REQUIRED",
       "per_event_credit_conservation":"MAX_1_TOTAL",
       "objective_conditioning":"REQUIRED",

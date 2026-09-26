@@ -21,7 +21,7 @@ def outcome(state="VERIFIED", event="EVT-OUTCOME-0001", fraction=1.0):
       "schema_version":"1.0.0","outcome_id":"MOUT-PORTFOLIO-0001","memory_id":"MEM-PORTFOLIO-0001",
       "event_id":event,"project_id":"PRJ-000","objective_id":"OBJ-000","reward":0.8,
       "attribution_fraction":fraction,"evidence_ids":["EVD-OUTCOME-0001"],"evidence_state":state,
-      "observer_actor_id":"observer","verifier_actor_id":"verifier" if verified else None,
+      "observer_actor_id":"AGT-RESEARCHER","verifier_actor_id":"AGT-AUDITOR" if verified else None,
       "verification_report_hash":"sha256:"+"a"*64 if verified else None,
       "observed_at":"2026-09-25T16:00:00Z","verified_at":"2026-09-25T16:01:00Z" if verified else None
     }
@@ -51,8 +51,23 @@ class SharedValueMemoryTests(unittest.TestCase):
         self.assertTrue(calls["verify"]["accepted"])
 
     def test_observer_cannot_verify_own_outcome(self):
-        o=outcome(); o["verifier_actor_id"]="observer"
+        o=outcome(); o["verifier_actor_id"]="AGT-RESEARCHER"
         with self.assertRaises(SharedMemoryError): validate_outcome(o)
+
+    def test_invented_verifier_cannot_create_verified_learning_credit(self):
+        o=outcome(); o["verifier_actor_id"]="AGT-INVENTED-VERIFIER"
+        with self.assertRaisesRegex(SharedMemoryError,"active registered agent"):
+            validate_outcome(o)
+
+    def test_registered_non_verifier_cannot_create_verified_learning_credit(self):
+        o=outcome(); o["verifier_actor_id"]="AGT-PRODUCT-ANALYST"
+        with self.assertRaisesRegex(SharedMemoryError,"verifier-eligible"):
+            validate_outcome(o)
+
+    def test_invented_observer_cannot_supply_outcome_evidence(self):
+        o=outcome("OBSERVED"); o["observer_actor_id"]="AGT-INVENTED-OBSERVER"
+        with self.assertRaisesRegex(SharedMemoryError,"active registered agent"):
+            validate_outcome(o)
 
     def test_verified_outcome_requires_report_hash(self):
         o=outcome(); o["verification_report_hash"]=None

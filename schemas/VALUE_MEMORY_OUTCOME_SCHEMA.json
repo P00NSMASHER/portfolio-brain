@@ -21,8 +21,8 @@
     "attribution_fraction":{"type":"number","exclusiveMinimum":0.0,"maximum":1.0},
     "evidence_ids":{"type":"array","items":{"type":"string","pattern":"^EVD-[A-Z0-9-]{8,}$"},"uniqueItems":true,"minItems":1},
     "evidence_state":{"enum":["OBSERVED","VERIFIED","INFERRED","UNKNOWN","CONTRADICTED","STALE","INVALID"]},
-    "observer_actor_id":{"type":"string","minLength":1,"maxLength":300},
-    "verifier_actor_id":{"type":["string","null"],"minLength":1,"maxLength":300},
+    "observer_actor_id":{"type":"string","pattern":"^AGT-[A-Z0-9-]{3,}$","minLength":1,"maxLength":300},
+    "verifier_actor_id":{"type":["string","null"],"pattern":"^AGT-[A-Z0-9-]{3,}$","minLength":1,"maxLength":300},
     "verification_report_hash":{"type":["string","null"],"pattern":"^sha256:[0-9a-f]{64}$"},
     "observed_at":{"type":"string","format":"date-time"},
     "verified_at":{"type":["string","null"],"format":"date-time"}

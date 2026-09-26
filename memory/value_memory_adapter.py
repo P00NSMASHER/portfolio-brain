@@ -13,6 +13,7 @@ from typing import Any
 
 ROOT=Path(__file__).resolve().parents[1]
 PIN_PATH=ROOT/"memory"/"AI_BUSINESS_OS_VALUE_MEMORY_PIN.json"
+AGENT_REGISTRY_PATH=ROOT/"agents"/"AGENT_REGISTRY.json"
 
 MEM_ID=re.compile(r"^MEM-[A-Z0-9-]{8,}$")
 MOUT_ID=re.compile(r"^MOUT-[A-Z0-9-]{8,}$")
@@ -45,6 +46,19 @@ def load_pin()->dict[str,Any]:
     pin=json.loads(PIN_PATH.read_text(encoding="utf-8"))
     validate_pin(pin)
     return pin
+
+def registered_agents()->dict[str,dict[str,Any]]:
+    registry=json.loads(AGENT_REGISTRY_PATH.read_text(encoding="utf-8"))
+    _require(registry.get("schema_version")=="1.0.0","agent registry schema mismatch")
+    roles=registry.get("roles")
+    _require(isinstance(roles,list) and roles,"agent registry roles missing")
+    by_id={}
+    for role in roles:
+        agent_id=role.get("agent_id")
+        _require(isinstance(agent_id,str) and agent_id,"registered agent id missing")
+        _require(agent_id not in by_id,"duplicate registered agent id")
+        by_id[agent_id]=role
+    return by_id
 
 def validate_pin(pin: dict[str,Any])->None:
     _require(pin["schema_version"]=="1.0.0","pin schema mismatch")
@@ -99,11 +113,17 @@ def validate_outcome(outcome: dict[str,Any])->None:
     ids=outcome["evidence_ids"]; _require(isinstance(ids,list) and ids and len(ids)==len(set(ids)),"evidence_ids invalid")
     _require(all(EVD_ID.fullmatch(x) for x in ids),"invalid evidence id")
     _require(outcome["evidence_state"] in TRUTH_STATES,"invalid evidence state")
-    _require(isinstance(outcome["observer_actor_id"],str) and outcome["observer_actor_id"],"observer required")
+    agents=registered_agents()
+    observer=agents.get(outcome["observer_actor_id"])
+    _require(observer is not None and observer.get("status")=="ACTIVE","observer must be an active registered agent")
     _time(outcome["observed_at"],"observed_at")
     if outcome["evidence_state"]=="VERIFIED":
         _require(isinstance(outcome["verifier_actor_id"],str) and outcome["verifier_actor_id"],"VERIFIED outcome requires verifier")
         _require(outcome["verifier_actor_id"]!=outcome["observer_actor_id"],"observer cannot verify own outcome")
+        verifier=agents.get(outcome["verifier_actor_id"])
+        _require(verifier is not None and verifier.get("status")=="ACTIVE","verifier must be an active registered agent")
+        _require(verifier.get("verifier_eligible") is True,"VERIFIED outcome requires a verifier-eligible agent")
+        _require(verifier.get("independence_group")!=observer.get("independence_group"),"observer and verifier independence groups must differ")
         _require(isinstance(outcome["verification_report_hash"],str) and SHA256P.fullmatch(outcome["verification_report_hash"]),"VERIFIED outcome requires verification report hash")
         _require(outcome["verified_at"] is not None,"VERIFIED outcome requires verified_at")
         _require(_time(outcome["verified_at"],"verified_at")>=_time(outcome["observed_at"],"observed_at"),"verified_at precedes observed_at")
