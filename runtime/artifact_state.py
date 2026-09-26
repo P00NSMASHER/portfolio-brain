@@ -2,9 +2,12 @@
 """Restore newest sanitized Step 8 runtime-state artifact from GitHub Actions."""
 from __future__ import annotations
 import argparse, json, os, time, urllib.request
+import shutil
 from pathlib import Path
 from runtime.artifact_http import open_url
 from runtime.artifact_restore import restore_latest_valid_state
+from runtime.artifact_restore import InvalidStateArtifact
+from runtime.provider_health import validate_provider_health
 from runtime.state import validate_state
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -41,7 +44,18 @@ class BudgetedHTTP:
     def bytes(self,url: str)->bytes:
         return self._request(url)
 
-def restore(*, output: Path, metadata_output: Path | None = None)->str:
+def _no_provider_metadata(path:Path|None)->None:
+    if path is None:return
+    path.parent.mkdir(parents=True,exist_ok=True)
+    path.write_text(json.dumps({
+      "schema_version":"1.0.0","restore_status":"NO_VALID_PROVIDER_HEALTH_ARTIFACT",
+      "artifact_id":None,"artifact_name":None,"artifact_created_at":None,
+      "artifact_expires_at":None,"source_run_id":None,"source_head_sha":None,
+    },sort_keys=True)+"\n",encoding="utf-8")
+
+def restore(*, output: Path, metadata_output: Path | None = None,
+            provider_health_output:Path|None=None,
+            provider_health_metadata_output:Path|None=None)->str:
     token=os.environ.get("GITHUB_TOKEN") or os.environ.get("PORTFOLIO_GITHUB_TOKEN")
     repository=os.environ.get("GITHUB_REPOSITORY")
     current_run=os.environ.get("GITHUB_RUN_ID")
@@ -52,16 +66,37 @@ def restore(*, output: Path, metadata_output: Path | None = None)->str:
                       retries=budgets["retry_limit"],backoff=budgets["retry_backoff_seconds"])
     url=f"https://api.github.com/repos/{repository}/actions/artifacts?name={p['state_persistence']['artifact_name']}&per_page=100"
     data=http.json(url)
-    return restore_latest_valid_state(
+    status=restore_latest_valid_state(
         data,current_run=current_run,expected_head_branch=os.environ.get("GITHUB_REF_NAME"),
         download=http.bytes,output=output,
         member_name="runtime_state.json",expected_state_id="portfolio-runtime-state",
         max_archive_bytes=budgets["max_output_bytes"],max_state_bytes=budgets["max_output_bytes"],
         validator=validate_state,metadata_output=metadata_output,
     )
+    if provider_health_output is not None:
+        try:
+            restore_latest_valid_state(
+                data,current_run=current_run,expected_head_branch=os.environ.get("GITHUB_REF_NAME"),
+                download=http.bytes,output=provider_health_output,
+                member_name="provider_health.json",expected_state_id="portfolio-provider-readiness-state",
+                max_archive_bytes=budgets["max_output_bytes"],max_state_bytes=budgets["max_output_bytes"],
+                validator=validate_provider_health,metadata_output=provider_health_metadata_output,
+            )
+        except InvalidStateArtifact:
+            _no_provider_metadata(provider_health_metadata_output)
+        if not provider_health_output.exists():
+            provider_health_output.parent.mkdir(parents=True,exist_ok=True)
+            shutil.copyfile(ROOT/"runtime"/"PROVIDER_HEALTH_SEED.json",provider_health_output)
+    return status
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("--output",required=True);ap.add_argument("--metadata-output",default=None)
+    ap.add_argument("--provider-health-output",default=None)
+    ap.add_argument("--provider-health-metadata-output",default=None)
     args=ap.parse_args()
-    print(restore(output=Path(args.output),metadata_output=None if args.metadata_output is None else Path(args.metadata_output)))
+    print(restore(
+      output=Path(args.output),metadata_output=None if args.metadata_output is None else Path(args.metadata_output),
+      provider_health_output=None if args.provider_health_output is None else Path(args.provider_health_output),
+      provider_health_metadata_output=None if args.provider_health_metadata_output is None else Path(args.provider_health_metadata_output),
+    ))
 if __name__=="__main__": main()

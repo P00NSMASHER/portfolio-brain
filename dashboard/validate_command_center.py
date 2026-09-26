@@ -21,7 +21,7 @@ def validate_command_center() -> dict[str, object]:
     page = render_html(snapshot)
     lower = page.lower()
 
-    require(snapshot["command_center_id"] == "portfolio-brain-command-center-v3", "unexpected command-center id")
+    require(snapshot["command_center_id"] == "portfolio-brain-command-center-v4", "unexpected command-center id")
     require(snapshot["authority_class"] == "OBSERVE", "command center widened authority")
     require(snapshot["mutation_capability"] == "NONE", "command center gained mutation capability")
     require(snapshot["network_capability"] == "NONE", "command center gained outbound network capability")
@@ -31,7 +31,7 @@ def validate_command_center() -> dict[str, object]:
     require(snapshot["system"]["project_count"] == 12, "registered project coverage drifted")
     require(snapshot["system"]["agent_count"] == len(snapshot["agents"]), "agent coverage mismatch")
     require(snapshot["system"]["agent_count"] == 10, "persistent agent registry drifted")
-    require(set(snapshot["state_sources"]["sources"]) >= {"runtime","scheduler","hunter","cost","notifications","agents"}, "live-state source coverage incomplete")
+    require(set(snapshot["state_sources"]["sources"]) >= {"runtime","scheduler","hunter","cost","notifications","agents","provider"}, "live-state source coverage incomplete")
     require(snapshot["state_sources"]["bridge_status"] in {"LIVE","STALE","DEGRADED","FALLBACK"}, "invalid live-state bridge status")
     require(all(src["status"] in {"LIVE","STALE","FALLBACK"} for src in snapshot["state_sources"]["sources"].values()), "invalid subsystem freshness status")
     require(all(a["human_act_allowed"] is False for a in snapshot["agents"]), "agent human-ACT boundary drifted")
@@ -46,6 +46,9 @@ def validate_command_center() -> dict[str, object]:
     require(ceiling["cost_usd"] >= 0, "invalid portfolio cost ceiling")
     require(ceiling["model_calls"] >= 0, "invalid model-call ceiling")
     require(snapshot["model_router"]["enabled_non_tier0_route_count"] >= 1, "no enabled non-Tier-0 model route visible")
+    readiness=snapshot["model_router"]["provider_readiness"]
+    require(readiness["status"] in {"READY","MISSING_CREDENTIAL","BILLING_NOT_ACTIVE","QUOTA_EXHAUSTED","RATE_LIMITED","BUDGET_BLOCKED","PROVIDER_ERROR","UNKNOWN"}, "provider readiness status invalid")
+    require(readiness["authority_granted"] is False and readiness["evidence_upgraded"] is False, "provider health widened authority/evidence")
 
     action = snapshot["action_engine"]
     require(action["enabled"] is True, "bounded action engine not represented as enabled")
@@ -65,6 +68,7 @@ def validate_command_center() -> dict[str, object]:
     require("OBSERVE ONLY" in page, "read-only label missing")
     require("Bounded Action Engine" in page, "action-engine panel missing")
     require("Enabled Model Routes" in page, "model-route panel missing")
+    require("Provider Readiness" in page, "provider-readiness panel missing")
     require("Architecture freeze:" in page, "optimization-state panel missing")
     require("Kill Switches" in page, "kill-switch panel missing")
 
@@ -96,4 +100,4 @@ def validate_command_center() -> dict[str, object]:
 
 
 if __name__ == "__main__":
-    print("portfolio-brain command center v3: PASS", json.dumps(validate_command_center(), sort_keys=True))
+    print("portfolio-brain command center v4: PASS", json.dumps(validate_command_center(), sort_keys=True))

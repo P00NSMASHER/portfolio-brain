@@ -7,12 +7,14 @@ authority, never upgrades evidence, and writes advisory analysis + receipts.
 """
 from __future__ import annotations
 import argparse,hashlib,json,os
+from datetime import datetime,timezone
 from pathlib import Path
 from typing import Any,Callable
 
 from cost_governor.cost_governor import load_state as load_cost_state,policy as cost_policy
 from model_router.model_router import provider_registry,route_request
 from model_router.openai_executor import OpenAIExecutorError,execute_openai
+from runtime.provider_health import write_provider_health
 
 ROOT=Path(__file__).resolve().parents[1]
 class ModelAnalysisError(ValueError):pass
@@ -29,6 +31,25 @@ def policy(): return load("runtime/RUNTIME_POLICY.json")
 
 def canon(v): return json.dumps(v,sort_keys=True,separators=(",",":"),ensure_ascii=False)
 def sha(v): return "sha256:"+hashlib.sha256((v if isinstance(v,str) else canon(v)).encode()).hexdigest()
+
+def _timestamp(at:str|None)->str:
+    return at or datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
+
+def _provider_identity(request:dict[str,Any])->tuple[str|None,str|None]:
+    route=route_request(request,provider_registry())
+    return route.get("provider_id"),route.get("model_id")
+
+def _write_health(output_dir:Path,*,mode:str,status:str,source_status:str,sequence:int,
+                  at:str|None,provider_id:str|None,model_id:str|None,
+                  cost_gate_status:str|None=None,retryable:bool=False,
+                  provider_attempt:int|None=None)->dict[str,Any]:
+    return write_provider_health(output_dir/"provider_health.json",{
+      "schema_version":"1.0.0","state_id":"portfolio-provider-readiness-state",
+      "sequence":sequence,"updated_at":_timestamp(at),"mode":mode,"status":status,
+      "source_analysis_status":source_status,"provider_id":provider_id,"model_id":model_id,
+      "cost_gate_status":cost_gate_status,"retryable":retryable,
+      "provider_attempt":provider_attempt,"authority_granted":False,"evidence_upgraded":False
+    })
 
 def _selected_uncertainty():
     from uncertainty.highest_value_uncertainty import build_snapshot
@@ -175,13 +196,16 @@ def run_model_analysis(mode:str,*,runtime_out:Path,cost_state_path:Path,output_d
     output_dir.mkdir(parents=True,exist_ok=True)
     packet=build_packet(mode,runtime_out)
     packet_hash=sha(packet)
+    request=_request(mode,packet,at)
+    provider_id,model_id=_provider_identity(request)
     if not os.environ.get("PORTFOLIO_MODEL_API_KEY","").strip():
         status={"schema_version":"1.0.0","mode":mode,"status":"BLOCKED_MISSING_CREDENTIAL",
                 "packet_hash":packet_hash,"authority_granted":False,"evidence_upgraded":False}
         (output_dir/f"{mode}_model_analysis_status.json").write_text(json.dumps(status,indent=2)+"\n")
+        _write_health(output_dir,mode=mode,status="MISSING_CREDENTIAL",source_status=status["status"],
+                      sequence=0,at=at,provider_id=provider_id,model_id=model_id)
         return status
     state=load_cost_state(cost_state_path)
-    request=_request(mode,packet,at)
     attempt=_governed_attempt(request,state)
     if attempt is None:
         status={
@@ -227,6 +251,22 @@ def run_model_analysis(mode:str,*,runtime_out:Path,cost_state_path:Path,output_d
           "authority_granted":False,"evidence_upgraded":False
         }
         (output_dir/f"{mode}_model_analysis_status.json").write_text(json.dumps(status,indent=2)+"\n")
+        if status_name in {"BLOCKED_COST_RETRY_LIMIT","BLOCKED_COST_BUDGET"}:
+            health_status="BUDGET_BLOCKED"
+        elif status_name=="DEFERRED_PROVIDER_RETRY":
+            health_status="RATE_LIMITED"
+        elif status_name=="BLOCKED_PROVIDER_BILLING":
+            health_status="BILLING_NOT_ACTIVE"
+        elif status_name=="BLOCKED_PROVIDER_QUOTA":
+            health_status="QUOTA_EXHAUSTED"
+        else:
+            health_status="PROVIDER_ERROR"
+        health_state=exc.cost_state if exc.cost_state is not None else state
+        _write_health(output_dir,mode=mode,status=health_status,source_status=status_name,
+                      sequence=int(health_state.get("sequence",0)),at=at,
+                      provider_id=provider_id,model_id=model_id,
+                      cost_gate_status=exc.gate_status,retryable=exc.retryable,
+                      provider_attempt=attempt)
         return status
     cost_state_path.write_text(json.dumps(next_state,indent=2)+"\n")
     receipt=result["receipt"]
@@ -238,6 +278,10 @@ def run_model_analysis(mode:str,*,runtime_out:Path,cost_state_path:Path,output_d
       "authority_granted":False,"evidence_upgraded":False
     }
     (output_dir/f"{mode}_model_analysis.json").write_text(json.dumps(advisory,indent=2)+"\n")
+    _write_health(output_dir,mode=mode,status="READY",source_status="SUCCESS",
+                  sequence=int(next_state.get("sequence",0)),at=at,
+                  provider_id=receipt["provider_id"],model_id=receipt["model_id"],
+                  cost_gate_status="COMMITTED",provider_attempt=attempt)
     return advisory
 
 def main():

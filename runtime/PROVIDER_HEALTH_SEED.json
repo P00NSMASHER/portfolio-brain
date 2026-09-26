@@ -1,0 +1,16 @@
+{
+  "authority_granted": false,
+  "cost_gate_status": null,
+  "evidence_upgraded": false,
+  "mode": null,
+  "model_id": null,
+  "provider_attempt": null,
+  "provider_id": null,
+  "retryable": false,
+  "schema_version": "1.0.0",
+  "sequence": 0,
+  "source_analysis_status": "NO_GOVERNED_ATTEMPT_OBSERVED",
+  "state_id": "portfolio-provider-readiness-state",
+  "status": "UNKNOWN",
+  "updated_at": "2026-09-26T00:00:00Z"
+}

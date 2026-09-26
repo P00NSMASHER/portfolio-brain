@@ -56,6 +56,7 @@ def load_state_sources() -> dict[str, Any]:
         "cost":"cost_governor/COST_STATE_SEED.json",
         "notifications":"notifications/NOTIFICATION_STATE_SEED.json",
         "agents":"agents/AGENT_STATE_SEED.json",
+        "provider":"runtime/PROVIDER_HEALTH_SEED.json",
     }
     for name, ref in seeds.items():
         data["sources"].setdefault(name, {
@@ -114,6 +115,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
     action_policy = load_json("action_engine/ACTION_POLICY.json")
     action_ledger = load_json("action_engine/GMAIL_GATEWAY_LEDGER.json")
     model_registry = load_json("model_router/PROVIDER_REGISTRY.json")
+    provider_health = load_live_json("provider_health.json", "runtime/PROVIDER_HEALTH_SEED.json")
 
     state_by_agent = {a["agent_id"]: a for a in agent_state["agents"]}
     agents = []
@@ -190,6 +192,15 @@ def build_command_center_snapshot() -> dict[str, Any]:
                 "evidence_ref": "cost_governor/COST_GOVERNOR_POLICY.json",
             }
         )
+    if provider_health["status"] not in {"READY", "UNKNOWN"}:
+        alerts.append(
+            {
+                "severity": "HIGH" if provider_health["status"] in {"MISSING_CREDENTIAL", "BILLING_NOT_ACTIVE", "QUOTA_EXHAUSTED"} else "MEDIUM",
+                "title": "Model provider is not ready",
+                "detail": f'{provider_health["status"]}: internal cost status is {provider_health.get("cost_gate_status") or "not blocked"}.',
+                "evidence_ref": "runtime/provider_health.py",
+            }
+        )
     if sent_actions:
         alerts.append(
             {
@@ -202,7 +213,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
 
     snapshot = {
         "schema_version": "1.0.0",
-        "command_center_id": "portfolio-brain-command-center-v3",
+        "command_center_id": "portfolio-brain-command-center-v4",
         "authority_class": "OBSERVE",
         "mutation_capability": "NONE",
         "network_capability": "NONE",
@@ -295,6 +306,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
         "model_router": {
             "enabled_non_tier0_routes": enabled_model_routes,
             "enabled_non_tier0_route_count": len(enabled_model_routes),
+            "provider_readiness": provider_health,
         },
         "action_engine": {
             "enabled": action_policy["enabled"],
@@ -343,6 +355,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
                     "action_engine/ACTION_POLICY.json",
                     "action_engine/GMAIL_GATEWAY_LEDGER.json",
                     "model_router/PROVIDER_REGISTRY.json",
+                    "runtime/PROVIDER_HEALTH_SEED.json",
+                    "runtime/provider_health.py",
                     "dashboard/live/state_sources.json",
                 ]
             )
@@ -362,11 +376,11 @@ def _badge(text: str, tone: str = "neutral") -> str:
 
 def _status_tone(value: str) -> str:
     upper = value.upper()
-    if upper in {"OPERATIONAL", "ACTIVE", "VERIFIED_FIXED", "RUNNING", "LIVE"}:
+    if upper in {"OPERATIONAL", "ACTIVE", "VERIFIED_FIXED", "RUNNING", "LIVE", "READY"}:
         return "good"
-    if upper in {"BLOCKED", "CRITICAL", "HIGH", "ENGAGED", "DISABLED"}:
+    if upper in {"BLOCKED", "CRITICAL", "HIGH", "ENGAGED", "DISABLED", "MISSING_CREDENTIAL", "BILLING_NOT_ACTIVE", "QUOTA_EXHAUSTED", "BUDGET_BLOCKED", "PROVIDER_ERROR"}:
         return "bad"
-    if upper in {"EVIDENCE_GAPS", "MEDIUM", "ACTIVE_RESEARCH_ONLY", "IN_DEVELOPMENT", "STALE", "FALLBACK", "DEGRADED"}:
+    if upper in {"EVIDENCE_GAPS", "MEDIUM", "ACTIVE_RESEARCH_ONLY", "IN_DEVELOPMENT", "STALE", "FALLBACK", "DEGRADED", "RATE_LIMITED", "UNKNOWN"}:
         return "warn"
     return "neutral"
 
@@ -380,6 +394,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
     optimization = snapshot["optimization"]
     action_engine = snapshot["action_engine"]
     model_router = snapshot["model_router"]
+    provider_readiness = model_router["provider_readiness"]
     source_bundle = snapshot["state_sources"]
     sources = source_bundle["sources"]
 
@@ -477,6 +492,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
         "cost":"Cost Governor",
         "notifications":"Notifications",
         "agents":"Agent Fleet",
+        "provider":"Model Provider",
     }
     source_rows = "".join(
         f"""
@@ -660,6 +676,13 @@ table{{width:100%;border-collapse:collapse;font-size:.82rem}} th{{text-align:lef
       <div class="switches">{kill_rows}</div>
       <div class="section-head" style="margin-top:16px"><h2>Enabled Model Routes</h2>{_badge(f'{model_router["enabled_non_tier0_route_count"]} non-Tier-0',"good")}</div>
       <ul>{''.join(f'<li><code>{_e(m["provider_id"])}::{_e(m["model_id"])}</code> — Tier {_e(m["tier"])}</li>' for m in model_router["enabled_non_tier0_routes"])}</ul>
+      <div class="section-head" style="margin-top:16px"><h2>Provider Readiness</h2>{_badge(provider_readiness["status"],_status_tone(provider_readiness["status"]))}</div>
+      <table><tbody>
+        <tr><td>Provider/model</td><td class="num">{_e((provider_readiness.get("provider_id") or "—") + "::" + (provider_readiness.get("model_id") or "—"))}</td></tr>
+        <tr><td>Latest governed analysis</td><td class="num">{_e(provider_readiness["source_analysis_status"])}</td></tr>
+        <tr><td>Internal cost gate</td><td class="num">{_e(provider_readiness.get("cost_gate_status") or "not blocked")}</td></tr>
+        <tr><td>Retryable</td><td class="num">{_e(provider_readiness["retryable"])}</td></tr>
+      </tbody></table>
     </div>
   </section>
 

@@ -37,6 +37,22 @@ class LiveStateBridgeTests(unittest.TestCase):
                 "source_run_id":run_id,
                 "source_head_sha":str(run_id).zfill(40)[-40:],
             })+"\n")
+            provider_output=kwargs.get("provider_health_output")
+            provider_metadata=kwargs.get("provider_health_metadata_output")
+            if name=="runtime" and provider_output is not None and provider_metadata is not None:
+                Path(provider_output).write_text(json.dumps({
+                  "schema_version":"1.0.0","state_id":"portfolio-provider-readiness-state",
+                  "sequence":sequence,"updated_at":created_at,"mode":"daily","status":"READY",
+                  "source_analysis_status":"SUCCESS","provider_id":"openai","model_id":"gpt-5.6-terra",
+                  "cost_gate_status":"COMMITTED","retryable":False,"provider_attempt":1,
+                  "authority_granted":False,"evidence_upgraded":False,
+                })+"\n")
+                Path(provider_metadata).write_text(json.dumps({
+                  "schema_version":"1.0.0","restore_status":"RESTORED","artifact_id":run_id+2000,
+                  "artifact_name":"portfolio-runtime-state","artifact_created_at":created_at,
+                  "artifact_expires_at":"2026-10-26T18:00:00Z","source_run_id":run_id,
+                  "source_head_sha":str(run_id).zfill(40)[-40:],
+                })+"\n")
             return "RESTORED"
         return restore
 
@@ -58,6 +74,7 @@ class LiveStateBridgeTests(unittest.TestCase):
         self.assertEqual(receipt["sources"]["hunter"]["status"],"STALE")
         self.assertEqual(receipt["sources"]["cost"]["status"],"LIVE")
         self.assertEqual(receipt["sources"]["notifications"]["status"],"LIVE")
+        self.assertEqual(receipt["sources"]["provider"]["status"],"LIVE")
         self.assertEqual(receipt["sources"]["scheduler"]["source_run_id"],102)
         self.assertEqual(receipt["sources"]["scheduler"]["artifact_created_at"],"2026-09-26T17:20:00Z")
 

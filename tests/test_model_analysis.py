@@ -5,6 +5,7 @@ from unittest.mock import patch
 from cost_governor.cost_governor import load_state
 from model_router.openai_executor import OpenAIExecutorError,execute_openai
 from runtime.model_analysis import build_packet,run_model_analysis
+from runtime.provider_health import ProviderHealthError,validate_provider_health
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -24,6 +25,13 @@ def executor(request,text,state,**kwargs):
     return execute_openai(request,text,state,transport=fake_transport,**kwargs)
 
 class ModelAnalysisTests(unittest.TestCase):
+    def test_provider_health_fails_closed_on_authority_or_unknown_status(self):
+        seed=json.loads((ROOT/"runtime/PROVIDER_HEALTH_SEED.json").read_text())
+        validate_provider_health(seed)
+        for field,value in (("authority_granted",True),("status","MAGIC_READY")):
+            changed=dict(seed);changed[field]=value
+            with self.assertRaises(ProviderHealthError):validate_provider_health(changed)
+
     def _runtime_out(self,root,mode):
         out=Path(root)/"runtime-out";out.mkdir()
         if mode=="daily":
@@ -62,6 +70,8 @@ class ModelAnalysisTests(unittest.TestCase):
             r=run_model_analysis("daily",runtime_out=self._runtime_out(td,"daily"),cost_state_path=cost,output_dir=Path(td)/"out",at="2026-09-26T15:00:00Z",executor=executor)
             self.assertEqual(r["status"],"BLOCKED_MISSING_CREDENTIAL")
             self.assertEqual(cost.read_text(),before)
+            health=json.loads((Path(td)/"out"/"provider_health.json").read_text())
+            self.assertEqual(health["status"],"MISSING_CREDENTIAL")
 
     def test_daily_routes_terra_and_commits_usage(self):
         with tempfile.TemporaryDirectory() as td, patch.dict(os.environ,{"PORTFOLIO_MODEL_API_KEY":"test-key"},clear=True):
@@ -72,6 +82,8 @@ class ModelAnalysisTests(unittest.TestCase):
             self.assertFalse(r["authority_granted"]);self.assertFalse(r["evidence_upgraded"])
             state=json.loads(cost.read_text())
             self.assertTrue(any(x["resource_kind"]=="MODEL_CALL" and x["status"]=="COMMITTED" for x in state["reservations"]))
+            health=json.loads((Path(td)/"out"/"provider_health.json").read_text())
+            self.assertEqual((health["status"],health["cost_gate_status"]),("READY","COMMITTED"))
 
     def test_weekly_routes_independent_sol(self):
         with tempfile.TemporaryDirectory() as td, patch.dict(os.environ,{"PORTFOLIO_MODEL_API_KEY":"test-key"},clear=True):
@@ -90,6 +102,7 @@ class ModelAnalysisTests(unittest.TestCase):
             self.assertTrue(r["retryable"])
             self.assertEqual(r["retry_after_seconds"],45.0)
             self.assertTrue((out/"daily_model_analysis_status.json").exists())
+            self.assertEqual(json.loads((out/"provider_health.json").read_text())["status"],"RATE_LIMITED")
 
     def test_provider_quota_block_is_recorded_not_retried(self):
         def quota(*args,**kwargs):
@@ -98,6 +111,7 @@ class ModelAnalysisTests(unittest.TestCase):
             r=run_model_analysis("daily",runtime_out=self._runtime_out(td,"daily"),cost_state_path=self._cost_state(td),output_dir=Path(td)/"out",at="2026-09-26T15:00:00Z",executor=quota)
             self.assertEqual(r["status"],"BLOCKED_PROVIDER_QUOTA")
             self.assertFalse(r["retryable"])
+            self.assertEqual(json.loads((Path(td)/"out"/"provider_health.json").read_text())["status"],"QUOTA_EXHAUSTED")
 
     def test_cost_duplicate_is_nonfatal_skip(self):
         def duplicate(*args,**kwargs):
@@ -114,6 +128,7 @@ class ModelAnalysisTests(unittest.TestCase):
             r=run_model_analysis("daily",runtime_out=self._runtime_out(td,"daily"),cost_state_path=self._cost_state(td),output_dir=Path(td)/"out",at="2026-09-26T15:00:00Z",executor=billing)
             self.assertEqual(r["status"],"BLOCKED_PROVIDER_BILLING")
             self.assertFalse(r["retryable"])
+            self.assertEqual(json.loads((Path(td)/"out"/"provider_health.json").read_text())["status"],"BILLING_NOT_ACTIVE")
 
     def test_retryable_provider_attempt_advances_once_and_persists_accounting(self):
         calls=[]

@@ -1,6 +1,6 @@
 # Portfolio Brain Command Center v3
 
-The command center is a read-only operator view over Portfolio Brain's current sanitized checked-in state plus the newest validated durable GitHub Actions state artifacts.
+The command center is a read-only operator view over Portfolio Brain's current sanitized checked-in state plus the newest validated durable GitHub Actions state artifacts. It reports model-provider readiness separately from the internal cost governor so missing credentials, inactive billing, provider quota, throttling, and budget blocks cannot be conflated.
 
 It observes the unrestricted post-optimization architecture, including the finite model/API budget and the bounded Gmail action gateway, without becoming a mutation or ACT surface itself.
 

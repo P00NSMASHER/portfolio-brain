@@ -40,6 +40,7 @@ def validate_runtime()->dict:
     worker=texts[names[0]]
     for required in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_RUNTIME_DISABLED",
                      "PORTFOLIO_MODEL_API_KEY","runtime.model_analysis","actions/upload-artifact@v4","retention-days: 30","cancel-in-progress: false",
+                     "--provider-health-output runtime/out/provider_health.json",
                      "Report governed no-work outcome","steps.cost.outputs.decision_status","GITHUB_STEP_SUMMARY"]:
         req(required in worker,f"runtime worker missing {required}")
     req("Fail closed when cost gate blocks" not in worker and "run: exit 3" not in worker,

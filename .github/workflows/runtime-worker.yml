@@ -55,7 +55,10 @@ jobs:
           --authority OBSERVE
       - name: Restore latest runtime state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
-        run: python -m runtime.artifact_state --output runtime/live/runtime_state.json
+        run: >-
+          python -m runtime.artifact_state
+          --output runtime/live/runtime_state.json
+          --provider-health-output runtime/out/provider_health.json
       - name: Execute deterministic runtime cycle
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: >-
