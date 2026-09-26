@@ -90,13 +90,16 @@ class HostileExaminationTests(unittest.TestCase):
         self.assertEqual(route["status"],"BLOCKED_NO_ELIGIBLE_PROVIDER")
 
 
-    def test_bounded_contact_rejects_child_project_and_high_risk_types_absent(self):
+    def test_bounded_contact_requires_verified_adult_for_education_and_high_risk_types_absent(self):
         with self.assertRaises(ActionEngineError):
             make_email_request(project_id="PRJ-005",target="adult@example.com",subject="x",body="y",campaign_id="hostile",evidence_refs=["hostile:action"],requested_at="2026-09-26T04:00:00Z")
+        req=make_email_request(project_id="PRJ-005",target="adult@example.com",subject="x",body="y",campaign_id="hostile-adult",evidence_refs=["hostile:action"],target_classification="VERIFIED_ADULT_STAKEHOLDER",requested_at="2026-09-26T04:00:00Z")
+        self.assertEqual(req["target_classification"],"VERIFIED_ADULT_STAKEHOLDER")
         policy=json.loads((ROOT/"action_engine/ACTION_POLICY.json").read_text())
         self.assertEqual(set(policy["allowed_actions"]),{"CUSTOMER_EMAIL"})
         self.assertIn("MOVE_MONEY",policy["prohibited_action_types"])
         self.assertIn("LIVE_MARKET_TRADING",policy["prohibited_action_types"])
+        self.assertIn("CONSEQUENTIAL_CHILD_FACING_CHANGE",policy["prohibited_action_types"])
 
 
     def test_gmail_gateway_has_no_smtp_transport_surface(self):
@@ -116,11 +119,16 @@ class HostileExaminationTests(unittest.TestCase):
         self.assertIn("NO_AUTONOMOUS_TRADING",project["hard_boundaries"])
         self.assertIn("NO_BROKER_ORDER_EXECUTION",project["hard_boundaries"])
 
-    def test_child_facing_external_validation_remains_human_gated(self):
+    def test_education_validation_is_adult_only_while_child_facing_change_remains_prohibited(self):
         candidates={c["uncertainty_id"]:c for c in uncertainty.generate_candidates()}
         for uid in ["UNC-EXTERNAL-PRJ-005","UNC-EXTERNAL-PRJ-006"]:
-            self.assertEqual(candidates[uid]["actionability"],"HUMAN_APPROVAL_REQUIRED")
-            self.assertIn("CONSEQUENTIAL_CHILD_FACING_CHANGE",candidates[uid]["approval_requirements"])
+            c=candidates[uid]
+            self.assertEqual(c["actionability"],"READY_FOR_BOUNDED_EXTERNAL_EXECUTION")
+            self.assertEqual(c["authority_requirement"],"BOUNDED_ACT")
+            self.assertEqual(c["approval_requirements"],[])
+            self.assertIn("without direct child contact",c["question"])
+        policy=json.loads((ROOT/"action_engine/ACTION_POLICY.json").read_text())
+        self.assertIn("CONSEQUENTIAL_CHILD_FACING_CHANGE",policy["prohibited_action_types"])
 
     def test_private_reference_graph_node_rejects_raw_secret_field(self):
         n={
