@@ -74,13 +74,13 @@ def _bucket(value:str)->str:
 
 
 def _point(telemetry:dict[str,Any],source_commit:str)->dict[str,Any]:
-    q=telemetry["queue"];usage=telemetry["cost"]["usage_today"];h=telemetry["hunter"]["totals"]
+    q=telemetry["queue"];usage=telemetry["cost"]["actual_usage_today"];h=telemetry["hunter"]["totals"]
     observed=telemetry["generated_at"];bucket=_bucket(observed)
     metrics={
       "open_work":q["open_total"],
       "queued_work":q["counts"]["QUEUED"],
       "active_work":q["counts"]["ACTIVE"],
-      "completed_work_total":q["counts"]["COMPLETE"],
+      "completed_work_total":q["completed_fingerprint_count"],
       "cancelled_work_total":q["counts"]["CANCELLED"],
       "cost_usd_today":round(float(usage["cost_usd"]),6),
       "model_calls_today":int(usage["model_calls"]),
@@ -121,8 +121,8 @@ def daily_trends(state:dict[str,Any],days:int=14)->list[dict[str,Any]]:
         idx=all_days.index(day)
         prev_last=None if idx==0 else sorted(by_day[all_days[idx-1]],key=lambda p:p["bucket_at"])[-1]
         def delta(field):
-            before=0 if prev_last is None else prev_last["metrics"][field]
-            return max(0,last["metrics"][field]-before)
+            if prev_last is None:return 0
+            return max(0,last["metrics"][field]-prev_last["metrics"][field])
         m=last["metrics"]
         out.append({
           "day":day,
