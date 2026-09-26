@@ -16,7 +16,7 @@ On `main`, the approved recurring workflows may self-trigger on their existing s
 
 ## What does not become autonomous
 
-The release does not grant customer communication, payment/cash movement, live market trading or brokerage execution, deployment, merge authority, secret changes, or unapproved child-facing consequential changes. Human-gated approvals remain human-gated.
+The release permits only policy-bounded customer email through the action-engine gateway. StarBlox/ABVM validation is adult-stakeholder-only and excludes direct minor contact, child-data collection, production changes, and consequential child-facing changes. Payment/cash movement, live market trading or brokerage execution, deployment, merge authority, secret changes, and unapproved child-facing consequential changes remain human-gated or prohibited.
 
 Paid/model/API execution remains deny-by-default because the checked-in provider registry has no enabled non-Tier-0 model and Step 20 paid/token/model/API ceilings remain zero.
 
