@@ -1,14 +1,14 @@
 {
   "schema_version": "1.0.0",
-  "request_id": "command-center-post-runtime-recovery-refresh-2026-09-26",
-  "requested_at": "2026-09-26T22:54:00Z",
-  "reason": "Publish fresh runtime/provider health after runtime sub-budget starvation recovery and mobile command-center fixes.",
+  "request_id": "command-center-provider-ready-refresh-2026-09-26",
+  "requested_at": "2026-09-26T23:08:00Z",
+  "reason": "Publish fresh provider readiness after governed OpenAI API analysis succeeded following owner API billing activation.",
   "expected_effect": [
     "restore newest runtime artifact",
-    "restore newest provider-readiness artifact",
+    "restore provider-readiness SUCCESS evidence",
     "restore newest agent-heartbeat artifact",
-    "rebuild mobile-safe command center",
-    "publish updated state-sources and snapshot"
+    "render mobile-safe command center",
+    "publish READY provider status and current core health"
   ],
   "authority_class": "OBSERVE",
   "mutation_scope": "TRIGGER_ONLY"
