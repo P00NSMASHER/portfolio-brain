@@ -41,7 +41,7 @@ def validate_publication() -> dict[str, object]:
     require(snapshot["authority_class"] == "OBSERVE", "public command center widened authority")
     require(snapshot["mutation_capability"] == "NONE", "public command center gained mutation capability")
     require(snapshot["network_capability"] == "NONE", "public command center gained browser network capability")
-    require(set(snapshot["state_sources"]["sources"]) >= {"runtime","scheduler","hunter","cost","notifications","agents"}, "public live-state provenance incomplete")
+    require(set(snapshot["state_sources"]["sources"]) >= {"runtime","scheduler","hunter","cost","notifications","agents","provider"}, "public live-state provenance incomplete")
     require(snapshot["data_boundary"] == "SANITIZED_CHECKED_IN_AND_DURABLE_ARTIFACT_STATE", "public data boundary widened")
     require(snapshot["telemetry"]["authority_class"] == "OBSERVE", "public telemetry widened authority")
     require(snapshot["history"]["history_id"] == "portfolio-command-center-public-history-v1", "public history missing")
