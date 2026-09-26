@@ -106,6 +106,15 @@ class ModelAnalysisTests(unittest.TestCase):
             r=run_model_analysis("daily",runtime_out=self._runtime_out(td,"daily"),cost_state_path=self._cost_state(td),output_dir=Path(td)/"out",at="2026-09-26T15:00:00Z",executor=duplicate)
             self.assertEqual(r["status"],"SKIPPED_DUPLICATE_PACKET")
 
+
+    def test_billing_not_active_is_explicit_nonfatal_status(self):
+        def billing(*args,**kwargs):
+            raise OpenAIExecutorError("billing",status_code=429,provider_code="billing_not_active",provider_type="billing_not_active",retryable=False)
+        with tempfile.TemporaryDirectory() as td, patch.dict(os.environ,{"PORTFOLIO_MODEL_API_KEY":"test-key"},clear=True):
+            r=run_model_analysis("daily",runtime_out=self._runtime_out(td,"daily"),cost_state_path=self._cost_state(td),output_dir=Path(td)/"out",at="2026-09-26T15:00:00Z",executor=billing)
+            self.assertEqual(r["status"],"BLOCKED_PROVIDER_BILLING")
+            self.assertFalse(r["retryable"])
+
     def test_analysis_output_is_advisory_only(self):
         with tempfile.TemporaryDirectory() as td, patch.dict(os.environ,{"PORTFOLIO_MODEL_API_KEY":"test-key"},clear=True):
             out=Path(td)/"out"

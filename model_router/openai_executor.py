@@ -52,9 +52,9 @@ def _extract_output_text(data:dict[str,Any])->str:
 
 NON_RETRYABLE_429_CODES={
     "credit_balance_exhausted","organization_spend_limit_exceeded",
-    "project_spend_limit_exceeded","organization_usage_limit_exceeded","insufficient_quota"
+    "project_spend_limit_exceeded","organization_usage_limit_exceeded","insufficient_quota","billing_not_active"
 }
-NON_RETRYABLE_429_TYPES={"insufficient_quota"}
+NON_RETRYABLE_429_TYPES={"insufficient_quota","billing_not_active"}
 
 def _parse_http_error(exc:HTTPError):
     raw=b""

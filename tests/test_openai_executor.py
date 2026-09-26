@@ -70,6 +70,15 @@ class OpenAIExecutorTests(unittest.TestCase):
         self.assertEqual(typ,"insufficient_quota")
         self.assertFalse(retryable)
 
+
+    def test_billing_not_active_429_is_not_retryable(self):
+        headers=Message()
+        body=io.BytesIO(b'{"error":{"type":"billing_not_active","code":"billing_not_active"}}')
+        exc=HTTPError("https://api.openai.com/v1/responses",429,"Too Many Requests",headers,body)
+        code,typ,retry_after,retryable=_parse_http_error(exc)
+        self.assertEqual((code,typ),("billing_not_active","billing_not_active"))
+        self.assertFalse(retryable)
+
     def test_short_context_pricing_boundary_is_enforced(self):
         r=req();r["max_input_tokens"]=272001
         self.assertEqual(route_request(r,provider_registry())["status"],"BLOCKED_NO_ELIGIBLE_PROVIDER")
