@@ -101,7 +101,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
     operating = load_json("operations/OPERATING_MODE_STATUS.json")
     sprint = load_json("operations/VALIDATION_SPRINT_STATE.json")
     agent_registry = load_json("agents/AGENT_REGISTRY.json")
-    agent_state = load_json("agents/AGENT_STATE_SEED.json")
+    agent_state = load_live_json("agent_heartbeat_state.json","agents/AGENT_HEARTBEAT_STATE_SEED.json")
     state_sources = load_state_sources()
     hunter_state = load_live_json("hunter_state.json","hunting/HUNTER_STATE_SEED.json")
     cost_policy = load_json("cost_governor/COST_GOVERNOR_POLICY.json")
@@ -115,7 +115,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
     action_ledger = load_json("action_engine/GMAIL_GATEWAY_LEDGER.json")
     model_registry = load_json("model_router/PROVIDER_REGISTRY.json")
 
-    state_by_agent = {a["agent_id"]: a for a in agent_state["agents"]}
+    state_by_agent = agent_state["agents"]
     agents = []
     for role in agent_registry["roles"]:
         state = state_by_agent.get(role["agent_id"], {})
@@ -125,8 +125,12 @@ def build_command_center_snapshot() -> dict[str, Any]:
                 "name": role["display_name"],
                 "role_key": role["role_key"],
                 "status": state.get("status", role.get("status", "UNKNOWN")),
-                "generation": state.get("generation"),
+                "generation": 1,
                 "last_heartbeat_at": state.get("last_heartbeat_at"),
+                "last_activity_kind": state.get("last_activity_kind"),
+                "source_workflow": state.get("source_workflow"),
+                "source_run_id": state.get("source_run_id"),
+                "recent_work_ids": state.get("recent_work_ids", []),
                 "max_autonomy": role["max_autonomy"],
                 "builder_eligible": role["builder_eligible"],
                 "verifier_eligible": role["verifier_eligible"],
@@ -333,7 +337,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
                     "operations/OPERATING_MODE_STATUS.json",
                     "operations/VALIDATION_SPRINT_STATE.json",
                     "agents/AGENT_REGISTRY.json",
-                    "agents/AGENT_STATE_SEED.json",
+                    "agents/AGENT_HEARTBEAT_STATE_SEED.json",
                     "hunting/HUNTER_STATE_SEED.json",
                     "cost_governor/COST_GOVERNOR_POLICY.json",
                     "cost_governor/COST_STATE_SEED.json",
