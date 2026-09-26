@@ -27,6 +27,12 @@ def validate_agents():
     with tempfile.TemporaryDirectory() as td:
         rt=PortfolioAgentRuntime(Path(td)/"agents.sqlite3");req(rt.event_chain_valid(),"fresh event chain invalid");count=rt.conn.execute("SELECT count(*) AS n FROM agents").fetchone()["n"];rt.close()
     req(count==10,"runtime failed to bootstrap agents")
-    provider=load("model_router/PROVIDER_REGISTRY.json");req(not any(p["enabled"] and m["enabled"] and m["tier"]>0 for p in provider["providers"] for m in p["models"]),"non-Tier-0 model unexpectedly enabled")
-    return {"roles":10,"builder_roles":1,"verifier_roles":4,"human_act_roles":0,"seed_work_items":0,"enabled_nonzero_models":0}
+    provider=load("model_router/PROVIDER_REGISTRY.json")
+    enabled=[(p["provider_id"],m["model_id"],m["tier"]) for p in provider["providers"] for m in p["models"] if p["enabled"] and m["enabled"] and m["tier"]>0]
+    req(enabled==[
+      ("openai","gpt-5.6-luna",1),("openai","gpt-5.6-terra",2),("openai","gpt-5.6-sol",3)
+    ],"approved GPT-5.6 model set mismatch")
+    req(by["AGT-HUNTER"]["max_model_tier"]>=1 and by["AGT-ENGINEER"]["max_model_tier"]>=2 and by["AGT-AUDITOR"]["max_model_tier"]>=3,
+        "agent model-tier ceilings do not align with enabled provider tiers")
+    return {"roles":10,"builder_roles":1,"verifier_roles":4,"human_act_roles":0,"seed_work_items":0,"enabled_nonzero_models":3}
 if __name__=="__main__":print("portfolio-brain Step 14 agents: PASS",json.dumps(validate_agents(),sort_keys=True))

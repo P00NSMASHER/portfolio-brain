@@ -7,7 +7,7 @@ class OperatingModeTests(unittest.TestCase):
     def test_operational_contract_passes(self):
         result=validate_operating_mode()
         self.assertEqual(result["approved_recurring_workflows"],7)
-        self.assertEqual(result["enabled_nonzero_models"],0)
+        self.assertEqual(result["enabled_nonzero_models"],3)
         self.assertFalse(result["interactive_chatgpt_runtime_dependency"])
         self.assertEqual(result["release_status"],"OPERATIONAL")
         self.assertEqual(result["promoted_main_sha"],"cdd7adc71472f61a07f3641e9ff414091fc1bc35")

@@ -52,7 +52,9 @@ def validate_operating_mode():
         "optimized operating mode requires nonzero finite model capacity")
     providers=load("model_router/PROVIDER_REGISTRY.json")
     enabled_nonzero=[(x["provider_id"],m["model_id"]) for x in providers["providers"] for m in x["models"] if x["enabled"] and m["enabled"] and m["tier"]>0]
-    req(enabled_nonzero==[],"non-Tier-0 provider/model enabled")
+    req(enabled_nonzero==[
+      ("openai","gpt-5.6-luna"),("openai","gpt-5.6-terra"),("openai","gpt-5.6-sol")
+    ],"approved non-Tier-0 provider/model set mismatch")
 
     expected={
       "runtime-hourly-sync":"17 * * * *",

@@ -10,13 +10,13 @@ class PortfolioAllocatorTests(unittest.TestCase):
     def test_nine_resources_are_explicit(self):
         self.assertEqual(set(self.by),{"MODEL_CALLS","ENGINEERING_CAPACITY","TESTING","RESEARCH","HUNTER_RUNS","ART_PRODUCTION","HUMAN_REVIEW","API_INFRASTRUCTURE","CASH"})
 
-    def test_current_evidence_allocates_only_research_hunter_and_human_review(self):
+    def test_current_evidence_allocates_model_research_hunter_and_human_review(self):
         active={k for k,v in self.by.items() if v["status"]=="ACTIVE_RECOMMENDATION"}
-        self.assertEqual(active,{"RESEARCH","HUNTER_RUNS","HUMAN_REVIEW"})
+        self.assertEqual(active,{"MODEL_CALLS","RESEARCH","HUNTER_RUNS","HUMAN_REVIEW"})
 
-    def test_cash_and_model_calls_remain_unallocated(self):
+    def test_cash_remains_unallocated_while_model_calls_are_bounded(self):
         self.assertEqual(self.by["CASH"]["allocated_share_basis_points"],0)
-        self.assertEqual(self.by["MODEL_CALLS"]["allocated_share_basis_points"],0)
+        self.assertGreater(self.by["MODEL_CALLS"]["allocated_share_basis_points"],0)
 
     def test_engineering_testing_art_and_api_are_not_busywork_allocations(self):
         for key in ["ENGINEERING_CAPACITY","TESTING","ART_PRODUCTION","API_INFRASTRUCTURE"]:

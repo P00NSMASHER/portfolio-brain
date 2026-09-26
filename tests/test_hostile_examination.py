@@ -7,7 +7,7 @@ import hunting.autonomous_hunter as hunter
 import uncertainty.highest_value_uncertainty as uncertainty
 from cost_governor.cost_governor import CostGovernorError,load_state as load_cost_state,make_github_job_request,preflight
 from graph.universal_graph import UniversalGraphError,validate_graph,validate_node
-from model_router.model_router import route_request
+from model_router.model_router import provider_registry,route_request
 from notifications.github_sink import emit
 from software_factory.github_executor import GitHubExecutor
 from software_factory.software_factory import SoftwareFactoryError,hashv
@@ -81,7 +81,11 @@ class HostileExaminationTests(unittest.TestCase):
           "builder_independence_group":None,"max_cost_usd":10.0,"max_input_tokens":1000,"max_output_tokens":1000,
           "provider_allowlist":[],"evidence_refs":["hostile:provider-failure"]
         }
-        route=route_request(req)
+        reg=copy.deepcopy(provider_registry())
+        for provider in reg["providers"]:
+            if provider["provider_id"]=="openai":
+                provider["enabled"]=False
+        route=route_request(req,reg)
         self.assertEqual(route["status"],"BLOCKED_NO_ELIGIBLE_PROVIDER")
 
     def test_market_research_act_remains_prohibited(self):
