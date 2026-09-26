@@ -64,6 +64,15 @@ class Step2ContractTests(unittest.TestCase):
         bad=copy.deepcopy(AUT); bad["permissions"]["ACT"]["decision"]="ALLOWED"
         with self.assertRaises(ContractValidationError): validate_autonomy_profile(bad)
 
+
+    def test_bounded_act_only_for_approved_commercial_project(self):
+        good=copy.deepcopy(AUT); good["project_id"]="PRJ-001"; good["autonomy_profile_id"]="AUT-001"
+        good["permissions"]["ACT"]["decision"]="BOUNDED"
+        good["human_approval_required_for"]=[x for x in good["human_approval_required_for"] if x!="CUSTOMER_COMMUNICATION"]
+        validate_autonomy_profile(good)
+        bad=copy.deepcopy(good); bad["project_id"]="PRJ-005"; bad["autonomy_profile_id"]="AUT-005"
+        with self.assertRaises(ContractValidationError): validate_autonomy_profile(bad)
+
     def test_builder_cannot_self_approve(self):
         bad=copy.deepcopy(AUT); bad["separation_of_duties"]["builder_may_self_approve"]=True
         with self.assertRaises(ContractValidationError): validate_autonomy_profile(bad)
