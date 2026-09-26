@@ -1,7 +1,26 @@
 {
   "schema_version": "1.0.0",
   "ledger_id": "portfolio-gmail-gateway-ledger",
-  "sequence": 0,
-  "updated_at": null,
-  "executions": []
+  "sequence": 1,
+  "updated_at": "2026-09-26T14:50:49Z",
+  "executions": [
+    {
+      "action_id": "PACT-7472E0C3D059F4FBD602",
+      "idempotency_key": "action:a93475efb6d364c1da6c7a8d40b4416e815f7d6beef05283fbe689f3a93a6a09",
+      "project_id": "PRJ-001",
+      "action_type": "CUSTOMER_EMAIL",
+      "target_hash": "sha256:4d0cdf902ce9ad2a70ba0b316d8c38f1997a00b22ada28154c914ed5c99df556",
+      "payload_hash": "sha256:9e6e92d1775474ab7742cc21a020bb8833e50fa1b874bcc2fd0a5513b6049841",
+      "campaign_hash": "sha256:d558a48f35a9a5ecb4125339fd0a476698b344229ebcbce9690680a65eeb6c4c",
+      "gmail_message_hash": "sha256:b6f0f2119d3fdd4bb33f23c0f34f567ffb03f29ef67d984bf1a15c22b6689238",
+      "gmail_thread_hash": "sha256:451148a1632cb1508ae55f9fb94e8eff81c356c4033fc5a9c8c7e8b9de055a26",
+      "status": "SENT",
+      "sent_at": "2026-09-26T14:50:49Z",
+      "evidence_refs": [
+        "gmail-connector:jayp19386",
+        "experiment:UNC-EXTERNAL-PRJ-001",
+        "proof:live-gateway-20260926"
+      ]
+    }
+  ]
 }
