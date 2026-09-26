@@ -81,13 +81,19 @@ def _candidate(work_type,source_ref,project_ids,assigned_agent_id,goal_type,auth
             "approval_requirements":sorted(set(approvals or [])),"hard_blockers":sorted(set(blockers or [])),"selection_reason":reason,"evidence_refs":list(dict.fromkeys(evidence_refs))}
 
 def _owner_approval(exp,u):
-    ledger_path=ROOT/"operator"/"OWNER_APPROVALS.json"
-    if not ledger_path.exists():return None
-    ledger=json.loads(ledger_path.read_text())
+    ledger_path=ROOT/"operator_console"/"OWNER_APPROVALS.json"
+    policy_path=ROOT/"operator_console"/"OPERATOR_POLICY.json"
+    if not ledger_path.exists() or not policy_path.exists():return None
+    ledger=json.loads(ledger_path.read_text());operator_policy=json.loads(policy_path.read_text())
+    if ledger.get("schema_version")!="1.0.0" or ledger.get("ledger_id")!="portfolio-owner-approvals":return None
+    allowed_actors=set(operator_policy.get("allowed_approval_actors") or [])
     required=set(exp.get("approval_requirements") or [])
-    if not required:return None
+    if not required or not allowed_actors:return None
+    expected_fields={"approval_id","source_ref","project_ids","approval_requirements","approved_by","approved_at","status","reason_hash"}
     for row in ledger.get("approvals",[]):
-        if row.get("status")!="ACTIVE":continue
+        if not isinstance(row,dict) or set(row)!=expected_fields:continue
+        if row.get("status")!="ACTIVE" or row.get("approved_by") not in allowed_actors:continue
+        if not isinstance(row.get("reason_hash"),str) or not row["reason_hash"].startswith("sha256:"):continue
         if row.get("source_ref") not in {exp.get("experiment_id"),u.get("uncertainty_id")}:continue
         if not set(exp.get("project_ids") or [])<=set(row.get("project_ids") or []):continue
         if required<=set(row.get("approval_requirements") or []):return row
@@ -108,7 +114,7 @@ def generate_candidates(context):
     # HUNT: capability-evidence gaps with explicit Hunter allocation.
     for rec in plans["HUNTER_RUNS"]["recommendations"]:
         candidates.append(_source_candidate(unc_by,rec,"HUNT","AGT-HUNTER","PUBLIC_HUNT","OBSERVE","MEDIUM","Step 15 allocated Hunter capacity to this capability-evidence gap."))
-    # Human-gated experiments remain visible but never enter the autonomous queue.
+    # Human-gated experiments remain blocked unless an exact owner approval unlocks OBSERVE-only preparation.
     for exp in context["experiments"]["plans"]:
         if exp["status"]=="HUMAN_APPROVAL_REQUIRED":
             u=unc_by[exp["uncertainty_id"]]
