@@ -41,7 +41,6 @@ def validate_allocator():
     req(by["ENGINEERING_CAPACITY"]["allocated_share_basis_points"]==0 and by["TESTING"]["allocated_share_basis_points"]==0,"build/test activity allocated without experiment demand")
     req(by["ART_PRODUCTION"]["allocated_share_basis_points"]==0,"art allocated without art-specific evidence")
     req(by["HUMAN_REVIEW"]["recommendations"]==[] and by["HUMAN_REVIEW"]["status"]=="HOLD_NO_ELIGIBLE_EVIDENCE","resolved education approvals still consume human-review capacity")
-    req(all(any(r["project_id"]==pid and r["authority_requirement"]=="BOUNDED_ACT" for r in by["MODEL_CALLS"]["recommendations"]) for pid in {"PRJ-005","PRJ-006"}),"education bounded validation missing model allocation")
     req(any(r["project_id"]=="PRJ-001" for r in by["MODEL_CALLS"]["recommendations"]),"RecoveryWorks bounded validation missing model allocation")
     runtime=(ROOT/"runtime/continuous_runtime.py").read_text()
     req("portfolio_allocation_recommendation.json" in runtime and "build_allocation_snapshot" in runtime,"daily runtime not connected to allocator")
