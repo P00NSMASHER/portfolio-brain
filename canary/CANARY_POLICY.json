@@ -15,7 +15,7 @@
     "INTEGRATION",
     "RESEARCH"
   ],
-  "expected_blocked_approval_count": 6,
+  "expected_blocked_approval_count": 2,
   "continuation_requires_zero_new_selected_work": true,
   "continuation_requires_duplicate_suppression": true,
   "learning_promotion_allowed": false,
