@@ -70,6 +70,8 @@ def validate_publication() -> dict[str, object]:
     require("Portfolio Brain Command Center" in html_text, "public page title missing")
     require("OBSERVE ONLY" in html_text, "public read-only boundary missing")
     require("Operational Telemetry" in html_text and "History & Trends" in html_text, "public telemetry/trends panels missing")
+    require('data-design="apple-inspired-v4-1"' in html_text, "public v4.1 design marker missing")
+    require("fonts.googleapis.com" not in lower and "<script src=" not in lower, "public redesign introduced external presentation dependency")
     require("operator-console" not in lower and "operator console" not in lower, "private operator console leaked into public command center")
 
     return {
