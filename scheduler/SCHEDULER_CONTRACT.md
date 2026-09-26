@@ -10,7 +10,7 @@ Selection is not a weighted activity score. It first applies authority/resource/
 
 ## Current evidence state
 
-Current evidence enqueues three work packets only: one RESEARCH item, one HUNT item and one read-only INTEGRATION assessment. The six external-validation experiments remain BLOCKED_APPROVAL because they require customer communication approval. There is no current evidence-backed REPAIR, TEST, VERIFICATION or isolated EXPERIMENT job, so none is fabricated.
+Current evidence may enqueue bounded RESEARCH, HUNT, INTEGRATION, and external-validation preparation work subject to the scheduler's per-agent and per-cycle ceilings. StarBlox and ABVM adult-only external validation is no longer BLOCKED_APPROVAL: those experiments are bounded by the action engine and the adult-only education validation policy. Direct minor contact, child-data collection, production changes, and consequential child-facing changes remain outside the scheduler and action engine.
 
 ## Persistence and duplicate control
 
