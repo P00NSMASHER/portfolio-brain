@@ -52,10 +52,10 @@
     },
     "REPO-008": {
       "full_name": "P00NSMASHER/portfolio-brain",
-      "last_inspected_sha": "cdd7adc71472f61a07f3641e9ff414091fc1bc35",
+      "last_inspected_sha": "242a707919f2e0f82e77574fe24d954ad6c24960",
       "inspection_status": "INSPECTED",
-      "last_observed_at": "2026-09-25T23:55:00Z",
-      "notes": "Step 25 final autonomous operating mode promoted to main at cdd7adc71472f61a07f3641e9ff414091fc1bc35. Post-promotion foundation-ci run 36202440293 and runtime-event-observe run 36202440452 both passed. Runtime and cost continuation artifacts were uploaded from the promoted main SHA. Seven approved recurring workflows are now present on main under Step 20 cost/kill-switch controls. Interactive ChatGPT and the 15 active ChatGPT tasks are advisory monitoring only, not runtime dependencies."
+      "last_observed_at": "2026-09-25T23:59:30Z",
+      "notes": "Portfolio Brain remains operational after verified artifact-restore hotfix PR #8 at main SHA 242a707919f2e0f82e77574fe24d954ad6c24960. Prior finalization push runtime run 36202795298 exposed cross-host Actions artifact redirect authentication failure. Safe redirect handling now strips GitHub Authorization when leaving the GitHub host. Post-hotfix foundation-ci 36203104743 and runtime-event-observe 36203104907 both passed; runtime and cost state restored and advanced successfully."
     }
   },
   "decisions": [
@@ -1524,6 +1524,39 @@
         "cost_governor/COST_GOVERNOR_POLICY.json",
         "agents/AGENT_POLICY.json",
         "registry/autonomy_profiles.json"
+      ]
+    },
+    {
+      "decision_id": "DEC-151",
+      "summary": "A post-finalization main push exposed a real artifact-restore failure: runtime-event-observe run 36202795298 failed with HTTP 401 when the Actions artifact archive endpoint redirected to signed cross-host storage while urllib retained the GitHub Authorization header.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "ci-run:36202795298",
+        "runtime/artifact_state.py",
+        "cost_governor/artifact_state.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-152",
+      "summary": "Operational hotfix PR #8 introduced one shared SafeArtifactRedirectHandler and routed runtime, Hunter, scheduler, cost-governor and notification artifact restores through it. GitHub Authorization is retained for same-host GitHub API redirects but removed on cross-host redirects; a permanent regression explicitly checks this credential boundary.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "pr:8",
+        "runtime/artifact_http.py",
+        "tests/test_artifact_redirect_security.py"
+      ]
+    },
+    {
+      "decision_id": "DEC-153",
+      "summary": "Hotfix candidate 19434ac5bb05a132f80a238dc115ef9609d0d1b1 passed foundation-ci run 36203066782 with 317 tests and was merged to main at 242a707919f2e0f82e77574fe24d954ad6c24960. Post-hotfix foundation-ci 36203104743 and runtime-event-observe 36203104907 passed; the runtime restored prior cost/runtime artifacts before advancing state and uploaded fresh continuation artifacts.",
+      "status": "ACCEPTED",
+      "evidence_refs": [
+        "ci-run:36203066782",
+        "git:portfolio-brain@242a707919f2e0f82e77574fe24d954ad6c24960",
+        "ci-run:36203104743",
+        "ci-run:36203104907",
+        "actions-artifact:10892059877",
+        "actions-artifact:10892174433"
       ]
     }
   ],
@@ -3604,6 +3637,12 @@
       "status": "PASS",
       "step": 25,
       "evidence": "Promoted main SHA cdd7adc71472f61a07f3641e9ff414091fc1bc35 passed runtime-event-observe run 36202440452 and uploaded portfolio-runtime-state artifact 10893000178 plus portfolio-cost-governor-state artifact 10892880305."
+    },
+    {
+      "name": "step25_artifact_restore_hotfix_ci",
+      "status": "PASS",
+      "step": 25,
+      "evidence": "Hotfix candidate 19434ac5bb05a132f80a238dc115ef9609d0d1b1 passed foundation-ci run 36203066782 with 317 tests. Main SHA 242a707919f2e0f82e77574fe24d954ad6c24960 then passed foundation-ci run 36203104743 and runtime-event-observe run 36203104907; both prior cost and runtime state restored successfully and fresh continuation artifacts were uploaded."
     }
   ],
   "next_action": {
@@ -3617,7 +3656,7 @@
       "Treat the 15 ChatGPT scheduled tasks as advisory monitoring only; ordinary operation must continue without them."
     ]
   },
-  "updated_at": "2026-09-25T23:55:00Z",
+  "updated_at": "2026-09-25T23:59:30Z",
   "step_progress": {
     "1": {
       "status": "COMPLETE",
@@ -4430,7 +4469,20 @@
         "step23_unresolved_findings": 0,
         "step24_authority_violations": 0,
         "operational_without_interactive_chatgpt": true,
-        "chatgpt_advisory_tasks_runtime_dependency": false
+        "chatgpt_advisory_tasks_runtime_dependency": false,
+        "operational_hotfix_count": 1,
+        "artifact_redirect_hotfix_candidate_sha": "19434ac5bb05a132f80a238dc115ef9609d0d1b1",
+        "artifact_redirect_hotfix_ci_run_id": 36203066782,
+        "artifact_redirect_hotfix_regression_tests": 317,
+        "artifact_redirect_repaired_main_sha": "242a707919f2e0f82e77574fe24d954ad6c24960",
+        "artifact_redirect_post_hotfix_foundation_ci_run_id": 36203104743,
+        "artifact_redirect_post_hotfix_runtime_run_id": 36203104907,
+        "artifact_redirect_authorization_cross_host_stripped": true,
+        "latest_runtime_state_artifact_id": 10892059877,
+        "latest_runtime_state_artifact_digest": "sha256:d1a4bf938376ca73fdda2f7b4e84eba312e5c1dcdd8936a3e545596d8cb863a5",
+        "latest_cost_state_artifact_id": 10892174433,
+        "latest_cost_state_artifact_digest": "sha256:89c444b8e7a4f7ad54ca003108278481d6646bb33a0b07644566eb5cec82eea0",
+        "latest_regression_tests": 317
       }
     }
   }
