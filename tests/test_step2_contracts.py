@@ -65,12 +65,26 @@ class Step2ContractTests(unittest.TestCase):
         with self.assertRaises(ContractValidationError): validate_autonomy_profile(bad)
 
 
-    def test_bounded_act_only_for_approved_commercial_project(self):
+    def test_bounded_act_for_commercial_and_adult_only_education_projects(self):
         good=copy.deepcopy(AUT); good["project_id"]="PRJ-001"; good["autonomy_profile_id"]="AUT-001"
         good["permissions"]["ACT"]["decision"]="BOUNDED"
         good["human_approval_required_for"]=[x for x in good["human_approval_required_for"] if x!="CUSTOMER_COMMUNICATION"]
         validate_autonomy_profile(good)
-        bad=copy.deepcopy(good); bad["project_id"]="PRJ-005"; bad["autonomy_profile_id"]="AUT-005"
+
+        edu=copy.deepcopy(AUT); edu["project_id"]="PRJ-005"; edu["autonomy_profile_id"]="AUT-005"
+        edu["permissions"]["ACT"]={"decision":"BOUNDED","conditions":[
+            "Target classification must be VERIFIED_ADULT_STAKEHOLDER.",
+            "Direct minor contact and child-data collection are prohibited."
+        ]}
+        edu["human_approval_required_for"]=[
+            "PRODUCTION_DEPLOYMENT_MEANINGFUL_RISK",
+            "CONSEQUENTIAL_CHILD_FACING_CHANGE",
+            "MOVE_MONEY"
+        ]
+        validate_autonomy_profile(edu)
+
+        bad=copy.deepcopy(edu)
+        bad["permissions"]["ACT"]["conditions"]=["adult contact"]
         with self.assertRaises(ContractValidationError): validate_autonomy_profile(bad)
 
     def test_builder_cannot_self_approve(self):
