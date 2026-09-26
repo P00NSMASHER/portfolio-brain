@@ -2,14 +2,14 @@
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import os
 import time
 import urllib.request
-import zipfile
 from pathlib import Path
 from runtime.artifact_http import open_url
+from runtime.artifact_restore import restore_latest_valid_state
+from cost_governor.cost_governor import validate_state
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -56,21 +56,13 @@ def restore(output: Path) -> str:
 
     name = p["state_persistence"]["artifact_name"]
     data = json.loads(get(f"https://api.github.com/repos/{repo}/actions/artifacts?name={name}&per_page=100").decode())
-    items = [
-        item for item in data.get("artifacts", [])
-        if not item.get("expired") and str((item.get("workflow_run") or {}).get("id")) != str(run)
-    ]
-    if not items:
-        return "NO_PRIOR_ARTIFACT"
-    items.sort(key=lambda item: item.get("created_at", ""), reverse=True)
-    raw = get(items[0]["archive_download_url"])
-    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
-        if "cost_state.json" not in archive.namelist():
-            raise RestoreError("cost_state.json missing")
-        body = archive.read("cost_state.json")
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_bytes(body)
-    return "RESTORED"
+    max_bytes = p["state_persistence"].get("max_artifact_bytes", 5_242_880)
+    return restore_latest_valid_state(
+        data,current_run=run,download=get,output=output,
+        member_name="cost_state.json",expected_state_id="portfolio-cost-governor-state",
+        max_archive_bytes=max_bytes,max_state_bytes=max_bytes,
+        validator=validate_state,
+    )
 
 def main():
     parser = argparse.ArgumentParser()

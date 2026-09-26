@@ -10,7 +10,8 @@ import argparse,hashlib,json,os
 from pathlib import Path
 from typing import Any,Callable
 
-from cost_governor.cost_governor import load_state as load_cost_state
+from cost_governor.cost_governor import load_state as load_cost_state,policy as cost_policy
+from model_router.model_router import provider_registry,route_request
 from model_router.openai_executor import OpenAIExecutorError,execute_openai
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -154,6 +155,18 @@ def _prompt(mode:str,packet:dict[str,Any])->str:
         )
     return mission+"\n\nReturn concise JSON with keys summary, top_bottleneck, next_actions, experiment_improvement, reuse_opportunity, risks.\n\nSANITIZED STATE:\n"+json.dumps(packet,sort_keys=True)
 
+def _governed_attempt(request:dict[str,Any],state:dict[str,Any])->int|None:
+    route=route_request(request,provider_registry())
+    if route.get("status")!="ROUTED" or not route.get("route_id"):return 1
+    group=f"model:{route['route_id']}"
+    rows=[r for r in state.get("reservations",[]) if r.get("retry_group")==group]
+    if not rows:return 1
+    latest=max(rows,key=lambda r:r["attempt"])
+    retryable=any(str(ref).startswith("provider-attempt:retryable:") for ref in latest.get("evidence_refs",[]))
+    if retryable and latest["attempt"]<cost_policy()["retry_limits"]["MODEL_CALL"]:
+        return latest["attempt"]+1
+    return None
+
 def run_model_analysis(mode:str,*,runtime_out:Path,cost_state_path:Path,output_dir:Path,at:str|None=None,
                        executor:Callable|None=None)->dict[str,Any]:
     cfg=policy()["governed_model_analysis"]
@@ -169,13 +182,30 @@ def run_model_analysis(mode:str,*,runtime_out:Path,cost_state_path:Path,output_d
         return status
     state=load_cost_state(cost_state_path)
     request=_request(mode,packet,at)
+    attempt=_governed_attempt(request,state)
+    if attempt is None:
+        status={
+          "schema_version":"1.0.0","mode":mode,"status":"SKIPPED_DUPLICATE_PACKET",
+          "packet_hash":packet_hash,"provider_attempt":None,"provider_attempt_accounted":False,
+          "cost_gate_status":"DUPLICATE_SUPPRESSED",
+          "reason_codes":["EXISTING_NONRETRYABLE_OR_RETRY_EXHAUSTED_ATTEMPT"],
+          "authority_granted":False,"evidence_upgraded":False
+        }
+        (output_dir/f"{mode}_model_analysis_status.json").write_text(json.dumps(status,indent=2)+"\n")
+        return status
     fn=executor or execute_openai
     try:
-        next_state,result=fn(request,_prompt(mode,packet),state,attempt=1,
+        next_state,result=fn(request,_prompt(mode,packet),state,attempt=attempt,
                              reasoning_effort=cfg[mode]["reasoning_effort"],at=at)
     except OpenAIExecutorError as exc:
+        if exc.cost_state is not None:
+            cost_state_path.write_text(json.dumps(exc.cost_state,indent=2)+"\n")
         if exc.gate_status=="DUPLICATE_SUPPRESSED":
             status_name="SKIPPED_DUPLICATE_PACKET"
+        elif exc.gate_status=="BLOCKED_RETRY_LIMIT":
+            status_name="BLOCKED_COST_RETRY_LIMIT"
+        elif exc.gate_status=="BLOCKED_BUDGET":
+            status_name="BLOCKED_COST_BUDGET"
         elif exc.retryable:
             status_name="DEFERRED_PROVIDER_RETRY"
         elif exc.status_code==429 and (exc.provider_code=="billing_not_active" or exc.provider_type=="billing_not_active"):
@@ -192,6 +222,7 @@ def run_model_analysis(mode:str,*,runtime_out:Path,cost_state_path:Path,output_d
           "packet_hash":packet_hash,"provider_status_code":exc.status_code,
           "provider_code":exc.provider_code,"provider_type":exc.provider_type,
           "retryable":exc.retryable,"retry_after_seconds":exc.retry_after,
+          "provider_attempt":attempt,"provider_attempt_accounted":exc.cost_state is not None,
           "cost_gate_status":exc.gate_status,"reason_codes":exc.reason_codes,
           "authority_granted":False,"evidence_upgraded":False
         }

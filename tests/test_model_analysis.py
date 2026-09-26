@@ -115,6 +115,26 @@ class ModelAnalysisTests(unittest.TestCase):
             self.assertEqual(r["status"],"BLOCKED_PROVIDER_BILLING")
             self.assertFalse(r["retryable"])
 
+    def test_retryable_provider_attempt_advances_once_and_persists_accounting(self):
+        calls=[]
+        def deferred(url,headers,payload,timeout):
+            calls.append(1)
+            raise OpenAIExecutorError("slow",status_code=429,provider_code="slow_down",provider_type="rate_limit_error",retryable=True,retry_after=45.0)
+        def governed(request,text,state,**kwargs):
+            return execute_openai(request,text,state,transport=deferred,**kwargs)
+        with tempfile.TemporaryDirectory() as td, patch.dict(os.environ,{"PORTFOLIO_MODEL_API_KEY":"test-key"},clear=True):
+            cost=self._cost_state(td);runtime=self._runtime_out(td,"daily");out=Path(td)/"out"
+            first=run_model_analysis("daily",runtime_out=runtime,cost_state_path=cost,output_dir=out,at="2026-09-26T15:00:00Z",executor=governed)
+            second=run_model_analysis("daily",runtime_out=runtime,cost_state_path=cost,output_dir=out,at="2026-09-26T15:01:00Z",executor=governed)
+            third=run_model_analysis("daily",runtime_out=runtime,cost_state_path=cost,output_dir=out,at="2026-09-26T15:02:00Z",executor=governed)
+            self.assertEqual([first["provider_attempt"],second["provider_attempt"]],[1,2])
+            self.assertEqual(third["status"],"SKIPPED_DUPLICATE_PACKET")
+            self.assertEqual(len(calls),2)
+            state=json.loads(cost.read_text())
+            rows=[r for r in state["reservations"] if r["resource_kind"]=="MODEL_CALL"]
+            self.assertEqual([r["attempt"] for r in rows],[1,2])
+            self.assertEqual(sum(r["actual_usage"]["api_calls"] for r in rows),2)
+
     def test_analysis_output_is_advisory_only(self):
         with tempfile.TemporaryDirectory() as td, patch.dict(os.environ,{"PORTFOLIO_MODEL_API_KEY":"test-key"},clear=True):
             out=Path(td)/"out"

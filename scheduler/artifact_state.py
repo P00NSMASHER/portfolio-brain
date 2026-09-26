@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse,io,json,os,time,urllib.request,zipfile
+import argparse,json,os,time,urllib.request
 from pathlib import Path
 from runtime.artifact_http import open_url
+from runtime.artifact_restore import restore_latest_valid_state
+from scheduler.autonomous_scheduler import validate_state
 ROOT=Path(__file__).resolve().parents[1]
 class RestoreError(RuntimeError):pass
 def policy():return json.loads((ROOT/"scheduler"/"SCHEDULER_POLICY.json").read_text())
@@ -24,13 +26,8 @@ def restore(output):
                 if attempt<2:time.sleep(attempt+1)
         raise RestoreError(str(last))
     data=json.loads(get(f"https://api.github.com/repos/{repo}/actions/artifacts?name={p['state_persistence']['artifact_name']}&per_page=100").decode())
-    items=[x for x in data.get("artifacts",[]) if not x.get("expired") and str((x.get("workflow_run") or {}).get("id"))!=str(run)]
-    if not items:return "NO_PRIOR_ARTIFACT"
-    items.sort(key=lambda x:x.get("created_at",""),reverse=True);raw=get(items[0]["archive_download_url"])
-    with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-        if "scheduler_state.json" not in zf.namelist():raise RestoreError("scheduler_state.json missing")
-        body=zf.read("scheduler_state.json")
-    output.parent.mkdir(parents=True,exist_ok=True);output.write_bytes(body);return "RESTORED"
+    max_bytes=p["state_persistence"].get("max_artifact_bytes",5_242_880)
+    return restore_latest_valid_state(data,current_run=run,download=get,output=Path(output),member_name="scheduler_state.json",expected_state_id="portfolio-scheduler-state",max_archive_bytes=max_bytes,max_state_bytes=max_bytes,validator=validate_state)
 def main():
     ap=argparse.ArgumentParser();ap.add_argument("--output",required=True);a=ap.parse_args();print(restore(Path(a.output)))
 if __name__=="__main__":main()

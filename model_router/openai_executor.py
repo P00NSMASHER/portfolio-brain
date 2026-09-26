@@ -12,7 +12,7 @@ from model_router.model_router import (
 )
 
 class OpenAIExecutorError(ValueError):
-    def __init__(self,message,*,status_code=None,provider_code=None,provider_type=None,retryable=False,retry_after=None,gate_status=None,reason_codes=None):
+    def __init__(self,message,*,status_code=None,provider_code=None,provider_type=None,retryable=False,retry_after=None,gate_status=None,reason_codes=None,cost_state=None,reservation_id=None):
         super().__init__(message)
         self.status_code=status_code
         self.provider_code=provider_code
@@ -21,6 +21,8 @@ class OpenAIExecutorError(ValueError):
         self.retry_after=retry_after
         self.gate_status=gate_status
         self.reason_codes=list(reason_codes or [])
+        self.cost_state=cost_state
+        self.reservation_id=reservation_id
 
 def _now():
     return datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
@@ -86,7 +88,9 @@ def _parse_http_error(exc:HTTPError):
 
 def _default_transport(url:str,headers:dict[str,str],payload:bytes,timeout:int)->dict[str,Any]:
     req=urllib.request.Request(url,data=payload,headers=headers,method="POST")
-    max_attempts=3
+    # One provider attempt must map to one durable cost reservation. Governed
+    # retries are scheduled explicitly with a new attempt/reservation.
+    max_attempts=1
     for attempt in range(max_attempts):
         try:
             with urllib.request.urlopen(req,timeout=timeout) as resp:
@@ -149,7 +153,8 @@ def execute_openai(
         raise OpenAIExecutorError(
             "cost governor blocked model execution",
             gate_status=decision.get("status"),
-            reason_codes=decision.get("reason_codes") or []
+            reason_codes=decision.get("reason_codes") or [],
+            cost_state=next_state,
         )
 
     started=at or _now()
@@ -162,7 +167,16 @@ def execute_openai(
     headers={"Authorization":"Bearer "+key,"Content-Type":"application/json"}
     call=transport or _default_transport
     t0=time.monotonic()
-    data=call(_endpoint(provider),headers,payload,timeout)
+    reservation_id=guard["cost_decision"]["reservation_id"]
+    try:
+        data=call(_endpoint(provider),headers,payload,timeout)
+    except OpenAIExecutorError as exc:
+        attempted=zero_usage();attempted["api_calls"]=1
+        evidence=f"provider-attempt:{'retryable' if exc.retryable else 'nonretryable'}:{exc.provider_code or exc.provider_type or exc.status_code or 'transport'}"
+        failed_state,_=commit_reservation(next_state,reservation_id,attempted,at=_now(),evidence_ref=evidence)
+        exc.cost_state=failed_state
+        exc.reservation_id=reservation_id
+        raise
     latency_ms=max(0,int((time.monotonic()-t0)*1000))
     completed=_now()
     text=_extract_output_text(data)
@@ -174,7 +188,6 @@ def execute_openai(
 
     actual=zero_usage()
     actual.update({"cost_usd":cost,"input_tokens":input_tokens,"output_tokens":output_tokens,"model_calls":1,"api_calls":1})
-    reservation_id=guard["cost_decision"]["reservation_id"]
     next_state,commit=commit_reservation(next_state,reservation_id,actual,at=completed,evidence_ref=f"openai-response:{data.get('id','unknown')}")
     if commit["status"]!="COMMITTED":raise OpenAIExecutorError("model usage exceeded reserved maximum")
 

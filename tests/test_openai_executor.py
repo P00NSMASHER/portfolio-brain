@@ -53,6 +53,20 @@ class OpenAIExecutorTests(unittest.TestCase):
         self.assertEqual(out["output_text"],"result")
         self.assertEqual(state["reservations"][-1]["status"],"COMMITTED")
 
+    def test_failed_provider_attempt_is_durably_accounted_once(self):
+        def failed(*args):
+            raise OpenAIExecutorError("billing",status_code=429,provider_code="billing_not_active",provider_type="billing_not_active",retryable=False)
+        with patch.dict(os.environ,{"PORTFOLIO_MODEL_API_KEY":"test-key"}):
+            with self.assertRaises(OpenAIExecutorError) as caught:
+                execute_openai(req(),"hello",load_state(),at="2026-09-25T20:00:00Z",transport=failed)
+        exc=caught.exception
+        self.assertIsNotNone(exc.cost_state)
+        row=exc.cost_state["reservations"][-1]
+        self.assertEqual(row["status"],"COMMITTED")
+        self.assertEqual(row["actual_usage"]["api_calls"],1)
+        self.assertEqual(row["actual_usage"]["model_calls"],0)
+        self.assertIn("provider-attempt:nonretryable:billing_not_active",row["evidence_refs"])
+
 
     def test_temporary_slow_down_429_is_retryable_and_honors_retry_after(self):
         headers=Message();headers["Retry-After"]="7"

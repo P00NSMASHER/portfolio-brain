@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Restore newest sanitized Step 8 runtime-state artifact from GitHub Actions."""
 from __future__ import annotations
-import argparse, io, json, os, time, urllib.request, zipfile
+import argparse, json, os, time, urllib.request
 from pathlib import Path
 from runtime.artifact_http import open_url
+from runtime.artifact_restore import restore_latest_valid_state
+from runtime.state import validate_state
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -50,29 +52,12 @@ def restore(*, output: Path)->str:
                       retries=budgets["retry_limit"],backoff=budgets["retry_backoff_seconds"])
     url=f"https://api.github.com/repos/{repository}/actions/artifacts?name={p['state_persistence']['artifact_name']}&per_page=100"
     data=http.json(url)
-    candidates=[]
-    for item in data.get("artifacts",[]):
-        if item.get("expired"): continue
-        wr=item.get("workflow_run") or {}
-        if current_run and str(wr.get("id"))==str(current_run): continue
-        candidates.append(item)
-    if not candidates:
-        return "NO_PRIOR_ARTIFACT"
-    candidates.sort(key=lambda x:x.get("created_at",""),reverse=True)
-    raw=http.bytes(candidates[0]["archive_download_url"])
-    if len(raw)>budgets["max_output_bytes"]:
-        raise ArtifactRestoreError("runtime-state artifact exceeds byte budget")
-    with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-        names=zf.namelist()
-        if "runtime_state.json" not in names:
-            raise ArtifactRestoreError("runtime-state artifact missing runtime_state.json")
-        info=zf.getinfo("runtime_state.json")
-        if info.file_size>budgets["max_output_bytes"]:
-            raise ArtifactRestoreError("extracted runtime state exceeds byte budget")
-        payload=zf.read(info)
-    output.parent.mkdir(parents=True,exist_ok=True)
-    output.write_bytes(payload)
-    return "RESTORED"
+    return restore_latest_valid_state(
+        data,current_run=current_run,download=http.bytes,output=output,
+        member_name="runtime_state.json",expected_state_id="portfolio-runtime-state",
+        max_archive_bytes=budgets["max_output_bytes"],max_state_bytes=budgets["max_output_bytes"],
+        validator=validate_state,
+    )
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("--output",required=True)
