@@ -8,7 +8,7 @@ class OperatingModeTests(unittest.TestCase):
         result=validate_operating_mode()
         self.assertEqual(result["approved_recurring_workflows"],7)
         self.assertEqual(result["durable_state_artifacts"],5)
-        self.assertEqual(result["gmail_gateway_account"],"jayp19386@gmail.com")
+        self.assertEqual(result["gmail_gateway_account_ref"],"PRIMARY_GMAIL_CONNECTOR")
         self.assertEqual(result["enabled_nonzero_models"],3)
         self.assertFalse(result["interactive_chatgpt_runtime_dependency"])
         self.assertEqual(result["release_status"],"OPERATIONAL")
@@ -34,7 +34,7 @@ class OperatingModeTests(unittest.TestCase):
         p=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
         gmail=p["external_connector_gateways"]["gmail"]
         self.assertEqual(gmail["provider"],"CHATGPT_GMAIL_CONNECTOR")
-        self.assertEqual(gmail["account"],"jayp19386@gmail.com")
+        self.assertEqual(gmail["account_ref"],"PRIMARY_GMAIL_CONNECTOR")
         self.assertEqual(gmail["execution_task_id"],"6ab377c25df08191a6e2aa1537d9d2ef")
         self.assertFalse((ROOT/".github/workflows/portfolio-action-worker.yml").exists())
 
