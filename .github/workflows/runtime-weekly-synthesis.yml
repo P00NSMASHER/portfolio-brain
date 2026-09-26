@@ -14,3 +14,5 @@ jobs:
     uses: ./.github/workflows/runtime-worker.yml
     with:
       mode: weekly
+    secrets:
+      portfolio_model_api_key: ${{ secrets.PORTFOLIO_MODEL_API_KEY }}
