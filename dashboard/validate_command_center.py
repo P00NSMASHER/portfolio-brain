@@ -35,7 +35,9 @@ def validate_command_center() -> dict[str, object]:
 
     require(snapshot["optimization"]["validation_architecture_freeze"] is False, "unrestricted optimization state unexpectedly refrozen")
     require(snapshot["validation_sprint"]["architecture_freeze_until"] is None, "legacy freeze timestamp returned")
-    require(snapshot["validation_sprint"]["architecture_change_policy"] == "CONTINUOUS_EVIDENCE_GATED_OPTIMIZATION", "optimization policy drifted")
+    require(snapshot["validation_sprint"]["status"] == "RETIRED", "legacy validation sprint not retired")
+    require(snapshot["validation_sprint"]["target_end_at"] is None, "retired sprint still has a target end date")
+    require(snapshot["validation_sprint"]["architecture_change_policy"] == "CONTINUOUS_OPTIMIZATION_NO_SPRINT_FREEZE", "continuous optimization policy drifted")
 
     ceiling = snapshot["cost_governor"]["portfolio_ceiling"]
     require(ceiling["cost_usd"] >= 0, "invalid portfolio cost ceiling")
