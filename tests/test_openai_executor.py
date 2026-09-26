@@ -1,8 +1,10 @@
-import copy,os,unittest
+import copy,io,os,unittest
+from email.message import Message
+from urllib.error import HTTPError
 from unittest.mock import patch
 from cost_governor.cost_governor import load_state
 from model_router.model_router import provider_registry,route_request
-from model_router.openai_executor import OpenAIExecutorError,execute_openai
+from model_router.openai_executor import OpenAIExecutorError,_parse_http_error,execute_openai
 
 def req(kind="ARCHITECTURE",builder=None):
     return {
@@ -50,6 +52,23 @@ class OpenAIExecutorTests(unittest.TestCase):
         self.assertEqual(out["receipt"]["output_tokens"],20)
         self.assertEqual(out["output_text"],"result")
         self.assertEqual(state["reservations"][-1]["status"],"COMMITTED")
+
+
+    def test_temporary_slow_down_429_is_retryable_and_honors_retry_after(self):
+        headers=Message();headers["Retry-After"]="7"
+        body=io.BytesIO(b'{"error":{"type":"rate_limit_error","code":"slow_down"}}')
+        exc=HTTPError("https://api.openai.com/v1/responses",429,"Too Many Requests",headers,body)
+        code,typ,retry_after,retryable=_parse_http_error(exc)
+        self.assertEqual((code,typ,retry_after,retryable),("slow_down","rate_limit_error",7.0,True))
+
+    def test_quota_429_is_not_retryable(self):
+        headers=Message()
+        body=io.BytesIO(b'{"error":{"type":"insufficient_quota","code":"credit_balance_exhausted"}}')
+        exc=HTTPError("https://api.openai.com/v1/responses",429,"Too Many Requests",headers,body)
+        code,typ,retry_after,retryable=_parse_http_error(exc)
+        self.assertEqual(code,"credit_balance_exhausted")
+        self.assertEqual(typ,"insufficient_quota")
+        self.assertFalse(retryable)
 
     def test_short_context_pricing_boundary_is_enforced(self):
         r=req();r["max_input_tokens"]=272001

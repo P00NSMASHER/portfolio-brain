@@ -3,7 +3,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from cost_governor.cost_governor import load_state
-from model_router.openai_executor import execute_openai
+from model_router.openai_executor import OpenAIExecutorError,execute_openai
 from runtime.model_analysis import build_packet,run_model_analysis
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -78,6 +78,33 @@ class ModelAnalysisTests(unittest.TestCase):
             r=run_model_analysis("weekly",runtime_out=self._runtime_out(td,"weekly"),cost_state_path=self._cost_state(td),output_dir=Path(td)/"out",at="2026-09-26T15:00:00Z",executor=executor)
             self.assertEqual((r["route"]["tier"],r["route"]["model_id"]),(3,"gpt-5.6-sol"))
             self.assertNotEqual(r["route"]["model_id"],"gpt-5.6-terra")
+
+
+    def test_transient_provider_throttle_is_deferred_not_fatal(self):
+        def throttled(*args,**kwargs):
+            raise OpenAIExecutorError("provider retry deferred",status_code=429,provider_code="slow_down",provider_type="rate_limit_error",retryable=True,retry_after=45.0)
+        with tempfile.TemporaryDirectory() as td, patch.dict(os.environ,{"PORTFOLIO_MODEL_API_KEY":"test-key"},clear=True):
+            out=Path(td)/"out"
+            r=run_model_analysis("daily",runtime_out=self._runtime_out(td,"daily"),cost_state_path=self._cost_state(td),output_dir=out,at="2026-09-26T15:00:00Z",executor=throttled)
+            self.assertEqual(r["status"],"DEFERRED_PROVIDER_RETRY")
+            self.assertTrue(r["retryable"])
+            self.assertEqual(r["retry_after_seconds"],45.0)
+            self.assertTrue((out/"daily_model_analysis_status.json").exists())
+
+    def test_provider_quota_block_is_recorded_not_retried(self):
+        def quota(*args,**kwargs):
+            raise OpenAIExecutorError("quota",status_code=429,provider_code="credit_balance_exhausted",provider_type="insufficient_quota",retryable=False)
+        with tempfile.TemporaryDirectory() as td, patch.dict(os.environ,{"PORTFOLIO_MODEL_API_KEY":"test-key"},clear=True):
+            r=run_model_analysis("daily",runtime_out=self._runtime_out(td,"daily"),cost_state_path=self._cost_state(td),output_dir=Path(td)/"out",at="2026-09-26T15:00:00Z",executor=quota)
+            self.assertEqual(r["status"],"BLOCKED_PROVIDER_QUOTA")
+            self.assertFalse(r["retryable"])
+
+    def test_cost_duplicate_is_nonfatal_skip(self):
+        def duplicate(*args,**kwargs):
+            raise OpenAIExecutorError("cost duplicate",gate_status="DUPLICATE_SUPPRESSED",reason_codes=["EXISTING_RESERVATION_OR_CONSUMPTION"])
+        with tempfile.TemporaryDirectory() as td, patch.dict(os.environ,{"PORTFOLIO_MODEL_API_KEY":"test-key"},clear=True):
+            r=run_model_analysis("daily",runtime_out=self._runtime_out(td,"daily"),cost_state_path=self._cost_state(td),output_dir=Path(td)/"out",at="2026-09-26T15:00:00Z",executor=duplicate)
+            self.assertEqual(r["status"],"SKIPPED_DUPLICATE_PACKET")
 
     def test_analysis_output_is_advisory_only(self):
         with tempfile.TemporaryDirectory() as td, patch.dict(os.environ,{"PORTFOLIO_MODEL_API_KEY":"test-key"},clear=True):

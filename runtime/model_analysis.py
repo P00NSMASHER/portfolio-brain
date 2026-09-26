@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any,Callable
 
 from cost_governor.cost_governor import load_state as load_cost_state
-from model_router.openai_executor import execute_openai
+from model_router.openai_executor import OpenAIExecutorError,execute_openai
 
 ROOT=Path(__file__).resolve().parents[1]
 class ModelAnalysisError(ValueError):pass
@@ -127,9 +127,9 @@ def build_packet(mode:str,runtime_out:Path)->dict[str,Any]:
 
 def _request(mode:str,packet:dict[str,Any],at:str|None):
     cfg=policy()["governed_model_analysis"][mode]
-    stamp=(at or "runtime").replace("-","").replace(":","").replace("T","")[:8]
+    packet_id=sha(packet).split(":",1)[1][:12].upper()
     return {
-      "schema_version":"1.0.0","request_id":f"MRQ-{mode.upper()}-{stamp}",
+      "schema_version":"1.0.0","request_id":f"MRQ-{mode.upper()}-{packet_id}",
       "project_ids":["PRJ-000"],"task_kind":cfg["task_kind"],"deterministic_sufficient":False,
       "consequence":cfg["consequence"],"data_classification":"SANITIZED","authority_class":"OBSERVE",
       "requires_independent_adversarial":cfg["requires_independent_adversarial"],
@@ -170,8 +170,31 @@ def run_model_analysis(mode:str,*,runtime_out:Path,cost_state_path:Path,output_d
     state=load_cost_state(cost_state_path)
     request=_request(mode,packet,at)
     fn=executor or execute_openai
-    next_state,result=fn(request,_prompt(mode,packet),state,attempt=1,
-                         reasoning_effort=cfg[mode]["reasoning_effort"],at=at)
+    try:
+        next_state,result=fn(request,_prompt(mode,packet),state,attempt=1,
+                             reasoning_effort=cfg[mode]["reasoning_effort"],at=at)
+    except OpenAIExecutorError as exc:
+        if exc.gate_status=="DUPLICATE_SUPPRESSED":
+            status_name="SKIPPED_DUPLICATE_PACKET"
+        elif exc.retryable:
+            status_name="DEFERRED_PROVIDER_RETRY"
+        elif exc.status_code==429 and (exc.provider_code in {
+            "credit_balance_exhausted","organization_spend_limit_exceeded",
+            "project_spend_limit_exceeded","organization_usage_limit_exceeded","insufficient_quota"
+        } or exc.provider_type=="insufficient_quota"):
+            status_name="BLOCKED_PROVIDER_QUOTA"
+        else:
+            status_name="BLOCKED_PROVIDER_ERROR"
+        status={
+          "schema_version":"1.0.0","mode":mode,"status":status_name,
+          "packet_hash":packet_hash,"provider_status_code":exc.status_code,
+          "provider_code":exc.provider_code,"provider_type":exc.provider_type,
+          "retryable":exc.retryable,"retry_after_seconds":exc.retry_after,
+          "cost_gate_status":exc.gate_status,"reason_codes":exc.reason_codes,
+          "authority_granted":False,"evidence_upgraded":False
+        }
+        (output_dir/f"{mode}_model_analysis_status.json").write_text(json.dumps(status,indent=2)+"\n")
+        return status
     cost_state_path.write_text(json.dumps(next_state,indent=2)+"\n")
     receipt=result["receipt"]
     advisory={
