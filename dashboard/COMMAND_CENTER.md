@@ -109,3 +109,21 @@ Expected production URL:
     https://p00nsmasher.github.io/portfolio-brain/
 
 The site rebuilds on relevant main-branch changes and every hour at minute 37. Before validation/rendering, dashboard.live_state_bridge restores the newest valid runtime, scheduler, Hunter, cost-governor, notification, agent-heartbeat, and provider-readiness artifacts using Actions read-only access. If a valid artifact is unavailable, the checked-in seed is used and labeled FALLBACK. Artifacts older than the subsystem freshness window remain usable but are labeled STALE. The publication gate still suppresses Pages deployment when only volatile metadata changed; telemetry history is persisted independently each successful refresh. Public artifacts remain subject to dashboard.validate_publication before deployment.
+
+
+## Visual design
+
+Command Center v4.1 uses an Apple-inspired product-site presentation while remaining fully original and dependency-free:
+
+- adaptive light/dark appearance using system preferences;
+- native Apple/system typography stack with no bundled font files;
+- translucent glass navigation;
+- oversized editorial hero typography;
+- bento-style KPI cards;
+- soft layered depth and restrained gradients;
+- pill controls and status badges;
+- cleaner table containers and hover states;
+- responsive iPhone layouts with horizontally scrollable navigation;
+- reduced-motion support for accessibility.
+
+The redesign changes presentation only. Data sources, public read-only authority, live-state provenance, operator-console separation, cost governance, and action boundaries are unchanged.
