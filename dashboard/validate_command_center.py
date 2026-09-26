@@ -80,7 +80,9 @@ def validate_command_center() -> dict[str, object]:
     require("Bounded Action Engine" in page, "action-engine panel missing")
     require("Enabled Model Routes" in page, "model-route panel missing")
     require("Provider Readiness" in page, "provider-readiness panel missing")
-    require("Architecture freeze:" in page, "optimization-state panel missing")
+    require("Architecture freeze" in page and "spec-grid" in page, "mobile-safe optimization-state panel missing")
+    require("source-mobile" in page and "source-mobile-card" in page, "mobile live-state cards missing")
+    require("Last successful autonomous cycle" in page and "cycle-callout" in page, "mobile cycle summary missing")
     require("Kill Switches" in page, "kill-switch panel missing")
 
     prohibited_browser_capabilities = (
