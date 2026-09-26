@@ -109,9 +109,13 @@ def validate_policy(p: dict[str, Any] | None = None) -> None:
     req(type(p["max_state_records"]) is int and p["max_state_records"] >= 100, "state record ceiling too small")
     req(type(p["recent_decision_limit"]) is int and p["recent_decision_limit"] >= 20, "decision retention too small")
     req(p["global_concurrency_group"] == "portfolio-cost-governed-autonomy", "global cost concurrency group changed")
-    # Paid/model/API execution is checked in deny-by-default.
+    # Paid/model/API execution may be enabled, but only under finite checked-in
+    # ceilings. Provider/model routing and pre-execution reservations remain
+    # independent gates, so budget capacity alone never creates an executable route.
     for field in ("cost_usd", "input_tokens", "output_tokens", "model_calls", "api_calls"):
-        req(p["portfolio_ceiling"][field] == 0, f"checked-in portfolio {field} budget must remain zero")
+        value=p["portfolio_ceiling"][field]
+        req(type(value) in {int,float} and math.isfinite(float(value)) and float(value)>=0,
+            f"checked-in portfolio {field} budget must be finite and nonnegative")
 
 def validate_request(r: dict[str, Any]) -> None:
     required = {
