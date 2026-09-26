@@ -30,7 +30,7 @@ def validate_allocator():
     req(p["resource_types"]==["MODEL_CALLS","ENGINEERING_CAPACITY","TESTING","RESEARCH","HUNTER_RUNS","ART_PRODUCTION","HUMAN_REVIEW","API_INFRASTRUCTURE","CASH"],"resource types changed")
     req(baseline["schema_version"]=="1.0.0" and baseline["resource_plan_count"]==9,"initial allocation baseline corrupted")
     req(not _contains_score(snap),"opaque/composite score leaked into allocation snapshot")
-    req(snap["active_resource_count"]==4 and snap["hold_resource_count"]==5,"unexpected active/hold allocation count")
+    req(snap["active_resource_count"]==3 and snap["hold_resource_count"]==6,"unexpected active/hold allocation count")
     for plan in snap["plans"]:
         req(plan["allocated_share_basis_points"]+plan["unallocated_share_basis_points"]==10000,"resource share accounting does not conserve basis points")
         req(all(r["share_basis_points"]<=p["max_project_share_basis_points"] for r in plan["recommendations"]),"project concentration cap exceeded")
@@ -40,12 +40,11 @@ def validate_allocator():
     req(by["MODEL_CALLS"]["allocated_share_basis_points"]>0 and by["MODEL_CALLS"]["status"]=="ACTIVE_RECOMMENDATION","enabled model capacity was not allocated")
     req(by["ENGINEERING_CAPACITY"]["allocated_share_basis_points"]==0 and by["TESTING"]["allocated_share_basis_points"]==0,"build/test activity allocated without experiment demand")
     req(by["ART_PRODUCTION"]["allocated_share_basis_points"]==0,"art allocated without art-specific evidence")
-    req(by["HUMAN_REVIEW"]["recommendations"],"human-review queue unexpectedly empty")
-    req(all(r["authority_requirement"]=="HUMAN_GATED_ACT" for r in by["HUMAN_REVIEW"]["recommendations"]),"human review contains non-human-gated work")
-    req(all(r["project_id"] in {"PRJ-005","PRJ-006"} for r in by["HUMAN_REVIEW"]["recommendations"]),"human review contains bounded commercial work")
+    req(by["HUMAN_REVIEW"]["recommendations"]==[] and by["HUMAN_REVIEW"]["status"]=="HOLD_NO_ELIGIBLE_EVIDENCE","resolved education approvals still consume human-review capacity")
+    req(all(any(r["project_id"]==pid and r["authority_requirement"]=="BOUNDED_ACT" for r in by["MODEL_CALLS"]["recommendations"]) for pid in {"PRJ-005","PRJ-006"}),"education bounded validation missing model allocation")
     req(any(r["project_id"]=="PRJ-001" for r in by["MODEL_CALLS"]["recommendations"]),"RecoveryWorks bounded validation missing model allocation")
     runtime=(ROOT/"runtime/continuous_runtime.py").read_text()
     req("portfolio_allocation_recommendation.json" in runtime and "build_allocation_snapshot" in runtime,"daily runtime not connected to allocator")
-    return {"resource_types":9,"active_resources":snap["active_resource_count"],"hold_resources":snap["hold_resource_count"],"recommendations":snap["recommendation_entry_count"],"cash_share_bps":0,"model_call_share_bps":by["MODEL_CALLS"]["allocated_share_basis_points"],"opaque_score":False}
+    return {"resource_types":9,"active_resources":snap["active_resource_count"],"hold_resources":snap["hold_resource_count"],"recommendations":snap["recommendation_entry_count"],"cash_share_bps":0,"model_call_share_bps":by["MODEL_CALLS"]["allocated_share_basis_points"],"human_review_share_bps":0,"opaque_score":False}
 
 if __name__=="__main__":print("portfolio-brain Step 15 allocator: PASS",json.dumps(validate_allocator(),sort_keys=True))
