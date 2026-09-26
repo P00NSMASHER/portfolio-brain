@@ -7,6 +7,8 @@ from unittest.mock import patch
 
 import dashboard.live_state_bridge as bridge
 
+ROOT=Path(__file__).resolve().parents[1]
+
 
 class LiveStateBridgeTests(unittest.TestCase):
     def fake_restorer(self, name, created_at, run_id, sequence=7):
@@ -58,6 +60,14 @@ class LiveStateBridgeTests(unittest.TestCase):
         self.assertEqual(receipt["sources"]["notifications"]["status"],"LIVE")
         self.assertEqual(receipt["sources"]["scheduler"]["source_run_id"],102)
         self.assertEqual(receipt["sources"]["scheduler"]["artifact_created_at"],"2026-09-26T17:20:00Z")
+
+    def test_pages_workflow_restores_live_state_hourly_before_publish(self):
+        workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text()
+        self.assertIn('cron: "37 * * * *"',workflow)
+        self.assertIn("actions: read",workflow)
+        self.assertIn("python -m dashboard.live_state_bridge",workflow)
+        self.assertLess(workflow.index("python -m dashboard.live_state_bridge"),workflow.index("python -m dashboard.validate_publication"))
+        self.assertIn("cp dashboard/live/state_sources.json public/state-sources.json",workflow)
 
     def test_no_artifacts_fall_back_explicitly(self):
         def missing(*args, **kwargs):
