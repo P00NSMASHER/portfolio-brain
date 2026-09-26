@@ -66,7 +66,6 @@ jobs:
           --state cost_governor/out/cost_state.json
           --decision cost_governor/out/cost_decision.json
           --output cost_governor/out/cost_state.json
-      - name: Upload sanitized cost-governor continuation state
       - name: Upload sanitized agent heartbeat state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         uses: actions/upload-artifact@v4
@@ -75,6 +74,7 @@ jobs:
           path: agents/out/agent_heartbeat_state.json
           if-no-files-found: error
           retention-days: 30
+      - name: Upload sanitized cost-governor continuation state
         if: ${{ always() && hashFiles('cost_governor/out/cost_state.json') != '' }}
         uses: actions/upload-artifact@v4
         with:
