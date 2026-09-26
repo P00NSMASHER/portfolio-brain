@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Durable sanitized runtime-state helpers for Step 8."""
 from __future__ import annotations
-import hashlib, json
+import hashlib, json, re
 from pathlib import Path
 from typing import Any
 
 ROOT=Path(__file__).resolve().parents[1]
 
 class RuntimeStateError(ValueError): pass
+
+SHA=re.compile(r"^[0-9a-f]{40}$")
 
 def canonical_hash(value: Any)->str:
     raw=json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode("utf-8")
@@ -55,9 +57,8 @@ def validate_state(state: dict[str,Any])->None:
         sha=item["cursor_sha"]
         if not isinstance(item["source_ref"],str) or not item["source_ref"]:
             raise RuntimeStateError(f"{rid} source_ref is missing")
-        if not isinstance(sha,str) or len(sha)!=40:
-            raise RuntimeStateError(f"{rid} cursor is not exact SHA")
-        int(sha,16)
+        if not isinstance(sha,str) or SHA.fullmatch(sha) is None:
+            raise RuntimeStateError(f"{rid} cursor is not exact lowercase SHA")
         if item["status"] not in {"CURRENT","BLOCKED_HISTORICAL_ONLY"}:
             raise RuntimeStateError(f"{rid} invalid runtime cursor status")
     if repos["REPO-006"]["status"]!="BLOCKED_HISTORICAL_ONLY":

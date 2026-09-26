@@ -23,6 +23,7 @@ class AdapterError(ValueError):
 
 SHA = re.compile(r"^[0-9a-f]{40}$")
 GITHUB_COMPARE_FILE_CAP = 300
+GITHUB_COMPARE_COMMIT_CAP = 250
 
 def _require(ok: bool, message: str) -> None:
     if not ok:
@@ -31,6 +32,21 @@ def _require(ok: bool, message: str) -> None:
 def _canonical_hash(value: Any) -> str:
     raw=json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
     return "sha256:"+hashlib.sha256(raw).hexdigest()
+
+def _exact_sha(value: Any, message: str) -> str:
+    _require(isinstance(value,str) and SHA.fullmatch(value) is not None, message)
+    return value
+
+def _repo_path(value: Any, message: str) -> str:
+    _require(isinstance(value,str) and value, message)
+    _require(not value.startswith("/") and "\\" not in value, message)
+    _require(not any(ord(char)<32 or ord(char)==127 for char in value), message)
+    _require(all(part not in {"",".",".."} for part in value.split("/")), message)
+    return value
+
+def _nonnegative_int(value: Any, message: str) -> int:
+    _require(isinstance(value,int) and not isinstance(value,bool) and value>=0, message)
+    return value
 
 @dataclass(frozen=True)
 class GitHubReadOnlyClient:
@@ -64,45 +80,67 @@ def _validate_cursor(cursor: dict[str,Any] | None, ref: str) -> str | None:
         return None
     _require(isinstance(cursor,dict), "cursor must be an object")
     _require(cursor.get("source_ref")==ref, "cursor source_ref does not match configured adapter ref")
-    sha=cursor.get("cursor_sha")
-    _require(isinstance(sha,str) and SHA.fullmatch(sha) is not None, "cursor requires an exact lowercase SHA")
-    return sha
+    return _exact_sha(cursor.get("cursor_sha"), "cursor requires an exact lowercase SHA")
 
 def resolve_head(adapter: dict[str,Any], fetch_json: FetchJSON) -> str:
     ref=_source_ref(adapter)
     payload=fetch_json(f"{_repo_api(adapter['repository_full_name'])}/commits/{urllib.parse.quote(ref,safe='')}")
-    sha=payload.get("sha")
-    _require(isinstance(sha,str) and len(sha)==40, "GitHub commit response missing exact SHA")
-    return sha
+    return _exact_sha(payload.get("sha"), "GitHub commit response missing exact lowercase SHA")
 
 def compare_range(adapter: dict[str,Any], base_sha: str, head_sha: str, fetch_json: FetchJSON) -> dict[str,Any]:
     _require(SHA.fullmatch(base_sha) is not None and SHA.fullmatch(head_sha) is not None, "compare requires exact lowercase SHAs")
     url=f"{_repo_api(adapter['repository_full_name'])}/compare/{base_sha}...{head_sha}"
     payload=fetch_json(url)
     status=payload.get("status")
-    ahead_by=payload.get("ahead_by")
-    behind_by=payload.get("behind_by")
-    total_commits=payload.get("total_commits")
+    ahead_by=_nonnegative_int(payload.get("ahead_by"), "GitHub compare ahead_by is invalid")
+    behind_by=_nonnegative_int(payload.get("behind_by"), "GitHub compare behind_by is invalid")
+    total_commits=_nonnegative_int(payload.get("total_commits"), "GitHub compare total_commits is invalid")
     raw_files=payload.get("files")
+    raw_commits=payload.get("commits")
+    base_commit=payload.get("base_commit")
+    merge_base_commit=payload.get("merge_base_commit")
     _require(status=="ahead", f"source history is not a fast-forward: {status}")
-    _require(isinstance(ahead_by,int) and ahead_by>0, "fast-forward compare requires positive ahead_by")
+    _require(ahead_by>0, "fast-forward compare requires positive ahead_by")
     _require(behind_by==0, "fast-forward compare cannot be behind the cursor")
     _require(total_commits==ahead_by, "GitHub compare commit count is incomplete or inconsistent")
+    _require(isinstance(base_commit,dict) and _exact_sha(base_commit.get("sha"), "GitHub compare base commit is invalid")==base_sha,
+             "GitHub compare response is not bound to the requested base SHA")
+    _require(isinstance(merge_base_commit,dict) and _exact_sha(merge_base_commit.get("sha"), "GitHub compare merge base is invalid")==base_sha,
+             "GitHub compare is not a linear fast-forward from the requested base SHA")
+    _require(isinstance(raw_commits,list), "GitHub compare response missing commits")
+    _require(len(raw_commits)<GITHUB_COMPARE_COMMIT_CAP, "GitHub compare commit list reached the 250-commit completeness boundary")
+    _require(len(raw_commits)==total_commits, "GitHub compare commit list is incomplete or inconsistent")
+    commit_shas=[_exact_sha(item.get("sha") if isinstance(item,dict) else None,
+                            "GitHub compare commit is missing an exact lowercase SHA") for item in raw_commits]
+    _require(len(set(commit_shas))==len(commit_shas), "GitHub compare commit list contains duplicates")
+    _require(commit_shas and commit_shas[-1]==head_sha,
+             "GitHub compare response is not bound to the requested head SHA")
     _require(isinstance(raw_files,list), "GitHub compare response missing changed files")
     _require(len(raw_files)<GITHUB_COMPARE_FILE_CAP, "GitHub compare file list reached the 300-file completeness boundary")
-    files=[]
+    files=[]; seen_paths=set()
     for item in raw_files:
-        path=item.get("filename")
+        _require(isinstance(item,dict), "GitHub compare file entry must be an object")
+        path=_repo_path(item.get("filename"), "GitHub compare file has unsafe or missing path")
         file_status=item.get("status")
-        _require(isinstance(path,str) and path, "GitHub compare file missing path")
         _require(file_status in {"added","removed","modified","renamed","copied","changed","unchanged"}, "GitHub compare file has unsupported status")
+        _require(path not in seen_paths, "GitHub compare file list contains duplicate paths")
+        seen_paths.add(path)
+        previous_path=item.get("previous_filename")
+        if previous_path is not None:
+            previous_path=_repo_path(previous_path, "GitHub compare file has unsafe previous path")
+        if file_status=="renamed":
+            _require(previous_path is not None and previous_path!=path, "renamed file requires a distinct previous path")
+        additions=_nonnegative_int(item.get("additions"), "GitHub compare file additions are invalid")
+        deletions=_nonnegative_int(item.get("deletions"), "GitHub compare file deletions are invalid")
+        changes=_nonnegative_int(item.get("changes"), "GitHub compare file changes are invalid")
+        _require(changes==additions+deletions, "GitHub compare file change counts are inconsistent")
         files.append({
             "path":path,
-            "previous_path":item.get("previous_filename"),
+            "previous_path":previous_path,
             "status":file_status,
-            "additions":item.get("additions"),
-            "deletions":item.get("deletions"),
-            "changes":item.get("changes"),
+            "additions":additions,
+            "deletions":deletions,
+            "changes":changes,
         })
     return {
         "compare_status":status,
@@ -187,8 +225,7 @@ def next_cursor(receipt: dict[str,Any], prior_cursor: dict[str,Any] | None) -> d
     if status=="BLOCKED":
         return prior_cursor
     _require(status in {"UNCHANGED","INITIALIZED","CHANGED"}, "receipt status cannot advance cursor")
-    sha=receipt.get("current_sha")
-    _require(isinstance(sha,str) and len(sha)==40, "cursor advancement requires exact current SHA")
+    sha=_exact_sha(receipt.get("current_sha"), "cursor advancement requires exact lowercase current SHA")
     ref=receipt.get("source_ref")
     _require(isinstance(ref,str) and ref, "cursor advancement requires source_ref provenance")
     return {

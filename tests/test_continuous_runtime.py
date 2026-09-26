@@ -3,7 +3,7 @@ from unittest.mock import patch
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from runtime.continuous_runtime import RequestBudget, RuntimePolicyError, run
-from runtime.state import bootstrap_state, validate_state
+from runtime.state import RuntimeStateError, bootstrap_state, validate_state
 from runtime.validate_runtime import validate_runtime
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -19,8 +19,12 @@ class FakeGitHub:
         if "/compare/" in url:
             repo=url.split("/repos/",1)[1].split("/compare/",1)[0]
             files=self.changed.get(repo,[])
+            pair=url.rsplit("/compare/",1)[1]
+            old,new=pair.split("...",1)
             return {"status":"ahead","ahead_by":1 if files else 0,"behind_by":0,
                     "total_commits":1 if files else 0,
+                    "base_commit":{"sha":old},"merge_base_commit":{"sha":old},
+                    "commits":[{"sha":new}] if files else [],
                     "files":[{"filename":x,"status":"modified","additions":1,"deletions":0,"changes":1} for x in files]}
         raise AssertionError(url)
 
@@ -75,6 +79,12 @@ class RuntimeTests(unittest.TestCase):
         state=bootstrap_state(now="2026-09-25T17:00:00Z")
         validate_state(state)
         self.assertEqual(state["repositories"]["REPO-006"]["status"],"BLOCKED_HISTORICAL_ONLY")
+
+    def test_runtime_state_rejects_noncanonical_cursor_sha(self):
+        state=bootstrap_state(now="2026-09-25T17:00:00Z")
+        state["repositories"]["REPO-001"]["cursor_sha"]="A"*40
+        with self.assertRaisesRegex(RuntimeStateError,"lowercase"):
+            validate_state(state)
 
     def test_hourly_sync_skips_blocked_and_updates_changed_cursor(self):
         heads=current_heads()

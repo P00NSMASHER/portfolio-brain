@@ -8,7 +8,9 @@
     "Blocked adapters perform no network read and do not advance their cursor.",
     "Cursor advancement occurs only after a successful observation receipt.",
     "Every cursor and observation is bound to the adapter's configured source ref.",
-    "Non-fast-forward or incomplete GitHub comparisons fail closed and never advance a cursor."
+    "Non-fast-forward or incomplete GitHub comparisons fail closed and never advance a cursor.",
+    "Resolved heads, compare endpoints, commit chains and durable cursors require exact lowercase SHA identities.",
+    "Compare file paths, duplicate entries and numeric change counts are validated before receipt persistence."
   ],
   "adapters": [
     {
