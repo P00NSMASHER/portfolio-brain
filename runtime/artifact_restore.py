@@ -82,6 +82,7 @@ def restore_latest_valid_state(
     data: dict[str, Any],
     *,
     current_run: str | None,
+    expected_head_branch: str | None = None,
     download: Callable[[str], bytes],
     output: Path,
     member_name: str,
@@ -96,6 +97,10 @@ def restore_latest_valid_state(
         for item in data.get("artifacts", [])
         if not item.get("expired")
         and str((item.get("workflow_run") or {}).get("id")) != str(current_run)
+        and (
+            expected_head_branch is None
+            or (item.get("workflow_run") or {}).get("head_branch") == expected_head_branch
+        )
     ]
     if not candidates:
         if metadata_output is not None:
