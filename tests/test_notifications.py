@@ -21,25 +21,25 @@ def base_sources(dashboard_hash="sha256:"+"a"*64):
     }
 
 class NotificationTests(unittest.TestCase):
-    def test_current_state_emits_two_aggregated_human_attention_alerts(self):
+    def test_current_state_emits_only_open_human_blocker_alert(self):
         state,receipt=notification_cycle(load_state(),at=AT)
-        self.assertEqual({x["kind"] for x in receipt["emitted_alerts"]},{"HUMAN_APPROVAL_QUEUE","OPEN_HUMAN_BLOCKERS"})
-        self.assertEqual(len(receipt["emitted_alerts"]),2)
+        self.assertEqual({x["kind"] for x in receipt["emitted_alerts"]},{"OPEN_HUMAN_BLOCKERS"})
+        self.assertEqual(len(receipt["emitted_alerts"]),1)
         self.assertTrue(all(x["severity"]=="HIGH" for x in receipt["emitted_alerts"]))
         self.assertTrue(all(x["authority_granted"] is False for x in receipt["emitted_alerts"]))
-        self.assertEqual(receipt["active_alert_count"],2)
+        self.assertEqual(receipt["active_alert_count"],1)
 
     def test_unchanged_alerts_are_deduplicated_within_cooldown(self):
         state,first=notification_cycle(load_state(),at=AT)
         state,second=notification_cycle(state,at="2026-09-25T23:40:00Z")
-        self.assertEqual(len(first["emitted_alerts"]),2)
+        self.assertEqual(len(first["emitted_alerts"]),1)
         self.assertEqual(second["emitted_alerts"],[])
-        self.assertEqual(len(second["suppressed_fingerprints"]),2)
+        self.assertEqual(len(second["suppressed_fingerprints"]),1)
 
     def test_high_alerts_may_repeat_only_after_daily_cooldown(self):
         state,_=notification_cycle(load_state(),at=AT)
         state,receipt=notification_cycle(state,at="2026-09-26T23:41:00Z")
-        self.assertEqual(len(receipt["emitted_alerts"]),2)
+        self.assertEqual(len(receipt["emitted_alerts"]),1)
 
     def test_notification_kill_switch_blocks_cycle(self):
         with patch.dict(os.environ,{"PORTFOLIO_NOTIFICATION_DISABLED":"true"}):
