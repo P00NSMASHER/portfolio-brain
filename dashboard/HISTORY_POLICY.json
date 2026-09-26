@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0.0",
+  "history_id": "portfolio-command-center-history-v1",
+  "mode": "SANITIZED_HOURLY_TRENDS",
+  "authority_class": "OBSERVE",
+  "max_samples": 2160,
+  "sampling": "ONE_SAMPLE_PER_UTC_HOUR_REPLACE_WITH_LATEST",
+  "state_persistence": {
+    "mode": "GITHUB_ACTIONS_ARTIFACT",
+    "artifact_name": "portfolio-command-center-history",
+    "retention_days": 90,
+    "sanitized_only": true,
+    "max_artifact_bytes": 5242880
+  },
+  "invariants": [
+    "History stores only aggregate sanitized command-center metrics.",
+    "History never stores raw recipients, message bodies, prompts, secrets, private payloads, or raw customer identifiers.",
+    "At most one sample is retained per UTC hour.",
+    "History is observational and grants no authority."
+  ]
+}
