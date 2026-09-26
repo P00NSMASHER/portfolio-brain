@@ -72,6 +72,14 @@ jobs:
           --runtime-out runtime/out
           --cost-state cost_governor/out/cost_state.json
           --output-dir runtime/out
+      - name: Upload sanitized provider readiness signal
+        if: ${{ steps.cost.outputs.allowed == 'true' && (inputs.mode == 'daily' || inputs.mode == 'weekly') && hashFiles('runtime/out/*model_analysis*.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-provider-health-state
+          path: runtime/out/*model_analysis*.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Validate emitted runtime state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -c "import json; from runtime.state import validate_state; validate_state(json.load(open('runtime/out/runtime_state.json')))"
