@@ -1,4 +1,4 @@
-# Portfolio Brain Command Center v3
+# Portfolio Brain Command Center v4
 
 The command center is a read-only operator view over Portfolio Brain's current sanitized checked-in state plus the newest validated durable GitHub Actions state artifacts.
 
@@ -79,6 +79,16 @@ The bridge restores five durable state classes:
 The Agent Fleet currently has no separate durable artifact stream, so its state is explicitly labeled FALLBACK from agents/AGENT_STATE_SEED.json rather than being presented as live.
 
 The bridge never writes portfolio state back to GitHub. It only restores sanitized artifacts into the ephemeral Pages build workspace.
+
+Persistent role activity now has its own sanitized `portfolio-agent-heartbeat-state` artifact. Heartbeats are emitted only when mapped workflows actually execute: Portfolio Manager for scheduler cycles, Hunter for Hunter cycles, Data Steward for runtime observation, and Engineer for software-factory actions. Roles without observed workflow activity remain NEVER/STALE rather than being invented as healthy.
+
+## History & trends
+
+Each successful Pages refresh restores the newest `portfolio-command-center-history` artifact, replaces/records one point for the current UTC hour, publishes a sanitized `history.json`, and uploads the new continuation artifact. The history retains up to 2,160 hourly points (90 days).
+
+Daily trends include completed/cancelled work, actual cost, model/API calls, GitHub runner minutes, Hunter candidates/retained findings, sanitized action executions, failure signals, and verified external outcomes.
+
+Project momentum is not a score. It exposes open work and 24-hour deltas in completed/cancelled work, external actions, and verified outcomes.
 
 ## Publication
 
