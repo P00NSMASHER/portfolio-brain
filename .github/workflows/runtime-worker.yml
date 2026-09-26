@@ -2,6 +2,9 @@ name: runtime-worker
 
 on:
   workflow_call:
+    secrets:
+      portfolio_model_api_key:
+        required: false
     inputs:
       mode:
         required: true
@@ -31,6 +34,7 @@ jobs:
       GITHUB_TOKEN: ${{ github.token }}
       RUNTIME_MODE: ${{ inputs.mode }}
       TARGET_REPOSITORY_ID: ${{ inputs.target_repository_id }}
+      PORTFOLIO_MODEL_API_KEY: ${{ secrets.portfolio_model_api_key }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -60,6 +64,14 @@ jobs:
           --state-path runtime/live/runtime_state.json
           --output-dir runtime/out
           ${TARGET_REPOSITORY_ID:+--target-repository-id "$TARGET_REPOSITORY_ID"}
+      - name: Run governed model-assisted analysis
+        if: ${{ steps.cost.outputs.allowed == 'true' && (inputs.mode == 'daily' || inputs.mode == 'weekly') }}
+        run: >-
+          python -m runtime.model_analysis
+          --mode "$RUNTIME_MODE"
+          --runtime-out runtime/out
+          --cost-state cost_governor/out/cost_state.json
+          --output-dir runtime/out
       - name: Validate emitted runtime state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -c "import json; from runtime.state import validate_state; validate_state(json.load(open('runtime/out/runtime_state.json')))"
