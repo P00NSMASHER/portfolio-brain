@@ -56,6 +56,9 @@ jobs:
       - name: Restore latest runtime state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m runtime.artifact_state --output runtime/live/runtime_state.json
+      - name: Restore latest agent heartbeat state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: python -m agents.artifact_state --output agents/live/agent_heartbeat_state.json
       - name: Execute deterministic runtime cycle
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: >-
@@ -64,6 +67,16 @@ jobs:
           --state-path runtime/live/runtime_state.json
           --output-dir runtime/out
           ${TARGET_REPOSITORY_ID:+--target-repository-id "$TARGET_REPOSITORY_ID"}
+      - name: Heartbeat Data Steward
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: >-
+          python -m agents.heartbeat_state
+          --state agents/live/agent_heartbeat_state.json
+          --output agents/out/agent_heartbeat_state.json
+          --agent-id AGT-DATA-STEWARD
+          --activity-kind RUNTIME_OBSERVATION
+          --source-workflow runtime-worker
+          --source-run-id "${GITHUB_RUN_ID}"
       - name: Run governed model-assisted analysis
         if: ${{ steps.cost.outputs.allowed == 'true' && (inputs.mode == 'daily' || inputs.mode == 'weekly') }}
         run: >-
@@ -83,6 +96,14 @@ jobs:
           --decision cost_governor/out/cost_decision.json
           --output cost_governor/out/cost_state.json
       - name: Upload sanitized runtime continuation state
+      - name: Upload sanitized agent heartbeat state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-agent-heartbeat-state
+          path: agents/out/agent_heartbeat_state.json
+          if-no-files-found: error
+          retention-days: 30
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         uses: actions/upload-artifact@v4
         with:
