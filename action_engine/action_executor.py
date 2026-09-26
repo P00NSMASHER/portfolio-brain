@@ -79,7 +79,7 @@ def validate_request(r):
     req(isinstance(r["target"],str) and EMAIL_RE.fullmatch(r["target"].strip()) is not None,"invalid email target")
     req(isinstance(r["subject"],str) and 1<=len(r["subject"])<=cfg["max_subject_chars"] and "\n" not in r["subject"] and "\r" not in r["subject"],"invalid email subject")
     req(isinstance(r["body"],str) and 1<=len(r["body"])<=cfg["max_body_chars"],"invalid email body")
-    req(isinstance(r["campaign_id"],str) and 1<=len(r["campaign_id"])<=120,"invalid campaign_id")
+    req(isinstance(r["campaign_id"],str) and 1<=len(r["campaign_id"])<=120 and _safe_ref("campaign:"+r["campaign_id"]),"invalid campaign_id")
     req(isinstance(r["evidence_refs"],list) and r["evidence_refs"] and all(_safe_ref(x) for x in r["evidence_refs"]),"sanitized evidence refs required")
     _time(r["requested_at"],"requested_at")
     th=_target_hash(r["target"]);ph=_payload_hash(r["subject"],r["body"],r["campaign_id"])
@@ -97,10 +97,12 @@ def validate_state(s):
     req(isinstance(s["recent_decisions"],list) and len(s["recent_decisions"])<=100,"recent decisions invalid")
     seen=set()
     for row in s["executions"]:
-        fields={"action_id","idempotency_key","project_id","action_type","target_hash","payload_hash","status","created_at","completed_at","remote_ref","evidence_refs"}
+        fields={"action_id","idempotency_key","attempt","project_id","action_type","target_hash","payload_hash","status","created_at","completed_at","remote_ref","evidence_refs"}
         req(isinstance(row,dict) and set(row)==fields,"execution fields changed")
-        req(row["idempotency_key"] not in seen,"duplicate action idempotency key")
-        seen.add(row["idempotency_key"])
+        key=(row["idempotency_key"],row["attempt"])
+        req(key not in seen,"duplicate action attempt")
+        seen.add(key)
+        req(type(row["attempt"]) is int and row["attempt"]>=1,"invalid action attempt")
         req(row["status"] in {"SENT","FAILED"},"invalid execution status")
         req(str(row["target_hash"]).startswith("sha256:") and str(row["payload_hash"]).startswith("sha256:"),"execution hashes missing")
         req(all(_safe_ref(x) for x in row["evidence_refs"]),"execution evidence refs not sanitized")
@@ -138,9 +140,11 @@ def preflight(state,request,*,at=None):
     disabled,reason=killed()
     if disabled:
         d=_decision(request,"BLOCKED_KILL_SWITCH",["ACTION_KILL_SWITCH",reason or "disabled"],at,False);_append_decision(out,d);return out,d
-    existing=next((x for x in out["executions"] if x["idempotency_key"]==request["idempotency_key"]),None)
-    if existing:
-        d=_decision(request,"DUPLICATE_SUPPRESSED",["EXISTING_EXECUTION"],at,False);_append_decision(out,d);return out,d
+    prior=[x for x in out["executions"] if x["idempotency_key"]==request["idempotency_key"]]
+    if any(x["status"]=="SENT" for x in prior):
+        d=_decision(request,"DUPLICATE_SUPPRESSED",["EXISTING_SUCCESSFUL_EXECUTION"],at,False);_append_decision(out,d);return out,d
+    if len(prior)>=policy()["retry_limit"]:
+        d=_decision(request,"BLOCKED_RETRY_LIMIT",["ACTION_RETRY_LIMIT"],at,False);_append_decision(out,d);return out,d
     p=policy();cfg=p["allowed_actions"][request["action_type"]];today=_day(at);th=_target_hash(request["target"])
     sent_today=[x for x in out["executions"] if x["status"]=="SENT" and _day(x["created_at"])==today and x["action_type"]==request["action_type"]]
     if len(sent_today)>=cfg["max_per_utc_day"]:
@@ -188,8 +192,9 @@ def execute_email(state,request,*,at=None,transport:Callable[[dict[str,Any],dict
     except Exception as exc:
         remote_ref=None;status="FAILED";failure=type(exc).__name__
     completed=_now()
+    attempt=1+sum(1 for x in next_state["executions"] if x["idempotency_key"]==request["idempotency_key"])
     row={
-      "action_id":request["action_id"],"idempotency_key":request["idempotency_key"],"project_id":request["project_id"],
+      "action_id":request["action_id"],"idempotency_key":request["idempotency_key"],"attempt":attempt,"project_id":request["project_id"],
       "action_type":request["action_type"],"target_hash":_target_hash(request["target"]),
       "payload_hash":_payload_hash(request["subject"],request["body"],request["campaign_id"]),
       "status":status,"created_at":started,"completed_at":completed,"remote_ref":remote_ref,
