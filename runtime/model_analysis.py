@@ -64,7 +64,7 @@ def _allocation_summary():
           "resource_type":p["resource_type"],"status":p["status"],
           "allocated_share_basis_points":p["allocated_share_basis_points"],
           "top_recommendations":[
-            {"project_id":r["project_id"],"uncertainty_id":r["uncertainty_id"],
+            {"project_id":r["project_id"],"uncertainty_id":r["source_uncertainty_id"],
              "authority_requirement":r["authority_requirement"],"actionability":r["actionability"]}
             for r in recs[:3]
           ]
