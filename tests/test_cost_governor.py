@@ -47,6 +47,19 @@ class CostGovernorTests(unittest.TestCase):
         self.assertNotIn('cron: "*/15 * * * *"',workflow)
         self.assertIn("actions: write",workflow)
 
+    def test_runtime_subbudget_cannot_starve_hourly_and_daily_reasoning(self):
+        p=policy()
+        cfg=p["workflow_job_ceilings"]["runtime-worker::runtime"]["daily_ceiling"]
+        self.assertGreaterEqual(cfg["github_job_starts"],48)
+        self.assertGreaterEqual(cfg["github_runner_minutes"],240)
+        self.assertLessEqual(cfg["github_job_starts"],p["portfolio_ceiling"]["github_job_starts"])
+        self.assertLessEqual(cfg["github_runner_minutes"],p["portfolio_ceiling"]["github_runner_minutes"])
+
+    def test_event_observe_ignores_dashboard_test_and_operator_churn(self):
+        workflow=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
+        for path in ['"dashboard/**"','"tests/**"','"operator_console/**"','"cost_governor/**"','".github/workflows/command-center-pages.yml"']:
+            self.assertIn(path,workflow)
+
     def test_command_center_hourly_refresh_is_cost_governed(self):
         workflow = (ROOT / ".github/workflows/command-center-pages.yml").read_text()
         self.assertIn('cron: "37 * * * *"',workflow)
