@@ -16,8 +16,6 @@ on:
       - "operations/**"
       - "PORTFOLIO_BUILD_STATE.json"
       - ".github/workflows/command-center-pages.yml"
-  schedule:
-    - cron: "23 * * * *"
   workflow_dispatch:
 
 permissions:

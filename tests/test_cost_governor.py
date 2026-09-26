@@ -1,6 +1,7 @@
 import copy
 import os
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from model_router.model_router import prepare_governed_execution
@@ -21,6 +22,7 @@ from cost_governor.cost_governor import (
 
 
 AT = "2026-09-25T12:00:00Z"
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def github_request(*, run_id="100", attempt=1, minutes=5, workflow="portfolio-autonomous-scheduler", job="schedule", authority="OBSERVE", at=AT):
@@ -37,6 +39,12 @@ def github_request(*, run_id="100", attempt=1, minutes=5, workflow="portfolio-au
 
 
 class CostGovernorTests(unittest.TestCase):
+    def test_command_center_rebuilds_only_for_changes_or_manual_dispatch(self):
+        workflow = (ROOT / ".github/workflows/command-center-pages.yml").read_text()
+        self.assertNotIn("\n  schedule:", workflow)
+        self.assertIn("workflow_dispatch:", workflow)
+        self.assertIn("\n  push:", workflow)
+
     def test_checked_in_paid_budget_is_finite_and_nonzero(self):
         p = policy()
         self.assertGreater(p["portfolio_ceiling"]["cost_usd"], 0)

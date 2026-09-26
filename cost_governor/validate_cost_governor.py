@@ -94,6 +94,12 @@ def validate_cost_governor():
             "portfolio-cost-governor-state",
         ]:
             req(text in body, f"{name} cost integration missing: {text}")
+
+    command_center = (ROOT / ".github/workflows/command-center-pages.yml").read_text()
+    req(
+        "\n  schedule:" not in command_center,
+        "command center must remain change-driven; periodic unchanged rebuilds waste runner capacity",
+    )
     scheduler = governed_workflows["portfolio-autonomous-scheduler"].read_text().lower()
     req("contents: write" not in scheduler and "actions: write" not in scheduler, "scheduler write authority widened")
 
