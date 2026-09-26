@@ -51,10 +51,6 @@
     "software-factory-candidate": {
       "trigger": "workflow_call",
       "purpose": "isolated branch/commit/PR candidate execution only"
-    },
-    "portfolio-action-worker": {
-      "trigger": "workflow_call",
-      "purpose": "cost-governed bounded commercial channel execution from secret private action requests"
     }
   },
   "durable_state_artifacts": {
@@ -62,16 +58,14 @@
     "hunter": "portfolio-hunter-state",
     "scheduler": "portfolio-scheduler-state",
     "cost": "portfolio-cost-governor-state",
-    "notifications": "portfolio-notification-state",
-    "actions": "portfolio-action-engine-state"
+    "notifications": "portfolio-notification-state"
   },
   "kill_switches": [
     "PORTFOLIO_RUNTIME_DISABLED",
     "PORTFOLIO_HUNTER_DISABLED",
     "PORTFOLIO_SCHEDULER_DISABLED",
     "PORTFOLIO_SPEND_DISABLED",
-    "PORTFOLIO_NOTIFICATION_DISABLED",
-    "PORTFOLIO_ACTIONS_DISABLED"
+    "PORTFOLIO_NOTIFICATION_DISABLED"
   ],
   "activation_prerequisites": {
     "step23_unresolved_hostile_findings": 0,
@@ -102,7 +96,19 @@
     "Recurring autonomous operation is GitHub-hosted and governed by durable state, explicit budgets, idempotency, leases, kill switches and evidence boundaries.",
     "The Step 23 hostile regression suite and Step 24 canary remain mandatory release evidence.",
     "Paid model/API execution remains provider-gated and requires finite pre-execution cost reservations under the Step 20 governor.",
-    "Recurring workflows do not directly execute customer ACT; the reusable action worker may execute only allowlisted bounded commercial email through action-engine policy and private secret inputs.",
+    "GitHub workflows do not execute customer email; bounded commercial email is executed by the scheduled ChatGPT Gmail connector gateway under action-engine policy, Gmail duplicate checks, sanitized GitHub receipts and the action kill-switch file.",
     "While BLK-005 remains open, GitHub persistence is sanitized-only."
-  ]
+  ],
+  "external_connector_gateways": {
+    "gmail": {
+      "provider": "CHATGPT_GMAIL_CONNECTOR",
+      "account": "jayp19386@gmail.com",
+      "execution_task_id": "6ab377c25df08191a6e2aa1537d9d2ef",
+      "planner_task_id": "6ab377be3184819186a3075f37a530b8",
+      "policy_file": "action_engine/ACTION_POLICY.json",
+      "ledger_file": "action_engine/GMAIL_GATEWAY_LEDGER.json",
+      "kill_switch_file": "action_engine/KILL_SWITCH.json",
+      "private_queue": "GMAIL_DRAFTS"
+    }
+  }
 }
