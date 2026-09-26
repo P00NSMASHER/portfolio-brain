@@ -26,7 +26,7 @@ def validate_experiments():
     req(policy["automatic_external_act"] is True and policy["automatic_model_calls"] is True,"bounded external/model execution not enabled")
     req(policy["automatic_downstream_modify"] is False and policy["automatic_cash_spend"] is False,"downstream/cash authority widened")
     req(portfolio["plan_count"]==20,"unexpected experiment plan count")
-    req(portfolio["status_counts"]=={"READY_FOR_ISOLATED_EXECUTION":12,"READY_FOR_BOUNDED_EXECUTION":4,"HUMAN_APPROVAL_REQUIRED":2,"BLOCKED":2},"unexpected experiment status distribution")
+    req(portfolio["status_counts"]=={"READY_FOR_ISOLATED_EXECUTION":12,"READY_FOR_BOUNDED_EXECUTION":6,"HUMAN_APPROVAL_REQUIRED":0,"BLOCKED":2},"unexpected experiment status distribution")
     selected=next(p for p in portfolio["plans"] if p["experiment_id"]==portfolio["selected_experiment_id"])
     req(selected["uncertainty_id"]=="UNC-EXTERNAL-PRJ-001","selected experiment not bound to selected uncertainty")
     req(selected["status"]=="READY_FOR_BOUNDED_EXECUTION" and selected["autonomous_execution_allowed"] is True,"selected external validation not bounded-executable")
@@ -35,13 +35,18 @@ def validate_experiments():
     req(selected["cost_boundary"]["external_messages_max"]==1 and selected["cost_boundary"]["autonomous_cash_spend_usd_max"]==0,"selected bounded action ceiling mismatch")
     star=next(p for p in portfolio["plans"] if p["uncertainty_id"]=="UNC-EXTERNAL-PRJ-005")
     abvm=next(p for p in portfolio["plans"] if p["uncertainty_id"]=="UNC-EXTERNAL-PRJ-006")
-    req("CONSEQUENTIAL_CHILD_FACING_CHANGE" in star["approval_requirements"] and "CONSEQUENTIAL_CHILD_FACING_CHANGE" in abvm["approval_requirements"],"child-facing approval not inherited")
+    for education in (star,abvm):
+        req(education["status"]=="READY_FOR_BOUNDED_EXECUTION","education experiment still blocked")
+        req(education["execution_mode"]=="BOUNDED_EXTERNAL_VALIDATION","education bounded mode missing")
+        req(education["approval_requirements"]==[],"education experiment retained approval requirement")
+        req(education["cost_boundary"]["external_messages_max"]==1,"education external-message ceiling changed")
+        req("action-policy:action_engine/EDUCATION_VALIDATION_POLICY.json" in education["provenance_refs"],"education policy provenance missing")
     trading=next(p for p in portfolio["plans"] if p["uncertainty_id"]=="UNC-CAPABILITY-PRJ-007")
     req({"NO_AUTONOMOUS_TRADING","NO_BROKER_ORDER_EXECUTION"}<=set(trading["inherited_hard_boundaries"]),"trading hard boundary lost")
     req(trading["execution_mode"]=="READ_ONLY_EVIDENCE_ACQUISITION","trading research plan gained execution authority")
     req(outcomes["outcomes"]==[],"Step 12 outcome ledger must start empty")
     runtime=(ROOT/"runtime/continuous_runtime.py").read_text()
     req("experiment_plan.json" in runtime and "build_experiment_portfolio" in runtime,"daily runtime not connected to experiment planner")
-    return {"plans":portfolio["plan_count"],"ready_isolated":12,"ready_bounded":4,"human_approval_required":2,"blocked":2,"outcomes":0,"selected_uncertainty":"UNC-EXTERNAL-PRJ-001"}
+    return {"plans":portfolio["plan_count"],"ready_isolated":12,"ready_bounded":6,"human_approval_required":0,"blocked":2,"outcomes":0,"selected_uncertainty":"UNC-EXTERNAL-PRJ-001"}
 
 if __name__=="__main__":print("portfolio-brain Step 12 experiments: PASS",json.dumps(validate_experiments(),sort_keys=True))
