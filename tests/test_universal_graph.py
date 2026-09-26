@@ -102,6 +102,40 @@ class UniversalGraphTests(unittest.TestCase):
         new=edge("GE-EDGE-00000002",f["node_id"],"STRENGTHENS",o["node_id"],start="2026-09-25T11:00:00Z",sup=old["edge_id"])
         validate_graph([f,o],[old,new])
 
+    def test_supersession_history_cannot_branch(self):
+        f=node("GN-FINDING-0001","FINDING","finding")
+        o=node("GN-OPPORTUNITY-01","OPPORTUNITY","opp")
+        old=edge("GE-EDGE-00000001",f["node_id"],"STRENGTHENS",o["node_id"],status="SUPERSEDED",start="2026-09-25T10:00:00Z",end="2026-09-25T11:00:00Z")
+        active=edge("GE-EDGE-00000002",f["node_id"],"STRENGTHENS",o["node_id"],start="2026-09-25T11:00:00Z",sup=old["edge_id"])
+        retired=edge("GE-EDGE-00000003",f["node_id"],"STRENGTHENS",o["node_id"],status="RETIRED",start="2026-09-25T11:00:00Z",end="2026-09-25T12:00:00Z",sup=old["edge_id"])
+        with self.assertRaisesRegex(UniversalGraphError,"cannot branch"):
+            validate_graph([f,o],[old,active,retired])
+
+    def test_superseded_edge_requires_a_successor(self):
+        f=node("GN-FINDING-0001","FINDING","finding")
+        o=node("GN-OPPORTUNITY-01","OPPORTUNITY","opp")
+        orphan=edge("GE-EDGE-00000001",f["node_id"],"STRENGTHENS",o["node_id"],status="SUPERSEDED",start="2026-09-25T10:00:00Z",end="2026-09-25T11:00:00Z")
+        with self.assertRaisesRegex(UniversalGraphError,"requires exactly one successor"):
+            validate_graph([f,o],[orphan])
+
+    def test_relationship_history_cannot_have_parallel_roots(self):
+        f=node("GN-FINDING-0001","FINDING","finding")
+        o=node("GN-OPPORTUNITY-01","OPPORTUNITY","opp")
+        first=edge("GE-EDGE-00000001",f["node_id"],"STRENGTHENS",o["node_id"],status="RETIRED",start="2026-09-25T10:00:00Z",end="2026-09-25T11:00:00Z")
+        second=edge("GE-EDGE-00000002",f["node_id"],"STRENGTHENS",o["node_id"],status="RETIRED",start="2026-09-25T12:00:00Z",end="2026-09-25T13:00:00Z")
+        with self.assertRaisesRegex(UniversalGraphError,"exactly one root"):
+            validate_graph([f,o],[first,second])
+
+    def test_edge_status_and_validity_window_must_agree(self):
+        f=node("GN-FINDING-0001","FINDING","finding")
+        o=node("GN-OPPORTUNITY-01","OPPORTUNITY","opp")
+        active=edge("GE-EDGE-00000001",f["node_id"],"STRENGTHENS",o["node_id"],end="2026-09-25T11:00:00Z")
+        with self.assertRaisesRegex(UniversalGraphError,"active edge cannot have valid_to"):
+            validate_graph([f,o],[active])
+        retired=edge("GE-EDGE-00000002",f["node_id"],"STRENGTHENS",o["node_id"],status="RETIRED")
+        with self.assertRaisesRegex(UniversalGraphError,"retired edge requires valid_to"):
+            validate_graph([f,o],[retired])
+
     def test_duplicate_active_relationship_rejected(self):
         r=node("GN-REPO-00000001","REPOSITORY","repo",mapping=("NATIVE","REPO"))
         c=node("GN-CAP-00000001","CAPABILITY","cap",mapping=("NATIVE","CAPABILITY"))

@@ -55,7 +55,7 @@
     "OUTCOME and REVENUE nodes may be VERIFIED only when provenance references a verified event/evidence receipt.",
     "No self edges.",
     "An ACTIVE source/type/target triple is unique.",
-    "Supersession preserves prior edge history and requires identical source/type/target identity.",
+    "Supersession preserves one contiguous non-branching temporal history with exactly one root and one ACTIVE or RETIRED terminal edge.",
     "Private entities remain reference-only while Portfolio Brain is public.",
     "Canonicalization is reversible; source identities and conflicts are never destroyed."
   ],

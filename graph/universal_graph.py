@@ -127,8 +127,11 @@ def validate_edge(edge: dict[str,Any], nodes_by_id: dict[str,dict[str,Any]], con
     _require(edge["status"] in EDGE_STATUSES,"invalid edge status")
     start=_time(edge["valid_from"],"valid_from")
     end=None if edge["valid_to"] is None else _time(edge["valid_to"],"valid_to")
-    if end is not None: _require(end>=start,"valid_to precedes valid_from")
-    if edge["status"]=="SUPERSEDED": _require(end is not None,"superseded edge requires valid_to")
+    if edge["status"]=="ACTIVE":
+        _require(end is None,"active edge cannot have valid_to")
+    else:
+        _require(end is not None,f"{edge['status'].lower()} edge requires valid_to")
+        _require(end>start,"closed edge requires a positive validity interval")
     sup=edge["supersedes_edge_id"]
     _require(sup is None or GE_ID.fullmatch(sup) is not None,"invalid supersedes_edge_id")
 
@@ -144,6 +147,7 @@ def validate_graph(nodes: list[dict[str,Any]], edges: list[dict[str,Any]])->dict
         canonical.add(key); nodes_by_id[node["node_id"]]=node
 
     edges_by_id={}
+    edges_by_triple={}
     active_triples=set()
     for edge in edges:
         validate_edge(edge,nodes_by_id,contract)
@@ -153,17 +157,34 @@ def validate_graph(nodes: list[dict[str,Any]], edges: list[dict[str,Any]])->dict
             _require(triple not in active_triples,"duplicate active source/type/target edge")
             active_triples.add(triple)
         edges_by_id[edge["edge_id"]]=edge
+        edges_by_triple.setdefault(triple,[]).append(edge["edge_id"])
 
+    successor_by_id={}
     for edge in edges:
         sup=edge["supersedes_edge_id"]
         if sup is not None:
             _require(sup in edges_by_id,"superseded edge missing")
+            _require(sup not in successor_by_id,"supersession history cannot branch")
             old=edges_by_id[sup]
             _require(old["status"]=="SUPERSEDED","prior edge must be SUPERSEDED")
             _require((old["source_node_id"],old["edge_type"],old["target_node_id"])==
                      (edge["source_node_id"],edge["edge_type"],edge["target_node_id"]),
                      "supersession must preserve source/type/target")
             _require(old["valid_to"]==edge["valid_from"],"supersession boundary must be contiguous")
+            successor_by_id[sup]=edge["edge_id"]
+
+    for triple,edge_ids in edges_by_triple.items():
+        roots=[edge_id for edge_id in edge_ids if edges_by_id[edge_id]["supersedes_edge_id"] is None]
+        _require(len(roots)==1,"relationship history must have exactly one root")
+        seen=set()
+        current=roots[0]
+        while current is not None:
+            _require(current not in seen,"supersession history cannot cycle")
+            seen.add(current)
+            current=successor_by_id.get(current)
+        _require(seen==set(edge_ids),"relationship history must be one contiguous chain")
+        terminal=edges_by_id[next(edge_id for edge_id in seen if edge_id not in successor_by_id)]
+        _require(terminal["status"] in {"ACTIVE","RETIRED"},"superseded edge requires exactly one successor")
 
     return {
       "nodes":len(nodes_by_id),
