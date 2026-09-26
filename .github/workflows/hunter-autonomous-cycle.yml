@@ -73,19 +73,19 @@ jobs:
           --decision cost_governor/out/cost_decision.json
           --output cost_governor/out/cost_state.json
       - name: Upload sanitized Hunter continuation state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-hunter-state
+          path: hunting/out/
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload sanitized agent heartbeat state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-agent-heartbeat-state
           path: agents/out/agent_heartbeat_state.json
-          if-no-files-found: error
-          retention-days: 30
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: portfolio-hunter-state
-          path: hunting/out/
           if-no-files-found: error
           retention-days: 30
       - name: Upload sanitized cost-governor continuation state
