@@ -1,15 +1,15 @@
 {
   "schema_version": "1.0.0",
   "sprint_id": "OPS-VALIDATION-20260925",
-  "status": "SUPERSEDED_BY_POST_RESTRICTION_OPTIMIZATION",
+  "status": "RETIRED",
   "purpose": "Prove Portfolio Brain produces one independently verifiable real-world outcome without weakening authority, cost, privacy, or durability controls.",
   "started_at": "2026-09-25T20:09:00-04:00",
-  "target_end_at": "2026-10-02T20:09:00-04:00",
+  "target_end_at": null,
   "architecture_freeze_until": null,
-  "architecture_change_policy": "CONTINUOUS_EVIDENCE_GATED_OPTIMIZATION",
+  "architecture_change_policy": "CONTINUOUS_OPTIMIZATION_NO_SPRINT_FREEZE",
   "primary_commercial_track": "freightrecovery",
   "secondary_commercial_track": "capturebrief",
-  "exit_gate": "ONE_VERIFIED_EXTERNAL_OUTCOME_THROUGH_PORTFOLIO_BRAIN",
+  "exit_gate": null,
   "operating_baseline": {
     "portfolio_brain_status": "OPERATIONAL",
     "architecture_version": "1.25.0",
@@ -33,8 +33,8 @@
   "primary_uncertainty": {
     "question": "Can the current FreightRecovery free-audit offer produce a genuine buyer engagement and a verifiable audit/recovery outcome?",
     "current_evidence": "NO_GENUINE_REPLY_OR_PAYMENT_YET",
-    "next_admissible_action": "Select and execute the highest-value measurable commercial experiment through available channels, preserving evidence and outcome attribution.",
-    "stop_condition": "A genuine buyer response creates an authorized bounded audit path, or the sprint window closes with no verified external outcome."
+    "next_admissible_action": "Use the live Portfolio Brain uncertainty/experiment engines; this file is historical baseline only.",
+    "stop_condition": null
   },
   "scorecard": {
     "successful_autonomous_cycles_since_start": 0,
@@ -55,5 +55,7 @@
     "stripe:freightrecovery-live-zero-checkout-zero-payment-intents"
   ],
   "superseded_at": "2026-09-25T21:11:00-04:00",
-  "superseded_by": "OPT-PORTFOLIO-BRAIN-20260925"
+  "superseded_by": "OPT-PORTFOLIO-BRAIN-20260925",
+  "retired_at": "2026-09-26T14:48:00-04:00",
+  "retirement_reason": "Owner explicitly ended the week-long validation/freeze concept and directed continuous work."
 }
