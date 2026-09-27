@@ -252,6 +252,40 @@ def schedule_cycle(state,context=None,*,at=None):
     new_state["recent_cycles"]=([*new_state["recent_cycles"],{"cycle_id":cid,"finished_at":at,"receipt_hash":receipt["receipt_hash"],"selected_count":len(selected)}])[-20:]
     validate_state(new_state);return new_state,receipt
 
+def _work_index(state,fingerprint):
+    matches=[i for i,w in enumerate(state["work_items"]) if w["fingerprint"]==fingerprint]
+    req(len(matches)==1,"scheduler work fingerprint missing/duplicate")
+    return matches[0]
+
+def claim_work(state,fingerprint,*,lease_owner,lease_seconds=300,at=None):
+    """Claim one queued scheduler item with an explicit, expiring execution lease."""
+    validate_state(state);req(isinstance(lease_owner,str) and lease_owner,"lease owner required")
+    req(type(lease_seconds) is int and 30<=lease_seconds<=900,"lease seconds outside scheduler execution boundary")
+    at=at or now_iso();out=json.loads(json.dumps(state));idx=_work_index(out,fingerprint);work=out["work_items"][idx]
+    req(work["state"]=="QUEUED","only queued scheduler work may be claimed")
+    work["state"]="ACTIVE";work["lease_generation"]=int(work.get("lease_generation") or 0)+1
+    work["lease_owner"]=lease_owner
+    work["lease_expires_at"]=datetime.fromisoformat(at.replace("Z","+00:00")).timestamp()+lease_seconds
+    out["sequence"]+=1;out["updated_at"]=at
+    validate_state(out);return out
+
+def requeue_work(state,fingerprint,*,at=None):
+    """Release active work after a deferred/failed execution without pretending it completed."""
+    validate_state(state);at=at or now_iso();out=json.loads(json.dumps(state));idx=_work_index(out,fingerprint);work=out["work_items"][idx]
+    req(work["state"]=="ACTIVE","only active scheduler work may be requeued")
+    work["state"]="QUEUED";work["lease_owner"]=None;work["lease_expires_at"]=None
+    out["sequence"]+=1;out["updated_at"]=at
+    validate_state(out);return out
+
+def complete_work(state,fingerprint,*,at=None):
+    """Complete active work only after its execution handler produced a durable success receipt."""
+    validate_state(state);at=at or now_iso();out=json.loads(json.dumps(state));idx=_work_index(out,fingerprint);work=out["work_items"][idx]
+    req(work["state"]=="ACTIVE","only active scheduler work may complete")
+    work["state"]="COMPLETE";work["lease_owner"]=None;work["lease_expires_at"]=None
+    if fingerprint not in out["completed_fingerprints"]:out["completed_fingerprints"].append(fingerprint)
+    out["sequence"]+=1;out["updated_at"]=at
+    validate_state(out);return out
+
 def mark_work(state,fingerprint,new_state_name):
     validate_state(state);req(new_state_name in {"ACTIVE","COMPLETE","CANCELLED"},"invalid scheduler work transition")
     out=json.loads(json.dumps(state));matches=[w for w in out["work_items"] if w["fingerprint"]==fingerprint];req(len(matches)==1,"scheduler work fingerprint missing/duplicate")
