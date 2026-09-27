@@ -52,7 +52,7 @@ def cancel_if_needed(state) -> dict:
     ids = managed_run_ids(
         runs,
         current_run_id=current,
-        managed_names=set(p["managed_workflow_names"]),
+        managed_names=set(p["paid_workflow_names"]),
         limit=p["max_cancellations_per_cycle"],
     )
     cancelled = []
