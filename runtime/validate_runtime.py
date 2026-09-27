@@ -24,6 +24,8 @@ def validate_runtime()->dict:
     req(0<b["max_repositories_per_cycle"]<=8,"repo budget invalid")
     req(0<b["max_api_requests_per_cycle"]<=40,"API budget invalid")
     req(0<b["max_runtime_seconds"]<=240,"time budget invalid")
+    req(0<b["max_state_restore_seconds"]<=45,"state restore time budget invalid")
+    req(b["max_state_restore_seconds"]<b["max_runtime_seconds"],"state restore must not consume the runtime budget")
     req(0<=b["retry_limit"]<=2,"retry budget invalid")
     req(p["state_persistence"]["mode"]=="GITHUB_ACTIONS_ARTIFACT","state persistence changed")
     req(p["state_persistence"]["sanitized_only"] is True,"runtime state must remain sanitized")
