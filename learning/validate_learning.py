@@ -51,6 +51,11 @@ def validate_learning():
     for body,label in ((proof_workflow,"model value proof"),(bootstrap_workflow,"verified feedback bootstrap")):
         req("python -m learning.live_observations" in body,f"{label} does not feed continuous learning")
         req("name: portfolio-learning-observation-state" in body,f"{label} does not persist continuous learning state")
+    learning_bootstrap=(ROOT/".github/workflows/continuous-learning-bootstrap.yml").read_text()
+    req("learning/TRIGGER_VERIFIED_OUTCOME_BOOTSTRAP" in learning_bootstrap,"continuous learning bootstrap trigger missing")
+    req("python -m learning.live_observations" in learning_bootstrap,"continuous learning bootstrap does not ingest verified outcome")
+    req("python -m learning.integrity" in learning_bootstrap,"continuous learning bootstrap does not prove cross-subsystem integrity")
+    req("PORTFOLIO_MODEL_API_KEY" not in learning_bootstrap,"continuous learning bootstrap may not bind paid-model credential")
     return {"pinned_components":len(expected),"domains":len(p["domains"]),"checked_in_source_observations":0,"live_seed_observations":0,"eligible_records":0,"durable_verified_ingest":True,"policy_effect":"NONE"}
 
 if __name__=="__main__":print("portfolio-brain Step 10 learning: PASS",json.dumps(validate_learning(),sort_keys=True))
