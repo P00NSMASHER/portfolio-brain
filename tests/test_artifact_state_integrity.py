@@ -69,7 +69,7 @@ class ArtifactStateIntegrityTests(unittest.TestCase):
         validate_runtime_artifact_bundle(runtime_bundle(),max_archive_bytes=100000,max_member_bytes=50000)
 
     def test_runtime_artifact_bundle_rejects_tampered_receipt(self):
-        with self.assertRaisesRegex(InvalidStateArtifact|Exception,"hash"):
+        with self.assertRaisesRegex(InvalidStateArtifact,"hash mismatch"):
             validate_runtime_artifact_bundle(runtime_bundle(tamper_receipt=True),max_archive_bytes=100000,max_member_bytes=50000)
 
     def test_runtime_artifact_bundle_rejects_state_receipt_mismatch(self):
