@@ -182,29 +182,88 @@ def structural_inspection(candidate,inspection,objective):
     tests=[p for p in paths if any(k in p.casefold() for k in ("test","spec","fixture","regression"))]
     docs=[p for p in paths if any(k in p.casefold() for k in ("readme","docs/","doc/"))]
     tokens=[x for x in re.findall(r"[a-z0-9]+",objective["capability_key"].casefold()) if len(x)>3]
+    def hit_count(items):
+        return sum(1 for p in items if any(t in p.casefold() for t in tokens))
+    source_hits=hit_count(source)
+    test_hits=hit_count(tests)
+    docs_hits=hit_count(docs)
     hits=sum(1 for p in lower if any(t in p for t in tokens))
     sample=sorted(dict.fromkeys((source[:10]+tests[:10]+docs[:5])))[:30]
-    return {"tree_sha":inspection["tree_sha"],"path_count":len(paths),"source_path_count":len(source),"test_path_count":len(tests),"docs_path_count":len(docs),"keyword_hit_count":hits,"sample_paths":sample}
+    return {
+      "tree_sha":inspection["tree_sha"],
+      "tree_truncated":bool(inspection.get("truncated",False)),
+      "path_count":len(paths),
+      "source_path_count":len(source),
+      "test_path_count":len(tests),
+      "docs_path_count":len(docs),
+      "keyword_hit_count":hits,
+      "source_keyword_hit_count":source_hits,
+      "test_keyword_hit_count":test_hits,
+      "docs_keyword_hit_count":docs_hits,
+      "sample_paths":sample,
+    }
 
 def candidate_fingerprint(candidate,revision,objective):
     return digest({"source":"PUBLIC_GITHUB","repository_id":candidate["id"],"revision":revision,"capability_key":objective["capability_key"]})
 
-def classify_candidate(state,fp,structural):
-    disposition="RETAIN"; negative=None
+def rank_candidate(structural,policy=None):
+    policy=policy or load_policy()
+    cfg=policy["candidate_evaluation"]["ranking"]
+    w=cfg["weights"]
+    components={
+      "implementation_presence":w["implementation_presence"] if structural["source_path_count"]>0 else 0,
+      "source_capability_signal":w["source_capability_signal"] if structural["source_keyword_hit_count"]>0 else 0,
+      "test_presence":w["test_presence"] if structural["test_path_count"]>0 else 0,
+      "test_capability_signal":w["test_capability_signal"] if structural["test_keyword_hit_count"]>0 else 0,
+      "docs_capability_signal":w["docs_capability_signal"] if structural["docs_keyword_hit_count"]>0 else 0,
+    }
+    score=sum(components.values())
+    req(0<=score<=cfg["max_score"],"Hunter ranking score outside configured bounds")
+    bands=cfg["bands"]
+    if score>=bands["HIGH"]["min_score"]:
+        band="HIGH"
+    elif score>=bands["MEDIUM"]["min_score"]:
+        band="MEDIUM"
+    else:
+        band="LOW"
+    soft=[]
+    if structural["test_path_count"]==0:
+        soft.append("NO_TEST_OR_REGRESSION_PATHS")
+    if structural["source_keyword_hit_count"]==0:
+        soft.append("NO_SOURCE_CAPABILITY_SIGNAL")
+    if structural["keyword_hit_count"]==0:
+        soft.append("NO_STRUCTURAL_CAPABILITY_SIGNAL")
+    elif structural["source_keyword_hit_count"]==0:
+        soft.append("CAPABILITY_SIGNAL_ONLY_OUTSIDE_SOURCE")
+    if structural["tree_truncated"]:
+        soft.append("TRUNCATED_TREE_REQUIRES_DEEPER_VALIDATION")
+    return {
+      "score":score,
+      "max_score":cfg["max_score"],
+      "band":band,
+      "components":components,
+      "soft_signal_codes":soft,
+      "value_credit_source":cfg["value_credit_source"],
+    }
+
+def classify_candidate(state,fp,structural,policy=None):
+    policy=policy or load_policy()
+    evaluation=policy["candidate_evaluation"]
+    ranking=rank_candidate(structural,policy)
+    disposition="RETAIN"; negative=None; hard_gate_status="PASS"
     if fp in state["seen_candidate_fingerprints"]:
-        disposition="DUPLICATE"; negative="EXACT_REVISION_CAPABILITY_DUPLICATE"
+        disposition="DUPLICATE"; negative=evaluation["terminal_duplicate_reason"]; hard_gate_status="DUPLICATE"
     elif structural["source_path_count"]==0:
-        disposition="REJECT"; negative="NO_IMPLEMENTATION_PATHS"
-    elif structural["test_path_count"]==0:
-        disposition="REJECT"; negative="NO_TEST_OR_REGRESSION_PATHS"
-    elif structural["keyword_hit_count"]==0:
-        disposition="REJECT"; negative="NO_STRUCTURAL_CAPABILITY_SIGNAL"
+        disposition="REJECT"; negative="NO_IMPLEMENTATION_PATHS"; hard_gate_status="REJECT"
+    req(negative is None or negative in set(evaluation["hard_reject_reasons"]+[evaluation["terminal_duplicate_reason"]]),"Hunter hard rejection reason is not policy-authorized")
     return disposition,negative,{
-      "reason_code":negative or "STRUCTURAL_GATES_PASSED",
+      "reason_code":negative or "HARD_GATES_PASSED",
+      "hard_gate_status":hard_gate_status,
+      "hard_reject_reasons":evaluation["hard_reject_reasons"],
       "implementation_path_gate":structural["source_path_count"]>0,
-      "test_or_regression_gate":structural["test_path_count"]>0,
-      "structural_capability_signal_gate":structural["keyword_hit_count"]>0,
       "duplicate_gate":fp in state["seen_candidate_fingerprints"],
+      "soft_signals_do_not_reject":evaluation["soft_signals_do_not_reject"],
+      "ranking":ranking,
     }
 
 def experiment_proposal(finding):
@@ -213,6 +272,9 @@ def experiment_proposal(finding):
     return {
       "schema_version":"1.0.0","proposal_id":hid,"finding_id":finding["finding_id"],"gap_id":finding["gap_id"],
       "project_ids":finding["project_ids"],
+      "candidate_rank_score":finding.get("ranking",{}).get("score"),
+      "candidate_rank_band":finding.get("ranking",{}).get("band"),
+      "candidate_soft_signals":finding.get("ranking",{}).get("soft_signal_codes",[]),
       "hypothesis":"The exact-revision public candidate contains a reusable implementation pattern relevant to the mapped portfolio gap.",
       "baseline":"No verified reusable capability is currently linked to this gap in Portfolio Brain.",
       "success_condition":"Independent exact-revision inspection confirms the implementation behavior, meaningful tests/negative controls, lawful reuse terms, and a bounded integration path.",
@@ -247,12 +309,19 @@ def _new_rejection_funnel():
       "queries_zero_results":0,
       "queries_suppressed":0,
       "rejection_reasons":{},
+      "soft_signal_counts":{},
+      "ranking_band_counts":{"HIGH":0,"MEDIUM":0,"LOW":0},
       "candidate_accounting_reconciled":True,
       "disposition_accounting_reconciled":True,
     }
 
 def _bump_reason(funnel,reason,count=1):
     funnel["rejection_reasons"][reason]=funnel["rejection_reasons"].get(reason,0)+count
+
+def _record_ranking(funnel,ranking):
+    funnel["ranking_band_counts"][ranking["band"]]+=1
+    for code in ranking["soft_signal_codes"]:
+        funnel["soft_signal_counts"][code]=funnel["soft_signal_counts"].get(code,0)+1
 
 def _finalize_rejection_funnel(funnel):
     funnel["candidate_accounting_reconciled"] = (
@@ -285,7 +354,8 @@ def run_cycle(state,provider,*,at=None):
               "objective_id":obj["objective_id"],"gap_id":obj["gap_id"],"strategy_id":obj["strategy_id"],
               "query":query,"query_fingerprint":query_fp,"status":"PENDING",
               "raw_results":0,"normalized_candidates":0,"inspected":0,"deferred_due_inspection_budget":0,
-              "retained":0,"duplicates":0,"rejected":0,"rejection_reasons":{}
+              "retained":0,"duplicates":0,"rejected":0,"rejection_reasons":{},
+              "ranking_band_counts":{"HIGH":0,"MEDIUM":0,"LOW":0},"soft_signal_counts":{}
             }
             if negative_hits(state,obj["gap_id"],obj["strategy_id"],query)>=policy["learning"]["negative_query_suppression_after"]:
                 _record_negative(state,obj,query,"REPEATED_DEAD_END_SUPPRESSED",at)
@@ -316,8 +386,13 @@ def run_cycle(state,provider,*,at=None):
                 fp=candidate_fingerprint(cand,inspection["revision"],obj)
                 core={"objective_id":obj["objective_id"],"fingerprint":fp}
                 fid="HFD-"+hashlib.sha256(canon(core).encode()).hexdigest()[:20].upper()
-                disposition,negative,classification_trace=classify_candidate(state,fp,structural)
+                disposition,negative,classification_trace=classify_candidate(state,fp,structural,policy)
+                ranking=classification_trace["ranking"]
                 decision_reason=classification_trace["reason_code"]
+                _record_ranking(funnel,ranking)
+                qout["ranking_band_counts"][ranking["band"]]+=1
+                for code in ranking["soft_signal_codes"]:
+                    qout["soft_signal_counts"][code]=qout["soft_signal_counts"].get(code,0)+1
                 finding={
                   "schema_version":"1.0.0","finding_id":fid,"objective_id":obj["objective_id"],"gap_id":obj["gap_id"],
                   "project_ids":obj["project_ids"],"strategy_id":obj["strategy_id"],"candidate_fingerprint":fp,
@@ -328,6 +403,7 @@ def run_cycle(state,provider,*,at=None):
                   "disposition":disposition,
                   "provenance_refs":[f"github:{cand['full_name']}@{inspection['revision']}",f"hunter-objective:{obj['objective_id']}"],
                   "negative_reason":negative,
+                  "ranking":ranking,
                   "decision_trace":{
                     **classification_trace,
                     "public_source_gate":cand.get("private") is False,
@@ -377,6 +453,8 @@ def run_cycle(state,provider,*,at=None):
         "queries_executed":funnel["queries_executed"],"queries_zero_results":funnel["queries_zero_results"],
         "queries_suppressed":funnel["queries_suppressed"],
         "rejection_reasons":funnel["rejection_reasons"],
+        "soft_signal_counts":funnel["soft_signal_counts"],
+        "ranking_band_counts":funnel["ranking_band_counts"],
         "candidate_accounting_reconciled":funnel["candidate_accounting_reconciled"],
         "disposition_accounting_reconciled":funnel["disposition_accounting_reconciled"],
       }
