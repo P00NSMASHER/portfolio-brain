@@ -1,7 +1,8 @@
 import copy, unittest
 from graph.universal_graph import (
   UniversalGraphError, canonicalization_route, find_paths, load_contract,
-  upstream_node_projection, validate_canonicalization_proposal, validate_graph,
+  upstream_edge_projection, upstream_node_projection,
+  validate_canonicalization_proposal, validate_graph,
   validate_node
 )
 
@@ -81,6 +82,30 @@ class UniversalGraphTests(unittest.TestCase):
         projected=upstream_node_projection(r)
         self.assertEqual(projected["node_type"],"REPO")
         self.assertEqual(projected["provenance"]["evidence_refs"],["git:repo@sha"])
+
+    def test_non_active_nodes_do_not_reactivate_during_upstream_projection(self):
+        for status in ["SUPERSEDED","RETIRED","CANONICALIZED","REVERSED"]:
+            r=node("GN-REPO-00000001","REPOSITORY",f"repo-{status}",mapping=("NATIVE","REPO"))
+            r["status"]=status
+            self.assertIsNone(upstream_node_projection(r),status)
+
+    def test_non_active_edges_do_not_reactivate_during_upstream_projection(self):
+        r=node("GN-REPO-00000001","REPOSITORY","repo",mapping=("NATIVE","REPO"))
+        c=node("GN-CAP-00000001","CAPABILITY","cap",mapping=("NATIVE","CAPABILITY"))
+        by_id={r["node_id"]:r,c["node_id"]:c}
+        for status in ["SUPERSEDED","RETIRED"]:
+            archived=edge(
+                "GE-EDGE-00000001",r["node_id"],"IMPLEMENTS",c["node_id"],
+                status=status,end="2026-09-25T18:00:00Z",
+            )
+            self.assertIsNone(upstream_edge_projection(archived,by_id),status)
+
+    def test_edge_with_non_active_endpoint_does_not_project_upstream(self):
+        r=node("GN-REPO-00000001","REPOSITORY","repo",mapping=("NATIVE","REPO"))
+        c=node("GN-CAP-00000001","CAPABILITY","cap",mapping=("NATIVE","CAPABILITY"))
+        c["status"]="RETIRED"
+        current=edge("GE-EDGE-00000001",r["node_id"],"IMPLEMENTS",c["node_id"])
+        self.assertIsNone(upstream_edge_projection(current,{r["node_id"]:r,c["node_id"]:c}))
 
     def test_path_hash_preserves_provenance_chain(self):
         r=node("GN-REPO-00000001","REPOSITORY","repo",mapping=("NATIVE","REPO"))

@@ -75,6 +75,8 @@ def validate_graph_bundle()->dict[str,object]:
     require(semantics["typed_edges"]=="FAIL_CLOSED","typed edge semantics weakened")
     require(semantics["node_provenance"]=="REQUIRED","node provenance weakened")
     require(semantics["edge_evidence"]=="REQUIRED","edge evidence weakened")
+    require(semantics["active_only_upstream_projection"]=="REQUIRED",
+            "non-active graph records may not project upstream")
     require(semantics["hard_identifier_conflict"]=="KEEP_SEPARATE","canonicalization conflict gate weakened")
     require(semantics["ambiguous_merge"]=="HUMAN_REVIEW_REQUIRED","canonicalization review gate weakened")
     require(semantics["canonicalization_reversal"]=="SUPPORTED_WITH_DEPENDENCY_GATES","canonicalization reversibility weakened")

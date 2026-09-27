@@ -233,6 +233,9 @@ def find_paths(nodes: list[dict[str,Any]], edges: list[dict[str,Any]], start_id:
 
 def upstream_node_projection(node: dict[str,Any])->dict[str,Any]|None:
     validate_node(node)
+    # Upstream records do not carry the portfolio envelope's lifecycle field.
+    # Projecting an archived identity would therefore silently reactivate it.
+    if node["status"]!="ACTIVE": return None
     mapping=node["upstream_mapping"]
     if mapping["mode"]=="PORTFOLIO_ONLY": return None
     provenance={"evidence_refs":node["provenance_refs"]}
@@ -301,6 +304,10 @@ UPSTREAM_BROAD_EDGES={"DEPENDS_ON"}
 
 def upstream_edge_projection(edge: dict[str,Any], nodes_by_id: dict[str,dict[str,Any]])->dict[str,Any]|None:
     validate_edge(edge,nodes_by_id)
+    # The upstream edge shape below omits status and validity windows. Only the
+    # active terminal relationship may cross that lossy boundary; otherwise a
+    # retired/superseded fact would be indistinguishable from a current one.
+    if edge["status"]!="ACTIVE": return None
     source=upstream_node_projection(nodes_by_id[edge["source_node_id"]])
     target=upstream_node_projection(nodes_by_id[edge["target_node_id"]])
     if source is None or target is None:
