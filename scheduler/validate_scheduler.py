@@ -35,11 +35,12 @@ def validate_scheduler():
     req(any(w["work_type"]=="EXPERIMENT" and w["assigned_agent_id"]=="AGT-COMMERCIAL-ANALYST" for w in selected),"bounded commercial experiment prep not queued")
     req(len(state["work_items"])==len(selected),"scheduler state did not persist queue")
     wf=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text().lower()
-    for s in ["contents: read","actions: read","23 * * * *","portfolio_scheduler_disabled","actions/upload-artifact@v4","cancel-in-progress: false",".github/triggers/scheduler-now.txt"]:
-        req(s in wf,f"scheduler workflow missing {s}")
-    req(wf.index("concurrency:")>wf.index("schedule:"),"scheduler cost concurrency must be job-level so cancelled queued jobs remain rerunnable")
+    for token in ["contents: read","actions: read","23 * * * *","portfolio_scheduler_disabled","actions/upload-artifact@v4","cancel-in-progress: false"]:
+        req(token in wf,f"scheduler workflow missing {token}")
+    req("push:" not in wf,"scheduler must not fan out on push inside the singleton cost-state concurrency lane")
+    req(wf.index("concurrency:")>wf.index("schedule:"),"scheduler cost concurrency must remain job-level so cancelled queued jobs are rerunnable")
     runtime_event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
-    req('".github/triggers/scheduler-now.txt"' in runtime_event and '".github/workflows/portfolio-autonomous-scheduler.yml"' in runtime_event,"scheduler trigger is not isolated from runtime-event churn")
+    req('".github/workflows/portfolio-autonomous-scheduler.yml"' in runtime_event,"scheduler workflow changes are not isolated from runtime-event churn")
     for s in ["hunting.proposal_artifact_state","hunting/live/hunter_proposal_state.json","portfolio-hunter-proposal-state"]:
         req(s in wf,f"scheduler Hunter proposal inbox integration missing {s}")
     executor=(ROOT/"scheduler/work_executor.py").read_text()
