@@ -76,6 +76,12 @@ jobs:
       - name: Select bounded work
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m scheduler.autonomous_scheduler --state scheduler/live/scheduler_state.json --output-dir scheduler/out
+      - name: Validate executor dependencies before queue mutation
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: |
+          python -m scheduler.validate_scheduler
+          python -m hunting.validate_hunter
+          python -m adapters.validate_adapters
       - name: Execute bounded queued work
         id: execute
         if: ${{ steps.cost.outputs.allowed == 'true' }}
