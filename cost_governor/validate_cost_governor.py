@@ -84,6 +84,7 @@ def validate_cost_governor():
         "portfolio-notification-cycle": ROOT / ".github/workflows/portfolio-notification-cycle.yml",
         "command-center-pages": ROOT / ".github/workflows/command-center-pages.yml",
         "agent-heartbeat-sweep": ROOT / ".github/workflows/agent-heartbeat-sweep.yml",
+        "model-value-proof": ROOT / ".github/workflows/model-value-proof.yml",
     }
     for name, path in governed_workflows.items():
         body = path.read_text().lower()
@@ -104,6 +105,14 @@ def validate_cost_governor():
     req("dashboard.live_state_bridge" in command_center,"command-center live-state restore missing")
     req("command-center-pages::publish" in p["workflow_job_ceilings"],"command-center publication lacks cost ceiling")
     req("command-center-pages" in p["managed_workflow_names"],"command-center publication is not cost managed")
+    value_proof = governed_workflows["model-value-proof"].read_text().lower()
+    req("model-value-proof::proof" in p["workflow_job_ceilings"],"model value proof lacks cost ceiling")
+    req("model-value-proof" in p["managed_workflow_names"],"model value proof is not cost managed")
+    req("portfolio_model_api_key" in value_proof,"model value proof provider credential binding missing")
+    req("value_proof.end_to_end" in value_proof,"model value proof finalization missing")
+    req("authority observe" in value_proof,"model value proof job reservation authority drifted")
+    req("contents: write" not in value_proof and "actions: write" not in value_proof,"model value proof workflow write authority widened")
+
     scheduler = governed_workflows["portfolio-autonomous-scheduler"].read_text().lower()
     req("contents: write" not in scheduler and "actions: write" not in scheduler, "scheduler write authority widened")
 
