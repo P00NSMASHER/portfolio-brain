@@ -741,7 +741,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
         </tr>
         """
         for p in snapshot["hunter_proposals"]["proposals"]
-    ) or '<tr><td colspan="7" class="empty">No quality-gated Hunter proposals in the durable inbox.</td></tr>'
+    ) or '<tr><td colspan="8" class="empty">No quality-gated Hunter proposals in the durable inbox.</td></tr>'
 
     proposal_cards = "".join(
         f"""
