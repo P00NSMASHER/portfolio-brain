@@ -106,6 +106,9 @@ def apply_execution_receipts(
             raise HunterProposalReviewError("proposal review execution id missing")
         if execution_id in out["applied_execution_ids"]:
             continue
+        receipt_body=dict(receipt)
+        receipt_hash=receipt_body.pop("receipt_hash",None)
+        req(isinstance(receipt_hash,str) and receipt_hash==digest(receipt_body),"proposal review source execution receipt hash mismatch")
         result=receipt.get("result")
         req(isinstance(result,dict),"proposal review execution result missing")
         required={
