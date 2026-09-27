@@ -8,5 +8,6 @@
   "authority_class": "OBSERVE",
   "rights_state": "NOT_GRANTED_BY_DISCOVERY",
   "proposals": [],
-  "findings": []
+  "findings": [],
+  "origins": {}
 }
