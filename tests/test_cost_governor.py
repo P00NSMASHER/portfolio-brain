@@ -60,6 +60,22 @@ class CostGovernorTests(unittest.TestCase):
         for path in ['"dashboard/**"','"tests/**"','"operator_console/**"','"cost_governor/**"','".github/workflows/command-center-pages.yml"']:
             self.assertIn(path,workflow)
 
+    def test_agent_heartbeat_sweep_is_cost_governed_and_bounded(self):
+        workflow=(ROOT/".github/workflows/agent-heartbeat-sweep.yml").read_text()
+        self.assertIn('cron: "29 */2 * * *"',workflow)
+        self.assertIn("portfolio-cost-governed-autonomy",workflow)
+        self.assertIn("cost_governor.workflow_gate preflight",workflow)
+        self.assertIn("cost_governor.workflow_gate finalize",workflow)
+        p=policy()
+        self.assertIn("agent-heartbeat-sweep",p["managed_workflow_names"])
+        cfg=p["workflow_job_ceilings"]["agent-heartbeat-sweep::heartbeat"]
+        self.assertEqual(cfg["max_minutes_per_job"],2)
+        self.assertLessEqual(cfg["daily_ceiling"]["github_job_starts"],13)
+        self.assertLessEqual(cfg["daily_ceiling"]["github_runner_minutes"],26)
+        self.assertEqual(cfg["daily_ceiling"]["cost_usd"],0)
+        self.assertEqual(cfg["daily_ceiling"]["model_calls"],0)
+        self.assertEqual(cfg["daily_ceiling"]["api_calls"],0)
+
     def test_command_center_hourly_refresh_is_cost_governed(self):
         workflow = (ROOT / ".github/workflows/command-center-pages.yml").read_text()
         self.assertIn('cron: "37 * * * *"',workflow)
