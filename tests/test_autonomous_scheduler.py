@@ -58,11 +58,30 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(review["assigned_agent_id"],"AGT-RESEARCHER")
         self.assertEqual(review["agent_goal_type"],"RESEARCH_EVIDENCE")
         self.assertEqual(review["required_authority"],"OBSERVE")
+        self.assertEqual(review["continuation_class"],"CONTINUATION")
         self.assertIn("rights-state:NOT_GRANTED_BY_DISCOVERY",review["evidence_refs"])
         self.assertIn("github:public/freight-audit@"+"a"*40,review["evidence_refs"])
         self.assertIn("hunter-origin-cycle:hunt-origin-test",review["evidence_refs"])
         self.assertIn("hunter-origin-receipt:sha256:"+"3"*64,review["evidence_refs"])
         self.assertNotIn("hunter-origin-cycle:hunt-latest",review["evidence_refs"])
+
+    def test_hunter_proposal_review_continuation_gets_researcher_slot_before_new_research(self):
+        ctx=build_context(hunter_proposal_state=proposal_state())
+        _,receipt=schedule_cycle(load_state(),ctx,at="2026-09-27T09:20:00Z")
+        researcher=[w for w in receipt["selected_work"] if w["assigned_agent_id"]=="AGT-RESEARCHER"]
+        self.assertTrue(researcher)
+        self.assertEqual(researcher[0]["source_ref"],"HEXP-TEST-INBOX")
+        self.assertEqual(researcher[0]["continuation_class"],"CONTINUATION")
+        self.assertEqual(researcher[0]["required_authority"],"OBSERVE")
+        self.assertLessEqual(len(researcher),2)
+        self.assertTrue(all(
+            w["continuation_class"] in {"CONTINUATION","NEW_WORK"}
+            for w in receipt["selected_work"]
+        ))
+        self.assertEqual(
+            receipt["selection_method"],
+            "EXPLICIT_GATE_PRECEDENCE_THEN_CONTINUATION_CLASS_SOURCE_PARETO_RANK_ALLOCATION_SHARE_NO_SCALAR_SCORE",
+        )
 
     def test_proposal_backlog_priority_prefers_rank_then_first_seen_fifo(self):
         state=proposal_state()
