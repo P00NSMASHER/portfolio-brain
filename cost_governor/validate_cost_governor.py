@@ -142,6 +142,7 @@ def validate_cost_governor():
     req("cost_governor.cancel_managed_jobs" in watchdog, "watchdog cancellation helper missing")
     req("operations.workflow_liveness" in watchdog, "watchdog liveness recovery helper missing")
     req("portfolio-workflow-liveness" in watchdog, "watchdog liveness receipt artifact missing")
+    req("workflow_run:" in watchdog and 'workflows: ["agent-heartbeat-sweep"]' in watchdog and "types: [completed]" in watchdog, "watchdog secondary heartbeat trigger missing")
     liveness=json.loads((ROOT/"operations/WORKFLOW_LIVENESS_POLICY.json").read_text())
     req(liveness["schema_version"]=="1.0.0" and liveness["liveness_id"]=="portfolio-core-workflow-liveness-v1","workflow liveness policy identity mismatch")
     req(liveness["authority_class"]=="NONE" and liveness["dispatch_authority_effect"]=="NONE","workflow liveness recovery widened authority")

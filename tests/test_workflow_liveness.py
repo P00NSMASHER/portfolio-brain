@@ -117,6 +117,10 @@ class WorkflowLivenessTests(unittest.TestCase):
         self.assertIn("actions: write",workflow)
         self.assertIn("contents: read",workflow)
         self.assertNotIn("contents: write",workflow)
+        self.assertIn("workflow_run:",workflow)
+        self.assertIn('workflows: ["agent-heartbeat-sweep"]',workflow)
+        self.assertIn("types: [completed]",workflow)
+        self.assertIn('branches: ["main"]',workflow)
 
 
 if __name__=="__main__":
