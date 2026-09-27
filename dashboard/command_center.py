@@ -142,6 +142,9 @@ def build_command_center_snapshot() -> dict[str, Any]:
     agents = []
     for role in agent_registry["roles"]:
         state = state_by_agent.get(role["agent_id"], {})
+        heartbeat = heartbeat_by_agent.get(role["agent_id"], {})
+        productive_age = heartbeat.get("productive_age_minutes")
+        probe_age = heartbeat.get("heartbeat_age_minutes")
         agents.append(
             {
                 "agent_id": role["agent_id"],
@@ -149,13 +152,18 @@ def build_command_center_snapshot() -> dict[str, Any]:
                 "role_key": role["role_key"],
                 "status": state.get("status", role.get("status", "UNKNOWN")),
                 "generation": 1,
-                "last_heartbeat_at": state.get("last_heartbeat_at"),
-                "last_activity_kind": state.get("last_activity_kind"),
-                "source_workflow": state.get("source_workflow"),
-                "source_run_id": state.get("source_run_id"),
-                "recent_work_ids": state.get("recent_work_ids", []),
-                "heartbeat_health": heartbeat_by_agent.get(role["agent_id"], {}).get("heartbeat_health", "NEVER"),
-                "heartbeat_age_minutes": heartbeat_by_agent.get(role["agent_id"], {}).get("heartbeat_age_minutes"),
+                "last_heartbeat_at": heartbeat.get("last_heartbeat_at", state.get("last_heartbeat_at")),
+                "last_productive_at": heartbeat.get("last_productive_at"),
+                "last_activity_kind": heartbeat.get("last_activity_kind", state.get("last_activity_kind")),
+                "source_workflow": heartbeat.get("source_workflow", state.get("source_workflow")),
+                "source_run_id": heartbeat.get("source_run_id", state.get("source_run_id")),
+                "recent_work_ids": heartbeat.get("recent_work_ids", state.get("recent_work_ids", [])),
+                "heartbeat_health": heartbeat.get("heartbeat_health", "NEVER"),
+                "heartbeat_age_minutes": probe_age,
+                "productive_age_minutes": productive_age,
+                "activity_age_minutes": productive_age if productive_age is not None else probe_age,
+                "open_work_count": heartbeat.get("open_work_count", 0),
+                "oldest_open_work_age_minutes": heartbeat.get("oldest_open_work_age_minutes"),
                 "max_autonomy": role["max_autonomy"],
                 "builder_eligible": role["builder_eligible"],
                 "verifier_eligible": role["verifier_eligible"],
@@ -190,8 +198,33 @@ def build_command_center_snapshot() -> dict[str, Any]:
     ]
     action_executions = action_ledger.get("executions", [])
     sent_actions = [x for x in action_executions if x.get("status") == "SENT"]
+    healthy_agents = telemetry["agents"].get("live", 0) + telemetry["agents"].get("idle_healthy", 0)
+    stalled_agents = telemetry["agents"].get("stalled", 0)
+    warming_agents = telemetry["agents"].get("warming_up", 0)
+    stalled_work = telemetry["queue"].get("stalled_open_count", 0)
+    functional_reasons = []
+    if state_sources["bridge_status"] != "LIVE":
+        functional_reasons.append(f"live-state bridge is {state_sources['bridge_status']}")
+    if engaged_switches:
+        functional_reasons.append(f"{engaged_switches} kill switch(es) engaged")
+    if stalled_agents:
+        functional_reasons.append(f"{stalled_agents} agent(s) have stale queued work without productive activity")
+    if telemetry["failures"]["count"]:
+        functional_reasons.append(f"{telemetry['failures']['count']} durable failure/stall signal(s)")
+    if enabled_model_routes and provider_health["status"] != "READY":
+        functional_reasons.append(f"enabled model route provider is {provider_health['status']}")
+    functional_status = "OPERATIONAL" if not functional_reasons else "DEGRADED"
 
     alerts = []
+    if stalled_work or stalled_agents:
+        alerts.append(
+            {
+                "severity": "HIGH",
+                "title": "Queued work is not producing agent activity",
+                "detail": f"{stalled_work} scheduler item(s) exceed the {90}-minute stall boundary; {stalled_agents} assigned agent(s) lack recent productive execution evidence.",
+                "evidence_ref": "dashboard/operational_telemetry.py",
+            }
+        )
     if executive["portfolio"]["blocked_action_count"]:
         alerts.append(
             {
@@ -248,6 +281,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
         "source_dashboard_hash": executive["snapshot_hash"],
         "system": {
             "status": operating["status"],
+            "functional_status": functional_status,
+            "functional_reasons": functional_reasons,
             "operational_without_interactive_chatgpt": operating["operational_without_interactive_chatgpt"],
             "main_promotion_sha": operating["promoted_main_sha"],
             "hotfix_count": len(hotfixes),
@@ -255,6 +290,9 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "project_count": executive["project_count"],
             "agent_count": len(agents),
             "active_agent_count": active_agents,
+            "healthy_agent_count": healthy_agents,
+            "stalled_agent_count": stalled_agents,
+            "warming_agent_count": warming_agents,
             "workflow_count": len(workflows),
             "engaged_kill_switch_count": engaged_switches,
             "live_state_bridge_status": state_sources["bridge_status"],
@@ -409,9 +447,9 @@ def _badge(text: str, tone: str = "neutral") -> str:
 
 def _status_tone(value: str) -> str:
     upper = value.upper()
-    if upper in {"OPERATIONAL", "ACTIVE", "VERIFIED_FIXED", "RUNNING", "LIVE", "READY"}:
+    if upper in {"OPERATIONAL", "ACTIVE", "VERIFIED_FIXED", "RUNNING", "LIVE", "READY", "IDLE_HEALTHY"}:
         return "good"
-    if upper in {"BLOCKED", "CRITICAL", "HIGH", "ENGAGED", "DISABLED", "MISSING_CREDENTIAL", "BILLING_NOT_ACTIVE", "QUOTA_EXHAUSTED", "BUDGET_BLOCKED", "PROVIDER_ERROR"}:
+    if upper in {"BLOCKED", "CRITICAL", "HIGH", "ENGAGED", "DISABLED", "MISSING_CREDENTIAL", "BILLING_NOT_ACTIVE", "QUOTA_EXHAUSTED", "BUDGET_BLOCKED", "PROVIDER_ERROR", "STALLED"}:
         return "bad"
     if upper in {"EVIDENCE_GAPS", "MEDIUM", "ACTIVE_RESEARCH_ONLY", "IN_DEVELOPMENT", "STALE", "FALLBACK", "DEGRADED", "RATE_LIMITED", "UNKNOWN"}:
         return "warn"
@@ -523,7 +561,8 @@ def render_html(snapshot: dict[str, Any]) -> str:
         <tr>
           <td><strong>{_e(a["name"])}</strong><span class="sub">{_e(a["agent_id"])}</span></td>
           <td>{_badge(a["heartbeat_health"], _status_tone(a["heartbeat_health"]))}</td>
-          <td class="num">{_e(a["heartbeat_age_minutes"] if a["heartbeat_age_minutes"] is not None else "—")}</td>
+          <td class="num">{_e(a["activity_age_minutes"] if a["activity_age_minutes"] is not None else "—")}</td>
+          <td class="num">{_e(a["open_work_count"])}</td>
           <td>{_e(a["last_activity_kind"] or "—")}</td>
           <td>{_e(a["source_workflow"] or "—")}<span class="sub">run {_e(a["source_run_id"] or "—")}</span></td>
           <td>{_badge(a["max_autonomy"], "neutral")}</td>
@@ -726,10 +765,10 @@ def render_html(snapshot: dict[str, Any]) -> str:
             {_badge(a["heartbeat_health"], _status_tone(a["heartbeat_health"]))}
           </div>
           <div class="mobile-stats mobile-stats-2">
-            <div><span>Heartbeat age</span><strong>{_e(str(a["heartbeat_age_minutes"]) + " min" if a["heartbeat_age_minutes"] is not None else "—")}</strong></div>
+            <div><span>Evidence age</span><strong>{_e(str(a["activity_age_minutes"]) + " min" if a["activity_age_minutes"] is not None else "—")}</strong></div>
+            <div><span>Open work</span><strong>{_e(a["open_work_count"])}</strong></div>
             <div><span>Last activity</span><strong>{_e((a["last_activity_kind"] or "—").replace("_"," "))}</strong></div>
-            <div><span>Autonomy</span><strong>{_e(a["max_autonomy"])}</strong></div>
-            <div><span>Model tier</span><strong>{_e(a["max_model_tier"])}</strong></div>
+            <div><span>Autonomy / tier</span><strong>{_e(a["max_autonomy"])} · T{_e(a["max_model_tier"])}</strong></div>
           </div>
           <div class="mobile-meta"><span>Source</span><strong>{_e(a["source_workflow"] or "—")}</strong><code>run {_e(a["source_run_id"] or "—")}</code></div>
         </article>
@@ -1484,7 +1523,7 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       <div class="eyebrow"><span class="signal-dot"></span>Portfolio Intelligence System</div>
       <h1>Portfolio Brain Command Center</h1>
       <p class="hero-lede">A live, evidence-backed view of your autonomous portfolio — work, agents, spend, outcomes, and operating boundaries in one place.</p>
-      <div class="hero-badges">{_badge(system["status"], _status_tone(system["status"]))} {_badge("READ ONLY", "neutral")} {_badge(snapshot["data_boundary"], "neutral")}</div>
+      <div class="hero-badges">{_badge(system["functional_status"], _status_tone(system["functional_status"]))} {_badge("EVIDENCE-DRIVEN", "neutral")} {_badge("READ ONLY", "neutral")}</div>
     </div>
     <div class="actions">
       <button type="button" onclick="location.reload()">Refresh</button>
@@ -1494,8 +1533,8 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
 
   <section class="grid kpis">
     <div class="card kpi"><div class="label">Projects</div><div class="value">{system["project_count"]}</div><div class="hint">{len([p for p in snapshot["projects"] if p["lifecycle_status"] == "ACTIVE"])} active</div></div>
-    <div class="card kpi"><div class="label">Agents</div><div class="value">{system["active_agent_count"]}/{system["agent_count"]}</div><div class="hint">active registry roles</div></div>
-    <div class="card kpi"><div class="label">Open work</div><div class="value">{portfolio["pending_autonomous_work_count"]}</div><div class="hint">{_e(sources["scheduler"]["status"].lower())} scheduler queue</div></div>
+    <div class="card kpi"><div class="label">Agents healthy</div><div class="value">{system["healthy_agent_count"]}/{system["agent_count"]}</div><div class="hint">{system["stalled_agent_count"]} stalled · {system["warming_agent_count"]} warming</div></div>
+    <div class="card kpi"><div class="label">Open work</div><div class="value">{telemetry["queue"]["open_total"]}</div><div class="hint">{telemetry["queue"].get("stalled_open_count",0)} stalled · {_e(sources["scheduler"]["status"].lower())}</div></div>
     <div class="card kpi"><div class="label">Blocked work</div><div class="value">{portfolio["blocked_action_count"]}</div><div class="hint">human/authority gated</div></div>
     <div class="card kpi"><div class="label">Verified outcomes</div><div class="value">{telemetry["verified_external_outcomes"]}</div><div class="hint">verified durable evidence</div></div>
     <div class="card kpi"><div class="label">Paid model spend</div><div class="value">USD {_e(round(telemetry["cost"]["actual_usage_today"]["cost_usd"],2))}</div><div class="hint">of USD {cost["portfolio_ceiling"]["cost_usd"]:.2f} today</div></div>
@@ -1603,7 +1642,7 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
     <div class="card" id="agents">
       <div class="section-head"><div><h2>Agent Fleet</h2><p>Persistent roles and maximum authorized autonomy · {_e(source_detail("agents"))}</p></div>{source_badge("agents")}</div>
       <div class="table-wrap mobile-hide"><table>
-        <thead><tr><th>Agent</th><th>Heartbeat</th><th class="num">Age min</th><th>Last activity</th><th>Source</th><th>Max autonomy</th><th class="num">Tier</th></tr></thead>
+        <thead><tr><th>Agent</th><th>Functional health</th><th class="num">Evidence age</th><th class="num">Open work</th><th>Last real activity</th><th>Source</th><th>Max autonomy</th><th class="num">Tier</th></tr></thead>
         <tbody>{agent_rows}</tbody>
       </table></div>
       <div class="mobile-records">{agent_cards}</div>
