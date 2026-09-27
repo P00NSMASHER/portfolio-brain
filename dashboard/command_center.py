@@ -20,6 +20,7 @@ from dashboard.executive_dashboard import build_dashboard_snapshot
 from dashboard.history_state import load_state as load_history_state, public_history
 from dashboard.operational_telemetry import build_operational_telemetry
 from cost_governor.sentinel import build_sentinel_snapshot
+from learning.integrity import build_learning_integrity
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -61,6 +62,7 @@ def load_state_sources() -> dict[str, Any]:
         "agents":"agents/AGENT_HEARTBEAT_STATE_SEED.json",
         "provider":"runtime/PROVIDER_HEALTH_SEED.json",
         "model_feedback":"model_router/MODEL_FEEDBACK_STATE_SEED.json",
+        "learning":"learning/LIVE_OBSERVATION_STATE_SEED.json",
     }
     for name, ref in seeds.items():
         data["sources"].setdefault(name, {
@@ -120,6 +122,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
     action_ledger = load_json("action_engine/GMAIL_GATEWAY_LEDGER.json")
     model_registry = load_json("model_router/PROVIDER_REGISTRY.json")
     model_feedback_state = load_live_json("model_feedback_state.json", "model_router/MODEL_FEEDBACK_STATE_SEED.json")
+    learning_observation_state = load_live_json("learning_observation_state.json", "learning/LIVE_OBSERVATION_STATE_SEED.json")
+    learning_integrity = build_learning_integrity(hunter_state, model_feedback_state, learning_observation_state)
     provider_health = load_live_json("provider_health.json", "runtime/PROVIDER_HEALTH_SEED.json")
     sentinel = build_sentinel_snapshot(
         cost_policy=cost_policy,
@@ -214,6 +218,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
         functional_reasons.append(f"{telemetry['failures']['count']} durable failure/stall signal(s)")
     if enabled_model_routes and provider_health["status"] != "READY":
         functional_reasons.append(f"enabled model route provider is {provider_health['status']}")
+    if learning_integrity["status"]=="DEGRADED":
+        functional_reasons.append("verified value has not reconciled across all durable learning layers")
     functional_status = "OPERATIONAL" if not functional_reasons else "DEGRADED"
 
     alerts = []
@@ -242,6 +248,15 @@ def build_command_center_snapshot() -> dict[str, Any]:
                 "title": "Active validation cycle still needs an external outcome",
                 "detail": sprint["exit_gate"],
                 "evidence_ref": "operations/VALIDATION_SPRINT_STATE.json",
+            }
+        )
+    if learning_integrity["status"]=="DEGRADED":
+        alerts.append(
+            {
+                "severity":"HIGH",
+                "title":"Verified learning propagation is incomplete",
+                "detail":f'{learning_integrity["verified_value_event_count"]} verified value event(s) exist, but {len(learning_integrity["missing_continuous_learning_event_ids"])} have not reached durable continuous learning or another integrity check failed.',
+                "evidence_ref":"learning/integrity.py",
             }
         )
     if portfolio_ceiling["cost_usd"] > 0:
@@ -357,6 +372,14 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "seen_candidate_count": len(hunter_state["seen_candidate_fingerprints"]),
             "negative_knowledge_count": len(hunter_state["negative_knowledge"]),
         },
+        "learning_loop": {
+            "integrity": learning_integrity,
+            "state_sequence": learning_observation_state.get("sequence",0),
+            "updated_at": learning_observation_state.get("updated_at"),
+            "observation_count": len(learning_observation_state.get("observations",[])),
+            "applied_value_outcome_count": len(learning_observation_state.get("applied_source_keys",[])),
+            "policy_effect":"NONE",
+        },
         "cost_governor": {
             "mode": cost_policy["mode"],
             "portfolio_ceiling": portfolio_ceiling,
@@ -435,6 +458,9 @@ def build_command_center_snapshot() -> dict[str, Any]:
                     "model_router/PROVIDER_REGISTRY.json",
                     "model_router/MODEL_FEEDBACK_STATE_SEED.json",
                     "model_router/feedback_state.py",
+                    "learning/LIVE_OBSERVATION_STATE_SEED.json",
+                    "learning/live_observations.py",
+                    "learning/integrity.py",
                     "runtime/PROVIDER_HEALTH_SEED.json",
                     "runtime/provider_health.py",
                     "dashboard/live/state_sources.json",
