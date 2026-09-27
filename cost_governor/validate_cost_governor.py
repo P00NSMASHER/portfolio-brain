@@ -86,6 +86,7 @@ def validate_cost_governor():
         "agent-heartbeat-sweep": ROOT / ".github/workflows/agent-heartbeat-sweep.yml",
         "model-value-proof": ROOT / ".github/workflows/model-value-proof.yml",
         "verified-feedback-bootstrap": ROOT / ".github/workflows/verified-feedback-bootstrap.yml",
+        "continuous-learning-bootstrap": ROOT / ".github/workflows/continuous-learning-bootstrap.yml",
     }
     for name, path in governed_workflows.items():
         body = path.read_text().lower()
@@ -122,6 +123,16 @@ def validate_cost_governor():
     req("portfolio_model_api_key" not in feedback_bootstrap,"feedback bootstrap may not bind model credentials")
     req("python -m value_proof.model_task" not in feedback_bootstrap and "python -m value_proof.verifier" not in feedback_bootstrap,"feedback bootstrap may not execute model calls")
     req("contents: write" not in feedback_bootstrap and "actions: write" not in feedback_bootstrap,"feedback bootstrap workflow write authority widened")
+
+    learning_bootstrap=governed_workflows["continuous-learning-bootstrap"].read_text().lower()
+    req("continuous-learning-bootstrap::bootstrap" in p["workflow_job_ceilings"],"continuous learning bootstrap lacks cost ceiling")
+    req("continuous-learning-bootstrap" in p["managed_workflow_names"],"continuous learning bootstrap is not cost managed")
+    req("value_proof.proof_artifact_state" in learning_bootstrap,"continuous learning bootstrap does not restore prior proof")
+    req("learning.live_observations" in learning_bootstrap,"continuous learning bootstrap does not ingest verified observations")
+    req("learning.integrity" in learning_bootstrap,"continuous learning bootstrap lacks cross-subsystem proof")
+    req("portfolio_model_api_key" not in learning_bootstrap,"continuous learning bootstrap may not bind model credentials")
+    req("python -m value_proof.model_task" not in learning_bootstrap and "python -m value_proof.verifier" not in learning_bootstrap,"continuous learning bootstrap may not execute model calls")
+    req("contents: write" not in learning_bootstrap and "actions: write" not in learning_bootstrap,"continuous learning bootstrap workflow write authority widened")
 
     scheduler = governed_workflows["portfolio-autonomous-scheduler"].read_text().lower()
     req("contents: write" not in scheduler and "actions: write" not in scheduler, "scheduler write authority widened")
