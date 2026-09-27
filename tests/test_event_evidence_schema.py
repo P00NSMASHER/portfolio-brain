@@ -209,6 +209,13 @@ class EvidenceEventContractTests(unittest.TestCase):
         with self.assertRaisesRegex(EventValidationError,"cannot precede observed_at"):
             validate_evidence(evd)
 
+    def test_source_cannot_be_retrieved_after_evidence_is_observed(self):
+        evd=evidence_record()
+        evd["source"]["retrieved_at"]="2026-09-25T15:00:02Z"
+        evd["evidence_hash"]=compute_evidence_hash(evd)
+        with self.assertRaisesRegex(EventValidationError,"cannot follow observed_at"):
+            validate_evidence(evd)
+
     def test_inference_requires_basis_evidence(self):
         evd=evidence_record(state="INFERRED",evidence_type="MODEL_OUTPUT",actor_type="MODEL",actor_id="model-a")
         evd["verification"]["method"]="MODEL_INFERENCE"
@@ -266,6 +273,43 @@ class EvidenceEventContractTests(unittest.TestCase):
         evt["event_hash"]=compute_event_hash(evt)
         with self.assertRaisesRegex(EventValidationError,"cannot ignore linked contradictory evidence"):
             validate_event(evt,{support["evidence_id"]:support,contradiction["evidence_id"]:contradiction})
+
+    def test_verified_event_cannot_omit_known_bundle_contradiction(self):
+        support=evidence_record(evidence_id="EVD-TEST-00000001")
+        contradiction=evidence_record(
+            evidence_id="EVD-TEST-00000002",
+            state="OBSERVED",
+            evidence_type="SYSTEM_OBSERVATION",
+        )
+        contradiction["supports_refs"]=[]
+        contradiction["contradicts_refs"]=["step:3"]
+        contradiction["evidence_hash"]=compute_evidence_hash(contradiction)
+        evt=event_record()
+        with self.assertRaisesRegex(EventValidationError,"cannot omit known contradictory evidence"):
+            validate_bundle([evt],[support,contradiction])
+
+    def test_future_contradiction_does_not_rewrite_historical_verification(self):
+        support=evidence_record(evidence_id="EVD-TEST-00000001")
+        contradiction=evidence_record(
+            evidence_id="EVD-TEST-00000002",
+            state="OBSERVED",
+            evidence_type="SYSTEM_OBSERVATION",
+        )
+        contradiction["observed_at"]="2026-09-25T15:00:03Z"
+        contradiction["source"]["retrieved_at"]="2026-09-25T15:00:03Z"
+        contradiction["supports_refs"]=[]
+        contradiction["contradicts_refs"]=["step:3"]
+        contradiction["evidence_hash"]=compute_evidence_hash(contradiction)
+        evt=event_record()
+        self.assertEqual(validate_bundle([evt],[support,contradiction]),{"events":1,"evidence":2})
+
+    def test_event_cannot_use_evidence_verified_after_recording(self):
+        evd=evidence_record()
+        evd["verification"]["verified_at"]="2026-09-25T15:00:03Z"
+        evd["evidence_hash"]=compute_evidence_hash(evd)
+        evt=event_record()
+        with self.assertRaisesRegex(EventValidationError,"verified after it was recorded"):
+            validate_bundle([evt],[evd])
 
     def test_cross_project_evidence_rejected(self):
         evd=evidence_record()
@@ -369,7 +413,7 @@ class EvidenceEventContractTests(unittest.TestCase):
         root=event_record()
         root["event_id"]="EVT-TEST-00000002"
         root["occurred_at"]="2026-09-25T14:59:59Z"
-        root["recorded_at"]="2026-09-25T15:00:00Z"
+        root["recorded_at"]="2026-09-25T15:00:01Z"
         dependent=event_record()
         dependent["dependency_event_ids"]=[root["event_id"]]
         rehash_event(root); rehash_event(dependent)
