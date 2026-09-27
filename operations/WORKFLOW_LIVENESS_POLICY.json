@@ -108,6 +108,8 @@
     "At most two workflow_dispatch calls may be emitted per watchdog cycle.",
     "A recent completed run is healthy only when its exact run artifact contains valid substantive-work proof.",
     "Proof artifacts are bound to the exact workflow run ID and are independently validated before they can suppress recovery.",
-    "Missing, expired, malformed, or semantically invalid proof remains explicitly unverified and never paints the target green."
-  ]
+    "Missing, expired, malformed, or semantically invalid proof remains explicitly unverified and never paints the target green.",
+    "A successful run with missing or invalid work proof becomes recoverable after the bounded unverified-work retry window."
+  ],
+  "unverified_work_retry_after_minutes": 30
 }
