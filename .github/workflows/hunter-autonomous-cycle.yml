@@ -57,6 +57,14 @@ jobs:
           if [ ! -f hunting/live/hunter_proposal_state.json ]; then
             cp hunting/HUNTER_PROPOSAL_STATE_SEED.json hunting/live/hunter_proposal_state.json
           fi
+      - name: Restore latest Hunter proposal review state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: |
+          mkdir -p hunting/live
+          python -m hunting.proposal_review_artifact_state --output hunting/live/hunter_proposal_review_state.json
+          if [ ! -f hunting/live/hunter_proposal_review_state.json ]; then
+            cp hunting/HUNTER_PROPOSAL_REVIEW_STATE_SEED.json hunting/live/hunter_proposal_review_state.json
+          fi
       - name: Restore latest agent heartbeat state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m agents.artifact_state --output agents/live/agent_heartbeat_state.json
