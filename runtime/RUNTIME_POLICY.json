@@ -63,5 +63,14 @@
       "requires_independent_adversarial": true,
       "builder_independence_group": "openai-terra"
     }
+  },
+  "state_integrity": {
+    "max_recent_cycles": 20,
+    "require_canonical_cycle_receipt_hash": true,
+    "require_cycle_id_state_binding": true,
+    "reject_cycle_replay": true,
+    "require_monotonic_history": true,
+    "artifact_requires_companion_cycle_receipt": true,
+    "artifact_state_receipt_binding": true
   }
 }
