@@ -31,6 +31,8 @@ def validate_model_router():
     req(enabled_nonzero==[
       ("openai","gpt-5.6-luna"),("openai","gpt-5.6-terra"),("openai","gpt-5.6-sol")
     ],"enabled model routes differ from approved GPT-5.6 set")
+    from model_router.astra_escalation import validate_astra_configuration
+    validate_astra_configuration()
     det={
       "schema_version":"1.0.0","request_id":"MRQ-VALIDATE-0001","project_ids":["PRJ-000"],"task_kind":"SCHEMA_VALIDATION",
       "deterministic_sufficient":True,"consequence":"HIGH","data_classification":"SANITIZED","authority_class":"OBSERVE",

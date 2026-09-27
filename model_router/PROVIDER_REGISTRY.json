@@ -89,6 +89,21 @@
             "output_usd_per_million_tokens": 20,
             "fixed_call_usd": 0
           }
+        },
+        {
+          "model_id": "gpt-6-astra",
+          "tier": 3,
+          "enabled": false,
+          "independence_group": "openai-astra",
+          "supported_data_classifications": ["PUBLIC", "SANITIZED"],
+          "max_input_tokens": 40000,
+          "max_output_tokens": 12000,
+          "pricing": {
+            "basis": "CONFIGURED_RATE",
+            "input_usd_per_million_tokens": 10,
+            "output_usd_per_million_tokens": 50,
+            "fixed_call_usd": 0
+          }
         }
       ]
     },

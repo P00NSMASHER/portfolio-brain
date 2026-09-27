@@ -138,9 +138,19 @@ def execute_openai(
     timeout:int=90,
     at:str|None=None,
     transport:Callable[[str,dict[str,str],bytes,int],dict[str,Any]]|None=None,
+    astra_candidate:dict[str,Any]|None=None,
 ):
     if not isinstance(input_text,str) or not input_text:raise OpenAIExecutorError("input_text required")
-    next_state,guard=prepare_governed_execution(model_request,cost_state,attempt=attempt,at=at)
+    registry_override=None
+    if astra_candidate is not None:
+        from model_router.astra_escalation import _admitted_registry,route_admitted_escalation
+        status,admitted_request,admitted_route=route_admitted_escalation(astra_candidate)
+        if status!="ADMITTED_ADVISORY_ONLY" or admitted_request != model_request or admitted_route is None:
+            raise OpenAIExecutorError("Astra admission blocked: "+status)
+        if attempt!=1 or reasoning_effort!=astra_candidate["reasoning_effort"]:
+            raise OpenAIExecutorError("Astra automatic retry or reasoning-effort mismatch blocked")
+        registry_override=_admitted_registry()
+    next_state,guard=prepare_governed_execution(model_request,cost_state,attempt=attempt,at=at,registry=registry_override)
     route=guard["route"]
     if route["status"]!="ROUTED" or route["tier"]==0:raise OpenAIExecutorError("non-Tier-0 routed model required")
     if route["provider_id"]!="openai":raise OpenAIExecutorError("route is not OpenAI")
