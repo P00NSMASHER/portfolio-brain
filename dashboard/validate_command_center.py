@@ -111,7 +111,7 @@ def validate_command_center() -> dict[str, object]:
     require("Observed gateway threads" in page and "Human-reply threads in scope" in page, "scoped commercial evidence UI missing")
     require("Current payment/checkout state</td><td class=\"num\">UNKNOWN" in page, "current commercial payment state is not fail-closed")
     require("Live checkout sessions</td>" not in page and "Live payment intents</td>" not in page, "retired baseline still labeled live")
-    require("GMAIL_LABEL_PORTFOLIOBRAIN_SENT_AFTER_2026_09_25" in page, "commercial coverage scope missing")
+    require("GMAIL_SENT_18_FREIGHTRECOVERY_CAMPAIGN_THREADS_THREE_EXACT_SUBJECT_FAMILIES" in page, "commercial coverage scope missing")
     require("Paid Cost Governor" in page, "paid-only cost governor label missing")
     require("GitHub Workload Controls" in page, "separate workload-control panel missing")
     require("Daily GitHub job-start quota</td><td class=\"num\">None" in page, "retired GitHub daily job quota is not explicit")
