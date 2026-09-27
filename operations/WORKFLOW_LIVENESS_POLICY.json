@@ -4,6 +4,7 @@
   "enabled": true,
   "default_branch": "main",
   "max_api_requests_per_cycle": 14,
+  "max_history_pages": 3,
   "max_dispatches_per_cycle": 2,
   "recent_failure_retry_after_minutes": 35,
   "authority_class": "NONE",
