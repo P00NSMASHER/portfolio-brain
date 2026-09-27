@@ -16,6 +16,7 @@ from typing import Any, Callable
 
 from model_router.model_router import provider_registry, route_request, validate_call_receipt
 from model_router.openai_executor import execute_openai
+from value_proof.strict_json import StrictJSONError, strict_json_loads
 
 ROOT=Path(__file__).resolve().parents[1]
 DEFAULT_CONTRACT=ROOT/"value_proof"/"MODEL_TASK_CONTRACT.json"
@@ -182,8 +183,8 @@ def parse_and_validate_output(text:str,contract:dict[str,Any])->dict[str,Any]:
     oc=contract["output_contract"]
     req(chr(96)*3 not in text,"code fences forbidden by output contract")
     try:
-        data=json.loads(text)
-    except json.JSONDecodeError as exc:
+        data=strict_json_loads(text)
+    except StrictJSONError as exc:
         raise ModelTaskError("model output is not strict JSON") from exc
     req(isinstance(data,dict),"model output must be an object")
     req(set(data)==set(oc["required_keys"]),"model output keys changed")

@@ -25,6 +25,7 @@ from value_proof.model_task import (
     validate_execution_receipt,
     write_json,
 )
+from value_proof.strict_json import StrictJSONError, strict_json_loads
 
 ROOT=Path(__file__).resolve().parents[1]
 DEFAULT_VERIFIER_CONTRACT=ROOT/"value_proof"/"VERIFIER_CONTRACT.json"
@@ -167,8 +168,8 @@ def parse_verifier_output(text:str,verifier_contract:dict[str,Any])->dict[str,An
     req(isinstance(text,str) and text.strip(),"verifier output empty")
     req(chr(96)*3 not in text,"verifier code fences forbidden")
     try:
-        data=json.loads(text)
-    except json.JSONDecodeError as exc:
+        data=strict_json_loads(text)
+    except StrictJSONError as exc:
         raise VerifierError("verifier output is not strict JSON") from exc
     oc=verifier_contract["output_contract"]
     req(isinstance(data,dict) and set(data)==set(oc["required_keys"]),"verifier output keys changed")

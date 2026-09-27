@@ -133,6 +133,16 @@ class ModelTaskContractTests(unittest.TestCase):
         with self.assertRaises(ModelTaskError):
             parse_and_validate_output(json.dumps(bad),self.contract)
 
+    def test_model_output_rejects_ambiguous_or_unsafe_json(self):
+        valid=json.dumps(valid_output(),separators=(",",":"))
+        duplicate=valid[:-1]+',"rights_state":"LICENSE_VERIFIED"}'
+        unsafe=valid.replace("bounded review", "bounded\\u000areview")
+        non_finite=valid.replace('"confidence":0.78', '"confidence":NaN')
+        for raw in (duplicate,unsafe,non_finite):
+            with self.subTest(raw=raw):
+                with self.assertRaises(ModelTaskError):
+                    parse_and_validate_output(raw,self.contract)
+
     def test_execution_emits_separate_model_success_receipt_without_value_claim(self):
         _,result=execute_task(contract=self.contract,pack=self.pack,cost_state={},executor=FakeExecutor())
         self.assertEqual(result["status"],"MODEL_CALL_SUCCESS")

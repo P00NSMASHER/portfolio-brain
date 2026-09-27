@@ -8,6 +8,7 @@ from value_proof.verifier import (
     VerifierError,
     deterministic_verify,
     load_verifier_contract,
+    parse_verifier_output,
     verify_output,
 )
 
@@ -170,8 +171,18 @@ class IndependentVerifierTests(unittest.TestCase):
               execution_receipt=self.built["execution_receipt"],
               builder_provider_receipt=self.built["provider_receipt"],
               cost_state={},
-              executor=BadVerifierExecutor(),
+                executor=BadVerifierExecutor(),
             )
+
+    def test_verifier_output_rejects_ambiguous_or_unsafe_json(self):
+        valid=json.dumps(verifier_output(),separators=(",",":"))
+        duplicate=valid[:-1]+',"verdict":"FAIL"}'
+        unsafe=valid.replace("rights uncertainty", "rights\\u000duncertainty")
+        non_finite=valid.replace('"confidence":0.84', '"confidence":Infinity')
+        for raw in (duplicate,unsafe,non_finite):
+            with self.subTest(raw=raw):
+                with self.assertRaises(VerifierError):
+                    parse_verifier_output(raw,self.verifier)
 
 
 if __name__=="__main__":
