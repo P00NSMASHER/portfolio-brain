@@ -3,10 +3,6 @@ name: portfolio-autonomous-scheduler
 on:
   schedule:
     - cron: "23 * * * *"
-  push:
-    branches: ["main"]
-    paths:
-      - ".github/triggers/scheduler-now.txt"
   repository_dispatch:
     types: ["portfolio_schedule"]
   workflow_dispatch:
