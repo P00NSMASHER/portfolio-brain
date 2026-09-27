@@ -67,6 +67,32 @@ class OpenAIExecutorTests(unittest.TestCase):
         self.assertEqual(row["actual_usage"]["model_calls"],0)
         self.assertIn("provider-attempt:nonretryable:billing_not_active",row["evidence_refs"])
 
+    def test_success_without_usage_charges_conservative_reservation_and_fails(self):
+        response={"id":"resp_missing_usage","status":"completed","output_text":"looks good"}
+        with patch.dict(os.environ,{"PORTFOLIO_MODEL_API_KEY":"test-key"}):
+            with self.assertRaisesRegex(OpenAIExecutorError,"usage missing") as caught:
+                execute_openai(req(),"hello",load_state(),at="2026-09-25T20:00:00Z",transport=lambda *args:response)
+        exc=caught.exception
+        row=exc.cost_state["reservations"][-1]
+        self.assertEqual(row["status"],"COMMITTED")
+        self.assertEqual(row["actual_usage"],row["estimated_usage"])
+        self.assertEqual(exc.reservation_id,row["reservation_id"])
+
+    def test_incomplete_response_cannot_produce_success_receipt(self):
+        response={"id":"resp_incomplete","status":"incomplete","output_text":"partial","usage":{"input_tokens":10,"output_tokens":1}}
+        with patch.dict(os.environ,{"PORTFOLIO_MODEL_API_KEY":"test-key"}):
+            with self.assertRaisesRegex(OpenAIExecutorError,"did not complete") as caught:
+                execute_openai(req(),"hello",load_state(),at="2026-09-25T20:00:00Z",transport=lambda *args:response)
+        self.assertEqual(caught.exception.cost_state["reservations"][-1]["status"],"COMMITTED")
+
+    def test_unknown_transport_failure_preserves_conservative_charge(self):
+        def broken(*args):raise TimeoutError("unknown provider outcome")
+        with patch.dict(os.environ,{"PORTFOLIO_MODEL_API_KEY":"test-key"}):
+            with self.assertRaisesRegex(OpenAIExecutorError,"outcome unknown") as caught:
+                execute_openai(req(),"hello",load_state(),at="2026-09-25T20:00:00Z",transport=broken)
+        row=caught.exception.cost_state["reservations"][-1]
+        self.assertEqual(row["actual_usage"],row["estimated_usage"])
+
 
     def test_temporary_slow_down_429_is_retryable_and_honors_retry_after(self):
         headers=Message();headers["Retry-After"]="7"

@@ -96,6 +96,12 @@ class WorkflowLivenessTests(unittest.TestCase):
             self.assertEqual(row["status"],"HEALTHY_ACTIVE")
             self.assertFalse(row["dispatch_required"])
 
+    def test_successful_run_does_not_prove_governed_work(self):
+        target=load_policy()["targets"][0]
+        row=evaluate_target(target,[run(target["workflow_name"],"2026-09-27T08:50:00Z")],at=AT,failure_retry_minutes=35)
+        self.assertEqual(row["status"],"RECENT_RUN_UNVERIFIED_WORK")
+        self.assertFalse(row["dispatch_required"])
+
     def test_same_name_run_from_another_branch_cannot_mask_overdue_main(self):
         target=load_policy()["targets"][0]
         row=evaluate_target(
@@ -194,7 +200,7 @@ class WorkflowLivenessTests(unittest.TestCase):
           at=AT,policy_data=p,
         )
         runtime=next(x for x in result["targets"] if x["workflow_name"]==runtime_target["workflow_name"])
-        self.assertEqual(result["status"],"HEALTHY")
+        self.assertEqual(result["status"],"BLOCKED_COST_PREFLIGHT")
         self.assertEqual(dispatched,[])
         self.assertEqual(runtime["status"],"BLOCKED_COST_PREFLIGHT")
         self.assertEqual(runtime["cost_gate_status"],"BLOCKED_BUDGET")
