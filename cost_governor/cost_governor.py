@@ -130,6 +130,12 @@ def validate_policy(p: dict[str, Any] | None = None) -> None:
     req(type(p["max_state_records"]) is int and p["max_state_records"] >= 100, "state record ceiling too small")
     req(type(p["recent_decision_limit"]) is int and p["recent_decision_limit"] >= 20, "decision retention too small")
     req(p["global_concurrency_group"] == "portfolio-paid-cost-ledger", "paid cost concurrency group changed")
+    req(
+        isinstance(p["paid_workflow_names"], list)
+        and p["paid_workflow_names"]
+        and len(p["paid_workflow_names"]) == len(set(p["paid_workflow_names"])),
+        "paid workflow cancellation allowlist invalid",
+    )
     # Paid/model/API execution may be enabled, but only under finite checked-in
     # ceilings. Provider/model routing and pre-execution reservations remain
     # independent gates, so budget capacity alone never creates an executable route.
@@ -364,11 +370,12 @@ def preflight(state: dict[str, Any], request: dict[str, Any], *, at: str | None 
         _append_decision(out, d, p)
         return _finish_state(out, at, p), d
 
-    is_killed, kill_reason = killed(p)
-    if is_killed:
-        d = _decision(request, at, "BLOCKED_KILL_SWITCH", ["SPEND_KILL_SWITCH", kill_reason or "kill switch"], None, False)
-        _append_decision(out, d, p)
-        return _finish_state(out, at, p), d
+    if request["resource_kind"] in {"MODEL_CALL", "API_CALL"}:
+        is_killed, kill_reason = killed(p)
+        if is_killed:
+            d = _decision(request, at, "BLOCKED_KILL_SWITCH", ["SPEND_KILL_SWITCH", kill_reason or "kill switch"], None, False)
+            _append_decision(out, d, p)
+            return _finish_state(out, at, p), d
     if request["authority_class"] == "ACT":
         d = _decision(request, at, "BLOCKED_AUTHORITY", ["COST_BUDGET_CANNOT_AUTHORIZE_ACT"], None, False)
         _append_decision(out, d, p)
