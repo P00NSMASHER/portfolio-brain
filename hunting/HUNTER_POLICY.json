@@ -31,7 +31,10 @@
     "minimum_inspections_before_strategy_adjustment": 20,
     "negative_query_suppression_after": 2,
     "verified_outcomes_only_for_value_credit": true,
-    "exploration_floor_fraction": 0.2
+    "exploration_floor_fraction": 0.2,
+    "verified_outcome_strategy_priority": true,
+    "verified_outcome_priority_mode": "ORDER_EXPLOIT_STRATEGIES_BY_VERIFIED_VALUE_OUTCOMES",
+    "unverified_activity_cannot_increase_strategy_priority": true
   },
   "state_persistence": {
     "mode": "GITHUB_ACTIONS_ARTIFACT",
