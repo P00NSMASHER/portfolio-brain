@@ -64,9 +64,11 @@ jobs:
           --public-output dashboard/out/history.json
           --source-commit "${GITHUB_SHA}"
       - name: Validate public command center
+        id: validation
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m dashboard.validate_publication
       - name: Build static command center
+        id: build
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: |
           mkdir -p public
@@ -140,6 +142,21 @@ jobs:
           path: cost_governor/out/
           if-no-files-found: error
           retention-days: 30
+      - name: Summarize command-center execution status
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          {
+            echo "### Command center execution status"
+            echo "- Attempted: yes"
+            echo "- Workload control: ${{ steps.cost.outputs.decision_status }}"
+            echo "- Blocked: ${{ steps.cost.outputs.allowed != 'true' }}"
+            echo "- Block reason: ${{ steps.cost.outputs.reason_codes }}"
+            echo "- Executed build: ${{ steps.build.outcome }}"
+            echo "- Verified publication input: ${{ steps.validation.outcome }}"
+            echo "- Material publish required: ${{ steps.publication_gate.outputs.should_publish }}"
+            echo "- Deployment: ${{ steps.deployment.outcome }}"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Report governed no-publication outcome
         if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
         run: |
