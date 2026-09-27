@@ -63,6 +63,7 @@ def load_state_sources() -> dict[str, Any]:
         "provider":"runtime/PROVIDER_HEALTH_SEED.json",
         "model_feedback":"model_router/MODEL_FEEDBACK_STATE_SEED.json",
         "learning":"learning/LIVE_OBSERVATION_STATE_SEED.json",
+        "hunter_proposals":"hunting/HUNTER_PROPOSAL_STATE_SEED.json",
     }
     for name, ref in seeds.items():
         data["sources"].setdefault(name, {
@@ -111,6 +112,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
     agent_state = load_live_json("agent_heartbeat_state.json","agents/AGENT_HEARTBEAT_STATE_SEED.json")
     state_sources = load_state_sources()
     hunter_state = load_live_json("hunter_state.json","hunting/HUNTER_STATE_SEED.json")
+    hunter_proposal_state = load_live_json("hunter_proposal_state.json","hunting/HUNTER_PROPOSAL_STATE_SEED.json")
+    scheduler_state = load_live_json("scheduler_state.json","scheduler/SCHEDULER_STATE_SEED.json")
     cost_policy = load_json("cost_governor/COST_GOVERNOR_POLICY.json")
     cost_state = load_live_json("cost_state.json","cost_governor/COST_STATE_SEED.json")
     notification_policy = load_json("notifications/NOTIFICATION_POLICY.json")
@@ -372,6 +375,20 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "seen_candidate_count": len(hunter_state["seen_candidate_fingerprints"]),
             "negative_knowledge_count": len(hunter_state["negative_knowledge"]),
         },
+        "hunter_proposals": {
+            "sequence": hunter_proposal_state.get("sequence", 0),
+            "updated_at": hunter_proposal_state.get("updated_at"),
+            "cycle_id": hunter_proposal_state.get("cycle_id"),
+            "cycle_receipt_hash": hunter_proposal_state.get("cycle_receipt_hash"),
+            "authority_class": hunter_proposal_state.get("authority_class", "OBSERVE"),
+            "rights_state": hunter_proposal_state.get("rights_state", "NOT_GRANTED_BY_DISCOVERY"),
+            "proposal_count": len(hunter_proposals),
+            "awaiting_scheduler_count": sum(1 for row in hunter_proposals if row["review_status"]=="AWAITING_SCHEDULER"),
+            "queued_review_count": sum(1 for row in hunter_proposals if row["review_status"]=="REVIEW_QUEUED"),
+            "active_review_count": sum(1 for row in hunter_proposals if row["review_status"]=="REVIEW_ACTIVE"),
+            "completed_review_count": sum(1 for row in hunter_proposals if row["review_status"]=="REVIEW_COMPLETE"),
+            "proposals": hunter_proposals,
+        },
         "learning_loop": {
             "integrity": learning_integrity,
             "state_sequence": learning_observation_state.get("sequence",0),
@@ -448,6 +465,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
                     "agents/AGENT_REGISTRY.json",
                     "agents/AGENT_HEARTBEAT_STATE_SEED.json",
                     "hunting/HUNTER_STATE_SEED.json",
+                    "hunting/HUNTER_PROPOSAL_STATE_SEED.json",
+                    "hunting/proposal_state.py",
                     "cost_governor/COST_GOVERNOR_POLICY.json",
                     "cost_governor/COST_STATE_SEED.json",
                     "notifications/NOTIFICATION_POLICY.json",
