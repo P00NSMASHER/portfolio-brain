@@ -21,12 +21,13 @@ def validate_notifications():
     req(second["emitted_alerts"]==[] and len(second["suppressed_fingerprints"])==1,"duplicate/cooldown suppression failed")
     req(all(r["status"]=="ACTIVE" for r in state["alert_records"]),"current alerts unexpectedly resolved")
     wf=(ROOT/".github/workflows/portfolio-notification-cycle.yml").read_text().lower()
-    for text in ["7 */6 * * *","portfolio-cost-governed-autonomy","cost_governor.workflow_gate preflight","notifications.artifact_state","notifications.notification_engine","notifications.github_sink","portfolio_notification_disabled"]:
+    for text in ["7 */6 * * *","group: portfolio-notification-cycle","cost_governor.workflow_gate preflight","--state cost_governor/cost_state_seed.json","notifications.artifact_state","notifications.notification_engine","notifications.github_sink","portfolio_notification_disabled"]:
         req(text in wf,f"notification workflow missing {text}")
-    for forbidden in ["contents: write","issues: write","pull-requests: write","deployments: write","id-token: write","curl ","webhook","slack","sms","smtp"]:
-        req(forbidden not in wf,f"notification workflow widened capability: {forbidden}")
+    for forbidden in ["portfolio-cost-governed-autonomy","cost_governor.artifact_state","cost_governor.workflow_gate finalize","portfolio-cost-governor-state","portfolio_spend_disabled","contents: write","issues: write","pull-requests: write","deployments: write","id-token: write","curl ","webhook","slack","sms","smtp"]:
+        req(forbidden not in wf,f"notification workflow widened or recoupled capability: {forbidden}")
     cp=load("cost_governor/COST_GOVERNOR_POLICY.json")
-    req("portfolio-notification-cycle" in cp["managed_workflow_names"],"notification workflow missing from cost managed list")
-    req("portfolio-notification-cycle::notify" in cp["workflow_job_ceilings"],"notification workflow lacks cost ceiling")
+    req("portfolio-notification-cycle" in cp["managed_workflow_names"],"notification workflow missing from managed list")
+    req(cp["github_workload_control"]["daily_job_count_quotas_enforced"] is False,"notification workflow job quota unexpectedly enforcing")
+    req(cp["workflow_job_ceilings"]["portfolio-notification-cycle::notify"]["max_minutes_per_job"]<=2,"notification workload timeout widened")
     return {"current_signals":first["signal_count"],"current_emitted":1,"current_active":1,"dedup_suppressed_next_cycle":1,"delivery_channels":2,"authority":"NONE"}
 if __name__=="__main__":print("portfolio-brain Step 22 notifications: PASS",json.dumps(validate_notifications(),sort_keys=True))
