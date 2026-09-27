@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Restore newest sanitized Step 8 runtime-state artifact from GitHub Actions."""
 from __future__ import annotations
-import argparse, json, os, time, urllib.request
+import argparse, io, json, os, time, urllib.request, zipfile
 from urllib.error import HTTPError, URLError
 import shutil
 from pathlib import Path
@@ -9,11 +9,59 @@ from runtime.artifact_http import open_url
 from runtime.artifact_restore import restore_latest_valid_state
 from runtime.artifact_restore import InvalidStateArtifact
 from runtime.provider_health import validate_provider_health
-from runtime.state import validate_state
+from runtime.state import validate_cycle_receipt, validate_state
 
 ROOT=Path(__file__).resolve().parents[1]
 
 class ArtifactRestoreError(RuntimeError): pass
+
+def _single_json_member(archive:zipfile.ZipFile,name:str,*,max_bytes:int)->dict:
+    matches=[info for info in archive.infolist() if info.filename==name and not info.is_dir()]
+    if len(matches)!=1:
+        raise InvalidStateArtifact(f"runtime artifact must contain exactly one {name}")
+    info=matches[0]
+    if info.file_size>max_bytes:
+        raise InvalidStateArtifact(f"runtime artifact {name} exceeds byte budget")
+    try:
+        raw=archive.read(info)
+        if len(raw)!=info.file_size:
+            raise InvalidStateArtifact(f"runtime artifact {name} size mismatch")
+        value=json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError,json.JSONDecodeError,RuntimeError,OSError) as exc:
+        raise InvalidStateArtifact(f"runtime artifact {name} is invalid JSON") from exc
+    if not isinstance(value,dict):
+        raise InvalidStateArtifact(f"runtime artifact {name} must be an object")
+    return value
+
+def validate_runtime_artifact_bundle(raw:bytes,*,max_archive_bytes:int,max_member_bytes:int)->None:
+    if len(raw)>max_archive_bytes:
+        raise InvalidStateArtifact("runtime artifact archive exceeds byte budget")
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            state=_single_json_member(archive,"runtime_state.json",max_bytes=max_member_bytes)
+            receipt=_single_json_member(archive,"cycle_receipt.json",max_bytes=max_member_bytes)
+    except zipfile.BadZipFile as exc:
+        raise InvalidStateArtifact("runtime artifact is not a readable zip archive") from exc
+    validate_state(state)
+    validate_cycle_receipt(receipt,allow_disabled=True)
+    if receipt["status"]=="PASS":
+        if not state["recent_cycles"]:
+            raise InvalidStateArtifact("runtime artifact PASS receipt has no durable cycle history")
+        last=state["recent_cycles"][-1]
+        expected={
+          "cycle_id":receipt["cycle_id"],
+          "mode":receipt["mode"],
+          "finished_at":receipt["finished_at"],
+          "status":"PASS",
+          "receipt_hash":receipt["receipt_hash"],
+        }
+        if last!=expected:
+            raise InvalidStateArtifact("runtime artifact state/receipt binding mismatch")
+        if state["last_cycle_id"]!=receipt["cycle_id"] or state["updated_at"]!=receipt["finished_at"]:
+            raise InvalidStateArtifact("runtime artifact latest-cycle projection mismatch")
+    else:
+        if receipt["cycle_id"]!="disabled":
+            raise InvalidStateArtifact("runtime disabled artifact receipt identity mismatch")
 
 def policy():
     return json.loads((ROOT/"runtime"/"RUNTIME_POLICY.json").read_text())
@@ -91,7 +139,13 @@ def restore(*, output: Path, metadata_output: Path | None = None,
     archive_cache:dict[str,bytes]={}
     def download(url:str)->bytes:
         if url not in archive_cache:
-            archive_cache[url]=http.bytes(url)
+            raw=http.bytes(url)
+            validate_runtime_artifact_bundle(
+              raw,
+              max_archive_bytes=budgets["max_output_bytes"],
+              max_member_bytes=budgets["max_output_bytes"],
+            )
+            archive_cache[url]=raw
         return archive_cache[url]
     status=restore_latest_valid_state(
         data,current_run=current_run,expected_head_branch=os.environ.get("GITHUB_REF_NAME"),
