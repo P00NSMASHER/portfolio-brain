@@ -2,7 +2,7 @@ import copy
 import unittest
 
 from hunting.autonomous_hunter import load_seed_state, run_cycle
-from hunting.proposal_state import HunterProposalStateError, build_proposal_state, normalize_state, validate_state
+from hunting.proposal_state import HunterProposalStateError, backlog_summary, build_proposal_state, normalize_state, validate_state
 
 
 class BroadHighProvider:
@@ -74,6 +74,22 @@ class HunterProposalStateTests(unittest.TestCase):
                 first_origins[proposal_id]["first_hunter_sequence"],
             )
         validate_state(state2)
+
+    def test_backlog_summary_distinguishes_carried_and_latest_cycle_proposals(self):
+        hunter=load_seed_state()
+        hunter,r1=run_cycle(hunter,BroadHighProvider(1),at="2026-09-27T06:30:00Z")
+        state1=build_proposal_state(hunter,r1)
+        hunter,r2=run_cycle(hunter,BroadHighProvider(101),at="2026-09-27T12:30:00Z")
+        state2=build_proposal_state(hunter,r2,prior_state=state1)
+        summary=backlog_summary(state2)
+        current_ids={p["proposal_id"] for p in r2["experiment_proposals"]}
+        self.assertEqual(summary["backlog_proposals"],len(state2["proposals"]))
+        self.assertEqual(summary["carried_forward_proposals"],len(state2["proposals"])-len(current_ids))
+        self.assertEqual(summary["originated_latest_cycle"],len(current_ids))
+        self.assertGreaterEqual(summary["distinct_origin_cycles"],2)
+        self.assertEqual(summary["capacity_remaining"],summary["capacity"]-summary["backlog_proposals"])
+        self.assertEqual(summary["authority_class"],"OBSERVE")
+        self.assertEqual(summary["rights_state"],"NOT_GRANTED_BY_DISCOVERY")
 
     def test_legacy_single_cycle_artifact_is_migrated_without_inventing_provenance(self):
         hunter,receipt=run_cycle(load_seed_state(),BroadHighProvider(),at="2026-09-27T06:30:00Z")
