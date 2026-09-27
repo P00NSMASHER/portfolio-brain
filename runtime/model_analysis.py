@@ -94,10 +94,13 @@ def _allocation_summary():
     return {"active_resource_count":s["active_resource_count"],"hold_resource_count":s["hold_resource_count"],"plans":rows}
 
 def _learning_summary():
-    from learning.continuous_learning import rebuild_from_ledger
-    s=rebuild_from_ledger()
+    from learning.continuous_learning import rebuild_from_sources
+    live=ROOT/"learning"/"live"/"learning_observation_state.json"
+    s=rebuild_from_sources(live if live.exists() else None)
     return {
       "source_observation_count":s["source_observation_count"],
+      "live_observation_count":s.get("live_observation_count",0),
+      "source_mode":s.get("source_mode","CHECKED_IN_ONLY"),
       "eligible_record_count":s["eligible_record_count"],
       "policy_effect":s["policy_effect"],"state_hash":s["state_hash"]
     }

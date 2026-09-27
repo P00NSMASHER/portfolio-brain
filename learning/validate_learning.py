@@ -3,7 +3,8 @@
 from __future__ import annotations
 import json
 from pathlib import Path
-from learning.continuous_learning import policy, rebuild_from_ledger
+from learning.continuous_learning import policy, rebuild_from_ledger, rebuild_from_sources
+from learning.live_observations import load_seed_state as load_live_seed, validate_state as validate_live_state
 
 ROOT=Path(__file__).resolve().parents[1]
 class LearningValidationError(ValueError): pass
@@ -36,9 +37,20 @@ def validate_learning():
     rebuilt=rebuild_from_ledger()
     req(ledger["observations"]==[],"Step 10 production ledger must not fabricate historical observations")
     req(rebuilt["source_observation_count"]==0 and rebuilt["eligible_record_count"]==0,"empty production ledger produced learned policy")
+    live_seed=load_live_seed();validate_live_state(live_seed)
+    req(live_seed["sequence"]==0 and live_seed["observations"]==[],"checked-in live learning seed must start empty")
+    req(rebuild_from_sources(None)["source_mode"]=="CHECKED_IN_ONLY","static learner source mode drifted")
     runtime=(ROOT/"runtime/continuous_runtime.py").read_text()
     req("portfolio_learning_state.json" in runtime,"daily runtime does not emit portfolio learning state")
-    req("rebuild_from_ledger" in runtime,"daily runtime not connected to Step 10 learner")
-    return {"pinned_components":len(expected),"domains":len(p["domains"]),"source_observations":0,"eligible_records":0,"policy_effect":"NONE"}
+    req("rebuild_from_sources" in runtime,"daily runtime not connected to durable Step 10 learner")
+    req("learning_observation_state.json" in runtime,"daily runtime does not consume durable learning observations")
+    runtime_workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text()
+    req("python -m learning.artifact_state --output learning/live/learning_observation_state.json" in runtime_workflow,"runtime does not restore durable learning observations")
+    proof_workflow=(ROOT/".github/workflows/model-value-proof.yml").read_text()
+    bootstrap_workflow=(ROOT/".github/workflows/verified-feedback-bootstrap.yml").read_text()
+    for body,label in ((proof_workflow,"model value proof"),(bootstrap_workflow,"verified feedback bootstrap")):
+        req("python -m learning.live_observations" in body,f"{label} does not feed continuous learning")
+        req("name: portfolio-learning-observation-state" in body,f"{label} does not persist continuous learning state")
+    return {"pinned_components":len(expected),"domains":len(p["domains"]),"checked_in_source_observations":0,"live_seed_observations":0,"eligible_records":0,"durable_verified_ingest":True,"policy_effect":"NONE"}
 
 if __name__=="__main__":print("portfolio-brain Step 10 learning: PASS",json.dumps(validate_learning(),sort_keys=True))
