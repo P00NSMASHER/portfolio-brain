@@ -66,6 +66,7 @@ class LiveStateBridgeTests(unittest.TestCase):
             "notifications":self.fake_restorer("notification","2026-09-26T17:00:00Z",105),
             "agents":self.fake_restorer("agent-heartbeat","2026-09-26T17:50:00Z",106),
             "model_feedback":self.fake_restorer("model-feedback","2026-09-26T17:40:00Z",107,sequence=2),
+            "learning":self.fake_restorer("learning-observation","2026-09-26T17:35:00Z",108,sequence=1),
         }
         with tempfile.TemporaryDirectory() as td, patch.dict(bridge.RESTORERS,restorers,clear=True):
             root=Path(td)
@@ -80,6 +81,8 @@ class LiveStateBridgeTests(unittest.TestCase):
         self.assertEqual(receipt["sources"]["agents"]["status"],"LIVE")
         self.assertEqual(receipt["sources"]["model_feedback"]["status"],"LIVE")
         self.assertEqual(receipt["sources"]["model_feedback"]["state_sequence"],2)
+        self.assertEqual(receipt["sources"]["learning"]["status"],"LIVE")
+        self.assertEqual(receipt["sources"]["learning"]["state_sequence"],1)
         self.assertEqual(receipt["sources"]["scheduler"]["source_run_id"],102)
         self.assertEqual(receipt["sources"]["scheduler"]["artifact_created_at"],"2026-09-26T17:20:00Z")
 
@@ -95,6 +98,7 @@ class LiveStateBridgeTests(unittest.TestCase):
             "notifications":self.fake_restorer("notification","2026-09-26T17:00:00Z",105),
             "agents":missing,
             "model_feedback":missing,
+            "learning":missing,
         }
         with tempfile.TemporaryDirectory() as td, patch.dict(bridge.RESTORERS,restorers,clear=True):
             root=Path(td)
@@ -103,8 +107,9 @@ class LiveStateBridgeTests(unittest.TestCase):
         self.assertEqual(receipt["sources"]["agents"]["status"],"FALLBACK")
         self.assertEqual(receipt["sources"]["provider"]["status"],"FALLBACK")
         self.assertEqual(receipt["sources"]["model_feedback"]["status"],"FALLBACK")
+        self.assertEqual(receipt["sources"]["learning"]["status"],"FALLBACK")
         self.assertEqual(set(receipt["health_sources"]),{"runtime","scheduler","hunter","cost","notifications"})
-        self.assertEqual(set(receipt["optional_observability_sources"]),{"agents","provider","model_feedback"})
+        self.assertEqual(set(receipt["optional_observability_sources"]),{"agents","provider","model_feedback","learning"})
 
     def test_pages_workflow_restores_live_state_hourly_before_publish(self):
         workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text()
