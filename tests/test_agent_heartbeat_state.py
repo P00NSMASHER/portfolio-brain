@@ -32,6 +32,33 @@ class AgentHeartbeatStateTests(unittest.TestCase):
         for forbidden in ["password","api_key","private_payload","customer_email"]:
             self.assertNotIn(forbidden,raw)
 
+    def test_health_check_sweep_covers_every_registered_agent(self):
+        state=seed_state()
+        agent_ids=sorted(state["agents"])
+        out=heartbeat(
+            state,
+            agent_ids=agent_ids,
+            activity_kind="HEALTH_CHECK",
+            source_workflow="agent-heartbeat-sweep",
+            source_run_id="health-run-1",
+            at="2026-09-26T23:00:00Z",
+        )
+        validate_state(out)
+        self.assertEqual(len(out["agents"]),10)
+        self.assertTrue(all(row["last_heartbeat_at"]=="2026-09-26T23:00:00Z" for row in out["agents"].values()))
+        self.assertTrue(all(row["last_activity_kind"]=="HEALTH_CHECK" for row in out["agents"].values()))
+        self.assertTrue(all(row["source_workflow"]=="agent-heartbeat-sweep" for row in out["agents"].values()))
+
+    def test_health_check_workflow_is_governed_and_recurring(self):
+        body=(ROOT/".github/workflows/agent-heartbeat-sweep.yml").read_text()
+        self.assertIn('cron: "29 */2 * * *"',body)
+        self.assertIn("--all-registered",body)
+        self.assertIn("--activity-kind HEALTH_CHECK",body)
+        self.assertIn("cost_governor.workflow_gate preflight",body)
+        self.assertIn("cost_governor.workflow_gate finalize",body)
+        self.assertIn("name: portfolio-agent-heartbeat-state",body)
+        self.assertIn("path: agents/out/agent_heartbeat_state.json",body)
+
     def test_operational_workflows_persist_heartbeat_artifacts(self):
         required={
             ".github/workflows/portfolio-autonomous-scheduler.yml":"--selected-work scheduler/out/scheduled_work.json",
