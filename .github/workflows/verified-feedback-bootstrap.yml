@@ -67,6 +67,15 @@ jobs:
             cp model_router/MODEL_FEEDBACK_STATE_SEED.json model_router/live/model_feedback_state.json
           fi
 
+      - name: Restore latest learning observation state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: |
+          mkdir -p learning/live
+          python -m learning.artifact_state --output learning/live/learning_observation_state.json
+          if [ ! -f learning/live/learning_observation_state.json ]; then
+            cp learning/LIVE_OBSERVATION_STATE_SEED.json learning/live/learning_observation_state.json
+          fi
+
       - name: Apply VERIFIED outcome feedback
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: >-
@@ -80,11 +89,25 @@ jobs:
           --model-feedback-state model_router/live/model_feedback_state.json
           --output-dir value_proof/out
 
+      - name: Ingest VERIFIED outcome into continuous learning
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: >-
+          python -m learning.live_observations
+          --state learning/live/learning_observation_state.json
+          --task-contract value_proof/MODEL_TASK_CONTRACT.json
+          --verifier-contract value_proof/VERIFIER_CONTRACT.json
+          --value-outcome value_proof/live/verified-proof/value_outcome.json
+          --feedback-receipt value_proof/out/feedback_loop_receipt.json
+          --builder-provider-receipt value_proof/live/verified-proof/model_provider_receipt.json
+          --verifier-provider-receipt value_proof/live/verified-proof/independent_verifier_provider_receipt.json
+          --output value_proof/out/learning_observation_state.json
+
       - name: Validate learned feedback state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: |
           python -c "import json; from hunting.autonomous_hunter import validate_state; validate_state(json.load(open('value_proof/out/hunter_state.json')))"
           python -c "import json; from model_router.feedback_state import validate_state; validate_state(json.load(open('value_proof/out/model_feedback_state.json')))"
+          python -c "import json; from learning.live_observations import validate_state; validate_state(json.load(open('value_proof/out/learning_observation_state.json')))"
 
       - name: Commit conservative bootstrap job usage
         if: ${{ always() && steps.cost.outputs.allowed == 'true' }}
@@ -120,6 +143,15 @@ jobs:
         with:
           name: portfolio-model-feedback-state
           path: value_proof/out/model_feedback_state.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload learned continuous-learning observations
+        if: ${{ always() && steps.cost.outputs.allowed == 'true' && hashFiles('value_proof/out/learning_observation_state.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-learning-observation-state
+          path: value_proof/out/learning_observation_state.json
           if-no-files-found: error
           retention-days: 30
 
