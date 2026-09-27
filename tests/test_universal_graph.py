@@ -120,6 +120,28 @@ class UniversalGraphTests(unittest.TestCase):
         self.assertTrue(paths[0]["provenance_chain_hash"].startswith("sha256:"))
         self.assertEqual(r["verification_state"],"OBSERVED")
 
+    def test_path_discovery_cannot_reactivate_inactive_identity(self):
+        r=node("GN-REPO-00000001","REPOSITORY","repo",mapping=("NATIVE","REPO"))
+        c=node("GN-CAP-00000001","CAPABILITY","cap",mapping=("NATIVE","CAPABILITY"))
+        p=node("GN-PROJECT-000001","PROJECT","PRJ-000",projects=["PRJ-000"])
+        edges=[
+          edge("GE-EDGE-00000001",r["node_id"],"IMPLEMENTS",c["node_id"]),
+          edge("GE-EDGE-00000002",c["node_id"],"ENABLES",p["node_id"]),
+        ]
+        for status in ["SUPERSEDED","RETIRED","CANONICALIZED","REVERSED"]:
+            poisoned=copy.deepcopy(c)
+            poisoned["status"]=status
+            self.assertEqual(find_paths([r,poisoned,p],edges,r["node_id"],p["node_id"]),[],status)
+
+    def test_path_discovery_requires_active_query_endpoints(self):
+        r=node("GN-REPO-00000001","REPOSITORY","repo",mapping=("NATIVE","REPO"))
+        c=node("GN-CAP-00000001","CAPABILITY","cap",mapping=("NATIVE","CAPABILITY"))
+        relation=edge("GE-EDGE-00000001",r["node_id"],"IMPLEMENTS",c["node_id"])
+        for inactive_index in [0,1]:
+            nodes=copy.deepcopy([r,c])
+            nodes[inactive_index]["status"]="RETIRED"
+            self.assertEqual(find_paths(nodes,[relation],r["node_id"],c["node_id"]),[])
+
     def test_supersession_preserves_temporal_history(self):
         f=node("GN-FINDING-0001","FINDING","finding")
         o=node("GN-OPPORTUNITY-01","OPPORTUNITY","opp")
