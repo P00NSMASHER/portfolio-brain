@@ -189,6 +189,24 @@ def structural_inspection(candidate,inspection,objective):
 def candidate_fingerprint(candidate,revision,objective):
     return digest({"source":"PUBLIC_GITHUB","repository_id":candidate["id"],"revision":revision,"capability_key":objective["capability_key"]})
 
+def classify_candidate(state,fp,structural):
+    disposition="RETAIN"; negative=None
+    if fp in state["seen_candidate_fingerprints"]:
+        disposition="DUPLICATE"; negative="EXACT_REVISION_CAPABILITY_DUPLICATE"
+    elif structural["source_path_count"]==0:
+        disposition="REJECT"; negative="NO_IMPLEMENTATION_PATHS"
+    elif structural["test_path_count"]==0:
+        disposition="REJECT"; negative="NO_TEST_OR_REGRESSION_PATHS"
+    elif structural["keyword_hit_count"]==0:
+        disposition="REJECT"; negative="NO_STRUCTURAL_CAPABILITY_SIGNAL"
+    return disposition,negative,{
+      "reason_code":negative or "STRUCTURAL_GATES_PASSED",
+      "implementation_path_gate":structural["source_path_count"]>0,
+      "test_or_regression_gate":structural["test_path_count"]>0,
+      "structural_capability_signal_gate":structural["keyword_hit_count"]>0,
+      "duplicate_gate":fp in state["seen_candidate_fingerprints"],
+    }
+
 def experiment_proposal(finding):
     seed={"finding_id":finding["finding_id"],"candidate_fingerprint":finding["candidate_fingerprint"],"gap_id":finding["gap_id"]}
     hid="HEXP-"+hashlib.sha256(canon(seed).encode()).hexdigest()[:20].upper()
@@ -298,16 +316,8 @@ def run_cycle(state,provider,*,at=None):
                 fp=candidate_fingerprint(cand,inspection["revision"],obj)
                 core={"objective_id":obj["objective_id"],"fingerprint":fp}
                 fid="HFD-"+hashlib.sha256(canon(core).encode()).hexdigest()[:20].upper()
-                disposition="RETAIN"; negative=None
-                if fp in state["seen_candidate_fingerprints"]:
-                    disposition="DUPLICATE"; negative="EXACT_REVISION_CAPABILITY_DUPLICATE"
-                elif structural["source_path_count"]==0:
-                    disposition="REJECT"; negative="NO_IMPLEMENTATION_PATHS"
-                elif structural["test_path_count"]==0:
-                    disposition="REJECT"; negative="NO_TEST_OR_REGRESSION_PATHS"
-                elif structural["keyword_hit_count"]==0:
-                    disposition="REJECT"; negative="NO_STRUCTURAL_CAPABILITY_SIGNAL"
-                decision_reason=negative or "STRUCTURAL_GATES_PASSED"
+                disposition,negative,classification_trace=classify_candidate(state,fp,structural)
+                decision_reason=classification_trace["reason_code"]
                 finding={
                   "schema_version":"1.0.0","finding_id":fid,"objective_id":obj["objective_id"],"gap_id":obj["gap_id"],
                   "project_ids":obj["project_ids"],"strategy_id":obj["strategy_id"],"candidate_fingerprint":fp,
@@ -319,13 +329,9 @@ def run_cycle(state,provider,*,at=None):
                   "provenance_refs":[f"github:{cand['full_name']}@{inspection['revision']}",f"hunter-objective:{obj['objective_id']}"],
                   "negative_reason":negative,
                   "decision_trace":{
-                    "reason_code":decision_reason,
+                    **classification_trace,
                     "public_source_gate":cand.get("private") is False,
                     "exact_revision_gate":isinstance(inspection.get("revision"),str) and len(inspection.get("revision",""))==40,
-                    "implementation_path_gate":structural["source_path_count"]>0,
-                    "test_or_regression_gate":structural["test_path_count"]>0,
-                    "structural_capability_signal_gate":structural["keyword_hit_count"]>0,
-                    "duplicate_gate":fp in state["seen_candidate_fingerprints"],
                   },
                   "experiment_proposal_id":None
                 }
