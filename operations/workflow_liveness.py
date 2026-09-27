@@ -66,10 +66,10 @@ def validate_policy(p:dict[str,Any])->None:
     req(type(p["max_dispatches_per_cycle"]) is int and 1<=p["max_dispatches_per_cycle"]<=2,"workflow liveness dispatch bound invalid")
     req(type(p["recent_failure_retry_after_minutes"]) is int and 20<=p["recent_failure_retry_after_minutes"]<=120,"workflow liveness failure retry window invalid")
     req(p["authority_class"]=="NONE" and p["dispatch_authority_effect"]=="NONE","workflow liveness authority widened")
-    req(p["hard_stop_behavior"]=="NO_RECOVERY_DISPATCH","workflow liveness hard-stop behavior weakened")
+    req(p["hard_stop_behavior"]=="ALLOW_NONPAID_RECOVERY","workflow liveness paid-stop behavior changed")
     req(isinstance(p["targets"],list) and 1<=len(p["targets"])<=8,"workflow liveness target set invalid")
     names=set();files=set();prior_priority=0
-    governed_jobs=cost_policy()["workflow_job_ceilings"]
+    governed_jobs=cost_policy()["workflow_job_controls"]
     for target in p["targets"]:
         req(set(target)=={
           "workflow_name","workflow_file","cost_workflow_id","cost_job_id",
@@ -83,10 +83,10 @@ def validate_policy(p:dict[str,Any])->None:
         req(type(target["max_start_age_minutes"]) is int and 60<=target["max_start_age_minutes"]<=480,"workflow liveness target age invalid")
         req(type(target["priority"]) is int and target["priority"]>prior_priority,"workflow liveness priorities must be strictly increasing")
         scope=f'{target["cost_workflow_id"]}::{target["cost_job_id"]}'
-        req(scope in governed_jobs,"workflow liveness target cost scope is not governed")
+        req(scope in governed_jobs,"workflow liveness target workload scope is not controlled")
         req(type(target["project_ids"]) is list and target["project_ids"] and len(target["project_ids"])==len(set(target["project_ids"])),"workflow liveness target project scope invalid")
         req(all(isinstance(x,str) and x.startswith("PRJ-") for x in target["project_ids"]),"workflow liveness target project id invalid")
-        req(type(target["estimated_minutes"]) is int and 1<=target["estimated_minutes"]<=governed_jobs[scope]["max_minutes_per_job"],"workflow liveness target estimate invalid")
+        req(type(target["estimated_minutes"]) is int and 1<=target["estimated_minutes"]<=governed_jobs[scope]["max_minutes_per_job"],"workflow liveness target workload estimate invalid")
         req(target["authority_class"] in {"NONE","OBSERVE","EXPERIMENT","MODIFY"},"workflow liveness target authority invalid")
         workflow_path=ROOT/".github"/"workflows"/target["workflow_file"]
         req(workflow_path.exists(),"workflow liveness target file missing")
@@ -94,16 +94,9 @@ def validate_policy(p:dict[str,Any])->None:
         reusable_marker="uses: ./.github/workflows/runtime-worker.yml"
         if reusable_marker in workflow_body:
             workflow_body+="\n"+(ROOT/".github"/"workflows"/"runtime-worker.yml").read_text(encoding="utf-8")
-        job_marker = (f'--job-id {target["cost_job_id"]}' if target["cost_workflow_id"] != "runtime-worker"
-                      else '--job-id "runtime-${RUNTIME_MODE}"')
-        for fragment in (
-          f'--workflow-id {target["cost_workflow_id"]}',
-          job_marker,
-          f'--estimated-minutes {target["estimated_minutes"]}',
-          f'--authority {target["authority_class"]}',
-          *(f'--project-id {project_id}' for project_id in target["project_ids"]),
-        ):
-            req(fragment in workflow_body,"workflow liveness cost preview drifted from target preflight")
+        control=governed_jobs[scope]
+        req(control["event_coalescing"] is True,"workflow liveness target must coalesce duplicate pending events")
+        req(isinstance(control["concurrency_group"],str) and control["concurrency_group"],"workflow liveness target concurrency control missing")
         prior_priority=target["priority"]
     req(isinstance(p["invariants"],list) and len(p["invariants"])>=5,"workflow liveness invariants missing")
 
@@ -197,19 +190,7 @@ def recover_overdue(
 )->dict[str,Any]:
     p=policy_data or load_policy();validate_policy(p)
     at=at or now_iso()
-    if os.environ.get("PORTFOLIO_SPEND_DISABLED","").strip().lower()=="true":
-        return {
-          "schema_version":"1.0.0","status":"BLOCKED_SPEND_KILL_SWITCH","checked_at":at,
-          "hard_stop_reason":"PORTFOLIO_SPEND_DISABLED","dispatches":[],"targets":[],
-          "authority_granted":False,
-        }
-    stop=hard_stop_reason(state,at=at)
-    if stop is not None:
-        return {
-          "schema_version":"1.0.0","status":"BLOCKED_COST_HARD_STOP","checked_at":at,
-          "hard_stop_reason":stop,"dispatches":[],"targets":[],
-          "authority_granted":False,
-        }
+    paid_stop=hard_stop_reason(state,at=at)
     evaluations=[
       evaluate_target(
         target,runs,at=at,
@@ -238,12 +219,12 @@ def recover_overdue(
           at=at,
         )
         simulated_state,preview=preflight(simulated_state,preview_request,at=at)
-        row["cost_gate_status"]=preview["status"]
-        row["cost_gate_reason_codes"]=preview["reason_codes"]
+        row["workload_control_status"]=preview["status"]
+        row["workload_control_reason_codes"]=preview["reason_codes"]
         if preview["status"]!="RESERVED":
-            row["status"]="BLOCKED_COST_PREFLIGHT"
+            row["status"]="BLOCKED_WORKLOAD_PREFLIGHT"
             row["dispatch_required"]=False
-            row["reason"]="TARGET_COST_GATE_BLOCKED"
+            row["reason"]="TARGET_WORKLOAD_CONTROL_BLOCKED"
             continue
         dispatch(row["workflow_file"],p["default_branch"])
         dispatches.append({
@@ -251,15 +232,15 @@ def recover_overdue(
           "workflow_file":row["workflow_file"],
           "reason":row["reason"],
           "prior_run_id":row["latest_run_id"],
-          "cost_gate_status":preview["status"],
+          "workload_control_status":preview["status"],
         })
     return {
       "schema_version":"1.0.0",
       "status":("RECOVERY_DISPATCHED" if dispatches else
-                "BLOCKED_COST_PREFLIGHT" if any(row["status"]=="BLOCKED_COST_PREFLIGHT" for row in evaluations) else
+                "BLOCKED_WORKLOAD_PREFLIGHT" if any(row["status"]=="BLOCKED_WORKLOAD_PREFLIGHT" for row in evaluations) else
                 "RECENT_RUNS_WORK_UNVERIFIED"),
       "checked_at":at,
-      "hard_stop_reason":None,
+      "hard_stop_reason":paid_stop,
       "dispatches":dispatches,
       "targets":evaluations,
       "authority_granted":False,
