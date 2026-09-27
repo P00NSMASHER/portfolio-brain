@@ -17,6 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+from commercial_evidence.state import load_current as load_commercial_observation, project_current as project_commercial_observation
 from dashboard.executive_dashboard import build_dashboard_snapshot
 from dashboard.history_state import load_state as load_history_state, public_history
 from dashboard.operational_telemetry import build_operational_telemetry
@@ -165,20 +166,36 @@ def build_repair_issues(snapshot: dict[str, Any]) -> list[dict[str, str]]:
         add("REVIEW", "Work awaits a human gate", f"{snapshot['portfolio']['blocked_action_count']} blocked items.",
             "dashboard/executive_dashboard.py", "Summarize the exact approval or authority boundary for each item; do not bypass it.")
     commercial=snapshot["commercial_validation"]
-    if commercial["evidence_status"]!="LIVE_VERIFIED":
+    if commercial["evidence_status"]=="STALE_OR_UNAVAILABLE":
         add(
             "REVIEW",
-            "Commercial outcome telemetry is historical-only",
+            "Commercial evidence observation is stale or unavailable",
             (
-                f"FreightRecovery reply/payment counts come from a retired baseline "
-                f"({commercial['source_ref']}); live external evidence feed="
-                f"{commercial['live_external_evidence_feed']}."
+                f"Current sanitized observation age={commercial['observation_age_minutes']} minutes; "
+                f"maximum={commercial['max_observation_age_minutes']} minutes. "
+                "Current reply/payment state therefore fails closed to UNKNOWN."
             ),
-            commercial["source_ref"],
+            commercial["current_source_ref"],
             (
-                "Do not interpret historical zero replies, checkout sessions, or payment intents as current state. "
-                "Design a sanitized, independently attributable evidence intake for current commercial outcomes; "
-                "until then keep current external outcome state UNKNOWN rather than zero."
+                "Refresh the sanitized connector observation without persisting raw private payloads. "
+                "Keep zero counts scoped to the explicit query contract and never infer a definitive external outcome "
+                "without VERIFIED evidence and independent verification."
+            ),
+        )
+    elif commercial["evidence_status"]=="CURRENT_SCOPE_OBSERVED":
+        add(
+            "REVIEW",
+            "Commercial evidence is current but scope-limited",
+            (
+                f"{commercial['threads_observed']} gateway-labeled thread(s) observed under "
+                f"{commercial['query_contract_id']}; human replies in that scope="
+                f"{commercial['threads_with_human_reply']}. Payment state remains UNKNOWN."
+            ),
+            commercial["current_source_ref"],
+            (
+                "Preserve the current scoped Gmail observation and add independently attributable coverage for the "
+                "remaining historical outreach and payment source. Do not broaden the zero-reply result outside the "
+                "recorded coverage scope, and do not convert OBSERVED evidence into a definitive experiment outcome."
             ),
         )
     return sorted(issues, key=lambda row: (0 if row["severity"] == "HIGH" else 1, row["title"]))
@@ -207,6 +224,16 @@ def build_command_center_snapshot() -> dict[str, Any]:
     optimization = load_json("operations/POST_RESTRICTION_OPTIMIZATION_STATUS.json")
     action_policy = load_json("action_engine/ACTION_POLICY.json")
     action_ledger = load_json("action_engine/GMAIL_GATEWAY_LEDGER.json")
+    commercial_observation = load_commercial_observation()
+    commercial_projection_at = (
+        os.getenv("PORTFOLIO_PUBLICATION_GENERATED_AT")
+        or state_sources.get("generated_at")
+        or commercial_observation["captured_at"]
+    )
+    current_commercial = project_commercial_observation(
+        commercial_observation,
+        at=commercial_projection_at,
+    )
     model_registry = load_json("model_router/PROVIDER_REGISTRY.json")
     model_feedback_state = load_live_json("model_feedback_state.json", "model_router/MODEL_FEEDBACK_STATE_SEED.json")
     learning_observation_state = load_live_json("learning_observation_state.json", "learning/LIVE_OBSERVATION_STATE_SEED.json")
@@ -522,15 +549,34 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "controls_retained": optimization["controls_retained"],
         },
         "commercial_validation": {
-            "evidence_status": "HISTORICAL_BASELINE",
-            "source_kind": "RETIRED_STATIC_BASELINE",
-            "source_ref": "operations/VALIDATION_SPRINT_STATE.json",
+            "evidence_status": current_commercial["evidence_status"],
+            "live_external_evidence_feed": current_commercial["live_external_evidence_feed"],
+            "current_source_kind": current_commercial["source_kind"],
+            "current_source_ref": "commercial_evidence/CURRENT_SANITIZED_OBSERVATION.json",
+            "observation_id": current_commercial["observation_id"],
+            "captured_at": current_commercial["captured_at"],
+            "observation_age_minutes": current_commercial["observation_age_minutes"],
+            "max_observation_age_minutes": current_commercial["max_observation_age_minutes"],
+            "fresh": current_commercial["fresh"],
+            "query_contract_id": current_commercial["query_contract_id"],
+            "coverage_scope": current_commercial["coverage_scope"],
+            "current_evidence_state": current_commercial["evidence_state"],
+            "threads_observed": current_commercial["threads_observed"],
+            "threads_truncated": current_commercial["threads_truncated"],
+            "outbound_messages_observed": current_commercial["outbound_messages_observed"],
+            "inbound_messages_observed": current_commercial["inbound_messages_observed"],
+            "threads_with_human_reply": current_commercial["threads_with_human_reply"],
+            "threads_with_auto_response": current_commercial["threads_with_auto_response"],
+            "current_external_reply_state": current_commercial["current_reply_state"],
+            "current_auto_response_state": current_commercial["current_auto_response_state"],
+            "current_external_payment_state": current_commercial["current_payment_state"],
+            "scope_note": current_commercial["scope_note"],
+            "definitive_outcome_recorded": current_commercial["definitive_outcome_recorded"],
+            "historical_source_kind": "RETIRED_STATIC_BASELINE",
+            "historical_source_ref": "operations/VALIDATION_SPRINT_STATE.json",
             "baseline_started_at": sprint["started_at"],
             "baseline_superseded_at": sprint.get("superseded_at"),
             "baseline_retired_at": sprint.get("retired_at"),
-            "live_external_evidence_feed": False,
-            "current_external_reply_state": "UNKNOWN",
-            "current_external_payment_state": "UNKNOWN",
             "historical_freightrecovery_first_contact_threads_sent": commercial["freightrecovery_first_contact_threads_sent"],
             "historical_freightrecovery_human_replies": commercial["freightrecovery_human_replies"],
             "historical_freightrecovery_related_auto_replies_observed": commercial[
@@ -543,8 +589,9 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "followup_to_existing_contacts_allowed": commercial["followup_to_existing_contacts_allowed"],
             "outbound_state": commercial["outbound_state"],
             "interpretation": (
-                "Historical counts are context only. Current human reply, checkout, payment, and verified external "
-                "outcome state remains UNKNOWN unless backed by a current sanitized evidence source."
+                "Current reply evidence is limited to the explicit sanitized Gmail query scope. "
+                "Historical counts remain context only. Payment and definitive external outcome state stay UNKNOWN "
+                "until separately attributable evidence exists."
             ),
         },
         "portfolio": executive["portfolio"],
@@ -2089,16 +2136,22 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       <div class="mobile-records">{agent_cards}</div>
     </div>
     <div class="card">
-      <div class="section-head"><div><h2>Commercial Evidence</h2><p>Historical baseline is separated from current verified state.</p></div>{_badge(commercial["evidence_status"],"warn")}</div>
+      <div class="section-head"><div><h2>Commercial Evidence</h2><p>Current scoped observation is separated from historical baseline.</p></div>{_badge(commercial["evidence_status"],"warn")}</div>
       <table>
         <tbody>
           <tr><td>Current human reply state</td><td class="num">{_e(commercial["current_external_reply_state"])}</td></tr>
+          <tr><td>Current auto-response state</td><td class="num">{_e(commercial["current_auto_response_state"])}</td></tr>
           <tr><td>Current payment/checkout state</td><td class="num">{_e(commercial["current_external_payment_state"])}</td></tr>
-          <tr><td>Live external evidence feed</td><td class="num">{_e(commercial["live_external_evidence_feed"])}</td></tr>
+          <tr><td>Observed gateway threads</td><td class="num">{commercial["threads_observed"]}</td></tr>
+          <tr><td>Human-reply threads in scope</td><td class="num">{commercial["threads_with_human_reply"]}</td></tr>
+          <tr><td>Observation age</td><td class="num">{_e(commercial["observation_age_minutes"])} min</td></tr>
+          <tr><td>Live autonomous evidence feed</td><td class="num">{_e(commercial["live_external_evidence_feed"])}</td></tr>
           <tr><td>Checked-in gateway sent receipts</td><td class="num">{commercial["checked_in_gateway_sent_receipts"]}</td></tr>
         </tbody>
       </table>
-      <div class="section-head" style="margin-top:16px"><div><h2>Retired FreightRecovery Baseline</h2><p>{_e(commercial["source_ref"])} · retired {_e(commercial["baseline_retired_at"] or "unknown")}</p></div>{_badge("HISTORICAL","neutral")}</div>
+      <p><strong>Scope:</strong> <code>{_e(commercial["query_contract_id"])}</code> · {_e(commercial["coverage_scope"])}</p>
+      <p>{_e(commercial["scope_note"])}</p>
+      <div class="section-head" style="margin-top:16px"><div><h2>Retired FreightRecovery Baseline</h2><p>{_e(commercial["historical_source_ref"])} · retired {_e(commercial["baseline_retired_at"] or "unknown")}</p></div>{_badge("HISTORICAL","neutral")}</div>
       <table>
         <tbody>
           <tr><td>Historical first-contact threads</td><td class="num">{commercial["historical_freightrecovery_first_contact_threads_sent"]}</td></tr>

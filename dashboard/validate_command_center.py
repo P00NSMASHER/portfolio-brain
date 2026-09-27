@@ -57,14 +57,23 @@ def validate_command_center() -> dict[str, object]:
     require(snapshot["validation_sprint"]["architecture_change_policy"] == "CONTINUOUS_OPTIMIZATION_NO_SPRINT_FREEZE", "continuous optimization policy drifted")
 
     commercial=snapshot["commercial_validation"]
-    require(commercial["evidence_status"]=="HISTORICAL_BASELINE","retired commercial baseline presented as live evidence")
-    require(commercial["source_kind"]=="RETIRED_STATIC_BASELINE","commercial baseline source kind drifted")
-    require(commercial["source_ref"]=="operations/VALIDATION_SPRINT_STATE.json","commercial baseline provenance drifted")
-    require(commercial["live_external_evidence_feed"] is False,"command center invented live commercial evidence feed")
-    require(commercial["current_external_reply_state"]=="UNKNOWN","historical reply count presented as current")
-    require(commercial["current_external_payment_state"]=="UNKNOWN","historical payment count presented as current")
-    require(commercial["baseline_retired_at"] is not None,"commercial historical baseline missing retirement timestamp")
+    require(commercial["evidence_status"] in {"CURRENT_SCOPE_OBSERVED","STALE_OR_UNAVAILABLE"},"commercial current evidence status invalid")
+    require(commercial["current_source_kind"]=="CHATGPT_GMAIL_CONNECTOR_SANITIZED_OBSERVATION","commercial current source kind drifted")
+    require(commercial["current_source_ref"]=="commercial_evidence/CURRENT_SANITIZED_OBSERVATION.json","commercial current source provenance drifted")
+    require(commercial["historical_source_kind"]=="RETIRED_STATIC_BASELINE","commercial historical source kind drifted")
+    require(commercial["historical_source_ref"]=="operations/VALIDATION_SPRINT_STATE.json","commercial historical provenance drifted")
+    require(commercial["live_external_evidence_feed"] is False,"command center invented autonomous commercial evidence feed")
+    require(commercial["current_external_payment_state"]=="UNKNOWN","Gmail-only observation invented payment state")
+    require(commercial["definitive_outcome_recorded"] is False,"OBSERVED commercial evidence invented definitive outcome")
+    require(commercial["threads_truncated"]==0,"current commercial observation is truncated")
     require(commercial["checked_in_gateway_sent_receipts"]<=commercial["checked_in_gateway_execution_receipts"],"commercial gateway receipt accounting invalid")
+    if commercial["evidence_status"]=="CURRENT_SCOPE_OBSERVED":
+        require(commercial["fresh"] is True,"current scoped commercial evidence marked stale")
+        require(commercial["current_evidence_state"]=="OBSERVED","scoped commercial evidence state widened")
+        require(commercial["current_external_reply_state"] in {"OBSERVED_NO_HUMAN_REPLY_IN_SCOPE","OBSERVED_HUMAN_REPLY_IN_SCOPE"},"scoped reply state invalid")
+    else:
+        require(commercial["fresh"] is False,"stale commercial evidence marked fresh")
+        require(commercial["current_external_reply_state"]=="UNKNOWN","stale commercial reply state did not fail closed")
 
     ceiling = snapshot["cost_governor"]["portfolio_ceiling"]
     require(ceiling["cost_usd"] >= 0, "invalid portfolio cost ceiling")
@@ -99,9 +108,10 @@ def validate_command_center() -> dict[str, object]:
     require("Operational Telemetry" in page, "operational telemetry panel missing")
     require("History & Trends" in page, "history/trends panel missing")
     require("Commercial Evidence" in page and "Retired FreightRecovery Baseline" in page, "commercial evidence provenance UI missing")
-    require("Current human reply state</td><td class=\"num\">UNKNOWN" in page, "current commercial reply state is not fail-closed")
+    require("Observed gateway threads" in page and "Human-reply threads in scope" in page, "scoped commercial evidence UI missing")
     require("Current payment/checkout state</td><td class=\"num\">UNKNOWN" in page, "current commercial payment state is not fail-closed")
     require("Live checkout sessions</td>" not in page and "Live payment intents</td>" not in page, "retired baseline still labeled live")
+    require("GMAIL_LABEL_PORTFOLIOBRAIN_SENT_AFTER_2026_09_25" in page, "commercial coverage scope missing")
     require("Paid Cost Governor" in page, "paid-only cost governor label missing")
     require("GitHub Workload Controls" in page, "separate workload-control panel missing")
     require("Daily GitHub job-start quota</td><td class=\"num\">None" in page, "retired GitHub daily job quota is not explicit")
