@@ -61,7 +61,7 @@
   "verified_feedback_routing": {
     "enabled": true,
     "state_path": "model_router/live/model_feedback_state.json",
-    "minimum_verified_outcomes": 1,
+    "minimum_verified_outcomes": 3,
     "within_required_tier_only": true,
     "preserve_independence_gate": true,
     "ordering": [
@@ -72,6 +72,11 @@
       "model_id"
     ],
     "no_cross_tier_promotion": true,
-    "no_authority_or_evidence_upgrade": true
+    "no_authority_or_evidence_upgrade": true,
+    "maturity_state_labels": {
+      "below_minimum": "WARMUP",
+      "at_or_above_minimum": "MATURE"
+    },
+    "unmatured_feedback_can_override_cost": false
   }
 }
