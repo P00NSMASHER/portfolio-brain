@@ -172,6 +172,18 @@
         "github_runner_minutes": 150
       },
       "max_minutes_per_job": 5
+    },
+    "agent-heartbeat-sweep::heartbeat": {
+      "daily_ceiling": {
+        "cost_usd": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "model_calls": 0,
+        "api_calls": 0,
+        "github_job_starts": 13,
+        "github_runner_minutes": 26
+      },
+      "max_minutes_per_job": 2
     }
   },
   "retry_limits": {
@@ -201,7 +213,8 @@
     "runtime-event-observe",
     "software-factory-candidate",
     "portfolio-notification-cycle",
-    "command-center-pages"
+    "command-center-pages",
+    "agent-heartbeat-sweep"
   ],
   "max_cancellations_per_cycle": 8,
   "invariants": [
@@ -218,6 +231,7 @@
     "Kill switches and hard-stop overages can cancel managed jobs without ChatGPT.",
     "Only sanitized IDs, hashes, numeric usage and evidence references may be persisted while BLK-005 is open.",
     "Hourly command-center publication is cost-governed and shares the global autonomous GitHub-job concurrency/budget boundary.",
-    "Runtime-worker sub-budget may use up to half of the global GitHub job/runner ceiling so push-observation traffic cannot starve scheduled sync/daily reasoning while the global ceiling remains the hard stop."
+    "Runtime-worker sub-budget may use up to half of the global GitHub job/runner ceiling so push-observation traffic cannot starve scheduled sync/daily reasoning while the global ceiling remains the hard stop.",
+    "Agent heartbeat sweep is telemetry-only, cost-governed, emits HEALTH_CHECK evidence for every registered role, and grants no new OBSERVE, MODIFY, EXPERIMENT, or ACT authority."
   ]
 }
