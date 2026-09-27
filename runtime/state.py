@@ -11,6 +11,9 @@ ROOT=Path(__file__).resolve().parents[1]
 class RuntimeStateError(ValueError): pass
 
 SHA=re.compile(r"^[0-9a-f]{40}$")
+HASH=re.compile(r"^sha256:[0-9a-f]{64}$")
+CYCLE_ID=re.compile(r"^cycle-[0-9a-f]{24}$")
+CYCLE_MODES={"observe","sync","daily","weekly"}
 
 def _utc_timestamp(value: Any, field: str)->datetime:
     if not isinstance(value,str) or not value.endswith("Z"):
@@ -26,6 +29,41 @@ def _utc_timestamp(value: Any, field: str)->datetime:
 def canonical_hash(value: Any)->str:
     raw=json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode("utf-8")
     return "sha256:"+hashlib.sha256(raw).hexdigest()
+
+def _validate_cycle_summary(value: Any, index: int)->datetime:
+    fields={"cycle_id","mode","finished_at","status","receipt_hash"}
+    if not isinstance(value,dict) or set(value)!=fields:
+        raise RuntimeStateError(f"recent cycle {index} fields changed")
+    if not isinstance(value["cycle_id"],str) or CYCLE_ID.fullmatch(value["cycle_id"]) is None:
+        raise RuntimeStateError(f"recent cycle {index} id invalid")
+    if value["mode"] not in CYCLE_MODES or value["status"]!="PASS":
+        raise RuntimeStateError(f"recent cycle {index} classification invalid")
+    if not isinstance(value["receipt_hash"],str) or HASH.fullmatch(value["receipt_hash"]) is None:
+        raise RuntimeStateError(f"recent cycle {index} receipt hash invalid")
+    return _utc_timestamp(value["finished_at"],f"recent cycle {index} finished_at")
+
+def _validate_receipt(receipt: Any)->None:
+    fields={"schema_version","cycle_id","mode","started_at","finished_at","status","reason",
+            "observations","api_requests","receipt_hash"}
+    if not isinstance(receipt,dict) or set(receipt)!=fields:
+        raise RuntimeStateError("cycle receipt fields changed")
+    if receipt["schema_version"]!="1.0.0":
+        raise RuntimeStateError("cycle receipt schema mismatch")
+    if not isinstance(receipt["cycle_id"],str) or CYCLE_ID.fullmatch(receipt["cycle_id"]) is None:
+        raise RuntimeStateError("cycle receipt id invalid")
+    if receipt["mode"] not in CYCLE_MODES or receipt["status"]!="PASS" or receipt["reason"] is not None:
+        raise RuntimeStateError("cycle receipt classification invalid")
+    started_at=_utc_timestamp(receipt["started_at"],"cycle started_at")
+    finished_at=_utc_timestamp(receipt["finished_at"],"cycle finished_at")
+    if finished_at < started_at:
+        raise RuntimeStateError("cycle receipt chronology invalid")
+    if not isinstance(receipt["observations"],list):
+        raise RuntimeStateError("cycle receipt observations invalid")
+    if type(receipt["api_requests"]) is not int or receipt["api_requests"]<0:
+        raise RuntimeStateError("cycle receipt API request count invalid")
+    body={key:value for key,value in receipt.items() if key!="receipt_hash"}
+    if receipt["receipt_hash"]!=canonical_hash(body):
+        raise RuntimeStateError("cycle receipt hash mismatch")
 
 def load_json(path: Path)->dict[str,Any]:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -78,11 +116,28 @@ def validate_state(state: dict[str,Any])->None:
             _utc_timestamp(item["observed_at"],f"{rid} observed_at")
     if repos["REPO-006"]["status"]!="BLOCKED_HISTORICAL_ONLY":
         raise RuntimeStateError("REPO-006 must remain blocked historical-only")
-    if not isinstance(state["recent_cycles"],list) or len(state["recent_cycles"])>20:
+    history=state["recent_cycles"]
+    if not isinstance(history,list) or len(history)>20:
         raise RuntimeStateError("recent cycle history invalid")
+    cycle_ids=set();previous=None
+    for index,cycle in enumerate(history):
+        finished_at=_validate_cycle_summary(cycle,index)
+        if cycle["cycle_id"] in cycle_ids:
+            raise RuntimeStateError("recent cycle history contains duplicate id")
+        if previous is not None and finished_at < previous:
+            raise RuntimeStateError("recent cycle history chronology invalid")
+        cycle_ids.add(cycle["cycle_id"]);previous=finished_at
+    if history:
+        if state["last_cycle_id"]!=history[-1]["cycle_id"]:
+            raise RuntimeStateError("last cycle id does not match retained history")
+        if state["updated_at"]!=history[-1]["finished_at"]:
+            raise RuntimeStateError("runtime freshness does not match retained history")
+    elif state["last_cycle_id"] is not None:
+        raise RuntimeStateError("last cycle id requires retained history")
 
 def advance_cycle(state: dict[str,Any], receipt: dict[str,Any])->dict[str,Any]:
     validate_state(state)
+    _validate_receipt(receipt)
     finished_at=_utc_timestamp(receipt.get("finished_at"),"cycle finished_at")
     if finished_at < _utc_timestamp(state["updated_at"],"runtime state updated_at"):
         raise RuntimeStateError("cycle timestamp would roll durable state backward")
