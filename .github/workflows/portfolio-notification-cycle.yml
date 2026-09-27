@@ -12,7 +12,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: portfolio-cost-governed-autonomy
+  group: portfolio-notification-cycle
   cancel-in-progress: false
 
 jobs:
@@ -88,4 +88,4 @@ jobs:
       - name: Report governed no-work outcome
         if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
         run: |
-          echo "::notice title=Portfolio notifications skipped::Cost governor status: ${{ steps.cost.outputs.decision_status }}"
+          echo "::notice title=Portfolio notifications skipped::Workload control status: ${{ steps.cost.outputs.decision_status }}"
