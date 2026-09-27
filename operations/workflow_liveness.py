@@ -3,7 +3,8 @@
 
 This watchdog never performs portfolio work itself. It only requests a normal
 workflow_dispatch for an overdue core workflow; the target workflow must still
-pass its own cost, authority, kill-switch, and concurrency gates.
+pass its own workload, authority, service kill-switch, and concurrency gates.
+Paid-execution workflows are deliberately excluded from this recovery lane.
 """
 from __future__ import annotations
 
@@ -66,7 +67,10 @@ def validate_policy(p:dict[str,Any])->None:
     req(type(p["max_dispatches_per_cycle"]) is int and 1<=p["max_dispatches_per_cycle"]<=2,"workflow liveness dispatch bound invalid")
     req(type(p["recent_failure_retry_after_minutes"]) is int and 20<=p["recent_failure_retry_after_minutes"]<=120,"workflow liveness failure retry window invalid")
     req(p["authority_class"]=="NONE" and p["dispatch_authority_effect"]=="NONE","workflow liveness authority widened")
-    req(p["hard_stop_behavior"]=="NO_RECOVERY_DISPATCH","workflow liveness hard-stop behavior weakened")
+    req(
+        p["hard_stop_behavior"]=="WORKLOAD_RECOVERY_CONTINUES_PAID_TARGETS_EXCLUDED",
+        "workflow liveness hard-stop behavior changed",
+    )
     req(isinstance(p["targets"],list) and 1<=len(p["targets"])<=8,"workflow liveness target set invalid")
     names=set();files=set();prior_priority=0
     governed_jobs=cost_policy()["workflow_job_ceilings"]
@@ -105,6 +109,8 @@ def validate_policy(p:dict[str,Any])->None:
         ):
             req(fragment in workflow_body,"workflow liveness cost preview drifted from target preflight")
         prior_priority=target["priority"]
+    paid_names=set(cost_policy()["paid_execution_workflow_names"])
+    req(names.isdisjoint(paid_names),"workflow liveness may not target paid-execution workflows")
     req(isinstance(p["invariants"],list) and len(p["invariants"])>=5,"workflow liveness invariants missing")
 
 def _matches_target_run(target:dict[str,Any],row:dict[str,Any],*,default_branch:str)->bool:
@@ -197,19 +203,10 @@ def recover_overdue(
 )->dict[str,Any]:
     p=policy_data or load_policy();validate_policy(p)
     at=at or now_iso()
-    if os.environ.get("PORTFOLIO_SPEND_DISABLED","").strip().lower()=="true":
-        return {
-          "schema_version":"1.0.0","status":"BLOCKED_SPEND_KILL_SWITCH","checked_at":at,
-          "hard_stop_reason":"PORTFOLIO_SPEND_DISABLED","dispatches":[],"targets":[],
-          "authority_granted":False,
-        }
+    # A paid-spend hard stop is diagnostic here, not a workload stop. Every
+    # configured recovery target is validated to be outside the paid-execution
+    # workflow set and must still pass its own workload preflight below.
     stop=hard_stop_reason(state,at=at)
-    if stop is not None:
-        return {
-          "schema_version":"1.0.0","status":"BLOCKED_COST_HARD_STOP","checked_at":at,
-          "hard_stop_reason":stop,"dispatches":[],"targets":[],
-          "authority_granted":False,
-        }
     evaluations=[
       evaluate_target(
         target,runs,at=at,
@@ -238,12 +235,12 @@ def recover_overdue(
           at=at,
         )
         simulated_state,preview=preflight(simulated_state,preview_request,at=at)
-        row["cost_gate_status"]=preview["status"]
-        row["cost_gate_reason_codes"]=preview["reason_codes"]
-        if preview["status"]!="RESERVED":
-            row["status"]="BLOCKED_COST_PREFLIGHT"
+        row["workload_gate_status"]=preview["status"]
+        row["workload_gate_reason_codes"]=preview["reason_codes"]
+        if preview["status"]!="WORKLOAD_ADMITTED":
+            row["status"]="BLOCKED_WORKLOAD_PREFLIGHT"
             row["dispatch_required"]=False
-            row["reason"]="TARGET_COST_GATE_BLOCKED"
+            row["reason"]="TARGET_WORKLOAD_GATE_BLOCKED"
             continue
         dispatch(row["workflow_file"],p["default_branch"])
         dispatches.append({
@@ -251,15 +248,15 @@ def recover_overdue(
           "workflow_file":row["workflow_file"],
           "reason":row["reason"],
           "prior_run_id":row["latest_run_id"],
-          "cost_gate_status":preview["status"],
+          "workload_gate_status":preview["status"],
         })
     return {
       "schema_version":"1.0.0",
       "status":("RECOVERY_DISPATCHED" if dispatches else
-                "BLOCKED_COST_PREFLIGHT" if any(row["status"]=="BLOCKED_COST_PREFLIGHT" for row in evaluations) else
+                "BLOCKED_WORKLOAD_PREFLIGHT" if any(row["status"]=="BLOCKED_WORKLOAD_PREFLIGHT" for row in evaluations) else
                 "RECENT_RUNS_WORK_UNVERIFIED"),
       "checked_at":at,
-      "hard_stop_reason":None,
+      "hard_stop_reason":stop,
       "dispatches":dispatches,
       "targets":evaluations,
       "authority_granted":False,
