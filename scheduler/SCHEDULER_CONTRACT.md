@@ -12,12 +12,16 @@ Selection is not a weighted activity score. It first applies authority/resource/
 
 Current evidence may enqueue bounded RESEARCH, HUNT, INTEGRATION, and external-validation preparation work subject to the scheduler's per-agent and per-cycle ceilings. StarBlox and ABVM adult-only external validation is no longer BLOCKED_APPROVAL: those experiments are bounded by the action engine and the adult-only education validation policy. Direct minor contact, child-data collection, production changes, and consequential child-facing changes remain outside the scheduler and action engine.
 
+## Hunter proposal handoff
+
+Quality-gated Hunter proposals are persisted separately from Hunter continuation state and may enter the scheduler only as OBSERVE-class RESEARCH work assigned to the Researcher. The scheduler never treats discovery as reuse permission. The executor re-reads public repository metadata and the exact immutable revision tree before completing the review, records license metadata only as evidence requiring review, and leaves rights as UNKNOWN/NOT GRANTED. It cannot authorize implementation, deployment, copying, or external action.
+
 ## Persistence and duplicate control
 
 Scheduler state is restored from the GitHub Actions artifact portfolio-scheduler-state. QUEUED or ACTIVE fingerprints suppress duplicates. COMPLETE and CANCELLED are terminal dispositions for the same immutable source identity, so both remain suppressed until that source identity changes. A retry therefore requires a materially new source reference and receives a new fingerprint instead of silently recreating unchanged work. If an external lease appears expired, the scheduler does not create overlapping replacement work; the Step 14 agent runtime must reconcile the lease generation first.
 
 ## Activation and authority
 
-The staged workflow runs hourly when promoted to the default branch, plus repository_dispatch/workflow_dispatch. It has contents: read and actions: read only. The scheduler cannot write repositories, open PRs, send messages, move money, trade, deploy, merge, or grant authority.
+The staged workflow runs hourly when promoted to the default branch, plus an isolated on-demand trigger path and repository_dispatch/workflow_dispatch. It has contents: read and actions: read only. The scheduler cannot write repositories, open PRs, send messages, move money, trade, deploy, merge, or grant authority.
 
 The new upstream StarBlox scout workflow was inspected but its direct push-to-main behavior and StarBlox-specific mission are deliberately not inherited into Portfolio Brain scheduling.
