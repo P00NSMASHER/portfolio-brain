@@ -16,6 +16,9 @@ USAGE_FIELDS = (
     "cost_usd","input_tokens","output_tokens","model_calls","api_calls",
     "github_job_starts","github_runner_minutes",
 )
+PRODUCTIVE_ACTIVITY_WINDOW_MINUTES = 180
+STALL_AFTER_MINUTES = 90
+NON_PRODUCTIVE_ACTIVITY_KINDS = {"HEALTH_CHECK"}
 
 
 def load_json(path: str | Path) -> Any:
@@ -82,11 +85,13 @@ def _age_minutes(value: str | None, at: datetime) -> float | None:
     return round(max(0.0,(at-dt).total_seconds()/60),1)
 
 
-def _queue(scheduler: dict[str,Any]) -> dict[str,Any]:
+def _queue(scheduler: dict[str,Any], *, at: datetime) -> dict[str,Any]:
     states=["QUEUED","ACTIVE","COMPLETE","CANCELLED"]
     counts={s:sum(1 for row in scheduler["work_items"] if row["state"]==s) for s in states}
-    items=[]
+    items=[];open_ages=[]
     for row in sorted(scheduler["work_items"],key=lambda x:(x.get("created_at") or "",x["scheduler_work_id"]),reverse=True)[:32]:
+        age=_age_minutes(row.get("created_at"),at)
+        if row["state"] in {"QUEUED","ACTIVE"} and age is not None:open_ages.append(age)
         items.append({
             "work_id":row["scheduler_work_id"],
             "work_type":row["work_type"],
@@ -96,6 +101,7 @@ def _queue(scheduler: dict[str,Any]) -> dict[str,Any]:
             "required_authority":row["required_authority"],
             "consequence":row["consequence"],
             "created_at":row.get("created_at"),
+            "age_minutes":age,
             "lease_generation":row.get("lease_generation"),
             "lease_expires_at":row.get("lease_expires_at"),
             "source_ref":row.get("source_ref"),
@@ -107,31 +113,84 @@ def _queue(scheduler: dict[str,Any]) -> dict[str,Any]:
         "open_total":counts["QUEUED"]+counts["ACTIVE"],
         "terminal_total":counts["COMPLETE"]+counts["CANCELLED"],
         "completed_fingerprint_count":len(scheduler["completed_fingerprints"]),
+        "oldest_open_age_minutes":max(open_ages) if open_ages else None,
+        "stalled_open_count":sum(
+            1 for row in items
+            if row["state"] in {"QUEUED","ACTIVE"}
+            and row["age_minutes"] is not None
+            and row["age_minutes"]>STALL_AFTER_MINUTES
+        ),
         "items":items,
     }
 
 
-def _agents(agent_state: dict[str,Any], *, at: datetime) -> dict[str,Any]:
+def _agents(agent_state: dict[str,Any], scheduler: dict[str,Any], *, at: datetime) -> dict[str,Any]:
+    events_by_agent={}
+    for event in agent_state["recent_events"]:
+        events_by_agent.setdefault(event["agent_id"],[]).append(event)
+
+    open_by_agent={}
+    for work in scheduler["work_items"]:
+        if work["state"] not in {"QUEUED","ACTIVE"}:continue
+        open_by_agent.setdefault(work["assigned_agent_id"],[]).append(work)
+
     rows=[]
     for agent_id,row in sorted(agent_state["agents"].items()):
-        age=_age_minutes(row["last_heartbeat_at"],at)
-        health="NEVER" if age is None else ("LIVE" if age<=180 else ("STALE" if age<=720 else "OFFLINE"))
+        heartbeat_age=_age_minutes(row["last_heartbeat_at"],at)
+        productive=None
+        for event in reversed(events_by_agent.get(agent_id,[])):
+            if event["activity_kind"] not in NON_PRODUCTIVE_ACTIVITY_KINDS:
+                productive=event;break
+        productive_age=_age_minutes(None if productive is None else productive["at"],at)
+        open_work=open_by_agent.get(agent_id,[])
+        open_ages=[_age_minutes(work.get("created_at"),at) for work in open_work]
+        open_ages=[age for age in open_ages if age is not None]
+        oldest_open_age=max(open_ages) if open_ages else None
+
+        if productive_age is not None and productive_age<=PRODUCTIVE_ACTIVITY_WINDOW_MINUTES:
+            health="LIVE"
+        elif open_work and oldest_open_age is not None and oldest_open_age>STALL_AFTER_MINUTES:
+            health="STALLED"
+        elif open_work:
+            health="WARMING_UP"
+        elif heartbeat_age is None:
+            health="NEVER"
+        elif heartbeat_age<=PRODUCTIVE_ACTIVITY_WINDOW_MINUTES:
+            health="IDLE_HEALTHY"
+        elif heartbeat_age<=720:
+            health="STALE"
+        else:
+            health="OFFLINE"
+
+        activity=productive or ({
+            "activity_kind":row["last_activity_kind"],
+            "source_workflow":row["source_workflow"],
+            "source_run_id":row["source_run_id"],
+            "at":row["last_heartbeat_at"],
+        } if row["last_heartbeat_at"] else None)
         rows.append({
             "agent_id":agent_id,
             "role_key":row["role_key"],
             "status":row["status"],
             "heartbeat_health":health,
             "last_heartbeat_at":row["last_heartbeat_at"],
-            "heartbeat_age_minutes":age,
-            "last_activity_kind":row["last_activity_kind"],
-            "source_workflow":row["source_workflow"],
-            "source_run_id":row["source_run_id"],
+            "heartbeat_age_minutes":heartbeat_age,
+            "last_productive_at":None if productive is None else productive["at"],
+            "productive_age_minutes":productive_age,
+            "last_activity_kind":None if activity is None else activity["activity_kind"],
+            "source_workflow":None if activity is None else activity["source_workflow"],
+            "source_run_id":None if activity is None else activity["source_run_id"],
             "recent_work_ids":row["recent_work_ids"],
+            "open_work_count":len(open_work),
+            "oldest_open_work_age_minutes":oldest_open_age,
         })
     return {
         "sequence":agent_state["sequence"],
         "updated_at":agent_state["updated_at"],
         "live":sum(1 for x in rows if x["heartbeat_health"]=="LIVE"),
+        "idle_healthy":sum(1 for x in rows if x["heartbeat_health"]=="IDLE_HEALTHY"),
+        "warming_up":sum(1 for x in rows if x["heartbeat_health"]=="WARMING_UP"),
+        "stalled":sum(1 for x in rows if x["heartbeat_health"]=="STALLED"),
         "stale":sum(1 for x in rows if x["heartbeat_health"]=="STALE"),
         "offline":sum(1 for x in rows if x["heartbeat_health"]=="OFFLINE"),
         "never":sum(1 for x in rows if x["heartbeat_health"]=="NEVER"),
@@ -193,8 +252,8 @@ def build_operational_telemetry(*, at: str | None=None) -> dict[str,Any]:
     action_ledger=load_json("action_engine/GMAIL_GATEWAY_LEDGER.json")
     cost_policy=load_json("cost_governor/COST_GOVERNOR_POLICY.json")
 
-    queue=_queue(scheduler)
-    agent_view=_agents(agents,at=now)
+    queue=_queue(scheduler,at=now)
+    agent_view=_agents(agents,scheduler,at=now)
     accounted=usage_today(cost,at=at)
     actual=actual_usage_today(cost,at=at)
     ceilings=cost_policy["portfolio_ceiling"]
@@ -219,6 +278,10 @@ def build_operational_telemetry(*, at: str | None=None) -> dict[str,Any]:
     for row in scheduler["work_items"]:
         if row["state"]=="CANCELLED":
             failures.append({"kind":"SCHEDULER_CANCELLED","at":row.get("created_at"),"ref":row["scheduler_work_id"],"project_ids":row["project_ids"]})
+        elif row["state"] in {"QUEUED","ACTIVE"}:
+            age=_age_minutes(row.get("created_at"),now)
+            if age is not None and age>STALL_AFTER_MINUTES:
+                failures.append({"kind":"SCHEDULER_STALLED","at":row.get("created_at"),"ref":row["scheduler_work_id"],"project_ids":row["project_ids"]})
     for row in cost["reservations"]:
         if row["status"]=="OVERAGE":
             failures.append({"kind":"COST_OVERAGE","at":row.get("committed_at") or row["created_at"],"ref":row["reservation_id"],"project_ids":row["project_ids"]})

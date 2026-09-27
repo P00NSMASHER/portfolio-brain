@@ -52,6 +52,14 @@ jobs:
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m agents.artifact_state --output agents/live/agent_heartbeat_state.json
 
+      - name: Run deterministic subsystem probes
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: |
+          python -m agents.validate_agents
+          python -m scheduler.validate_scheduler
+          python -m hunting.validate_hunter
+          python -m runtime.validate_runtime
+
       - name: Heartbeat every registered agent
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: >-
