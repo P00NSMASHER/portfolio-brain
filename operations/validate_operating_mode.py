@@ -55,6 +55,31 @@ def workflow_schedule_crons(path):
                 crons.append(cron)
     return crons if found_schedule else None
 
+def workflow_top_level_triggers(path):
+    """Return active keys from the top-level ``on`` mapping.
+
+    The production workflows use block mappings. Parsing only two-space keys
+    keeps comments and nested values from masquerading as active triggers.
+    """
+    triggers=set()
+    in_on=False
+    for raw in Path(path).read_text().splitlines():
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        indent=len(raw)-len(raw.lstrip(" "))
+        value=raw.strip()
+        if indent==0:
+            trigger=re.fullmatch(r"(?:on|'on'|\"on\")\s*:\s*(.*)",value)
+            in_on=trigger is not None
+            if trigger is not None:
+                req(not trigger.group(1),f"workflow triggers must use a block mapping in {path}")
+            continue
+        if in_on and indent==2:
+            match=re.fullmatch(r"([A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(.*)",value)
+            if match:
+                triggers.add(match.group(1))
+    return triggers
+
 def scheduled_workflow_inventory(workflow_dir):
     """Return the canonical scheduled-workflow inventory.
 
@@ -190,6 +215,9 @@ def validate_operating_mode():
     for name in ["hunter-autonomous-cycle","portfolio-autonomous-scheduler","portfolio-notification-cycle","agent-heartbeat-sweep"]:
         body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
         req("portfolio-cost-governed-autonomy" in body and "cost_governor.workflow_gate preflight" in body,f"{name} is not cost governed")
+    for name in ["portfolio-autonomous-scheduler","agent-heartbeat-sweep"]:
+        triggers=workflow_top_level_triggers(ROOT/".github/workflows"/f"{name}.yml")
+        req("push" not in triggers,f"{name} must not fan out on push inside the singleton cost-state concurrency lane")
     worker=(ROOT/".github/workflows/runtime-worker.yml").read_text().lower()
     req("portfolio-cost-governed-autonomy" in worker and "cost_governor.workflow_gate preflight" in worker,"runtime worker is not cost governed")
     for name in neutral_no_work_workflows:

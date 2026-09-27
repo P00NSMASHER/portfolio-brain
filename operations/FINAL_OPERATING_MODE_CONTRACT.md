@@ -14,6 +14,8 @@ On `main`, the approved recurring workflows may self-trigger on their existing s
 
 `runtime-event-observe` reacts to pushes on `main`. The runtime worker and software-factory candidate workflow remain reusable/callable surfaces rather than new schedules.
 
+Scheduler and heartbeat workflows remain scheduled and manually dispatchable, but are not separately push-triggered. All cost-state writers share a singleton concurrency lane; limiting ordinary main-push fan-out prevents GitHub from evicting excess pending runs before any job starts. Foundation CI validates their code and contracts on each relevant push, and their next scheduled or explicit dispatch supplies execution evidence.
+
 ## What does not become autonomous
 
 The release permits only policy-bounded customer email through the action-engine gateway. StarBlox/ABVM validation is adult-stakeholder-only and excludes direct minor contact, child-data collection, production changes, and consequential child-facing changes. Payment/cash movement, live market trading or brokerage execution, deployment, merge authority, secret changes, and unapproved child-facing consequential changes remain human-gated or prohibited.

@@ -1,6 +1,6 @@
 import copy,json,unittest
 from pathlib import Path
-from operations.validate_operating_mode import OperatingModeValidationError,scheduled_workflow_inventory,validate_gmail_gateway_status,validate_operating_mode,validate_reasoning_fallback,workflow_schedule_crons
+from operations.validate_operating_mode import OperatingModeValidationError,scheduled_workflow_inventory,validate_gmail_gateway_status,validate_operating_mode,validate_reasoning_fallback,workflow_schedule_crons,workflow_top_level_triggers
 ROOT=Path(__file__).resolve().parents[1]
 
 class OperatingModeTests(unittest.TestCase):
@@ -53,6 +53,20 @@ class OperatingModeTests(unittest.TestCase):
         actual=scheduled_workflow_inventory(ROOT/".github/workflows")
         expected={name:[entry["cron"]] for name,entry in policy["approved_recurring_workflows"].items()}
         self.assertEqual(actual,expected)
+
+    def test_singleton_cost_state_lane_does_not_fan_out_specialized_push_runs(self):
+        for name in ("portfolio-autonomous-scheduler","agent-heartbeat-sweep"):
+            triggers=workflow_top_level_triggers(ROOT/".github/workflows"/f"{name}.yml")
+            self.assertNotIn("push",triggers,name)
+            self.assertIn("schedule",triggers,name)
+            self.assertIn("workflow_dispatch",triggers,name)
+
+    def test_trigger_parser_ignores_commented_push(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as directory:
+            path=Path(directory)/"scheduled.yml"
+            path.write_text('name: scheduled\non:\n  schedule:\n    - cron: "17 * * * *"\n  # push:\n  workflow_dispatch:\njobs: {}\n')
+            self.assertEqual(workflow_top_level_triggers(path),{"schedule","workflow_dispatch"})
 
     def test_schedule_parser_ignores_comments_and_unrelated_cron_text(self):
         from tempfile import TemporaryDirectory
