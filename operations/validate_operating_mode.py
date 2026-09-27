@@ -208,26 +208,46 @@ def validate_operating_mode():
     req(set(actual)==set(expected),"scheduled workflow inventory differs from approved operating policy")
     for name,cron in expected.items():
         req(actual[name]==[cron],f"{name} cron mismatch")
-    neutral_no_work_workflows=[
-      "runtime-worker","hunter-autonomous-cycle","portfolio-autonomous-scheduler",
-      "portfolio-notification-cycle","command-center-pages","agent-heartbeat-sweep"
-    ]
-    for name in ["hunter-autonomous-cycle","portfolio-autonomous-scheduler","portfolio-notification-cycle","agent-heartbeat-sweep"]:
+    workload=load("workload_control/WORKLOAD_POLICY.json")
+    req(workload["mode"]=="GITHUB_NATIVE_WORKLOAD_CONTROL","workload control mode changed")
+    workload_workflows={
+      "hunter-autonomous-cycle":("hunt","portfolio-hunter-cycle"),
+      "portfolio-autonomous-scheduler":("schedule","portfolio-scheduler"),
+      "portfolio-notification-cycle":("notify","portfolio-notification"),
+      "command-center-pages":("publish","portfolio-reporting-pages"),
+      "agent-heartbeat-sweep":("heartbeat","portfolio-heartbeat"),
+    }
+    for name,(job_id,group) in workload_workflows.items():
         body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
-        req("portfolio-cost-governed-autonomy" in body and "cost_governor.workflow_gate preflight" in body,f"{name} is not cost governed")
+        req("workload_control.workload_gate preflight" in body,f"{name} is not workload controlled")
+        req("cost_governor.workflow_gate" not in body,f"{name} is still coupled to paid cost governance")
+        req(f"group: {group}" in body,f"{name} independent concurrency lane missing")
+        req("steps.workload.outputs.allowed != 'true'" in body,f"{name} lacks blocked-work reporting")
+        req("exit 1" in body,f"{name} can still report green after workload admission blocks")
+        scope=f"{name}::{job_id}"
+        req(scope in workload["services"],f"{name} workload policy entry missing")
+        req(workload["services"][scope]["concurrency_group"]==group,f"{name} workload policy lane drifted")
     for name in ["portfolio-autonomous-scheduler","agent-heartbeat-sweep"]:
         triggers=workflow_top_level_triggers(ROOT/".github/workflows"/f"{name}.yml")
-        req("push" not in triggers,f"{name} must not fan out on push inside the singleton cost-state concurrency lane")
+        req("push" not in triggers,f"{name} must not fan out on push")
+
     worker=(ROOT/".github/workflows/runtime-worker.yml").read_text().lower()
-    req("portfolio-cost-governed-autonomy" in worker and "cost_governor.workflow_gate preflight" in worker,"runtime worker is not cost governed")
-    for name in neutral_no_work_workflows:
-        body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
-        req("steps.cost.outputs.allowed != 'true'" in body,f"{name} lacks governed no-work reporting")
-        req("run: exit 3" not in body,f"{name} turns an expected cost denial into a workflow failure")
+    req("portfolio-cost-governed-autonomy" in worker and "cost_governor.workflow_gate preflight" in worker,
+        "runtime worker lost serialized paid-wrapper governance")
+    req("steps.cost.outputs.allowed != 'true'" in worker and "exit 1" in worker,
+        "runtime worker can still report green after paid-wrapper admission blocks")
+
+    proof=(ROOT/".github/workflows/model-value-proof.yml").read_text().lower()
+    req("portfolio-cost-governed-autonomy" in proof and "cost_governor.workflow_gate preflight" in proof,
+        "model value proof lost paid cost governance")
+    req("steps.cost.outputs.allowed != 'true'" in proof and "exit 1" in proof,
+        "model value proof can still report green after paid admission blocks")
+
     factory=(ROOT/".github/workflows/software-factory-candidate.yml").read_text().lower()
     req("workflow_call" in factory and "schedule:" not in factory,"software factory unexpectedly recurring")
-    req("cost_governor.workflow_gate preflight" in factory,"software factory is not cost governed")
-    req("run: exit 3" in factory,"software factory must fail closed when modification authority is denied")
+    req("workload_control.workload_gate preflight" in factory,"software factory is not workload controlled")
+    req("cost_governor.workflow_gate" not in factory,"software factory is still coupled to paid cost governance")
+    req("run: exit 3" in factory,"software factory must fail closed when workload admission is denied")
     event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text().lower()
     req("push:" in event and 'branches: ["main"]' in event,"main push observer missing")
     req('"operations/command_center_refresh_request.json"' in event,"trigger-only command-center refresh still creates redundant runtime work")
@@ -242,7 +262,9 @@ def validate_operating_mode():
     liveness=load("operations/WORKFLOW_LIVENESS_POLICY.json")
     req(liveness["schema_version"]=="1.0.0" and liveness["liveness_id"]=="portfolio-core-workflow-liveness-v1","workflow liveness policy identity mismatch")
     req(liveness["authority_class"]=="NONE" and liveness["dispatch_authority_effect"]=="NONE","workflow liveness recovery widened authority")
-    req(liveness["hard_stop_behavior"]=="NO_RECOVERY_DISPATCH","workflow liveness recovery can bypass cost hard stop")
+    req(liveness["hard_stop_behavior"]=="NONPAID_RECOVERY_CONTINUES","workflow liveness paid/non-paid separation drifted")
+    req(any(row["admission_domain"]=="WORKLOAD" for row in liveness["targets"]),"workflow liveness lacks non-paid workload recovery")
+    req(any(row["admission_domain"]=="COST_WRAPPER" for row in liveness["targets"]),"workflow liveness lacks paid-wrapper recovery target")
     req(1<=liveness["max_dispatches_per_cycle"]<=2 and 1<=liveness["max_history_pages"]<=5,"workflow liveness recovery bounds invalid")
     recovery_names={row["workflow_name"] for row in liveness["targets"]}
     req(recovery_names<=set(expected),"workflow liveness recovery target is not an approved recurring workflow")
@@ -290,7 +312,8 @@ def validate_operating_mode():
       "approved_recurring_workflows":len(expected),
       "workflow_liveness_recovery_targets":len(liveness["targets"]),
       "workflow_liveness_max_dispatches":liveness["max_dispatches_per_cycle"],
-      "neutral_no_work_workflows":len(neutral_no_work_workflows),
+      "truthful_blocked_workflows":len(workload_workflows)+2,
+      "workload_controlled_services":len(workload["services"]),
       "durable_state_artifacts":len(p["durable_state_artifacts"]),
       "gmail_gateway_account_ref":gmail["account_ref"],
       "gmail_gateway_status":gateway_status["status"],
