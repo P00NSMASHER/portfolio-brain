@@ -4,3 +4,4 @@ hunter-proof=sha256:acc72db61caf877308105e578e0711e34ff19ea5a44e4eb3cf35550a6ae5
 builder=tier2-openai-terra
 verifier=tier3-openai-sol-independent
 goal=verified-technical-research-decision-utility
+retry=2-fix-github-expression-interpolation
