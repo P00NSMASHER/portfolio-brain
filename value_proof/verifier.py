@@ -206,6 +206,28 @@ def make_verification_receipt(*,verifier_contract:dict[str,Any],task_contract:di
     }
     return {**core,"receipt_hash":digest(core)}
 
+def validate_verification_receipt(receipt:dict[str,Any],verifier_contract:dict[str,Any],task_contract:dict[str,Any],deterministic_receipt:dict[str,Any],verifier_provider_receipt:dict[str,Any],verifier_output:dict[str,Any])->None:
+    required={
+      "schema_version","verifier_id","task_id","deterministic_receipt_hash","verifier_route_id",
+      "verifier_tier","verifier_provider_id","verifier_model_id","verifier_independence_group",
+      "verifier_provider_receipt_hash","verifier_invocation_id","verifier_output_hash","status",
+      "value_outcome_claimed","authority_granted","evidence_upgraded","receipt_hash"
+    }
+    req(isinstance(receipt,dict) and set(receipt)==required,"verification receipt fields changed")
+    req(receipt["schema_version"]=="1.0.0","verification receipt schema mismatch")
+    req(receipt["verifier_id"]==verifier_contract["verifier_id"] and receipt["task_id"]==task_contract["task_id"],"verification receipt identity mismatch")
+    req(receipt["deterministic_receipt_hash"]==deterministic_receipt["receipt_hash"],"verification receipt deterministic lineage mismatch")
+    req(receipt["verifier_tier"]==3,"verification receipt tier mismatch")
+    req(receipt["verifier_independence_group"]!=verifier_contract["builder_requirements"]["required_independence_group"],"verification receipt independence collapsed")
+    req(receipt["verifier_provider_receipt_hash"]==verifier_provider_receipt["receipt_hash"],"verification provider receipt hash mismatch")
+    req(receipt["verifier_invocation_id"]==verifier_provider_receipt["invocation_id"],"verification invocation mismatch")
+    req(receipt["verifier_output_hash"]==digest(verifier_output),"verification output hash mismatch")
+    req(receipt["status"] in {"OUTPUT_VERIFIED","OUTPUT_REJECTED"},"verification status invalid")
+    req(receipt["value_outcome_claimed"] is False,"verification receipt cannot self-claim value")
+    req(receipt["authority_granted"] is False and receipt["evidence_upgraded"] is False,"verification receipt widened authority/evidence")
+    body=dict(receipt);given=body.pop("receipt_hash")
+    req(given==digest(body),"verification receipt hash mismatch")
+
 def verify_output(*,task_contract:dict[str,Any],verifier_contract:dict[str,Any],pack:dict[str,Any],builder_output:dict[str,Any],execution_receipt:dict[str,Any],builder_provider_receipt:dict[str,Any],cost_state:dict[str,Any],executor:Callable=execute_openai,at:str|None=None)->tuple[dict[str,Any],dict[str,Any]]:
     deterministic_receipt=deterministic_verify(
       task_contract=task_contract,
@@ -242,6 +264,9 @@ def verify_output(*,task_contract:dict[str,Any],verifier_contract:dict[str,Any],
       route=result["route"],
       provider_receipt=result["receipt"],
       verifier_output=parsed,
+    )
+    validate_verification_receipt(
+      verification_receipt,verifier_contract,task_contract,deterministic_receipt,result["receipt"],parsed
     )
     return next_state,{
       "schema_version":"1.0.0",
