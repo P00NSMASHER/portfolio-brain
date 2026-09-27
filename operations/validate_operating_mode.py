@@ -164,6 +164,7 @@ def validate_operating_mode():
       "portfolio-cost-watchdog":"53 * * * *",
       "portfolio-notification-cycle":"7 */6 * * *",
       "command-center-pages":"37 * * * *",
+      "agent-heartbeat-sweep":"29 */2 * * *",
     }
     req(set(p["approved_recurring_workflows"])==set(expected),"approved recurring workflow set changed")
     workflow_dir=ROOT/".github/workflows"
@@ -173,9 +174,9 @@ def validate_operating_mode():
         req(actual[name]==[cron],f"{name} cron mismatch")
     neutral_no_work_workflows=[
       "runtime-worker","hunter-autonomous-cycle","portfolio-autonomous-scheduler",
-      "portfolio-notification-cycle","command-center-pages"
+      "portfolio-notification-cycle","command-center-pages","agent-heartbeat-sweep"
     ]
-    for name in ["hunter-autonomous-cycle","portfolio-autonomous-scheduler","portfolio-notification-cycle"]:
+    for name in ["hunter-autonomous-cycle","portfolio-autonomous-scheduler","portfolio-notification-cycle","agent-heartbeat-sweep"]:
         body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
         req("portfolio-cost-governed-autonomy" in body and "cost_governor.workflow_gate preflight" in body,f"{name} is not cost governed")
     worker=(ROOT/".github/workflows/runtime-worker.yml").read_text().lower()
@@ -198,7 +199,7 @@ def validate_operating_mode():
     req(p["durable_state_artifacts"]=={
       "runtime":"portfolio-runtime-state","hunter":"portfolio-hunter-state",
       "scheduler":"portfolio-scheduler-state","cost":"portfolio-cost-governor-state",
-      "notifications":"portfolio-notification-state"
+      "notifications":"portfolio-notification-state","agents":"portfolio-agent-heartbeat-state"
     },"durable artifact names changed")
 
     kill_files={
