@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json
 from pathlib import Path
+from hunting.proposal_state import load_seed_state as load_hunter_proposal_seed, validate_state as validate_hunter_proposal_state
 from scheduler.autonomous_scheduler import build_context,load_state,policy,schedule_cycle
 ROOT=Path(__file__).resolve().parents[1]
 class SchedulerValidationError(ValueError):pass
@@ -17,6 +18,13 @@ def validate_scheduler():
     req(p["authority_class"]=="MODIFY" and p["mode"]=="EVIDENCE_GATED_PERSISTENT_QUEUE","scheduler authority/mode changed")
     req(p["work_types"]==["HUNT","EXPERIMENT","REPAIR","TEST","RESEARCH","INTEGRATION","VERIFICATION"],"scheduler work type set changed")
     req(p["max_new_work_per_cycle"]<=8 and p["max_open_work_per_agent"]==2,"scheduler concurrency ceiling invalid")
+    handoff=p["hunter_proposal_handoff"]
+    req(handoff["enabled"] is True,"Hunter proposal handoff disabled")
+    req(handoff["source_state_id"]=="portfolio-hunter-proposal-state","Hunter proposal handoff source identity drifted")
+    req((handoff["work_type"],handoff["agent_id"],handoff["goal_type"],handoff["authority_class"])==("RESEARCH","AGT-RESEARCHER","RESEARCH_EVIDENCE","OBSERVE"),"Hunter proposal handoff widened scheduler authority or role")
+    req(handoff["rights_state"]=="NOT_GRANTED_BY_DISCOVERY","Hunter proposal handoff granted reuse rights")
+    req(handoff["exact_revision_reinspection_required"] is True and handoff["license_metadata_is_not_reuse_authority"] is True,"Hunter proposal evidence safeguards weakened")
+    proposal_seed=load_hunter_proposal_seed();validate_hunter_proposal_state(proposal_seed)
     context=build_context();state,receipt=schedule_cycle(seed,context,at="2026-09-25T20:40:00Z")
     selected=receipt["selected_work"];types={w["work_type"] for w in selected}
     req(3<=len(selected)<=p["max_new_work_per_cycle"] and {"RESEARCH","HUNT","INTEGRATION"}<=types,"unexpected current selected work")
@@ -29,8 +37,10 @@ def validate_scheduler():
     wf=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text().lower()
     for s in ["contents: read","actions: read","23 * * * *","portfolio_scheduler_disabled","actions/upload-artifact@v4","cancel-in-progress: false"]:
         req(s in wf,f"scheduler workflow missing {s}")
+    for s in ["hunting.proposal_artifact_state","hunting/live/hunter_proposal_state.json","portfolio-hunter-proposal-state"]:
+        req(s in wf,f"scheduler Hunter proposal inbox integration missing {s}")
     for forbidden in ["contents: write","pull-requests: write","deployments: write","id-token: write","git push","gh pr","openai","anthropic"]:
         req(forbidden not in wf,f"forbidden scheduler workflow capability: {forbidden}")
     req("git push origin head:main" not in (ROOT/"scheduler/SCHEDULER_CONTRACT.md").read_text().lower(),"upstream direct-main behavior adopted")
-    return {"work_types":7,"selected_current":len(selected),"blocked_approval":0,"queued_agents":len({w["assigned_agent_id"] for w in selected}),"act_work":0,"max_new_per_cycle":p["max_new_work_per_cycle"]}
+    return {"work_types":7,"selected_current":len(selected),"blocked_approval":0,"queued_agents":len({w["assigned_agent_id"] for w in selected}),"act_work":0,"max_new_per_cycle":p["max_new_work_per_cycle"],"hunter_proposal_handoff":"OBSERVE_RESEARCH","hunter_proposal_seed_sequence":proposal_seed["sequence"]}
 if __name__=="__main__":print("portfolio-brain Step 19 scheduler: PASS",json.dumps(validate_scheduler(),sort_keys=True))
