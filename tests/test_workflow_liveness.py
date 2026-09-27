@@ -149,6 +149,27 @@ class WorkflowLivenessTests(unittest.TestCase):
         self.assertEqual(row["reason"],"EXACT_RUN_SUBSTANTIVE_WORK_PROVEN")
         self.assertEqual(row["work_proof_metrics"]["attempted"],3)
 
+    def test_scheduler_idle_receipt_is_verified_only_when_queue_is_empty(self):
+        target=load_policy()["targets"][0]
+        idle=receipt({
+          "schema_version":"1.0.0",
+          "cycle_id":"wexec-idle00000000000000000000",
+          "finished_at":"2026-09-27T08:50:00Z",
+          "attempted_count":0,
+          "completed_count":0,
+          "deferred_count":0,
+          "remaining_queued_count":0,
+          "authority_granted":False,
+        })
+        self.assertEqual(verify_work_proof(target,idle,run_id=80)["status"],"VERIFIED_WORK")
+        blocked=dict(idle)
+        blocked["remaining_queued_count"]=1
+        blocked.pop("receipt_hash")
+        blocked=receipt(blocked)
+        proof=verify_work_proof(target,blocked,run_id=81)
+        self.assertEqual(proof["status"],"INVALID_WORK_PROOF")
+        self.assertEqual(proof["reason"],"SCHEDULER_IDLE_WITH_QUEUED_WORK")
+
     def test_tampered_receipt_never_paints_liveness_green(self):
         target=load_policy()["targets"][0]
         doc=scheduler_proof_doc()
