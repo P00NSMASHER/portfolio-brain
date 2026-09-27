@@ -9,6 +9,7 @@ class Hunter proposal continuation work.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -25,7 +26,7 @@ from scheduler.autonomous_scheduler import (
     schedule_cycle,
     validate_state as validate_scheduler_state,
 )
-from scheduler.work_executor import execute_cycle, hashv
+from scheduler.work_executor import canon, execute_cycle, hashv
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -98,8 +99,8 @@ def _combined_summary(
 )->dict[str,Any]:
     summary={
         "schema_version":"1.0.0",
-        "cycle_id":"wexec-"+__import__("hashlib").sha256(
-            json.dumps([row["execution_id"] for row in receipts],sort_keys=True,separators=(",",":")).encode("utf-8")
+        "cycle_id":"wexec-"+hashlib.sha256(
+            canon([row["execution_id"] for row in receipts]).encode("utf-8")
         ).hexdigest()[:24],
         "finished_at":at,
         "attempted_count":len(receipts),
