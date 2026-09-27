@@ -15,6 +15,10 @@ The checked-in exact-SHA cursor file is the bootstrap baseline. Each successful 
 
 Artifacts are operational continuation state, not truth evidence by themselves. If artifacts expire or are unavailable, the runtime safely resumes from the checked-in baseline and replays only SHA deltas.
 
+Each successful state advance is bound to a canonical cycle receipt. The runtime recomputes the cycle identity from the pre-cycle sequence, exact repository cursors, mode, target, and observed heads; validates the receipt hash before mutation; rejects receipt replay; and stores only monotonic, uniquely identified PASS-cycle summaries.
+
+A restored `portfolio-runtime-state` artifact is accepted only when the same archive also contains a valid `cycle_receipt.json`. For PASS cycles, the restored state's latest history entry, last-cycle ID, freshness timestamp, mode, and receipt hash must exactly match that companion receipt. A tampered state or receipt therefore invalidates the whole candidate artifact and restore falls back to an older validated predecessor.
+
 ## Authority and safety
 
 - GitHub workflow token permissions are `contents: read` and `actions: read`.

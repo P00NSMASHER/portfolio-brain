@@ -29,6 +29,20 @@ def validate_runtime()->dict:
     req(0<=b["retry_limit"]<=2,"retry budget invalid")
     req(p["state_persistence"]["mode"]=="GITHUB_ACTIONS_ARTIFACT","state persistence changed")
     req(p["state_persistence"]["sanitized_only"] is True,"runtime state must remain sanitized")
+    integrity=p["state_integrity"]
+    req(integrity["max_recent_cycles"]==20,"runtime history bound drifted")
+    req(integrity["require_canonical_cycle_receipt_hash"] is True,"runtime receipt hashing disabled")
+    req(integrity["require_cycle_id_state_binding"] is True,"runtime cycle identity no longer bound to state")
+    req(integrity["reject_cycle_replay"] is True,"runtime cycle replay protection disabled")
+    req(integrity["require_monotonic_history"] is True,"runtime history chronology protection disabled")
+    req(integrity["artifact_requires_companion_cycle_receipt"] is True,"runtime artifact companion receipt no longer required")
+    req(integrity["artifact_state_receipt_binding"] is True,"runtime artifact state/receipt binding disabled")
+    state_code=(ROOT/"runtime/state.py").read_text()
+    for token in ["validate_cycle_receipt","cycle_id_for","cycle receipt replay detected","runtime freshness does not match retained history"]:
+        req(token in state_code,f"runtime state integrity implementation missing {token}")
+    artifact_code=(ROOT/"runtime/artifact_state.py").read_text()
+    for token in ["validate_runtime_artifact_bundle","cycle_receipt.json","state/receipt binding mismatch"]:
+        req(token in artifact_code,f"runtime artifact integrity implementation missing {token}")
     req(k["disabled"] is False,"checked-in runtime kill switch unexpectedly active")
 
     names=[
@@ -71,6 +85,7 @@ def validate_runtime()->dict:
         req(isolated in texts[names[1]],f"one-shot governed trigger/workflow is not isolated from event-observe: {isolated}")
     return {"workflows":5,"model_calls":0,"governed_daily_model_calls":1,"governed_weekly_model_calls":1,
             "downstream_writes":0,"external_actions":0,
+            "runtime_receipt_integrity":True,"runtime_artifact_companion_binding":True,
             "max_api_requests":b["max_api_requests_per_cycle"],"max_runtime_seconds":b["max_runtime_seconds"]}
 
 if __name__=="__main__":

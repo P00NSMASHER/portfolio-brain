@@ -3,7 +3,7 @@ from unittest.mock import patch
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from runtime.continuous_runtime import RequestBudget, RuntimePolicyError, run
-from runtime.state import RuntimeStateError, advance_cycle, bootstrap_state, canonical_hash, validate_state
+from runtime.state import RuntimeStateError, advance_cycle, bootstrap_state, canonical_hash, cycle_id_for, validate_state
 from runtime.validate_runtime import validate_runtime
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -36,10 +36,16 @@ def current_heads():
 
 class RuntimeTests(unittest.TestCase):
     def cycle_receipt(self,state,observation,*,finished_at="2026-09-25T18:00:00Z"):
+        observations=[observation]
         receipt={
-            "schema_version":"1.0.0","cycle_id":"cycle-test","mode":"observe",
+            "schema_version":"1.0.0",
+            "cycle_id":cycle_id_for(
+                state,mode="observe",target_repository_id=observation["repository_id"],
+                observations=observations,
+            ),
+            "mode":"observe",
             "started_at":finished_at,"finished_at":finished_at,"status":"PASS","reason":None,
-            "observations":[observation],"api_requests":1,
+            "observations":observations,"api_requests":1,
         }
         receipt["receipt_hash"]=canonical_hash(receipt)
         return receipt
@@ -150,6 +156,77 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeStateError,"timestamp is not bound"):
             advance_cycle(state,self.cycle_receipt(state,observation))
 
+    def test_tampered_cycle_receipt_cannot_mutate_state(self):
+        state=bootstrap_state(now="2026-09-25T17:00:00Z")
+        rid="REPO-001";sha=state["repositories"][rid]["cursor_sha"]
+        observation={
+            "repository_id":rid,"status":"UNCHANGED","source_ref":"main",
+            "prior_sha":sha,"current_sha":sha,"observed_at":"2026-09-25T18:00:00Z",
+        }
+        receipt=self.cycle_receipt(state,observation)
+        receipt["api_requests"]=99
+        with self.assertRaisesRegex(RuntimeStateError,"hash mismatch"):
+            advance_cycle(state,receipt)
+        self.assertEqual(state["sequence"],0)
+
+    def test_cycle_id_must_bind_to_current_runtime_state(self):
+        state=bootstrap_state(now="2026-09-25T17:00:00Z")
+        rid="REPO-001";sha=state["repositories"][rid]["cursor_sha"]
+        observation={
+            "repository_id":rid,"status":"UNCHANGED","source_ref":"main",
+            "prior_sha":sha,"current_sha":sha,"observed_at":"2026-09-25T18:00:00Z",
+        }
+        receipt=self.cycle_receipt(state,observation)
+        receipt["cycle_id"]="cycle-"+"f"*24
+        body={k:v for k,v in receipt.items() if k!="receipt_hash"}
+        receipt["receipt_hash"]=canonical_hash(body)
+        with self.assertRaisesRegex(RuntimeStateError,"not bound to current runtime state"):
+            advance_cycle(state,receipt)
+
+    def test_same_valid_cycle_receipt_cannot_be_replayed(self):
+        state=bootstrap_state(now="2026-09-25T17:00:00Z")
+        rid="REPO-001";sha=state["repositories"][rid]["cursor_sha"]
+        observation={
+            "repository_id":rid,"status":"UNCHANGED","source_ref":"main",
+            "prior_sha":sha,"current_sha":sha,"observed_at":"2026-09-25T18:00:00Z",
+        }
+        receipt=self.cycle_receipt(state,observation)
+        advanced=advance_cycle(state,receipt)
+        with self.assertRaises(RuntimeStateError):
+            advance_cycle(advanced,receipt)
+
+    def test_restored_state_rejects_forged_cycle_history(self):
+        state=bootstrap_state(now="2026-09-25T18:00:00Z")
+        state["sequence"]=1;state["last_cycle_id"]="cycle-"+"1"*24
+        state["recent_cycles"]=[{
+            "cycle_id":state["last_cycle_id"],"mode":"sync","finished_at":state["updated_at"],
+            "status":"PASS","receipt_hash":"sha256:not-a-digest",
+        }]
+        with self.assertRaisesRegex(RuntimeStateError,"receipt hash invalid"):
+            validate_state(state)
+
+    def test_restored_state_rejects_history_identity_mismatch(self):
+        state=bootstrap_state(now="2026-09-25T18:00:00Z")
+        state["sequence"]=1;state["last_cycle_id"]="cycle-"+"2"*24
+        state["recent_cycles"]=[{
+            "cycle_id":"cycle-"+"1"*24,"mode":"sync","finished_at":state["updated_at"],
+            "status":"PASS","receipt_hash":"sha256:"+"2"*64,
+        }]
+        with self.assertRaisesRegex(RuntimeStateError,"last cycle id"):
+            validate_state(state)
+
+    def test_restored_state_rejects_nonmonotonic_cycle_history(self):
+        state=bootstrap_state(now="2026-09-25T18:00:00Z")
+        state["sequence"]=2
+        state["last_cycle_id"]="cycle-"+"2"*24
+        state["recent_cycles"]=[
+          {"cycle_id":"cycle-"+"1"*24,"mode":"sync","finished_at":"2026-09-25T18:00:00Z","status":"PASS","receipt_hash":"sha256:"+"1"*64},
+          {"cycle_id":"cycle-"+"2"*24,"mode":"sync","finished_at":"2026-09-25T17:00:00Z","status":"PASS","receipt_hash":"sha256:"+"2"*64},
+        ]
+        state["updated_at"]="2026-09-25T17:00:00Z"
+        with self.assertRaisesRegex(RuntimeStateError,"chronology"):
+            validate_state(state)
+
     def test_hourly_sync_skips_blocked_and_updates_changed_cursor(self):
         heads=current_heads()
         heads["P00NSMASHER/StarBlox"]="f"*40
@@ -218,13 +295,25 @@ class RuntimeTests(unittest.TestCase):
                     fetch_json=fake,forced_now="2026-09-25T17:00:00Z")
 
     def test_restored_state_advances_sequence(self):
-        state=bootstrap_state(now="2026-09-25T16:00:00Z"); state["sequence"]=9
+        initial=bootstrap_state(now="2026-09-25T16:00:00Z")
+        rid="REPO-001";sha=initial["repositories"][rid]["cursor_sha"]
+        observation={
+            "repository_id":rid,"status":"UNCHANGED","source_ref":"main",
+            "prior_sha":sha,"current_sha":sha,"observed_at":"2026-09-25T16:30:00Z",
+        }
+        state=advance_cycle(initial,self.cycle_receipt(initial,observation,finished_at="2026-09-25T16:30:00Z"))
         fake=FakeGitHub(current_heads())
         with tempfile.TemporaryDirectory() as td:
             path=Path(td)/"state.json"; path.write_text(json.dumps(state))
             run("sync",state_path=path,output_dir=Path(td)/"out",
                 fetch_json=fake,forced_now="2026-09-25T17:00:00Z")
             new=json.loads((Path(td)/"out"/"runtime_state.json").read_text())
-        self.assertEqual(new["sequence"],10)
+        self.assertEqual(new["sequence"],2)
+
+    def test_runtime_sequence_cannot_claim_missing_retained_history(self):
+        state=bootstrap_state(now="2026-09-25T18:00:00Z")
+        state["sequence"]=1
+        with self.assertRaisesRegex(RuntimeStateError,"history length"):
+            validate_state(state)
 
 if __name__=="__main__": unittest.main()
