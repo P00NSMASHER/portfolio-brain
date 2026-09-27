@@ -35,6 +35,11 @@ def validate_command_center() -> dict[str, object]:
     require(snapshot["telemetry"]["authority_class"] == "OBSERVE", "telemetry widened authority")
     require(set(snapshot["telemetry"]["queue"]["counts"]) == {"QUEUED","ACTIVE","COMPLETE","CANCELLED"}, "queue telemetry state vector drifted")
     require(snapshot["telemetry"]["cost"]["utilization"]["cost_usd"]["ceiling"] == snapshot["cost_governor"]["portfolio_ceiling"]["cost_usd"], "cost telemetry ceiling mismatch")
+    require(snapshot["workload_control"]["mode"] == "GITHUB_NATIVE_WORKLOAD_CONTROL", "workload controls missing")
+    require(snapshot["workload_control"]["service_count"] >= 8, "workload service coverage incomplete")
+    truth=snapshot["execution_truth"]
+    require(set(truth) == {"attempted","blocked","executed","verified","scope_note"}, "execution truth vector changed")
+    require(all(type(truth[k]) is int and truth[k] >= 0 for k in ("attempted","blocked","executed","verified")), "execution truth counts invalid")
     require(snapshot["history"]["history_id"] == "portfolio-command-center-public-history-v1", "history payload missing")
     require("momentum_definition" in snapshot["history"], "project momentum definition missing")
     require(snapshot["state_sources"]["bridge_status"] in {"LIVE","STALE","DEGRADED","FALLBACK"}, "invalid live-state bridge status")
