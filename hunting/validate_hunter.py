@@ -99,8 +99,13 @@ def validate_hunter():
     req(controlled["completion_gate"]["min_distinct_strategies"]>=2,"controlled Hunter proof strategy gate too weak")
     req(len({x["strategy_id"] for x in controlled["cases"]})>=2,"controlled Hunter proof lacks strategy diversity")
     wf=(ROOT/".github/workflows/hunter-autonomous-cycle.yml").read_text()
-    for s in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_HUNTER_DISABLED","47 */6 * * *","cancel-in-progress: false","actions/upload-artifact@v4","python -m hunting.calibration --output hunting/out/calibration_report.json"]:
+    for s in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_HUNTER_DISABLED","47 */6 * * *","cancel-in-progress: false","actions/upload-artifact@v4","python -m hunting.calibration --output hunting/out/calibration_report.json",".github/triggers/hunter-autonomous-now.txt"]:
         req(s in wf,f"Hunter workflow missing {s}")
+    req(wf.index("concurrency:")>wf.index("hunt:"),"Hunter cost concurrency must be job-level so cancelled queued jobs remain rerunnable")
+    trigger=(ROOT/".github/triggers/hunter-autonomous-now.txt").read_text()
+    req("authority=OBSERVE" in trigger and "model-calls=0" in trigger,"Hunter on-demand trigger widened authority/cost")
+    runtime_event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
+    req('".github/triggers/hunter-autonomous-now.txt"' in runtime_event and '".github/workflows/hunter-autonomous-cycle.yml"' in runtime_event,"Hunter proof trigger is not isolated from runtime-event churn")
     proof_wf=(ROOT/".github/workflows/hunter-controlled-proof.yml").read_text()
     for s in ["contents: read","actions: read","timeout-minutes: 5","hunting/TRIGGER_CONTROLLED_PROOF","python -m hunting.controlled_proof --output hunting/out/controlled_proof.json","portfolio-hunter-controlled-proof"]:
         req(s in proof_wf,f"controlled Hunter proof workflow missing {s}")
