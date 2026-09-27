@@ -103,7 +103,11 @@
     "retention_days": 30,
     "seed_file": "hunting/HUNTER_PROPOSAL_STATE_SEED.json",
     "sanitized_only": true,
-    "downstream_authority": "OBSERVE"
+    "downstream_authority": "OBSERVE",
+    "max_backlog_proposals": 96,
+    "carry_forward_prior_proposals": true,
+    "origin_metadata_required": true,
+    "compaction_policy": "DROP_OLDEST_LAST_SEEN_ONLY_AFTER_BACKLOG_CAP"
   },
   "inspection_failure_handling": {
     "candidate_disposition": "UNAVAILABLE_NOT_REJECTED",

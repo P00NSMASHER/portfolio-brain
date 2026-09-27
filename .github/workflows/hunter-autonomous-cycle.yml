@@ -49,6 +49,14 @@ jobs:
       - name: Restore latest Hunter state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m hunting.artifact_state --output hunting/live/hunter_state.json
+      - name: Restore latest Hunter proposal backlog
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: |
+          mkdir -p hunting/live
+          python -m hunting.proposal_artifact_state --output hunting/live/hunter_proposal_state.json
+          if [ ! -f hunting/live/hunter_proposal_state.json ]; then
+            cp hunting/HUNTER_PROPOSAL_STATE_SEED.json hunting/live/hunter_proposal_state.json
+          fi
       - name: Restore latest agent heartbeat state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m agents.artifact_state --output agents/live/agent_heartbeat_state.json

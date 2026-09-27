@@ -24,9 +24,21 @@ def proposal_state():
     }
     return {
       "schema_version":"1.0.0","state_id":"portfolio-hunter-proposal-state","sequence":8,
-      "updated_at":"2026-09-27T06:30:00Z","cycle_id":"hunt-test","cycle_receipt_hash":"sha256:"+"2"*64,
+      "updated_at":"2026-09-27T06:30:00Z","cycle_id":"hunt-latest","cycle_receipt_hash":"sha256:"+"2"*64,
       "authority_class":"OBSERVE","rights_state":"NOT_GRANTED_BY_DISCOVERY",
-      "proposals":[proposal],"findings":[finding]
+      "proposals":[proposal],"findings":[finding],
+      "origins":{
+        "HEXP-TEST-INBOX":{
+          "first_cycle_id":"hunt-origin-test",
+          "first_cycle_receipt_hash":"sha256:"+"3"*64,
+          "first_seen_at":"2026-09-27T04:30:00Z",
+          "first_hunter_sequence":4,
+          "last_cycle_id":"hunt-latest",
+          "last_cycle_receipt_hash":"sha256:"+"2"*64,
+          "last_seen_at":"2026-09-27T06:30:00Z",
+          "last_hunter_sequence":8
+        }
+      }
     }
 
 class SchedulerTests(unittest.TestCase):
@@ -48,6 +60,55 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(review["required_authority"],"OBSERVE")
         self.assertIn("rights-state:NOT_GRANTED_BY_DISCOVERY",review["evidence_refs"])
         self.assertIn("github:public/freight-audit@"+"a"*40,review["evidence_refs"])
+        self.assertIn("hunter-origin-cycle:hunt-origin-test",review["evidence_refs"])
+        self.assertIn("hunter-origin-receipt:sha256:"+"3"*64,review["evidence_refs"])
+        self.assertNotIn("hunter-origin-cycle:hunt-latest",review["evidence_refs"])
+
+    def test_proposal_backlog_priority_prefers_rank_then_first_seen_fifo(self):
+        state=proposal_state()
+        high=copy.deepcopy(state["proposals"][0])
+        high["proposal_id"]="HEXP-HIGH-NEW"
+        high["finding_id"]="HFD-HIGH-NEW"
+        high["candidate_rank_score"]=9
+        high["candidate_rank_order"]=1
+        high_finding=copy.deepcopy(state["findings"][0])
+        high_finding["proposal_id"]=high["proposal_id"]
+        high_finding["finding_id"]=high["finding_id"]
+        high_finding["rank_score"]=9
+        high_finding["repository_id"]=124
+        high_finding["repository_full_name"]="public/high-new"
+        high_finding["revision"]="c"*40
+        high_finding["provenance_refs"]=["github:public/high-new@"+"c"*40]
+        same=copy.deepcopy(state["proposals"][0])
+        same["proposal_id"]="HEXP-SAME-NEW"
+        same["finding_id"]="HFD-SAME-NEW"
+        same["candidate_rank_order"]=1
+        same_finding=copy.deepcopy(state["findings"][0])
+        same_finding["proposal_id"]=same["proposal_id"]
+        same_finding["finding_id"]=same["finding_id"]
+        same_finding["repository_id"]=125
+        same_finding["repository_full_name"]="public/same-new"
+        same_finding["revision"]="d"*40
+        same_finding["provenance_refs"]=["github:public/same-new@"+"d"*40]
+        state["proposals"].extend([high,same])
+        state["findings"].extend([high_finding,same_finding])
+        state["origins"][high["proposal_id"]]={
+          "first_cycle_id":"hunt-high","first_cycle_receipt_hash":"sha256:"+"4"*64,
+          "first_seen_at":"2026-09-27T06:00:00Z","first_hunter_sequence":7,
+          "last_cycle_id":"hunt-high","last_cycle_receipt_hash":"sha256:"+"4"*64,
+          "last_seen_at":"2026-09-27T06:00:00Z","last_hunter_sequence":7
+        }
+        state["origins"][same["proposal_id"]]={
+          "first_cycle_id":"hunt-same","first_cycle_receipt_hash":"sha256:"+"5"*64,
+          "first_seen_at":"2026-09-27T05:30:00Z","first_hunter_sequence":6,
+          "last_cycle_id":"hunt-same","last_cycle_receipt_hash":"sha256:"+"5"*64,
+          "last_seen_at":"2026-09-27T05:30:00Z","last_hunter_sequence":6
+        }
+        ctx=build_context(hunter_proposal_state=state)
+        candidates,_=generate_candidates(ctx)
+        reviews={c["source_ref"]:c for c in candidates if c["source_ref"].startswith("HEXP-")}
+        self.assertLess(reviews["HEXP-HIGH-NEW"]["source_rank_order"],reviews["HEXP-TEST-INBOX"]["source_rank_order"])
+        self.assertLess(reviews["HEXP-TEST-INBOX"]["source_rank_order"],reviews["HEXP-SAME-NEW"]["source_rank_order"])
 
     def test_current_cycle_includes_research_hunt_integration_with_bounded_parallelism(self):
         state,receipt=schedule_cycle(load_state(),build_context(),at="2026-09-25T20:40:00Z")

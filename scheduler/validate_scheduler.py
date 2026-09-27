@@ -25,7 +25,10 @@ def validate_scheduler():
     req((handoff["work_type"],handoff["agent_id"],handoff["goal_type"],handoff["authority_class"])==("RESEARCH","AGT-RESEARCHER","RESEARCH_EVIDENCE","OBSERVE"),"Hunter proposal handoff widened scheduler authority or role")
     req(handoff["rights_state"]=="NOT_GRANTED_BY_DISCOVERY","Hunter proposal handoff granted reuse rights")
     req(handoff["exact_revision_reinspection_required"] is True and handoff["license_metadata_is_not_reuse_authority"] is True,"Hunter proposal evidence safeguards weakened")
+    req(handoff["origin_cycle_required"] is True,"Hunter proposal origin-cycle provenance disabled")
+    req(handoff["backlog_priority_mode"]=="RANK_SCORE_DESC_THEN_FIRST_SEEN_FIFO","Hunter proposal backlog priority mode drifted")
     proposal_seed=load_hunter_proposal_seed();validate_hunter_proposal_state(proposal_seed)
+    req(proposal_seed.get("origins")=={},"Hunter proposal seed origin map must be empty")
     proposal_review_seed=load_hunter_proposal_review_seed();validate_hunter_proposal_review_state(proposal_review_seed)
     req(proposal_review_seed["reviews"]==[] and proposal_review_seed["applied_execution_ids"]==[],"Hunter proposal review seed invented review evidence")
     context=build_context();state,receipt=schedule_cycle(seed,context,at="2026-09-25T20:40:00Z")
@@ -63,8 +66,11 @@ def validate_scheduler():
         "inspect_revision",
     ]:
         req(token in executor,f"Hunter proposal evidence-review boundary missing {token}")
+    scheduler_source=(ROOT/"scheduler/autonomous_scheduler.py").read_text()
+    for token in ["hunter-origin-cycle:","hunter-origin-receipt:","hunter-origin-sequence:","hunter-last-seen-sequence:"]:
+        req(token in scheduler_source,f"Hunter proposal scheduler provenance missing {token}")
     for forbidden in ["contents: write","pull-requests: write","deployments: write","id-token: write","git push","gh pr","openai","anthropic"]:
         req(forbidden not in wf,f"forbidden scheduler workflow capability: {forbidden}")
     req("git push origin head:main" not in (ROOT/"scheduler/SCHEDULER_CONTRACT.md").read_text().lower(),"upstream direct-main behavior adopted")
-    return {"work_types":7,"selected_current":len(selected),"blocked_approval":0,"queued_agents":len({w["assigned_agent_id"] for w in selected}),"act_work":0,"max_new_per_cycle":p["max_new_work_per_cycle"],"hunter_proposal_handoff":"OBSERVE_RESEARCH","hunter_proposal_seed_sequence":proposal_seed["sequence"],"hunter_proposal_review_seed_sequence":proposal_review_seed["sequence"]}
+    return {"work_types":7,"selected_current":len(selected),"blocked_approval":0,"queued_agents":len({w["assigned_agent_id"] for w in selected}),"act_work":0,"max_new_per_cycle":p["max_new_work_per_cycle"],"hunter_proposal_handoff":"OBSERVE_RESEARCH","hunter_proposal_backlog_priority":handoff["backlog_priority_mode"],"hunter_proposal_seed_sequence":proposal_seed["sequence"],"hunter_proposal_review_seed_sequence":proposal_review_seed["sequence"]}
 if __name__=="__main__":print("portfolio-brain Step 19 scheduler: PASS",json.dumps(validate_scheduler(),sort_keys=True))
