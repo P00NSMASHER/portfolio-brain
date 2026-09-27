@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from model_router.model_router import prepare_governed_execution
 from cost_governor.cancel_managed_jobs import managed_run_ids
-from cost_governor.workflow_gate import governed_github_attempt
+from cost_governor.workflow_gate import governed_github_attempt, measured_github_usage
 from cost_governor.cost_governor import (
     CostGovernorError,
     cancel_reservation,
@@ -146,6 +146,28 @@ class CostGovernorTests(unittest.TestCase):
         self.assertFalse(decision["authority_granted"])
         self.assertEqual(len(state["reservations"]), 1)
         validate_decision_record(state["recent_decisions"][0])
+
+    def test_successful_github_job_commits_measured_not_reserved_minutes(self):
+        state, decision = preflight(load_state(), github_request(minutes=5), at=AT)
+        row = next(r for r in state["reservations"] if r["reservation_id"] == decision["reservation_id"])
+        actual = measured_github_usage(row, at="2026-09-25T12:01:01Z")
+        self.assertEqual(actual["github_job_starts"],1)
+        self.assertEqual(actual["github_runner_minutes"],2)
+        state, commit = commit_reservation(state,decision["reservation_id"],actual,at="2026-09-25T12:01:01Z")
+        self.assertEqual(commit["status"],"COMMITTED")
+        self.assertEqual(state["reservations"][0]["actual_usage"]["github_runner_minutes"],2)
+
+    def test_subminute_github_job_is_charged_one_runner_minute(self):
+        state, decision = preflight(load_state(),github_request(minutes=5),at=AT)
+        row = next(r for r in state["reservations"] if r["reservation_id"] == decision["reservation_id"])
+        actual = measured_github_usage(row,at="2026-09-25T12:00:01Z")
+        self.assertEqual(actual["github_runner_minutes"],1)
+
+    def test_github_usage_timestamp_rollback_fails_closed(self):
+        state, decision = preflight(load_state(),github_request(minutes=5),at=AT)
+        row = next(r for r in state["reservations"] if r["reservation_id"] == decision["reservation_id"])
+        with self.assertRaisesRegex(CostGovernorError,"finish before reservation"):
+            measured_github_usage(row,at="2026-09-25T11:59:59Z")
 
     def test_cost_decision_history_rejects_hash_tampering(self):
         state, _ = preflight(load_state(), github_request(), at=AT)
