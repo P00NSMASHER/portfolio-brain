@@ -202,6 +202,7 @@ def main() -> None:
     parser.add_argument("--state", default="agents/live/agent_heartbeat_state.json")
     parser.add_argument("--output", default="agents/out/agent_heartbeat_state.json")
     parser.add_argument("--agent-id", action="append", default=[])
+    parser.add_argument("--all-registered", action="store_true")
     parser.add_argument("--selected-work", default=None)
     parser.add_argument("--activity-kind", required=True)
     parser.add_argument("--source-workflow", required=True)
@@ -214,7 +215,8 @@ def main() -> None:
     work_ids: dict[str, list[str]] = {}
     if args.selected_work:
         selected_agents, work_ids = _selected_work(Path(args.selected_work))
-    agent_ids = list(dict.fromkeys([*args.agent_id, *selected_agents]))
+    all_registered = sorted(registry()) if args.all_registered else []
+    agent_ids = list(dict.fromkeys([*all_registered, *args.agent_id, *selected_agents]))
     out = heartbeat(
         state,
         agent_ids=agent_ids,
