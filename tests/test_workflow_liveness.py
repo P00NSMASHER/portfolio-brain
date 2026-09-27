@@ -47,7 +47,7 @@ class WorkflowLivenessTests(unittest.TestCase):
         self.assertLessEqual(p["max_history_pages"],5)
         self.assertEqual(p["authority_class"],"NONE")
         self.assertEqual(p["dispatch_authority_effect"],"NONE")
-        self.assertEqual(p["hard_stop_behavior"],"NO_RECOVERY_DISPATCH")
+        self.assertEqual(p["hard_stop_behavior"],"WORKLOAD_RECOVERY_CONTINUES_PAID_TARGETS_EXCLUDED")
         for target in p["targets"]:
             workflow=(ROOT/".github/workflows"/target["workflow_file"]).read_text()
             self.assertIn("workflow_dispatch:",workflow)
@@ -168,12 +168,11 @@ class WorkflowLivenessTests(unittest.TestCase):
         self.assertEqual(dispatched[1][0],"runtime-hourly-sync.yml")
         self.assertEqual(len(result["dispatches"]),2)
 
-    def test_recovery_does_not_dispatch_target_already_blocked_by_its_cost_scope(self):
+
+    def test_legacy_daily_job_counts_do_not_block_workload_recovery(self):
         p=load_policy()
         state=load_state()
         runtime_target=next(x for x in p["targets"] if x["workflow_name"]=="runtime-hourly-sync")
-        # Fill only the runtime-worker job-start allocation. Other workflows retain
-        # capacity, proving this is a target-specific block rather than a hard stop.
         for i in range(26):
             state["reservations"].append({
               "reservation_id":f"CRES-{i:020X}",
@@ -200,13 +199,11 @@ class WorkflowLivenessTests(unittest.TestCase):
           at=AT,policy_data=p,
         )
         runtime=next(x for x in result["targets"] if x["workflow_name"]==runtime_target["workflow_name"])
-        self.assertEqual(result["status"],"BLOCKED_COST_PREFLIGHT")
-        self.assertEqual(dispatched,[])
-        self.assertEqual(runtime["status"],"BLOCKED_COST_PREFLIGHT")
-        self.assertEqual(runtime["cost_gate_status"],"BLOCKED_BUDGET")
-        self.assertFalse(runtime["dispatch_required"])
+        self.assertEqual(result["status"],"RECOVERY_DISPATCHED")
+        self.assertEqual(dispatched,[("runtime-hourly-sync.yml","main")])
+        self.assertEqual(runtime["workload_gate_status"],"WORKLOAD_ADMITTED")
 
-    def test_spend_kill_switch_blocks_all_recovery_dispatches(self):
+    def test_spend_kill_switch_does_not_block_workload_only_recovery(self):
         dispatched=[]
         with patch.dict(os.environ,{"PORTFOLIO_SPEND_DISABLED":"true"}):
             result=recover_overdue(
@@ -214,10 +211,10 @@ class WorkflowLivenessTests(unittest.TestCase):
               dispatch=lambda workflow,branch:dispatched.append((workflow,branch)),
               at=AT,
             )
-        self.assertEqual(result["status"],"BLOCKED_SPEND_KILL_SWITCH")
-        self.assertEqual(dispatched,[])
+        self.assertEqual(result["status"],"RECOVERY_DISPATCHED")
+        self.assertEqual(len(dispatched),2)
+        self.assertTrue(str(result["hard_stop_reason"]).startswith("KILL_SWITCH:"))
         self.assertFalse(result["authority_granted"])
-
     def test_watchdog_workflow_persists_liveness_receipt_and_keeps_actions_write_only(self):
         workflow=(ROOT/".github/workflows/portfolio-cost-watchdog.yml").read_text()
         self.assertIn("python -m operations.workflow_liveness",workflow)
