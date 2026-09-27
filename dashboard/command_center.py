@@ -697,6 +697,151 @@ def render_html(snapshot: dict[str, Any]) -> str:
         """ for m in momentum_sorted
     )
 
+    queue_cards = "".join(
+        f"""
+        <article class="mobile-record">
+          <div class="mobile-record-head">
+            <div class="mobile-title">
+              <strong>{_e(w["work_type"].replace("_", " ").title())}</strong>
+              <code>{_e(w["work_id"])}</code>
+            </div>
+            {_badge(w["state"], _status_tone(w["state"]))}
+          </div>
+          <div class="mobile-stats mobile-stats-2">
+            <div><span>Agent</span><strong>{_e(w["assigned_agent_id"])}</strong></div>
+            <div><span>Projects</span><strong>{_e(", ".join(w["project_ids"]) or "—")}</strong></div>
+            <div><span>Created</span><strong>{_e(compact_timestamp(w.get("created_at")))}</strong></div>
+            <div><span>Source</span><code>{_e(w.get("source_ref") or "—")}</code></div>
+          </div>
+        </article>
+        """
+        for w in telemetry["queue"]["items"]
+    ) or '<div class="empty mobile-record">No durable scheduler work items.</div>'
+
+    agent_cards = "".join(
+        f"""
+        <article class="mobile-record">
+          <div class="mobile-record-head">
+            <div class="mobile-title"><strong>{_e(a["name"])}</strong><code>{_e(a["agent_id"])}</code></div>
+            {_badge(a["heartbeat_health"], _status_tone(a["heartbeat_health"]))}
+          </div>
+          <div class="mobile-stats mobile-stats-2">
+            <div><span>Heartbeat age</span><strong>{_e(str(a["heartbeat_age_minutes"]) + " min" if a["heartbeat_age_minutes"] is not None else "—")}</strong></div>
+            <div><span>Last activity</span><strong>{_e((a["last_activity_kind"] or "—").replace("_"," "))}</strong></div>
+            <div><span>Autonomy</span><strong>{_e(a["max_autonomy"])}</strong></div>
+            <div><span>Model tier</span><strong>{_e(a["max_model_tier"])}</strong></div>
+          </div>
+          <div class="mobile-meta"><span>Source</span><strong>{_e(a["source_workflow"] or "—")}</strong><code>run {_e(a["source_run_id"] or "—")}</code></div>
+        </article>
+        """
+        for a in snapshot["agents"]
+    )
+
+    strategy_cards = "".join(
+        f"""
+        <article class="mobile-record">
+          <div class="mobile-record-head">
+            <div class="mobile-title mobile-title-wide"><strong>{_e(name.replace("STRAT:","").replace("-"," "))}</strong><code>{_e(name)}</code></div>
+          </div>
+          <div class="mobile-stats mobile-stats-3">
+            <div><span>Cycles</span><strong>{stats["cycles"]}</strong></div>
+            <div><span>Queries</span><strong>{stats["queries"]}</strong></div>
+            <div><span>Candidates</span><strong>{stats["candidates"]}</strong></div>
+            <div><span>Retained</span><strong>{stats["retained"]}</strong></div>
+            <div><span>Verified value</span><strong>{stats["verified_value_outcomes"]}</strong></div>
+          </div>
+        </article>
+        """
+        for name, stats in snapshot["hunter"]["strategy_stats"].items()
+    )
+
+    usage_cards = "".join(
+        f"""
+        <article class="mobile-record compact">
+          <div class="mobile-record-head">
+            <div class="mobile-title"><strong>{_e(label)}</strong></div>
+            {_badge(f'{round(100*telemetry["cost"]["utilization"][key]["fraction"],1)}% used',"neutral")}
+          </div>
+          <div class="mobile-stats mobile-stats-3">
+            <div><span>Actual</span><strong>{_e(telemetry["cost"]["utilization"][key]["actual"])}</strong></div>
+            <div><span>Accounted</span><strong>{_e(telemetry["cost"]["utilization"][key]["used"])}</strong></div>
+            <div><span>Ceiling</span><strong>{_e(telemetry["cost"]["utilization"][key]["ceiling"])}</strong></div>
+          </div>
+        </article>
+        """
+        for key,label in usage_order
+    )
+
+    action_cards = "".join(
+        f"""
+        <article class="mobile-record">
+          <div class="mobile-record-head">
+            <div class="mobile-title"><strong>{_e(project_names.get(a["project_id"], a["project_id"]))}</strong><code>{_e(a["action_id"])}</code></div>
+            {_badge(a["status"], _status_tone(a["status"]))}
+          </div>
+          <div class="mobile-stats mobile-stats-2">
+            <div><span>Type</span><strong>{_e(a["action_type"].replace("_"," "))}</strong></div>
+            <div><span>Sent</span><strong>{_e(compact_timestamp(a["sent_at"]))}</strong></div>
+          </div>
+        </article>
+        """
+        for a in telemetry["actions"]["recent"][:10]
+    ) or '<div class="empty mobile-record">No sanitized action receipts.</div>'
+
+    failure_cards = "".join(
+        f"""
+        <article class="mobile-record">
+          <div class="mobile-record-head">
+            <div class="mobile-title"><strong>{_e(f["kind"].replace("_"," "))}</strong><code>{_e(f.get("ref") or "—")}</code></div>
+            {_badge("FAILURE","bad")}
+          </div>
+          <div class="mobile-stats mobile-stats-2">
+            <div><span>Projects</span><strong>{_e(", ".join(f.get("project_ids") or []) or "—")}</strong></div>
+            <div><span>Observed</span><strong>{_e(compact_timestamp(f.get("at")))}</strong></div>
+          </div>
+        </article>
+        """
+        for f in telemetry["failures"]["recent"][:10]
+    ) or '<div class="empty mobile-record">No current failure records in durable telemetry.</div>'
+
+    daily_cards = "".join(
+        f"""
+        <article class="mobile-record">
+          <div class="mobile-record-head">
+            <div class="mobile-title"><strong>{_e(d["day"])}</strong></div>
+            {_badge(f'USD {_e(d["cost_usd"])}',"neutral")}
+          </div>
+          <div class="mobile-stats mobile-stats-3">
+            <div><span>Completed</span><strong>{d["completed_work"]}</strong></div>
+            <div><span>Model calls</span><strong>{d["model_calls"]}</strong></div>
+            <div><span>Hunter</span><strong>{d["hunter_candidates"]}</strong></div>
+            <div><span>Actions</span><strong>{d["action_executions"]}</strong></div>
+            <div><span>Failures</span><strong>{d["new_failures"]}</strong></div>
+            <div><span>Outcomes</span><strong>{d["verified_external_outcomes"]}</strong></div>
+          </div>
+        </article>
+        """
+        for d in history["daily"]
+    ) or '<div class="empty mobile-record">History will accumulate automatically.</div>'
+
+    momentum_cards = "".join(
+        f"""
+        <article class="mobile-record compact">
+          <div class="mobile-record-head">
+            <div class="mobile-title"><strong>{_e(project_names.get(m["project_id"], m["project_id"]))}</strong><code>{_e(m["project_id"])}</code></div>
+            {_badge(f'{m["open_work"]} open',"neutral")}
+          </div>
+          <div class="mobile-stats mobile-stats-2">
+            <div><span>Completed Δ</span><strong>{m["completed_work_delta"]}</strong></div>
+            <div><span>Actions Δ</span><strong>{m["sent_actions_delta"]}</strong></div>
+            <div><span>Verified Δ</span><strong>{m["verified_outcomes_delta"]}</strong></div>
+            <div><span>Cancelled Δ</span><strong>{m["cancelled_work_delta"]}</strong></div>
+          </div>
+        </article>
+        """
+        for m in momentum_sorted
+    )
+
     last_cycle = telemetry["cycles"]["latest_overall"]
     if last_cycle is None:
         last_cycle_title = "No successful cycle yet"
@@ -1122,6 +1267,58 @@ tbody tr:hover{{background:color-mix(in srgb,var(--blue) 4%,transparent)}}
 .source-mobile-specs span{{display:block;color:var(--muted);font-size:.62rem;text-transform:uppercase;letter-spacing:.05em}}
 .source-mobile-specs strong{{display:block;margin-top:4px;font-size:.8rem;overflow-wrap:anywhere}}
 .source-mobile-time{{margin-top:12px;color:var(--muted);font-size:.72rem}}
+.mobile-records{{display:none}}
+.mobile-record{{
+  min-width:0;
+  border:1px solid var(--line);
+  border-radius:20px;
+  background:var(--surface-soft);
+  padding:16px;
+}}
+.mobile-record.compact{{padding:14px 16px}}
+.mobile-record-head{{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}}
+.mobile-title{{min-width:0;display:grid;gap:5px}}
+.mobile-title strong{{font-size:.98rem;line-height:1.22;letter-spacing:-.02em;overflow-wrap:anywhere}}
+.mobile-title code{{display:block;max-width:100%;font-size:.66rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+.mobile-title-wide strong{{text-transform:capitalize}}
+.mobile-stats{{display:grid;gap:8px;margin-top:14px}}
+.mobile-stats-2{{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.mobile-stats-3{{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.mobile-stats>div{{
+  min-width:0;
+  padding:10px 11px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:color-mix(in srgb,var(--surface-solid) 70%,transparent);
+}}
+.mobile-stats span,.mobile-meta span{{
+  display:block;
+  color:var(--muted);
+  font-size:.59rem;
+  font-weight:680;
+  text-transform:uppercase;
+  letter-spacing:.055em;
+}}
+.mobile-stats strong{{
+  display:block;
+  margin-top:5px;
+  font-size:.82rem;
+  line-height:1.3;
+  overflow-wrap:anywhere;
+  font-variant-numeric:tabular-nums;
+}}
+.mobile-stats code{{display:block;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+.mobile-meta{{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  gap:5px 10px;
+  align-items:baseline;
+  margin-top:12px;
+  padding-top:12px;
+  border-top:1px solid var(--line);
+}}
+.mobile-meta strong{{font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.mobile-meta code{{grid-column:2;font-size:.64rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
 .project-mobile{{display:none}}
 .project-mobile-card{{border:1px solid var(--line);border-radius:22px;background:var(--surface-soft);padding:18px}}
 .project-mobile-top{{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}}
@@ -1172,24 +1369,57 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
   .two{{grid-template-columns:1fr}}
 }}
 @media(max-width:820px){{
-  :root{{--nav-h:52px;--radius-xl:24px}}
-  aside{{padding:0 12px;gap:8px}}
-  .brand{{font-size:.75rem}}
-  .logo{{width:25px;height:25px;border-radius:8px}}
-  main{{width:min(100% - 24px,1480px);padding-bottom:46px}}
-  .topbar{{min-height:390px;display:block;padding:72px 10px 34px}}
+  :root{{--nav-h:96px;--radius-xl:22px}}
+  body{{overflow-x:hidden}}
+  aside{{
+    min-height:var(--nav-h);
+    height:auto;
+    align-content:center;
+    flex-wrap:wrap;
+    gap:7px 10px;
+    padding:8px max(12px,env(safe-area-inset-left)) 8px max(12px,env(safe-area-inset-right));
+  }}
+  .brand{{font-size:.75rem;min-height:30px}}
+  .logo{{width:28px;height:28px;border-radius:9px}}
+  nav{{
+    order:3;
+    flex:0 0 100%;
+    justify-content:flex-start;
+    gap:6px;
+    margin:0;
+    padding:0 8px 1px 0;
+    scroll-padding-inline:2px 22px;
+  }}
+  nav a{{
+    min-height:34px;
+    display:flex;
+    align-items:center;
+    padding:7px 11px;
+    border:1px solid var(--line);
+    background:color-mix(in srgb,var(--surface-solid) 70%,transparent);
+    font-size:.69rem;
+    scroll-snap-align:start;
+  }}
+  main{{
+    width:100%;
+    padding:0 max(12px,env(safe-area-inset-right)) calc(46px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));
+  }}
+  .topbar{{min-height:340px;display:block;padding:52px 6px 30px}}
   h1{{font-size:clamp(3.25rem,16vw,5.6rem)}}
   .hero-lede{{font-size:1.05rem;max-width:92%}}
   .actions{{justify-content:flex-start;margin-top:28px}}
   .kpis{{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}}
   .kpi,.kpi:nth-child(n){{grid-column:span 1;min-height:158px;padding:20px}}
   .kpi .value{{font-size:2.5rem}}
-  .card{{padding:21px;border-radius:24px}}
+  .card{{padding:18px;border-radius:22px;box-shadow:0 6px 24px rgba(0,0,0,.045)}}
+  .card:hover{{transform:none}}
   .three{{grid-template-columns:1fr}}
   .switches{{grid-template-columns:repeat(2,minmax(0,1fr))}}
   .section-head{{display:block}}
   .section-head>.badge{{margin-top:12px}}
-  .table-wrap{{margin-left:-4px;margin-right:-4px;width:calc(100% + 8px)}}
+  .table-wrap{{margin-left:0;margin-right:0;width:100%;border-radius:17px}}
+  .mobile-hide{{display:none!important}}
+  .mobile-records{{display:grid;gap:10px}}
   .source-desktop{{display:none}}
   .source-mobile{{display:grid;gap:10px}}
   .project-desktop{{display:none}}
@@ -1200,14 +1430,24 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
   .spec-item{{padding:13px 14px}}
   th,td{{padding:12px 11px}}
   .alert-row{{grid-template-columns:1fr;gap:7px}}
-  .search{{margin-top:12px;width:100%}}
+  .search{{margin-top:12px;width:100%;font-size:16px;min-height:44px}}
+  button{{min-height:44px;padding:10px 16px}}
+  .section-head{{margin-bottom:16px}}
+  .section-head p{{font-size:.82rem;line-height:1.42}}
+  h2{{font-size:1.62rem;line-height:1.08}}
+  .badge{{font-size:.62rem;padding:6px 9px}}
+  .source-mobile-specs{{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .project-mobile-badges{{max-width:52%}}
+  .mobile-stats-3{{grid-template-columns:repeat(3,minmax(0,1fr))}}
 }}
+
 @media(max-width:520px){{
-  nav{{gap:0;padding-right:18px}}
-  nav a{{padding:7px 7px;font-size:.68rem}}
+  :root{{--nav-h:94px}}
+  nav{{gap:6px;padding-right:24px}}
+  nav a{{padding:7px 10px;font-size:.68rem}}
   .brand div:last-child{{font-size:0}}
-  .brand div:last-child::after{{content:"Brain";font-size:.72rem}}
-  .topbar{{min-height:350px;padding-top:62px}}
+  .brand div:last-child::after{{content:"Brain";font-size:.76rem}}
+  .topbar{{min-height:320px;padding-top:46px}}
   .eyebrow{{font-size:.66rem}}
   h1{{font-size:clamp(2.9rem,17vw,4.5rem)}}
   .hero-lede{{font-size:.98rem}}
@@ -1216,10 +1456,18 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
   .kpi .label{{font-size:.65rem}}
   .kpi .value{{font-size:2.15rem}}
   .switches{{grid-template-columns:1fr}}
+  .mobile-stats-3{{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .mobile-record{{padding:14px}}
+  .mobile-record-head{{gap:9px}}
+  .mobile-title strong{{font-size:.94rem}}
+  .mobile-stats{{gap:7px;margin-top:12px}}
+  .mobile-stats>div{{padding:9px 10px}}
+  .project-mobile-stats{{gap:6px}}
 }}
+
 </style>
 </head>
-<body data-design="apple-inspired-v4-1">
+<body data-design="apple-inspired-v4-1" data-mobile-optimized="true">
 <div class="shell">
 <aside>
   <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Command Center v4.1</small></div></div>
@@ -1277,26 +1525,30 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       <div class="callout"><strong>Failures</strong><p>{telemetry["failures"]["count"]} durable failure signal(s) currently represented.</p></div>
     </div>
     <div class="section-head" style="margin-top:16px"><div><h2>Durable Work Queue</h2><p>Newest 32 scheduler work records.</p></div>{source_badge("scheduler")}</div>
-    <div class="table-wrap"><table>
+    <div class="table-wrap mobile-hide"><table>
       <thead><tr><th>Work</th><th>State</th><th>Type</th><th>Agent</th><th>Projects</th><th>Created</th></tr></thead>
       <tbody>{queue_rows}</tbody>
     </table></div>
+    <div class="mobile-records">{queue_cards}</div>
   </section>
 
   <section class="grid two" style="margin-bottom:14px">
     <div class="card">
       <div class="section-head"><div><h2>Actual Cost / Capacity Today</h2><p>Actual committed usage is separate from conservative governor accounting.</p></div>{source_badge("cost")}</div>
-      <table><thead><tr><th>Resource</th><th class="num">Actual</th><th class="num">Accounted</th><th class="num">Ceiling</th><th class="num">Utilization</th></tr></thead><tbody>{usage_rows}</tbody></table>
+      <table class="mobile-hide"><thead><tr><th>Resource</th><th class="num">Actual</th><th class="num">Accounted</th><th class="num">Ceiling</th><th class="num">Utilization</th></tr></thead><tbody>{usage_rows}</tbody></table>
+      <div class="mobile-records">{usage_cards}</div>
     </div>
     <div class="card">
       <div class="section-head"><div><h2>Recent External Actions</h2><p>Sanitized action receipts only.</p></div>{_badge(f'{telemetry["actions"]["total_sent"]} total',"neutral")}</div>
-      <div class="table-wrap"><table><thead><tr><th>Action</th><th>Project</th><th>Type</th><th>Status</th><th>Sent</th></tr></thead><tbody>{action_rows}</tbody></table></div>
+      <div class="table-wrap mobile-hide"><table><thead><tr><th>Action</th><th>Project</th><th>Type</th><th>Status</th><th>Sent</th></tr></thead><tbody>{action_rows}</tbody></table></div>
+      <div class="mobile-records">{action_cards}</div>
     </div>
   </section>
 
   <section class="card" style="margin-bottom:14px">
     <div class="section-head"><div><h2>Failure Stream</h2><p>Cancelled scheduler work, cost overages, and active failure-class alerts.</p></div>{_badge(str(telemetry["failures"]["count"]), "bad" if telemetry["failures"]["count"] else "good")}</div>
-    <div class="table-wrap"><table><thead><tr><th>Kind</th><th>Reference</th><th>Projects</th><th>Observed</th></tr></thead><tbody>{failure_rows}</tbody></table></div>
+    <div class="table-wrap mobile-hide"><table><thead><tr><th>Kind</th><th>Reference</th><th>Projects</th><th>Observed</th></tr></thead><tbody>{failure_rows}</tbody></table></div>
+    <div class="mobile-records">{failure_cards}</div>
   </section>
 
   <section class="card" id="trends" style="margin-bottom:14px">
@@ -1304,15 +1556,17 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       <div><h2>History & Trends</h2><p>{history["point_count"]} hourly snapshot point(s). Project momentum is evidence-backed signals, not an opaque score.</p></div>
       {_badge(f'seq {history["sequence"]}',"neutral")}
     </div>
-    <div class="table-wrap"><table>
+    <div class="table-wrap mobile-hide"><table>
       <thead><tr><th>Day</th><th class="num">Completed</th><th class="num">Cost USD</th><th class="num">Model calls</th><th class="num">Hunter candidates</th><th class="num">Actions</th><th class="num">Failures</th><th class="num">Verified outcomes</th></tr></thead>
       <tbody>{daily_rows}</tbody>
     </table></div>
+    <div class="mobile-records">{daily_cards}</div>
     <div class="section-head" style="margin-top:16px"><div><h2>24h Project Momentum Signals</h2><p>{_e(history["momentum_definition"])}</p></div></div>
-    <div class="table-wrap"><table>
+    <div class="table-wrap mobile-hide"><table>
       <thead><tr><th>Project</th><th class="num">Open work</th><th class="num">Completed Δ</th><th class="num">Actions Δ</th><th class="num">Verified Δ</th><th class="num">Cancelled Δ</th></tr></thead>
       <tbody>{momentum_rows}</tbody>
     </table></div>
+    <div class="mobile-records">{momentum_cards}</div>
   </section>
 
   <section class="grid two">
@@ -1348,10 +1602,11 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
   <section class="grid two" style="margin-top:14px">
     <div class="card" id="agents">
       <div class="section-head"><div><h2>Agent Fleet</h2><p>Persistent roles and maximum authorized autonomy · {_e(source_detail("agents"))}</p></div>{source_badge("agents")}</div>
-      <div class="table-wrap"><table>
+      <div class="table-wrap mobile-hide"><table>
         <thead><tr><th>Agent</th><th>Heartbeat</th><th class="num">Age min</th><th>Last activity</th><th>Source</th><th>Max autonomy</th><th class="num">Tier</th></tr></thead>
         <tbody>{agent_rows}</tbody>
       </table></div>
+      <div class="mobile-records">{agent_cards}</div>
     </div>
     <div class="card">
       <div class="section-head"><div><h2>Commercial Validation</h2><p>Sanitized evidence counts only.</p></div>{_badge("NO PRIVATE PAYLOADS","neutral")}</div>
@@ -1371,10 +1626,11 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
   <section class="grid two" style="margin-top:14px">
     <div class="card" id="hunter">
       <div class="section-head"><div><h2>Hunter Intelligence Loop</h2><p>{_e(source_detail("hunter"))}</p></div>{source_badge("hunter")}</div>
-      <div class="table-wrap"><table>
+      <div class="table-wrap mobile-hide"><table>
         <thead><tr><th>Strategy</th><th class="num">Cycles</th><th class="num">Queries</th><th class="num">Candidates</th><th class="num">Retained</th><th class="num">Verified value</th></tr></thead>
         <tbody>{strategy_rows}</tbody>
       </table></div>
+      <div class="mobile-records">{strategy_cards}</div>
     </div>
     <div class="card" id="cost">
       <div class="section-head"><div><h2>Cost Governor</h2><p>{_e(cost["mode"])} · {_e(source_detail("cost"))}</p></div>{source_badge("cost")}</div>

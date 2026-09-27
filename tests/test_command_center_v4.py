@@ -139,6 +139,16 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertIn("portfolio-command-center-history",workflow)
         self.assertIn("public/history.json",workflow)
 
+    def test_command_center_has_iphone_first_responsive_projection(self):
+        public=render_html(build_command_center_snapshot())
+        self.assertIn('viewport-fit=cover',public)
+        self.assertIn('data-mobile-optimized="true"',public)
+        self.assertIn('env(safe-area-inset-left)',public)
+        self.assertIn('.mobile-records{display:none}',public)
+        self.assertIn('.mobile-hide{display:none!important}',public)
+        self.assertIn('<div class="mobile-records">',public)
+        self.assertIn('font-size:16px;min-height:44px',public)
+
 
 if __name__=="__main__":
     unittest.main()
