@@ -49,7 +49,7 @@ jobs:
           --state cost_governor/live/cost_state.json
           --output-dir cost_governor/out
           --workflow-id runtime-worker
-          --job-id runtime
+          --job-id "runtime-${RUNTIME_MODE}"
           --project-id PRJ-000
           --estimated-minutes 5
           --authority OBSERVE
