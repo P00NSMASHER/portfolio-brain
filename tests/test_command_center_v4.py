@@ -149,6 +149,37 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertIn('<div class="mobile-records">',public)
         self.assertIn('font-size:16px;min-height:44px',public)
 
+    def test_scheduler_executes_work_before_heartbeating_workers(self):
+        workflow=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text()
+        self.assertIn("python -m scheduler.work_executor",workflow)
+        self.assertIn("--selected-work scheduler/out/executed_work.json",workflow)
+        self.assertNotIn("--selected-work scheduler/out/scheduled_work.json",workflow)
+        self.assertIn("--activity-kind WORK_EXECUTION",workflow)
+        self.assertIn("portfolio-hunter-state",workflow)
+        self.assertLess(
+            workflow.index("python -m scheduler.work_executor"),
+            workflow.index("--activity-kind WORK_EXECUTION"),
+        )
+
+    def test_blanket_heartbeat_is_backed_by_real_subsystem_probes(self):
+        workflow=(ROOT/".github/workflows/agent-heartbeat-sweep.yml").read_text()
+        self.assertIn("python -m agents.validate_agents",workflow)
+        self.assertIn("python -m scheduler.validate_scheduler",workflow)
+        self.assertIn("python -m hunting.validate_hunter",workflow)
+        self.assertIn("python -m runtime.validate_runtime",workflow)
+        self.assertLess(
+            workflow.index("Run deterministic subsystem probes"),
+            workflow.index("Heartbeat every registered agent"),
+        )
+
+    def test_command_center_exposes_functional_not_declared_health(self):
+        snapshot=build_command_center_snapshot()
+        self.assertIn("functional_status",snapshot["system"])
+        self.assertIn("functional_reasons",snapshot["system"])
+        public=render_html(snapshot)
+        self.assertIn("Functional health",public)
+        self.assertIn("EVIDENCE-DRIVEN",public)
+
 
 if __name__=="__main__":
     unittest.main()
