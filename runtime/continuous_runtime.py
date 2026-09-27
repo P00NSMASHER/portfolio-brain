@@ -8,7 +8,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 
 from adapters.github_readonly import AdapterError, GitHubReadOnlyClient, observe_repository
-from runtime.state import advance_cycle, bootstrap_state, canonical_hash, load_json, validate_state
+from runtime.state import advance_cycle, bootstrap_state, canonical_hash, cycle_id_for, load_json, validate_state
 from learning.continuous_learning import rebuild_from_sources
 from uncertainty.highest_value_uncertainty import build_snapshot as build_uncertainty_snapshot
 from experiments.experiment_engine import build_experiment_portfolio
@@ -173,10 +173,12 @@ def run(mode: str, *, state_path: Path, output_dir: Path, target_repository_id: 
                                       fetch_json=fetch_json,deadline=deadline)
     if time.monotonic()-started>policy["budgets"]["max_runtime_seconds"]:
         raise RuntimePolicyError("runtime time budget exceeded")
-    seed={"mode":mode,"target_repository_id":target,"prior_sequence":state["sequence"],
-          "prior_cursors":{k:v["cursor_sha"] for k,v in sorted(state["repositories"].items())},
-          "observed_heads":{x["repository_id"]:x.get("current_sha") for x in observations}}
-    cycle_id="cycle-"+hashlib.sha256(json.dumps(seed,sort_keys=True,separators=(",",":")).encode()).hexdigest()[:24]
+    cycle_id=cycle_id_for(
+        state,
+        mode=mode,
+        target_repository_id=target,
+        observations=observations,
+    )
     receipt={"schema_version":"1.0.0","cycle_id":cycle_id,"mode":mode,"started_at":at,"finished_at":at,
              "status":"PASS","reason":None,"observations":observations,"api_requests":api_requests}
     receipt["receipt_hash"]=canonical_hash(receipt)
