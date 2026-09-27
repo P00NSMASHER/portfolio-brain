@@ -159,6 +159,7 @@ def _hunter_proposal_review_handler(work: dict[str, Any], ctx: dict[str, Any]) -
           "tree_sha":exact["tree_sha"],
           "rank_score":proposal["candidate_rank_score"],
           "rank_band":proposal["candidate_rank_band"],
+          "capability_key":finding["capability_key"],
           "license_spdx_id":usable_spdx,
           "license_name":license_name,
           "license_state":license_state,
