@@ -125,7 +125,7 @@ jobs:
         if: ${{ steps.cost.outputs.allowed == 'true' && hashFiles('hunting/out/hunter_state.json') != '' }}
         run: python -c "import json; from hunting.autonomous_hunter import validate_state; validate_state(json.load(open('hunting/out/hunter_state.json')))"
       - name: Commit conservative scheduler compute usage
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ always() && steps.cost.outputs.allowed == 'true' }}
         run: >-
           python -m cost_governor.workflow_gate finalize
           --state cost_governor/out/cost_state.json

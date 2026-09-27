@@ -60,7 +60,7 @@ jobs:
           --source-workflow software-factory-candidate
           --source-run-id "${GITHUB_RUN_ID}"
       - name: Commit conservative factory compute usage
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ always() && steps.cost.outputs.allowed == 'true' }}
         run: >-
           python -m cost_governor.workflow_gate finalize
           --state cost_governor/out/cost_state.json
