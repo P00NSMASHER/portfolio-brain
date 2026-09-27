@@ -305,20 +305,26 @@
     "Budget approval never grants OBSERVE, EXPERIMENT, MODIFY or ACT authority.",
     "Paid/model/API execution is finite-budget, reservation-gated, provider-gated, idempotent and kill-switch controlled; disabled providers still cannot execute.",
     "Every non-deterministic model/API execution requires a durable reservation before invocation.",
-    "Every managed autonomous GitHub job requires a durable reservation before substantive work.",
-    "Portfolio, project, provider/model and workflow/job ceilings are checked independently; the strictest blocking scope wins.",
+    "Managed GitHub jobs are admitted by workload controls (timeouts, retry bounds, event coalescing and service-scoped concurrency); they do not consume paid cost reservations or daily job-start quotas.",
+    "Portfolio, project and provider/model financial ceilings are checked independently for paid model/API execution; GitHub workload counts are not financial budget gates.",
     "Active reservations count against ceilings until committed, cancelled or expired.",
     "Idempotency keys suppress duplicate spend and collisions fail closed.",
     "Retry groups cannot reset attempt numbers to bypass retry ceilings.",
     "Actual token and cost usage is committed against the reservation; an overage triggers a hard stop.",
-    "The shared concurrency group serializes autonomous reservations so artifact-backed accounting cannot race.",
+    "The paid-ledger concurrency group serializes workflows that can mutate paid model/API reservation state; unrelated workload lanes use service-scoped concurrency.",
     "Kill switches and hard-stop overages can cancel managed jobs without ChatGPT.",
     "Only sanitized IDs, hashes, numeric usage and evidence references may be persisted while BLK-005 is open.",
-    "Hourly command-center publication is cost-governed and shares the global autonomous GitHub-job concurrency/budget boundary.",
-    "Runtime-worker uses separate OBSERVE/SYNC/DAILY/WEEKLY job sub-budgets whose combined job-start ceiling remains half of the global GitHub-job ceiling; push observation traffic cannot consume scheduled sync/daily/weekly capacity.",
-    "Agent heartbeat sweep is telemetry-only, cost-governed, emits HEALTH_CHECK evidence for every registered role, and grants no new OBSERVE, MODIFY, EXPERIMENT, or ACT authority.",
+    "Command-center publication is workload-controlled and remains available to explain paid-spend blocks or provider failures; it does not consume the paid budget ledger.",
+    "Runtime-worker retains separate OBSERVE/SYNC/DAILY/WEEKLY workload identities and per-job timeouts; paid model/API calls inside DAILY/WEEKLY remain independently reservation-gated.",
+    "Agent heartbeat sweep is telemetry-only, workload-controlled, emits HEALTH_CHECK evidence for every registered role, and grants no new OBSERVE, MODIFY, EXPERIMENT, or ACT authority.",
     "The one-shot model value proof is OBSERVE-only, executes at most one governed Tier-2 builder call and one independent Tier-3 verifier call under their own model reservations, and cannot claim customer value, reuse rights, deployment authority, or capability verification.",
-    "The one-shot verified-feedback bootstrap may consume at most one GitHub job start and two runner minutes under the unchanged global ceiling; it performs no model/API calls and only ingests an already VERIFIED value-proof artifact into durable learning state.",
-    "The continuous-learning bootstrap may consume one bounded GitHub job but performs no model/API calls; it only replays an already VERIFIED value proof through the existing feedback contract into durable advisory learning state."
-  ]
+    "The one-shot verified-feedback bootstrap is bounded by its workflow timeout, performs no model/API calls, and only ingests an already VERIFIED value-proof artifact into durable learning state.",
+    "The continuous-learning bootstrap is bounded by its workflow timeout, performs no model/API calls, and only replays an already VERIFIED value proof through the existing feedback contract into durable advisory learning state."
+  ],
+  "github_workload_control": {
+    "mode": "NATIVE_TIMEOUTS_CONCURRENCY_AND_COALESCING",
+    "daily_job_count_quotas_enforced": false,
+    "durable_cost_reservations": false,
+    "compatibility_note": "workflow_job_ceilings.daily_ceiling is retained for historical telemetry/schema compatibility only; max_minutes_per_job remains enforced."
+  }
 }
