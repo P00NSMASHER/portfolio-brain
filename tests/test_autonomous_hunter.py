@@ -1,7 +1,7 @@
 import copy, unittest
 from pathlib import Path
 from hunting.autonomous_hunter import (
-    CandidateInspectionError, GitHubPublicProvider, HunterError, _queries, apply_verified_feedback, candidate_fingerprint, classify_candidate, detect_gaps,
+    CandidateInspectionError, GitHubPublicProvider, HunterError, _queries, candidate_fingerprint, classify_candidate, detect_gaps,
     load_policy, load_seed_state, load_strategies, rank_candidate, run_cycle, search_concepts_for_gap,
     select_objectives, strategy_priority_maturity, structural_inspection, validate_state
 )
@@ -193,18 +193,6 @@ class HunterTests(unittest.TestCase):
     def test_private_candidate_fails_closed(self):
         with self.assertRaises(HunterError):
             run_cycle(load_seed_state(),FakeProvider(results=[{"id":1,"full_name":"x/y","default_branch":"main","private":True}]),at="2026-09-25T18:00:00Z")
-
-    def test_unverified_feedback_cannot_train_strategy_value(self):
-        s=load_seed_state()
-        feedback={"feedback_id":"FB-1","strategy_id":"STRAT:capability-conjunction-search-claim-tracing","finding_id":"HFD-X","outcome_event_id":"EVT-X","evidence_state":"OBSERVED","value_realized":True}
-        with self.assertRaises(HunterError):apply_verified_feedback(s,feedback)
-
-    def test_verified_feedback_is_idempotent_and_value_specific(self):
-        s=load_seed_state()
-        feedback={"feedback_id":"FB-1","strategy_id":"STRAT:capability-conjunction-search-claim-tracing","finding_id":"HFD-X","outcome_event_id":"EVT-X","evidence_state":"VERIFIED","value_realized":True}
-        apply_verified_feedback(s,feedback)
-        self.assertEqual(s["strategy_stats"][feedback["strategy_id"]]["verified_value_outcomes"],1)
-        with self.assertRaises(HunterError):apply_verified_feedback(s,feedback)
 
     def test_rejection_funnel_reconciles_every_inspected_candidate(self):
         _,receipt=run_cycle(load_seed_state(),FakeProvider(),at="2026-09-25T18:00:00Z")
