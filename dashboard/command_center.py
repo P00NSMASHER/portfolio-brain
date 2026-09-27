@@ -60,6 +60,7 @@ def load_state_sources() -> dict[str, Any]:
         "notifications":"notifications/NOTIFICATION_STATE_SEED.json",
         "agents":"agents/AGENT_HEARTBEAT_STATE_SEED.json",
         "provider":"runtime/PROVIDER_HEALTH_SEED.json",
+        "model_feedback":"model_router/MODEL_FEEDBACK_STATE_SEED.json",
     }
     for name, ref in seeds.items():
         data["sources"].setdefault(name, {
@@ -118,13 +119,13 @@ def build_command_center_snapshot() -> dict[str, Any]:
     action_policy = load_json("action_engine/ACTION_POLICY.json")
     action_ledger = load_json("action_engine/GMAIL_GATEWAY_LEDGER.json")
     model_registry = load_json("model_router/PROVIDER_REGISTRY.json")
-    model_ledger = load_json("model_router/MODEL_ROUTING_LEDGER.json")
+    model_feedback_state = load_live_json("model_feedback_state.json", "model_router/MODEL_FEEDBACK_STATE_SEED.json")
     provider_health = load_live_json("provider_health.json", "runtime/PROVIDER_HEALTH_SEED.json")
     sentinel = build_sentinel_snapshot(
         cost_policy=cost_policy,
         cost_state=cost_state,
         provider_registry=model_registry,
-        model_ledger=model_ledger,
+        model_feedback_state=model_feedback_state,
         action_policy=action_policy,
         action_ledger=action_ledger,
         provider_health=provider_health,
@@ -376,6 +377,13 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "enabled_non_tier0_route_count": len(enabled_model_routes),
             "provider_readiness": provider_health,
             "model_efficiency": sentinel["model_efficiency"],
+            "feedback_state": {
+                "sequence": model_feedback_state.get("sequence", 0),
+                "updated_at": model_feedback_state.get("updated_at"),
+                "verified_feedback_records": sentinel["model_efficiency"]["verified_feedback_records"],
+                "verified_value_events": sentinel["model_efficiency"]["verified_value_events"],
+                "task_kind_count": len(sentinel["model_efficiency"]["task_summaries"]),
+            },
         },
         "action_engine": {
             "enabled": action_policy["enabled"],
@@ -425,7 +433,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
                     "action_engine/ACTION_POLICY.json",
                     "action_engine/GMAIL_GATEWAY_LEDGER.json",
                     "model_router/PROVIDER_REGISTRY.json",
-                    "model_router/MODEL_ROUTING_LEDGER.json",
+                    "model_router/MODEL_FEEDBACK_STATE_SEED.json",
+                    "model_router/feedback_state.py",
                     "runtime/PROVIDER_HEALTH_SEED.json",
                     "runtime/provider_health.py",
                     "dashboard/live/state_sources.json",
@@ -602,6 +611,46 @@ def render_html(snapshot: dict[str, Any]) -> str:
         for name, stats in snapshot["hunter"]["strategy_stats"].items()
     )
 
+    model_value_rows = "".join(
+        f"""
+        <tr>
+          <td><strong>{_e(row["model_id"])}</strong><span class="sub">{_e(row["provider_id"])}</span></td>
+          <td class="num">T{_e(row["tier"])}</td>
+          <td class="num">{_e(row["successful_calls"])}</td>
+          <td class="num">{_e("$"+str(round(row["committed_spend_usd"],6)))}</td>
+          <td class="num">{_e(row["verified_outcomes_recorded"])}</td>
+          <td class="num">{_e(row["verified_value_events"])}</td>
+          <td class="num">{_e("—" if row["mean_verified_outcome_value"] is None else row["mean_verified_outcome_value"])}</td>
+          <td class="num">{_e("—" if row["spend_per_verified_outcome_usd"] is None else "$"+str(round(row["spend_per_verified_outcome_usd"],6)))}</td>
+          <td>{_badge(row["value_signal"].replace("_"," "), "good" if row["value_signal"]=="VERIFIED_VALUE_EVIDENCE" else "neutral")}</td>
+        </tr>
+        """
+        for row in sentinel["model_efficiency"]["models"]
+    )
+
+    model_value_cards = "".join(
+        f"""
+        <article class="mobile-record">
+          <div class="mobile-record-head">
+            <div class="mobile-title">
+              <strong>{_e(row["model_id"])}</strong>
+              <code>{_e(row["provider_id"])} · T{_e(row["tier"])}</code>
+            </div>
+            {_badge(row["value_signal"].replace("_"," "), "good" if row["value_signal"]=="VERIFIED_VALUE_EVIDENCE" else "neutral")}
+          </div>
+          <div class="mobile-stats mobile-stats-2">
+            <div><span>Verified feedback</span><strong>{_e(row["verified_outcomes_recorded"])}</strong></div>
+            <div><span>Value events</span><strong>{_e(row["verified_value_events"])}</strong></div>
+            <div><span>Mean verified value</span><strong>{_e("—" if row["mean_verified_outcome_value"] is None else row["mean_verified_outcome_value"])}</strong></div>
+            <div><span>Cost / verified</span><strong>{_e("—" if row["spend_per_verified_outcome_usd"] is None else "$"+str(round(row["spend_per_verified_outcome_usd"],6)))}</strong></div>
+            <div><span>Calls today</span><strong>{_e(row["successful_calls"])}</strong></div>
+            <div><span>Spend today</span><strong>{_e("$"+str(round(row["committed_spend_usd"],6)))}</strong></div>
+          </div>
+        </article>
+        """
+        for row in sentinel["model_efficiency"]["models"]
+    )
+
     source_labels = {
         "runtime":"Runtime",
         "scheduler":"Scheduler",
@@ -610,6 +659,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
         "notifications":"Notifications",
         "agents":"Agent Fleet",
         "provider":"Model Provider",
+        "model_feedback":"Verified Model Value",
     }
     source_rows = "".join(
         f"""
@@ -1701,6 +1751,28 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
         <tr><td>Retryable</td><td class="num">{_e(provider_readiness["retryable"])}</td></tr>
       </tbody></table>
     </div>
+  </section>
+
+  <section class="card" id="model-value" style="margin-top:14px">
+    <div class="section-head">
+      <div>
+        <h2>Verified Model Value</h2>
+        <p>{_e(source_detail("model_feedback"))} · {_e(sentinel["model_efficiency"]["feedback_source"])}</p>
+      </div>
+      {_badge(str(sentinel["model_efficiency"]["verified_value_events"]) + " verified value event(s)", "good" if sentinel["model_efficiency"]["verified_value_events"] else "neutral")}
+    </div>
+    <div class="spec-grid" style="margin-bottom:18px">
+      <div class="spec-item"><span>Feedback state sequence</span><strong>{_e(model_router["feedback_state"]["sequence"])}</strong></div>
+      <div class="spec-item"><span>Verified model feedback</span><strong>{_e(model_router["feedback_state"]["verified_feedback_records"])}</strong></div>
+      <div class="spec-item"><span>Unique value events</span><strong>{_e(model_router["feedback_state"]["verified_value_events"])}</strong></div>
+      <div class="spec-item"><span>Task kinds with evidence</span><strong>{_e(model_router["feedback_state"]["task_kind_count"])}</strong></div>
+    </div>
+    <div class="table-wrap mobile-hide"><table>
+      <thead><tr><th>Model</th><th class="num">Tier</th><th class="num">Calls today</th><th class="num">Spend today</th><th class="num">Verified feedback</th><th class="num">Value events</th><th class="num">Mean value</th><th class="num">Cost / verified</th><th>Evidence signal</th></tr></thead>
+      <tbody>{model_value_rows}</tbody>
+    </table></div>
+    <div class="mobile-records">{model_value_cards}</div>
+    <p>Value evidence is credited only from durable VERIFIED feedback. This panel does not convert model output into authority, reuse rights, capability verification, deployment permission, or customer-value claims.</p>
   </section>
 
   <section class="grid two" id="actions" style="margin-top:14px">
