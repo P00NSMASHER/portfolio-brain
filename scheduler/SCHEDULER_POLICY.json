@@ -94,6 +94,18 @@
     "Step 15 resource HOLD prevents ordinary engineering/testing/model/art/cash work from being invented.",
     "Cross-project transfer work is assessment only until target outcome evidence and MODIFY gates exist.",
     "Kill switches and STOP/governance boundaries override scheduling.",
-    "The scheduler cannot send customer communications, move money, trade, merge PRs, deploy or grant authority."
-  ]
+    "The scheduler cannot send customer communications, move money, trade, merge PRs, deploy or grant authority.",
+    "Quality-gated Hunter proposals may enter only OBSERVE-class Researcher review; exact revision is re-inspected and license metadata never grants reuse or implementation authority."
+  ],
+  "hunter_proposal_handoff": {
+    "enabled": true,
+    "source_state_id": "portfolio-hunter-proposal-state",
+    "work_type": "RESEARCH",
+    "agent_id": "AGT-RESEARCHER",
+    "goal_type": "RESEARCH_EVIDENCE",
+    "authority_class": "OBSERVE",
+    "rights_state": "NOT_GRANTED_BY_DISCOVERY",
+    "exact_revision_reinspection_required": true,
+    "license_metadata_is_not_reuse_authority": true
+  }
 }

@@ -86,6 +86,14 @@ jobs:
           path: hunting/out/
           if-no-files-found: error
           retention-days: 30
+      - name: Upload quality-gated Hunter proposal inbox
+        if: ${{ steps.cost.outputs.allowed == 'true' && hashFiles('hunting/out/hunter_proposal_state.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-hunter-proposal-state
+          path: hunting/out/hunter_proposal_state.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload sanitized agent heartbeat state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         uses: actions/upload-artifact@v4

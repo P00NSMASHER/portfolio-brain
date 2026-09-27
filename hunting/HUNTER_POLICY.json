@@ -90,5 +90,13 @@
     "rotate_queries_by_state_sequence": true,
     "prefer_lowest_negative_hits": true,
     "structural_ranking_uses_semantic_concepts": true
+  },
+  "proposal_persistence": {
+    "mode": "GITHUB_ACTIONS_ARTIFACT",
+    "artifact_name": "portfolio-hunter-proposal-state",
+    "retention_days": 30,
+    "seed_file": "hunting/HUNTER_PROPOSAL_STATE_SEED.json",
+    "sanitized_only": true,
+    "downstream_authority": "OBSERVE"
   }
 }

@@ -6,6 +6,7 @@ from pathlib import Path
 from hunting.autonomous_hunter import _queries, detect_gaps, load_policy, load_query_concepts, load_seed_state, load_strategies, run_cycle, search_concepts_for_gap, select_objectives, validate_state
 from hunting.calibration import run_calibration
 from hunting.controlled_proof import load_cases as load_controlled_cases
+from hunting.proposal_state import load_seed_state as load_proposal_seed, validate_state as validate_proposal_state
 ROOT=Path(__file__).resolve().parents[1]
 class HunterValidationError(ValueError): pass
 def req(ok,msg):
@@ -65,6 +66,12 @@ def validate_hunter():
     req(1<=proposal_gate["max_experiment_proposals_per_cycle"]<=policy["budgets"]["max_candidates_inspected_per_cycle"],"Hunter proposal cycle cap invalid")
     req(proposal_gate["low_rank_disposition"]=="RETAIN_OBSERVED_WITHOUT_PROPOSAL","low-rank Hunter candidates are not kept as observed near misses")
     req(proposal_gate["value_credit_source"]=="VERIFIED_OUTCOMES_ONLY","Hunter proposal gate may not create value credit")
+    proposal_persistence=policy["proposal_persistence"]
+    req(proposal_persistence["artifact_name"]=="portfolio-hunter-proposal-state","Hunter proposal artifact identity drifted")
+    req(proposal_persistence["seed_file"]=="hunting/HUNTER_PROPOSAL_STATE_SEED.json","Hunter proposal seed path drifted")
+    req(proposal_persistence["sanitized_only"] is True and proposal_persistence["downstream_authority"]=="OBSERVE","Hunter proposal persistence widened data/authority")
+    proposal_seed=load_proposal_seed();validate_proposal_state(proposal_seed)
+    req(proposal_seed["proposals"]==[] and proposal_seed["findings"]==[],"Hunter proposal seed invented findings")
     req(len(strategies)==4 and any(x["family"]=="EXPLORATION" for x in strategies),"strategy set/exploration missing")
     gaps=detect_gaps(); objectives=select_objectives(seed)
     req(len(gaps)>=1,"no structural portfolio gaps detected")
@@ -108,6 +115,7 @@ def validate_hunter():
     for s in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_HUNTER_DISABLED","47 */6 * * *","cancel-in-progress: false","actions/upload-artifact@v4","python -m hunting.calibration --output hunting/out/calibration_report.json",".github/triggers/hunter-autonomous-now.txt"]:
         req(s in wf,f"Hunter workflow missing {s}")
     req(wf.index("concurrency:")>wf.index("hunt:"),"Hunter cost concurrency must be job-level so cancelled queued jobs remain rerunnable")
+    req("portfolio-hunter-proposal-state" in wf and "hunting/out/hunter_proposal_state.json" in wf,"Hunter workflow does not persist proposal inbox")
     trigger=(ROOT/".github/triggers/hunter-autonomous-now.txt").read_text()
     req("authority=OBSERVE" in trigger and "model-calls=0" in trigger,"Hunter on-demand trigger widened authority/cost")
     runtime_event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
@@ -119,5 +127,5 @@ def validate_hunter():
     low=(wf+"\n"+proof_wf).lower()
     for forbidden in ["contents: write","pull-requests: write","issues: write","id-token: write","git push","gh pr","openai","anthropic"]:
         req(forbidden not in low,f"forbidden Hunter workflow capability: {forbidden}")
-    return {"pinned_components":len(expected),"strategies":len(strategies),"detected_gaps":len(gaps),"selected_objectives":len(objectives),"exploration_objectives":sum(1 for x in objectives if x["exploration"]),"hard_reject_reasons":evaluation["hard_reject_reasons"],"soft_signals_do_not_reject":evaluation["soft_signals_do_not_reject"],"ranking_max_score":ranking["max_score"],"rejection_funnel_reconciled":True,"query_outcomes":len(probe_receipt["query_outcomes"]),"calibration_cases":calibration["case_count"],"calibration_positive_retained":calibration["positive_retained"],"calibration_negative_rejected":calibration["negative_rejected"],"calibration_ambiguous_matched":calibration["ambiguous_matched"],"calibration_rank_bands":calibration["rank_band_counts"],"controlled_proof_cases":len(controlled["cases"]),"controlled_proof_min_retained":controlled["completion_gate"]["min_retained_candidates"],"controlled_proof_min_strategies":controlled["completion_gate"]["min_distinct_strategies"],"verified_outcome_strategy_priority":True,"semantic_query_taxonomy":concepts["taxonomy_id"],"semantic_query_categories":len(concepts["category_concepts"]),"per_query_inspection_cap":policy["budgets"]["max_candidates_inspected_per_query"],"proposal_min_rank":proposal_gate["minimum_rank_band"],"proposal_cycle_cap":proposal_gate["max_experiment_proposals_per_cycle"],"model_calls":0,"downstream_writes":0,"external_actions":0}
+    return {"pinned_components":len(expected),"strategies":len(strategies),"detected_gaps":len(gaps),"selected_objectives":len(objectives),"exploration_objectives":sum(1 for x in objectives if x["exploration"]),"hard_reject_reasons":evaluation["hard_reject_reasons"],"soft_signals_do_not_reject":evaluation["soft_signals_do_not_reject"],"ranking_max_score":ranking["max_score"],"rejection_funnel_reconciled":True,"query_outcomes":len(probe_receipt["query_outcomes"]),"calibration_cases":calibration["case_count"],"calibration_positive_retained":calibration["positive_retained"],"calibration_negative_rejected":calibration["negative_rejected"],"calibration_ambiguous_matched":calibration["ambiguous_matched"],"calibration_rank_bands":calibration["rank_band_counts"],"controlled_proof_cases":len(controlled["cases"]),"controlled_proof_min_retained":controlled["completion_gate"]["min_retained_candidates"],"controlled_proof_min_strategies":controlled["completion_gate"]["min_distinct_strategies"],"verified_outcome_strategy_priority":True,"semantic_query_taxonomy":concepts["taxonomy_id"],"semantic_query_categories":len(concepts["category_concepts"]),"per_query_inspection_cap":policy["budgets"]["max_candidates_inspected_per_query"],"proposal_min_rank":proposal_gate["minimum_rank_band"],"proposal_cycle_cap":proposal_gate["max_experiment_proposals_per_cycle"],"proposal_artifact":proposal_persistence["artifact_name"],"proposal_seed_sequence":proposal_seed["sequence"],"model_calls":0,"downstream_writes":0,"external_actions":0}
 if __name__=="__main__":print("portfolio-brain Step 9 Hunter: PASS",json.dumps(validate_hunter(),sort_keys=True))

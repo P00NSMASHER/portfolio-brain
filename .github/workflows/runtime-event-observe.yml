@@ -7,6 +7,8 @@ on:
       - "runtime/TRIGGER_DAILY_REASONING"
       - ".github/triggers/hunter-autonomous-now.txt"
       - ".github/workflows/hunter-autonomous-cycle.yml"
+      - ".github/triggers/scheduler-now.txt"
+      - ".github/workflows/portfolio-autonomous-scheduler.yml"
       - "dashboard/**"
       - "tests/**"
       - "operator_console/**"

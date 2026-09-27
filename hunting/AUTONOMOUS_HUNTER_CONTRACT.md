@@ -32,6 +32,12 @@ Hard rejection is reserved for candidates that do not contain implementation pat
 
 Missing tests, weak path-level capability signals, or a truncated repository tree do **not** become silent hard rejections. They are recorded as soft signals and reduce candidate rank. Retained candidates receive a bounded 0-10 rank with HIGH / MEDIUM / LOW bands. Rank orders bounded experiment proposals but cannot grant reuse rights, VERIFIED evidence, value credit, or additional authority.
 
+## Durable proposal inbox
+
+Only proposals that pass the configured quality gate are projected into a separate sanitized durable state, `portfolio-hunter-proposal-state`. The inbox binds each proposal to its retained finding, capability key, public repository identity, exact revision, structural inspection, rank, and provenance.
+
+The inbox is OBSERVE-only and preserves `NOT_GRANTED_BY_DISCOVERY` rights state. LOW-ranked retained findings remain useful Hunter evidence but are not projected into the downstream proposal inbox. The scheduler may consume the inbox only through its separately validated OBSERVE-class Researcher handoff.
+
 ## Learning
 
 Negative/no-find results are durable and suppress repeated dead ends after repeated failures. Exact repository revision + capability need forms the candidate fingerprint.

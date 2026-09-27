@@ -11,12 +11,11 @@ permissions:
   contents: read
   actions: read
 
-concurrency:
-  group: portfolio-cost-governed-autonomy
-  cancel-in-progress: false
-
 jobs:
   schedule:
+    concurrency:
+      group: portfolio-cost-governed-autonomy
+      cancel-in-progress: false
     if: ${{ vars.PORTFOLIO_SCHEDULER_DISABLED != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -49,6 +48,14 @@ jobs:
       - name: Restore latest Hunter state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m hunting.artifact_state --output hunting/live/hunter_state.json
+      - name: Restore latest Hunter proposal inbox
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: |
+          mkdir -p hunting/live
+          python -m hunting.proposal_artifact_state --output hunting/live/hunter_proposal_state.json
+          if [ ! -f hunting/live/hunter_proposal_state.json ]; then
+            cp hunting/HUNTER_PROPOSAL_STATE_SEED.json hunting/live/hunter_proposal_state.json
+          fi
       - name: Restore latest runtime state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: >-
@@ -119,6 +126,14 @@ jobs:
         with:
           name: portfolio-hunter-state
           path: hunting/out/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload Hunter proposal inbox when hunt work executed
+        if: ${{ steps.cost.outputs.allowed == 'true' && hashFiles('hunting/out/hunter_proposal_state.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-hunter-proposal-state
+          path: hunting/out/hunter_proposal_state.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload sanitized agent heartbeat state
