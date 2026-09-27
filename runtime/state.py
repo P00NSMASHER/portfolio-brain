@@ -165,6 +165,9 @@ def validate_state(state: dict[str,Any])->None:
         if previous is not None and finished_at<previous:
             raise RuntimeStateError("recent cycle history chronology invalid")
         cycle_ids.add(cycle["cycle_id"]);previous=finished_at
+    expected_history_len=min(state["sequence"],20)
+    if len(history)!=expected_history_len:
+        raise RuntimeStateError("recent cycle history length does not match runtime sequence")
     if history:
         if state["last_cycle_id"]!=history[-1]["cycle_id"]:
             raise RuntimeStateError("last cycle id does not match retained history")
