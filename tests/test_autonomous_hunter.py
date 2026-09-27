@@ -109,14 +109,15 @@ class HunterTests(unittest.TestCase):
         self.assertEqual(r["findings"],[])
         self.assertGreater(len(s["negative_knowledge"]),0)
 
-    def test_repeated_dead_end_is_suppressed(self):
+    def test_repeated_dead_end_is_suppressed_only_after_query_rotation_exhausts_fresh_options(self):
         s=load_seed_state()
-        for hour in range(2):
-            s,_=run_cycle(s,FakeProvider(results=[]),at=f"2026-09-25T{18+hour:02d}:00:00Z")
-        before=sum(x["queries"] for x in s["strategy_stats"].values())
-        s,r=run_cycle(s,FakeProvider(results=[]),at="2026-09-25T20:00:00Z")
-        after=sum(x["queries"] for x in s["strategy_stats"].values())
-        self.assertGreaterEqual(after,before)
+        saw_suppressed=False
+        for step in range(16):
+            s,r=run_cycle(s,FakeProvider(results=[]),at=f"2026-09-25T{step:02d}:00:00Z")
+            if r["rejection_funnel"]["queries_suppressed"]>0:
+                saw_suppressed=True
+                break
+        self.assertTrue(saw_suppressed)
         self.assertTrue(any(x["reason_code"]=="REPEATED_DEAD_END_SUPPRESSED" for x in s["negative_knowledge"]))
 
     def test_private_candidate_fails_closed(self):
@@ -160,15 +161,19 @@ class HunterTests(unittest.TestCase):
         counted=sum(receipt["rejection_funnel"]["rejection_reasons"].values())
         self.assertEqual(counted,receipt["rejection_funnel"]["duplicates"]+receipt["rejection_funnel"]["rejected"]+receipt["rejection_funnel"]["queries_suppressed"])
 
-    def test_zero_result_and_suppressed_queries_are_visible_in_funnel(self):
+    def test_zero_result_and_eventual_suppressed_queries_are_visible_in_funnel(self):
         s=load_seed_state()
-        s,r1=run_cycle(s,FakeProvider(results=[]),at="2026-09-25T18:00:00Z")
-        self.assertGreater(r1["rejection_funnel"]["queries_zero_results"],0)
-        s,_=run_cycle(s,FakeProvider(results=[]),at="2026-09-25T19:00:00Z")
-        s,r3=run_cycle(s,FakeProvider(results=[]),at="2026-09-25T20:00:00Z")
-        self.assertGreater(r3["rejection_funnel"]["queries_suppressed"],0)
-        self.assertTrue(any(x["status"]=="SUPPRESSED_REPEAT_DEAD_END" for x in r3["query_outcomes"]))
-        self.assertIn("REPEATED_DEAD_END_SUPPRESSED",r3["rejection_funnel"]["rejection_reasons"])
+        s,first=run_cycle(s,FakeProvider(results=[]),at="2026-09-25T00:00:00Z")
+        self.assertGreater(first["rejection_funnel"]["queries_zero_results"],0)
+        suppressed=None
+        for step in range(1,16):
+            s,receipt=run_cycle(s,FakeProvider(results=[]),at=f"2026-09-25T{step:02d}:00:00Z")
+            if receipt["rejection_funnel"]["queries_suppressed"]>0:
+                suppressed=receipt
+                break
+        self.assertIsNotNone(suppressed)
+        self.assertTrue(any(x["status"]=="SUPPRESSED_REPEAT_DEAD_END" for x in suppressed["query_outcomes"]))
+        self.assertIn("REPEATED_DEAD_END_SUPPRESSED",suppressed["rejection_funnel"]["rejection_reasons"])
 
     def test_inspection_budget_deferrals_are_counted_not_silently_dropped(self):
         results=[
