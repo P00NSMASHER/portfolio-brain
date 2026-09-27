@@ -255,7 +255,7 @@ class GitHubPublicProvider:
             return self._get(url)
         except HunterError as exc:
             message=str(exc)
-            if message.startswith("public GitHub read failed after bounded retries:") and re.search(r"HTTP Error (404|409|410|422)\\b",message):
+            if message.startswith("public GitHub read failed after bounded retries:") and re.search(r"HTTP Error (404|409|410|422)\b",message):
                 raise CandidateInspectionError(message) from exc
             raise
     def inspect_revision(self,candidate,revision):
