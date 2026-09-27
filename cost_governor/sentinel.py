@@ -132,6 +132,34 @@ def build_sentinel_snapshot(
         for field in USAGE_FIELDS
     }
 
+    # A GitHub runner has already started by the time workflow preflight can
+    # deny admission. Those starts intentionally have no reservation, so they
+    # are not part of governed budget usage. Preserve a conservative lower
+    # bound from the retained decision ledger instead of presenting admitted
+    # work as total Actions consumption. Deduplicate by request because a
+    # repeated preflight for the same request is not proof of another runner.
+    github_denials_by_request: dict[str, dict[str, Any]] = {}
+    for decision in cost_state.get("recent_decisions", []):
+        if _day(decision.get("decided_at")) != today:
+            continue
+        request_id = decision.get("request_id")
+        status = str(decision.get("status") or "")
+        if (
+            isinstance(request_id, str)
+            and request_id.startswith("CGR-GH-")
+            and (status.startswith("BLOCKED_") or status == "DUPLICATE_SUPPRESSED")
+        ):
+            github_denials_by_request.setdefault(request_id, decision)
+    github_denial_statuses = Counter(
+        str(row.get("status") or "UNKNOWN")
+        for row in github_denials_by_request.values()
+    )
+    decision_limit = cost_policy.get("recent_decision_limit")
+    decision_retention_saturated = (
+        isinstance(decision_limit, int)
+        and len(cost_state.get("recent_decisions", [])) >= decision_limit
+    )
+
     verified_outcomes = sum(
         1
         for outcome in model_ledger.get("outcomes", [])
@@ -229,6 +257,19 @@ def build_sentinel_snapshot(
                 "committed_runner_minutes": int(committed["github_runner_minutes"]),
                 "reserved_starts": int(reserved["github_job_starts"]),
                 "reserved_runner_minutes": int(reserved["github_runner_minutes"]),
+            },
+            "preflight_denied_overhead": {
+                "accounting_domain": "GITHUB_CONTROL_PLANE_OVERHEAD",
+                "included_in_governed_job_usage": False,
+                "minimum_denied_starts_today": len(github_denials_by_request),
+                "by_status": dict(sorted(github_denial_statuses.items())),
+                "runner_minutes_known": False,
+                "decision_retention_saturated": decision_retention_saturated,
+                "coverage": (
+                    "RETENTION_LIMITED_LOWER_BOUND"
+                    if decision_retention_saturated
+                    else "COMPLETE_RETAINED_DECISION_WINDOW"
+                ),
             },
             "watchdog_control_plane_overhead": {
                 "accounting_domain": "CONTROL_PLANE_OVERHEAD",
