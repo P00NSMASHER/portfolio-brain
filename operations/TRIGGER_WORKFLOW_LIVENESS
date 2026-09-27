@@ -1,5 +1,4 @@
-workflow-liveness-live-proof-v5
-reason=verify-five-of-five-exact-run-proof-after-notification-recovery
+workflow-liveness-live-proof-v4
+reason=recover-overdue-heartbeat-after-runtime-anchor-fix
 authority=NONE
-source_commit=cbd4911cc8d34646b4e918fe3d5f51e7077e829a
-expected=5-of-5-healthy-verified-work
+source_commit=b2820a69fcfc102fb0c175ebaf3d00519f20a9d6
