@@ -111,5 +111,14 @@
     "counts_against_inspection_budget": true,
     "records_negative_query_knowledge": false,
     "cycle_behavior": "CONTINUE_BOUNDED"
+  },
+  "proposal_review_persistence": {
+    "mode": "GITHUB_ACTIONS_ARTIFACT",
+    "artifact_name": "portfolio-hunter-proposal-review-state",
+    "retention_days": 30,
+    "seed_file": "hunting/HUNTER_PROPOSAL_REVIEW_STATE_SEED.json",
+    "sanitized_only": true,
+    "authority_class": "OBSERVE",
+    "rights_resolution": "NONE"
   }
 }
