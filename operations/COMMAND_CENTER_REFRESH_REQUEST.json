@@ -1,14 +1,13 @@
 {
   "schema_version": "1.0.0",
-  "request_id": "command-center-provider-ready-refresh-2026-09-26",
-  "requested_at": "2026-09-26T23:08:00Z",
-  "reason": "Publish fresh provider readiness after governed OpenAI API analysis succeeded following owner API billing activation.",
+  "request_id": "command-center-all-agent-heartbeat-refresh-2026-09-27",
+  "requested_at": "2026-09-27T01:06:30Z",
+  "reason": "Publish the first successful all-agent HEALTH_CHECK sweep so every registered agent heartbeat is visible on the public command center.",
   "expected_effect": [
-    "restore newest runtime artifact",
-    "restore provider-readiness SUCCESS evidence",
-    "restore newest agent-heartbeat artifact",
-    "render mobile-safe command center",
-    "publish READY provider status and current core health"
+    "restore portfolio-agent-heartbeat-state from run 36284491910",
+    "show all 10 registered agents with a real HEALTH_CHECK heartbeat",
+    "preserve role-specific substantive activity when newer than a health check",
+    "publish the refreshed Agent Fleet to GitHub Pages"
   ],
   "authority_class": "OBSERVE",
   "mutation_scope": "TRIGGER_ONLY"
