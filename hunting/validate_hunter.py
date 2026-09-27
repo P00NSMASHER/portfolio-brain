@@ -32,6 +32,14 @@ def validate_hunter():
     req(policy["repository_count_reward"]==0,"repository count must not be rewarded")
     req(policy["learning"]["verified_outcomes_only_for_value_credit"] is True,"Hunter value training must require verified outcomes")
     req(policy["learning"]["exploration_floor_fraction"]>=0.20,"exploration floor weakened")
+    req(policy["learning"]["verified_outcome_strategy_priority"] is True,"verified Hunter outcome priority disabled")
+    req(policy["learning"]["verified_outcome_priority_mode"]=="ORDER_EXPLOIT_STRATEGIES_BY_VERIFIED_VALUE_OUTCOMES","Hunter feedback priority mode drifted")
+    req(policy["learning"]["unverified_activity_cannot_increase_strategy_priority"] is True,"unverified Hunter activity may increase priority")
+    priority_probe=load_seed_state()
+    target="STRAT:fail-open-boundary-archaeology"
+    priority_probe["strategy_stats"][target]["verified_value_outcomes"]=2
+    priority_objectives=[x for x in select_objectives(priority_probe) if not x["exploration"]]
+    req(priority_objectives and priority_objectives[0]["strategy_id"]==target,"verified Hunter outcome did not affect exploit strategy order")
     evaluation=policy["candidate_evaluation"]
     req(evaluation["hard_reject_reasons"]==["NO_IMPLEMENTATION_PATHS"],"Hunter structural hard-reject surface widened")
     req(evaluation["terminal_duplicate_reason"]=="EXACT_REVISION_CAPABILITY_DUPLICATE","Hunter duplicate terminal reason drifted")
@@ -82,5 +90,5 @@ def validate_hunter():
     low=(wf+"\n"+proof_wf).lower()
     for forbidden in ["contents: write","pull-requests: write","issues: write","id-token: write","git push","gh pr","openai","anthropic"]:
         req(forbidden not in low,f"forbidden Hunter workflow capability: {forbidden}")
-    return {"pinned_components":len(expected),"strategies":len(strategies),"detected_gaps":len(gaps),"selected_objectives":len(objectives),"exploration_objectives":sum(1 for x in objectives if x["exploration"]),"hard_reject_reasons":evaluation["hard_reject_reasons"],"soft_signals_do_not_reject":evaluation["soft_signals_do_not_reject"],"ranking_max_score":ranking["max_score"],"rejection_funnel_reconciled":True,"query_outcomes":len(probe_receipt["query_outcomes"]),"calibration_cases":calibration["case_count"],"calibration_positive_retained":calibration["positive_retained"],"calibration_negative_rejected":calibration["negative_rejected"],"calibration_ambiguous_matched":calibration["ambiguous_matched"],"calibration_rank_bands":calibration["rank_band_counts"],"controlled_proof_cases":len(controlled["cases"]),"controlled_proof_min_retained":controlled["completion_gate"]["min_retained_candidates"],"controlled_proof_min_strategies":controlled["completion_gate"]["min_distinct_strategies"],"model_calls":0,"downstream_writes":0,"external_actions":0}
+    return {"pinned_components":len(expected),"strategies":len(strategies),"detected_gaps":len(gaps),"selected_objectives":len(objectives),"exploration_objectives":sum(1 for x in objectives if x["exploration"]),"hard_reject_reasons":evaluation["hard_reject_reasons"],"soft_signals_do_not_reject":evaluation["soft_signals_do_not_reject"],"ranking_max_score":ranking["max_score"],"rejection_funnel_reconciled":True,"query_outcomes":len(probe_receipt["query_outcomes"]),"calibration_cases":calibration["case_count"],"calibration_positive_retained":calibration["positive_retained"],"calibration_negative_rejected":calibration["negative_rejected"],"calibration_ambiguous_matched":calibration["ambiguous_matched"],"calibration_rank_bands":calibration["rank_band_counts"],"controlled_proof_cases":len(controlled["cases"]),"controlled_proof_min_retained":controlled["completion_gate"]["min_retained_candidates"],"controlled_proof_min_strategies":controlled["completion_gate"]["min_distinct_strategies"],"verified_outcome_strategy_priority":True,"model_calls":0,"downstream_writes":0,"external_actions":0}
 if __name__=="__main__":print("portfolio-brain Step 9 Hunter: PASS",json.dumps(validate_hunter(),sort_keys=True))
