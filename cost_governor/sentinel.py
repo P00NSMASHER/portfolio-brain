@@ -67,12 +67,93 @@ def _provider_attempt_failure(row: dict[str, Any]) -> bool:
         for ref in row.get("evidence_refs", [])
     )
 
+def _verified_model_feedback(state: dict[str, Any]) -> dict[str, Any]:
+    """Project durable verified model feedback without inventing value."""
+    if state.get("state_id") == "portfolio-model-feedback-state":
+        calls = {
+            row.get("invocation_id"): row
+            for row in state.get("calls", [])
+            if isinstance(row, dict) and isinstance(row.get("invocation_id"), str)
+        }
+        per_model: dict[str, dict[str, Any]] = {}
+        verified_records = 0
+        value_events: set[str] = set()
+        for outcome in state.get("outcomes", []):
+            if not isinstance(outcome, dict) or outcome.get("evidence_state") != "VERIFIED":
+                continue
+            call = calls.get(outcome.get("invocation_id"))
+            if call is None:
+                continue
+            provider_id = call.get("provider_id")
+            model_id = call.get("model_id")
+            if not isinstance(provider_id, str) or not isinstance(model_id, str):
+                continue
+            key = f"{provider_id}::{model_id}"
+            bucket = per_model.setdefault(key, {
+                "verified_feedback_records": 0,
+                "verified_value_events": set(),
+                "outcome_value_sum": 0.0,
+                "invocation_ids": set(),
+            })
+            bucket["verified_feedback_records"] += 1
+            event_id = outcome.get("outcome_event_id")
+            if isinstance(event_id, str) and event_id:
+                bucket["verified_value_events"].add(event_id)
+                value_events.add(event_id)
+            value = outcome.get("outcome_value")
+            if type(value) in {int, float}:
+                bucket["outcome_value_sum"] += float(value)
+            bucket["invocation_ids"].add(call["invocation_id"])
+            verified_records += 1
+
+        projected: dict[str, dict[str, Any]] = {}
+        for key, bucket in per_model.items():
+            costs = [
+                float(calls[invocation_id].get("cost_usd", 0) or 0)
+                for invocation_id in bucket["invocation_ids"]
+                if invocation_id in calls
+            ]
+            count = bucket["verified_feedback_records"]
+            lifetime_cost = round(sum(costs), 6)
+            projected[key] = {
+                "verified_feedback_records": count,
+                "verified_value_events": len(bucket["verified_value_events"]),
+                "mean_verified_outcome_value": None if count == 0 else round(bucket["outcome_value_sum"] / count, 6),
+                "feedback_call_cost_usd": lifetime_cost,
+                "mean_feedback_cost_per_verified_outcome_usd": None if count == 0 else round(lifetime_cost / count, 6),
+            }
+        return {
+            "source": "DURABLE_VERIFIED_FEEDBACK",
+            "state_sequence": state.get("sequence"),
+            "state_updated_at": state.get("updated_at"),
+            "verified_feedback_records": verified_records,
+            "verified_value_events": len(value_events),
+            "per_model": projected,
+            "task_summaries": state.get("routing_task_summaries", {}),
+        }
+
+    verified = [
+        outcome
+        for outcome in state.get("outcomes", [])
+        if str(outcome.get("verification_status") or outcome.get("status") or "").upper() == "VERIFIED"
+    ]
+    return {
+        "source": "LEGACY_ROUTING_LEDGER",
+        "state_sequence": None,
+        "state_updated_at": None,
+        "verified_feedback_records": len(verified),
+        "verified_value_events": len(verified),
+        "per_model": {},
+        "task_summaries": {},
+    }
+
 def build_sentinel_snapshot(
     *,
     cost_policy: dict[str, Any] | None = None,
     cost_state: dict[str, Any] | None = None,
     provider_registry: dict[str, Any] | None = None,
     model_ledger: dict[str, Any] | None = None,
+    model_feedback_state: dict[str, Any] | None = None,
     action_policy: dict[str, Any] | None = None,
     action_ledger: dict[str, Any] | None = None,
     provider_health: dict[str, Any] | None = None,
@@ -81,7 +162,8 @@ def build_sentinel_snapshot(
     cost_policy = cost_policy or _load("cost_governor/COST_GOVERNOR_POLICY.json")
     cost_state = cost_state or _load("cost_governor/COST_STATE_SEED.json")
     provider_registry = provider_registry or _load("model_router/PROVIDER_REGISTRY.json")
-    model_ledger = model_ledger or _load("model_router/MODEL_ROUTING_LEDGER.json")
+    if model_feedback_state is None:
+        model_feedback_state = model_ledger if model_ledger is not None else _load("model_router/MODEL_FEEDBACK_STATE_SEED.json")
     action_policy = action_policy or _load("action_engine/ACTION_POLICY.json")
     action_ledger = action_ledger or _load("action_engine/GMAIL_GATEWAY_LEDGER.json")
     provider_health = provider_health or _load("runtime/PROVIDER_HEALTH_SEED.json")
@@ -132,11 +214,7 @@ def build_sentinel_snapshot(
         for field in USAGE_FIELDS
     }
 
-    verified_outcomes = sum(
-        1
-        for outcome in model_ledger.get("outcomes", [])
-        if str(outcome.get("verification_status") or outcome.get("status") or "").upper() == "VERIFIED"
-    )
+    feedback = _verified_model_feedback(model_feedback_state)
 
     models = []
     for provider in provider_registry.get("providers", []):
@@ -149,12 +227,15 @@ def build_sentinel_snapshot(
             usage = model_usage[key]
             successful_calls = int(usage["model_calls"])
             spend = round(float(usage["cost_usd"]), 6)
-            if successful_calls == 0:
+            feedback_row = feedback["per_model"].get(key, {})
+            verified_feedback = int(feedback_row.get("verified_feedback_records", 0) or 0)
+            verified_events = int(feedback_row.get("verified_value_events", 0) or 0)
+            if verified_feedback > 0:
+                value_signal = "VERIFIED_VALUE_EVIDENCE"
+            elif successful_calls == 0:
                 value_signal = "NO_SUCCESSFUL_CALL_BASELINE"
-            elif verified_outcomes == 0:
-                value_signal = "NO_VERIFIED_OUTCOME_BASELINE"
             else:
-                value_signal = "MEASURABLE"
+                value_signal = "NO_VERIFIED_OUTCOME_BASELINE"
             models.append({
                 "provider_id": provider["provider_id"],
                 "model_id": model["model_id"],
@@ -165,8 +246,11 @@ def build_sentinel_snapshot(
                 "successful_calls": successful_calls,
                 "failed_provider_attempts": failed_attempts[key],
                 "spend_per_successful_call_usd": None if successful_calls == 0 else round(spend / successful_calls, 6),
-                "verified_outcomes_recorded": verified_outcomes,
-                "spend_per_verified_outcome_usd": None if verified_outcomes == 0 else round(spend / verified_outcomes, 6),
+                "verified_outcomes_recorded": verified_feedback,
+                "verified_value_events": verified_events,
+                "mean_verified_outcome_value": feedback_row.get("mean_verified_outcome_value"),
+                "feedback_call_cost_usd": feedback_row.get("feedback_call_cost_usd", 0.0),
+                "spend_per_verified_outcome_usd": feedback_row.get("mean_feedback_cost_per_verified_outcome_usd"),
                 "value_signal": value_signal,
             })
 
@@ -220,7 +304,13 @@ def build_sentinel_snapshot(
             "budget_domain_blocked": readiness == "BUDGET_BLOCKED",
         },
         "model_efficiency": {
-            "verified_outcomes_recorded": verified_outcomes,
+            "feedback_source": feedback["source"],
+            "feedback_state_sequence": feedback["state_sequence"],
+            "feedback_state_updated_at": feedback["state_updated_at"],
+            "verified_outcomes_recorded": feedback["verified_feedback_records"],
+            "verified_feedback_records": feedback["verified_feedback_records"],
+            "verified_value_events": feedback["verified_value_events"],
+            "task_summaries": feedback["task_summaries"],
             "models": models,
         },
         "github": {
