@@ -144,5 +144,5 @@ jobs:
       - name: Report governed no-work outcome
         if: ${{ always() && steps.workload.outputs.allowed != 'true' }}
         run: |
-          echo "::error title=Continuous learning bootstrap skipped::Cost governor status: ${{ steps.workload.outputs.decision_status }}"
+          echo "::error title=Continuous learning bootstrap skipped::Workload status: ${{ steps.workload.outputs.decision_status }}"
           exit 1
