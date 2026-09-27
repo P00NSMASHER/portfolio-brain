@@ -295,13 +295,25 @@ class RuntimeTests(unittest.TestCase):
                     fetch_json=fake,forced_now="2026-09-25T17:00:00Z")
 
     def test_restored_state_advances_sequence(self):
-        state=bootstrap_state(now="2026-09-25T16:00:00Z"); state["sequence"]=9
+        initial=bootstrap_state(now="2026-09-25T16:00:00Z")
+        rid="REPO-001";sha=initial["repositories"][rid]["cursor_sha"]
+        observation={
+            "repository_id":rid,"status":"UNCHANGED","source_ref":"main",
+            "prior_sha":sha,"current_sha":sha,"observed_at":"2026-09-25T16:30:00Z",
+        }
+        state=advance_cycle(initial,self.cycle_receipt(initial,observation,finished_at="2026-09-25T16:30:00Z"))
         fake=FakeGitHub(current_heads())
         with tempfile.TemporaryDirectory() as td:
             path=Path(td)/"state.json"; path.write_text(json.dumps(state))
             run("sync",state_path=path,output_dir=Path(td)/"out",
                 fetch_json=fake,forced_now="2026-09-25T17:00:00Z")
             new=json.loads((Path(td)/"out"/"runtime_state.json").read_text())
-        self.assertEqual(new["sequence"],10)
+        self.assertEqual(new["sequence"],2)
+
+    def test_runtime_sequence_cannot_claim_missing_retained_history(self):
+        state=bootstrap_state(now="2026-09-25T18:00:00Z")
+        state["sequence"]=1
+        with self.assertRaisesRegex(RuntimeStateError,"history length"):
+            validate_state(state)
 
 if __name__=="__main__": unittest.main()
