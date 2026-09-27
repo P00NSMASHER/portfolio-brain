@@ -185,6 +185,34 @@ def validate_state(state:dict[str,Any])->None:
         req(inspection.get("source_path_count",0)>0,"proposal finding lacks implementation evidence")
     req(finding_ids==set(proposal_by_finding),"Hunter proposal inbox proposal/finding coverage mismatch")
 
+def backlog_summary(state:dict[str,Any])->dict[str,Any]:
+    normalized=normalize_state(state)
+    validate_state(normalized)
+    capacity=load_policy()["proposal_persistence"]["max_backlog_proposals"]
+    latest_cycle=normalized["cycle_id"]
+    origins=normalized["origins"]
+    backlog_count=len(normalized["proposals"])
+    carried=sum(1 for origin in origins.values() if origin["first_cycle_id"]!=latest_cycle)
+    originated_latest=sum(1 for origin in origins.values() if origin["first_cycle_id"]==latest_cycle)
+    seen_latest=sum(1 for origin in origins.values() if origin["last_cycle_id"]==latest_cycle)
+    first_seen=[origin["first_seen_at"] for origin in origins.values()]
+    return {
+      "schema_version":"1.0.0",
+      "state_id":normalized["state_id"],
+      "state_sequence":normalized["sequence"],
+      "latest_cycle_id":latest_cycle,
+      "backlog_proposals":backlog_count,
+      "carried_forward_proposals":carried,
+      "originated_latest_cycle":originated_latest,
+      "seen_latest_cycle":seen_latest,
+      "distinct_origin_cycles":len({origin["first_cycle_id"] for origin in origins.values()}),
+      "oldest_first_seen_at":min(first_seen) if first_seen else None,
+      "capacity":capacity,
+      "capacity_remaining":capacity-backlog_count,
+      "authority_class":"OBSERVE",
+      "rights_state":normalized["rights_state"],
+    }
+
 def _cycle_entries(receipt:dict[str,Any])->tuple[list[dict[str,Any]],list[dict[str,Any]]]:
     proposals=list(receipt.get("experiment_proposals") or [])
     all_findings=list(receipt.get("findings") or [])
