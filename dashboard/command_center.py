@@ -206,6 +206,44 @@ def build_command_center_snapshot() -> dict[str, Any]:
     ]
     action_executions = action_ledger.get("executions", [])
     sent_actions = [x for x in action_executions if x.get("status") == "SENT"]
+    proposal_findings = {
+        row["proposal_id"]: row for row in hunter_proposal_state.get("findings", [])
+    }
+    scheduler_by_source = {}
+    for work in scheduler_state.get("work_items", []):
+        source_ref = work.get("source_ref")
+        if isinstance(source_ref, str):
+            scheduler_by_source.setdefault(source_ref, []).append(work)
+    hunter_proposals = []
+    for proposal in hunter_proposal_state.get("proposals", []):
+        finding = proposal_findings.get(proposal["proposal_id"], {})
+        review_work = scheduler_by_source.get(proposal["proposal_id"], [])
+        review_work.sort(key=lambda row: (row.get("created_at") or "", row.get("scheduler_work_id") or ""), reverse=True)
+        current = review_work[0] if review_work else None
+        review_status = "AWAITING_SCHEDULER"
+        if current is not None:
+            review_status = {
+                "QUEUED":"REVIEW_QUEUED",
+                "ACTIVE":"REVIEW_ACTIVE",
+                "COMPLETE":"REVIEW_COMPLETE",
+                "CANCELLED":"REVIEW_CANCELLED",
+            }.get(current.get("state"), "REVIEW_UNKNOWN")
+        hunter_proposals.append({
+            "proposal_id": proposal["proposal_id"],
+            "finding_id": proposal["finding_id"],
+            "project_ids": proposal["project_ids"],
+            "repository_full_name": finding.get("repository_full_name"),
+            "revision": finding.get("revision"),
+            "rank_score": proposal["candidate_rank_score"],
+            "rank_band": proposal["candidate_rank_band"],
+            "soft_signals": proposal["candidate_soft_signals"],
+            "capability_key": finding.get("capability_key"),
+            "strategy_id": finding.get("strategy_id"),
+            "rights_state": hunter_proposal_state.get("rights_state"),
+            "review_status": review_status,
+            "scheduler_work_id": None if current is None else current.get("scheduler_work_id"),
+            "scheduler_work_state": None if current is None else current.get("state"),
+        })
     healthy_agents = telemetry["agents"].get("live", 0) + telemetry["agents"].get("idle_healthy", 0)
     stalled_agents = telemetry["agents"].get("stalled", 0)
     warming_agents = telemetry["agents"].get("warming_up", 0)
