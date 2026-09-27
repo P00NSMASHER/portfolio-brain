@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from hunting.autonomous_hunter import detect_gaps, load_policy, load_seed_state, load_strategies, run_cycle, select_objectives, validate_state
 from hunting.calibration import run_calibration
+from hunting.controlled_proof import load_cases as load_controlled_cases
 ROOT=Path(__file__).resolve().parents[1]
 class HunterValidationError(ValueError): pass
 def req(ok,msg):
@@ -66,11 +67,16 @@ def validate_hunter():
     req(calibration["rank_band_counts"]["HIGH"]>0 and calibration["rank_band_counts"]["MEDIUM"]>0 and calibration["rank_band_counts"]["LOW"]>0,"Hunter calibration does not exercise all rank bands")
     req(calibration["soft_signal_case_count"]>0,"Hunter calibration does not exercise soft ranking signals")
     req(calibration["network_calls"]==0 and calibration["state_mutations"]==0,"Hunter calibration widened authority")
+    controlled=load_controlled_cases()
+    req(controlled["authority_class"]=="OBSERVE","controlled Hunter proof authority widened")
+    req(controlled["completion_gate"]["min_retained_candidates"]>=3,"controlled Hunter proof retained gate too weak")
+    req(controlled["completion_gate"]["min_distinct_strategies"]>=2,"controlled Hunter proof strategy gate too weak")
+    req(len({x["strategy_id"] for x in controlled["cases"]})>=2,"controlled Hunter proof lacks strategy diversity")
     wf=(ROOT/".github/workflows/hunter-autonomous-cycle.yml").read_text()
-    for s in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_HUNTER_DISABLED","47 */6 * * *","cancel-in-progress: false","actions/upload-artifact@v4","python -m hunting.calibration --output hunting/out/calibration_report.json"]:
+    for s in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_HUNTER_DISABLED","47 */6 * * *","cancel-in-progress: false","actions/upload-artifact@v4","python -m hunting.calibration --output hunting/out/calibration_report.json","hunting/TRIGGER_CONTROLLED_PROOF","python -m hunting.controlled_proof --output hunting/out/controlled_proof.json"]:
         req(s in wf,f"Hunter workflow missing {s}")
     low=wf.lower()
     for forbidden in ["contents: write","pull-requests: write","issues: write","id-token: write","git push","gh pr","openai","anthropic"]:
         req(forbidden not in low,f"forbidden Hunter workflow capability: {forbidden}")
-    return {"pinned_components":len(expected),"strategies":len(strategies),"detected_gaps":len(gaps),"selected_objectives":len(objectives),"exploration_objectives":sum(1 for x in objectives if x["exploration"]),"hard_reject_reasons":evaluation["hard_reject_reasons"],"soft_signals_do_not_reject":evaluation["soft_signals_do_not_reject"],"ranking_max_score":ranking["max_score"],"rejection_funnel_reconciled":True,"query_outcomes":len(probe_receipt["query_outcomes"]),"calibration_cases":calibration["case_count"],"calibration_positive_retained":calibration["positive_retained"],"calibration_negative_rejected":calibration["negative_rejected"],"calibration_ambiguous_matched":calibration["ambiguous_matched"],"calibration_rank_bands":calibration["rank_band_counts"],"model_calls":0,"downstream_writes":0,"external_actions":0}
+    return {"pinned_components":len(expected),"strategies":len(strategies),"detected_gaps":len(gaps),"selected_objectives":len(objectives),"exploration_objectives":sum(1 for x in objectives if x["exploration"]),"hard_reject_reasons":evaluation["hard_reject_reasons"],"soft_signals_do_not_reject":evaluation["soft_signals_do_not_reject"],"ranking_max_score":ranking["max_score"],"rejection_funnel_reconciled":True,"query_outcomes":len(probe_receipt["query_outcomes"]),"calibration_cases":calibration["case_count"],"calibration_positive_retained":calibration["positive_retained"],"calibration_negative_rejected":calibration["negative_rejected"],"calibration_ambiguous_matched":calibration["ambiguous_matched"],"calibration_rank_bands":calibration["rank_band_counts"],"controlled_proof_cases":len(controlled["cases"]),"controlled_proof_min_retained":controlled["completion_gate"]["min_retained_candidates"],"controlled_proof_min_strategies":controlled["completion_gate"]["min_distinct_strategies"],"model_calls":0,"downstream_writes":0,"external_actions":0}
 if __name__=="__main__":print("portfolio-brain Step 9 Hunter: PASS",json.dumps(validate_hunter(),sort_keys=True))
