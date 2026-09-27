@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from hunting.autonomous_hunter import digest, load_policy, validate_state as validate_hunter_state
+from hunting.proposal_review_state import load_seed_state as load_review_seed_state, validate_state as validate_review_state
 
 ROOT=Path(__file__).resolve().parents[1]
 SEED_PATH=ROOT/"hunting"/"HUNTER_PROPOSAL_STATE_SEED.json"
@@ -256,6 +257,7 @@ def build_proposal_state(
     receipt:dict[str,Any],
     *,
     prior_state:dict[str,Any]|None=None,
+    review_state:dict[str,Any]|None=None,
 )->dict[str,Any]:
     validate_hunter_state(hunter_state)
     req(receipt.get("status")=="PASS","Hunter proposal state requires PASS cycle")
@@ -264,6 +266,9 @@ def build_proposal_state(
     prior=normalize_state(prior_state if prior_state is not None else load_seed_state())
     validate_state(prior)
     req(hunter_state["sequence"]>=prior["sequence"],"Hunter proposal state sequence rollback")
+    reviews=review_state if review_state is not None else load_review_seed_state()
+    validate_review_state(reviews)
+    reviewed_proposal_ids={row["proposal_id"] for row in reviews["reviews"]}
 
     current_proposals,current_findings=_cycle_entries(receipt)
     proposal_by_id={row["proposal_id"]:json.loads(json.dumps(row)) for row in prior["proposals"]}
@@ -295,21 +300,28 @@ def build_proposal_state(
             existing["last_seen_at"]=receipt["finished_at"]
             existing["last_hunter_sequence"]=hunter_state["sequence"]
 
-    maxn=load_policy()["proposal_persistence"]["max_backlog_proposals"]
+    persistence=load_policy()["proposal_persistence"]
+    maxn=persistence["max_backlog_proposals"]
+    req(persistence["review_aware_compaction"] is True,"Hunter proposal review-aware compaction disabled")
+    req(persistence["review_state_id"]=="portfolio-hunter-proposal-review-state","Hunter proposal review-state identity drifted")
+    req(persistence["unreviewed_proposals_protected_before_reviewed"] is True,"Hunter unreviewed proposal protection disabled")
+    req(persistence["compaction_policy"]=="DROP_REVIEWED_FIRST_THEN_OLDEST_LAST_SEEN_AFTER_BACKLOG_CAP","Hunter proposal compaction policy drifted")
     if len(order)>maxn:
-        keep=set(sorted(
+        drop_count=len(order)-maxn
+        eviction_order=sorted(
           order,
           key=lambda proposal_id:(
+            0 if proposal_id in reviewed_proposal_ids else 1,
             origins[proposal_id]["last_hunter_sequence"],
             origins[proposal_id]["last_seen_at"],
             proposal_id,
           ),
-          reverse=True,
-        )[:maxn])
-        order=[proposal_id for proposal_id in order if proposal_id in keep]
-        proposal_by_id={proposal_id:row for proposal_id,row in proposal_by_id.items() if proposal_id in keep}
-        finding_by_proposal={proposal_id:row for proposal_id,row in finding_by_proposal.items() if proposal_id in keep}
-        origins={proposal_id:row for proposal_id,row in origins.items() if proposal_id in keep}
+        )
+        drop=set(eviction_order[:drop_count])
+        order=[proposal_id for proposal_id in order if proposal_id not in drop]
+        proposal_by_id={proposal_id:row for proposal_id,row in proposal_by_id.items() if proposal_id not in drop}
+        finding_by_proposal={proposal_id:row for proposal_id,row in finding_by_proposal.items() if proposal_id not in drop}
+        origins={proposal_id:row for proposal_id,row in origins.items() if proposal_id not in drop}
 
     state={
       "schema_version":"1.0.0",
