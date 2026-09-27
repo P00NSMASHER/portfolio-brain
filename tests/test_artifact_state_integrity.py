@@ -164,7 +164,40 @@ class ArtifactStateIntegrityTests(unittest.TestCase):
             receipt=json.loads(metadata.read_text())
             self.assertEqual(receipt["artifact_id"],1)
             self.assertEqual(receipt["source_sequence"],9)
+            self.assertTrue(receipt["source_state_hash"].startswith("sha256:"))
             self.assertEqual(receipt["candidates_inspected"],2)
+
+    def test_conflicting_payloads_at_highest_sequence_fail_closed(self):
+        with tempfile.TemporaryDirectory() as td:
+            output=Path(td)/"runtime_state.json"
+            first=json.loads(self.state(9));first["branch"]="first"
+            second=json.loads(self.state(9));second["branch"]="second"
+            with self.assertRaisesRegex(InvalidStateArtifact,"conflicting state artifacts"):
+                self.restore(
+                    self.candidates(),
+                    {
+                        "new":artifact("runtime_state.json",json.dumps(first).encode()),
+                        "old":artifact("runtime_state.json",json.dumps(second).encode()),
+                    },
+                    output,
+                )
+            self.assertFalse(output.exists())
+
+    def test_canonical_duplicates_at_highest_sequence_restore_newest(self):
+        with tempfile.TemporaryDirectory() as td:
+            output=Path(td)/"runtime_state.json"
+            compact=self.state(9)
+            pretty=json.dumps(json.loads(compact),indent=2).encode()
+            status=self.restore(
+                self.candidates(),
+                {
+                    "new":artifact("runtime_state.json",pretty),
+                    "old":artifact("runtime_state.json",compact),
+                },
+                output,
+            )
+            self.assertEqual(status,"RESTORED")
+            self.assertEqual(json.loads(output.read_text())["sequence"],9)
 
     def test_restore_scan_is_bounded(self):
         data={"artifacts":[
