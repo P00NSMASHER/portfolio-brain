@@ -25,7 +25,6 @@ jobs:
     timeout-minutes: 5
     env:
       PORTFOLIO_HUNTER_DISABLED: ${{ vars.PORTFOLIO_HUNTER_DISABLED }}
-      PORTFOLIO_SPEND_DISABLED: ${{ vars.PORTFOLIO_SPEND_DISABLED }}
       PORTFOLIO_GITHUB_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
     steps:
