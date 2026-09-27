@@ -5,7 +5,10 @@ import unittest
 import warnings
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
+from urllib.error import HTTPError, URLError
 
+from runtime.artifact_state import ArtifactRestoreError, BudgetedHTTP
 from runtime.artifact_restore import InvalidStateArtifact, restore_latest_valid_state
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -23,6 +26,36 @@ def artifact(member, body, *, duplicate=False):
 
 
 class ArtifactStateIntegrityTests(unittest.TestCase):
+    def test_artifact_http_does_not_retry_permanent_failure(self):
+        error=HTTPError("https://api.github.com/example",404,"not found",None,None)
+        http=BudgetedHTTP("token",max_requests=6,retries=2,backoff=0)
+        with patch("runtime.artifact_state.open_url",side_effect=error) as opened:
+            with self.assertRaises(ArtifactRestoreError):
+                http.bytes("https://api.github.com/example")
+        self.assertEqual(opened.call_count,1)
+        self.assertEqual(http.requests,1)
+
+    def test_artifact_http_retries_transient_failure(self):
+        response=io.BytesIO(b"restored")
+        http=BudgetedHTTP("token",max_requests=6,retries=2,backoff=0)
+        with patch("runtime.artifact_state.open_url",side_effect=[URLError("temporary"),response]) as opened:
+            self.assertEqual(http.bytes("https://api.github.com/example"),b"restored")
+        self.assertEqual(opened.call_count,2)
+        self.assertEqual(http.requests,2)
+
+    def test_artifact_http_deadline_prevents_retry_backoff_overrun(self):
+        now=[10.0]; sleeps=[]
+        def unavailable(*_args,**_kwargs):
+            now[0]=11.0
+            raise URLError("temporary")
+        http=BudgetedHTTP("token",max_requests=6,retries=2,backoff=2,
+                          deadline=12.0,clock=lambda:now[0],sleep=sleeps.append)
+        with patch("runtime.artifact_state.open_url",side_effect=unavailable):
+            with self.assertRaisesRegex(ArtifactRestoreError,"time budget"):
+                http.bytes("https://api.github.com/example")
+        self.assertEqual(http.requests,1)
+        self.assertEqual(sleeps,[])
+
     def test_all_persistent_restorers_use_shared_validated_atomic_restore(self):
         for relative in [
             "runtime/artifact_state.py","cost_governor/artifact_state.py",
