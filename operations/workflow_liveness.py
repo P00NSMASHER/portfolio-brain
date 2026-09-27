@@ -22,6 +22,7 @@ ROOT=Path(__file__).resolve().parents[1]
 POLICY_PATH=ROOT/"operations"/"WORKFLOW_LIVENESS_POLICY.json"
 ACTIVE_STATUSES={"queued","in_progress","waiting","requested","pending"}
 FAILURE_CONCLUSIONS={"failure","cancelled","timed_out","action_required","startup_failure","stale"}
+TRUSTED_RUN_EVENTS={"schedule","workflow_dispatch","repository_dispatch","push"}
 
 class WorkflowLivenessError(RuntimeError):
     pass
@@ -73,9 +74,33 @@ def validate_policy(p:dict[str,Any])->None:
         prior_priority=target["priority"]
     req(isinstance(p["invariants"],list) and len(p["invariants"])>=5,"workflow liveness invariants missing")
 
-def evaluate_target(target:dict[str,Any],runs:list[dict[str,Any]],*,at:str,failure_retry_minutes:int)->dict[str,Any]:
+def _matches_target_run(target:dict[str,Any],row:dict[str,Any],*,default_branch:str)->bool:
+    """Bind liveness evidence to the governed workflow file on the governed branch.
+
+    Workflow display names are mutable and are not unique across files or branches.
+    Treating a name-only match as proof of health lets an unrelated run suppress
+    recovery of the actual production workflow.
+    """
+    return (
+      row.get("name")==target["workflow_name"]
+      and row.get("path")==f".github/workflows/{target['workflow_file']}"
+      and row.get("head_branch")==default_branch
+      and row.get("event") in TRUSTED_RUN_EVENTS
+    )
+
+def evaluate_target(
+    target:dict[str,Any],
+    runs:list[dict[str,Any]],
+    *,
+    at:str,
+    failure_retry_minutes:int,
+    default_branch:str="main",
+)->dict[str,Any]:
     now=_time(at)
-    matching=[row for row in runs if row.get("name")==target["workflow_name"]]
+    matching=[
+      row for row in runs
+      if _matches_target_run(target,row,default_branch=default_branch)
+    ]
     active=[
       row for row in matching
       if row.get("status") in ACTIVE_STATUSES
@@ -154,6 +179,7 @@ def recover_overdue(
       evaluate_target(
         target,runs,at=at,
         failure_retry_minutes=p["recent_failure_retry_after_minutes"],
+        default_branch=p["default_branch"],
       )
       for target in p["targets"]
     ]
@@ -221,7 +247,14 @@ def main()->int:
         requests+=1
         page_runs=json.loads(raw.decode()).get("workflow_runs",[])
         runs.extend(page_runs)
-        found.update(row.get("name") for row in page_runs if row.get("name") in target_names)
+        found.update(
+          target["workflow_name"]
+          for target in p["targets"]
+          if any(
+            _matches_target_run(target,row,default_branch=p["default_branch"])
+            for row in page_runs
+          )
+        )
         if target_names<=found or len(page_runs)<100:
             break
     def dispatch(workflow_file:str,branch:str)->None:
