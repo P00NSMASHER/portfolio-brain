@@ -68,6 +68,16 @@ def validate_value_proof():
         req(token in workflow,f"Step 8 value-proof workflow missing {token}")
     runtime_workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text()
     req("python -m model_router.feedback_artifact_state --output model_router/live/model_feedback_state.json" in runtime_workflow,"runtime does not restore verified model feedback")
+    bootstrap=(ROOT/".github/workflows/verified-feedback-bootstrap.yml").read_text()
+    for token in [
+      "value_proof/TRIGGER_VERIFIED_FEEDBACK_BOOTSTRAP",
+      "python -m value_proof.proof_artifact_state",
+      "python -m value_proof.feedback_loop",
+      "name: portfolio-hunter-state",
+      "name: portfolio-model-feedback-state",
+    ]:
+        req(token in bootstrap,f"Step 8 bootstrap workflow missing {token}")
+    req("PORTFOLIO_MODEL_API_KEY" not in bootstrap,"Step 8 bootstrap may not execute paid model work")
     return {
       "task_id":contract["task_id"],
       "builder_tier":route["tier"],
