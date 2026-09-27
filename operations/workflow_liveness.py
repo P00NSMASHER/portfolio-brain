@@ -181,8 +181,10 @@ def verify_work_proof(target:dict[str,Any],document:Any,*,run_id:int)->dict[str,
             return _proof("INVALID_WORK_PROOF","SCHEDULER_RECEIPT_INTEGRITY_INVALID")
         if not all(type(document.get(key)) is int and document[key]>=0 for key in fields):
             return _proof("INVALID_WORK_PROOF","SCHEDULER_RECEIPT_COUNTS_INVALID")
-        if document["attempted_count"]<1 or document["completed_count"]+document["deferred_count"]!=document["attempted_count"]:
+        if document["completed_count"]+document["deferred_count"]!=document["attempted_count"]:
             return _proof("INVALID_WORK_PROOF","SCHEDULER_EXECUTION_ACCOUNTING_INVALID")
+        if document["attempted_count"]==0 and document["remaining_queued_count"]!=0:
+            return _proof("INVALID_WORK_PROOF","SCHEDULER_IDLE_WITH_QUEUED_WORK")
         return _proof("VERIFIED_WORK","SCHEDULER_EXECUTION_RECEIPT",{
           "attempted":document["attempted_count"],"completed":document["completed_count"],
           "deferred":document["deferred_count"],"remaining_queued":document["remaining_queued_count"],
@@ -207,12 +209,16 @@ def verify_work_proof(target:dict[str,Any],document:Any,*,run_id:int)->dict[str,
             return _proof("INVALID_WORK_PROOF","HUNTER_RECEIPT_IDENTITY_INVALID")
         if not _valid_receipt_hash(document):
             return _proof("INVALID_WORK_PROOF","HUNTER_RECEIPT_INTEGRITY_INVALID")
-        if not isinstance(funnel,dict) or type(funnel.get("queries_executed")) is not int or funnel["queries_executed"]<1:
-            return _proof("INVALID_WORK_PROOF","HUNTER_NO_EXECUTED_QUERIES")
-        if not isinstance(outcomes,list):
-            return _proof("INVALID_WORK_PROOF","HUNTER_QUERY_OUTCOMES_INVALID")
+        if not isinstance(funnel,dict) or not isinstance(outcomes,list):
+            return _proof("INVALID_WORK_PROOF","HUNTER_QUERY_ACCOUNTING_INVALID")
+        executed=funnel.get("queries_executed")
+        suppressed=funnel.get("queries_suppressed")
+        if type(executed) is not int or type(suppressed) is not int or executed<0 or suppressed<0:
+            return _proof("INVALID_WORK_PROOF","HUNTER_QUERY_COUNTS_INVALID")
+        if executed+suppressed<1 or len(outcomes)<1:
+            return _proof("INVALID_WORK_PROOF","HUNTER_NO_BOUNDED_QUERY_EVALUATION")
         return _proof("VERIFIED_WORK","HUNTER_CYCLE_RECEIPT",{
-          "queries_executed":funnel["queries_executed"],"findings":len(document.get("findings",[])),
+          "queries_executed":executed,"queries_suppressed":suppressed,"findings":len(document.get("findings",[])),
           "retained":funnel.get("retained",0),"proposals":len(document.get("experiment_proposals",[])),
         })
 
