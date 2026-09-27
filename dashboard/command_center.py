@@ -1819,7 +1819,7 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
   .kpi .value{{font-size:2.5rem}}
   .card{{padding:18px;border-radius:22px;box-shadow:0 6px 24px rgba(0,0,0,.045)}}
   .card:hover{{transform:none}}
-  .three{{grid-template-columns:1fr}}
+  .three,.four{{grid-template-columns:1fr}}
   .switches{{grid-template-columns:repeat(2,minmax(0,1fr))}}
   .section-head{{display:block}}
   .section-head>.badge{{margin-top:12px}}
