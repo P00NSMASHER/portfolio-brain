@@ -30,13 +30,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Restore latest cost-governor state
-        run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
       - name: Check command-center workload controls
         id: cost
         run: >-
           python -m cost_governor.workflow_gate preflight
-          --state cost_governor/live/cost_state.json
+          --state cost_governor/COST_STATE_SEED.json
           --output-dir cost_governor/out
           --workflow-id command-center-pages
           --job-id publish
@@ -127,21 +125,6 @@ jobs:
         if: ${{ steps.cost.outputs.allowed == 'true' && steps.publication_gate.outputs.should_publish == 'true' && steps.pages.outcome != 'success' }}
         run: |
           echo "::notice title=Portfolio Brain Command Center::Static command center validated and uploaded as an artifact. GitHub Pages is not yet enabled for Actions in repository Settings > Pages."
-      - name: Commit conservative command-center compute usage
-        if: ${{ always() && steps.cost.outputs.allowed == 'true' }}
-        run: >-
-          python -m cost_governor.workflow_gate finalize
-          --state cost_governor/out/cost_state.json
-          --decision cost_governor/out/cost_decision.json
-          --output cost_governor/out/cost_state.json
-      - name: Upload sanitized cost-governor continuation state
-        if: ${{ always() && hashFiles('cost_governor/out/cost_state.json') != '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: portfolio-cost-governor-state
-          path: cost_governor/out/
-          if-no-files-found: error
-          retention-days: 30
       - name: Summarize command-center execution status
         if: ${{ always() }}
         shell: bash
