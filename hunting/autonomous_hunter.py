@@ -27,6 +27,7 @@ def slug(text):
 
 def load_policy(): return load("hunting/HUNTER_POLICY.json")
 def load_strategies(): return load("hunting/SEARCH_STRATEGIES.json")["strategies"]
+def load_query_concepts(): return load("hunting/QUERY_CONCEPTS.json")
 def load_seed_state(): return load("hunting/HUNTER_STATE_SEED.json")
 
 def validate_state(state):
@@ -59,6 +60,23 @@ def _project_capability_map():
             result.setdefault(source["canonical_key"],set()).add(target["canonical_key"])
     return result
 
+def search_concepts_for_gap(gap):
+    cfg=load_query_concepts()
+    generic=set(cfg["generic_categories"])
+    mapping=cfg["category_concepts"]
+    out=[]
+    for category in gap["categories"]:
+        for concept in mapping.get(category,[]):
+            if concept not in out:
+                out.append(concept)
+        if category not in generic and category not in mapping:
+            concept=category.replace("_"," ").strip()
+            if concept and concept not in out:
+                out.append(concept)
+    if not out:
+        out=["software architecture"]
+    return out[:cfg["max_concepts_per_gap"]]
+
 def detect_gaps():
     projects=load("registry/projects.json")["projects"]
     mapped=_project_capability_map()
@@ -89,14 +107,25 @@ def negative_hits(state,gap_id,strategy_id,query):
     return sum(int(x.get("hits",1)) for x in state["negative_knowledge"]
                if x.get("gap_id")==gap_id and x.get("strategy_id")==strategy_id and x.get("normalized_query")==norm)
 
-def _queries(gap,strategy):
-    category=" ".join(x.replace("_"," ") for x in gap["categories"][:2]) or gap["project_name"]
-    need=gap["capability_key"].replace("capability-coverage:","").replace("-"," ")
+def _queries(gap,strategy,state=None):
+    concepts=search_concepts_for_gap(gap)
     out=[]
-    for template in strategy["query_modes"]:
-        q=template.format(category=category,need=need)
-        if q not in out: out.append(q)
-    return out
+    for concept in concepts:
+        for template in strategy["query_modes"]:
+            q=" ".join(template.format(concept=concept).split())
+            if q not in out:
+                out.append(q)
+    if not out:
+        return []
+    if state is None:
+        return out
+    offset_seed=hashlib.sha256((gap["gap_id"]+"|"+strategy["strategy_id"]).encode()).hexdigest()
+    offset=(state["sequence"]+int(offset_seed[:8],16))%len(out)
+    rotated=out[offset:]+out[:offset]
+    return sorted(
+      rotated,
+      key=lambda q:negative_hits(state,gap["gap_id"],strategy["strategy_id"],q)
+    )
 
 def select_objectives(state):
     policy=load_policy(); strategies=load_strategies(); gaps=detect_gaps()
@@ -113,13 +142,13 @@ def select_objectives(state):
     objectives=[]
     for idx,gap in enumerate(gaps[:exploit_slots]):
         strategy=exploit_strategies[idx%len(exploit_strategies)]
-        queries=_queries(gap,strategy)[:policy["budgets"]["max_queries_per_objective"]]
+        queries=_queries(gap,strategy,state)[:policy["budgets"]["max_queries_per_objective"]]
         penalty=min(5,max((negative_hits(state,gap["gap_id"],strategy["strategy_id"],q) for q in queries),default=0))
         core={"gap_id":gap["gap_id"],"strategy_id":strategy["strategy_id"],"project_ids":gap["project_ids"],"capability_key":gap["capability_key"],"exploration":False}
         oid="HOBJ-"+hashlib.sha256(canon(core).encode()).hexdigest()[:20].upper()
         objectives.append({
           "schema_version":"1.0.0","objective_id":oid,"gap_id":gap["gap_id"],"project_ids":gap["project_ids"],
-          "need_type":gap["need_type"],"capability_key":gap["capability_key"],"strategy_id":strategy["strategy_id"],
+          "need_type":gap["need_type"],"capability_key":gap["capability_key"],"search_concepts":search_concepts_for_gap(gap),"strategy_id":strategy["strategy_id"],
           "exploration":False,
           "strategy_verified_value_outcomes":state["strategy_stats"][strategy["strategy_id"]]["verified_value_outcomes"],
           "strategy_selection_basis":"VERIFIED_OUTCOME_PRIORITY_THEN_DETERMINISTIC_ORDER" if policy["learning"].get("verified_outcome_strategy_priority") is True else "DETERMINISTIC_ORDER",
@@ -133,12 +162,12 @@ def select_objectives(state):
         start=state["exploration_cursor"]%len(gaps)
         for offset in range(min(explore_slots,len(gaps))):
             gap=gaps[(start+offset)%len(gaps)]
-            qs=_queries(gap,exploration)[:policy["budgets"]["max_queries_per_objective"]]
+            qs=_queries(gap,exploration,state)[:policy["budgets"]["max_queries_per_objective"]]
             core={"gap_id":gap["gap_id"],"strategy_id":exploration["strategy_id"],"project_ids":gap["project_ids"],"capability_key":gap["capability_key"],"exploration":True,"cursor":state["exploration_cursor"]+offset}
             oid="HOBJ-"+hashlib.sha256(canon(core).encode()).hexdigest()[:20].upper()
             objectives.append({
               "schema_version":"1.0.0","objective_id":oid,"gap_id":gap["gap_id"],"project_ids":gap["project_ids"],
-              "need_type":"EXPLORATION","capability_key":gap["capability_key"],"strategy_id":exploration["strategy_id"],
+              "need_type":"EXPLORATION","capability_key":gap["capability_key"],"search_concepts":search_concepts_for_gap(gap),"strategy_id":exploration["strategy_id"],
               "exploration":True,
               "priority_components":{"importance":gap["importance"],"uncertainty":5,"downstream_reuse":5,"external_validation_value":gap["external_validation_value"],"dead_end_penalty":0},
               "queries":qs,
@@ -193,7 +222,12 @@ def structural_inspection(candidate,inspection,objective):
     tests=[p for p in paths if any(k in p.casefold() for k in ("test","spec","fixture","regression"))]
     source=[p for p in code if p not in tests]
     docs=[p for p in paths if any(k in p.casefold() for k in ("readme","docs/","doc/"))]
-    tokens=[x for x in re.findall(r"[a-z0-9]+",objective["capability_key"].casefold()) if len(x)>3]
+    search_text=" ".join([*objective.get("search_concepts",[]),objective["capability_key"]])
+    stop={"business","product","research","infrastructure","coverage","capability","software","architecture","platform","system","framework","engine","testing","tests"}
+    tokens=sorted({
+      x for x in re.findall(r"[a-z0-9]+",search_text.casefold())
+      if len(x)>3 and x not in stop
+    })
     def hit_count(items):
         return sum(1 for p in items if any(t in p.casefold() for t in tokens))
     source_hits=hit_count(source)
