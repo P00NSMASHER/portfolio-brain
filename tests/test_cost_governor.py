@@ -42,29 +42,27 @@ def github_request(*, run_id="100", attempt=1, minutes=5, workflow="portfolio-au
 
 
 class CostGovernorTests(unittest.TestCase):
-    def test_every_governed_workflow_finalizes_cost_after_upstream_failure(self):
-        governed_workflows = [
+
+    def test_workflow_budget_and_workload_controls_are_separated(self):
+        nonpaid = [
             "agent-heartbeat-sweep.yml",
             "command-center-pages.yml",
             "continuous-learning-bootstrap.yml",
             "hunter-autonomous-cycle.yml",
-            "model-value-proof.yml",
             "portfolio-autonomous-scheduler.yml",
             "portfolio-notification-cycle.yml",
-            "runtime-worker.yml",
             "software-factory-candidate.yml",
             "verified-feedback-bootstrap.yml",
         ]
-        for filename in governed_workflows:
+        for filename in nonpaid:
             with self.subTest(workflow=filename):
                 workflow = (ROOT / ".github/workflows" / filename).read_text()
-                finalize = workflow.index("python -m cost_governor.workflow_gate finalize")
-                preceding_step = workflow.rfind("      - name:", 0, finalize)
-                block = workflow[preceding_step:finalize]
-                self.assertIn(
-                    "if: ${{ always() && steps.cost.outputs.allowed == 'true' }}",
-                    block,
-                )
+                self.assertNotIn("cost_governor.workflow_gate", workflow)
+                self.assertNotIn("portfolio-cost-governed-autonomy", workflow)
+        for filename in ("model-value-proof.yml", "runtime-worker.yml"):
+            workflow = (ROOT / ".github/workflows" / filename).read_text()
+            self.assertNotIn("cost_governor.workflow_gate", workflow)
+            self.assertIn("cost_governor.artifact_state", workflow)
 
     def test_watchdog_polling_is_hourly_not_quarter_hourly(self):
         workflow = (ROOT / ".github/workflows/portfolio-cost-watchdog.yml").read_text()
@@ -75,51 +73,39 @@ class CostGovernorTests(unittest.TestCase):
         self.assertIn('workflows: ["agent-heartbeat-sweep"]',workflow)
         self.assertIn('operations/TRIGGER_WORKFLOW_LIVENESS',workflow)
 
-    def test_runtime_subbudgets_isolate_push_observation_from_scheduled_reasoning(self):
-        p=policy()
-        keys={
-          "observe":"runtime-worker::runtime-observe",
-          "sync":"runtime-worker::runtime-sync",
-          "daily":"runtime-worker::runtime-daily",
-          "weekly":"runtime-worker::runtime-weekly",
-        }
-        cfg={mode:p["workflow_job_ceilings"][key]["daily_ceiling"] for mode,key in keys.items()}
-        self.assertEqual(sum(row["github_job_starts"] for row in cfg.values()),60)
-        self.assertLessEqual(
-            sum(row["github_job_starts"] for row in cfg.values()),
-            p["portfolio_ceiling"]["github_job_starts"]//2,
-        )
-        self.assertGreaterEqual(cfg["sync"]["github_job_starts"],26)
-        self.assertGreaterEqual(cfg["daily"]["github_job_starts"],2)
-        self.assertGreaterEqual(cfg["weekly"]["github_job_starts"],2)
-        self.assertLess(cfg["observe"]["github_job_starts"],sum(row["github_job_starts"] for row in cfg.values()))
-        workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text()
-        self.assertIn('--job-id "runtime-${RUNTIME_MODE}"',workflow)
 
-    def test_exhausted_observe_budget_does_not_block_hourly_sync_budget(self):
-        p=copy.deepcopy(policy())
-        observe=p["workflow_job_ceilings"]["runtime-worker::runtime-observe"]["daily_ceiling"]
-        sync=p["workflow_job_ceilings"]["runtime-worker::runtime-sync"]["daily_ceiling"]
-        observe["github_job_starts"]=1;observe["github_runner_minutes"]=5
-        sync["github_job_starts"]=1;sync["github_runner_minutes"]=5
+    def test_runtime_modes_use_service_specific_workload_controls(self):
+        p=policy()
+        controls=p["workflow_job_controls"]
+        self.assertEqual(p["workflow_job_ceilings"],{})
+        self.assertEqual(controls["runtime-worker::runtime-observe"]["concurrency_group"],"portfolio-runtime-observe")
+        self.assertEqual(controls["runtime-worker::runtime-sync"]["concurrency_group"],"portfolio-runtime-sync")
+        self.assertEqual(controls["runtime-worker::runtime-daily"]["concurrency_group"],"portfolio-paid-cost-ledger")
+        self.assertEqual(controls["runtime-worker::runtime-weekly"]["concurrency_group"],"portfolio-paid-cost-ledger")
+        workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text()
+        self.assertIn("portfolio-runtime-{0}",workflow)
+        self.assertIn("portfolio-paid-cost-ledger",workflow)
+        self.assertNotIn("cost_governor.workflow_gate",workflow)
+
+
+    def test_prior_github_job_counts_do_not_block_runtime_workload(self):
         state=load_state()
         state,d1=preflight(
             state,
             github_request(run_id="observe-1",workflow="runtime-worker",job="runtime-observe"),
-            at=AT,policy_data=p,
+            at=AT,
         )
         self.assertEqual(d1["status"],"RESERVED")
         state,d2=preflight(
             state,
             github_request(run_id="observe-2",workflow="runtime-worker",job="runtime-observe"),
-            at=AT,policy_data=p,
+            at=AT,
         )
-        self.assertEqual(d2["status"],"BLOCKED_BUDGET")
-        self.assertTrue(any("runtime-worker::runtime-observe:github_job_starts" in x for x in d2["reason_codes"]))
+        self.assertEqual(d2["status"],"RESERVED")
         state,d3=preflight(
             state,
             github_request(run_id="sync-1",workflow="runtime-worker",job="runtime-sync"),
-            at=AT,policy_data=p,
+            at=AT,
         )
         self.assertEqual(d3["status"],"RESERVED")
         self.assertTrue(d3["can_execute"])
@@ -142,83 +128,66 @@ class CostGovernorTests(unittest.TestCase):
         ]:
             self.assertIn(path,workflow)
 
-    def test_agent_heartbeat_sweep_is_cost_governed_and_bounded(self):
+
+    def test_agent_heartbeat_sweep_uses_workload_controls_not_paid_budget(self):
         workflow=(ROOT/".github/workflows/agent-heartbeat-sweep.yml").read_text()
         self.assertIn('cron: "29 */2 * * *"',workflow)
-        self.assertIn("portfolio-cost-governed-autonomy",workflow)
-        self.assertIn("cost_governor.workflow_gate preflight",workflow)
-        self.assertIn("cost_governor.workflow_gate finalize",workflow)
+        self.assertIn("portfolio-telemetry-heartbeats",workflow)
+        self.assertNotIn("cost_governor.workflow_gate",workflow)
         p=policy()
-        self.assertIn("agent-heartbeat-sweep",p["managed_workflow_names"])
-        cfg=p["workflow_job_ceilings"]["agent-heartbeat-sweep::heartbeat"]
+        cfg=p["workflow_job_controls"]["agent-heartbeat-sweep::heartbeat"]
         self.assertEqual(cfg["max_minutes_per_job"],2)
-        self.assertLessEqual(cfg["daily_ceiling"]["github_job_starts"],13)
-        self.assertLessEqual(cfg["daily_ceiling"]["github_runner_minutes"],26)
-        self.assertEqual(cfg["daily_ceiling"]["cost_usd"],0)
-        self.assertEqual(cfg["daily_ceiling"]["model_calls"],0)
-        self.assertEqual(cfg["daily_ceiling"]["api_calls"],0)
+        self.assertTrue(cfg["event_coalescing"])
+        self.assertEqual(cfg["concurrency_group"],"portfolio-telemetry-heartbeats")
 
-    def test_model_value_proof_is_one_shot_cost_governed_and_bounded(self):
+
+    def test_model_value_proof_reserves_paid_budget_only_at_model_invocation(self):
         workflow=(ROOT/".github/workflows/model-value-proof.yml").read_text()
-        self.assertIn("portfolio-cost-governed-autonomy",workflow)
-        self.assertIn("cost_governor.workflow_gate preflight",workflow)
-        self.assertIn("cost_governor.workflow_gate finalize",workflow)
+        self.assertIn("portfolio-paid-cost-ledger",workflow)
+        self.assertNotIn("cost_governor.workflow_gate",workflow)
+        self.assertIn("cost_governor.artifact_state",workflow)
+        self.assertIn("portfolio-cost-governor-state",workflow)
         self.assertIn("PORTFOLIO_MODEL_API_KEY",workflow)
+        self.assertIn("python -m value_proof.model_task",workflow)
+        self.assertIn("python -m value_proof.verifier",workflow)
         self.assertIn("value_proof.end_to_end",workflow)
-        self.assertNotIn("\\${{",workflow)
         self.assertNotIn("\n  schedule:",workflow)
         p=policy()
-        self.assertIn("model-value-proof",p["managed_workflow_names"])
-        cfg=p["workflow_job_ceilings"]["model-value-proof::proof"]
+        self.assertIn("model-value-proof",p["paid_workflow_names"])
+        cfg=p["workflow_job_controls"]["model-value-proof::proof"]
         self.assertEqual(cfg["max_minutes_per_job"],5)
-        self.assertEqual(cfg["daily_ceiling"]["github_job_starts"],1)
-        self.assertEqual(cfg["daily_ceiling"]["github_runner_minutes"],5)
-        self.assertEqual(cfg["daily_ceiling"]["cost_usd"],0)
-        self.assertEqual(cfg["daily_ceiling"]["model_calls"],0)
-        self.assertEqual(cfg["daily_ceiling"]["api_calls"],0)
+        self.assertEqual(cfg["concurrency_group"],"portfolio-paid-cost-ledger")
 
-    def test_verified_feedback_bootstrap_is_one_shot_bounded_and_model_free(self):
+
+    def test_verified_feedback_bootstrap_is_model_free_and_workload_controlled(self):
         workflow=(ROOT/".github/workflows/verified-feedback-bootstrap.yml").read_text()
-        self.assertIn("portfolio-cost-governed-autonomy",workflow)
-        self.assertIn("cost_governor.workflow_gate preflight",workflow)
-        self.assertIn("cost_governor.workflow_gate finalize",workflow)
+        self.assertIn("portfolio-learning-feedback",workflow)
+        self.assertNotIn("cost_governor.workflow_gate",workflow)
         self.assertIn("value_proof.proof_artifact_state",workflow)
         self.assertIn("value_proof.feedback_loop",workflow)
         self.assertNotIn("PORTFOLIO_MODEL_API_KEY",workflow)
         self.assertNotIn("value_proof.model_task",workflow)
         self.assertNotIn("value_proof.verifier",workflow)
-        self.assertNotIn("\n  schedule:",workflow)
         p=policy()
-        self.assertIn("verified-feedback-bootstrap",p["managed_workflow_names"])
-        cfg=p["workflow_job_ceilings"]["verified-feedback-bootstrap::feedback"]
+        cfg=p["workflow_job_controls"]["verified-feedback-bootstrap::feedback"]
         self.assertEqual(cfg["max_minutes_per_job"],2)
-        self.assertEqual(cfg["daily_ceiling"]["github_job_starts"],1)
-        self.assertEqual(cfg["daily_ceiling"]["github_runner_minutes"],2)
-        self.assertEqual(cfg["daily_ceiling"]["model_calls"],0)
-        self.assertEqual(cfg["daily_ceiling"]["api_calls"],0)
-        self.assertEqual(cfg["daily_ceiling"]["cost_usd"],0)
+        self.assertEqual(cfg["concurrency_group"],"portfolio-learning-feedback")
 
-    def test_continuous_learning_bootstrap_is_bounded_and_model_free(self):
+
+    def test_continuous_learning_bootstrap_is_model_free_and_workload_controlled(self):
         workflow=(ROOT/".github/workflows/continuous-learning-bootstrap.yml").read_text()
-        self.assertIn("portfolio-cost-governed-autonomy",workflow)
-        self.assertIn("cost_governor.workflow_gate preflight",workflow)
-        self.assertIn("cost_governor.workflow_gate finalize",workflow)
+        self.assertIn("portfolio-learning-continuous",workflow)
+        self.assertNotIn("cost_governor.workflow_gate",workflow)
         self.assertIn("value_proof.proof_artifact_state",workflow)
         self.assertIn("learning.live_observations",workflow)
         self.assertIn("learning.integrity",workflow)
         self.assertNotIn("PORTFOLIO_MODEL_API_KEY",workflow)
         self.assertNotIn("python -m value_proof.model_task",workflow)
         self.assertNotIn("python -m value_proof.verifier",workflow)
-        self.assertNotIn("\n  schedule:",workflow)
         p=policy()
-        self.assertIn("continuous-learning-bootstrap",p["managed_workflow_names"])
-        cfg=p["workflow_job_ceilings"]["continuous-learning-bootstrap::bootstrap"]
+        cfg=p["workflow_job_controls"]["continuous-learning-bootstrap::bootstrap"]
         self.assertEqual(cfg["max_minutes_per_job"],2)
-        self.assertEqual(cfg["daily_ceiling"]["github_job_starts"],1)
-        self.assertEqual(cfg["daily_ceiling"]["github_runner_minutes"],2)
-        self.assertEqual(cfg["daily_ceiling"]["model_calls"],0)
-        self.assertEqual(cfg["daily_ceiling"]["api_calls"],0)
-        self.assertEqual(cfg["daily_ceiling"]["cost_usd"],0)
+        self.assertEqual(cfg["concurrency_group"],"portfolio-learning-continuous")
 
     def test_command_center_hourly_refresh_is_cost_governed(self):
         workflow = (ROOT / ".github/workflows/command-center-pages.yml").read_text()
