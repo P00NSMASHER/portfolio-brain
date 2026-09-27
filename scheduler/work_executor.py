@@ -26,6 +26,7 @@ from hunting.autonomous_hunter import (
     run_cycle as run_hunter_cycle,
     validate_state as validate_hunter_state,
 )
+from hunting.proposal_state import build_proposal_state
 from scheduler.autonomous_scheduler import (
     claim_work,
     complete_work,
@@ -453,6 +454,8 @@ def write_outputs(
         (hunter_output_dir / "hunt_objectives.json").write_text(json.dumps(cycle["objectives"], indent=2) + "\n", encoding="utf-8")
         (hunter_output_dir / "hunt_findings.json").write_text(json.dumps(cycle["findings"], indent=2) + "\n", encoding="utf-8")
         (hunter_output_dir / "experiment_proposals.json").write_text(json.dumps(cycle["experiment_proposals"], indent=2) + "\n", encoding="utf-8")
+        proposal_state=build_proposal_state(state,cycle)
+        (hunter_output_dir / "hunter_proposal_state.json").write_text(json.dumps(proposal_state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def main() -> None:
