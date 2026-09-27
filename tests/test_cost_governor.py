@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from model_router.model_router import prepare_governed_execution
 from cost_governor.cancel_managed_jobs import managed_run_ids
+from cost_governor.workflow_gate import governed_github_attempt
 from cost_governor.cost_governor import (
     CostGovernorError,
     cancel_reservation,
@@ -184,6 +185,50 @@ class CostGovernorTests(unittest.TestCase):
         state, decision = preflight(state, changed, at=AT)
         self.assertEqual(decision["status"], "BLOCKED_IDEMPOTENCY_COLLISION")
         self.assertFalse(decision["can_execute"])
+
+    def test_cancelled_before_preflight_rerun_starts_at_governed_attempt_one(self):
+        state=load_state()
+        self.assertEqual(
+            governed_github_attempt(state,run_id="cancelled-run",job_id="feedback",observed_attempt=2),
+            1,
+        )
+
+    def test_skipped_github_attempt_numbers_advance_only_one_governed_retry(self):
+        state=load_state()
+        first_req=github_request(run_id="retry-run",attempt=1)
+        state,first=preflight(state,first_req,at=AT)
+        self.assertEqual(first["status"],"RESERVED")
+        self.assertEqual(
+            governed_github_attempt(state,run_id="retry-run",job_id="schedule",observed_attempt=3),
+            2,
+        )
+
+    def test_same_github_attempt_remains_idempotent_after_reservation(self):
+        state=load_state()
+        req=github_request(run_id="same-run",attempt=1)
+        state,first=preflight(state,req,at=AT)
+        self.assertEqual(first["status"],"RESERVED")
+        self.assertEqual(
+            governed_github_attempt(state,run_id="same-run",job_id="schedule",observed_attempt=1),
+            1,
+        )
+        state,second=preflight(state,req,at=AT)
+        self.assertEqual(second["status"],"DUPLICATE_SUPPRESSED")
+
+    def test_governed_retry_still_cannot_exceed_retry_limit(self):
+        state=load_state()
+        first=github_request(run_id="limit-run",attempt=1)
+        state,d1=preflight(state,first,at=AT)
+        self.assertEqual(d1["status"],"RESERVED")
+        second=github_request(run_id="limit-run",attempt=2)
+        state,d2=preflight(state,second,at=AT)
+        self.assertEqual(d2["status"],"RESERVED")
+        governed=governed_github_attempt(state,run_id="limit-run",job_id="schedule",observed_attempt=7)
+        self.assertEqual(governed,3)
+        third=github_request(run_id="limit-run",attempt=governed)
+        _,d3=preflight(state,third,at=AT)
+        self.assertEqual(d3["status"],"BLOCKED_RETRY_LIMIT")
+        self.assertIn("RETRY_LIMIT_EXCEEDED",d3["reason_codes"])
 
     def test_retry_sequence_cannot_start_at_three(self):
         _, decision = preflight(load_state(), github_request(attempt=3), at=AT)
