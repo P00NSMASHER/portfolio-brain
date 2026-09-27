@@ -45,7 +45,9 @@ def review_receipt():
       "result":result,
       "evidence_refs":[
         "hunter-proposal:HEXP-TEST-REVIEW",
+        "hunter-finding:HFD-TEST-REVIEW",
         "github:public/example@"+"a"*40,
+        "git-tree:"+"b"*40,
         "license-metadata:MIT",
       ],
       "authority_granted":False,
@@ -108,6 +110,57 @@ class HunterProposalReviewStateTests(unittest.TestCase):
             receipt["receipt_hash"]=digest(body)
             with self.assertRaises(HunterProposalReviewError):
                 apply_execution_receipts(load_seed_state(),[receipt])
+
+    def test_source_receipt_cannot_self_attest_authority(self):
+        receipt=review_receipt()
+        receipt["authority_granted"]=True
+        body=dict(receipt);body.pop("receipt_hash")
+        receipt["receipt_hash"]=digest(body)
+        with self.assertRaises(HunterProposalReviewError):
+            apply_execution_receipts(load_seed_state(),[receipt])
+
+    def test_source_receipt_cannot_persist_private_or_injected_evidence(self):
+        for unsafe in ("email:buyer@example.com","safe\n::error title=PWNED::"):
+            receipt=review_receipt()
+            receipt["evidence_refs"].append(unsafe)
+            body=dict(receipt);body.pop("receipt_hash")
+            receipt["receipt_hash"]=digest(body)
+            with self.assertRaises(HunterProposalReviewError):
+                apply_execution_receipts(load_seed_state(),[receipt])
+
+    def test_source_receipt_requires_bounded_projects_and_chronology(self):
+        for field,value in (
+            ("project_ids",["../../PRJ-002"]),
+            ("finished_at","not-a-timestamp"),
+            ("authority_granted","false"),
+        ):
+            receipt=review_receipt()
+            receipt[field]=value
+            body=dict(receipt);body.pop("receipt_hash")
+            receipt["receipt_hash"]=digest(body)
+            with self.assertRaises(HunterProposalReviewError):
+                apply_execution_receipts(load_seed_state(),[receipt])
+
+    def test_restored_state_rejects_timestamp_and_applied_id_projection_tampering(self):
+        state,_=apply_execution_receipts(load_seed_state(),[review_receipt()])
+        rolled=copy.deepcopy(state)
+        rolled["updated_at"]="2026-09-27T07:19:59Z"
+        with self.assertRaises(HunterProposalReviewError):
+            validate_state(rolled)
+        detached=copy.deepcopy(state)
+        detached["applied_execution_ids"]=[]
+        with self.assertRaises(HunterProposalReviewError):
+            validate_state(detached)
+
+    def test_restored_state_rejects_rehashed_semantically_unbound_evidence(self):
+        state,_=apply_execution_receipts(load_seed_state(),[review_receipt()])
+        poisoned=copy.deepcopy(state)
+        row=poisoned["reviews"][0]
+        row["evidence_refs"]=["hunter-proposal:HEXP-TEST-REVIEW"]
+        body=dict(row);body.pop("review_hash")
+        row["review_hash"]=digest(body)
+        with self.assertRaises(HunterProposalReviewError):
+            validate_state(poisoned)
 
 
 if __name__=="__main__":
