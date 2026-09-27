@@ -107,14 +107,6 @@ jobs:
           python -m learning.integrity             --hunter-state value_proof/out/hunter_state.json             --model-feedback-state value_proof/out/model_feedback_state.json             --learning-state value_proof/out/learning_observation_state.json             > value_proof/out/learning_integrity.json
           python -c "import json; x=json.load(open('value_proof/out/learning_integrity.json')); assert x['status']=='HEALTHY', x"
 
-      - name: Commit conservative bootstrap job usage
-        if: ${{ always() && steps.cost.outputs.allowed == 'true' }}
-        run: >-
-          python -m cost_governor.workflow_gate finalize
-          --state cost_governor/out/cost_state.json
-          --decision cost_governor/out/cost_decision.json
-          --output cost_governor/out/cost_state.json
-
       - name: Upload learning bootstrap proof
         if: ${{ always() && steps.cost.outputs.allowed == 'true' && hashFiles('value_proof/out/learning_integrity.json') != '' }}
         uses: actions/upload-artifact@v4
