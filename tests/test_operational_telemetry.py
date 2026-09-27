@@ -76,17 +76,79 @@ class OperationalTelemetryTests(unittest.TestCase):
         hunter_row=next(x for x in out["agents"]["agents"] if x["agent_id"]=="AGT-HUNTER")
         self.assertEqual(hunter_row["heartbeat_health"],"LIVE")
         self.assertEqual(out["cycles"]["latest_overall"]["subsystem"],"runtime")
-        self.assertEqual(out["runtime_sync_proof"]["status"],"UNVERIFIED_SYNC_WORK")
+        self.assertEqual(out["runtime_sync_proof"]["status"],"VERIFIED_SYNC_WORK")
+        self.assertEqual(out["runtime_sync_proof"]["source_run_id"],"telemetry-1")
         self.assertEqual(out["hunter"]["totals"]["candidates"],7)
         self.assertGreaterEqual(out["failures"]["count"],1)
 
-    def test_runtime_sync_proof_requires_same_run_cost_receipt(self):
-        runtime={"recent_cycles":[{"mode":"sync","status":"PASS","cycle_id":"RC-1","receipt_hash":"sha256:"+"a"*64}]}
-        source={"sources":{"runtime":{"status":"LIVE","source_run_id":"42"}}}
-        cost={"reservations":[{"workflow_id":"runtime-worker","job_id":"runtime-sync","status":"COMMITTED","evidence_refs":["github-run:42"]}]}
-        self.assertEqual(telemetry._runtime_sync_proof(runtime,cost,source)["status"],"VERIFIED_SYNC_WORK")
-        cost["reservations"][0]["evidence_refs"]=["github-run:41"]
-        self.assertEqual(telemetry._runtime_sync_proof(runtime,cost,source)["status"],"UNVERIFIED_SYNC_WORK")
+    def test_runtime_sync_proof_survives_newer_observe_artifact(self):
+        runtime={"recent_cycles":[{
+            "mode":"sync","status":"PASS","cycle_id":"RC-1",
+            "finished_at":"2026-09-26T11:59:30Z","receipt_hash":"sha256:"+"a"*64
+        },{
+            "mode":"observe","status":"PASS","cycle_id":"RC-2",
+            "finished_at":"2026-09-26T12:00:30Z","receipt_hash":"sha256:"+"b"*64
+        }]}
+        source={"generated_at":"2026-09-26T12:01:00Z","sources":{
+            "runtime":{"status":"LIVE","source_run_id":99},
+            "cost":{"status":"LIVE","source_run_id":99},
+        }}
+        cost={"reservations":[{
+            "reservation_id":"CRES-SYNC",
+            "resource_kind":"GITHUB_JOB",
+            "workflow_id":"runtime-worker","job_id":"runtime-sync","status":"COMMITTED",
+            "created_at":"2026-09-26T11:59:00Z",
+            "committed_at":"2026-09-26T12:00:00Z",
+            "evidence_refs":["github-run:42","workflow:runtime-worker","job:runtime-sync","github-run:42:finalized"],
+        }]}
+        proof=telemetry._runtime_sync_proof(runtime,cost,source)
+        self.assertEqual(proof["status"],"VERIFIED_SYNC_WORK")
+        self.assertEqual(proof["source_run_id"],42)
+        self.assertEqual(proof["runtime_artifact_source_run_id"],99)
+        self.assertEqual(proof["reservation_id"],"CRES-SYNC")
+        self.assertEqual(proof["cycle_id"],"RC-1")
+
+    def test_runtime_sync_proof_fails_closed_without_temporal_reservation_match(self):
+        runtime={"recent_cycles":[{
+            "mode":"sync","status":"PASS","cycle_id":"RC-1",
+            "finished_at":"2026-09-26T11:59:30Z","receipt_hash":"sha256:"+"a"*64
+        }]}
+        source={"generated_at":"2026-09-26T12:01:00Z","sources":{
+            "runtime":{"status":"LIVE","source_run_id":99},
+            "cost":{"status":"LIVE","source_run_id":99},
+        }}
+        cost={"reservations":[{
+            "reservation_id":"CRES-WRONG-WINDOW",
+            "resource_kind":"GITHUB_JOB",
+            "workflow_id":"runtime-worker","job_id":"runtime-sync","status":"COMMITTED",
+            "created_at":"2026-09-26T11:00:00Z",
+            "committed_at":"2026-09-26T11:01:00Z",
+            "evidence_refs":["github-run:42"],
+        }]}
+        proof=telemetry._runtime_sync_proof(runtime,cost,source)
+        self.assertEqual(proof["status"],"UNVERIFIED_SYNC_WORK")
+        self.assertEqual(proof["reason"],"MISSING_MATCHING_SYNC_RESERVATION")
+
+    def test_runtime_sync_proof_rejects_stale_sync_even_if_observe_state_is_live(self):
+        runtime={"recent_cycles":[{
+            "mode":"sync","status":"PASS","cycle_id":"RC-OLD",
+            "finished_at":"2026-09-26T09:00:00Z","receipt_hash":"sha256:"+"a"*64
+        }]}
+        source={"generated_at":"2026-09-26T12:01:00Z","sources":{
+            "runtime":{"status":"LIVE","source_run_id":99},
+            "cost":{"status":"LIVE","source_run_id":99},
+        }}
+        cost={"reservations":[{
+            "reservation_id":"CRES-OLD",
+            "resource_kind":"GITHUB_JOB",
+            "workflow_id":"runtime-worker","job_id":"runtime-sync","status":"COMMITTED",
+            "created_at":"2026-09-26T08:59:00Z",
+            "committed_at":"2026-09-26T09:01:00Z",
+            "evidence_refs":["github-run:42"],
+        }]}
+        proof=telemetry._runtime_sync_proof(runtime,cost,source)
+        self.assertEqual(proof["status"],"UNVERIFIED_SYNC_WORK")
+        self.assertEqual(proof["reason"],"SYNC_CYCLE_TOO_OLD")
 
     def test_health_check_cannot_hide_stalled_assigned_work(self):
         scheduler,receipt=schedule_cycle(
