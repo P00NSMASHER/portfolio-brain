@@ -6,6 +6,10 @@ on:
   repository_dispatch:
     types: ["portfolio_hunt"]
   workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - "hunting/TRIGGER_CONTROLLED_PROOF"
 
 permissions:
   contents: read
@@ -52,8 +56,11 @@ jobs:
       - name: Verify Hunter calibration corpus
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m hunting.calibration --output hunting/out/calibration_report.json
+      - name: Run controlled Hunter proof
+        if: ${{ steps.cost.outputs.allowed == 'true' && github.event_name == 'push' }}
+        run: python -m hunting.controlled_proof --output hunting/out/controlled_proof.json
       - name: Run autonomous bounded Hunter cycle
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.cost.outputs.allowed == 'true' && github.event_name != 'push' }}
         run: python -m hunting.autonomous_hunter --state hunting/live/hunter_state.json --output-dir hunting/out
       - name: Heartbeat Hunter
         if: ${{ steps.cost.outputs.allowed == 'true' }}
@@ -66,7 +73,7 @@ jobs:
           --source-workflow hunter-autonomous-cycle
           --source-run-id "${GITHUB_RUN_ID}"
       - name: Validate state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.cost.outputs.allowed == 'true' && github.event_name != 'push' }}
         run: python -c "import json; from hunting.autonomous_hunter import validate_state; validate_state(json.load(open('hunting/out/hunter_state.json')))"
       - name: Commit conservative Hunter compute usage
         if: ${{ steps.cost.outputs.allowed == 'true' }}

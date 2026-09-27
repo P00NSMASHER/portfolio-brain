@@ -163,6 +163,10 @@ class GitHubPublicProvider:
         q=urllib.parse.quote(query+" fork:false archived:false")
         data=self._get(f"https://api.github.com/search/repositories?q={q}&sort=stars&order=desc&per_page={per}")
         return [x for x in data.get("items",[]) if x.get("private") is False][:per]
+    def repository_metadata(self,full_name):
+        data=self._get("https://api.github.com/repos/"+urllib.parse.quote(full_name,safe="/"))
+        req(data.get("private") is False,"Hunter controlled candidate must be public")
+        return data
     def inspect(self,candidate):
         full=candidate["full_name"]; branch=candidate.get("default_branch") or "main"
         base=f"https://api.github.com/repos/{full}"
