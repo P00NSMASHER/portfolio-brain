@@ -575,6 +575,9 @@ def main():
       "rejection_funnel":receipt.get("rejection_funnel",{}),
     },indent=2)+"\n")
     (out/"experiment_proposals.json").write_text(json.dumps(receipt["experiment_proposals"],indent=2)+"\n")
+    from hunting.proposal_state import build_proposal_state
+    proposal_state=build_proposal_state(state,receipt)
+    (out/"hunter_proposal_state.json").write_text(json.dumps(proposal_state,indent=2,sort_keys=True)+"\n")
     total=sum(p.stat().st_size for p in out.iterdir() if p.is_file())
     if total>load_policy()["budgets"]["max_output_bytes"]: raise HunterError("Hunter output byte budget exceeded")
     print(json.dumps({"cycle_id":receipt["cycle_id"],"objectives":len(receipt["objectives"]),"findings":len(receipt["findings"]),"proposals":len(receipt["experiment_proposals"]),"status":receipt["status"]}))
