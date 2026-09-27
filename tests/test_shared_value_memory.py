@@ -1,6 +1,6 @@
 import copy, unittest
 from memory.value_memory_adapter import (
-    SharedMemoryError, canonical_hash, load_pin, project_upstream_summary,
+    SharedMemoryError, canonical_hash, load_pin, outcome_hash, project_upstream_summary,
     upstream_registration_args, validate_credit_conservation, validate_memory,
     validate_outcome, verified_outcome_calls
 )
@@ -17,14 +17,21 @@ def mem():
 
 def outcome(state="VERIFIED", event="EVT-OUTCOME-0001", fraction=1.0):
     verified=state=="VERIFIED"
-    return {
+    receipt={
       "schema_version":"1.0.0","outcome_id":"MOUT-PORTFOLIO-0001","memory_id":"MEM-PORTFOLIO-0001",
       "event_id":event,"project_id":"PRJ-000","objective_id":"OBJ-000","reward":0.8,
       "attribution_fraction":fraction,"evidence_ids":["EVD-OUTCOME-0001"],"evidence_state":state,
       "observer_actor_id":"AGT-RESEARCHER","verifier_actor_id":"AGT-AUDITOR" if verified else None,
       "verification_report_hash":"sha256:"+"a"*64 if verified else None,
-      "observed_at":"2026-09-25T16:00:00Z","verified_at":"2026-09-25T16:01:00Z" if verified else None
+      "observed_at":"2026-09-25T16:00:00Z","verified_at":"2026-09-25T16:01:00Z" if verified else None,
+      "outcome_hash":""
     }
+    receipt["outcome_hash"]=outcome_hash(receipt)
+    return receipt
+
+def resign(value):
+    value["outcome_hash"]=outcome_hash(value)
+    return value
 
 class SharedValueMemoryTests(unittest.TestCase):
     def test_pin_reuses_upstream_engine(self):
@@ -73,6 +80,14 @@ class SharedValueMemoryTests(unittest.TestCase):
         o=outcome(); o["verification_report_hash"]=None
         with self.assertRaises(SharedMemoryError): validate_outcome(o)
 
+    def test_verified_learning_rejects_post_verification_reward_tampering(self):
+        o=outcome()
+        original_hash=o["outcome_hash"]
+        o["reward"]=-0.8
+        self.assertEqual(o["outcome_hash"],original_hash)
+        with self.assertRaisesRegex(SharedMemoryError,"does not bind"):
+            validate_outcome(o)
+
     def test_project_attribution_is_preserved(self):
         m=mem(); o=outcome(); o["project_id"]="PRJ-005"
         with self.assertRaises(SharedMemoryError): verified_outcome_calls(m,o)
@@ -83,18 +98,18 @@ class SharedValueMemoryTests(unittest.TestCase):
 
     def test_verified_credit_is_conserved_across_memories(self):
         a=outcome(event="EVT-OUTCOME-0002",fraction=0.6)
-        b=copy.deepcopy(a); b["outcome_id"]="MOUT-PORTFOLIO-0002"; b["memory_id"]="MEM-PORTFOLIO-0002"; b["attribution_fraction"]=0.5
+        b=copy.deepcopy(a); b["outcome_id"]="MOUT-PORTFOLIO-0002"; b["memory_id"]="MEM-PORTFOLIO-0002"; b["attribution_fraction"]=0.5; resign(b)
         with self.assertRaises(SharedMemoryError): validate_credit_conservation([a,b])
 
     def test_duplicate_event_cannot_be_replayed_into_same_memory(self):
         a=outcome(event="EVT-OUTCOME-0003",fraction=0.5)
-        b=copy.deepcopy(a); b["outcome_id"]="MOUT-PORTFOLIO-0002"; b["attribution_fraction"]=0.5
+        b=copy.deepcopy(a); b["outcome_id"]="MOUT-PORTFOLIO-0002"; b["attribution_fraction"]=0.5; resign(b)
         with self.assertRaisesRegex(SharedMemoryError,"duplicate event for memory"):
             validate_credit_conservation([a,b])
 
     def test_unverified_observations_do_not_consume_verified_credit(self):
         a=outcome(event="EVT-OUTCOME-0004",fraction=1.0)
-        b=copy.deepcopy(a); b["outcome_id"]="MOUT-PORTFOLIO-0002"; b["memory_id"]="MEM-PORTFOLIO-0002"; b["evidence_state"]="OBSERVED"; b["verifier_actor_id"]=None; b["verification_report_hash"]=None; b["verified_at"]=None
+        b=copy.deepcopy(a); b["outcome_id"]="MOUT-PORTFOLIO-0002"; b["memory_id"]="MEM-PORTFOLIO-0002"; b["evidence_state"]="OBSERVED"; b["verifier_actor_id"]=None; b["verification_report_hash"]=None; b["verified_at"]=None; resign(b)
         validate_credit_conservation([a,b])
 
     def test_verified_positive_summary_outweighs_neutral_speculation(self):
