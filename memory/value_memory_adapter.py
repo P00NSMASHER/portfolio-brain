@@ -35,6 +35,10 @@ def canonical_hash(value: Any)->str:
     raw=json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
     return "sha256:"+hashlib.sha256(raw).hexdigest()
 
+def outcome_hash(outcome: dict[str,Any])->str:
+    """Bind a value-memory outcome receipt to every learning-relevant field."""
+    return canonical_hash({key:value for key,value in outcome.items() if key!="outcome_hash"})
+
 def _time(value: str, field: str)->datetime:
     _require(isinstance(value,str) and value,f"{field} required")
     try: dt=datetime.fromisoformat(value.replace("Z","+00:00"))
@@ -99,7 +103,7 @@ def validate_memory(record: dict[str,Any])->None:
 def validate_outcome(outcome: dict[str,Any])->None:
     required={"schema_version","outcome_id","memory_id","event_id","project_id","objective_id",
               "reward","attribution_fraction","evidence_ids","evidence_state","observer_actor_id",
-              "verifier_actor_id","verification_report_hash","observed_at","verified_at"}
+              "verifier_actor_id","verification_report_hash","observed_at","verified_at","outcome_hash"}
     _require(isinstance(outcome,dict) and set(outcome)==required,"outcome fields must exactly match contract")
     _require(outcome["schema_version"]=="1.0.0","outcome schema mismatch")
     _require(MOUT_ID.fullmatch(outcome["outcome_id"]) is not None,"invalid outcome_id")
@@ -131,6 +135,7 @@ def validate_outcome(outcome: dict[str,Any])->None:
         _require(outcome["verifier_actor_id"] is None,"non-VERIFIED outcome cannot claim verifier")
         _require(outcome["verification_report_hash"] is None,"non-VERIFIED outcome cannot claim verification report")
         _require(outcome["verified_at"] is None,"non-VERIFIED outcome cannot claim verified_at")
+    _require(outcome["outcome_hash"]==outcome_hash(outcome),"outcome_hash does not bind value-memory outcome")
 
 def upstream_registration_args(record: dict[str,Any])->dict[str,Any]:
     validate_memory(record)
