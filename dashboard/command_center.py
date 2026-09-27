@@ -201,6 +201,123 @@ def build_repair_issues(snapshot: dict[str, Any]) -> list[dict[str, str]]:
     return sorted(issues, key=lambda row: (0 if row["severity"] == "HIGH" else 1, row["title"]))
 
 
+def build_recommended_upgrades(snapshot: dict[str, Any]) -> list[dict[str, str]]:
+    """Forward-looking, evidence-backed upgrades. Diagnostics remain defect-only."""
+    upgrades: list[dict[str, str]] = []
+
+    def add(priority: str, title: str, detail: str, evidence: str, prompt: str) -> None:
+        upgrades.append({
+            "priority": priority,
+            "title": title,
+            "detail": detail,
+            "evidence_ref": evidence,
+            "prompt": prompt,
+        })
+
+    hunter=snapshot["hunter_proposals"]
+    pending_reviews=(
+        hunter["awaiting_scheduler_count"]
+        + hunter["queued_review_count"]
+        + hunter["active_review_count"]
+    )
+    if pending_reviews>0:
+        add(
+            "HIGH VALUE",
+            "Finish the Hunter evidence-review backlog",
+            (
+                f'{hunter["evidence_reviewed_count"]}/{hunter["proposal_count"]} Hunter proposals are evidence-reviewed; '
+                f'{pending_reviews} still await, queue, or actively consume review capacity.'
+            ),
+            "hunting/hunter_proposal_state.json + hunting/hunter_proposal_review_state.json",
+            (
+                "Work only in P00NSMASHER/portfolio-brain. Audit current main, the newest scheduler execution receipt, "
+                "Hunter proposal inbox/review state, same-cycle continuation report, and exact-review provenance. "
+                f"Current snapshot shows {hunter['evidence_reviewed_count']} evidence-reviewed proposals out of "
+                f"{hunter['proposal_count']}, with {pending_reviews} still pending review. Improve throughput using the "
+                "smallest safe change without raising the eight-attempt scheduler ceiling, widening the per-agent open-work "
+                "limit, weakening continuation-before-new-work ordering, or granting reuse/implementation rights from discovery. "
+                "Prefer eliminating starvation and using proven spare capacity. Add focused regression tests and require an exact-run "
+                "receipt that reconciles attempted/completed/deferred counts. Do not merge or claim backlog improvement without durable evidence."
+            ),
+        )
+
+    commercial=snapshot["commercial_validation"]
+    if commercial["live_external_evidence_feed"] is False:
+        add(
+            "HIGH VALUE",
+            "Automate the sanitized commercial-evidence refresh",
+            (
+                f'Current commercial observation is {commercial["evidence_status"]}; age '
+                f'{commercial["observation_age_minutes"]} min with a {commercial["max_observation_age_minutes"]} min freshness limit.'
+            ),
+            commercial["current_source_ref"],
+            (
+                "Work only in P00NSMASHER/portfolio-brain. Build a durable, bounded refresh path for sanitized commercial evidence "
+                "that preserves the existing closed privacy contract. The refresh may persist counts, hashes, explicit query scope, "
+                "timestamps, source kind, and evidence state only. It must reject raw email addresses, recipients, senders, subjects, "
+                "bodies, snippets, Gmail message/thread IDs, checkout IDs, payment-intent IDs, customer IDs, or any private payload. "
+                "A zero result must remain scoped to the exact observation window and may never be generalized to historical outreach. "
+                "Stale or unavailable evidence must fail closed to UNKNOWN. Do not send outreach, create payments, alter external accounts, "
+                "or convert OBSERVED evidence into a definitive experiment outcome. Add privacy, freshness, idempotency, and tamper tests."
+            ),
+        )
+
+    if commercial["current_external_payment_state"]=="UNKNOWN":
+        add(
+            "HIGH VALUE",
+            "Add a sanitized payment-outcome observation",
+            "Current reply evidence has bounded Gmail coverage, but payment/checkout state is still UNKNOWN.",
+            "commercial_evidence/COMMERCIAL_EVIDENCE_POLICY.json",
+            (
+                "Work only in P00NSMASHER/portfolio-brain. Design the smallest read-only, sanitized payment-evidence intake that can "
+                "observe current FreightRecovery checkout/payment state without creating charges, payment intents, refunds, invoices, "
+                "or any other mutation. Persist only aggregate counts, observation window, evidence state, source kind, scope, and hashes. "
+                "Never persist customer identifiers, checkout-session IDs, payment-intent IDs, raw metadata, or private payloads. "
+                "Require freshness expiry and fail closed to UNKNOWN. Keep OBSERVED separate from VERIFIED and do not record PASSED/FAILED "
+                "experiment outcomes without independently verified evidence and a distinct verifier. Add hostile privacy and attribution tests."
+            ),
+        )
+
+    if snapshot["telemetry"]["verified_external_outcomes"]==0:
+        add(
+            "HIGH VALUE",
+            "Produce the first independently verified external outcome",
+            "The durable telemetry still reports 0 verified external outcomes.",
+            "experiments/EXPERIMENT_OUTCOME_LEDGER.json",
+            (
+                "Work only in P00NSMASHER/portfolio-brain. Audit the highest-value current external-validation uncertainty, existing sanitized "
+                "commercial observations, action receipts, experiment plan, and outcome contract. Define and implement the smallest path that "
+                "can turn real-world evidence into one independently VERIFIED external outcome without weakening authority or privacy. "
+                "Silence, missing attribution, incomplete windows, or OBSERVED-only evidence must remain INCONCLUSIVE. A definitive PASSED or FAILED "
+                "outcome requires VERIFIED evidence, nonempty evidence/event provenance, and a verifier actor distinct from the builder/actor. "
+                "Do not send new outreach, spend money, or invent missing evidence merely to satisfy the metric. Add deterministic validation and show the exact evidence chain."
+            ),
+        )
+
+    model=snapshot["model_router"]["feedback_state"]
+    if model["verified_value_events"]==0:
+        add(
+            "NEXT",
+            "Establish verified model-value attribution",
+            (
+                f'{model["verified_feedback_records"]} verified model-feedback record(s) and '
+                f'{model["verified_value_events"]} verified value event(s) are currently recorded.'
+            ),
+            "model_router/MODEL_FEEDBACK_STATE_SEED.json + value_proof/",
+            (
+                "Work only in P00NSMASHER/portfolio-brain. Audit current model routes, committed usage, verified feedback, and value-proof receipts. "
+                "Improve the attribution path so a model call receives value credit only when an independently VERIFIED downstream outcome is bound "
+                "to the exact execution receipt and task. Do not treat model usage, successful calls, internal activity, or synthetic fixtures as value. "
+                "Do not enable a provider or increase spend just to create evidence. Preserve model tier, data-classification, authority, token, request, and "
+                "cost gates. Add tamper, stale-feedback, duplicate-attribution, and receipt-lineage tests."
+            ),
+        )
+
+    priority_order={"HIGH VALUE":0,"NEXT":1}
+    upgrades.sort(key=lambda row:(priority_order.get(row["priority"],9),row["title"]))
+    return upgrades[:5]
+
+
 def build_command_center_snapshot() -> dict[str, Any]:
     executive = build_dashboard_snapshot()
     operating = load_json("operations/OPERATING_MODE_STATUS.json")
@@ -744,6 +861,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
         ),
     }
     snapshot["repair_issues"] = build_repair_issues(snapshot)
+    snapshot["recommended_upgrades"] = build_recommended_upgrades(snapshot)
     snapshot["snapshot_hash"] = hash_value(snapshot)
     return snapshot
 
@@ -901,6 +1019,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
 
     workflow_rows = "".join(f"<li><code>{_e(name)}</code></li>" for name in snapshot["workflows"])
     repair_issues = snapshot["repair_issues"]
+    recommended_upgrades = snapshot["recommended_upgrades"]
     repair_cards = "".join(
         f'''<article class="repair-item">
           <div class="repair-item-head"><span class="repair-index">{index:02d}</span><div><h3>{_e(issue['title'])}</h3><p>{_e(issue['detail'])}</p></div>{_badge(issue['severity'], 'bad' if issue['severity']=='HIGH' else 'warn')}</div>
@@ -909,6 +1028,14 @@ def render_html(snapshot: dict[str, Any]) -> str:
         </article>'''
         for index, issue in enumerate(repair_issues, 1)
     ) or '<p class="repair-empty">No defects detected in this snapshot. This is not a guarantee of complete operation; inspect the evidence age and recent end-to-end receipts.</p>'
+    upgrade_cards = "".join(
+        f'''<article class="repair-item upgrade-item">
+          <div class="repair-item-head"><span class="repair-index">{index:02d}</span><div><h3>{_e(upgrade['title'])}</h3><p>{_e(upgrade['detail'])}</p></div>{_badge(upgrade['priority'], 'warn' if upgrade['priority']=='HIGH VALUE' else 'neutral')}</div>
+          <div class="repair-source">Evidence · <code>{_e(upgrade['evidence_ref'])}</code></div>
+          <details class="repair-details"><summary>View upgrade prompt</summary><div class="repair-prompt"><p id="upgrade-prompt-{index}">{_e(upgrade['prompt'])}</p><button type="button" class="copy-repair" data-copy-target="upgrade-prompt-{index}">Copy prompt</button></div></details>
+        </article>'''
+        for index, upgrade in enumerate(recommended_upgrades, 1)
+    ) or '<p class="repair-empty">No upgrade recommendations are currently generated from this snapshot.</p>'
     guardrails = "".join(f"<li>{_e(x)}</li>" for x in sprint["guardrails"])
     allowed = "".join(f"<li>{_e(x)}</li>" for x in snapshot["operator_boundary"]["allowed"])
     blocked = "".join(f"<li>{_e(x)}</li>" for x in snapshot["operator_boundary"]["not_allowed"])
@@ -1842,6 +1969,15 @@ li{{margin:.45rem 0;line-height:1.42}}
 .repair-foot,.repair-board .repair-empty{{color:#aabbd3;font-size:.75rem;line-height:1.45;margin:16px 0 0}}
 .publication-stale{{margin-bottom:10px;border-color:rgba(255,197,107,.55)}}
 .publication-stale[hidden]{{display:none}}
+.upgrade-board{{border-color:rgba(162,124,255,.34);background:linear-gradient(130deg,#0b0c20 0%,#15152f 52%,#101d2f 100%)}}
+.upgrade-board::before{{background:radial-gradient(ellipse 430px 260px at 92% 0%,rgba(153,102,255,.26),transparent),radial-gradient(ellipse 320px 200px at 0% 100%,rgba(52,199,89,.10),transparent),linear-gradient(90deg,transparent 98.8%,rgba(185,156,255,.055) 99%),linear-gradient(0deg,transparent 98.8%,rgba(185,156,255,.055) 99%);background-size:auto,auto,28px 28px,28px 28px}}
+.upgrade-kicker{{color:#c3a9ff}}
+.upgrade-count{{border-color:rgba(198,169,255,.30);background:rgba(89,59,148,.18)}}
+.upgrade-board .repair-pulse{{background:#b997ff;box-shadow:0 0 0 4px rgba(185,151,255,.12),0 0 18px #b997ff}}
+.upgrade-board .repair-index,.upgrade-board .repair-details summary{{color:#c6b0ff}}
+.upgrade-board .repair-source code{{color:#bda7ff}}
+.upgrade-board .copy-repair{{background:#b99cff;color:#151020}}
+.upgrade-item{{background:rgba(28,24,60,.72);border-color:rgba(184,156,255,.18)}}
 section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
 #live-state{{background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--blue) 4%,var(--surface-solid)))}}
 #operations{{background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--cyan) 3%,var(--surface-solid)))}}
@@ -2010,6 +2146,13 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
     <article class="repair-item publication-stale" id="publication-stale" hidden><div class="repair-item-head"><span class="repair-index">!</span><div><h3>Published view is out of date</h3><p id="publication-age-detail">The latest run may differ from this snapshot.</p></div>{_badge('CHECK NOW', 'warn')}</div><details class="repair-details"><summary>View repair prompt</summary><div class="repair-prompt"><p id="publication-repair-prompt">Audit the latest P00NSMASHER/portfolio-brain Pages workflow and its durable state bridge against current main. The public dashboard snapshot is older than the expected hourly refresh window or has no timestamp. Check the newest run, artifact continuity, publication gate and deployment status. Repair the root cause on a branch and verify a fresh published snapshot with valid source receipts. Do not change the cost ceiling, authority gates or tests to force green.</p><button type="button" class="copy-repair" data-copy-target="publication-repair-prompt">Copy prompt</button></div></details></article>
     <div class="repair-list">{repair_cards}</div>
     <p class="repair-foot">A healthy badge reflects only checks supported by this snapshot. A heartbeat check alone does not prove useful work. No action runs from this public page.</p>
+  </section>
+
+  <section class="repair-board upgrade-board" id="recommended-upgrades" aria-labelledby="upgrade-title">
+    <div class="repair-head"><div><div class="repair-kicker upgrade-kicker">RECOMMENDED UPGRADES · EVIDENCE BACKED</div><h2 id="upgrade-title">Make the Brain better.</h2><p>Forward-looking improvements generated from the current snapshot. These are not defects; each item includes a ready-to-run prompt with the current evidence boundaries preserved.</p></div><div class="repair-count upgrade-count"><strong>{len(recommended_upgrades)}</strong><span>recommended</span></div></div>
+    <div class="repair-meta"><span>{_badge("READ ONLY","neutral")}</span><span>Source <code>{_e((publication.get('source_commit') or 'not stamped')[:12])}</code></span><span>Generated from current durable state</span></div>
+    <div class="repair-list upgrade-list">{upgrade_cards}</div>
+    <p class="repair-foot">Recommendations are prioritized from current evidence and should be rechecked against current main before implementation. Copying a prompt does not execute it.</p>
   </section>
 
   <section class="grid kpis">
