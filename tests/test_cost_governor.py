@@ -117,6 +117,28 @@ class CostGovernorTests(unittest.TestCase):
         self.assertEqual(cfg["daily_ceiling"]["api_calls"],0)
         self.assertEqual(cfg["daily_ceiling"]["cost_usd"],0)
 
+    def test_continuous_learning_bootstrap_is_bounded_and_model_free(self):
+        workflow=(ROOT/".github/workflows/continuous-learning-bootstrap.yml").read_text()
+        self.assertIn("portfolio-cost-governed-autonomy",workflow)
+        self.assertIn("cost_governor.workflow_gate preflight",workflow)
+        self.assertIn("cost_governor.workflow_gate finalize",workflow)
+        self.assertIn("value_proof.proof_artifact_state",workflow)
+        self.assertIn("learning.live_observations",workflow)
+        self.assertIn("learning.integrity",workflow)
+        self.assertNotIn("PORTFOLIO_MODEL_API_KEY",workflow)
+        self.assertNotIn("python -m value_proof.model_task",workflow)
+        self.assertNotIn("python -m value_proof.verifier",workflow)
+        self.assertNotIn("\n  schedule:",workflow)
+        p=policy()
+        self.assertIn("continuous-learning-bootstrap",p["managed_workflow_names"])
+        cfg=p["workflow_job_ceilings"]["continuous-learning-bootstrap::bootstrap"]
+        self.assertEqual(cfg["max_minutes_per_job"],2)
+        self.assertEqual(cfg["daily_ceiling"]["github_job_starts"],1)
+        self.assertEqual(cfg["daily_ceiling"]["github_runner_minutes"],2)
+        self.assertEqual(cfg["daily_ceiling"]["model_calls"],0)
+        self.assertEqual(cfg["daily_ceiling"]["api_calls"],0)
+        self.assertEqual(cfg["daily_ceiling"]["cost_usd"],0)
+
     def test_command_center_hourly_refresh_is_cost_governed(self):
         workflow = (ROOT / ".github/workflows/command-center-pages.yml").read_text()
         self.assertIn('cron: "37 * * * *"',workflow)
