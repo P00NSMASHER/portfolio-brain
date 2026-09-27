@@ -79,18 +79,29 @@ def _validate_cycle_summary(value: Any, index: int)->datetime:
         raise RuntimeStateError(f"recent cycle {index} receipt hash invalid")
     return _utc_timestamp(value["finished_at"],f"recent cycle {index} finished_at")
 
+def cycle_id_for(state: dict[str,Any], *, mode:str, target_repository_id:str|None,
+                 observations:list[dict[str,Any]])->str:
+    if mode not in CYCLE_MODES:
+        raise RuntimeStateError("cycle id mode invalid")
+    if target_repository_id is not None and not isinstance(target_repository_id,str):
+        raise RuntimeStateError("cycle id target repository invalid")
+    seed={
+      "mode":mode,
+      "target_repository_id":target_repository_id,
+      "prior_sequence":state["sequence"],
+      "prior_cursors":{k:v["cursor_sha"] for k,v in sorted(state["repositories"].items())},
+      "observed_heads":{x.get("repository_id"):x.get("current_sha") for x in observations},
+    }
+    return "cycle-"+hashlib.sha256(json.dumps(seed,sort_keys=True,separators=(",",":")).encode()).hexdigest()[:24]
+
 def _expected_cycle_id(state: dict[str,Any], receipt: dict[str,Any])->str:
     target=None
     if receipt["mode"]=="observe" and len(receipt["observations"])==1:
         target=receipt["observations"][0].get("repository_id")
-    seed={
-      "mode":receipt["mode"],
-      "target_repository_id":target,
-      "prior_sequence":state["sequence"],
-      "prior_cursors":{k:v["cursor_sha"] for k,v in sorted(state["repositories"].items())},
-      "observed_heads":{x.get("repository_id"):x.get("current_sha") for x in receipt["observations"]},
-    }
-    return "cycle-"+hashlib.sha256(json.dumps(seed,sort_keys=True,separators=(",",":")).encode()).hexdigest()[:24]
+    return cycle_id_for(
+      state,mode=receipt["mode"],target_repository_id=target,
+      observations=receipt["observations"]
+    )
 
 def load_json(path: Path)->dict[str,Any]:
     return json.loads(path.read_text(encoding="utf-8"))
