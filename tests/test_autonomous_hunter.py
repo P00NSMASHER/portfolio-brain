@@ -187,6 +187,18 @@ class HunterTests(unittest.TestCase):
         bands=receipt["rejection_funnel"]["ranking_band_counts"]
         self.assertEqual(sum(bands.values()),receipt["rejection_funnel"]["inspection_attempted"])
 
+    def test_verified_value_outcome_reorders_exploit_strategy_priority(self):
+        state=load_seed_state()
+        target="STRAT:fail-open-boundary-archaeology"
+        state["strategy_stats"][target]["verified_value_outcomes"]=2
+        objectives=select_objectives(state)
+        exploit=[x for x in objectives if not x["exploration"]]
+        self.assertTrue(exploit)
+        self.assertEqual(exploit[0]["strategy_id"],target)
+        self.assertEqual(exploit[0]["strategy_verified_value_outcomes"],2)
+        self.assertEqual(exploit[0]["strategy_selection_basis"],"VERIFIED_OUTCOME_PRIORITY_THEN_DETERMINISTIC_ORDER")
+        self.assertTrue(any(x["exploration"] for x in objectives))
+
     def test_repository_count_has_no_direct_reward(self):
         from hunting.autonomous_hunter import load_policy
         self.assertEqual(load_policy()["repository_count_reward"],0)
