@@ -744,7 +744,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
     proposal_rows = "".join(
         f"""
         <tr>
-          <td><strong>{_e(p["proposal_id"])}</strong><span class="sub">{_e(", ".join(p["project_ids"]))}</span></td>
+          <td><strong>{_e(p["proposal_id"])}</strong><span class="sub">{_e(", ".join(p["project_ids"]))}</span><span class="sub">{_e("origin seq " + str(p["first_hunter_sequence"]) if p["first_hunter_sequence"] is not None else "origin unavailable")} · {_e(compact_timestamp(p["first_seen_at"]))}</span></td>
           <td class="wrap"><strong>{_e(p["repository_full_name"] or "—")}</strong><code class="sub">{_e((p["revision"] or "—")[:12])}</code></td>
           <td class="num">{_e(p["rank_score"])}</td>
           <td>{_badge(p["rank_band"], "good" if p["rank_band"]=="HIGH" else "warn")}</td>
@@ -777,6 +777,9 @@ def render_html(snapshot: dict[str, Any]) -> str:
           </div>
           <div class="mobile-meta">
             <span>Strategy</span><strong>{_e((p["strategy_id"] or "—").replace("STRAT:",""))}</strong>
+            <span>Origin</span><code>{_e(p["first_cycle_id"] or "—")} · seq {_e(p["first_hunter_sequence"] if p["first_hunter_sequence"] is not None else "—")}</code>
+            <span>First seen</span><strong>{_e(compact_timestamp(p["first_seen_at"]))}</strong>
+            <span>Last seen</span><strong>{_e(compact_timestamp(p["last_seen_at"]))}</strong>
             <span>Work</span><code>{_e(p["scheduler_work_id"] or "not queued")}</code>
           </div>
         </article>
@@ -1938,6 +1941,12 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       {_badge(str(snapshot["hunter_proposals"]["proposal_count"]) + " proposal(s)", "good" if snapshot["hunter_proposals"]["proposal_count"] else "neutral")}
     </div>
     <div class="spec-grid" style="margin-bottom:18px">
+      <div class="spec-item"><span>Backlog proposals</span><strong>{_e(snapshot["hunter_proposals"]["backlog"]["backlog_proposals"])}</strong></div>
+      <div class="spec-item"><span>Carried forward</span><strong>{_e(snapshot["hunter_proposals"]["backlog"]["carried_forward_proposals"])}</strong></div>
+      <div class="spec-item"><span>Originated latest cycle</span><strong>{_e(snapshot["hunter_proposals"]["backlog"]["originated_latest_cycle"])}</strong></div>
+      <div class="spec-item"><span>Distinct origin cycles</span><strong>{_e(snapshot["hunter_proposals"]["backlog"]["distinct_origin_cycles"])}</strong></div>
+      <div class="spec-item"><span>Capacity remaining</span><strong>{_e(snapshot["hunter_proposals"]["backlog"]["capacity_remaining"])}</strong></div>
+      <div class="spec-item"><span>Oldest first seen</span><strong>{_e(compact_timestamp(snapshot["hunter_proposals"]["backlog"]["oldest_first_seen_at"]))}</strong></div>
       <div class="spec-item"><span>Inbox sequence</span><strong>{_e(snapshot["hunter_proposals"]["sequence"])}</strong></div>
       <div class="spec-item"><span>Awaiting scheduler</span><strong>{_e(snapshot["hunter_proposals"]["awaiting_scheduler_count"])}</strong></div>
       <div class="spec-item"><span>Queued / active review</span><strong>{_e(snapshot["hunter_proposals"]["queued_review_count"] + snapshot["hunter_proposals"]["active_review_count"])}</strong></div>
@@ -1950,7 +1959,7 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       <tbody>{proposal_rows}</tbody>
     </table></div>
     <div class="mobile-records">{proposal_cards}</div>
-    <p>Discovery never grants reuse rights. Scheduler review is OBSERVE-only and re-inspects the exact public revision before recording license metadata; implementation remains independently gated.</p>
+    <p>The inbox is a bounded continuation backlog: proposals survive later Hunter cycles until reviewed/compacted, and each item keeps its original Hunter cycle/receipt provenance. Discovery never grants reuse rights. Scheduler review is OBSERVE-only and re-inspects the exact public revision before recording license metadata; implementation remains independently gated.</p>
   </section>
 
   <section class="card" id="model-value" style="margin-top:14px">
