@@ -14,30 +14,55 @@
     {
       "workflow_name": "portfolio-autonomous-scheduler",
       "workflow_file": "portfolio-autonomous-scheduler.yml",
+      "cost_workflow_id": "portfolio-autonomous-scheduler",
+      "cost_job_id": "schedule",
+      "project_ids": ["PRJ-000"],
+      "estimated_minutes": 5,
+      "authority_class": "OBSERVE",
       "max_start_age_minutes": 100,
       "priority": 1
     },
     {
       "workflow_name": "runtime-hourly-sync",
       "workflow_file": "runtime-hourly-sync.yml",
+      "cost_workflow_id": "runtime-worker",
+      "cost_job_id": "runtime",
+      "project_ids": ["PRJ-000"],
+      "estimated_minutes": 5,
+      "authority_class": "OBSERVE",
       "max_start_age_minutes": 100,
       "priority": 2
     },
     {
       "workflow_name": "agent-heartbeat-sweep",
       "workflow_file": "agent-heartbeat-sweep.yml",
+      "cost_workflow_id": "agent-heartbeat-sweep",
+      "cost_job_id": "heartbeat",
+      "project_ids": ["PRJ-000"],
+      "estimated_minutes": 2,
+      "authority_class": "OBSERVE",
       "max_start_age_minutes": 160,
       "priority": 3
     },
     {
       "workflow_name": "hunter-autonomous-cycle",
       "workflow_file": "hunter-autonomous-cycle.yml",
+      "cost_workflow_id": "hunter-autonomous-cycle",
+      "cost_job_id": "hunt",
+      "project_ids": ["PRJ-000"],
+      "estimated_minutes": 5,
+      "authority_class": "OBSERVE",
       "max_start_age_minutes": 420,
       "priority": 4
     },
     {
       "workflow_name": "portfolio-notification-cycle",
       "workflow_file": "portfolio-notification-cycle.yml",
+      "cost_workflow_id": "portfolio-notification-cycle",
+      "cost_job_id": "notify",
+      "project_ids": ["PRJ-000"],
+      "estimated_minutes": 2,
+      "authority_class": "OBSERVE",
       "max_start_age_minutes": 420,
       "priority": 5
     }
@@ -48,6 +73,7 @@
     "Only a trusted event for the exact governed workflow file on the default branch can prove target liveness.",
     "A recent completed run suppresses recovery even when scheduled delivery is delayed.",
     "A failed/cancelled target may be retried only after the configured failure retry age.",
+    "Recovery previews the target's exact workflow/job budget and never dispatches a request that is already cost-blocked.",
     "At most two workflow_dispatch calls may be emitted per watchdog cycle.",
     "A cost hard stop or spend kill switch disables all recovery dispatch."
   ]

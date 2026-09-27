@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from cost_governor.cost_governor import load_state
 from operations.workflow_liveness import (
+    WorkflowLivenessError,
     evaluate_target,
     load_policy,
     recover_overdue,
@@ -50,6 +51,17 @@ class WorkflowLivenessTests(unittest.TestCase):
         for target in p["targets"]:
             workflow=(ROOT/".github/workflows"/target["workflow_file"]).read_text()
             self.assertIn("workflow_dispatch:",workflow)
+
+    def test_liveness_cost_preview_must_match_target_preflight(self):
+        p=load_policy()
+        p["targets"][0]["cost_job_id"]="unrelated-cheap-job"
+        with self.assertRaisesRegex(WorkflowLivenessError,"cost scope is not governed"):
+            validate_policy(p)
+
+        p=load_policy()
+        p["targets"][0]["estimated_minutes"]=1
+        with self.assertRaisesRegex(WorkflowLivenessError,"cost preview drifted"):
+            validate_policy(p)
 
     def test_overdue_scheduler_is_recovered_without_touching_recent_targets(self):
         p=load_policy()
@@ -149,6 +161,44 @@ class WorkflowLivenessTests(unittest.TestCase):
         self.assertEqual(dispatched[0][0],"portfolio-autonomous-scheduler.yml")
         self.assertEqual(dispatched[1][0],"runtime-hourly-sync.yml")
         self.assertEqual(len(result["dispatches"]),2)
+
+    def test_recovery_does_not_dispatch_target_already_blocked_by_its_cost_scope(self):
+        p=load_policy()
+        state=load_state()
+        runtime_target=next(x for x in p["targets"] if x["workflow_name"]=="runtime-hourly-sync")
+        # Fill only the runtime-worker job-start allocation. Other workflows retain
+        # capacity, proving this is a target-specific block rather than a hard stop.
+        for i in range(60):
+            state["reservations"].append({
+              "reservation_id":f"CRES-{i:020X}",
+              "request_id":f"CGR-TEST-{i:04d}",
+              "request_hash":"sha256:"+f"{i:064x}",
+              "idempotency_key":f"github-job:prior-{i}:runtime:attempt:1",
+              "retry_group":f"github-job:prior-{i}:runtime",
+              "attempt":1,"resource_kind":"GITHUB_JOB","project_ids":["PRJ-000"],
+              "provider_id":None,"model_id":None,"workflow_id":"runtime-worker","job_id":"runtime",
+              "estimated_usage":{"cost_usd":0.0,"input_tokens":0,"output_tokens":0,"model_calls":0,"api_calls":0,"github_job_starts":1,"github_runner_minutes":5},
+              "actual_usage":{"cost_usd":0.0,"input_tokens":0,"output_tokens":0,"model_calls":0,"api_calls":0,"github_job_starts":1,"github_runner_minutes":1},
+              "status":"COMMITTED","created_at":"2026-09-27T01:00:00Z","expires_at":"2026-09-27T07:00:00Z","committed_at":"2026-09-27T01:01:00Z",
+              "evidence_refs":[f"github-run:prior-{i}"]
+            })
+        runs=[
+          run(target["workflow_name"],"2026-09-27T08:30:00Z",run_id=100+idx)
+          for idx,target in enumerate(p["targets"])
+          if target["workflow_name"]!="runtime-hourly-sync"
+        ]
+        dispatched=[]
+        result=recover_overdue(
+          state,runs,
+          dispatch=lambda workflow,branch:dispatched.append((workflow,branch)),
+          at=AT,policy_data=p,
+        )
+        runtime=next(x for x in result["targets"] if x["workflow_name"]==runtime_target["workflow_name"])
+        self.assertEqual(result["status"],"HEALTHY")
+        self.assertEqual(dispatched,[])
+        self.assertEqual(runtime["status"],"BLOCKED_COST_PREFLIGHT")
+        self.assertEqual(runtime["cost_gate_status"],"BLOCKED_BUDGET")
+        self.assertFalse(runtime["dispatch_required"])
 
     def test_spend_kill_switch_blocks_all_recovery_dispatches(self):
         dispatched=[]
