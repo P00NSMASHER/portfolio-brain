@@ -1563,7 +1563,7 @@
   "blockers": [
     {
       "blocker_id": "BLK-001",
-      "summary": "permitplate-state is currently public while durable architecture treats it as sensitive operational state; review intended visibility and access controls before integrating it into Portfolio Brain.",
+      "summary": "GitHub repository metadata for P00NSMASHER/permitplate-state showed private=true and visibility=private on 2026-09-27 (https://api.github.com/repos/P00NSMASHER/permitplate-state). Visibility is corrected; integration remains blocked until a scoped read-only identity, private-state handling, and access controls are verified. The existing adapter performs zero reads.",
       "status": "OPEN",
       "requires_human_decision": true
     },
