@@ -6,10 +6,11 @@ on:
     # cannot reliably interrupt them before completion. Hourly enforcement keeps
     # the independent kill-switch backstop while cutting control-plane starts 75%.
     - cron: "53 * * * *"
-  # GitHub scheduled delivery can be delayed. A successful heartbeat sweep is
-  # an independent, low-frequency opportunity to recheck core workflow liveness.
+  # GitHub scheduled delivery can be delayed or skipped. Recheck liveness after
+  # either the heartbeat sweep or the reliably recurring hourly runtime sync.
+  # Runtime completion is an independent recovery anchor when heartbeat cron is missed.
   workflow_run:
-    workflows: ["agent-heartbeat-sweep"]
+    workflows: ["agent-heartbeat-sweep", "runtime-hourly-sync"]
     types: [completed]
     branches: ["main"]
   push:
