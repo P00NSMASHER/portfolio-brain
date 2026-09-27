@@ -40,9 +40,13 @@ Missing tests, weak path-level capability signals, or a truncated repository tre
 
 ## Durable proposal inbox
 
-Only proposals that pass the configured quality gate are projected into a separate sanitized durable state, `portfolio-hunter-proposal-state`. The inbox binds each proposal to its retained finding, capability key, public repository identity, exact revision, structural inspection, rank, and provenance.
+Only proposals that pass the configured quality gate are projected into the separate sanitized durable state `portfolio-hunter-proposal-state`. The inbox binds each proposal to its retained finding, capability key, public repository identity, exact revision, structural inspection, rank, and provenance.
 
-The inbox is OBSERVE-only and preserves `NOT_GRANTED_BY_DISCOVERY` rights state. LOW-ranked retained findings remain useful Hunter evidence but are not projected into the downstream proposal inbox. The scheduler may consume the inbox only through its separately validated OBSERVE-class Researcher handoff.
+The inbox is a **bounded continuation backlog**, not a latest-cycle snapshot. Before each Hunter cycle, the newest validated proposal artifact is restored. Newly selected MEDIUM/HIGH proposals are merged by immutable `proposal_id` with unconsumed proposals from prior cycles, so a delayed scheduler cannot silently erase useful discoveries when Hunter runs again. The backlog is capped at 96 proposals; compaction occurs only after that cap and removes the least-recently-seen entries deterministically.
+
+Each proposal carries explicit origin metadata: first Hunter cycle/receipt, first-seen timestamp/sequence, and most-recent cycle/receipt/timestamp/sequence. An older proposal must keep its original cycle provenance even when the top-level artifact advances to a newer Hunter sequence. Legacy single-cycle artifacts are migrated in memory by binding their contained proposals to the cycle metadata they already carried; no missing provenance is invented.
+
+The inbox is OBSERVE-only and preserves `NOT_GRANTED_BY_DISCOVERY` rights state. LOW-ranked retained findings remain useful Hunter evidence but are not projected into the downstream proposal backlog. Scheduler Researcher handoff prefers higher structural rank, then first-seen order among equal-rank proposals, and includes the exact origin-cycle/receipt evidence in each work packet. Review still re-inspects the exact public revision and may record license metadata, but it cannot authorize reuse or implementation.
 
 ## Learning
 
@@ -54,4 +58,4 @@ The exploration strategy retains at least 20% of each bounded objective allocati
 
 ## Activation
 
-The scheduled workflow is staged on the isolated Step 9 branch. Like Step 8 runtime schedules, it is not active until later authorized promotion to the default branch.
+Hunter is active on the default branch through its bounded scheduled/on-demand workflow. Its cost preflight, OBSERVE-only authority, public-source allowlist, proposal quality gate, durable backlog restore, and kill switches remain mandatory on every cycle.
