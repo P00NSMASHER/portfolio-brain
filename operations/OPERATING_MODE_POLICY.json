@@ -109,7 +109,7 @@
     "While BLK-005 remains open, GitHub persistence is sanitized-only.",
     "The recurring agent heartbeat sweep is telemetry-only and records HEALTH_CHECK connectivity evidence without implying substantive role work or widening authority.",
     "Specialized scheduler and heartbeat workflows remain scheduled or explicitly dispatched; they do not fan out on repository pushes because all cost-state writers share a singleton concurrency lane where excess pending runs would be canceled.",
-    "A trigger-only command-center refresh does not create redundant runtime observation work or compete for the serialized autonomous execution slot."
+    "The command center refreshes hourly or by explicit dispatch; repository pushes do not fan out a redundant publication run into the serialized autonomous execution slot."
   ],
   "external_connector_gateways": {
     "gmail": {

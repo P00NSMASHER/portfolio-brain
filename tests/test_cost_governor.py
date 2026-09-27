@@ -152,7 +152,7 @@ class CostGovernorTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/command-center-pages.yml").read_text()
         self.assertIn('cron: "37 * * * *"',workflow)
         self.assertIn("workflow_dispatch:",workflow)
-        self.assertIn("\n  push:",workflow)
+        self.assertNotIn("\n  push:",workflow)
         self.assertIn("portfolio-cost-governed-autonomy",workflow)
         self.assertIn("cost_governor.workflow_gate preflight",workflow)
         self.assertIn("cost_governor.workflow_gate finalize",workflow)
