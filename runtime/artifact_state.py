@@ -66,9 +66,14 @@ def restore(*, output: Path, metadata_output: Path | None = None,
                       retries=budgets["retry_limit"],backoff=budgets["retry_backoff_seconds"])
     url=f"https://api.github.com/repos/{repository}/actions/artifacts?name={p['state_persistence']['artifact_name']}&per_page=100"
     data=http.json(url)
+    archive_cache:dict[str,bytes]={}
+    def download(url:str)->bytes:
+        if url not in archive_cache:
+            archive_cache[url]=http.bytes(url)
+        return archive_cache[url]
     status=restore_latest_valid_state(
         data,current_run=current_run,expected_head_branch=os.environ.get("GITHUB_REF_NAME"),
-        download=http.bytes,output=output,
+        download=download,output=output,
         member_name="runtime_state.json",expected_state_id="portfolio-runtime-state",
         max_archive_bytes=budgets["max_output_bytes"],max_state_bytes=budgets["max_output_bytes"],
         validator=validate_state,metadata_output=metadata_output,
@@ -77,7 +82,7 @@ def restore(*, output: Path, metadata_output: Path | None = None,
         try:
             restore_latest_valid_state(
                 data,current_run=current_run,expected_head_branch=os.environ.get("GITHUB_REF_NAME"),
-                download=http.bytes,output=provider_health_output,
+                download=download,output=provider_health_output,
                 member_name="provider_health.json",expected_state_id="portfolio-provider-readiness-state",
                 max_archive_bytes=budgets["max_output_bytes"],max_state_bytes=budgets["max_output_bytes"],
                 validator=validate_provider_health,metadata_output=provider_health_metadata_output,
