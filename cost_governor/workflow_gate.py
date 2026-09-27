@@ -26,11 +26,42 @@ def _github_output(**values) -> None:
         for key, value in values.items():
             handle.write(f"{key}={value}\n")
 
+def governed_github_attempt(state, *, run_id: str, job_id: str, observed_attempt: int) -> int:
+    """Map a GitHub rerun number onto the durable governed retry sequence.
+
+    GitHub increments GITHUB_RUN_ATTEMPT even when an earlier job was cancelled
+    before Portfolio Brain obtained a reservation. Cost retry accounting must
+    advance only when a prior governed reservation exists. Repeating the same
+    GitHub attempt remains idempotent, while skipped GitHub attempts are
+    normalized to the next durable attempt rather than creating a retry gap.
+    """
+    if type(observed_attempt) is not int or observed_attempt < 1:
+        raise ValueError("observed GitHub attempt must be a positive integer")
+    group = f"github-job:{run_id}:{job_id}"
+    prior = sorted({
+        int(row["attempt"])
+        for row in state.get("reservations", [])
+        if row.get("retry_group") == group
+    })
+    if not prior:
+        return 1
+    highest = max(prior)
+    if observed_attempt <= highest:
+        return observed_attempt
+    return highest + 1
+
+
 def preflight_command(args) -> int:
     at = os.environ.get("PORTFOLIO_COST_NOW") or now_iso()
     run_id = os.environ.get("GITHUB_RUN_ID") or args.run_id or "local-run"
-    attempt = int(os.environ.get("GITHUB_RUN_ATTEMPT") or args.attempt)
+    observed_attempt = int(os.environ.get("GITHUB_RUN_ATTEMPT") or args.attempt)
     state = load_state(args.state)
+    attempt = governed_github_attempt(
+        state,
+        run_id=str(run_id),
+        job_id=args.job_id,
+        observed_attempt=observed_attempt,
+    )
     request = make_github_job_request(
         workflow_id=args.workflow_id,
         job_id=args.job_id,
@@ -50,11 +81,15 @@ def preflight_command(args) -> int:
         allowed=str(allowed).lower(),
         reservation_id=decision.get("reservation_id") or "",
         decision_status=decision["status"],
+        observed_run_attempt=observed_attempt,
+        governed_attempt=attempt,
     )
     print(json.dumps({
         "status": decision["status"],
         "allowed": allowed,
         "reservation_id": decision.get("reservation_id"),
+        "observed_run_attempt": observed_attempt,
+        "governed_attempt": attempt,
     }, sort_keys=True))
     return 0
 
