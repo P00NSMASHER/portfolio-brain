@@ -75,13 +75,54 @@ class CostGovernorTests(unittest.TestCase):
         self.assertIn('workflows: ["agent-heartbeat-sweep"]',workflow)
         self.assertIn('operations/TRIGGER_WORKFLOW_LIVENESS',workflow)
 
-    def test_runtime_subbudget_cannot_starve_hourly_and_daily_reasoning(self):
+    def test_runtime_subbudgets_isolate_push_observation_from_scheduled_reasoning(self):
         p=policy()
-        cfg=p["workflow_job_ceilings"]["runtime-worker::runtime"]["daily_ceiling"]
-        self.assertGreaterEqual(cfg["github_job_starts"],48)
-        self.assertGreaterEqual(cfg["github_runner_minutes"],240)
-        self.assertLessEqual(cfg["github_job_starts"],p["portfolio_ceiling"]["github_job_starts"])
-        self.assertLessEqual(cfg["github_runner_minutes"],p["portfolio_ceiling"]["github_runner_minutes"])
+        keys={
+          "observe":"runtime-worker::runtime-observe",
+          "sync":"runtime-worker::runtime-sync",
+          "daily":"runtime-worker::runtime-daily",
+          "weekly":"runtime-worker::runtime-weekly",
+        }
+        cfg={mode:p["workflow_job_ceilings"][key]["daily_ceiling"] for mode,key in keys.items()}
+        self.assertEqual(sum(row["github_job_starts"] for row in cfg.values()),60)
+        self.assertLessEqual(
+            sum(row["github_job_starts"] for row in cfg.values()),
+            p["portfolio_ceiling"]["github_job_starts"]//2,
+        )
+        self.assertGreaterEqual(cfg["sync"]["github_job_starts"],26)
+        self.assertGreaterEqual(cfg["daily"]["github_job_starts"],2)
+        self.assertGreaterEqual(cfg["weekly"]["github_job_starts"],2)
+        self.assertLess(cfg["observe"]["github_job_starts"],sum(row["github_job_starts"] for row in cfg.values()))
+        workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text()
+        self.assertIn('--job-id "runtime-${RUNTIME_MODE}"',workflow)
+
+    def test_exhausted_observe_budget_does_not_block_hourly_sync_budget(self):
+        p=copy.deepcopy(policy())
+        observe=p["workflow_job_ceilings"]["runtime-worker::runtime-observe"]["daily_ceiling"]
+        sync=p["workflow_job_ceilings"]["runtime-worker::runtime-sync"]["daily_ceiling"]
+        observe["github_job_starts"]=1;observe["github_runner_minutes"]=5
+        sync["github_job_starts"]=1;sync["github_runner_minutes"]=5
+        state=load_state()
+        state,d1=preflight(
+            state,
+            github_request(run_id="observe-1",workflow="runtime-worker",job="runtime-observe"),
+            at=AT,policy_data=p,
+        )
+        self.assertEqual(d1["status"],"RESERVED")
+        state,d2=preflight(
+            state,
+            github_request(run_id="observe-2",workflow="runtime-worker",job="runtime-observe"),
+            at=AT,policy_data=p,
+        )
+        self.assertEqual(d2["status"],"BLOCKED_BUDGET")
+        self.assertTrue(any("runtime-worker::runtime-observe:github_job_starts" in x for x in d2["reason_codes"]))
+        state,d3=preflight(
+            state,
+            github_request(run_id="sync-1",workflow="runtime-worker",job="runtime-sync"),
+            at=AT,policy_data=p,
+        )
+        self.assertEqual(d3["status"],"RESERVED")
+        self.assertTrue(d3["can_execute"])
 
     def test_event_observe_ignores_dashboard_test_operator_and_one_shot_trigger_churn(self):
         workflow=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
