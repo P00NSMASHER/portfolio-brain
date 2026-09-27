@@ -141,5 +141,6 @@ jobs:
       - name: Report governed no-work outcome
         if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
         run: |
-          echo "::notice title=Portfolio runtime skipped::Cost governor status: ${{ steps.cost.outputs.decision_status }}"
-          echo "Runtime work was skipped because the cost governor did not grant a reservation." >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=Portfolio runtime blocked::Cost governor status: ${{ steps.cost.outputs.decision_status }}"
+          echo "Runtime work did not execute because paid-wrapper admission was blocked." >> "$GITHUB_STEP_SUMMARY"
+          exit 1
