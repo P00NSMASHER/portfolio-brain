@@ -180,6 +180,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
     hunter_proposal_review_state = load_live_json("hunter_proposal_review_state.json","hunting/HUNTER_PROPOSAL_REVIEW_STATE_SEED.json")
     scheduler_state = load_live_json("scheduler_state.json","scheduler/SCHEDULER_STATE_SEED.json")
     cost_policy = load_json("cost_governor/COST_GOVERNOR_POLICY.json")
+    workload_policy = load_json("workload_control/WORKLOAD_POLICY.json")
     cost_state = load_live_json("cost_state.json","cost_governor/COST_STATE_SEED.json")
     notification_policy = load_json("notifications/NOTIFICATION_POLICY.json")
     notification_state = load_live_json("notification_state.json","notifications/NOTIFICATION_STATE_SEED.json")
@@ -203,6 +204,19 @@ def build_command_center_snapshot() -> dict[str, Any]:
         provider_health=provider_health,
     )
     telemetry = build_operational_telemetry()
+    recent_paid_decisions = telemetry["cost"]["recent_decisions"]
+    execution_truth = {
+        "attempted": (
+            telemetry["queue"]["counts"]["ACTIVE"]
+            + telemetry["queue"]["counts"]["COMPLETE"]
+            + telemetry["queue"]["counts"]["CANCELLED"]
+        ),
+        "blocked": executive["portfolio"]["blocked_action_count"]
+        + sum(1 for row in recent_paid_decisions if str(row.get("status", "")).startswith("BLOCKED_")),
+        "executed": telemetry["queue"]["counts"]["COMPLETE"],
+        "verified": telemetry["verified_external_outcomes"],
+        "scope_note": "Durable scheduler work plus recent paid-gate blocks; verified outcomes are tracked separately.",
+    }
     history_public_path = ROOT / "dashboard" / "out" / "history.json"
     if history_public_path.exists():
         history = json.loads(history_public_path.read_text(encoding="utf-8"))
@@ -543,8 +557,15 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "reservation_count": len(cost_state["reservations"]),
             "recent_decision_count": len(cost_state["recent_decisions"]),
             "managed_workflow_names": cost_policy["managed_workflow_names"],
+            "workload_separation": cost_policy.get("workload_separation", {}),
             "sentinel": sentinel,
         },
+        "workload_control": {
+            "mode": workload_policy["mode"],
+            "service_count": len(workload_policy["services"]),
+            "services": workload_policy["services"],
+        },
+        "execution_truth": execution_truth,
         "notifications": {
             "mode": notification_policy["mode"],
             "channels": notification_policy["delivery_channels"],
@@ -611,6 +632,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
                     "hunting/proposal_review_state.py",
                     "cost_governor/COST_GOVERNOR_POLICY.json",
                     "cost_governor/COST_STATE_SEED.json",
+                    "workload_control/WORKLOAD_POLICY.json",
+                    "workload_control/workload_gate.py",
                     "notifications/NOTIFICATION_POLICY.json",
                     "notifications/NOTIFICATION_STATE_SEED.json",
                     "operations/POST_RESTRICTION_OPTIMIZATION_STATUS.json",
@@ -672,6 +695,8 @@ def render_html(snapshot: dict[str, Any]) -> str:
     source_bundle = snapshot["state_sources"]
     sources = source_bundle["sources"]
     telemetry = snapshot["telemetry"]
+    execution_truth = snapshot["execution_truth"]
+    workload_control = snapshot["workload_control"]
     history = snapshot["history"]
     project_names = {p["project_id"]: p["name"] for p in snapshot["projects"]}
 
@@ -993,8 +1018,11 @@ def render_html(snapshot: dict[str, Any]) -> str:
     ) or '<tr><td colspan="4" class="empty">No current failure records in durable telemetry.</td></tr>'
 
     usage_order = [
-        ("cost_usd","USD"),("model_calls","Model calls"),("api_calls","API calls"),
-        ("github_job_starts","GitHub jobs"),("github_runner_minutes","Runner minutes"),
+        ("cost_usd","USD"),
+        ("input_tokens","Input tokens"),
+        ("output_tokens","Output tokens"),
+        ("model_calls","Model calls"),
+        ("api_calls","API calls"),
     ]
     usage_rows = "".join(
         f"""
@@ -1919,7 +1947,14 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       <div><h2>Operational Telemetry</h2><p>Durable queue, governed usage, actions, failures, agent heartbeats, and successful-cycle evidence.</p><p>Scheduled sync: {_badge(telemetry['runtime_sync_proof']['status'], _status_tone(telemetry['runtime_sync_proof']['status']))} · source run {_e(telemetry['runtime_sync_proof']['source_run_id'] or 'unknown')} · {_e(telemetry['runtime_sync_proof']['reason'].replace('_',' ').lower())}</p></div>
       {_badge("LIVE DATA" if source_bundle["bridge_status"]=="LIVE" else source_bundle["bridge_status"], _status_tone(source_bundle["bridge_status"]))}
     </div>
-    <div class="grid three">
+    <div class="section-head" style="margin-top:16px"><div><h2>Execution Truth</h2><p>Attempted, blocked, executed, and verified are intentionally separate. {_e(execution_truth["scope_note"])}</p></div>{_badge("TRUTHFUL STATUS","neutral")}</div>
+    <div class="grid four execution-truth">
+      <div class="callout"><strong>Attempted</strong><span class="callout-value">{execution_truth["attempted"]}</span><p>Durable scheduler work that reached active or terminal state.</p></div>
+      <div class="callout"><strong>Blocked</strong><span class="callout-value">{execution_truth["blocked"]}</span><p>Human/authority gates plus recent paid preflight blocks.</p></div>
+      <div class="callout"><strong>Executed</strong><span class="callout-value">{execution_truth["executed"]}</span><p>Scheduler work recorded COMPLETE.</p></div>
+      <div class="callout"><strong>Verified</strong><span class="callout-value">{execution_truth["verified"]}</span><p>External outcomes backed by durable verification evidence.</p></div>
+    </div>
+    <div class="grid three" style="margin-top:12px">
       <div class="callout"><strong>Queue</strong><p>Queued {telemetry["queue"]["counts"]["QUEUED"]} · Active {telemetry["queue"]["counts"]["ACTIVE"]} · Complete {telemetry["queue"]["counts"]["COMPLETE"]} · Cancelled {telemetry["queue"]["counts"]["CANCELLED"]}</p></div>
       <div class="callout cycle-callout"><strong>Last successful autonomous cycle</strong><span class="callout-value">{_e(last_cycle_title)}</span><span class="callout-meta">{_e(last_cycle_meta)}</span>{('<code class="cycle-id">'+_e(last_cycle_id)+'</code>') if last_cycle_id else ''}</div>
       <div class="callout"><strong>Failures</strong><p>{telemetry["failures"]["count"]} durable failure signal(s) currently represented.</p></div>
@@ -1934,7 +1969,7 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
 
   <section class="grid two" style="margin-bottom:14px">
     <div class="card">
-      <div class="section-head"><div><h2>Actual Cost / Capacity Today</h2><p>Actual committed usage is separate from conservative governor accounting.</p></div>{source_badge("cost")}</div>
+      <div class="section-head"><div><h2>Paid Cost / API Capacity Today</h2><p>Only paid model/API resources live here. GitHub workload is controlled separately across {workload_control["service_count"]} independent service lanes.</p></div>{source_badge("cost")}</div>
       <table class="mobile-hide"><thead><tr><th>Resource</th><th class="num">Actual</th><th class="num">Accounted</th><th class="num">Ceiling</th><th class="num">Utilization</th></tr></thead><tbody>{usage_rows}</tbody></table>
       <div class="mobile-records">{usage_cards}</div>
     </div>
