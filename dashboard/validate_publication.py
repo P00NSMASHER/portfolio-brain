@@ -44,6 +44,8 @@ def validate_publication() -> dict[str, object]:
     require(set(snapshot["state_sources"]["sources"]) >= {"runtime","scheduler","hunter","cost","notifications","agents","provider","model_feedback","hunter_proposals","hunter_proposal_reviews"}, "public live-state provenance incomplete")
     require(snapshot["data_boundary"] == "SANITIZED_CHECKED_IN_AND_DURABLE_ARTIFACT_STATE", "public data boundary widened")
     require(snapshot["telemetry"]["authority_class"] == "OBSERVE", "public telemetry widened authority")
+    require(snapshot["workload_control"]["mode"] == "GITHUB_NATIVE_WORKLOAD_CONTROL", "public workload controls missing")
+    require(set(snapshot["execution_truth"]) == {"attempted","blocked","executed","verified","scope_note"}, "public execution truth missing")
     require(snapshot["history"]["history_id"] == "portfolio-command-center-public-history-v1", "public history missing")
 
     with tempfile.TemporaryDirectory() as td:
