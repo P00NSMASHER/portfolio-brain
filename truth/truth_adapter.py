@@ -37,6 +37,19 @@ def _canonical_hash(value: Any) -> str:
     raw=json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode("utf-8")
     return "sha256:"+hashlib.sha256(raw).hexdigest()
 
+def _upstream_receipt_hash(receipt: dict[str,Any]) -> str:
+    """Reproduce the exact receipt hash contract at the pinned upstream revision."""
+    payload={
+        "claim_id":receipt["claim_id"],
+        "claim_hash":receipt["claim_hash"],
+        "verdict":receipt["verdict"],
+        "evaluated_at":receipt["evaluated_at"],
+        "findings":receipt["findings"],
+        "evidence_set_hash":receipt["evidence_set_hash"],
+    }
+    raw=json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
 def load_pin() -> dict[str,Any]:
     data=json.loads(PIN_PATH.read_text(encoding="utf-8"))
     validate_pin(data)
@@ -108,6 +121,11 @@ def validate_upstream_receipt(receipt: dict[str,Any]) -> None:
     for finding in findings:
         _validate_finding(finding)
 
+    _require(
+        receipt["receipt_hash"]==_upstream_receipt_hash(receipt),
+        "receipt_hash does not bind the upstream receipt body",
+    )
+
     required=[f for f in findings if f["required"]]
     verdict=receipt["verdict"]
     if verdict=="PROVEN":
@@ -174,3 +192,4 @@ def project_receipt(
         } for f in required],
     }
     return projection | {"projection_hash":_canonical_hash(projection)}
+
