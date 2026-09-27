@@ -1,7 +1,7 @@
 import copy, unittest
 from hunting.autonomous_hunter import (
     HunterError, _queries, apply_verified_feedback, candidate_fingerprint, classify_candidate, detect_gaps,
-    load_policy, load_seed_state, rank_candidate, run_cycle, search_concepts_for_gap,
+    load_policy, load_seed_state, load_strategies, rank_candidate, run_cycle, search_concepts_for_gap,
     select_objectives, structural_inspection, validate_state
 )
 
@@ -29,7 +29,7 @@ class HunterTests(unittest.TestCase):
     def test_queries_use_reusable_concepts_instead_of_portfolio_brand_names(self):
         gaps=detect_gaps()
         capture=next(g for g in gaps if g["project_name"]=="CaptureBrief")
-        strategy=next(x for x in __import__("hunting.autonomous_hunter",fromlist=["load_strategies"]).load_strategies() if x["family"]=="EXACT_IMPLEMENTATION")
+        strategy=next(x for x in load_strategies() if x["family"]=="EXACT_IMPLEMENTATION")
         queries=_queries(capture,strategy,load_seed_state())
         self.assertTrue(queries)
         self.assertTrue(all("capturebrief" not in q.casefold() for q in queries))
