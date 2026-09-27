@@ -18,6 +18,12 @@ Each gap receives multiple reusable search concepts, query templates are rotated
 
 This query expansion does not widen Hunter authority, add model calls, execute discovered code, or grant reuse rights.
 
+## Candidate inspection availability
+
+A public search result that cannot be resolved to an exact revision/tree because the repository is empty, temporarily unavailable, or returns a bounded GitHub read error is classified as **inspection unavailable**, not as a negative capability finding.
+
+Inspection-unavailable candidates still consume the per-query and per-cycle inspection budget, are counted explicitly in the rejection funnel, do not create findings or proposals, and do not train dead-end query knowledge. Hunter continues to the next bounded candidate instead of aborting the entire cycle. Empty repositories are filtered before exact-revision inspection when GitHub search metadata identifies them.
+
 ## Inspection fairness and proposal quality
 
 A single broad search query may not consume the entire cycle inspection budget. Hunter caps exact-revision inspections per query so later objectives and protected exploration receive evidence-gathering capacity in the same cycle.
