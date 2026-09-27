@@ -3,6 +3,7 @@
 from __future__ import annotations
 import json
 from pathlib import Path
+from model_router.feedback_state import load_seed_state as load_feedback_seed, validate_state as validate_feedback_state
 from model_router.model_router import provider_registry, route_request, value_summary
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -15,6 +16,12 @@ def validate_model_router():
     p=load("model_router/MODEL_ROUTER_POLICY.json");reg=provider_registry()
     req(p["mode"]=="DETERMINISTIC_FIRST","router is not deterministic-first")
     req(p["routing_adaptation"]=="VERIFIED_OUTCOME_FEEDBACK_ONLY","routing adaptation evidence weakened")
+    feedback_cfg=p["verified_feedback_routing"]
+    req(feedback_cfg["enabled"] is True,"verified feedback routing disabled")
+    req(feedback_cfg["within_required_tier_only"] is True and feedback_cfg["no_cross_tier_promotion"] is True,"feedback routing may cross tier")
+    req(feedback_cfg["preserve_independence_gate"] is True,"feedback routing weakened verifier independence")
+    req(feedback_cfg["no_authority_or_evidence_upgrade"] is True,"feedback routing widened authority/evidence")
+    req(feedback_cfg["minimum_verified_outcomes"]>=1,"feedback routing minimum invalid")
     req(set(p["tiers"])=={"0","1","2","3"},"tier set changed")
     enabled_nonzero=[]
     for provider in reg["providers"]:
@@ -34,6 +41,8 @@ def validate_model_router():
     routed_model=route_request(model,reg);req(routed_model["status"]=="ROUTED" and routed_model["tier"]==2 and routed_model["model_id"]=="gpt-5.6-terra","Tier 2 OpenAI routing failed")
     adv=dict(det);adv.update({"request_id":"MRQ-VALIDATE-0003","task_kind":"PROMOTION_VERIFICATION","deterministic_sufficient":False,"requires_independent_adversarial":True,"builder_independence_group":"openai-terra","max_cost_usd":1.0,"max_input_tokens":1000,"max_output_tokens":1000})
     routed_adv=route_request(adv,reg);req(routed_adv["status"]=="ROUTED" and routed_adv["tier"]==3 and routed_adv["model_id"]=="gpt-5.6-sol","Tier 3 OpenAI routing failed")
+    feedback_seed=load_feedback_seed();validate_feedback_state(feedback_seed)
+    req(feedback_seed["calls"]==[] and feedback_seed["outcomes"]==[] and feedback_seed["routing_task_summaries"]=={},"model feedback seed must start empty")
     ledger=load("model_router/MODEL_ROUTING_LEDGER.json")
     req(ledger["calls"]==[] and ledger["outcomes"]==[],"Step 13 checked-in routing ledger must start empty")
     req(value_summary([],[])=={},"empty routing ledger produced learned value")
@@ -41,6 +50,6 @@ def validate_model_router():
     req(gw["source_revision"]=="c6276c80828d2632d5fee37cdaaf65f1d5b36427","runtime gateway pin revision mismatch")
     req(gw["gateway"]["blob_sha"]=="fdc77391ce6ed3e0f6db25aed859aa684e0818f0","runtime gateway blob mismatch")
     state=load("PORTFOLIO_BUILD_STATE.json");req(state["repositories"]["REPO-001"]["last_inspected_sha"]=="c6276c80828d2632d5fee37cdaaf65f1d5b36427","source cursor not reconciled")
-    return {"tiers":4,"enabled_nonzero_models":3,"tier0_provider":"deterministic","checked_in_calls":0,"checked_in_outcomes":0}
+    return {"tiers":4,"enabled_nonzero_models":3,"tier0_provider":"deterministic","checked_in_calls":0,"checked_in_outcomes":0,"verified_feedback_routing":True,"feedback_seed_sequence":feedback_seed["sequence"]}
 
 if __name__=="__main__":print("portfolio-brain Step 13 model router: PASS",json.dumps(validate_model_router(),sort_keys=True))

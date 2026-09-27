@@ -62,6 +62,50 @@ class ModelRouterTests(unittest.TestCase):
         r=request(kind="ARCHITECTURE");r["provider_allowlist"]=["second"]
         self.assertEqual(route_request(r,registry())["status"],"BLOCKED_NO_ELIGIBLE_PROVIDER")
 
+    def test_verified_feedback_can_prefer_better_outcome_model_within_same_tier(self):
+        reg=registry()
+        reg["providers"][1]["models"].append({
+          "model_id":"strong-better",
+          "tier":2,
+          "enabled":True,
+          "independence_group":"strong-better-g",
+          "supported_data_classifications":["PUBLIC","SANITIZED"],
+          "max_input_tokens":10000,
+          "max_output_tokens":5000,
+          "pricing":{"basis":"CONFIGURED_RATE","input_usd_per_million_tokens":4.0,"output_usd_per_million_tokens":7.0,"fixed_call_usd":0.0}
+        })
+        feedback={
+          "state_id":"portfolio-model-feedback-state",
+          "routing_task_summaries":{
+            "ARCHITECTURE":{
+              "T2::api::strong":{"verified_outcomes":2,"mean_verified_outcome_value":0.2},
+              "T2::api::strong-better":{"verified_outcomes":1,"mean_verified_outcome_value":1.0},
+            }
+          }
+        }
+        route=route_request(request(kind="ARCHITECTURE"),reg,feedback)
+        self.assertEqual(route["model_id"],"strong-better")
+        self.assertIn("VERIFIED_FEEDBACK_PREFERENCE_APPLIED",route["reason_codes"])
+        self.assertEqual(route["verified_feedback_outcomes"],1)
+        self.assertEqual(route["verified_feedback_mean_value"],1.0)
+        self.assertEqual(route["tier"],2)
+
+    def test_verified_feedback_never_crosses_required_tier_or_independence_gate(self):
+        feedback={
+          "state_id":"portfolio-model-feedback-state",
+          "routing_task_summaries":{
+            "PROMOTION_VERIFICATION":{
+              "T3::api::red":{"verified_outcomes":100,"mean_verified_outcome_value":1.0},
+              "T3::second::red2":{"verified_outcomes":1,"mean_verified_outcome_value":0.5},
+            }
+          }
+        }
+        r=request(kind="PROMOTION_VERIFICATION",independent=True,builder="red-g")
+        route=route_request(r,registry(),feedback)
+        self.assertEqual(route["tier"],3)
+        self.assertEqual(route["model_id"],"red2")
+        self.assertNotEqual(route["independence_group"],"red-g")
+
     def test_tier0_receipt_has_zero_cost_and_no_authority(self):
         r=request(kind="SCHEMA_VALIDATION",det=True,cost=0.0);r["max_input_tokens"]=0;r["max_output_tokens"]=0
         route=route_request(r,registry())

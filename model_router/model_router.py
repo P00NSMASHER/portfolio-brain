@@ -52,6 +52,40 @@ def required_tier(r):
     if r["task_kind"] in p["tier2_task_kinds"]:return 2
     raise ModelRouterError("unable to classify tier")
 
+def _feedback_task_summary(task_kind,feedback_state=None):
+    cfg=policy().get("verified_feedback_routing") or {}
+    if cfg.get("enabled") is not True:
+        return {}
+    if feedback_state is not None:
+        state=feedback_state
+    else:
+        path=ROOT/cfg.get("state_path","model_router/live/model_feedback_state.json")
+        if not path.exists():
+            return {}
+        try:
+            state=json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    if not isinstance(state,dict) or state.get("state_id")!="portfolio-model-feedback-state":
+        return {}
+    summaries=state.get("routing_task_summaries")
+    if not isinstance(summaries,dict):
+        return {}
+    rows=summaries.get(task_kind,{})
+    return rows if isinstance(rows,dict) else {}
+
+def _feedback_metrics(task_summary,tier,provider_id,model_id):
+    key=f"T{tier}::{provider_id}::{model_id}"
+    row=task_summary.get(key,{})
+    try:
+        count=int(row.get("verified_outcomes",0))
+        mean=float(row.get("mean_verified_outcome_value",0.0))
+    except (TypeError,ValueError):
+        return 0,0.0
+    if count<0 or not math.isfinite(mean) or mean<-1 or mean>1:
+        return 0,0.0
+    return count,mean
+
 def _cost(model,r):
     pricing=model["pricing"];basis=pricing["basis"]
     if basis=="ZERO_TIER0":return 0.0
@@ -61,9 +95,12 @@ def _cost(model,r):
         return float(pricing["fixed_call_usd"])+(r["max_input_tokens"]*float(pricing["input_usd_per_million_tokens"])+r["max_output_tokens"]*float(pricing["output_usd_per_million_tokens"]))/1_000_000
     raise ModelRouterError("provider lacks configured pre-call pricing")
 
-def _candidates(r,registry,tier):
+def _candidates(r,registry,tier,feedback_state=None):
     out=[]
     allowed=set(r["provider_allowlist"])
+    task_summary=_feedback_task_summary(r["task_kind"],feedback_state)
+    feedback_cfg=policy().get("verified_feedback_routing") or {}
+    minimum=int(feedback_cfg.get("minimum_verified_outcomes",1))
     for provider in registry["providers"]:
         if not provider.get("enabled"):continue
         if allowed and provider["provider_id"] not in allowed:continue
@@ -75,10 +112,15 @@ def _candidates(r,registry,tier):
             try:cost=_cost(model,r)
             except ModelRouterError:continue
             if cost>float(r["max_cost_usd"])+1e-12:continue
-            out.append((cost,provider["provider_id"],model["model_id"],model["independence_group"],provider["adapter_kind"]))
+            count,mean=_feedback_metrics(task_summary,tier,provider["provider_id"],model["model_id"])
+            if count<minimum:
+                count,mean=0,0.0
+            out.append((cost,provider["provider_id"],model["model_id"],model["independence_group"],provider["adapter_kind"],count,mean))
+    if feedback_cfg.get("enabled") is True:
+        return sorted(out,key=lambda x:(-x[6],-x[5],x[0],x[1],x[2]))
     return sorted(out,key=lambda x:(x[0],x[1],x[2]))
 
-def route_request(r,registry=None):
+def route_request(r,registry=None,feedback_state=None):
     validate_request(r);registry=registry or provider_registry();tier=required_tier(r)
     if tier==0:
         provider=next(p for p in registry["providers"] if p["provider_id"]=="deterministic" and p["enabled"])
@@ -87,19 +129,28 @@ def route_request(r,registry=None):
         status="ROUTED"
         reasons=["DETERMINISTIC_SUFFICIENT","TIER0_PREFERRED"]
     else:
-        candidates=_candidates(r,registry,tier)
+        candidates=_candidates(r,registry,tier,feedback_state)
         if not candidates:
             status="BLOCKED_NO_ELIGIBLE_PROVIDER";selected=None
             reasons=["NO_ENABLED_COMPATIBLE_PROVIDER_WITHIN_COST_AND_DATA_BOUNDARIES"]
             if tier==3:reasons.append("INDEPENDENT_ADVERSARIAL_ROUTE_REQUIRED")
         else:
-            selected=candidates[0];status="ROUTED";reasons=[f"TIER_{tier}_REQUIRED","LOWEST_CONFIGURED_COST_WITHIN_TIER"]
+            selected=candidates[0];status="ROUTED";reasons=[f"TIER_{tier}_REQUIRED"]
+            cheapest=min(candidates,key=lambda x:(x[0],x[1],x[2]))
+            if selected[1:3]!=cheapest[1:3]:
+                reasons.append("VERIFIED_FEEDBACK_PREFERENCE_APPLIED")
+            elif selected[5]>0:
+                reasons.append("VERIFIED_FEEDBACK_AVAILABLE_SELECTED")
+            else:
+                reasons.append("LOWEST_CONFIGURED_COST_WITHIN_TIER")
             if tier==3:reasons.append("INDEPENDENCE_GROUP_DIFFERS_FROM_BUILDER")
     route_core={
       "request_id":r["request_id"],"tier":tier,"status":status,
       "provider_id":selected[1] if selected else None,"model_id":selected[2] if selected else None,
       "independence_group":selected[3] if selected else None,"adapter_kind":selected[4] if selected else None,
       "max_estimated_cost_usd":selected[0] if selected else None,
+      "verified_feedback_outcomes":selected[5] if selected and len(selected)>5 else 0,
+      "verified_feedback_mean_value":selected[6] if selected and len(selected)>6 else 0.0,
       "reason_codes":reasons,"can_grant_authority":False,"can_upgrade_evidence":False,
       "requires_independent_adversarial":r["requires_independent_adversarial"] or tier==3
     }
