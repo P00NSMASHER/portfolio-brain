@@ -309,7 +309,7 @@ class CostGovernorTests(unittest.TestCase):
         state,first=preflight(state,first_req,at=AT)
         self.assertEqual(first["status"],"RESERVED")
         self.assertEqual(
-            governed_github_attempt(state,run_id="retry-run",job_id="schedule",observed_attempt=3),
+            governed_github_attempt(state,run_id="retry-run",job_id="runtime-sync",observed_attempt=3),
             2,
         )
 
@@ -319,7 +319,7 @@ class CostGovernorTests(unittest.TestCase):
         state,first=preflight(state,req,at=AT)
         self.assertEqual(first["status"],"RESERVED")
         self.assertEqual(
-            governed_github_attempt(state,run_id="same-run",job_id="schedule",observed_attempt=1),
+            governed_github_attempt(state,run_id="same-run",job_id="runtime-sync",observed_attempt=1),
             1,
         )
         state,second=preflight(state,req,at=AT)
@@ -333,7 +333,7 @@ class CostGovernorTests(unittest.TestCase):
         second=github_request(run_id="limit-run",attempt=2)
         state,d2=preflight(state,second,at=AT)
         self.assertEqual(d2["status"],"RESERVED")
-        governed=governed_github_attempt(state,run_id="limit-run",job_id="schedule",observed_attempt=7)
+        governed=governed_github_attempt(state,run_id="limit-run",job_id="runtime-sync",observed_attempt=7)
         self.assertEqual(governed,3)
         third=github_request(run_id="limit-run",attempt=governed)
         _,d3=preflight(state,third,at=AT)
