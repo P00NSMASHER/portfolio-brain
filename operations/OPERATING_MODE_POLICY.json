@@ -35,6 +35,10 @@
     "portfolio-notification-cycle": {
       "cron": "7 */6 * * *",
       "purpose": "deduplicated evidence-gated alerts"
+    },
+    "command-center-pages": {
+      "cron": "37 * * * *",
+      "purpose": "sanitized live-state publication and dashboard-history continuity"
     }
   },
   "event_driven_workflows": {

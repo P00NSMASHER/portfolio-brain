@@ -1,12 +1,12 @@
 import copy,json,unittest
 from pathlib import Path
-from operations.validate_operating_mode import OperatingModeValidationError,validate_operating_mode,validate_reasoning_fallback
+from operations.validate_operating_mode import OperatingModeValidationError,validate_operating_mode,validate_reasoning_fallback,workflow_schedule_crons
 ROOT=Path(__file__).resolve().parents[1]
 
 class OperatingModeTests(unittest.TestCase):
     def test_operational_contract_passes(self):
         result=validate_operating_mode()
-        self.assertEqual(result["approved_recurring_workflows"],7)
+        self.assertEqual(result["approved_recurring_workflows"],8)
         self.assertEqual(result["neutral_no_work_workflows"],5)
         self.assertEqual(result["durable_state_artifacts"],5)
         self.assertEqual(result["gmail_gateway_account_ref"],"PRIMARY_GMAIL_CONNECTOR")
@@ -43,8 +43,25 @@ class OperatingModeTests(unittest.TestCase):
         self.assertEqual(set(p["approved_recurring_workflows"]),{
           "runtime-hourly-sync","runtime-daily-learning","runtime-weekly-synthesis",
           "hunter-autonomous-cycle","portfolio-autonomous-scheduler",
-          "portfolio-cost-watchdog","portfolio-notification-cycle"
+          "portfolio-cost-watchdog","portfolio-notification-cycle","command-center-pages"
         })
+
+    def test_active_schedule_inventory_matches_operating_policy(self):
+        policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
+        actual={}
+        for path in (ROOT/".github/workflows").glob("*.yml"):
+            crons=workflow_schedule_crons(path)
+            if crons is not None:
+                actual[path.stem]=crons
+        expected={name:[entry["cron"]] for name,entry in policy["approved_recurring_workflows"].items()}
+        self.assertEqual(actual,expected)
+
+    def test_schedule_parser_ignores_comments_and_unrelated_cron_text(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as directory:
+            path=Path(directory)/"comment-only.yml"
+            path.write_text('name: comment-only\n# schedule:\n#   - cron: "* * * * *"\non:\n  push:\n    branches: ["main"]\njobs: {}\n')
+            self.assertIsNone(workflow_schedule_crons(path))
 
     def test_expected_cost_denials_are_neutral_for_recurring_observe_lanes(self):
         for name in [

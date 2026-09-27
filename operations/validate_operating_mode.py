@@ -13,6 +13,41 @@ def req(ok,msg):
     if not ok:raise OperatingModeValidationError(msg)
 def load(p):return json.loads((ROOT/p).read_text())
 
+def workflow_schedule_crons(path):
+    """Return active schedule crons, None when the workflow is not scheduled.
+
+    This deliberately inspects only the top-level ``on.schedule`` block. A raw
+    substring search can mistake comments or unrelated scalar values for an
+    approved production trigger.
+    """
+    lines=Path(path).read_text().splitlines()
+    in_on=False
+    in_schedule=False
+    found_schedule=False
+    crons=[]
+    for raw in lines:
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        indent=len(raw)-len(raw.lstrip(" "))
+        value=raw.strip()
+        if indent==0:
+            in_on=value=="on:"
+            in_schedule=False
+            continue
+        if not in_on:
+            continue
+        if indent==2:
+            in_schedule=value=="schedule:"
+            found_schedule=found_schedule or in_schedule
+            continue
+        if in_schedule and indent>=4:
+            match=re.match(r"^-\s+cron:\s*(.+?)\s*$",value)
+            if match:
+                cron=match.group(1).split(" #",1)[0].strip().strip('"\'')
+                req(bool(cron),f"empty workflow cron in {path}")
+                crons.append(cron)
+    return crons if found_schedule else None
+
 def validate_reasoning_fallback(data=None):
     d=load("operations/CHATGPT_REASONING_FALLBACK.json") if data is None else data
     expected={
@@ -101,11 +136,18 @@ def validate_operating_mode():
       "portfolio-autonomous-scheduler":"23 * * * *",
       "portfolio-cost-watchdog":"53 * * * *",
       "portfolio-notification-cycle":"7 */6 * * *",
+      "command-center-pages":"37 * * * *",
     }
     req(set(p["approved_recurring_workflows"])==set(expected),"approved recurring workflow set changed")
+    workflow_dir=ROOT/".github/workflows"
+    actual={}
+    for path in workflow_dir.glob("*.yml"):
+        crons=workflow_schedule_crons(path)
+        if crons is not None:
+            actual[path.stem]=crons
+    req(set(actual)==set(expected),"scheduled workflow inventory differs from approved operating policy")
     for name,cron in expected.items():
-        body=(ROOT/".github/workflows"/f"{name}.yml").read_text()
-        req(cron in body,f"{name} cron mismatch")
+        req(actual[name]==[cron],f"{name} cron mismatch")
     neutral_no_work_workflows=[
       "runtime-worker","hunter-autonomous-cycle","portfolio-autonomous-scheduler",
       "portfolio-notification-cycle","command-center-pages"
