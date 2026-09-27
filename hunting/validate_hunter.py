@@ -73,9 +73,13 @@ def validate_hunter():
     req(controlled["completion_gate"]["min_distinct_strategies"]>=2,"controlled Hunter proof strategy gate too weak")
     req(len({x["strategy_id"] for x in controlled["cases"]})>=2,"controlled Hunter proof lacks strategy diversity")
     wf=(ROOT/".github/workflows/hunter-autonomous-cycle.yml").read_text()
-    for s in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_HUNTER_DISABLED","47 */6 * * *","cancel-in-progress: false","actions/upload-artifact@v4","python -m hunting.calibration --output hunting/out/calibration_report.json","hunting/TRIGGER_CONTROLLED_PROOF","python -m hunting.controlled_proof --output hunting/out/controlled_proof.json"]:
+    for s in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_HUNTER_DISABLED","47 */6 * * *","cancel-in-progress: false","actions/upload-artifact@v4","python -m hunting.calibration --output hunting/out/calibration_report.json"]:
         req(s in wf,f"Hunter workflow missing {s}")
-    low=wf.lower()
+    proof_wf=(ROOT/".github/workflows/hunter-controlled-proof.yml").read_text()
+    for s in ["contents: read","actions: read","timeout-minutes: 5","hunting/TRIGGER_CONTROLLED_PROOF","python -m hunting.controlled_proof --output hunting/out/controlled_proof.json","portfolio-hunter-controlled-proof"]:
+        req(s in proof_wf,f"controlled Hunter proof workflow missing {s}")
+    req("portfolio-cost-governed-autonomy" not in proof_wf,"controlled proof must not compete for persistent autonomous-state concurrency")
+    low=(wf+"\n"+proof_wf).lower()
     for forbidden in ["contents: write","pull-requests: write","issues: write","id-token: write","git push","gh pr","openai","anthropic"]:
         req(forbidden not in low,f"forbidden Hunter workflow capability: {forbidden}")
     return {"pinned_components":len(expected),"strategies":len(strategies),"detected_gaps":len(gaps),"selected_objectives":len(objectives),"exploration_objectives":sum(1 for x in objectives if x["exploration"]),"hard_reject_reasons":evaluation["hard_reject_reasons"],"soft_signals_do_not_reject":evaluation["soft_signals_do_not_reject"],"ranking_max_score":ranking["max_score"],"rejection_funnel_reconciled":True,"query_outcomes":len(probe_receipt["query_outcomes"]),"calibration_cases":calibration["case_count"],"calibration_positive_retained":calibration["positive_retained"],"calibration_negative_rejected":calibration["negative_rejected"],"calibration_ambiguous_matched":calibration["ambiguous_matched"],"calibration_rank_bands":calibration["rank_band_counts"],"controlled_proof_cases":len(controlled["cases"]),"controlled_proof_min_retained":controlled["completion_gate"]["min_retained_candidates"],"controlled_proof_min_strategies":controlled["completion_gate"]["min_distinct_strategies"],"model_calls":0,"downstream_writes":0,"external_actions":0}
