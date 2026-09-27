@@ -3,7 +3,7 @@
 from __future__ import annotations
 import json
 from pathlib import Path
-from hunting.autonomous_hunter import detect_gaps, load_policy, load_seed_state, load_strategies, run_cycle, select_objectives, validate_state
+from hunting.autonomous_hunter import _queries, detect_gaps, load_policy, load_query_concepts, load_seed_state, load_strategies, run_cycle, search_concepts_for_gap, select_objectives, validate_state
 from hunting.calibration import run_calibration
 from hunting.controlled_proof import load_cases as load_controlled_cases
 ROOT=Path(__file__).resolve().parents[1]
@@ -35,6 +35,17 @@ def validate_hunter():
     req(policy["learning"]["verified_outcome_strategy_priority"] is True,"verified Hunter outcome priority disabled")
     req(policy["learning"]["verified_outcome_priority_mode"]=="ORDER_EXPLOIT_STRATEGIES_BY_VERIFIED_VALUE_OUTCOMES","Hunter feedback priority mode drifted")
     req(policy["learning"]["unverified_activity_cannot_increase_strategy_priority"] is True,"unverified Hunter activity may increase priority")
+    query_policy=policy["query_generation"]
+    req(query_policy["taxonomy_file"]=="hunting/QUERY_CONCEPTS.json","Hunter query taxonomy path drifted")
+    req(query_policy["repository_search_mode"]=="METADATA_FIRST_THEN_EXACT_REVISION_STRUCTURAL_INSPECTION","Hunter repository search semantics drifted")
+    req(query_policy["portfolio_brand_names_default"] is False,"Hunter query generation reverted to portfolio brand names")
+    req(query_policy["rotate_queries_by_state_sequence"] is True and query_policy["prefer_lowest_negative_hits"] is True,"Hunter dead-end query rotation disabled")
+    req(query_policy["structural_ranking_uses_semantic_concepts"] is True,"Hunter structural ranking lost semantic concepts")
+    concepts=load_query_concepts()
+    req(concepts["schema_version"]=="1.0.0" and concepts["taxonomy_id"]=="portfolio-hunter-query-concepts-v1","Hunter query concept taxonomy identity drifted")
+    req(concepts["max_concepts_per_gap"]>=3,"Hunter query concept breadth too narrow")
+    req("business" in concepts["generic_categories"] and "product" in concepts["generic_categories"],"generic Hunter categories not filtered")
+    req(len(concepts["category_concepts"])>=10,"Hunter semantic concept coverage too narrow")
     priority_probe=load_seed_state()
     target="STRAT:fail-open-boundary-archaeology"
     priority_probe["strategy_stats"][target]["verified_value_outcomes"]=2
@@ -54,6 +65,13 @@ def validate_hunter():
     req(1<=len(objectives)<=policy["budgets"]["max_objectives_per_cycle"],"objective generation out of bounds")
     req(any(x["exploration"] for x in objectives),"exploration objective missing")
     req(all(x["authority_class"]=="OBSERVE" for x in objectives),"objective authority widened")
+    req(all(x.get("search_concepts") for x in objectives),"Hunter objectives missing semantic search concepts")
+    capture=next(g for g in gaps if g["project_name"]=="CaptureBrief")
+    exact=next(x for x in strategies if x["family"]=="EXACT_IMPLEMENTATION")
+    capture_queries=_queries(capture,exact,seed)
+    req(capture_queries and all("capturebrief" not in q.casefold() for q in capture_queries),"Hunter queries leaked portfolio brand name into repository search")
+    req(any("government contract proposal" in q.casefold() or "rfp proposal" in q.casefold() for q in capture_queries),"Hunter semantic govcon query coverage missing")
+    req("government contract proposal" in search_concepts_for_gap(capture),"Hunter CaptureBrief concept translation missing")
     class NoResultProvider:
         requests=0
         def search(self,query):
@@ -90,5 +108,5 @@ def validate_hunter():
     low=(wf+"\n"+proof_wf).lower()
     for forbidden in ["contents: write","pull-requests: write","issues: write","id-token: write","git push","gh pr","openai","anthropic"]:
         req(forbidden not in low,f"forbidden Hunter workflow capability: {forbidden}")
-    return {"pinned_components":len(expected),"strategies":len(strategies),"detected_gaps":len(gaps),"selected_objectives":len(objectives),"exploration_objectives":sum(1 for x in objectives if x["exploration"]),"hard_reject_reasons":evaluation["hard_reject_reasons"],"soft_signals_do_not_reject":evaluation["soft_signals_do_not_reject"],"ranking_max_score":ranking["max_score"],"rejection_funnel_reconciled":True,"query_outcomes":len(probe_receipt["query_outcomes"]),"calibration_cases":calibration["case_count"],"calibration_positive_retained":calibration["positive_retained"],"calibration_negative_rejected":calibration["negative_rejected"],"calibration_ambiguous_matched":calibration["ambiguous_matched"],"calibration_rank_bands":calibration["rank_band_counts"],"controlled_proof_cases":len(controlled["cases"]),"controlled_proof_min_retained":controlled["completion_gate"]["min_retained_candidates"],"controlled_proof_min_strategies":controlled["completion_gate"]["min_distinct_strategies"],"verified_outcome_strategy_priority":True,"model_calls":0,"downstream_writes":0,"external_actions":0}
+    return {"pinned_components":len(expected),"strategies":len(strategies),"detected_gaps":len(gaps),"selected_objectives":len(objectives),"exploration_objectives":sum(1 for x in objectives if x["exploration"]),"hard_reject_reasons":evaluation["hard_reject_reasons"],"soft_signals_do_not_reject":evaluation["soft_signals_do_not_reject"],"ranking_max_score":ranking["max_score"],"rejection_funnel_reconciled":True,"query_outcomes":len(probe_receipt["query_outcomes"]),"calibration_cases":calibration["case_count"],"calibration_positive_retained":calibration["positive_retained"],"calibration_negative_rejected":calibration["negative_rejected"],"calibration_ambiguous_matched":calibration["ambiguous_matched"],"calibration_rank_bands":calibration["rank_band_counts"],"controlled_proof_cases":len(controlled["cases"]),"controlled_proof_min_retained":controlled["completion_gate"]["min_retained_candidates"],"controlled_proof_min_strategies":controlled["completion_gate"]["min_distinct_strategies"],"verified_outcome_strategy_priority":True,"semantic_query_taxonomy":concepts["taxonomy_id"],"semantic_query_categories":len(concepts["category_concepts"]),"model_calls":0,"downstream_writes":0,"external_actions":0}
 if __name__=="__main__":print("portfolio-brain Step 9 Hunter: PASS",json.dumps(validate_hunter(),sort_keys=True))
