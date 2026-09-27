@@ -202,29 +202,38 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertNotIn("<td>Daily GitHub job starts</td>",public)
         self.assertNotIn("Governed runner minutes committed",public)
 
-    def test_retired_commercial_baseline_never_masquerades_as_live_state(self):
+    def test_current_scoped_commercial_observation_never_masquerades_as_global_or_definitive_state(self):
         snapshot=build_command_center_snapshot()
         commercial=snapshot["commercial_validation"]
-        self.assertEqual(commercial["evidence_status"],"HISTORICAL_BASELINE")
-        self.assertEqual(commercial["source_kind"],"RETIRED_STATIC_BASELINE")
-        self.assertEqual(commercial["source_ref"],"operations/VALIDATION_SPRINT_STATE.json")
+        self.assertEqual(commercial["evidence_status"],"CURRENT_SCOPE_OBSERVED")
+        self.assertEqual(commercial["current_source_kind"],"CHATGPT_GMAIL_CONNECTOR_SANITIZED_OBSERVATION")
+        self.assertEqual(commercial["current_source_ref"],"commercial_evidence/CURRENT_SANITIZED_OBSERVATION.json")
+        self.assertEqual(commercial["historical_source_ref"],"operations/VALIDATION_SPRINT_STATE.json")
         self.assertFalse(commercial["live_external_evidence_feed"])
-        self.assertEqual(commercial["current_external_reply_state"],"UNKNOWN")
+        self.assertEqual(commercial["current_external_reply_state"],"OBSERVED_NO_HUMAN_REPLY_IN_SCOPE")
         self.assertEqual(commercial["current_external_payment_state"],"UNKNOWN")
+        self.assertFalse(commercial["definitive_outcome_recorded"])
+        self.assertEqual(commercial["threads_observed"],3)
+        self.assertEqual(commercial["threads_with_human_reply"],0)
+        self.assertEqual(commercial["query_contract_id"],"freightrecovery-gateway-followup-v1")
+        self.assertIn("GMAIL_LABEL_PORTFOLIOBRAIN_SENT_AFTER_2026_09_25",commercial["coverage_scope"])
         self.assertIsNotNone(commercial["baseline_retired_at"])
         self.assertEqual(commercial["historical_freightrecovery_first_contact_threads_sent"],18)
         public=render_html(snapshot)
         self.assertIn("Commercial Evidence",public)
+        self.assertIn("Observed gateway threads",public)
+        self.assertIn("Human-reply threads in scope",public)
         self.assertIn("Retired FreightRecovery Baseline",public)
-        self.assertIn('Current human reply state</td><td class="num">UNKNOWN',public)
+        self.assertIn('Current human reply state</td><td class="num">OBSERVED_NO_HUMAN_REPLY_IN_SCOPE',public)
+        self.assertIn('Current payment/checkout state</td><td class="num">UNKNOWN',public)
         self.assertNotIn("Live checkout sessions</td>",public)
         self.assertNotIn("Live payment intents</td>",public)
         issue=next(
             row for row in snapshot["repair_issues"]
-            if row["title"]=="Commercial outcome telemetry is historical-only"
+            if row["title"]=="Commercial evidence is current but scope-limited"
         )
         self.assertEqual(issue["severity"],"REVIEW")
-        self.assertIn("UNKNOWN rather than zero",issue["prompt"])
+        self.assertIn("Do not broaden the zero-reply result",issue["prompt"])
 
     def test_command_center_exposes_hunter_proposal_inbox_without_rights_upgrade(self):
         snapshot=build_command_center_snapshot()
