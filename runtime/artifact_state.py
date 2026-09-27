@@ -2,6 +2,7 @@
 """Restore newest sanitized Step 8 runtime-state artifact from GitHub Actions."""
 from __future__ import annotations
 import argparse, json, os, time, urllib.request
+from urllib.error import HTTPError, URLError
 import shutil
 from pathlib import Path
 from runtime.artifact_http import open_url
@@ -17,12 +18,25 @@ class ArtifactRestoreError(RuntimeError): pass
 def policy():
     return json.loads((ROOT/"runtime"/"RUNTIME_POLICY.json").read_text())
 
+def _retryable_fetch_error(exc: Exception)->bool:
+    if isinstance(exc,HTTPError):
+        return exc.code in {408,429} or 500<=exc.code<600
+    return isinstance(exc,(URLError,TimeoutError,ConnectionError))
+
 class BudgetedHTTP:
-    def __init__(self, token: str, *, max_requests: int, retries: int, backoff: float):
+    def __init__(self, token: str, *, max_requests: int, retries: int, backoff: float,
+                 deadline: float|None=None, clock=time.monotonic, sleep=time.sleep):
         self.token=token; self.max_requests=max_requests; self.retries=retries; self.backoff=backoff; self.requests=0
+        self.deadline=deadline; self.clock=clock; self.sleep=sleep
+    def _timeout(self)->float:
+        if self.deadline is None:return 20
+        remaining=self.deadline-self.clock()
+        if remaining<=0:raise ArtifactRestoreError("artifact restore time budget exceeded")
+        return min(20,remaining)
     def _request(self,url: str)->bytes:
         last=None
         for attempt in range(self.retries+1):
+            timeout=self._timeout()
             if self.requests>=self.max_requests:
                 raise ArtifactRestoreError("artifact API request budget exceeded")
             self.requests+=1
@@ -33,11 +47,18 @@ class BudgetedHTTP:
               "User-Agent":"portfolio-brain-runtime/1.0",
             },method="GET")
             try:
-                with open_url(req,timeout=20) as response:
-                    return response.read()
+                with open_url(req,timeout=timeout) as response:
+                    body=response.read()
+                self._timeout()
+                return body
             except Exception as exc:
+                if isinstance(exc,ArtifactRestoreError):raise
                 last=exc
-                if attempt<self.retries: time.sleep(self.backoff*(attempt+1))
+                if attempt>=self.retries or not _retryable_fetch_error(exc):break
+                delay=self.backoff*(attempt+1)
+                if self.deadline is not None and self.clock()+delay>=self.deadline:
+                    raise ArtifactRestoreError("artifact restore time budget exceeded") from exc
+                self.sleep(delay)
         raise ArtifactRestoreError(f"artifact API read failed after bounded retries: {last}")
     def json(self,url: str)->dict:
         return json.loads(self._request(url).decode("utf-8"))
@@ -63,7 +84,8 @@ def restore(*, output: Path, metadata_output: Path | None = None,
         return "NO_ACTIONS_CONTEXT"
     p=policy(); budgets=p["budgets"]
     http=BudgetedHTTP(token,max_requests=min(6,budgets["max_api_requests_per_cycle"]),
-                      retries=budgets["retry_limit"],backoff=budgets["retry_backoff_seconds"])
+                      retries=budgets["retry_limit"],backoff=budgets["retry_backoff_seconds"],
+                      deadline=time.monotonic()+budgets["max_state_restore_seconds"])
     url=f"https://api.github.com/repos/{repository}/actions/artifacts?name={p['state_persistence']['artifact_name']}&per_page=100"
     data=http.json(url)
     status=restore_latest_valid_state(
