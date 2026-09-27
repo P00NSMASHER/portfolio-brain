@@ -53,6 +53,9 @@ def validate_publication() -> dict[str, object]:
     require(publication["mode"] == "AUTO_ON_RELEVANT_MAIN_PUSH_PLUS_HOURLY_REFRESH", "public publication mode drifted")
     if publication["source_commit"] is not None:
         require(len(publication["source_commit"]) == 40, "public source commit is not a full SHA")
+    upgrades=snapshot["recommended_upgrades"]
+    require(isinstance(upgrades,list) and 1<=len(upgrades)<=5,"public recommended upgrades invalid")
+    require(all(row.get("prompt") and row.get("evidence_ref") for row in upgrades),"public recommended upgrade prompt/evidence missing")
     require(snapshot["history"]["history_id"] == "portfolio-command-center-public-history-v1", "public history missing")
     commercial=snapshot["commercial_validation"]
     require(commercial["evidence_status"] in {"CURRENT_SCOPE_OBSERVED","STALE_OR_UNAVAILABLE"},"public commercial evidence status invalid")
@@ -100,6 +103,8 @@ def validate_publication() -> dict[str, object]:
     require("Stamp publication provenance" in workflow, "Pages publication provenance stamp missing")
     require('if [[ "$GITHUB_EVENT_NAME" == "push" ]]' in workflow, "source-change publication override missing")
     require("Verify deployed source commit" in workflow and "source-commit.txt" in workflow, "end-to-end Pages deployment proof missing")
+    require("Recommended Upgrades" in html_text and "RECOMMENDED UPGRADES · EVIDENCE BACKED" in html_text, "public recommended upgrades board missing")
+    require(html_text.index("SYSTEM DIAGNOSTICS · READ ONLY") < html_text.index("RECOMMENDED UPGRADES · EVIDENCE BACKED") < html_text.index('class="grid kpis"'), "public recommended upgrades placement drifted")
     require("Operational Telemetry" in html_text and "History & Trends" in html_text, "public telemetry/trends panels missing")
     require("Commercial Evidence" in html_text and "Retired FreightRecovery Baseline" in html_text, "public commercial provenance UI missing")
     require("Observed gateway threads" in html_text and "Human-reply threads in scope" in html_text, "public scoped commercial evidence UI missing")
