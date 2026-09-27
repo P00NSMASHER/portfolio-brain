@@ -9,6 +9,7 @@ on:
       - "tests/**"
       - "operator_console/**"
       - "cost_governor/**"
+      - "operations/COMMAND_CENTER_REFRESH_REQUEST.json"
       - ".github/workflows/command-center-pages.yml"
       - ".github/workflows/foundation-ci.yml"
       - ".github/workflows/runtime-event-observe.yml"

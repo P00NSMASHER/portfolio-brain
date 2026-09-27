@@ -109,6 +109,17 @@ def validate_reasoning_fallback(data=None):
     req(not any(re.search(rf'"{re.escape(token)}"\s*:',raw,re.I) for token in forbidden),"reasoning fallback contains a private connector field")
     return {"provider":d["provider"],"authority_granted":False,"evidence_upgraded":False}
 
+def validate_gmail_gateway_status(gmail,gateway_status,ledger):
+    req(gateway_status.get("provider")==gmail["provider"] and gateway_status.get("account")==gmail["account_ref"],"operating status Gmail gateway binding mismatch")
+    req(gateway_status.get("status")=="LIVE_GATEWAY_PROVEN","live Gmail gateway proof not recorded")
+    req(gateway_status.get("proof_ledger")=="action_engine/GMAIL_GATEWAY_LEDGER.json","Gmail gateway proof ledger mismatch")
+    req(ledger.get("ledger_id")=="portfolio-gmail-gateway-ledger" and type(ledger.get("sequence")) is int and ledger["sequence"]>0,"live Gmail gateway ledger proof missing")
+    req(len(ledger.get("executions",[]))==ledger["sequence"] and all(row.get("status")=="SENT" for row in ledger["executions"]),"Gmail gateway proof executions invalid")
+    req(gateway_status.get("proof_sequence")==ledger["sequence"],"Gmail gateway proof sequence stale")
+    req(gateway_status.get("proof_at")==ledger.get("updated_at") and ISO_Z.fullmatch(gateway_status.get("proof_at") or "") is not None,"Gmail gateway proof timestamp stale or invalid")
+    req(gateway_status.get("raw_connector_identifiers_persisted") is False,"Gmail gateway status permits raw connector identifiers")
+    return {"status":gateway_status["status"],"proof_sequence":gateway_status["proof_sequence"]}
+
 def validate_operating_mode():
     p=load("operations/OPERATING_MODE_POLICY.json")
     s=load("operations/OPERATING_MODE_STATUS.json")
@@ -191,6 +202,7 @@ def validate_operating_mode():
     req("run: exit 3" in factory,"software factory must fail closed when modification authority is denied")
     event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text().lower()
     req("push:" in event and 'branches: ["main"]' in event,"main push observer missing")
+    req('"operations/command_center_refresh_request.json"' in event,"trigger-only command-center refresh still creates redundant runtime work")
     watchdog=(ROOT/".github/workflows/portfolio-cost-watchdog.yml").read_text().lower()
     req("actions: write" in watchdog and "contents: read" in watchdog and "contents: write" not in watchdog,"watchdog permissions invalid")
     foundation=(ROOT/".github/workflows/foundation-ci.yml").read_text().lower()
@@ -217,6 +229,9 @@ def validate_operating_mode():
     req(gmail.get("planner_task_id")=="6ab377be3184819186a3075f37a530b8","Gmail gateway planner task mismatch")
     req(load("action_engine/KILL_SWITCH.json").get("disabled") is False,"checked-in Gmail action kill switch unexpectedly active")
     req(not (ROOT/".github/workflows/portfolio-action-worker.yml").exists(),"obsolete SMTP action worker still present")
+    gateway_status=s.get("connector_gateways",{}).get("gmail",{})
+    ledger=load("action_engine/GMAIL_GATEWAY_LEDGER.json")
+    validate_gmail_gateway_status(gmail,gateway_status,ledger)
     boundaries=set(p["permanent_authority_boundaries"])
     for b in [
       "PAYMENT_CASH_MOVEMENT_REQUIRES_HUMAN_APPROVAL",
@@ -231,6 +246,7 @@ def validate_operating_mode():
       "neutral_no_work_workflows":len(neutral_no_work_workflows),
       "durable_state_artifacts":len(p["durable_state_artifacts"]),
       "gmail_gateway_account_ref":gmail["account_ref"],
+      "gmail_gateway_status":gateway_status["status"],
       "enabled_nonzero_models":len(enabled_nonzero),
       "step23_unresolved":step23["unresolved_findings"],
       "step24_authority_violations":step24["authority_violations"],

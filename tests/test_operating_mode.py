@@ -1,6 +1,6 @@
 import copy,json,unittest
 from pathlib import Path
-from operations.validate_operating_mode import OperatingModeValidationError,scheduled_workflow_inventory,validate_operating_mode,validate_reasoning_fallback,workflow_schedule_crons
+from operations.validate_operating_mode import OperatingModeValidationError,scheduled_workflow_inventory,validate_gmail_gateway_status,validate_operating_mode,validate_reasoning_fallback,workflow_schedule_crons
 ROOT=Path(__file__).resolve().parents[1]
 
 class OperatingModeTests(unittest.TestCase):
@@ -10,6 +10,7 @@ class OperatingModeTests(unittest.TestCase):
         self.assertEqual(result["neutral_no_work_workflows"],6)
         self.assertEqual(result["durable_state_artifacts"],6)
         self.assertEqual(result["gmail_gateway_account_ref"],"PRIMARY_GMAIL_CONNECTOR")
+        self.assertEqual(result["gmail_gateway_status"],"LIVE_GATEWAY_PROVEN")
         self.assertEqual(result["enabled_nonzero_models"],3)
         self.assertFalse(result["interactive_chatgpt_runtime_dependency"])
         self.assertEqual(result["release_status"],"OPERATIONAL")
@@ -121,6 +122,26 @@ class OperatingModeTests(unittest.TestCase):
         self.assertEqual(gmail["account_ref"],"PRIMARY_GMAIL_CONNECTOR")
         self.assertEqual(gmail["execution_task_id"],"6ab377c25df08191a6e2aa1537d9d2ef")
         self.assertFalse((ROOT/".github/workflows/portfolio-action-worker.yml").exists())
+
+    def test_live_gmail_gateway_proof_tracks_sanitized_ledger(self):
+        status=json.loads((ROOT/"operations/OPERATING_MODE_STATUS.json").read_text())["connector_gateways"]["gmail"]
+        ledger=json.loads((ROOT/"action_engine/GMAIL_GATEWAY_LEDGER.json").read_text())
+        self.assertEqual(status["status"],"LIVE_GATEWAY_PROVEN")
+        self.assertEqual(status["proof_sequence"],ledger["sequence"])
+        self.assertEqual(status["proof_at"],ledger["updated_at"])
+        self.assertFalse(status["raw_connector_identifiers_persisted"])
+
+    def test_stale_gmail_gateway_proof_fails_closed(self):
+        policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())["external_connector_gateways"]["gmail"]
+        status=json.loads((ROOT/"operations/OPERATING_MODE_STATUS.json").read_text())["connector_gateways"]["gmail"]
+        ledger=json.loads((ROOT/"action_engine/GMAIL_GATEWAY_LEDGER.json").read_text())
+        status=copy.deepcopy(status);status["proof_sequence"]-=1
+        with self.assertRaisesRegex(OperatingModeValidationError,"proof sequence stale"):
+            validate_gmail_gateway_status(policy,status,ledger)
+
+    def test_trigger_only_command_center_refresh_does_not_spawn_runtime_work(self):
+        workflow=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
+        self.assertIn('"operations/COMMAND_CENTER_REFRESH_REQUEST.json"',workflow)
 
     def test_chatgpt_tasks_are_advisory_not_runtime_dependency(self):
         p=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())

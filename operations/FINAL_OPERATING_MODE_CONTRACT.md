@@ -18,7 +18,7 @@ On `main`, the approved recurring workflows may self-trigger on their existing s
 
 The release permits only policy-bounded customer email through the action-engine gateway. StarBlox/ABVM validation is adult-stakeholder-only and excludes direct minor contact, child-data collection, production changes, and consequential child-facing changes. Payment/cash movement, live market trading or brokerage execution, deployment, merge authority, secret changes, and unapproved child-facing consequential changes remain human-gated or prohibited.
 
-Paid/model/API execution remains deny-by-default because the checked-in provider registry has no enabled non-Tier-0 model and Step 20 paid/token/model/API ceilings remain zero.
+Paid/model/API execution remains deny-by-default at invocation time unless the enabled OpenAI route passes provider readiness, finite pre-execution cost reservation, retry, idempotency, and kill-switch gates. Model output is advisory and cannot grant authority or upgrade evidence.
 
 ## Governed no-work outcomes
 
@@ -33,3 +33,5 @@ Ordinary operation is GitHub-hosted and machine-readable. Interactive ChatGPT an
 Before merge to `main`, exact-head CI must pass with Steps 1–25 validators, Step 23 hostile regressions, and the Step 24 no-prompt canary.
 
 After merge, the promoted `main` head must pass foundation CI and the push-triggered runtime observation path. The final durable state must record the exact main SHA and post-promotion evidence before Portfolio Brain is declared operational.
+
+Post-release, trigger-only command-center refresh commits are excluded from runtime event observation. This preserves the serialized cost/state boundary for useful work and prevents a display refresh from generating redundant repository-observation traffic. The bounded Gmail connector gateway is considered live only when its sanitized operating-status proof exactly matches the durable gateway ledger sequence and timestamp; no raw connector identifiers are persisted.
