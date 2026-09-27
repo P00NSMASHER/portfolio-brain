@@ -233,6 +233,18 @@ def validate_operating_mode():
     req('"operations/command_center_refresh_request.json"' in event,"trigger-only command-center refresh still creates redundant runtime work")
     watchdog=(ROOT/".github/workflows/portfolio-cost-watchdog.yml").read_text().lower()
     req("actions: write" in watchdog and "contents: read" in watchdog and "contents: write" not in watchdog,"watchdog permissions invalid")
+    req("operations.workflow_liveness" in watchdog and "portfolio-workflow-liveness" in watchdog,"watchdog core-workflow recovery missing")
+    liveness=load("operations/WORKFLOW_LIVENESS_POLICY.json")
+    req(liveness["schema_version"]=="1.0.0" and liveness["liveness_id"]=="portfolio-core-workflow-liveness-v1","workflow liveness policy identity mismatch")
+    req(liveness["authority_class"]=="NONE" and liveness["dispatch_authority_effect"]=="NONE","workflow liveness recovery widened authority")
+    req(liveness["hard_stop_behavior"]=="NO_RECOVERY_DISPATCH","workflow liveness recovery can bypass cost hard stop")
+    req(1<=liveness["max_dispatches_per_cycle"]<=2 and 1<=liveness["max_history_pages"]<=5,"workflow liveness recovery bounds invalid")
+    recovery_names={row["workflow_name"] for row in liveness["targets"]}
+    req(recovery_names<=set(expected),"workflow liveness recovery target is not an approved recurring workflow")
+    for target in liveness["targets"]:
+        path=ROOT/".github/workflows"/target["workflow_file"]
+        req(path.exists(),f"workflow liveness target file missing: {target['workflow_file']}")
+        req("workflow_dispatch" in workflow_top_level_triggers(path),f"workflow liveness target not dispatchable: {target['workflow_name']}")
     foundation=(ROOT/".github/workflows/foundation-ci.yml").read_text().lower()
     req('branches: ["main", "step*-*"]' in foundation,"foundation CI main trigger missing")
 
@@ -271,6 +283,8 @@ def validate_operating_mode():
     fallback=validate_reasoning_fallback()
     return {
       "approved_recurring_workflows":len(expected),
+      "workflow_liveness_recovery_targets":len(liveness["targets"]),
+      "workflow_liveness_max_dispatches":liveness["max_dispatches_per_cycle"],
       "neutral_no_work_workflows":len(neutral_no_work_workflows),
       "durable_state_artifacts":len(p["durable_state_artifacts"]),
       "gmail_gateway_account_ref":gmail["account_ref"],
