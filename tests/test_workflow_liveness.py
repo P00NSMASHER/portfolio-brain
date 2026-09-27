@@ -16,10 +16,23 @@ ROOT=Path(__file__).resolve().parents[1]
 AT="2026-09-27T08:53:00Z"
 
 
-def run(name,created_at,*,status="completed",conclusion="success",run_id=1):
+def run(
+    name,
+    created_at,
+    *,
+    status="completed",
+    conclusion="success",
+    run_id=1,
+    workflow_file=None,
+    head_branch="main",
+    event="schedule",
+):
     return {
       "id":run_id,
       "name":name,
+      "path":f".github/workflows/{workflow_file or name + '.yml'}",
+      "head_branch":head_branch,
+      "event":event,
       "created_at":created_at,
       "status":status,
       "conclusion":conclusion,
@@ -70,6 +83,45 @@ class WorkflowLivenessTests(unittest.TestCase):
             )
             self.assertEqual(row["status"],"HEALTHY_ACTIVE")
             self.assertFalse(row["dispatch_required"])
+
+    def test_same_name_run_from_another_branch_cannot_mask_overdue_main(self):
+        target=load_policy()["targets"][0]
+        row=evaluate_target(
+          target,
+          [run(
+            target["workflow_name"],"2026-09-27T08:50:00Z",
+            status="in_progress",conclusion=None,head_branch="feature/spoof-liveness",
+          )],
+          at=AT,
+          failure_retry_minutes=35,
+        )
+        self.assertEqual(row["status"],"OVERDUE_NO_HISTORY")
+        self.assertTrue(row["dispatch_required"])
+
+    def test_same_name_run_from_another_workflow_file_cannot_mask_target(self):
+        target=load_policy()["targets"][0]
+        row=evaluate_target(
+          target,
+          [run(
+            target["workflow_name"],"2026-09-27T08:50:00Z",
+            workflow_file="unrelated-spoof.yml",event="workflow_dispatch",
+          )],
+          at=AT,
+          failure_retry_minutes=35,
+        )
+        self.assertEqual(row["status"],"OVERDUE_NO_HISTORY")
+        self.assertTrue(row["dispatch_required"])
+
+    def test_untrusted_event_cannot_mask_target(self):
+        target=load_policy()["targets"][0]
+        row=evaluate_target(
+          target,
+          [run(target["workflow_name"],"2026-09-27T08:50:00Z",event="pull_request")],
+          at=AT,
+          failure_retry_minutes=35,
+        )
+        self.assertEqual(row["status"],"OVERDUE_NO_HISTORY")
+        self.assertTrue(row["dispatch_required"])
 
     def test_recent_failure_retries_only_after_failure_window(self):
         target=next(x for x in load_policy()["targets"] if x["workflow_name"]=="runtime-hourly-sync")
