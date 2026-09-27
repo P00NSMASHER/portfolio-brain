@@ -55,11 +55,21 @@ def validate_publication() -> dict[str, object]:
         require(len(publication["source_commit"]) == 40, "public source commit is not a full SHA")
     require(snapshot["history"]["history_id"] == "portfolio-command-center-public-history-v1", "public history missing")
     commercial=snapshot["commercial_validation"]
-    require(commercial["evidence_status"]=="HISTORICAL_BASELINE","public commercial baseline presented as live")
-    require(commercial["live_external_evidence_feed"] is False,"public snapshot invented live commercial evidence feed")
-    require(commercial["current_external_reply_state"]=="UNKNOWN","public snapshot misstates current reply state")
-    require(commercial["current_external_payment_state"]=="UNKNOWN","public snapshot misstates current payment state")
-    require(commercial["source_ref"]=="operations/VALIDATION_SPRINT_STATE.json","public commercial provenance missing")
+    require(commercial["evidence_status"] in {"CURRENT_SCOPE_OBSERVED","STALE_OR_UNAVAILABLE"},"public commercial evidence status invalid")
+    require(commercial["current_source_kind"]=="CHATGPT_GMAIL_CONNECTOR_SANITIZED_OBSERVATION","public current commercial source kind drifted")
+    require(commercial["current_source_ref"]=="commercial_evidence/CURRENT_SANITIZED_OBSERVATION.json","public current commercial provenance missing")
+    require(commercial["historical_source_ref"]=="operations/VALIDATION_SPRINT_STATE.json","public historical commercial provenance missing")
+    require(commercial["live_external_evidence_feed"] is False,"public snapshot invented autonomous live commercial evidence feed")
+    require(commercial["current_external_payment_state"]=="UNKNOWN","public Gmail-only evidence invented payment state")
+    require(commercial["definitive_outcome_recorded"] is False,"public OBSERVED evidence invented definitive outcome")
+    require(commercial["threads_truncated"]==0,"public commercial observation is truncated")
+    if commercial["evidence_status"]=="CURRENT_SCOPE_OBSERVED":
+        require(commercial["fresh"] is True,"public current commercial observation is stale")
+        require(commercial["current_evidence_state"]=="OBSERVED","public commercial evidence state widened")
+        require(commercial["current_external_reply_state"] in {"OBSERVED_NO_HUMAN_REPLY_IN_SCOPE","OBSERVED_HUMAN_REPLY_IN_SCOPE"},"public scoped reply state invalid")
+    else:
+        require(commercial["fresh"] is False,"public stale commercial observation marked fresh")
+        require(commercial["current_external_reply_state"]=="UNKNOWN","public stale commercial reply state did not fail closed")
 
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
@@ -92,6 +102,8 @@ def validate_publication() -> dict[str, object]:
     require("Verify deployed source commit" in workflow and "source-commit.txt" in workflow, "end-to-end Pages deployment proof missing")
     require("Operational Telemetry" in html_text and "History & Trends" in html_text, "public telemetry/trends panels missing")
     require("Commercial Evidence" in html_text and "Retired FreightRecovery Baseline" in html_text, "public commercial provenance UI missing")
+    require("Observed gateway threads" in html_text and "Human-reply threads in scope" in html_text, "public scoped commercial evidence UI missing")
+    require("GMAIL_LABEL_PORTFOLIOBRAIN_SENT_AFTER_2026_09_25" in html_text, "public commercial coverage scope missing")
     require("Live checkout sessions</td>" not in html_text and "Live payment intents</td>" not in html_text, "retired commercial baseline labeled live")
     require("Hunter Proposal Inbox" in html_text, "public Hunter proposal inbox panel missing")
     require(snapshot["hunter_proposals"]["authority_class"]=="OBSERVE","public Hunter proposal inbox widened authority")
