@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from model_router.feedback_state import load_seed_state as load_feedback_seed, validate_state as validate_feedback_state
 from model_router.model_router import route_request
 from value_proof.model_task import build_model_request, load_contract, make_evidence_pack, validate_evidence_pack
 from value_proof.verifier import build_verifier_request, load_verifier_contract
@@ -50,6 +51,23 @@ def validate_value_proof():
     req(verify_route["provider_id"]=="openai" and verify_route["model_id"]=="gpt-5.6-sol","independent verifier route drifted")
     req(verify_route["independence_group"]!=route["independence_group"],"builder/verifier independence collapsed")
     req(verify_route["max_estimated_cost_usd"]<=verifier["model_contract"]["max_cost_usd"],"independent verifier exceeds cost ceiling")
+    feedback_seed=load_feedback_seed();validate_feedback_state(feedback_seed)
+    req(feedback_seed["sequence"]==0 and feedback_seed["routing_task_summaries"]=={},"model feedback seed must begin empty")
+    model_policy=json.loads((ROOT/"model_router"/"MODEL_ROUTER_POLICY.json").read_text())
+    feedback_cfg=model_policy["verified_feedback_routing"]
+    req(feedback_cfg["enabled"] is True and feedback_cfg["within_required_tier_only"] is True,"verified feedback routing disabled or widened")
+    req(feedback_cfg["preserve_independence_gate"] is True and feedback_cfg["no_cross_tier_promotion"] is True,"feedback routing may weaken tier/independence")
+    workflow=(ROOT/".github/workflows/model-value-proof.yml").read_text()
+    for token in [
+      "python -m value_proof.feedback_loop",
+      "python -m hunting.artifact_state --output hunting/live/hunter_state.json",
+      "python -m model_router.feedback_artifact_state --output model_router/live/model_feedback_state.json",
+      "name: portfolio-hunter-state",
+      "name: portfolio-model-feedback-state",
+    ]:
+        req(token in workflow,f"Step 8 value-proof workflow missing {token}")
+    runtime_workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text()
+    req("python -m model_router.feedback_artifact_state --output model_router/live/model_feedback_state.json" in runtime_workflow,"runtime does not restore verified model feedback")
     return {
       "task_id":contract["task_id"],
       "builder_tier":route["tier"],
@@ -59,6 +77,8 @@ def validate_value_proof():
       "verifier_tier":verify_route["tier"],
       "verifier_model":verify_route["model_id"],
       "independent_groups":[route["independence_group"],verify_route["independence_group"]],
+      "verified_feedback_loop":True,
+      "model_feedback_seed_sequence":feedback_seed["sequence"],
       "authority":"OBSERVE",
       "data_classification":"PUBLIC",
     }
