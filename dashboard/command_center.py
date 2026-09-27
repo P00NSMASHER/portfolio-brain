@@ -658,6 +658,55 @@ def render_html(snapshot: dict[str, Any]) -> str:
         for name, stats in snapshot["hunter"]["strategy_stats"].items()
     )
 
+    def proposal_status_tone(status: str) -> str:
+        if status == "REVIEW_COMPLETE":
+            return "good"
+        if status == "REVIEW_CANCELLED":
+            return "bad"
+        if status in {"REVIEW_ACTIVE","REVIEW_QUEUED","AWAITING_SCHEDULER"}:
+            return "warn"
+        return "neutral"
+
+    proposal_rows = "".join(
+        f"""
+        <tr>
+          <td><strong>{_e(p["proposal_id"])}</strong><span class="sub">{_e(", ".join(p["project_ids"]))}</span></td>
+          <td class="wrap"><strong>{_e(p["repository_full_name"] or "—")}</strong><code class="sub">{_e((p["revision"] or "—")[:12])}</code></td>
+          <td class="num">{_e(p["rank_score"])}</td>
+          <td>{_badge(p["rank_band"], "good" if p["rank_band"]=="HIGH" else "warn")}</td>
+          <td>{_badge(p["review_status"].replace("_"," "), proposal_status_tone(p["review_status"]))}</td>
+          <td class="wrap">{_e(p["capability_key"] or "—")}</td>
+          <td>{_e(p["rights_state"] or "—")}</td>
+        </tr>
+        """
+        for p in snapshot["hunter_proposals"]["proposals"]
+    ) or '<tr><td colspan="7" class="empty">No quality-gated Hunter proposals in the durable inbox.</td></tr>'
+
+    proposal_cards = "".join(
+        f"""
+        <article class="mobile-record">
+          <div class="mobile-record-head">
+            <div class="mobile-title">
+              <strong>{_e(p["repository_full_name"] or p["proposal_id"])}</strong>
+              <code>{_e(p["proposal_id"])} · {_e((p["revision"] or "—")[:12])}</code>
+            </div>
+            {_badge(p["review_status"].replace("_"," "), proposal_status_tone(p["review_status"]))}
+          </div>
+          <div class="mobile-stats mobile-stats-2">
+            <div><span>Rank</span><strong>{_e(p["rank_band"])} · {_e(p["rank_score"])}/10</strong></div>
+            <div><span>Projects</span><strong>{_e(", ".join(p["project_ids"]))}</strong></div>
+            <div><span>Rights</span><strong>{_e(p["rights_state"] or "—")}</strong></div>
+            <div><span>Capability</span><strong>{_e((p["capability_key"] or "—").replace("capability-coverage:",""))}</strong></div>
+          </div>
+          <div class="mobile-meta">
+            <span>Strategy</span><strong>{_e((p["strategy_id"] or "—").replace("STRAT:",""))}</strong>
+            <span>Work</span><code>{_e(p["scheduler_work_id"] or "not queued")}</code>
+          </div>
+        </article>
+        """
+        for p in snapshot["hunter_proposals"]["proposals"]
+    ) or '<div class="empty mobile-record">No quality-gated Hunter proposals in the durable inbox.</div>'
+
     model_value_rows = "".join(
         f"""
         <tr>
@@ -708,6 +757,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
         "provider":"Model Provider",
         "model_feedback":"Verified Model Value",
         "learning":"Continuous Learning",
+        "hunter_proposals":"Hunter Proposal Inbox",
     }
     source_rows = "".join(
         f"""
@@ -1799,6 +1849,28 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
         <tr><td>Retryable</td><td class="num">{_e(provider_readiness["retryable"])}</td></tr>
       </tbody></table>
     </div>
+  </section>
+
+  <section class="card" id="hunter-proposals" style="margin-top:14px">
+    <div class="section-head">
+      <div>
+        <h2>Hunter Proposal Inbox</h2>
+        <p>{_e(source_detail("hunter_proposals"))} · exact-revision public candidates that passed the bounded proposal quality gate.</p>
+      </div>
+      {_badge(str(snapshot["hunter_proposals"]["proposal_count"]) + " proposal(s)", "good" if snapshot["hunter_proposals"]["proposal_count"] else "neutral")}
+    </div>
+    <div class="spec-grid" style="margin-bottom:18px">
+      <div class="spec-item"><span>Inbox sequence</span><strong>{_e(snapshot["hunter_proposals"]["sequence"])}</strong></div>
+      <div class="spec-item"><span>Awaiting scheduler</span><strong>{_e(snapshot["hunter_proposals"]["awaiting_scheduler_count"])}</strong></div>
+      <div class="spec-item"><span>Queued / active review</span><strong>{_e(snapshot["hunter_proposals"]["queued_review_count"] + snapshot["hunter_proposals"]["active_review_count"])}</strong></div>
+      <div class="spec-item"><span>Completed review</span><strong>{_e(snapshot["hunter_proposals"]["completed_review_count"])}</strong></div>
+    </div>
+    <div class="table-wrap mobile-hide"><table>
+      <thead><tr><th>Proposal</th><th>Repository @ revision</th><th class="num">Score</th><th>Rank</th><th>Review</th><th>Capability</th><th>Rights</th></tr></thead>
+      <tbody>{proposal_rows}</tbody>
+    </table></div>
+    <div class="mobile-records">{proposal_cards}</div>
+    <p>Discovery never grants reuse rights. Scheduler review is OBSERVE-only and re-inspects the exact public revision before recording license metadata; implementation remains independently gated.</p>
   </section>
 
   <section class="card" id="model-value" style="margin-top:14px">
