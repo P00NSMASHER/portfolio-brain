@@ -41,6 +41,12 @@ def validate_command_center() -> dict[str, object]:
     require(publication["mode"] == "AUTO_ON_RELEVANT_MAIN_PUSH_PLUS_HOURLY_REFRESH", "publication mode drifted")
     if publication["source_commit"] is not None:
         require(len(publication["source_commit"]) == 40, "published source commit is not a full SHA")
+    upgrades=snapshot["recommended_upgrades"]
+    require(isinstance(upgrades,list) and 1<=len(upgrades)<=5,"recommended upgrade set invalid")
+    require(all(set(row)=={"priority","title","detail","evidence_ref","prompt"} for row in upgrades),"recommended upgrade fields changed")
+    require(all(row["priority"] in {"HIGH VALUE","NEXT"} for row in upgrades),"recommended upgrade priority invalid")
+    require(all(row["title"] and row["detail"] and row["evidence_ref"] and row["prompt"] for row in upgrades),"recommended upgrade content incomplete")
+    require(all("P00NSMASHER/portfolio-brain" in row["prompt"] for row in upgrades),"recommended upgrade prompt is not repository-scoped")
     truth=snapshot["execution_truth"]
     require(set(truth) == {"attempted","blocked","executed","verified","scope_note"}, "execution truth vector changed")
     require(all(type(truth[k]) is int and truth[k] >= 0 for k in ("attempted","blocked","executed","verified")), "execution truth counts invalid")
@@ -105,6 +111,9 @@ def validate_command_center() -> dict[str, object]:
     require(snapshot["snapshot_hash"].startswith("sha256:"), "snapshot hash missing")
     require("Portfolio Brain Command Center" in page, "command-center title missing")
     require("Live State Bridge" in page, "live-state bridge panel missing")
+    require("Recommended Upgrades" in page and "Make the Brain better." in page, "recommended upgrades board missing")
+    require(page.index("SYSTEM DIAGNOSTICS · READ ONLY") < page.index("RECOMMENDED UPGRADES · EVIDENCE BACKED") < page.index('class="grid kpis"'), "recommended upgrades board is not directly below diagnostics")
+    require("View upgrade prompt" in page and "upgrade-prompt-" in page, "recommended upgrade prompts missing")
     require("Operational Telemetry" in page, "operational telemetry panel missing")
     require("History & Trends" in page, "history/trends panel missing")
     require("Commercial Evidence" in page and "Retired FreightRecovery Baseline" in page, "commercial evidence provenance UI missing")

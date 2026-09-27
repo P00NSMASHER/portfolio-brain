@@ -235,6 +235,26 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertEqual(issue["severity"],"REVIEW")
         self.assertIn("Do not broaden the zero-reply result",issue["prompt"])
 
+    def test_recommended_upgrades_render_directly_below_system_diagnostics_with_copyable_prompts(self):
+        snapshot=build_command_center_snapshot()
+        upgrades=snapshot["recommended_upgrades"]
+        self.assertGreaterEqual(len(upgrades),1)
+        self.assertLessEqual(len(upgrades),5)
+        self.assertTrue(all(row["priority"] in {"HIGH VALUE","NEXT"} for row in upgrades))
+        self.assertTrue(all(row["prompt"] and row["evidence_ref"] for row in upgrades))
+        self.assertTrue(all("P00NSMASHER/portfolio-brain" in row["prompt"] for row in upgrades))
+        public=render_html(snapshot)
+        diagnostics=public.index("SYSTEM DIAGNOSTICS · READ ONLY")
+        recommendations=public.index("RECOMMENDED UPGRADES · EVIDENCE BACKED")
+        kpis=public.index('class="grid kpis"')
+        self.assertLess(diagnostics,recommendations)
+        self.assertLess(recommendations,kpis)
+        self.assertIn("Recommended Upgrades",public)
+        self.assertIn("Make the Brain better.",public)
+        self.assertIn("View upgrade prompt",public)
+        self.assertIn("upgrade-prompt-1",public)
+        self.assertIn('data-copy-target="upgrade-prompt-1"',public)
+
     def test_command_center_exposes_hunter_proposal_inbox_without_rights_upgrade(self):
         snapshot=build_command_center_snapshot()
         self.assertIn("hunter_proposals",snapshot)
