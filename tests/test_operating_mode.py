@@ -7,7 +7,8 @@ class OperatingModeTests(unittest.TestCase):
     def test_operational_contract_passes(self):
         result=validate_operating_mode()
         self.assertEqual(result["approved_recurring_workflows"],9)
-        self.assertEqual(result["neutral_no_work_workflows"],6)
+        self.assertEqual(result["truthful_blocked_workflows"],7)
+        self.assertGreaterEqual(result["workload_controlled_services"],9)
         self.assertEqual(result["durable_state_artifacts"],6)
         self.assertEqual(result["gmail_gateway_account_ref"],"PRIMARY_GMAIL_CONNECTOR")
         self.assertEqual(result["gmail_gateway_status"],"LIVE_GATEWAY_PROVEN")
@@ -109,16 +110,24 @@ class OperatingModeTests(unittest.TestCase):
             with self.assertRaises(OperatingModeValidationError):
                 workflow_schedule_crons(aliased)
 
-    def test_expected_cost_denials_are_neutral_for_recurring_observe_lanes(self):
-        for name in [
-            "runtime-worker","hunter-autonomous-cycle","portfolio-autonomous-scheduler",
+    def test_blocked_workflows_report_failure_truthfully(self):
+        workload_names=[
+            "hunter-autonomous-cycle","portfolio-autonomous-scheduler",
             "portfolio-notification-cycle","command-center-pages","agent-heartbeat-sweep",
-        ]:
+        ]
+        for name in workload_names:
+            body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
+            self.assertIn("steps.workload.outputs.allowed != 'true'",body,name)
+            self.assertIn("exit 1",body,name)
+            self.assertNotIn("cost_governor.workflow_gate",body,name)
+
+        for name in ["runtime-worker","model-value-proof"]:
             body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
             self.assertIn("steps.cost.outputs.allowed != 'true'",body,name)
-            self.assertNotIn("run: exit 3",body,name)
+            self.assertIn("exit 1",body,name)
 
         factory=(ROOT/".github/workflows/software-factory-candidate.yml").read_text().lower()
+        self.assertIn("workload_control.workload_gate preflight",factory)
         self.assertIn("run: exit 3",factory)
 
     def test_high_risk_payment_trading_deploy_merge_boundaries_remain(self):

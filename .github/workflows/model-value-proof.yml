@@ -205,4 +205,5 @@ jobs:
       - name: Report governed no-work outcome
         if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
         run: |
-          echo "::notice title=Model value proof skipped::Cost governor status: ${{ steps.cost.outputs.decision_status }}"
+          echo "::error title=Model value proof blocked::Cost governor status: ${{ steps.cost.outputs.decision_status }}"
+          exit 1

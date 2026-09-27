@@ -32,11 +32,11 @@ class OperationalTelemetryTests(unittest.TestCase):
             self._write(live,"scheduler_state.json",scheduler)
 
             cost=load_cost_state()
-            r1=make_github_job_request(workflow_id="portfolio-autonomous-scheduler",job_id="schedule",run_id="telemetry-1",attempt=1,project_ids=["PRJ-000"],estimated_minutes=5,authority_class="OBSERVE",at=AT)
+            r1=make_github_job_request(workflow_id="runtime-worker",job_id="runtime-sync",run_id="telemetry-1",attempt=1,project_ids=["PRJ-000"],estimated_minutes=5,authority_class="OBSERVE",at=AT)
             cost,d1=preflight(cost,r1,at=AT)
             actual=zero_usage();actual.update({"github_job_starts":1,"github_runner_minutes":3})
             cost,_=commit_reservation(cost,d1["reservation_id"],actual,at=AT)
-            r2=make_github_job_request(workflow_id="portfolio-autonomous-scheduler",job_id="schedule",run_id="telemetry-2",attempt=1,project_ids=["PRJ-000"],estimated_minutes=5,authority_class="OBSERVE",at=AT)
+            r2=make_github_job_request(workflow_id="runtime-worker",job_id="runtime-sync",run_id="telemetry-2",attempt=1,project_ids=["PRJ-000"],estimated_minutes=5,authority_class="OBSERVE",at=AT)
             cost,_=preflight(cost,r2,at=AT)
             self._write(live,"cost_state.json",cost)
 

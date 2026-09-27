@@ -12,7 +12,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: portfolio-cost-governed-autonomy
+  group: portfolio-notification
   cancel-in-progress: false
 
 jobs:
@@ -22,34 +22,27 @@ jobs:
     timeout-minutes: 2
     env:
       PORTFOLIO_NOTIFICATION_DISABLED: ${{ vars.PORTFOLIO_NOTIFICATION_DISABLED }}
-      PORTFOLIO_SPEND_DISABLED: ${{ vars.PORTFOLIO_SPEND_DISABLED }}
       GITHUB_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Restore latest cost-governor state
-        run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
-      - name: Reserve bounded notification compute
-        id: cost
+      - name: Check independent workload controls
+        id: workload
         run: >-
-          python -m cost_governor.workflow_gate preflight
-          --state cost_governor/live/cost_state.json
-          --output-dir cost_governor/out
+          python -m workload_control.workload_gate preflight
           --workflow-id portfolio-notification-cycle
           --job-id notify
-          --project-id PRJ-000
           --estimated-minutes 2
-          --authority OBSERVE
       - name: Restore latest notification state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m notifications.artifact_state --output notifications/live/notification_state.json
       - name: Restore latest scheduler state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m scheduler.artifact_state --output scheduler/live/scheduler_state.json
       - name: Build evidence-gated alerts
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
           python -m notifications.notification_engine
           --state notifications/live/notification_state.json
@@ -57,35 +50,21 @@ jobs:
           --cost-state cost_governor/live/cost_state.json
           --output-dir notifications/out
       - name: Emit sanitized GitHub alerts
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m notifications.github_sink --alerts notifications/out/emitted_alerts.json
       - name: Validate persisted notification state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -c "import json; from notifications.notification_engine import validate_state; validate_state(json.load(open('notifications/out/notification_state.json')))"
-      - name: Commit conservative notification compute usage
-        if: ${{ always() && steps.cost.outputs.allowed == 'true' }}
-        run: >-
-          python -m cost_governor.workflow_gate finalize
-          --state cost_governor/out/cost_state.json
-          --decision cost_governor/out/cost_decision.json
-          --output cost_governor/out/cost_state.json
       - name: Upload sanitized notification continuation state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-notification-state
           path: notifications/out/
           if-no-files-found: error
           retention-days: 30
-      - name: Upload sanitized cost-governor continuation state
-        if: ${{ always() && hashFiles('cost_governor/out/cost_state.json') != '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: portfolio-cost-governor-state
-          path: cost_governor/out/
-          if-no-files-found: error
-          retention-days: 30
       - name: Report governed no-work outcome
-        if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
+        if: ${{ always() && steps.workload.outputs.allowed != 'true' }}
         run: |
-          echo "::notice title=Portfolio notifications skipped::Cost governor status: ${{ steps.cost.outputs.decision_status }}"
+          echo "::error title=Portfolio notifications skipped::Workload status: ${{ steps.workload.outputs.decision_status }}"
+          exit 1

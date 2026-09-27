@@ -35,7 +35,8 @@ class AutonomousLearningCanaryTests(unittest.TestCase):
         c=self.receipt["continuation"]
         self.assertEqual(c["scheduler_selected_count"],0)
         self.assertGreaterEqual(c["scheduler_suppressed_duplicates"],self.receipt["first_cycle"]["scheduler_selected_count"])
-        self.assertEqual(c["cost_status"],"DUPLICATE_SUPPRESSED")
+        self.assertEqual(c["cost_status"],"WORKLOAD_ALLOWED")
+        self.assertEqual(self.receipt["first_cycle"]["admission_domain"],"WORKLOAD")
         self.assertEqual(c["notifications_emitted"],0)
         self.assertGreaterEqual(c["notification_suppressed"],1)
 

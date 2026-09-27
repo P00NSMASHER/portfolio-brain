@@ -18,8 +18,8 @@
     "output_tokens": 250000,
     "model_calls": 40,
     "api_calls": 80,
-    "github_job_starts": 120,
-    "github_runner_minutes": 600
+    "github_job_starts": 0,
+    "github_runner_minutes": 0
   },
   "project_default_ceiling": {
     "cost_usd": 3,
@@ -27,8 +27,8 @@
     "output_tokens": 75000,
     "model_calls": 12,
     "api_calls": 24,
-    "github_job_starts": 40,
-    "github_runner_minutes": 200
+    "github_job_starts": 0,
+    "github_runner_minutes": 0
   },
   "project_overrides": {
     "PRJ-000": {
@@ -37,8 +37,8 @@
       "output_tokens": 125000,
       "model_calls": 20,
       "api_calls": 40,
-      "github_job_starts": 112,
-      "github_runner_minutes": 560
+      "github_job_starts": 0,
+      "github_runner_minutes": 0
     }
   },
   "provider_model_default_ceiling": {
@@ -98,90 +98,6 @@
     }
   },
   "workflow_job_ceilings": {
-    "hunter-autonomous-cycle::hunt": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 6,
-        "github_runner_minutes": 30
-      },
-      "max_minutes_per_job": 5
-    },
-    "portfolio-autonomous-scheduler::schedule": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 26,
-        "github_runner_minutes": 130
-      },
-      "max_minutes_per_job": 5
-    },
-    "software-factory-candidate::execute-candidate-action": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 8,
-        "github_runner_minutes": 40
-      },
-      "max_minutes_per_job": 5
-    },
-    "portfolio-notification-cycle::notify": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 4,
-        "github_runner_minutes": 8
-      },
-      "max_minutes_per_job": 2
-    },
-    "step24-autonomous-learning-canary::canary": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 1,
-        "github_runner_minutes": 5
-      },
-      "max_minutes_per_job": 5
-    },
-    "command-center-pages::publish": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 30,
-        "github_runner_minutes": 150
-      },
-      "max_minutes_per_job": 5
-    },
-    "agent-heartbeat-sweep::heartbeat": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 13,
-        "github_runner_minutes": 26
-      },
-      "max_minutes_per_job": 2
-    },
     "model-value-proof::proof": {
       "daily_ceiling": {
         "cost_usd": 0,
@@ -189,34 +105,10 @@
         "output_tokens": 0,
         "model_calls": 0,
         "api_calls": 0,
-        "github_job_starts": 1,
-        "github_runner_minutes": 5
+        "github_job_starts": 0,
+        "github_runner_minutes": 0
       },
       "max_minutes_per_job": 5
-    },
-    "verified-feedback-bootstrap::feedback": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 1,
-        "github_runner_minutes": 2
-      },
-      "max_minutes_per_job": 2
-    },
-    "continuous-learning-bootstrap::bootstrap": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 1,
-        "github_runner_minutes": 2
-      },
-      "max_minutes_per_job": 2
     },
     "runtime-worker::runtime-observe": {
       "daily_ceiling": {
@@ -225,8 +117,8 @@
         "output_tokens": 0,
         "model_calls": 0,
         "api_calls": 0,
-        "github_job_starts": 30,
-        "github_runner_minutes": 120
+        "github_job_starts": 0,
+        "github_runner_minutes": 0
       },
       "max_minutes_per_job": 5
     },
@@ -237,8 +129,8 @@
         "output_tokens": 0,
         "model_calls": 0,
         "api_calls": 0,
-        "github_job_starts": 26,
-        "github_runner_minutes": 130
+        "github_job_starts": 0,
+        "github_runner_minutes": 0
       },
       "max_minutes_per_job": 5
     },
@@ -249,8 +141,8 @@
         "output_tokens": 0,
         "model_calls": 0,
         "api_calls": 0,
-        "github_job_starts": 2,
-        "github_runner_minutes": 10
+        "github_job_starts": 0,
+        "github_runner_minutes": 0
       },
       "max_minutes_per_job": 5
     },
@@ -261,8 +153,8 @@
         "output_tokens": 0,
         "model_calls": 0,
         "api_calls": 0,
-        "github_job_starts": 2,
-        "github_runner_minutes": 10
+        "github_job_starts": 0,
+        "github_runner_minutes": 0
       },
       "max_minutes_per_job": 5
     }
@@ -285,40 +177,38 @@
   },
   "global_concurrency_group": "portfolio-cost-governed-autonomy",
   "managed_workflow_names": [
-    "portfolio-autonomous-scheduler",
-    "hunter-autonomous-cycle",
     "runtime-worker",
     "runtime-hourly-sync",
     "runtime-daily-learning",
     "runtime-weekly-synthesis",
     "runtime-event-observe",
-    "software-factory-candidate",
-    "portfolio-notification-cycle",
-    "command-center-pages",
-    "agent-heartbeat-sweep",
-    "model-value-proof",
-    "verified-feedback-bootstrap",
-    "continuous-learning-bootstrap"
+    "model-value-proof"
   ],
   "max_cancellations_per_cycle": 8,
   "invariants": [
     "Budget approval never grants OBSERVE, EXPERIMENT, MODIFY or ACT authority.",
-    "Paid/model/API execution is finite-budget, reservation-gated, provider-gated, idempotent and kill-switch controlled; disabled providers still cannot execute.",
-    "Every non-deterministic model/API execution requires a durable reservation before invocation.",
-    "Every managed autonomous GitHub job requires a durable reservation before substantive work.",
-    "Portfolio, project, provider/model and workflow/job ceilings are checked independently; the strictest blocking scope wins.",
-    "Active reservations count against ceilings until committed, cancelled or expired.",
-    "Idempotency keys suppress duplicate spend and collisions fail closed.",
-    "Retry groups cannot reset attempt numbers to bypass retry ceilings.",
-    "Actual token and cost usage is committed against the reservation; an overage triggers a hard stop.",
-    "The shared concurrency group serializes autonomous reservations so artifact-backed accounting cannot race.",
-    "Kill switches and hard-stop overages can cancel managed jobs without ChatGPT.",
-    "Only sanitized IDs, hashes, numeric usage and evidence references may be persisted while BLK-005 is open.",
-    "Hourly command-center publication is cost-governed and shares the global autonomous GitHub-job concurrency/budget boundary.",
-    "Runtime-worker uses separate OBSERVE/SYNC/DAILY/WEEKLY job sub-budgets whose combined job-start ceiling remains half of the global GitHub-job ceiling; push observation traffic cannot consume scheduled sync/daily/weekly capacity.",
-    "Agent heartbeat sweep is telemetry-only, cost-governed, emits HEALTH_CHECK evidence for every registered role, and grants no new OBSERVE, MODIFY, EXPERIMENT, or ACT authority.",
-    "The one-shot model value proof is OBSERVE-only, executes at most one governed Tier-2 builder call and one independent Tier-3 verifier call under their own model reservations, and cannot claim customer value, reuse rights, deployment authority, or capability verification.",
-    "The one-shot verified-feedback bootstrap may consume at most one GitHub job start and two runner minutes under the unchanged global ceiling; it performs no model/API calls and only ingests an already VERIFIED value-proof artifact into durable learning state.",
-    "The continuous-learning bootstrap may consume one bounded GitHub job but performs no model/API calls; it only replays an already VERIFIED value proof through the existing feedback contract into durable advisory learning state."
-  ]
+    "The USD 10/day paid model/API ceiling remains finite, reservation-gated, provider-gated, idempotent and kill-switch controlled.",
+    "Paid model/API execution requires a durable reservation before invocation.",
+    "GitHub-hosted workload is not admitted or blocked by daily job-start quotas in the cost governor.",
+    "Non-paid reporting, Hunter, scheduler, heartbeat, notification, software-factory and feedback workflows use workload_control/WORKLOAD_POLICY.json and independent concurrency lanes.",
+    "Paid-workflow wrappers may retain a bounded GitHub-job reservation only for timeout/accounting compatibility; GitHub job counts and minutes are not financial hard-stop fields.",
+    "Active paid reservations count against financial ceilings until committed, cancelled or expired.",
+    "Idempotency keys suppress duplicate paid spend and collisions fail closed.",
+    "Retry groups cannot reset attempt numbers to bypass paid retry ceilings.",
+    "A paid reservation overage triggers a hard stop that blocks subsequent paid model/API preflight.",
+    "Paid hard stops and the spend kill switch do not block essential reporting or other non-paid workload lanes.",
+    "The shared paid concurrency group serializes workflows that can mutate paid cost state so artifact-backed accounting cannot race.",
+    "Only sanitized IDs, hashes, numeric usage and evidence references may be persisted while BLK-005 is open."
+  ],
+  "workload_separation": {
+    "policy_file": "workload_control/WORKLOAD_POLICY.json",
+    "github_daily_job_quotas_enforced": false,
+    "reporting_remains_available_during_paid_hard_stop": true,
+    "controls": [
+      "workflow_timeout",
+      "service_concurrency",
+      "pending_event_coalescing",
+      "duplicate_suppression"
+    ]
+  }
 }

@@ -7,6 +7,7 @@ from unittest.mock import patch
 from model_router.model_router import prepare_governed_execution
 from cost_governor.cancel_managed_jobs import managed_run_ids
 from cost_governor.workflow_gate import governed_github_attempt, measured_github_usage
+from workload_control.workload_gate import evaluate as evaluate_workload, load_policy as workload_policy
 from cost_governor.cost_governor import (
     CostGovernorError,
     cancel_reservation,
@@ -28,7 +29,7 @@ AT = "2026-09-25T12:00:00Z"
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def github_request(*, run_id="100", attempt=1, minutes=5, workflow="portfolio-autonomous-scheduler", job="schedule", authority="OBSERVE", at=AT):
+def github_request(*, run_id="100", attempt=1, minutes=5, workflow="runtime-worker", job="runtime-sync", authority="OBSERVE", at=AT):
     return make_github_job_request(
         workflow_id=workflow,
         job_id=job,
@@ -42,29 +43,32 @@ def github_request(*, run_id="100", attempt=1, minutes=5, workflow="portfolio-au
 
 
 class CostGovernorTests(unittest.TestCase):
-    def test_every_governed_workflow_finalizes_cost_after_upstream_failure(self):
-        governed_workflows = [
+
+    def test_only_paid_workflows_finalize_cost_state(self):
+        paid_workflows = ["model-value-proof.yml", "runtime-worker.yml"]
+        for filename in paid_workflows:
+            with self.subTest(workflow=filename):
+                workflow = (ROOT / ".github/workflows" / filename).read_text()
+                self.assertIn("portfolio-cost-governed-autonomy", workflow)
+                self.assertIn("cost_governor.workflow_gate preflight", workflow)
+                self.assertIn("cost_governor.workflow_gate finalize", workflow)
+
+        nonpaid_workflows = [
             "agent-heartbeat-sweep.yml",
             "command-center-pages.yml",
             "continuous-learning-bootstrap.yml",
             "hunter-autonomous-cycle.yml",
-            "model-value-proof.yml",
             "portfolio-autonomous-scheduler.yml",
             "portfolio-notification-cycle.yml",
-            "runtime-worker.yml",
             "software-factory-candidate.yml",
             "verified-feedback-bootstrap.yml",
         ]
-        for filename in governed_workflows:
+        for filename in nonpaid_workflows:
             with self.subTest(workflow=filename):
                 workflow = (ROOT / ".github/workflows" / filename).read_text()
-                finalize = workflow.index("python -m cost_governor.workflow_gate finalize")
-                preceding_step = workflow.rfind("      - name:", 0, finalize)
-                block = workflow[preceding_step:finalize]
-                self.assertIn(
-                    "if: ${{ always() && steps.cost.outputs.allowed == 'true' }}",
-                    block,
-                )
+                self.assertIn("workload_control.workload_gate preflight", workflow)
+                self.assertNotIn("cost_governor.workflow_gate preflight", workflow)
+                self.assertNotIn("cost_governor.workflow_gate finalize", workflow)
 
     def test_watchdog_polling_is_hourly_not_quarter_hourly(self):
         workflow = (ROOT / ".github/workflows/portfolio-cost-watchdog.yml").read_text()
@@ -75,54 +79,37 @@ class CostGovernorTests(unittest.TestCase):
         self.assertIn('workflows: ["agent-heartbeat-sweep"]',workflow)
         self.assertIn('operations/TRIGGER_WORKFLOW_LIVENESS',workflow)
 
-    def test_runtime_subbudgets_isolate_push_observation_from_scheduled_reasoning(self):
-        p=policy()
-        keys={
-          "observe":"runtime-worker::runtime-observe",
-          "sync":"runtime-worker::runtime-sync",
-          "daily":"runtime-worker::runtime-daily",
-          "weekly":"runtime-worker::runtime-weekly",
-        }
-        cfg={mode:p["workflow_job_ceilings"][key]["daily_ceiling"] for mode,key in keys.items()}
-        self.assertEqual(sum(row["github_job_starts"] for row in cfg.values()),60)
-        self.assertLessEqual(
-            sum(row["github_job_starts"] for row in cfg.values()),
-            p["portfolio_ceiling"]["github_job_starts"]//2,
-        )
-        self.assertGreaterEqual(cfg["sync"]["github_job_starts"],26)
-        self.assertGreaterEqual(cfg["daily"]["github_job_starts"],2)
-        self.assertGreaterEqual(cfg["weekly"]["github_job_starts"],2)
-        self.assertLess(cfg["observe"]["github_job_starts"],sum(row["github_job_starts"] for row in cfg.values()))
-        workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text()
-        self.assertIn('--job-id "runtime-${RUNTIME_MODE}"',workflow)
 
-    def test_exhausted_observe_budget_does_not_block_hourly_sync_budget(self):
-        p=copy.deepcopy(policy())
-        observe=p["workflow_job_ceilings"]["runtime-worker::runtime-observe"]["daily_ceiling"]
-        sync=p["workflow_job_ceilings"]["runtime-worker::runtime-sync"]["daily_ceiling"]
-        observe["github_job_starts"]=1;observe["github_runner_minutes"]=5
-        sync["github_job_starts"]=1;sync["github_runner_minutes"]=5
-        state=load_state()
-        state,d1=preflight(
-            state,
-            github_request(run_id="observe-1",workflow="runtime-worker",job="runtime-observe"),
-            at=AT,policy_data=p,
-        )
-        self.assertEqual(d1["status"],"RESERVED")
-        state,d2=preflight(
-            state,
-            github_request(run_id="observe-2",workflow="runtime-worker",job="runtime-observe"),
-            at=AT,policy_data=p,
-        )
-        self.assertEqual(d2["status"],"BLOCKED_BUDGET")
-        self.assertTrue(any("runtime-worker::runtime-observe:github_job_starts" in x for x in d2["reason_codes"]))
-        state,d3=preflight(
-            state,
-            github_request(run_id="sync-1",workflow="runtime-worker",job="runtime-sync"),
-            at=AT,policy_data=p,
-        )
-        self.assertEqual(d3["status"],"RESERVED")
-        self.assertTrue(d3["can_execute"])
+    def test_paid_wrapper_jobs_have_timeouts_without_daily_job_quotas(self):
+        p = policy()
+        keys = [
+            "runtime-worker::runtime-observe",
+            "runtime-worker::runtime-sync",
+            "runtime-worker::runtime-daily",
+            "runtime-worker::runtime-weekly",
+            "model-value-proof::proof",
+        ]
+        for key in keys:
+            cfg = p["workflow_job_ceilings"][key]
+            self.assertGreater(cfg["max_minutes_per_job"], 0)
+            self.assertEqual(cfg["daily_ceiling"]["github_job_starts"], 0)
+            self.assertEqual(cfg["daily_ceiling"]["github_runner_minutes"], 0)
+        self.assertEqual(p["portfolio_ceiling"]["github_job_starts"], 0)
+        self.assertEqual(p["portfolio_ceiling"]["github_runner_minutes"], 0)
+
+
+    def test_github_job_counts_do_not_block_paid_workflow_wrappers(self):
+        p = copy.deepcopy(policy())
+        state = load_state()
+        for idx in range(3):
+            state, decision = preflight(
+                state,
+                github_request(run_id=f"sync-{idx}", workflow="runtime-worker", job="runtime-sync"),
+                at=AT,
+                policy_data=p,
+            )
+            self.assertEqual(decision["status"], "RESERVED")
+            self.assertTrue(decision["can_execute"])
 
     def test_event_observe_ignores_dashboard_test_operator_and_one_shot_trigger_churn(self):
         workflow=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
@@ -142,67 +129,75 @@ class CostGovernorTests(unittest.TestCase):
         ]:
             self.assertIn(path,workflow)
 
-    def test_agent_heartbeat_sweep_is_cost_governed_and_bounded(self):
-        workflow=(ROOT/".github/workflows/agent-heartbeat-sweep.yml").read_text()
-        self.assertIn('cron: "29 */2 * * *"',workflow)
-        self.assertIn("portfolio-cost-governed-autonomy",workflow)
-        self.assertIn("cost_governor.workflow_gate preflight",workflow)
-        self.assertIn("cost_governor.workflow_gate finalize",workflow)
-        p=policy()
-        self.assertIn("agent-heartbeat-sweep",p["managed_workflow_names"])
-        cfg=p["workflow_job_ceilings"]["agent-heartbeat-sweep::heartbeat"]
-        self.assertEqual(cfg["max_minutes_per_job"],2)
-        self.assertLessEqual(cfg["daily_ceiling"]["github_job_starts"],13)
-        self.assertLessEqual(cfg["daily_ceiling"]["github_runner_minutes"],26)
-        self.assertEqual(cfg["daily_ceiling"]["cost_usd"],0)
-        self.assertEqual(cfg["daily_ceiling"]["model_calls"],0)
-        self.assertEqual(cfg["daily_ceiling"]["api_calls"],0)
 
-    def test_model_value_proof_is_one_shot_cost_governed_and_bounded(self):
+    def test_nonpaid_workflows_use_independent_workload_controls(self):
+        expected = {
+            "agent-heartbeat-sweep.yml": ("agent-heartbeat-sweep", "heartbeat", "portfolio-heartbeat", 2),
+            "command-center-pages.yml": ("command-center-pages", "publish", "portfolio-reporting-pages", 5),
+            "continuous-learning-bootstrap.yml": ("continuous-learning-bootstrap", "bootstrap", "portfolio-learning-bootstrap", 2),
+            "hunter-autonomous-cycle.yml": ("hunter-autonomous-cycle", "hunt", "portfolio-hunter-cycle", 5),
+            "portfolio-autonomous-scheduler.yml": ("portfolio-autonomous-scheduler", "schedule", "portfolio-scheduler", 5),
+            "portfolio-notification-cycle.yml": ("portfolio-notification-cycle", "notify", "portfolio-notification", 2),
+            "software-factory-candidate.yml": ("software-factory-candidate", "execute-candidate-action", "portfolio-software-factory", 5),
+            "verified-feedback-bootstrap.yml": ("verified-feedback-bootstrap", "feedback", "portfolio-feedback-bootstrap", 2),
+        }
+        wp = workload_policy()
+        for filename, values in expected.items():
+            workflow_id, job_id, group, minutes = values
+            with self.subTest(workflow=filename):
+                workflow = (ROOT / ".github/workflows" / filename).read_text()
+                self.assertIn(f"group: {group}", workflow)
+                self.assertIn("cancel-in-progress: false", workflow)
+                self.assertIn("workload_control.workload_gate preflight", workflow)
+                self.assertNotIn("portfolio-cost-governed-autonomy", workflow)
+                self.assertNotIn("cost_governor.workflow_gate", workflow)
+                decision = evaluate_workload(
+                    workflow_id=workflow_id,
+                    job_id=job_id,
+                    estimated_minutes=minutes,
+                )
+                self.assertEqual(decision["status"], "WORKLOAD_ALLOWED")
+                self.assertEqual(decision["concurrency_group"], group)
+                self.assertEqual(
+                    wp["services"][f"{workflow_id}::{job_id}"]["max_minutes_per_job"],
+                    minutes,
+                )
+
+
+    def test_model_value_proof_remains_paid_cost_governed_and_bounded(self):
         workflow=(ROOT/".github/workflows/model-value-proof.yml").read_text()
         self.assertIn("portfolio-cost-governed-autonomy",workflow)
         self.assertIn("cost_governor.workflow_gate preflight",workflow)
         self.assertIn("cost_governor.workflow_gate finalize",workflow)
         self.assertIn("PORTFOLIO_MODEL_API_KEY",workflow)
         self.assertIn("value_proof.end_to_end",workflow)
-        self.assertNotIn("\\${{",workflow)
         self.assertNotIn("\n  schedule:",workflow)
         p=policy()
         self.assertIn("model-value-proof",p["managed_workflow_names"])
         cfg=p["workflow_job_ceilings"]["model-value-proof::proof"]
         self.assertEqual(cfg["max_minutes_per_job"],5)
-        self.assertEqual(cfg["daily_ceiling"]["github_job_starts"],1)
-        self.assertEqual(cfg["daily_ceiling"]["github_runner_minutes"],5)
-        self.assertEqual(cfg["daily_ceiling"]["cost_usd"],0)
-        self.assertEqual(cfg["daily_ceiling"]["model_calls"],0)
-        self.assertEqual(cfg["daily_ceiling"]["api_calls"],0)
+        self.assertEqual(cfg["daily_ceiling"]["github_job_starts"],0)
+        self.assertEqual(cfg["daily_ceiling"]["github_runner_minutes"],0)
 
-    def test_verified_feedback_bootstrap_is_one_shot_bounded_and_model_free(self):
+
+    def test_verified_feedback_bootstrap_is_workload_controlled_and_model_free(self):
         workflow=(ROOT/".github/workflows/verified-feedback-bootstrap.yml").read_text()
-        self.assertIn("portfolio-cost-governed-autonomy",workflow)
-        self.assertIn("cost_governor.workflow_gate preflight",workflow)
-        self.assertIn("cost_governor.workflow_gate finalize",workflow)
+        self.assertIn("group: portfolio-feedback-bootstrap",workflow)
+        self.assertIn("workload_control.workload_gate preflight",workflow)
+        self.assertNotIn("cost_governor.workflow_gate",workflow)
         self.assertIn("value_proof.proof_artifact_state",workflow)
         self.assertIn("value_proof.feedback_loop",workflow)
         self.assertNotIn("PORTFOLIO_MODEL_API_KEY",workflow)
         self.assertNotIn("value_proof.model_task",workflow)
         self.assertNotIn("value_proof.verifier",workflow)
         self.assertNotIn("\n  schedule:",workflow)
-        p=policy()
-        self.assertIn("verified-feedback-bootstrap",p["managed_workflow_names"])
-        cfg=p["workflow_job_ceilings"]["verified-feedback-bootstrap::feedback"]
-        self.assertEqual(cfg["max_minutes_per_job"],2)
-        self.assertEqual(cfg["daily_ceiling"]["github_job_starts"],1)
-        self.assertEqual(cfg["daily_ceiling"]["github_runner_minutes"],2)
-        self.assertEqual(cfg["daily_ceiling"]["model_calls"],0)
-        self.assertEqual(cfg["daily_ceiling"]["api_calls"],0)
-        self.assertEqual(cfg["daily_ceiling"]["cost_usd"],0)
 
-    def test_continuous_learning_bootstrap_is_bounded_and_model_free(self):
+
+    def test_continuous_learning_bootstrap_is_workload_controlled_and_model_free(self):
         workflow=(ROOT/".github/workflows/continuous-learning-bootstrap.yml").read_text()
-        self.assertIn("portfolio-cost-governed-autonomy",workflow)
-        self.assertIn("cost_governor.workflow_gate preflight",workflow)
-        self.assertIn("cost_governor.workflow_gate finalize",workflow)
+        self.assertIn("group: portfolio-learning-bootstrap",workflow)
+        self.assertIn("workload_control.workload_gate preflight",workflow)
+        self.assertNotIn("cost_governor.workflow_gate",workflow)
         self.assertIn("value_proof.proof_artifact_state",workflow)
         self.assertIn("learning.live_observations",workflow)
         self.assertIn("learning.integrity",workflow)
@@ -210,29 +205,19 @@ class CostGovernorTests(unittest.TestCase):
         self.assertNotIn("python -m value_proof.model_task",workflow)
         self.assertNotIn("python -m value_proof.verifier",workflow)
         self.assertNotIn("\n  schedule:",workflow)
-        p=policy()
-        self.assertIn("continuous-learning-bootstrap",p["managed_workflow_names"])
-        cfg=p["workflow_job_ceilings"]["continuous-learning-bootstrap::bootstrap"]
-        self.assertEqual(cfg["max_minutes_per_job"],2)
-        self.assertEqual(cfg["daily_ceiling"]["github_job_starts"],1)
-        self.assertEqual(cfg["daily_ceiling"]["github_runner_minutes"],2)
-        self.assertEqual(cfg["daily_ceiling"]["model_calls"],0)
-        self.assertEqual(cfg["daily_ceiling"]["api_calls"],0)
-        self.assertEqual(cfg["daily_ceiling"]["cost_usd"],0)
 
-    def test_command_center_hourly_refresh_is_cost_governed(self):
+
+    def test_command_center_hourly_refresh_is_independent_from_paid_spend(self):
         workflow = (ROOT / ".github/workflows/command-center-pages.yml").read_text()
         self.assertIn('cron: "37 * * * *"',workflow)
         self.assertIn("workflow_dispatch:",workflow)
         self.assertNotIn("\n  push:",workflow)
-        self.assertIn("portfolio-cost-governed-autonomy",workflow)
-        self.assertIn("cost_governor.workflow_gate preflight",workflow)
-        self.assertIn("cost_governor.workflow_gate finalize",workflow)
+        self.assertIn("group: portfolio-reporting-pages",workflow)
+        self.assertIn("workload_control.workload_gate preflight",workflow)
+        self.assertNotIn("cost_governor.workflow_gate",workflow)
+        self.assertNotIn("PORTFOLIO_SPEND_DISABLED",workflow)
         self.assertIn("actions: read",workflow)
         self.assertNotIn("contents: write",workflow)
-        p=policy()
-        self.assertIn("command-center-pages",p["managed_workflow_names"])
-        self.assertIn("command-center-pages::publish",p["workflow_job_ceilings"])
 
     def test_checked_in_paid_budget_is_finite_and_nonzero(self):
         p = policy()
@@ -324,7 +309,7 @@ class CostGovernorTests(unittest.TestCase):
         state,first=preflight(state,first_req,at=AT)
         self.assertEqual(first["status"],"RESERVED")
         self.assertEqual(
-            governed_github_attempt(state,run_id="retry-run",job_id="schedule",observed_attempt=3),
+            governed_github_attempt(state,run_id="retry-run",job_id="runtime-sync",observed_attempt=3),
             2,
         )
 
@@ -334,7 +319,7 @@ class CostGovernorTests(unittest.TestCase):
         state,first=preflight(state,req,at=AT)
         self.assertEqual(first["status"],"RESERVED")
         self.assertEqual(
-            governed_github_attempt(state,run_id="same-run",job_id="schedule",observed_attempt=1),
+            governed_github_attempt(state,run_id="same-run",job_id="runtime-sync",observed_attempt=1),
             1,
         )
         state,second=preflight(state,req,at=AT)
@@ -348,7 +333,7 @@ class CostGovernorTests(unittest.TestCase):
         second=github_request(run_id="limit-run",attempt=2)
         state,d2=preflight(state,second,at=AT)
         self.assertEqual(d2["status"],"RESERVED")
-        governed=governed_github_attempt(state,run_id="limit-run",job_id="schedule",observed_attempt=7)
+        governed=governed_github_attempt(state,run_id="limit-run",job_id="runtime-sync",observed_attempt=7)
         self.assertEqual(governed,3)
         third=github_request(run_id="limit-run",attempt=governed)
         _,d3=preflight(state,third,at=AT)
@@ -365,10 +350,30 @@ class CostGovernorTests(unittest.TestCase):
         self.assertEqual(decision["status"], "BLOCKED_AUTHORITY")
         self.assertFalse(decision["authority_granted"])
 
-    def test_environment_kill_switch_blocks_new_work(self):
+
+    def test_environment_spend_kill_switch_blocks_paid_work_but_not_github_wrapper(self):
+        route = {
+            "status": "ROUTED",
+            "tier": 2,
+            "route_id": "MRT-KILL",
+            "provider_id": "openai",
+            "model_id": "gpt-5.6-luna",
+            "max_estimated_cost_usd": 0.01,
+            "route_hash": "sha256:kill",
+        }
+        request = {
+            "request_id": "MRQ-KILL",
+            "project_ids": ["PRJ-000"],
+            "max_input_tokens": 100,
+            "max_output_tokens": 100,
+            "authority_class": "OBSERVE",
+            "data_classification": "SANITIZED",
+        }
         with patch.dict(os.environ, {"PORTFOLIO_SPEND_DISABLED": "true"}):
-            _, decision = preflight(load_state(), github_request(), at=AT)
-        self.assertEqual(decision["status"], "BLOCKED_KILL_SWITCH")
+            _, paid = reserve_model_execution(load_state(), route, request, at=AT)
+            _, wrapper = preflight(load_state(), github_request(), at=AT)
+        self.assertEqual(paid["status"], "BLOCKED_KILL_SWITCH")
+        self.assertEqual(wrapper["status"], "RESERVED")
 
     def test_unconfigured_workflow_job_fails_closed(self):
         _, decision = preflight(load_state(), github_request(workflow="unknown-workflow"), at=AT)
@@ -380,46 +385,40 @@ class CostGovernorTests(unittest.TestCase):
         self.assertEqual(decision["status"], "BLOCKED_BUDGET")
         self.assertTrue(any(x.startswith("JOB_MINUTE_CEILING_EXCEEDED:") for x in decision["reason_codes"]))
 
-    def test_portfolio_scope_is_independent(self):
+
+    def test_github_job_ignores_portfolio_daily_job_counters(self):
         p = copy.deepcopy(policy())
         p["portfolio_ceiling"]["github_job_starts"] = 0
         p["portfolio_ceiling"]["github_runner_minutes"] = 0
         _, decision = preflight(load_state(), github_request(), at=AT, policy_data=p)
-        self.assertEqual(decision["status"], "BLOCKED_BUDGET")
-        self.assertTrue(any("portfolio:github_job_starts" in x for x in decision["reason_codes"]))
+        self.assertEqual(decision["status"], "RESERVED")
 
-    def test_project_scope_is_independent(self):
+
+    def test_github_job_ignores_project_daily_job_counters(self):
         p = copy.deepcopy(policy())
         p["project_overrides"]["PRJ-000"]["github_job_starts"] = 0
         p["project_overrides"]["PRJ-000"]["github_runner_minutes"] = 0
         _, decision = preflight(load_state(), github_request(), at=AT, policy_data=p)
-        self.assertEqual(decision["status"], "BLOCKED_BUDGET")
-        self.assertTrue(any("project:PRJ-000:github_job_starts" in x for x in decision["reason_codes"]))
+        self.assertEqual(decision["status"], "RESERVED")
 
-    def test_workflow_job_scope_is_independent(self):
+
+    def test_github_job_ignores_legacy_workflow_daily_job_counters(self):
         p = copy.deepcopy(policy())
-        cfg = p["workflow_job_ceilings"]["portfolio-autonomous-scheduler::schedule"]["daily_ceiling"]
+        cfg = p["workflow_job_ceilings"]["runtime-worker::runtime-sync"]["daily_ceiling"]
         cfg["github_job_starts"] = 0
         cfg["github_runner_minutes"] = 0
         _, decision = preflight(load_state(), github_request(), at=AT, policy_data=p)
-        self.assertEqual(decision["status"], "BLOCKED_BUDGET")
-        self.assertTrue(any("workflow_job:portfolio-autonomous-scheduler::schedule:github_job_starts" in x for x in decision["reason_codes"]))
+        self.assertEqual(decision["status"], "RESERVED")
 
-    def test_expired_unknown_execution_remains_charged_for_day(self):
+
+    def test_expired_github_wrapper_does_not_consume_a_daily_job_quota(self):
         p = copy.deepcopy(policy())
-        for ceiling in (
-            p["portfolio_ceiling"],
-            p["project_overrides"]["PRJ-000"],
-            p["workflow_job_ceilings"]["portfolio-autonomous-scheduler::schedule"]["daily_ceiling"],
-        ):
-            ceiling["github_job_starts"] = 1
-            ceiling["github_runner_minutes"] = 5
         first_at = "2026-09-25T00:00:00Z"
         state, first = preflight(load_state(), github_request(run_id="1", at=first_at), at=first_at, policy_data=p)
         self.assertEqual(first["status"], "RESERVED")
         later = "2026-09-25T07:00:00Z"
         state, second = preflight(state, github_request(run_id="2", at=later), at=later, policy_data=p)
-        self.assertEqual(second["status"], "BLOCKED_BUDGET")
+        self.assertEqual(second["status"], "RESERVED")
         self.assertEqual(state["reservations"][0]["status"], "EXPIRED")
 
     def test_cancelled_reservation_releases_compute_capacity(self):
@@ -427,7 +426,7 @@ class CostGovernorTests(unittest.TestCase):
         for ceiling in (
             p["portfolio_ceiling"],
             p["project_overrides"]["PRJ-000"],
-            p["workflow_job_ceilings"]["portfolio-autonomous-scheduler::schedule"]["daily_ceiling"],
+            p["workflow_job_ceilings"]["runtime-worker::runtime-sync"]["daily_ceiling"],
         ):
             ceiling["github_job_starts"] = 1
             ceiling["github_runner_minutes"] = 5
@@ -436,13 +435,47 @@ class CostGovernorTests(unittest.TestCase):
         state, second = preflight(state, github_request(run_id="2"), at=AT, policy_data=p)
         self.assertEqual(second["status"], "RESERVED")
 
-    def test_actual_usage_overage_trips_hard_stop(self):
-        state, decision = preflight(load_state(), github_request(minutes=1), at=AT)
+
+    def test_paid_usage_overage_trips_hard_stop_and_blocks_next_paid_preflight(self):
+        route = {
+            "status": "ROUTED",
+            "tier": 2,
+            "route_id": "MRT-OVERAGE-1",
+            "provider_id": "openai",
+            "model_id": "gpt-5.6-luna",
+            "max_estimated_cost_usd": 0.01,
+            "route_hash": "sha256:overage1",
+        }
+        request = {
+            "request_id": "MRQ-OVERAGE-1",
+            "project_ids": ["PRJ-000"],
+            "max_input_tokens": 100,
+            "max_output_tokens": 100,
+            "authority_class": "OBSERVE",
+            "data_classification": "SANITIZED",
+        }
+        state, decision = reserve_model_execution(load_state(), route, request, at=AT)
         actual = zero_usage()
-        actual.update({"github_job_starts": 1, "github_runner_minutes": 2})
+        actual.update({
+            "cost_usd": 0.02,
+            "input_tokens": 100,
+            "output_tokens": 100,
+            "model_calls": 1,
+            "api_calls": 1,
+        })
         state, commit = commit_reservation(state, decision["reservation_id"], actual, at=AT)
         self.assertEqual(commit["status"], "HARD_STOP_OVERAGE")
-        self.assertEqual(hard_stop_reason(state, at=AT), "CURRENT_DAY_RESERVATION_OVERAGE")
+        self.assertEqual(hard_stop_reason(state, at=AT), "CURRENT_DAY_PAID_RESERVATION_OVERAGE")
+
+        next_route = dict(route, route_id="MRT-OVERAGE-2", route_hash="sha256:overage2")
+        next_request = dict(request, request_id="MRQ-OVERAGE-2")
+        state, blocked = reserve_model_execution(state, next_route, next_request, at=AT)
+        self.assertEqual(blocked["status"], "BLOCKED_BUDGET")
+        self.assertFalse(blocked["can_execute"])
+        self.assertTrue(any(x.startswith("HARD_STOP_ACTIVE:") for x in blocked["reason_codes"]))
+
+        _, wrapper = preflight(state, github_request(run_id="after-overage"), at=AT)
+        self.assertEqual(wrapper["status"], "RESERVED")
 
     def test_cost_request_rejects_payload_fields(self):
         request = github_request()

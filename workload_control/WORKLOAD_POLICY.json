@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0.0",
+  "mode": "GITHUB_NATIVE_WORKLOAD_CONTROL",
+  "services": {
+    "command-center-pages::publish": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-reporting-pages",
+      "scheduled_cadence": "hourly",
+      "coalesce_pending": true
+    },
+    "hunter-autonomous-cycle::hunt": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-hunter-cycle",
+      "scheduled_cadence": "every_6_hours",
+      "coalesce_pending": true
+    },
+    "portfolio-autonomous-scheduler::schedule": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-scheduler",
+      "scheduled_cadence": "hourly",
+      "coalesce_pending": true
+    },
+    "agent-heartbeat-sweep::heartbeat": {
+      "max_minutes_per_job": 2,
+      "concurrency_group": "portfolio-heartbeat",
+      "scheduled_cadence": "event_driven",
+      "coalesce_pending": true
+    },
+    "portfolio-notification-cycle::notify": {
+      "max_minutes_per_job": 2,
+      "concurrency_group": "portfolio-notification",
+      "scheduled_cadence": "service_defined",
+      "coalesce_pending": true
+    },
+    "software-factory-candidate::execute-candidate-action": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-software-factory",
+      "scheduled_cadence": "event_driven",
+      "coalesce_pending": true
+    },
+    "verified-feedback-bootstrap::feedback": {
+      "max_minutes_per_job": 2,
+      "concurrency_group": "portfolio-feedback-bootstrap",
+      "scheduled_cadence": "event_driven",
+      "coalesce_pending": true
+    },
+    "continuous-learning-bootstrap::bootstrap": {
+      "max_minutes_per_job": 2,
+      "concurrency_group": "portfolio-learning-bootstrap",
+      "scheduled_cadence": "event_driven",
+      "coalesce_pending": true
+    },
+    "step24-autonomous-learning-canary::canary": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-step24-canary",
+      "scheduled_cadence": "ci_validation",
+      "coalesce_pending": true
+    }
+  },
+  "invariants": [
+    "Workload admission is independent from paid model/API spend.",
+    "No service is limited by a daily GitHub job-start quota.",
+    "Each service has its own concurrency lane so unrelated pending work cannot replace it.",
+    "GitHub timeout-minutes remains the hard wall-clock bound for each job.",
+    "Repeated triggers for the same service may coalesce into one pending run.",
+    "A workload admission decision never grants OBSERVE, EXPERIMENT, MODIFY, or ACT authority."
+  ]
+}

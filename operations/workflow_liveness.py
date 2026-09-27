@@ -23,6 +23,7 @@ from cost_governor.cost_governor import (
     policy as cost_policy,
     preflight,
 )
+from workload_control.workload_gate import evaluate as evaluate_workload, load_policy as workload_policy
 
 ROOT=Path(__file__).resolve().parents[1]
 POLICY_PATH=ROOT/"operations"/"WORKFLOW_LIVENESS_POLICY.json"
@@ -66,15 +67,17 @@ def validate_policy(p:dict[str,Any])->None:
     req(type(p["max_dispatches_per_cycle"]) is int and 1<=p["max_dispatches_per_cycle"]<=2,"workflow liveness dispatch bound invalid")
     req(type(p["recent_failure_retry_after_minutes"]) is int and 20<=p["recent_failure_retry_after_minutes"]<=120,"workflow liveness failure retry window invalid")
     req(p["authority_class"]=="NONE" and p["dispatch_authority_effect"]=="NONE","workflow liveness authority widened")
-    req(p["hard_stop_behavior"]=="NO_RECOVERY_DISPATCH","workflow liveness hard-stop behavior weakened")
+    req(p["hard_stop_behavior"]=="NONPAID_RECOVERY_CONTINUES","workflow liveness hard-stop separation changed")
     req(isinstance(p["targets"],list) and 1<=len(p["targets"])<=8,"workflow liveness target set invalid")
+
     names=set();files=set();prior_priority=0
-    governed_jobs=cost_policy()["workflow_job_ceilings"]
+    paid_jobs=cost_policy()["workflow_job_ceilings"]
+    workload_jobs=workload_policy()["services"]
+
     for target in p["targets"]:
         req(set(target)=={
-          "workflow_name","workflow_file","cost_workflow_id","cost_job_id",
-          "project_ids","estimated_minutes","authority_class",
-          "max_start_age_minutes","priority"
+          "workflow_name","workflow_file","admission_domain","admission_workflow_id","admission_job_id",
+          "project_ids","estimated_minutes","authority_class","max_start_age_minutes","priority"
         },"workflow liveness target fields changed")
         req(isinstance(target["workflow_name"],str) and target["workflow_name"],"workflow liveness target name invalid")
         req(isinstance(target["workflow_file"],str) and target["workflow_file"].endswith(".yml"),"workflow liveness target file invalid")
@@ -82,29 +85,47 @@ def validate_policy(p:dict[str,Any])->None:
         names.add(target["workflow_name"]);files.add(target["workflow_file"])
         req(type(target["max_start_age_minutes"]) is int and 60<=target["max_start_age_minutes"]<=480,"workflow liveness target age invalid")
         req(type(target["priority"]) is int and target["priority"]>prior_priority,"workflow liveness priorities must be strictly increasing")
-        scope=f'{target["cost_workflow_id"]}::{target["cost_job_id"]}'
-        req(scope in governed_jobs,"workflow liveness target cost scope is not governed")
+        req(target["admission_domain"] in {"WORKLOAD","COST_WRAPPER"},"workflow liveness admission domain invalid")
+        scope=f'{target["admission_workflow_id"]}::{target["admission_job_id"]}'
+        controls=workload_jobs if target["admission_domain"]=="WORKLOAD" else paid_jobs
+        req(scope in controls,f"workflow liveness target admission scope is not configured: {scope}")
         req(type(target["project_ids"]) is list and target["project_ids"] and len(target["project_ids"])==len(set(target["project_ids"])),"workflow liveness target project scope invalid")
         req(all(isinstance(x,str) and x.startswith("PRJ-") for x in target["project_ids"]),"workflow liveness target project id invalid")
-        req(type(target["estimated_minutes"]) is int and 1<=target["estimated_minutes"]<=governed_jobs[scope]["max_minutes_per_job"],"workflow liveness target estimate invalid")
+        req(type(target["estimated_minutes"]) is int and 1<=target["estimated_minutes"]<=controls[scope]["max_minutes_per_job"],"workflow liveness target estimate invalid")
         req(target["authority_class"] in {"NONE","OBSERVE","EXPERIMENT","MODIFY"},"workflow liveness target authority invalid")
+
         workflow_path=ROOT/".github"/"workflows"/target["workflow_file"]
         req(workflow_path.exists(),"workflow liveness target file missing")
         workflow_body=workflow_path.read_text(encoding="utf-8")
         reusable_marker="uses: ./.github/workflows/runtime-worker.yml"
         if reusable_marker in workflow_body:
             workflow_body+="\n"+(ROOT/".github"/"workflows"/"runtime-worker.yml").read_text(encoding="utf-8")
-        job_marker = (f'--job-id {target["cost_job_id"]}' if target["cost_workflow_id"] != "runtime-worker"
-                      else '--job-id "runtime-${RUNTIME_MODE}"')
-        for fragment in (
-          f'--workflow-id {target["cost_workflow_id"]}',
-          job_marker,
-          f'--estimated-minutes {target["estimated_minutes"]}',
-          f'--authority {target["authority_class"]}',
-          *(f'--project-id {project_id}' for project_id in target["project_ids"]),
-        ):
-            req(fragment in workflow_body,"workflow liveness cost preview drifted from target preflight")
+
+        if target["admission_domain"]=="WORKLOAD":
+            cfg=workload_jobs[scope]
+            for fragment in (
+              "workload_control.workload_gate preflight",
+              f'--workflow-id {target["admission_workflow_id"]}',
+              f'--job-id {target["admission_job_id"]}',
+              f'--estimated-minutes {target["estimated_minutes"]}',
+              f'group: {cfg["concurrency_group"]}',
+            ):
+                req(fragment in workflow_body,"workflow liveness workload admission drifted from target")
+        else:
+            job_marker = ('--job-id "runtime-${RUNTIME_MODE}"'
+                          if target["admission_workflow_id"]=="runtime-worker"
+                          else f'--job-id {target["admission_job_id"]}')
+            for fragment in (
+              "cost_governor.workflow_gate preflight",
+              f'--workflow-id {target["admission_workflow_id"]}',
+              job_marker,
+              f'--estimated-minutes {target["estimated_minutes"]}',
+              f'--authority {target["authority_class"]}',
+              *(f'--project-id {project_id}' for project_id in target["project_ids"]),
+            ):
+                req(fragment in workflow_body,"workflow liveness cost-wrapper admission drifted from target")
         prior_priority=target["priority"]
+
     req(isinstance(p["invariants"],list) and len(p["invariants"])>=5,"workflow liveness invariants missing")
 
 def _matches_target_run(target:dict[str,Any],row:dict[str,Any],*,default_branch:str)->bool:
@@ -197,19 +218,8 @@ def recover_overdue(
 )->dict[str,Any]:
     p=policy_data or load_policy();validate_policy(p)
     at=at or now_iso()
-    if os.environ.get("PORTFOLIO_SPEND_DISABLED","").strip().lower()=="true":
-        return {
-          "schema_version":"1.0.0","status":"BLOCKED_SPEND_KILL_SWITCH","checked_at":at,
-          "hard_stop_reason":"PORTFOLIO_SPEND_DISABLED","dispatches":[],"targets":[],
-          "authority_granted":False,
-        }
-    stop=hard_stop_reason(state,at=at)
-    if stop is not None:
-        return {
-          "schema_version":"1.0.0","status":"BLOCKED_COST_HARD_STOP","checked_at":at,
-          "hard_stop_reason":stop,"dispatches":[],"targets":[],
-          "authority_granted":False,
-        }
+    paid_stop=hard_stop_reason(state,at=at)
+
     evaluations=[
       evaluate_target(
         target,runs,at=at,
@@ -223,43 +233,60 @@ def recover_overdue(
     overdue.sort(key=lambda row:targets_by_name[row["workflow_name"]]["priority"])
     dispatches=[]
     simulated_state=state
+
     for row in overdue:
         if len(dispatches)>=p["max_dispatches_per_cycle"]:
             break
         target=targets_by_name[row["workflow_name"]]
-        preview_request=make_github_job_request(
-          workflow_id=target["cost_workflow_id"],
-          job_id=target["cost_job_id"],
-          run_id=f'liveness-preview-{row["workflow_name"]}-{at}',
-          attempt=1,
-          project_ids=target["project_ids"],
-          estimated_minutes=target["estimated_minutes"],
-          authority_class=target["authority_class"],
-          at=at,
-        )
-        simulated_state,preview=preflight(simulated_state,preview_request,at=at)
-        row["cost_gate_status"]=preview["status"]
-        row["cost_gate_reason_codes"]=preview["reason_codes"]
-        if preview["status"]!="RESERVED":
-            row["status"]="BLOCKED_COST_PREFLIGHT"
+
+        if target["admission_domain"]=="WORKLOAD":
+            preview=evaluate_workload(
+              workflow_id=target["admission_workflow_id"],
+              job_id=target["admission_job_id"],
+              estimated_minutes=target["estimated_minutes"],
+            )
+            row["admission_status"]=preview["status"]
+            row["admission_reason_codes"]=[preview["reason"]]
+            allowed=preview["allowed"]
+        else:
+            preview_request=make_github_job_request(
+              workflow_id=target["admission_workflow_id"],
+              job_id=target["admission_job_id"],
+              run_id=f'liveness-preview-{row["workflow_name"]}-{at}',
+              attempt=1,
+              project_ids=target["project_ids"],
+              estimated_minutes=target["estimated_minutes"],
+              authority_class=target["authority_class"],
+              at=at,
+            )
+            simulated_state,preview=preflight(simulated_state,preview_request,at=at)
+            row["admission_status"]=preview["status"]
+            row["admission_reason_codes"]=preview["reason_codes"]
+            allowed=preview["status"]=="RESERVED"
+
+        if not allowed:
+            row["status"]="BLOCKED_ADMISSION_PREFLIGHT"
             row["dispatch_required"]=False
-            row["reason"]="TARGET_COST_GATE_BLOCKED"
+            row["reason"]="TARGET_ADMISSION_BLOCKED"
             continue
+
         dispatch(row["workflow_file"],p["default_branch"])
         dispatches.append({
           "workflow_name":row["workflow_name"],
           "workflow_file":row["workflow_file"],
           "reason":row["reason"],
           "prior_run_id":row["latest_run_id"],
-          "cost_gate_status":preview["status"],
+          "admission_status":row["admission_status"],
+          "admission_domain":target["admission_domain"],
         })
+
     return {
       "schema_version":"1.0.0",
       "status":("RECOVERY_DISPATCHED" if dispatches else
-                "BLOCKED_COST_PREFLIGHT" if any(row["status"]=="BLOCKED_COST_PREFLIGHT" for row in evaluations) else
+                "BLOCKED_ADMISSION_PREFLIGHT" if any(row["status"]=="BLOCKED_ADMISSION_PREFLIGHT" for row in evaluations) else
                 "RECENT_RUNS_WORK_UNVERIFIED"),
       "checked_at":at,
-      "hard_stop_reason":None,
+      "hard_stop_reason":paid_stop,
       "dispatches":dispatches,
       "targets":evaluations,
       "authority_granted":False,

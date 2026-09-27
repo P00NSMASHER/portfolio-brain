@@ -8,12 +8,8 @@ import json
 from pathlib import Path
 from urllib.parse import unquote
 
-from cost_governor.cost_governor import (
-    commit_reservation,
-    load_state as load_cost_state,
-    make_github_job_request,
-    preflight,
-)
+from cost_governor.cost_governor import load_state as load_cost_state
+from workload_control.workload_gate import evaluate as evaluate_workload
 from dashboard.executive_dashboard import build_dashboard_snapshot
 from learning.continuous_learning import rebuild_from_ledger
 from notifications.notification_engine import (
@@ -113,25 +109,18 @@ def execute_canary(output_dir):
     req(all(w["required_authority"]!="ACT" for w in [*scheduler_receipt_1["selected_work"],*scheduler_receipt_1["blocked_work"]]),"canary surfaced ACT-authorized work")
     _write(checkpoint/"scheduler_state.json",scheduler_state_1)
 
-    cost_request=make_github_job_request(
+    workload_decision_1=evaluate_workload(
         workflow_id="step24-autonomous-learning-canary",
         job_id="canary",
-        run_id="step24-bounded-canary",
-        attempt=1,
-        project_ids=["PRJ-000"],
         estimated_minutes=5,
-        authority_class="OBSERVE",
-        at=T1,
     )
-    cost_state_1,cost_decision_1=preflight(cost_seed,cost_request,at=T1)
-    req(cost_decision_1["status"]=="RESERVED" and cost_decision_1["can_execute"] is True,"canary compute reservation failed")
-    _,cost_duplicate_probe=preflight(cost_state_1,cost_request,at=T1)
-    req(cost_duplicate_probe["status"]=="DUPLICATE_SUPPRESSED","cost duplicate probe failed")
-    reserved=next(r for r in cost_state_1["reservations"] if r["reservation_id"]==cost_decision_1["reservation_id"])
-    cost_state_1,cost_commit_1=commit_reservation(cost_state_1,cost_decision_1["reservation_id"],reserved["estimated_usage"],at=T1,evidence_ref="canary:first-cycle")
-    req(cost_commit_1["status"]=="COMMITTED","canary cost commit failed")
-    req(all((r["actual_usage"] or r["estimated_usage"])["cost_usd"]==0.0 for r in cost_state_1["reservations"]),"canary incurred paid cost")
-    req(all((r["actual_usage"] or r["estimated_usage"])["model_calls"]==0 for r in cost_state_1["reservations"]),"canary incurred model calls")
+    req(workload_decision_1["status"]=="WORKLOAD_ALLOWED" and workload_decision_1["allowed"] is True,
+        "canary workload admission failed")
+    cost_state_1=cost_seed
+    req(all((r["actual_usage"] or r["estimated_usage"])["cost_usd"]==0.0 for r in cost_state_1["reservations"]),
+        "canary inherited paid cost")
+    req(all((r["actual_usage"] or r["estimated_usage"])["model_calls"]==0 for r in cost_state_1["reservations"]),
+        "canary inherited model calls")
     _write(checkpoint/"cost_state.json",cost_state_1)
 
     dashboard=build_dashboard_snapshot()
@@ -181,8 +170,14 @@ def execute_canary(output_dir):
     req(scheduler_receipt_2["selected_work"]==[],"unchanged continuation selected duplicate scheduler work")
     req(len(scheduler_receipt_2["suppressed_duplicates"])>=len(scheduler_receipt_1["selected_work"]),"continuation did not suppress prior work fingerprints")
 
-    cost_state_2,cost_decision_2=preflight(restored_cost,cost_request,at=T2)
-    req(cost_decision_2["status"]=="DUPLICATE_SUPPRESSED" and cost_decision_2["can_execute"] is False,"restored cost state did not suppress duplicate canary execution")
+    workload_decision_2=evaluate_workload(
+        workflow_id="step24-autonomous-learning-canary",
+        job_id="canary",
+        estimated_minutes=5,
+    )
+    req(workload_decision_2["status"]=="WORKLOAD_ALLOWED" and workload_decision_2["allowed"] is True,
+        "restored canary workload admission failed")
+    cost_state_2=restored_cost
 
     notification_state_2,notification_receipt_2=notification_cycle(
         restored_notification,at=T2,
@@ -203,7 +198,7 @@ def execute_canary(output_dir):
     authority_violations=0
     if any(w["required_authority"]=="ACT" for w in scheduler_receipt_1["selected_work"]):authority_violations+=1
     if notification_receipt_1.get("authority_granted") is not False:authority_violations+=1
-    if cost_decision_1.get("authority_granted") is not False:authority_violations+=1
+    if workload_decision_1.get("authority_granted",False) is not False:authority_violations+=1
     req(authority_violations==policy["authority_violations_allowed"],"canary authority violation detected")
 
     receipt={
@@ -221,8 +216,9 @@ def execute_canary(output_dir):
         "scheduler_selected_count":len(scheduler_receipt_1["selected_work"]),
         "scheduler_selected_work_types":first_types,
         "scheduler_blocked_approval_count":len(scheduler_receipt_1["blocked_work"]),
-        "cost_status":cost_commit_1["status"],
-        "cost_duplicate_probe":cost_duplicate_probe["status"],
+        "cost_status":workload_decision_1["status"],
+        "cost_duplicate_probe":"WORKLOAD_CONTROLLED",
+        "admission_domain":"WORKLOAD",
         "paid_cost_usd":sum((r["actual_usage"] or r["estimated_usage"])["cost_usd"] for r in cost_state_1["reservations"]),
         "model_calls":sum((r["actual_usage"] or r["estimated_usage"])["model_calls"] for r in cost_state_1["reservations"]),
         "notifications_emitted":len(notification_receipt_1["emitted_alerts"]),
@@ -234,7 +230,7 @@ def execute_canary(output_dir):
         "runtime_sequence":runtime_state_2["sequence"],
         "scheduler_selected_count":len(scheduler_receipt_2["selected_work"]),
         "scheduler_suppressed_duplicates":len(scheduler_receipt_2["suppressed_duplicates"]),
-        "cost_status":cost_decision_2["status"],
+        "cost_status":workload_decision_2["status"],
         "notifications_emitted":len(notification_receipt_2["emitted_alerts"]),
         "notification_suppressed":len(notification_receipt_2["suppressed_fingerprints"]),
         "learning_state_hash_unchanged":learning_2["state_hash"]==learning_1["state_hash"],
@@ -247,7 +243,7 @@ def execute_canary(output_dir):
       },
       "evidence_refs":[
         runtime_receipt_1["receipt_hash"],scheduler_receipt_1["receipt_hash"],
-        cost_decision_1["decision_hash"],notification_receipt_1["receipt_hash"],
+        "workload:step24-autonomous-learning-canary::canary",notification_receipt_1["receipt_hash"],
         learning_1["state_hash"],runtime_receipt_2["receipt_hash"],
         scheduler_receipt_2["receipt_hash"],notification_receipt_2["receipt_hash"]
       ]

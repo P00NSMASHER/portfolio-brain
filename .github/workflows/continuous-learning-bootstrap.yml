@@ -14,43 +14,34 @@ permissions:
 jobs:
   bootstrap:
     concurrency:
-      group: portfolio-cost-governed-autonomy
+      group: portfolio-learning-bootstrap
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:
       GITHUB_TOKEN: ${{ github.token }}
       PORTFOLIO_GITHUB_TOKEN: ${{ github.token }}
-      PORTFOLIO_SPEND_DISABLED: ${{ vars.PORTFOLIO_SPEND_DISABLED }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Restore latest cost-governor state
-        run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
-
-      - name: Reserve bounded learning-bootstrap compute
-        id: cost
+      - name: Check independent workload controls
+        id: workload
         run: >-
-          python -m cost_governor.workflow_gate preflight
-          --state cost_governor/live/cost_state.json
-          --output-dir cost_governor/out
+          python -m workload_control.workload_gate preflight
           --workflow-id continuous-learning-bootstrap
           --job-id bootstrap
-          --project-id PRJ-000
           --estimated-minutes 2
-          --authority OBSERVE
-
       - name: Restore latest VERIFIED value proof
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
           python -m value_proof.proof_artifact_state
           --output-dir value_proof/live/verified-proof
 
       - name: Restore durable Hunter value state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: |
           mkdir -p hunting/live
           python -m hunting.artifact_state --output hunting/live/hunter_state.json
@@ -59,7 +50,7 @@ jobs:
           fi
 
       - name: Restore durable model feedback state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: |
           mkdir -p model_router/live
           python -m model_router.feedback_artifact_state --output model_router/live/model_feedback_state.json
@@ -68,7 +59,7 @@ jobs:
           fi
 
       - name: Restore durable continuous-learning observations
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: |
           mkdir -p learning/live
           python -m learning.artifact_state --output learning/live/learning_observation_state.json
@@ -77,7 +68,7 @@ jobs:
           fi
 
       - name: Reconcile VERIFIED feedback lineage
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
           python -m value_proof.feedback_loop
           --task-contract value_proof/MODEL_TASK_CONTRACT.json
@@ -90,7 +81,7 @@ jobs:
           --output-dir value_proof/out
 
       - name: Ingest VERIFIED outcome into continuous learning
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
           python -m learning.live_observations
           --state learning/live/learning_observation_state.json
@@ -103,7 +94,7 @@ jobs:
           --output value_proof/out/learning_observation_state.json
 
       - name: Prove cross-subsystem learning integrity
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: |
           python -c "import json; from hunting.autonomous_hunter import validate_state; validate_state(json.load(open('value_proof/out/hunter_state.json')))"
           python -c "import json; from model_router.feedback_state import validate_state; validate_state(json.load(open('value_proof/out/model_feedback_state.json')))"
@@ -111,16 +102,8 @@ jobs:
           python -m learning.integrity             --hunter-state value_proof/out/hunter_state.json             --model-feedback-state value_proof/out/model_feedback_state.json             --learning-state value_proof/out/learning_observation_state.json             > value_proof/out/learning_integrity.json
           python -c "import json; x=json.load(open('value_proof/out/learning_integrity.json')); assert x['status']=='HEALTHY', x"
 
-      - name: Commit conservative bootstrap job usage
-        if: ${{ always() && steps.cost.outputs.allowed == 'true' }}
-        run: >-
-          python -m cost_governor.workflow_gate finalize
-          --state cost_governor/out/cost_state.json
-          --decision cost_governor/out/cost_decision.json
-          --output cost_governor/out/cost_state.json
-
       - name: Upload learning bootstrap proof
-        if: ${{ always() && steps.cost.outputs.allowed == 'true' && hashFiles('value_proof/out/learning_integrity.json') != '' }}
+        if: ${{ always() && steps.workload.outputs.allowed == 'true' && hashFiles('value_proof/out/learning_integrity.json') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-continuous-learning-bootstrap
@@ -132,7 +115,7 @@ jobs:
           retention-days: 30
 
       - name: Upload reconciled Hunter continuation state
-        if: ${{ always() && steps.cost.outputs.allowed == 'true' && hashFiles('value_proof/out/hunter_state.json') != '' }}
+        if: ${{ always() && steps.workload.outputs.allowed == 'true' && hashFiles('value_proof/out/hunter_state.json') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-hunter-state
@@ -141,7 +124,7 @@ jobs:
           retention-days: 30
 
       - name: Upload reconciled model feedback state
-        if: ${{ always() && steps.cost.outputs.allowed == 'true' && hashFiles('value_proof/out/model_feedback_state.json') != '' }}
+        if: ${{ always() && steps.workload.outputs.allowed == 'true' && hashFiles('value_proof/out/model_feedback_state.json') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-model-feedback-state
@@ -150,7 +133,7 @@ jobs:
           retention-days: 30
 
       - name: Upload durable continuous-learning state
-        if: ${{ always() && steps.cost.outputs.allowed == 'true' && hashFiles('value_proof/out/learning_observation_state.json') != '' }}
+        if: ${{ always() && steps.workload.outputs.allowed == 'true' && hashFiles('value_proof/out/learning_observation_state.json') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-learning-observation-state
@@ -158,16 +141,8 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Upload sanitized cost-governor continuation state
-        if: ${{ always() && hashFiles('cost_governor/out/cost_state.json') != '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: portfolio-cost-governor-state
-          path: cost_governor/out/
-          if-no-files-found: error
-          retention-days: 30
-
       - name: Report governed no-work outcome
-        if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
+        if: ${{ always() && steps.workload.outputs.allowed != 'true' }}
         run: |
-          echo "::notice title=Continuous learning bootstrap skipped::Cost governor status: ${{ steps.cost.outputs.decision_status }}"
+          echo "::error title=Continuous learning bootstrap skipped::Workload status: ${{ steps.workload.outputs.decision_status }}"
+          exit 1

@@ -14,14 +14,13 @@ permissions:
 jobs:
   schedule:
     concurrency:
-      group: portfolio-cost-governed-autonomy
+      group: portfolio-scheduler
       cancel-in-progress: false
     if: ${{ vars.PORTFOLIO_SCHEDULER_DISABLED != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
       PORTFOLIO_SCHEDULER_DISABLED: ${{ vars.PORTFOLIO_SCHEDULER_DISABLED }}
-      PORTFOLIO_SPEND_DISABLED: ${{ vars.PORTFOLIO_SPEND_DISABLED }}
       PORTFOLIO_GITHUB_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
     steps:
@@ -29,27 +28,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Restore latest cost-governor state
-        run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
-      - name: Reserve bounded scheduler compute
-        id: cost
+      - name: Check independent workload controls
+        id: workload
         run: >-
-          python -m cost_governor.workflow_gate preflight
-          --state cost_governor/live/cost_state.json
-          --output-dir cost_governor/out
+          python -m workload_control.workload_gate preflight
           --workflow-id portfolio-autonomous-scheduler
           --job-id schedule
-          --project-id PRJ-000
           --estimated-minutes 5
-          --authority OBSERVE
       - name: Restore latest scheduler state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m scheduler.artifact_state --output scheduler/live/scheduler_state.json
       - name: Restore latest Hunter state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m hunting.artifact_state --output hunting/live/hunter_state.json
       - name: Restore latest Hunter proposal inbox
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: |
           mkdir -p hunting/live
           python -m hunting.proposal_artifact_state --output hunting/live/hunter_proposal_state.json
@@ -57,7 +50,7 @@ jobs:
             cp hunting/HUNTER_PROPOSAL_STATE_SEED.json hunting/live/hunter_proposal_state.json
           fi
       - name: Restore latest Hunter proposal review state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: |
           mkdir -p hunting/live
           python -m hunting.proposal_review_artifact_state --output hunting/live/hunter_proposal_review_state.json
@@ -65,26 +58,26 @@ jobs:
             cp hunting/HUNTER_PROPOSAL_REVIEW_STATE_SEED.json hunting/live/hunter_proposal_review_state.json
           fi
       - name: Restore latest runtime state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
           python -m runtime.artifact_state
           --output runtime/live/runtime_state.json
           --provider-health-output runtime/live/provider_health.json
       - name: Restore latest agent heartbeat state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m agents.artifact_state --output agents/live/agent_heartbeat_state.json
       - name: Select bounded work
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m scheduler.autonomous_scheduler --state scheduler/live/scheduler_state.json --output-dir scheduler/out
       - name: Validate executor dependencies before queue mutation
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: |
           python -m scheduler.validate_scheduler
           python -m hunting.validate_hunter
           python -m adapters.validate_adapters
       - name: Execute bounded queued work
         id: execute
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
           python -m scheduler.work_executor
           --state scheduler/out/scheduler_state.json
@@ -94,7 +87,7 @@ jobs:
           --hunter-output-dir hunting/out
           --max-items 8
       - name: Persist Hunter proposal evidence reviews
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
           python -m hunting.proposal_review_state
           --state hunting/live/hunter_proposal_review_state.json
@@ -102,10 +95,10 @@ jobs:
           --output hunting/out/hunter_proposal_review_state.json
           --report hunting/out/hunter_proposal_review_report.json
       - name: Validate Hunter proposal review state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -c "import json; from hunting.proposal_review_state import validate_state; validate_state(json.load(open('hunting/out/hunter_proposal_review_state.json')))"
       - name: Heartbeat Portfolio Manager
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
           python -m agents.heartbeat_state
           --state agents/live/agent_heartbeat_state.json
@@ -115,7 +108,7 @@ jobs:
           --source-workflow portfolio-autonomous-scheduler
           --source-run-id "${GITHUB_RUN_ID}"
       - name: Heartbeat agents that actually executed work
-        if: ${{ steps.cost.outputs.allowed == 'true' && steps.execute.outputs.executed_count != '0' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' && steps.execute.outputs.executed_count != '0' }}
         run: >-
           python -m agents.heartbeat_state
           --state agents/out/agent_heartbeat_state.json
@@ -125,20 +118,13 @@ jobs:
           --source-workflow portfolio-autonomous-scheduler
           --source-run-id "${GITHUB_RUN_ID}"
       - name: Validate persisted scheduler state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -c "import json; from scheduler.autonomous_scheduler import validate_state; validate_state(json.load(open('scheduler/out/scheduler_state.json')))"
       - name: Validate Hunter state when executed
-        if: ${{ steps.cost.outputs.allowed == 'true' && hashFiles('hunting/out/hunter_state.json') != '' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' && hashFiles('hunting/out/hunter_state.json') != '' }}
         run: python -c "import json; from hunting.autonomous_hunter import validate_state; validate_state(json.load(open('hunting/out/hunter_state.json')))"
-      - name: Commit conservative scheduler compute usage
-        if: ${{ always() && steps.cost.outputs.allowed == 'true' }}
-        run: >-
-          python -m cost_governor.workflow_gate finalize
-          --state cost_governor/out/cost_state.json
-          --decision cost_governor/out/cost_decision.json
-          --output cost_governor/out/cost_state.json
       - name: Upload sanitized scheduler continuation state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-scheduler-state
@@ -146,7 +132,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Upload Hunter continuation state when work executed
-        if: ${{ steps.cost.outputs.allowed == 'true' && hashFiles('hunting/out/hunter_state.json') != '' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' && hashFiles('hunting/out/hunter_state.json') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-hunter-state
@@ -154,7 +140,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Upload Hunter proposal inbox when hunt work executed
-        if: ${{ steps.cost.outputs.allowed == 'true' && hashFiles('hunting/out/hunter_proposal_state.json') != '' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' && hashFiles('hunting/out/hunter_proposal_state.json') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-hunter-proposal-state
@@ -162,7 +148,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Upload Hunter proposal review continuation state
-        if: ${{ steps.cost.outputs.allowed == 'true' && hashFiles('hunting/out/hunter_proposal_review_state.json') != '' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' && hashFiles('hunting/out/hunter_proposal_review_state.json') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-hunter-proposal-review-state
@@ -172,22 +158,15 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Upload sanitized agent heartbeat state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-agent-heartbeat-state
           path: agents/out/agent_heartbeat_state.json
           if-no-files-found: error
           retention-days: 30
-      - name: Upload sanitized cost-governor continuation state
-        if: ${{ always() && hashFiles('cost_governor/out/cost_state.json') != '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: portfolio-cost-governor-state
-          path: cost_governor/out/
-          if-no-files-found: error
-          retention-days: 30
       - name: Report governed no-work outcome
-        if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
+        if: ${{ always() && steps.workload.outputs.allowed != 'true' }}
         run: |
-          echo "::notice title=Portfolio scheduler skipped::Cost governor status: ${{ steps.cost.outputs.decision_status }}"
+          echo "::error title=Portfolio scheduler skipped::Workload status: ${{ steps.workload.outputs.decision_status }}"
+          exit 1
