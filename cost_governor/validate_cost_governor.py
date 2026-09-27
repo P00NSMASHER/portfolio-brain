@@ -85,6 +85,7 @@ def validate_cost_governor():
         "command-center-pages": ROOT / ".github/workflows/command-center-pages.yml",
         "agent-heartbeat-sweep": ROOT / ".github/workflows/agent-heartbeat-sweep.yml",
         "model-value-proof": ROOT / ".github/workflows/model-value-proof.yml",
+        "verified-feedback-bootstrap": ROOT / ".github/workflows/verified-feedback-bootstrap.yml",
     }
     for name, path in governed_workflows.items():
         body = path.read_text().lower()
@@ -112,6 +113,15 @@ def validate_cost_governor():
     req("value_proof.end_to_end" in value_proof,"model value proof finalization missing")
     req("authority observe" in value_proof,"model value proof job reservation authority drifted")
     req("contents: write" not in value_proof and "actions: write" not in value_proof,"model value proof workflow write authority widened")
+
+    feedback_bootstrap=governed_workflows["verified-feedback-bootstrap"].read_text().lower()
+    req("verified-feedback-bootstrap::feedback" in p["workflow_job_ceilings"],"verified feedback bootstrap lacks cost ceiling")
+    req("verified-feedback-bootstrap" in p["managed_workflow_names"],"verified feedback bootstrap is not cost managed")
+    req("value_proof.proof_artifact_state" in feedback_bootstrap,"verified feedback bootstrap does not restore prior proof")
+    req("value_proof.feedback_loop" in feedback_bootstrap,"verified feedback bootstrap does not apply feedback")
+    req("portfolio_model_api_key" not in feedback_bootstrap,"feedback bootstrap may not bind model credentials")
+    req("model_task" not in feedback_bootstrap and "value_proof.verifier" not in feedback_bootstrap,"feedback bootstrap may not execute model calls")
+    req("contents: write" not in feedback_bootstrap and "actions: write" not in feedback_bootstrap,"feedback bootstrap workflow write authority widened")
 
     scheduler = governed_workflows["portfolio-autonomous-scheduler"].read_text().lower()
     req("contents: write" not in scheduler and "actions: write" not in scheduler, "scheduler write authority widened")
