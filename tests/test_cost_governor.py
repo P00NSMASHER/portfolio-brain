@@ -76,6 +76,24 @@ class CostGovernorTests(unittest.TestCase):
         self.assertEqual(cfg["daily_ceiling"]["model_calls"],0)
         self.assertEqual(cfg["daily_ceiling"]["api_calls"],0)
 
+    def test_model_value_proof_is_one_shot_cost_governed_and_bounded(self):
+        workflow=(ROOT/".github/workflows/model-value-proof.yml").read_text()
+        self.assertIn("portfolio-cost-governed-autonomy",workflow)
+        self.assertIn("cost_governor.workflow_gate preflight",workflow)
+        self.assertIn("cost_governor.workflow_gate finalize",workflow)
+        self.assertIn("PORTFOLIO_MODEL_API_KEY",workflow)
+        self.assertIn("value_proof.end_to_end",workflow)
+        self.assertNotIn("\n  schedule:",workflow)
+        p=policy()
+        self.assertIn("model-value-proof",p["managed_workflow_names"])
+        cfg=p["workflow_job_ceilings"]["model-value-proof::proof"]
+        self.assertEqual(cfg["max_minutes_per_job"],5)
+        self.assertEqual(cfg["daily_ceiling"]["github_job_starts"],1)
+        self.assertEqual(cfg["daily_ceiling"]["github_runner_minutes"],5)
+        self.assertEqual(cfg["daily_ceiling"]["cost_usd"],0)
+        self.assertEqual(cfg["daily_ceiling"]["model_calls"],0)
+        self.assertEqual(cfg["daily_ceiling"]["api_calls"],0)
+
     def test_command_center_hourly_refresh_is_cost_governed(self):
         workflow = (ROOT / ".github/workflows/command-center-pages.yml").read_text()
         self.assertIn('cron: "37 * * * *"',workflow)

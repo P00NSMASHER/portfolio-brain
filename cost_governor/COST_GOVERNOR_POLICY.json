@@ -184,6 +184,18 @@
         "github_runner_minutes": 26
       },
       "max_minutes_per_job": 2
+    },
+    "model-value-proof::proof": {
+      "daily_ceiling": {
+        "cost_usd": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "model_calls": 0,
+        "api_calls": 0,
+        "github_job_starts": 1,
+        "github_runner_minutes": 5
+      },
+      "max_minutes_per_job": 5
     }
   },
   "retry_limits": {
@@ -214,7 +226,8 @@
     "software-factory-candidate",
     "portfolio-notification-cycle",
     "command-center-pages",
-    "agent-heartbeat-sweep"
+    "agent-heartbeat-sweep",
+    "model-value-proof"
   ],
   "max_cancellations_per_cycle": 8,
   "invariants": [
@@ -232,6 +245,7 @@
     "Only sanitized IDs, hashes, numeric usage and evidence references may be persisted while BLK-005 is open.",
     "Hourly command-center publication is cost-governed and shares the global autonomous GitHub-job concurrency/budget boundary.",
     "Runtime-worker sub-budget may use up to half of the global GitHub job/runner ceiling so push-observation traffic cannot starve scheduled sync/daily reasoning while the global ceiling remains the hard stop.",
-    "Agent heartbeat sweep is telemetry-only, cost-governed, emits HEALTH_CHECK evidence for every registered role, and grants no new OBSERVE, MODIFY, EXPERIMENT, or ACT authority."
+    "Agent heartbeat sweep is telemetry-only, cost-governed, emits HEALTH_CHECK evidence for every registered role, and grants no new OBSERVE, MODIFY, EXPERIMENT, or ACT authority.",
+    "The one-shot model value proof is OBSERVE-only, executes at most one governed Tier-2 builder call and one independent Tier-3 verifier call under their own model reservations, and cannot claim customer value, reuse rights, deployment authority, or capability verification."
   ]
 }
