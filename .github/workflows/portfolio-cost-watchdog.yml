@@ -6,6 +6,12 @@ on:
     # cannot reliably interrupt them before completion. Hourly enforcement keeps
     # the independent kill-switch backstop while cutting control-plane starts 75%.
     - cron: "53 * * * *"
+  # GitHub scheduled delivery can be delayed. A successful heartbeat sweep is
+  # an independent, low-frequency opportunity to recheck core workflow liveness.
+  workflow_run:
+    workflows: ["agent-heartbeat-sweep"]
+    types: [completed]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
