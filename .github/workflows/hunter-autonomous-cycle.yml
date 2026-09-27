@@ -49,6 +49,9 @@ jobs:
       - name: Restore latest agent heartbeat state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m agents.artifact_state --output agents/live/agent_heartbeat_state.json
+      - name: Verify Hunter calibration corpus
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: python -m hunting.calibration --output hunting/out/calibration_report.json
       - name: Run autonomous bounded Hunter cycle
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m hunting.autonomous_hunter --state hunting/live/hunter_state.json --output-dir hunting/out
