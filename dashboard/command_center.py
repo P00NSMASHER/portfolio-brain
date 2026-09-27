@@ -1467,7 +1467,7 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
 
 </style>
 </head>
-<body data-design="apple-inspired-v4-2" data-mobile-optimized="true">
+<body data-design="apple-inspired-v4-1" data-mobile-optimized="true">
 <div class="shell">
 <aside>
   <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Command Center v4.1</small></div></div>
