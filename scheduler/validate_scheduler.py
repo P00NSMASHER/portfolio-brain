@@ -29,6 +29,14 @@ def validate_scheduler():
     req(handoff["backlog_priority_mode"]=="RANK_SCORE_DESC_THEN_FIRST_SEEN_FIFO","Hunter proposal backlog priority mode drifted")
     req(handoff["continuation_class"]=="CONTINUATION","Hunter proposal review lost continuation classification")
     req(handoff["continuation_priority_policy"]=="CONTINUATION_BEFORE_NEW_WORK_WITHIN_SAME_GATE","Hunter proposal continuation priority drifted")
+    continuation=p["same_cycle_continuation"]
+    req(continuation["enabled"] is True,"same-cycle Hunter continuation disabled")
+    req(continuation["continuation_class"]=="HUNTER_PROPOSAL_REVIEW","same-cycle continuation class drifted")
+    req(continuation["max_passes"]==1,"same-cycle continuation pass count widened")
+    req(continuation["max_total_attempts_per_cycle"]==p["max_new_work_per_cycle"],"same-cycle attempt ceiling drifted")
+    req(continuation["require_primary_queue_drained"] is True,"same-cycle continuation may retry primary queued work")
+    req(continuation["authority_class"]=="OBSERVE","same-cycle continuation authority widened")
+    req(continuation["reuse_spare_capacity_only"] is True,"same-cycle continuation no longer requires spare capacity")
     proposal_seed=load_hunter_proposal_seed();validate_hunter_proposal_state(proposal_seed)
     req(proposal_seed.get("origins")=={},"Hunter proposal seed origin map must be empty")
     proposal_review_seed=load_hunter_proposal_review_seed();validate_hunter_proposal_review_state(proposal_review_seed)
@@ -58,6 +66,17 @@ def validate_scheduler():
         "portfolio-hunter-proposal-review-state",
     ]:
         req(token in wf,f"scheduler Hunter proposal review persistence missing {token}")
+    for token in [
+        "scheduler.same_cycle_continuation",
+        "Reuse spare capacity for Hunter proposal continuation",
+        "--primary-cycle-receipt scheduler/out/execution_cycle_receipt.json",
+        "--max-items 8",
+    ]:
+        req(token.lower() in wf,f"scheduler same-cycle continuation integration missing {token}")
+    req(
+        wf.index("scheduler.same_cycle_continuation")<wf.index("hunting.proposal_review_state"),
+        "same-cycle continuation must finish before proposal review persistence",
+    )
     executor=(ROOT/"scheduler/work_executor.py").read_text()
     for token in [
         "HUNTER_PROPOSAL_PUBLIC_EVIDENCE_REVIEW",
@@ -68,6 +87,15 @@ def validate_scheduler():
         "inspect_revision",
     ]:
         req(token in executor,f"Hunter proposal evidence-review boundary missing {token}")
+    continuation_source=(ROOT/"scheduler/same_cycle_continuation.py").read_text()
+    for token in [
+        '"max_passes"]==1',
+        '"require_primary_queue_drained"',
+        "is_hunter_proposal_continuation",
+        "len(merged_receipts)<=max_items",
+        '"authority_granted":False',
+    ]:
+        req(token in continuation_source,f"same-cycle continuation boundary missing {token}")
     scheduler_source=(ROOT/"scheduler/autonomous_scheduler.py").read_text()
     for token in ["hunter-origin-cycle:","hunter-origin-receipt:","hunter-origin-sequence:","hunter-last-seen-sequence:"]:
         req(token in scheduler_source,f"Hunter proposal scheduler provenance missing {token}")
@@ -76,5 +104,5 @@ def validate_scheduler():
     for forbidden in ["contents: write","pull-requests: write","deployments: write","id-token: write","git push","gh pr","openai","anthropic"]:
         req(forbidden not in wf,f"forbidden scheduler workflow capability: {forbidden}")
     req("git push origin head:main" not in (ROOT/"scheduler/SCHEDULER_CONTRACT.md").read_text().lower(),"upstream direct-main behavior adopted")
-    return {"work_types":7,"selected_current":len(selected),"blocked_approval":0,"queued_agents":len({w["assigned_agent_id"] for w in selected}),"act_work":0,"max_new_per_cycle":p["max_new_work_per_cycle"],"hunter_proposal_handoff":"OBSERVE_RESEARCH","hunter_proposal_backlog_priority":handoff["backlog_priority_mode"],"hunter_proposal_continuation_priority":handoff["continuation_priority_policy"],"hunter_proposal_seed_sequence":proposal_seed["sequence"],"hunter_proposal_review_seed_sequence":proposal_review_seed["sequence"]}
+    return {"work_types":7,"selected_current":len(selected),"blocked_approval":0,"queued_agents":len({w["assigned_agent_id"] for w in selected}),"act_work":0,"max_new_per_cycle":p["max_new_work_per_cycle"],"hunter_proposal_handoff":"OBSERVE_RESEARCH","hunter_proposal_backlog_priority":handoff["backlog_priority_mode"],"hunter_proposal_continuation_priority":handoff["continuation_priority_policy"],"same_cycle_hunter_continuation":continuation["enabled"],"hunter_proposal_seed_sequence":proposal_seed["sequence"],"hunter_proposal_review_seed_sequence":proposal_review_seed["sequence"]}
 if __name__=="__main__":print("portfolio-brain Step 19 scheduler: PASS",json.dumps(validate_scheduler(),sort_keys=True))
