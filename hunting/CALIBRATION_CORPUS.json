@@ -13,7 +13,8 @@
         "README.md"
       ],
       "expected_disposition": "RETAIN",
-      "expected_reason": "STRUCTURAL_GATES_PASSED"
+      "expected_reason": "HARD_GATES_PASSED",
+      "expected_rank_band": "HIGH"
     },
     {
       "case_id": "CAL-P02",
@@ -25,7 +26,8 @@
         "docs/freight-audit.md"
       ],
       "expected_disposition": "RETAIN",
-      "expected_reason": "STRUCTURAL_GATES_PASSED"
+      "expected_reason": "HARD_GATES_PASSED",
+      "expected_rank_band": "HIGH"
     },
     {
       "case_id": "CAL-P03",
@@ -37,7 +39,8 @@
         "README.md"
       ],
       "expected_disposition": "RETAIN",
-      "expected_reason": "STRUCTURAL_GATES_PASSED"
+      "expected_reason": "HARD_GATES_PASSED",
+      "expected_rank_band": "HIGH"
     },
     {
       "case_id": "CAL-P04",
@@ -49,7 +52,8 @@
         "docs/provenance.md"
       ],
       "expected_disposition": "RETAIN",
-      "expected_reason": "STRUCTURAL_GATES_PASSED"
+      "expected_reason": "HARD_GATES_PASSED",
+      "expected_rank_band": "HIGH"
     },
     {
       "case_id": "CAL-P05",
@@ -61,7 +65,8 @@
         "README.md"
       ],
       "expected_disposition": "RETAIN",
-      "expected_reason": "STRUCTURAL_GATES_PASSED"
+      "expected_reason": "HARD_GATES_PASSED",
+      "expected_rank_band": "HIGH"
     },
     {
       "case_id": "CAL-P06",
@@ -73,7 +78,8 @@
         "docs/allocation.md"
       ],
       "expected_disposition": "RETAIN",
-      "expected_reason": "STRUCTURAL_GATES_PASSED"
+      "expected_reason": "HARD_GATES_PASSED",
+      "expected_rank_band": "HIGH"
     },
     {
       "case_id": "CAL-P07",
@@ -85,7 +91,8 @@
         "README.md"
       ],
       "expected_disposition": "RETAIN",
-      "expected_reason": "STRUCTURAL_GATES_PASSED"
+      "expected_reason": "HARD_GATES_PASSED",
+      "expected_rank_band": "HIGH"
     },
     {
       "case_id": "CAL-P08",
@@ -97,7 +104,8 @@
         "docs/runtime.md"
       ],
       "expected_disposition": "RETAIN",
-      "expected_reason": "STRUCTURAL_GATES_PASSED"
+      "expected_reason": "HARD_GATES_PASSED",
+      "expected_rank_band": "HIGH"
     },
     {
       "case_id": "CAL-P09",
@@ -109,7 +117,8 @@
         "README.md"
       ],
       "expected_disposition": "RETAIN",
-      "expected_reason": "STRUCTURAL_GATES_PASSED"
+      "expected_reason": "HARD_GATES_PASSED",
+      "expected_rank_band": "HIGH"
     },
     {
       "case_id": "CAL-P10",
@@ -121,7 +130,8 @@
         "docs/graph.md"
       ],
       "expected_disposition": "RETAIN",
-      "expected_reason": "STRUCTURAL_GATES_PASSED"
+      "expected_reason": "HARD_GATES_PASSED",
+      "expected_rank_band": "HIGH"
     },
     {
       "case_id": "CAL-N01",
@@ -140,24 +150,24 @@
       "case_class": "NEGATIVE",
       "capability_key": "capability-coverage:freight-audit",
       "paths": [
-        "src/freight_audit.py",
         "README.md",
-        "docs/freight-audit.md"
+        "docs/freight-audit.md",
+        "fixtures/freight-audit.json"
       ],
       "expected_disposition": "REJECT",
-      "expected_reason": "NO_TEST_OR_REGRESSION_PATHS"
+      "expected_reason": "NO_IMPLEMENTATION_PATHS"
     },
     {
       "case_id": "CAL-N03",
       "case_class": "NEGATIVE",
       "capability_key": "capability-coverage:claim-validation",
       "paths": [
-        "src/engine.py",
-        "tests/test_engine.py",
-        "README.md"
+        "README.md",
+        "docs/claim-validation.md",
+        "fixtures/claim-validation.json"
       ],
       "expected_disposition": "REJECT",
-      "expected_reason": "NO_STRUCTURAL_CAPABILITY_SIGNAL"
+      "expected_reason": "NO_IMPLEMENTATION_PATHS"
     },
     {
       "case_id": "CAL-N04",
@@ -175,23 +185,24 @@
       "case_class": "NEGATIVE",
       "capability_key": "capability-coverage:evidence-ledger",
       "paths": [
-        "src/evidence_ledger.ts",
-        "docs/ledger.md"
+        "README.md",
+        "docs/evidence-ledger.md",
+        "fixtures/evidence-ledger.json"
       ],
       "expected_disposition": "REJECT",
-      "expected_reason": "NO_TEST_OR_REGRESSION_PATHS"
+      "expected_reason": "NO_IMPLEMENTATION_PATHS"
     },
     {
       "case_id": "CAL-N06",
       "case_class": "NEGATIVE",
       "capability_key": "capability-coverage:portfolio-allocation",
       "paths": [
-        "src/scheduler.py",
-        "tests/test_scheduler.py",
-        "docs/scheduler.md"
+        "README.md",
+        "docs/portfolio-allocation.md",
+        "fixtures/allocation.json"
       ],
       "expected_disposition": "REJECT",
-      "expected_reason": "NO_STRUCTURAL_CAPABILITY_SIGNAL"
+      "expected_reason": "NO_IMPLEMENTATION_PATHS"
     },
     {
       "case_id": "CAL-N07",
@@ -210,23 +221,24 @@
       "case_class": "NEGATIVE",
       "capability_key": "capability-coverage:runtime-repair",
       "paths": [
-        "runtime/runtime_repair.go",
-        "docs/runtime-repair.md"
+        "README.md",
+        "docs/runtime-repair.md",
+        "fixtures/runtime-repair.json"
       ],
       "expected_disposition": "REJECT",
-      "expected_reason": "NO_TEST_OR_REGRESSION_PATHS"
+      "expected_reason": "NO_IMPLEMENTATION_PATHS"
     },
     {
       "case_id": "CAL-N09",
       "case_class": "NEGATIVE",
       "capability_key": "capability-coverage:school-questions",
       "paths": [
-        "game/economy.lua",
-        "tests/economy_spec.lua",
-        "README.md"
+        "README.md",
+        "docs/school-questions.md",
+        "fixtures/questions.json"
       ],
       "expected_disposition": "REJECT",
-      "expected_reason": "NO_STRUCTURAL_CAPABILITY_SIGNAL"
+      "expected_reason": "NO_IMPLEMENTATION_PATHS"
     },
     {
       "case_id": "CAL-N10",
@@ -265,8 +277,9 @@
       "allowed_dispositions": [
         "RETAIN"
       ],
-      "expected_reason": "STRUCTURAL_GATES_PASSED",
-      "ambiguity": "Minimal implementation and one test path satisfy current hard gates but provide little depth."
+      "expected_reason": "HARD_GATES_PASSED",
+      "ambiguity": "Minimal implementation and one test path satisfy current hard gates but provide little depth.",
+      "expected_rank_band": "HIGH"
     },
     {
       "case_id": "CAL-A03",
@@ -280,8 +293,9 @@
       "allowed_dispositions": [
         "RETAIN"
       ],
-      "expected_reason": "STRUCTURAL_GATES_PASSED",
-      "ambiguity": "Capability keyword appears only in documentation while generic source and tests exist."
+      "expected_reason": "HARD_GATES_PASSED",
+      "ambiguity": "Capability keyword appears only in documentation while generic source and tests exist.",
+      "expected_rank_band": "MEDIUM"
     },
     {
       "case_id": "CAL-A04",
@@ -295,8 +309,47 @@
       "allowed_dispositions": [
         "RETAIN"
       ],
-      "expected_reason": "STRUCTURAL_GATES_PASSED",
-      "ambiguity": "Capability keyword appears in test path but not implementation path."
+      "expected_reason": "HARD_GATES_PASSED",
+      "ambiguity": "Capability keyword appears in test path but not implementation path.",
+      "expected_rank_band": "MEDIUM"
+    },
+    {
+      "case_id": "CAL-A05",
+      "case_class": "AMBIGUOUS",
+      "capability_key": "capability-coverage:runtime-repair",
+      "paths": [
+        "runtime/runtime_repair.py",
+        "docs/runtime-repair.md"
+      ],
+      "allowed_dispositions": [
+        "RETAIN"
+      ],
+      "expected_reason": "HARD_GATES_PASSED",
+      "expected_rank_band": "MEDIUM",
+      "required_soft_signals": [
+        "NO_TEST_OR_REGRESSION_PATHS"
+      ],
+      "ambiguity": "Implementation has a direct capability signal but no test path. It must survive hard gates and rank below a fully tested candidate."
+    },
+    {
+      "case_id": "CAL-A06",
+      "case_class": "AMBIGUOUS",
+      "capability_key": "capability-coverage:graph-integrity",
+      "paths": [
+        "src/engine.py",
+        "tests/test_engine.py",
+        "README.md"
+      ],
+      "allowed_dispositions": [
+        "RETAIN"
+      ],
+      "expected_reason": "HARD_GATES_PASSED",
+      "expected_rank_band": "LOW",
+      "required_soft_signals": [
+        "NO_SOURCE_CAPABILITY_SIGNAL",
+        "NO_STRUCTURAL_CAPABILITY_SIGNAL"
+      ],
+      "ambiguity": "Generic implementation and tests exist but no path-level capability signal is present. It should be retained as low-priority uncertainty, not hard-rejected."
     }
   ]
 }
