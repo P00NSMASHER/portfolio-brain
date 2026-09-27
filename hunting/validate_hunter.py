@@ -57,7 +57,7 @@ def validate_hunter():
     req(calibration["ambiguous_cases"]>=3 and calibration["ambiguous_matched"]==calibration["ambiguous_cases"],"Hunter ambiguous controls drifted")
     req(calibration["network_calls"]==0 and calibration["state_mutations"]==0,"Hunter calibration widened authority")
     wf=(ROOT/".github/workflows/hunter-autonomous-cycle.yml").read_text()
-    for s in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_HUNTER_DISABLED","47 */6 * * *","cancel-in-progress: false","actions/upload-artifact@v4"]:
+    for s in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_HUNTER_DISABLED","47 */6 * * *","cancel-in-progress: false","actions/upload-artifact@v4","python -m hunting.calibration --output hunting/out/calibration_report.json"]:
         req(s in wf,f"Hunter workflow missing {s}")
     low=wf.lower()
     for forbidden in ["contents: write","pull-requests: write","issues: write","id-token: write","git push","gh pr","openai","anthropic"]:
