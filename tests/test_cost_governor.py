@@ -96,6 +96,34 @@ class CostGovernorTests(unittest.TestCase):
         workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text()
         self.assertIn('--job-id "runtime-${RUNTIME_MODE}"',workflow)
 
+    def test_exhausted_observe_budget_does_not_block_hourly_sync_budget(self):
+        p=copy.deepcopy(policy())
+        observe=p["workflow_job_ceilings"]["runtime-worker::runtime-observe"]["daily_ceiling"]
+        sync=p["workflow_job_ceilings"]["runtime-worker::runtime-sync"]["daily_ceiling"]
+        observe["github_job_starts"]=1;observe["github_runner_minutes"]=5
+        sync["github_job_starts"]=1;sync["github_runner_minutes"]=5
+        state=load_state()
+        state,d1=preflight(
+            state,
+            github_request(run_id="observe-1",workflow="runtime-worker",job="runtime-observe"),
+            at=AT,policy_data=p,
+        )
+        self.assertEqual(d1["status"],"RESERVED")
+        state,d2=preflight(
+            state,
+            github_request(run_id="observe-2",workflow="runtime-worker",job="runtime-observe"),
+            at=AT,policy_data=p,
+        )
+        self.assertEqual(d2["status"],"BLOCKED_BUDGET")
+        self.assertTrue(any("runtime-worker::runtime-observe:github_job_starts" in x for x in d2["reason_codes"]))
+        state,d3=preflight(
+            state,
+            github_request(run_id="sync-1",workflow="runtime-worker",job="runtime-sync"),
+            at=AT,policy_data=p,
+        )
+        self.assertEqual(d3["status"],"RESERVED")
+        self.assertTrue(d3["can_execute"])
+
     def test_event_observe_ignores_dashboard_test_operator_and_one_shot_trigger_churn(self):
         workflow=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
         self.assertIn("group: runtime-event-observe-${{ github.event_name }}-${{ github.ref }}",workflow)
