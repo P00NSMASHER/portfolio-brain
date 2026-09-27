@@ -168,15 +168,15 @@ class WorkflowLivenessTests(unittest.TestCase):
         runtime_target=next(x for x in p["targets"] if x["workflow_name"]=="runtime-hourly-sync")
         # Fill only the runtime-worker job-start allocation. Other workflows retain
         # capacity, proving this is a target-specific block rather than a hard stop.
-        for i in range(60):
+        for i in range(26):
             state["reservations"].append({
               "reservation_id":f"CRES-{i:020X}",
               "request_id":f"CGR-TEST-{i:04d}",
               "request_hash":"sha256:"+f"{i:064x}",
-              "idempotency_key":f"github-job:prior-{i}:runtime:attempt:1",
-              "retry_group":f"github-job:prior-{i}:runtime",
+              "idempotency_key":f"github-job:prior-{i}:runtime-sync:attempt:1",
+              "retry_group":f"github-job:prior-{i}:runtime-sync",
               "attempt":1,"resource_kind":"GITHUB_JOB","project_ids":["PRJ-000"],
-              "provider_id":None,"model_id":None,"workflow_id":"runtime-worker","job_id":"runtime",
+              "provider_id":None,"model_id":None,"workflow_id":"runtime-worker","job_id":"runtime-sync",
               "estimated_usage":{"cost_usd":0.0,"input_tokens":0,"output_tokens":0,"model_calls":0,"api_calls":0,"github_job_starts":1,"github_runner_minutes":5},
               "actual_usage":{"cost_usd":0.0,"input_tokens":0,"output_tokens":0,"model_calls":0,"api_calls":0,"github_job_starts":1,"github_runner_minutes":1},
               "status":"COMMITTED","created_at":"2026-09-27T01:00:00Z","expires_at":"2026-09-27T07:00:00Z","committed_at":"2026-09-27T01:01:00Z",
