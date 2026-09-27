@@ -104,15 +104,19 @@ def build_proposal_state(hunter_state:dict[str,Any],receipt:dict[str,Any])->dict
     body=dict(receipt);given=body.pop("receipt_hash",None)
     req(isinstance(given,str) and given==digest(body),"Hunter cycle receipt hash mismatch")
     proposals=list(receipt.get("experiment_proposals") or [])
-    by_finding={row["finding_id"]:row for row in receipt.get("findings") or []}
+    all_findings=list(receipt.get("findings") or [])
     by_objective={row["objective_id"]:row for row in receipt.get("objectives") or []}
     findings=[]
     for proposal in proposals:
-        finding=by_finding.get(proposal["finding_id"])
-        req(finding is not None,"Hunter proposal references missing finding")
-        req(finding.get("disposition")=="RETAIN","Hunter proposal finding is not retained")
-        req(finding.get("proposal_eligibility")=="SELECTED","Hunter proposal finding did not pass proposal selection")
-        req(finding.get("experiment_proposal_id")==proposal["proposal_id"],"Hunter proposal finding linkage mismatch")
+        matches=[
+          row for row in all_findings
+          if row.get("finding_id")==proposal["finding_id"]
+          and row.get("experiment_proposal_id")==proposal["proposal_id"]
+          and row.get("proposal_eligibility")=="SELECTED"
+          and row.get("disposition")=="RETAIN"
+        ]
+        req(len(matches)==1,"Hunter proposal must bind exactly one selected retained finding")
+        finding=matches[0]
         source=finding["source"];ranking=finding["ranking"]
         objective=by_objective.get(finding["objective_id"])
         req(objective is not None,"Hunter proposal finding objective missing")
