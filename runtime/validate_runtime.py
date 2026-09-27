@@ -83,6 +83,8 @@ def validate_runtime()->dict:
       ".github/workflows/model-value-proof.yml",
       ".github/workflows/verified-feedback-bootstrap.yml",
       ".github/workflows/continuous-learning-bootstrap.yml",
+      "operations/TRIGGER_WORKFLOW_LIVENESS",
+      ".github/workflows/portfolio-cost-watchdog.yml",
     ]:
         req(isolated in texts[names[1]],f"one-shot governed trigger/workflow is not isolated from event-observe: {isolated}")
     return {"workflows":5,"model_calls":0,"governed_daily_model_calls":1,"governed_weekly_model_calls":1,

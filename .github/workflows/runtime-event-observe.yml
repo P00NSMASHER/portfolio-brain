@@ -20,6 +20,8 @@ on:
       - "operator_console/**"
       - "cost_governor/**"
       - "operations/COMMAND_CENTER_REFRESH_REQUEST.json"
+      - "operations/TRIGGER_WORKFLOW_LIVENESS"
+      - ".github/workflows/portfolio-cost-watchdog.yml"
       - ".github/workflows/command-center-pages.yml"
       - ".github/workflows/foundation-ci.yml"
       - ".github/workflows/runtime-event-observe.yml"
