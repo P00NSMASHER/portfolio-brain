@@ -127,6 +127,32 @@ def _queries(gap,strategy,state=None):
       key=lambda q:negative_hits(state,gap["gap_id"],strategy["strategy_id"],q)
     )
 
+def strategy_priority_maturity(state,strategy_id,policy=None):
+    policy=policy or load_policy()
+    learning=policy["learning"]
+    stats=state["strategy_stats"][strategy_id]
+    requirements={
+      "minimum_cycles":int(learning["minimum_cycles_before_strategy_adjustment"]),
+      "minimum_inspections":int(learning["minimum_inspections_before_strategy_adjustment"]),
+      "minimum_verified_value_outcomes":int(learning.get("minimum_verified_outcomes_before_strategy_priority",1)),
+    }
+    req(all(v>=1 for v in requirements.values()),"Hunter strategy maturity requirements invalid")
+    mature=(
+      stats["cycles"]>=requirements["minimum_cycles"]
+      and stats["inspected"]>=requirements["minimum_inspections"]
+      and stats["verified_value_outcomes"]>=requirements["minimum_verified_value_outcomes"]
+    )
+    return {
+      "status":"MATURE" if mature else "WARMUP",
+      "mature":mature,
+      "requirements":requirements,
+      "observed":{
+        "cycles":stats["cycles"],
+        "inspected":stats["inspected"],
+        "verified_value_outcomes":stats["verified_value_outcomes"],
+      },
+    }
+
 def select_objectives(state):
     policy=load_policy(); strategies=load_strategies(); gaps=detect_gaps()
     maxn=policy["budgets"]["max_objectives_per_cycle"]
@@ -134,10 +160,21 @@ def select_objectives(state):
     exploit_slots=maxn-explore_slots
     exploit_strategies=[s for s in strategies if s["family"]!="EXPLORATION"]
     if policy["learning"].get("verified_outcome_strategy_priority") is True:
-        exploit_strategies=sorted(
-          exploit_strategies,
-          key=lambda s:(-state["strategy_stats"][s["strategy_id"]]["verified_value_outcomes"],s["strategy_id"])
-        )
+        indexed=list(enumerate(exploit_strategies))
+        exploit_strategies=[
+          strategy for _,strategy in sorted(
+            indexed,
+            key=lambda item:(
+              -int(strategy_priority_maturity(state,item[1]["strategy_id"],policy)["mature"]),
+              -(
+                state["strategy_stats"][item[1]["strategy_id"]]["verified_value_outcomes"]
+                if strategy_priority_maturity(state,item[1]["strategy_id"],policy)["mature"]
+                else 0
+              ),
+              item[0],
+            )
+          )
+        ]
     exploration=next(s for s in strategies if s["family"]=="EXPLORATION")
     objectives=[]
     for idx,gap in enumerate(gaps[:exploit_slots]):
@@ -151,7 +188,13 @@ def select_objectives(state):
           "need_type":gap["need_type"],"capability_key":gap["capability_key"],"search_concepts":search_concepts_for_gap(gap),"strategy_id":strategy["strategy_id"],
           "exploration":False,
           "strategy_verified_value_outcomes":state["strategy_stats"][strategy["strategy_id"]]["verified_value_outcomes"],
-          "strategy_selection_basis":"VERIFIED_OUTCOME_PRIORITY_THEN_DETERMINISTIC_ORDER" if policy["learning"].get("verified_outcome_strategy_priority") is True else "DETERMINISTIC_ORDER",
+          "strategy_priority_maturity":strategy_priority_maturity(state,strategy["strategy_id"],policy),
+          "strategy_selection_basis":(
+            "MATURE_VERIFIED_OUTCOME_PRIORITY_THEN_CONFIGURED_ORDER"
+            if policy["learning"].get("verified_outcome_strategy_priority") is True
+            and strategy_priority_maturity(state,strategy["strategy_id"],policy)["mature"]
+            else "WARMUP_CONFIGURED_ORDER"
+          ),
           "priority_components":{"importance":gap["importance"],"uncertainty":gap["uncertainty"],"downstream_reuse":gap["downstream_reuse"],"external_validation_value":gap["external_validation_value"],"dead_end_penalty":penalty},
           "queries":queries,
           "acceptance_target":"Retain only an exact public repository revision with structural implementation and test evidence relevant to the portfolio gap; discovery alone does not establish reuse rights or verified capability.",
