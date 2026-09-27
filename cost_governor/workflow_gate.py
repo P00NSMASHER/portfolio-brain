@@ -33,11 +33,10 @@ def _github_output(**values) -> None:
 def governed_github_attempt(state, *, run_id: str, job_id: str, observed_attempt: int) -> int:
     """Map a GitHub rerun number onto the durable governed retry sequence.
 
-    GitHub increments GITHUB_RUN_ATTEMPT even when an earlier job was cancelled
-    before Portfolio Brain obtained a reservation. Cost retry accounting must
-    advance only when a prior governed reservation exists. Repeating the same
-    GitHub attempt remains idempotent, while skipped GitHub attempts are
-    normalized to the next durable attempt rather than creating a retry gap.
+    GitHub workload admission is no longer a paid-ledger reservation. New runs
+    therefore use GitHub's observed run attempt directly. Historical reservations
+    are still honored so a rerun that crosses the migration boundary cannot reset
+    an already-recorded retry sequence.
     """
     if type(observed_attempt) is not int or observed_attempt < 1:
         raise ValueError("observed GitHub attempt must be a positive integer")
@@ -48,7 +47,7 @@ def governed_github_attempt(state, *, run_id: str, job_id: str, observed_attempt
         if row.get("retry_group") == group
     })
     if not prior:
-        return 1
+        return observed_attempt
     highest = max(prior)
     if observed_attempt <= highest:
         return observed_attempt
@@ -108,11 +107,15 @@ def preflight_command(args) -> int:
     out = Path(args.output_dir)
     _write_json(out / "cost_state.json", state)
     _write_json(out / "cost_decision.json", decision)
-    allowed = decision["status"] == "RESERVED" and decision["can_execute"] is True
+    allowed = decision["status"] in {"RESERVED", "WORKLOAD_ADMITTED"} and decision["can_execute"] is True
+    control_plane = "WORKLOAD" if request["resource_kind"] == "GITHUB_JOB" else "PAID_BUDGET"
+    reasons = ",".join(decision.get("reason_codes") or [])
     _github_output(
         allowed=str(allowed).lower(),
         reservation_id=decision.get("reservation_id") or "",
         decision_status=decision["status"],
+        reason_codes=reasons,
+        control_plane=control_plane,
         observed_run_attempt=observed_attempt,
         governed_attempt=attempt,
     )
@@ -120,6 +123,8 @@ def preflight_command(args) -> int:
         "status": decision["status"],
         "allowed": allowed,
         "reservation_id": decision.get("reservation_id"),
+        "reason_codes": decision.get("reason_codes") or [],
+        "control_plane": control_plane,
         "observed_run_attempt": observed_attempt,
         "governed_attempt": attempt,
     }, sort_keys=True))
