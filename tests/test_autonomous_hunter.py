@@ -1,7 +1,8 @@
 import copy, unittest
 from hunting.autonomous_hunter import (
-    HunterError, apply_verified_feedback, candidate_fingerprint, classify_candidate, detect_gaps,
-    load_policy, load_seed_state, rank_candidate, run_cycle, select_objectives, validate_state
+    HunterError, _queries, apply_verified_feedback, candidate_fingerprint, classify_candidate, detect_gaps,
+    load_policy, load_seed_state, rank_candidate, run_cycle, search_concepts_for_gap,
+    select_objectives, structural_inspection, validate_state
 )
 
 class FakeProvider:
@@ -24,6 +25,52 @@ class HunterTests(unittest.TestCase):
         objectives=select_objectives(load_seed_state())
         self.assertTrue(any(x["exploration"] for x in objectives))
         self.assertTrue(all(x["authority_class"]=="OBSERVE" for x in objectives))
+
+    def test_queries_use_reusable_concepts_instead_of_portfolio_brand_names(self):
+        gaps=detect_gaps()
+        capture=next(g for g in gaps if g["project_name"]=="CaptureBrief")
+        strategy=next(x for x in __import__("hunting.autonomous_hunter",fromlist=["load_strategies"]).load_strategies() if x["family"]=="EXACT_IMPLEMENTATION")
+        queries=_queries(capture,strategy,load_seed_state())
+        self.assertTrue(queries)
+        self.assertTrue(all("capturebrief" not in q.casefold() for q in queries))
+        self.assertTrue(any("government contract proposal" in q.casefold() or "rfp proposal" in q.casefold() for q in queries))
+        self.assertIn("government contract proposal",search_concepts_for_gap(capture))
+
+    def test_query_rotation_prefers_fresh_semantic_queries_after_dead_ends(self):
+        state=load_seed_state()
+        gap=next(g for g in detect_gaps() if g["project_name"]=="Freight Recovery")
+        strategy=next(x for x in __import__("hunting.autonomous_hunter",fromlist=["load_strategies"]).load_strategies() if x["family"]=="EXACT_IMPLEMENTATION")
+        first=_queries(gap,strategy,state)
+        self.assertGreaterEqual(len(first),4)
+        for q in first[:2]:
+            state["negative_knowledge"].append({
+              "gap_id":gap["gap_id"],"strategy_id":strategy["strategy_id"],
+              "normalized_query":" ".join(q.casefold().split()),
+              "query_fingerprint":"sha256:"+"0"*64,
+              "reason_code":"NO_RETAINED_CANDIDATE","hits":2,
+              "first_seen":"2026-09-25T18:00:00Z","last_seen":"2026-09-25T19:00:00Z"
+            })
+        state["sequence"]+=1
+        second=_queries(gap,strategy,state)
+        self.assertTrue(second)
+        self.assertTrue(all(q not in first[:2] for q in second[:2]))
+
+    def test_structural_ranking_uses_semantic_search_concepts_not_unique_slug(self):
+        gap=next(g for g in detect_gaps() if g["project_name"]=="CaptureBrief")
+        objective={
+          "capability_key":gap["capability_key"],
+          "search_concepts":search_concepts_for_gap(gap),
+        }
+        candidate={"id":1,"full_name":"public/proposal-engine"}
+        inspection={
+          "revision":"a"*40,"tree_sha":"b"*40,
+          "paths":["src/proposal_engine.py","tests/test_proposal_engine.py","docs/government-contract-proposal.md"],
+          "truncated":False,
+        }
+        structural=structural_inspection(candidate,inspection,objective)
+        self.assertGreater(structural["source_keyword_hit_count"],0)
+        self.assertGreater(structural["test_keyword_hit_count"],0)
+        self.assertGreaterEqual(rank_candidate(structural)["score"],8)
 
     def test_public_exact_revision_candidate_can_be_retained_and_proposed(self):
         state,receipt=run_cycle(load_seed_state(),FakeProvider(),at="2026-09-25T18:00:00Z")
