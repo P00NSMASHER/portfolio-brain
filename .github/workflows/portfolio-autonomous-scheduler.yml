@@ -56,6 +56,14 @@ jobs:
           if [ ! -f hunting/live/hunter_proposal_state.json ]; then
             cp hunting/HUNTER_PROPOSAL_STATE_SEED.json hunting/live/hunter_proposal_state.json
           fi
+      - name: Restore latest Hunter proposal review state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: |
+          mkdir -p hunting/live
+          python -m hunting.proposal_review_artifact_state --output hunting/live/hunter_proposal_review_state.json
+          if [ ! -f hunting/live/hunter_proposal_review_state.json ]; then
+            cp hunting/HUNTER_PROPOSAL_REVIEW_STATE_SEED.json hunting/live/hunter_proposal_review_state.json
+          fi
       - name: Restore latest runtime state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: >-
@@ -79,6 +87,17 @@ jobs:
           --output-dir scheduler/out
           --hunter-output-dir hunting/out
           --max-items 8
+      - name: Persist Hunter proposal evidence reviews
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: >-
+          python -m hunting.proposal_review_state
+          --state hunting/live/hunter_proposal_review_state.json
+          --execution-receipts scheduler/out/execution_receipts.json
+          --output hunting/out/hunter_proposal_review_state.json
+          --report hunting/out/hunter_proposal_review_report.json
+      - name: Validate Hunter proposal review state
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: python -c "import json; from hunting.proposal_review_state import validate_state; validate_state(json.load(open('hunting/out/hunter_proposal_review_state.json')))"
       - name: Heartbeat Portfolio Manager
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: >-
@@ -134,6 +153,16 @@ jobs:
         with:
           name: portfolio-hunter-proposal-state
           path: hunting/out/hunter_proposal_state.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload Hunter proposal review continuation state
+        if: ${{ steps.cost.outputs.allowed == 'true' && hashFiles('hunting/out/hunter_proposal_review_state.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-hunter-proposal-review-state
+          path: |
+            hunting/out/hunter_proposal_review_state.json
+            hunting/out/hunter_proposal_review_report.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload sanitized agent heartbeat state
