@@ -215,6 +215,24 @@ def _last_cycles(runtime: dict[str,Any],hunter: dict[str,Any],scheduler: dict[st
     return {"latest_overall":rows[0] if rows else None,"by_subsystem":latest,"recent":rows[:20]}
 
 
+def _runtime_sync_proof(runtime:dict[str,Any],cost:dict[str,Any],sources:dict[str,Any])->dict[str,Any]:
+    source=sources.get("sources",{}).get("runtime",{})
+    run_id=source.get("source_run_id")
+    cycles=[row for row in runtime.get("recent_cycles",[]) if row.get("mode")=="sync" and row.get("status")=="PASS" and row.get("receipt_hash")]
+    admitted=any(
+        row.get("workflow_id")=="runtime-worker" and row.get("job_id")=="runtime-sync"
+        and row.get("status")=="COMMITTED" and f"github-run:{run_id}" in row.get("evidence_refs",[])
+        for row in cost.get("reservations",[])
+    ) if run_id else False
+    verified=source.get("status")=="LIVE" and bool(cycles) and admitted
+    return {
+        "status":"VERIFIED_SYNC_WORK" if verified else "UNVERIFIED_SYNC_WORK",
+        "source_run_id":run_id,"runtime_source_status":source.get("status","FALLBACK"),
+        "cycle_id":cycles[-1].get("cycle_id") if verified else None,
+        "reason":"CURRENT_RUNTIME_ARTIFACT_AND_GOVERNED_RECEIPT" if verified else "MISSING_FRESH_RUNTIME_CYCLE_OR_MATCHING_COST_RECEIPT",
+    }
+
+
 def _verified_outcomes() -> tuple[int,dict[str,int]]:
     experiment=load_json("experiments/EXPERIMENT_OUTCOME_LEDGER.json")["outcomes"]
     transfer=load_json("transfer/TRANSFER_LEDGER.json")["outcomes"]
@@ -335,6 +353,7 @@ def build_operational_telemetry(*, at: str | None=None) -> dict[str,Any]:
         "actions":{"total_sent":len(action_ledger["executions"]),"recent":recent_actions},
         "failures":{"count":len(failures),"recent":failures[:20]},
         "cycles":_last_cycles(runtime,hunter,scheduler),
+        "runtime_sync_proof":_runtime_sync_proof(runtime,cost,sources),
         "hunter":{"totals":hunter_totals,"state_sequence":hunter["sequence"],"updated_at":hunter["updated_at"]},
         "notifications":{
             "state_sequence":notifications["sequence"],"updated_at":notifications["updated_at"],
