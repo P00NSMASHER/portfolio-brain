@@ -1,4 +1,5 @@
-workflow-liveness-live-proof-v4
-reason=verify-redirect-safe-artifact-proof-after-674decd5316c
+workflow-liveness-live-proof-v5
+reason=verify-five-of-five-exact-run-proof-after-notification-recovery
 authority=NONE
-source_commit=674decd5316c62026f29658aa0d5f6110d439422
+source_commit=cbd4911cc8d34646b4e918fe3d5f51e7077e829a
+expected=5-of-5-healthy-verified-work
