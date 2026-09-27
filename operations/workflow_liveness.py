@@ -199,6 +199,7 @@ def _request(url:str,token:str,*,method:str="GET",payload:dict[str,Any]|None=Non
 def main()->int:
     ap=argparse.ArgumentParser()
     ap.add_argument("--state",default="cost_governor/live/cost_state.json")
+    ap.add_argument("--output",default=None)
     args=ap.parse_args()
     p=load_policy();validate_policy(p)
     token=os.environ.get("GITHUB_TOKEN")
@@ -237,6 +238,10 @@ def main()->int:
         requests+=1
     result=recover_overdue(load_state(args.state),runs,dispatch=dispatch)
     result["api_requests"]=requests
+    if args.output:
+        output=Path(args.output)
+        output.parent.mkdir(parents=True,exist_ok=True)
+        output.write_text(json.dumps(result,indent=2,sort_keys=True)+"\n",encoding="utf-8")
     print(json.dumps(result,sort_keys=True))
     return 0
 
