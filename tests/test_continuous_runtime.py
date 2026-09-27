@@ -37,7 +37,7 @@ def current_heads():
 class RuntimeTests(unittest.TestCase):
     def cycle_receipt(self,state,observation,*,finished_at="2026-09-25T18:00:00Z"):
         receipt={
-            "schema_version":"1.0.0","cycle_id":"cycle-test","mode":"observe",
+            "schema_version":"1.0.0","cycle_id":"cycle-"+"1"*24,"mode":"observe",
             "started_at":finished_at,"finished_at":finished_at,"status":"PASS","reason":None,
             "observations":[observation],"api_requests":1,
         }
@@ -149,6 +149,38 @@ class RuntimeTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(RuntimeStateError,"timestamp is not bound"):
             advance_cycle(state,self.cycle_receipt(state,observation))
+
+    def test_tampered_cycle_receipt_cannot_mutate_state(self):
+        state=bootstrap_state(now="2026-09-25T17:00:00Z")
+        rid="REPO-001"; sha=state["repositories"][rid]["cursor_sha"]
+        observation={
+            "repository_id":rid,"status":"UNCHANGED","source_ref":"main",
+            "prior_sha":sha,"current_sha":sha,"observed_at":"2026-09-25T18:00:00Z",
+        }
+        receipt=self.cycle_receipt(state,observation);receipt["api_requests"]=99
+        with self.assertRaisesRegex(RuntimeStateError,"hash mismatch"):
+            advance_cycle(state,receipt)
+        self.assertEqual(state["sequence"],0)
+
+    def test_restored_state_rejects_forged_cycle_history(self):
+        state=bootstrap_state(now="2026-09-25T18:00:00Z")
+        state["sequence"]=1;state["last_cycle_id"]="cycle-"+"1"*24
+        state["recent_cycles"]=[{
+            "cycle_id":state["last_cycle_id"],"mode":"sync","finished_at":state["updated_at"],
+            "status":"PASS","receipt_hash":"sha256:not-a-digest",
+        }]
+        with self.assertRaisesRegex(RuntimeStateError,"receipt hash invalid"):
+            validate_state(state)
+
+    def test_restored_state_rejects_history_identity_mismatch(self):
+        state=bootstrap_state(now="2026-09-25T18:00:00Z")
+        state["sequence"]=1;state["last_cycle_id"]="cycle-"+"2"*24
+        state["recent_cycles"]=[{
+            "cycle_id":"cycle-"+"1"*24,"mode":"sync","finished_at":state["updated_at"],
+            "status":"PASS","receipt_hash":"sha256:"+"2"*64,
+        }]
+        with self.assertRaisesRegex(RuntimeStateError,"last cycle id"):
+            validate_state(state)
 
     def test_hourly_sync_skips_blocked_and_updates_changed_cursor(self):
         heads=current_heads()
