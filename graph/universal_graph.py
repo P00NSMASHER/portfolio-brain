@@ -205,7 +205,19 @@ def find_paths(nodes: list[dict[str,Any]], edges: list[dict[str,Any]], start_id:
     validate_graph(nodes,edges)
     by_id={n["node_id"]:n for n in nodes}
     _require(start_id in by_id and target_id in by_id,"path endpoint missing")
-    active=[e for e in edges if e["status"]=="ACTIVE"]
+    # Path discovery is a decision-support projection. Like the upstream graph
+    # projection, it must not silently reactivate retired, superseded,
+    # canonicalized, or reversed identities just because a connected edge was
+    # not retired at the same moment. Inactive query endpoints have no current
+    # path, and every traversed edge must connect two ACTIVE nodes.
+    if by_id[start_id]["status"]!="ACTIVE" or by_id[target_id]["status"]!="ACTIVE":
+        return []
+    active=[
+      e for e in edges
+      if e["status"]=="ACTIVE"
+      and by_id[e["source_node_id"]]["status"]=="ACTIVE"
+      and by_id[e["target_node_id"]]["status"]=="ACTIVE"
+    ]
     outgoing={}
     for e in active: outgoing.setdefault(e["source_node_id"],[]).append(e)
     queue=deque([(start_id,[start_id],[])])

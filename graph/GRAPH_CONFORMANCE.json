@@ -8,6 +8,7 @@
     "node_provenance": "REQUIRED",
     "edge_evidence": "REQUIRED",
     "active_only_upstream_projection": "REQUIRED",
+    "active_only_path_discovery": "REQUIRED",
     "outcome_provenance": "VERIFIED_AND_STABLE_EVENT_REQUIRED",
     "temporal_supersession": "PRESERVE_HISTORY",
     "aliases": "NON_DESTRUCTIVE",
