@@ -25,6 +25,9 @@ SECRET_MARKERS = (
 )
 
 
+ROOT = Path(__file__).resolve().parents[1]
+
+
 class PublicationValidationError(ValueError):
     pass
 
@@ -46,6 +49,10 @@ def validate_publication() -> dict[str, object]:
     require(snapshot["telemetry"]["authority_class"] == "OBSERVE", "public telemetry widened authority")
     require(snapshot["workload_control"]["mode"] == "GITHUB_NATIVE_WORKLOAD_CONTROL", "public workload controls missing")
     require(set(snapshot["execution_truth"]) == {"attempted","blocked","executed","verified","scope_note"}, "public execution truth missing")
+    publication=snapshot["publication"]
+    require(publication["mode"] == "AUTO_ON_RELEVANT_MAIN_PUSH_PLUS_HOURLY_REFRESH", "public publication mode drifted")
+    if publication["source_commit"] is not None:
+        require(len(publication["source_commit"]) == 40, "public source commit is not a full SHA")
     require(snapshot["history"]["history_id"] == "portfolio-command-center-public-history-v1", "public history missing")
 
     with tempfile.TemporaryDirectory() as td:
@@ -71,6 +78,12 @@ def validate_publication() -> dict[str, object]:
     require('method="post"' not in lower, "public command center introduced POST form")
     require("Portfolio Brain Command Center" in html_text, "public page title missing")
     require("OBSERVE ONLY" in html_text, "public read-only boundary missing")
+    require("Paid Cost Governor" in html_text and "GitHub Workload Controls" in html_text, "public paid/workload separation missing")
+    workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text(encoding="utf-8")
+    require("\n  push:\n" in workflow and "      - main" in workflow, "Pages is not auto-triggered by relevant main pushes")
+    require("Stamp publication provenance" in workflow, "Pages publication provenance stamp missing")
+    require('if [[ "$GITHUB_EVENT_NAME" == "push" ]]' in workflow, "source-change publication override missing")
+    require("Verify deployed source commit" in workflow and "source-commit.txt" in workflow, "end-to-end Pages deployment proof missing")
     require("Operational Telemetry" in html_text and "History & Trends" in html_text, "public telemetry/trends panels missing")
     require("Hunter Proposal Inbox" in html_text, "public Hunter proposal inbox panel missing")
     require(snapshot["hunter_proposals"]["authority_class"]=="OBSERVE","public Hunter proposal inbox widened authority")

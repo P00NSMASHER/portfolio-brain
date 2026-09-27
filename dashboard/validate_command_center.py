@@ -37,6 +37,10 @@ def validate_command_center() -> dict[str, object]:
     require(snapshot["telemetry"]["cost"]["utilization"]["cost_usd"]["ceiling"] == snapshot["cost_governor"]["portfolio_ceiling"]["cost_usd"], "cost telemetry ceiling mismatch")
     require(snapshot["workload_control"]["mode"] == "GITHUB_NATIVE_WORKLOAD_CONTROL", "workload controls missing")
     require(snapshot["workload_control"]["service_count"] >= 8, "workload service coverage incomplete")
+    publication=snapshot["publication"]
+    require(publication["mode"] == "AUTO_ON_RELEVANT_MAIN_PUSH_PLUS_HOURLY_REFRESH", "publication mode drifted")
+    if publication["source_commit"] is not None:
+        require(len(publication["source_commit"]) == 40, "published source commit is not a full SHA")
     truth=snapshot["execution_truth"]
     require(set(truth) == {"attempted","blocked","executed","verified","scope_note"}, "execution truth vector changed")
     require(all(type(truth[k]) is int and truth[k] >= 0 for k in ("attempted","blocked","executed","verified")), "execution truth counts invalid")
@@ -84,6 +88,12 @@ def validate_command_center() -> dict[str, object]:
     require("Live State Bridge" in page, "live-state bridge panel missing")
     require("Operational Telemetry" in page, "operational telemetry panel missing")
     require("History & Trends" in page, "history/trends panel missing")
+    require("Paid Cost Governor" in page, "paid-only cost governor label missing")
+    require("GitHub Workload Controls" in page, "separate workload-control panel missing")
+    require("Daily GitHub job-start quota</td><td class=\"num\">None" in page, "retired GitHub daily job quota is not explicit")
+    require("Daily runner-minute quota</td><td class=\"num\">None" in page, "retired runner-minute quota is not explicit")
+    for retired_label in ("Accounted runner minutes today", "<td>Daily GitHub job starts</td>", "<td>Daily runner minutes</td>", "Governed runner minutes committed"):
+        require(retired_label not in page, f"paid-cost UI still conflates GitHub workload: {retired_label}")
     require('data-design="apple-inspired-v4-1"' in page, "v4.1 visual-design marker missing")
     require("font-family:-apple-system" in page, "native system typography stack missing")
     require("-webkit-backdrop-filter" in page and "border-radius:var(--radius-xl)" in page, "premium glass/card design contract missing")

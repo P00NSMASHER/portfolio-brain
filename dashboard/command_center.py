@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import html
 import json
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -440,6 +441,16 @@ def build_command_center_snapshot() -> dict[str, Any]:
             }
         )
 
+    publication = {
+        "mode": "AUTO_ON_RELEVANT_MAIN_PUSH_PLUS_HOURLY_REFRESH",
+        "generated_at": os.getenv("PORTFOLIO_PUBLICATION_GENERATED_AT"),
+        "source_commit": os.getenv("PORTFOLIO_PUBLICATION_SOURCE_COMMIT"),
+        "source_ref": os.getenv("PORTFOLIO_PUBLICATION_SOURCE_REF"),
+        "run_id": os.getenv("PORTFOLIO_PUBLICATION_RUN_ID"),
+        "run_attempt": os.getenv("PORTFOLIO_PUBLICATION_RUN_ATTEMPT"),
+        "event_name": os.getenv("PORTFOLIO_PUBLICATION_EVENT"),
+    }
+
     snapshot = {
         "schema_version": "1.0.0",
         "command_center_id": "portfolio-brain-command-center-v4",
@@ -448,6 +459,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
         "network_capability": "NONE",
         "data_boundary": "SANITIZED_CHECKED_IN_AND_DURABLE_ARTIFACT_STATE",
         "source_dashboard_hash": executive["snapshot_hash"],
+        "publication": publication,
         "system": {
             "status": operating["status"],
             "functional_status": functional_status,
@@ -693,6 +705,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
     sentinel = cost["sentinel"]
     gateway_health = action_engine["gateway_health"]
     source_bundle = snapshot["state_sources"]
+    publication = snapshot["publication"]
     sources = source_bundle["sources"]
     telemetry = snapshot["telemetry"]
     execution_truth = snapshot["execution_truth"]
@@ -1912,9 +1925,9 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
     </div>
   </header>
 
-  <section class="repair-board" id="repair-board" aria-labelledby="repair-title" data-as-of="{_e(source_bundle.get('generated_at') or '')}">
+  <section class="repair-board" id="repair-board" aria-labelledby="repair-title" data-as-of="{_e(publication.get('generated_at') or source_bundle.get('generated_at') or '')}">
     <div class="repair-head"><div><div class="repair-kicker"><span class="repair-pulse"></span> SYSTEM DIAGNOSTICS · READ ONLY</div><h2 id="repair-title">Keep the Brain operational.</h2><p>Evidence-backed issues and a focused prompt for each repair. Recheck against the latest run before changing code.</p></div><div class="repair-count"><strong>{len(repair_issues)}</strong><span>snapshot issues</span></div></div>
-    <div class="repair-meta"><span>{_badge(system['functional_status'], _status_tone(system['functional_status']))}</span><span>Evidence captured <time>{_e(source_bundle.get('generated_at') or 'unknown')}</time></span><span id="snapshot-age" role="status">Checking publication age…</span></div>
+    <div class="repair-meta"><span>{_badge(system['functional_status'], _status_tone(system['functional_status']))}</span><span>Published <time>{_e(publication.get('generated_at') or 'validation preview')}</time></span><span>Source <code>{_e((publication.get('source_commit') or 'not stamped')[:12])}</code></span><span>Evidence captured <time>{_e(source_bundle.get('generated_at') or 'unknown')}</time></span><span id="snapshot-age" role="status">Checking publication age…</span></div>
     <article class="repair-item publication-stale" id="publication-stale" hidden><div class="repair-item-head"><span class="repair-index">!</span><div><h3>Published view is out of date</h3><p id="publication-age-detail">The latest run may differ from this snapshot.</p></div>{_badge('CHECK NOW', 'warn')}</div><details class="repair-details"><summary>View repair prompt</summary><div class="repair-prompt"><p id="publication-repair-prompt">Audit the latest P00NSMASHER/portfolio-brain Pages workflow and its durable state bridge against current main. The public dashboard snapshot is older than the expected hourly refresh window or has no timestamp. Check the newest run, artifact continuity, publication gate and deployment status. Repair the root cause on a branch and verify a fresh published snapshot with valid source receipts. Do not change the cost ceiling, authority gates or tests to force green.</p><button type="button" class="copy-repair" data-copy-target="publication-repair-prompt">Copy prompt</button></div></details></article>
     <div class="repair-list">{repair_cards}</div>
     <p class="repair-foot">A healthy badge reflects only checks supported by this snapshot. A heartbeat check alone does not prove useful work. No action runs from this public page.</p>
@@ -2068,23 +2081,28 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       <div class="mobile-records">{strategy_cards}</div>
     </div>
     <div class="card" id="cost">
-      <div class="section-head"><div><h2>Cost Governor</h2><p>{_e(cost["mode"])} · {_e(source_detail("cost"))}</p></div>{source_badge("cost")}</div>
+      <div class="section-head"><div><h2>Paid Cost Governor</h2><p>{_e(cost["mode"])} · financial model/API budget only · {_e(source_detail("cost"))}</p></div>{source_badge("cost")}</div>
       <table><tbody>
-        <tr><td>Actual cost today</td><td class="num">USD {_e(round(telemetry["cost"]["actual_usage_today"]["cost_usd"],4))}</td></tr>
+        <tr><td>Actual paid cost today</td><td class="num">USD {_e(round(telemetry["cost"]["actual_usage_today"]["cost_usd"],4))}</td></tr>
+        <tr><td>Daily paid ceiling</td><td class="num">USD {_e(cost["portfolio_ceiling"]["cost_usd"])}</td></tr>
         <tr><td>Actual model calls today</td><td class="num">{telemetry["cost"]["actual_usage_today"]["model_calls"]}</td></tr>
+        <tr><td>Paid model-call ceiling</td><td class="num">{cost["portfolio_ceiling"]["model_calls"]}</td></tr>
         <tr><td>Actual API calls today</td><td class="num">{telemetry["cost"]["actual_usage_today"]["api_calls"]}</td></tr>
-        <tr><td>Accounted runner minutes today</td><td class="num">{telemetry["cost"]["budget_accounted_usage_today"]["github_runner_minutes"]}</td></tr>
-        <tr><td>Daily GitHub job starts</td><td class="num">{cost["portfolio_ceiling"]["github_job_starts"]}</td></tr>
-        <tr><td>Daily runner minutes</td><td class="num">{cost["portfolio_ceiling"]["github_runner_minutes"]}</td></tr>
-        <tr><td>Paid model calls</td><td class="num">{cost["portfolio_ceiling"]["model_calls"]}</td></tr>
-        <tr><td>API calls</td><td class="num">{cost["portfolio_ceiling"]["api_calls"]}</td></tr>
+        <tr><td>Paid API-call ceiling</td><td class="num">{cost["portfolio_ceiling"]["api_calls"]}</td></tr>
         <tr><td>Active durable reservations</td><td class="num">{cost["reservation_count"]}</td></tr>
         <tr><td>Committed model/API spend</td><td class="num">${sentinel["budget"]["committed_usage"]["cost_usd"]:.4f}</td></tr>
         <tr><td>Fail-closed expired reservation spend</td><td class="num">${sentinel["budget"]["fail_closed_expired_usage"]["cost_usd"]:.4f}</td></tr>
         <tr><td>Effective budget-accounted spend</td><td class="num">${sentinel["budget"]["effective_budget_usage"]["cost_usd"]:.4f}</td></tr>
-        <tr><td>Governed runner minutes committed</td><td class="num">{int(sentinel["github"]["governed_job_usage"]["committed_runner_minutes"])}</td></tr>
-        <tr><td>Watchdog max control-plane minutes/day</td><td class="num">{_e(sentinel["github"]["watchdog_control_plane_overhead"]["nominal_max_runner_minutes_per_day"])}</td></tr>
       </tbody></table>
+      <div class="section-head" style="margin-top:16px"><div><h2>GitHub Workload Controls</h2><p>Independent scheduling capacity; never counted as paid model/API budget.</p></div>{_badge(f'{workload_control["service_count"]} service lanes',"neutral")}</div>
+      <table><tbody>
+        <tr><td>Admission mode</td><td class="num">{_e(workload_control["mode"])}</td></tr>
+        <tr><td>Managed service lanes</td><td class="num">{workload_control["service_count"]}</td></tr>
+        <tr><td>Daily GitHub job-start quota</td><td class="num">None</td></tr>
+        <tr><td>Daily runner-minute quota</td><td class="num">None</td></tr>
+        <tr><td>Shared pending lane across unrelated services</td><td class="num">No</td></tr>
+      </tbody></table>
+      <p>Each service keeps its own concurrency lane and hard per-job timeout. Workload admission remains independent from paid spend and grants no authority.</p>
       <div class="section-head" style="margin-top:16px"><h2>Kill Switches</h2>{_badge(f'{system["engaged_kill_switch_count"]} engaged', "bad" if system["engaged_kill_switch_count"] else "good")}</div>
       <div class="switches">{kill_rows}</div>
       <div class="section-head" style="margin-top:16px"><h2>Enabled Model Routes</h2>{_badge(f'{model_router["enabled_non_tier0_route_count"]} non-Tier-0',"good")}</div>
@@ -2217,7 +2235,8 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
 
   <div class="footer">
     Snapshot <code id="snapshotHash">{_e(snapshot["snapshot_hash"])}</code><br>
-    Source executive dashboard <code>{_e(snapshot["source_dashboard_hash"])}</code>
+    Source executive dashboard <code>{_e(snapshot["source_dashboard_hash"])}</code><br>
+    Published source <code>{_e(publication.get("source_commit") or "validation-preview")}</code> · run {_e(publication.get("run_id") or "n/a")}
   </div>
 </main>
 </div>

@@ -9,6 +9,7 @@ from unittest.mock import patch
 from agents.heartbeat_state import heartbeat,seed_state,validate_state
 from dashboard.history_state import append_point,daily_trends,project_momentum,validate_state as validate_history
 from dashboard.command_center import build_command_center_snapshot,render_html
+from dashboard.publication_gate import should_publish
 from operator_console.operator_console import validate_approval_ledger
 from scheduler.autonomous_scheduler import _owner_approval
 import scheduler.autonomous_scheduler as scheduler_module
@@ -176,6 +177,30 @@ class CommandCenterV4Tests(unittest.TestCase):
         workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text()
         self.assertIn("name: github-pages-${{ github.run_attempt }}",workflow)
         self.assertIn("artifact_name: github-pages-${{ github.run_attempt }}",workflow)
+
+    def test_command_center_auto_publishes_relevant_main_changes_with_proof(self):
+        workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text()
+        self.assertIn("\n  push:\n",workflow)
+        self.assertIn("      - main",workflow)
+        self.assertIn("Stamp publication provenance",workflow)
+        self.assertIn('if [[ "$GITHUB_EVENT_NAME" == "push" ]]',workflow)
+        self.assertIn("Verify deployed source commit",workflow)
+        self.assertIn("source-commit.txt",workflow)
+
+    def test_publication_provenance_does_not_create_false_material_change(self):
+        current={"value":1,"publication":{"generated_at":"2026-09-27T17:10:00Z","source_commit":"a"*40}}
+        previous={"value":1,"publication":{"generated_at":"2026-09-27T16:10:00Z","source_commit":"b"*40}}
+        self.assertFalse(should_publish(current,previous))
+
+    def test_cost_and_workload_controls_are_visually_separated(self):
+        snapshot=build_command_center_snapshot()
+        self.assertEqual(snapshot["publication"]["mode"],"AUTO_ON_RELEVANT_MAIN_PUSH_PLUS_HOURLY_REFRESH")
+        public=render_html(snapshot)
+        self.assertIn("Paid Cost Governor",public)
+        self.assertIn("GitHub Workload Controls",public)
+        self.assertIn("Daily GitHub job-start quota</td><td class=\"num\">None",public)
+        self.assertNotIn("<td>Daily GitHub job starts</td>",public)
+        self.assertNotIn("Governed runner minutes committed",public)
 
     def test_command_center_exposes_hunter_proposal_inbox_without_rights_upgrade(self):
         snapshot=build_command_center_snapshot()
