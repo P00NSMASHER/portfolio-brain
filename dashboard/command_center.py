@@ -611,6 +611,46 @@ def render_html(snapshot: dict[str, Any]) -> str:
         for name, stats in snapshot["hunter"]["strategy_stats"].items()
     )
 
+    model_value_rows = "".join(
+        f"""
+        <tr>
+          <td><strong>{_e(row["model_id"])}</strong><span class="sub">{_e(row["provider_id"])}</span></td>
+          <td class="num">T{_e(row["tier"])}</td>
+          <td class="num">{_e(row["successful_calls"])}</td>
+          <td class="num">{_e("$"+str(round(row["committed_spend_usd"],6)))}</td>
+          <td class="num">{_e(row["verified_outcomes_recorded"])}</td>
+          <td class="num">{_e(row["verified_value_events"])}</td>
+          <td class="num">{_e("—" if row["mean_verified_outcome_value"] is None else row["mean_verified_outcome_value"])}</td>
+          <td class="num">{_e("—" if row["spend_per_verified_outcome_usd"] is None else "$"+str(round(row["spend_per_verified_outcome_usd"],6)))}</td>
+          <td>{_badge(row["value_signal"].replace("_"," "), "good" if row["value_signal"]=="VERIFIED_VALUE_EVIDENCE" else "neutral")}</td>
+        </tr>
+        """
+        for row in sentinel["model_efficiency"]["models"]
+    )
+
+    model_value_cards = "".join(
+        f"""
+        <article class="mobile-record">
+          <div class="mobile-record-head">
+            <div class="mobile-title">
+              <strong>{_e(row["model_id"])}</strong>
+              <code>{_e(row["provider_id"])} · T{_e(row["tier"])}</code>
+            </div>
+            {_badge(row["value_signal"].replace("_"," "), "good" if row["value_signal"]=="VERIFIED_VALUE_EVIDENCE" else "neutral")}
+          </div>
+          <div class="mobile-stats mobile-stats-2">
+            <div><span>Verified feedback</span><strong>{_e(row["verified_outcomes_recorded"])}</strong></div>
+            <div><span>Value events</span><strong>{_e(row["verified_value_events"])}</strong></div>
+            <div><span>Mean verified value</span><strong>{_e("—" if row["mean_verified_outcome_value"] is None else row["mean_verified_outcome_value"])}</strong></div>
+            <div><span>Cost / verified</span><strong>{_e("—" if row["spend_per_verified_outcome_usd"] is None else "$"+str(round(row["spend_per_verified_outcome_usd"],6)))}</strong></div>
+            <div><span>Calls today</span><strong>{_e(row["successful_calls"])}</strong></div>
+            <div><span>Spend today</span><strong>{_e("$"+str(round(row["committed_spend_usd"],6)))}</strong></div>
+          </div>
+        </article>
+        """
+        for row in sentinel["model_efficiency"]["models"]
+    )
+
     source_labels = {
         "runtime":"Runtime",
         "scheduler":"Scheduler",
@@ -619,6 +659,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
         "notifications":"Notifications",
         "agents":"Agent Fleet",
         "provider":"Model Provider",
+        "model_feedback":"Verified Model Value",
     }
     source_rows = "".join(
         f"""
