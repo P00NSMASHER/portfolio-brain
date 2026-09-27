@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any, Callable
 
@@ -22,6 +23,8 @@ DEFAULT_CONTRACT=ROOT/"value_proof"/"MODEL_TASK_CONTRACT.json"
 class ModelTaskError(ValueError):
     pass
 
+EXACT_REVISION_RE=re.compile(r"[0-9a-f]{40}")
+
 def req(ok:bool,msg:str)->None:
     if not ok:
         raise ModelTaskError(msg)
@@ -32,6 +35,17 @@ def canon(value:Any)->str:
 def digest(value:Any)->str:
     raw=value if isinstance(value,str) else canon(value)
     return "sha256:"+hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+def write_json(path:Path,value:Any)->None:
+    """Persist exactly one JSON document with a real trailing newline."""
+    path.write_text(json.dumps(value,indent=2,sort_keys=True)+"\n",encoding="utf-8")
+
+def validate_manifest_path(path:Any)->None:
+    req(isinstance(path,str) and path,"evidence manifest path invalid")
+    req("\\" not in path and not path.startswith("/"),"evidence manifest path must be canonical and relative")
+    parts=path.split("/")
+    req(all(part not in {"",".",".."} for part in parts),"evidence manifest path traversal forbidden")
+    req(all(ord(char)>=32 and ord(char)!=127 for char in path),"evidence manifest path contains control characters")
 
 def load_contract(path:Path=DEFAULT_CONTRACT)->dict[str,Any]:
     c=json.loads(path.read_text(encoding="utf-8"))
@@ -49,12 +63,14 @@ def load_contract(path:Path=DEFAULT_CONTRACT)->dict[str,Any]:
     req(c["project_ids"] and len(c["project_ids"])==len(set(c["project_ids"])),"model task projects invalid")
     src=c["source_candidate"]
     req(src["repository_full_name"] and int(src["repository_id"])>0,"source candidate identity invalid")
-    req(isinstance(src["revision"],str) and len(src["revision"])==40,"source revision must be exact SHA")
+    req(isinstance(src["revision"],str) and EXACT_REVISION_RE.fullmatch(src["revision"]) is not None,"source revision must be canonical lowercase SHA")
     req(src["hunter_proof_hash"].startswith("sha256:"),"Hunter proof hash missing")
     req(src["hunter_proof_artifact_digest"].startswith("sha256:"),"Hunter proof artifact digest missing")
     manifest=c["evidence_manifest"]
     req(manifest["exact_revision_required"] is True and manifest["public_source_required"] is True,"evidence manifest source gates weakened")
     req(len(manifest["required_paths"])>=2 and len(manifest["required_paths"])==len(set(manifest["required_paths"])),"evidence manifest paths invalid")
+    for path in manifest["required_paths"]:
+        validate_manifest_path(path)
     mc=c["model_contract"]
     req(mc["task_kind"]=="OPPORTUNITY_REASONING" and mc["expected_tier"]==2,"builder task must remain Tier 2 opportunity reasoning")
     req(mc["provider_allowlist"]==["openai"],"builder provider allowlist widened")
@@ -81,13 +97,14 @@ def validate_evidence_pack(pack:dict[str,Any],contract:dict[str,Any])->None:
     total_chars=0
     for row in pack["files"]:
         req(set(row)=={"path","content","content_hash"},"evidence file fields changed")
+        validate_manifest_path(row["path"])
         req(row["path"] not in by_path,"duplicate evidence path")
         req(isinstance(row["content"],str) and row["content"],"empty evidence file")
         req(row["content_hash"]==digest(row["content"]),"evidence file content hash mismatch")
         by_path[row["path"]]=row
         total_chars+=len(row["content"])
-    for path in contract["evidence_manifest"]["required_paths"]:
-        req(path in by_path,f"required evidence path missing: {path}")
+    manifest_paths=set(contract["evidence_manifest"]["required_paths"])
+    req(set(by_path)==manifest_paths,"evidence pack paths must exactly match approved manifest")
     req(total_chars<=120000,"evidence pack exceeds bounded input size")
     body=dict(pack);given=body.pop("pack_hash")
     req(given==digest(body),"evidence pack hash mismatch")
@@ -273,10 +290,10 @@ def main()->None:
     state=json.loads(args.cost_state.read_text(encoding="utf-8"))
     next_state,result=execute_task(contract=contract,pack=pack,cost_state=state)
     args.output_dir.mkdir(parents=True,exist_ok=True)
-    (args.output_dir/"builder_output.json").write_text(json.dumps(result["parsed_output"],indent=2,sort_keys=True)+"\\n",encoding="utf-8")
-    (args.output_dir/"model_task_execution_receipt.json").write_text(json.dumps(result["execution_receipt"],indent=2,sort_keys=True)+"\\n",encoding="utf-8")
-    (args.output_dir/"model_provider_receipt.json").write_text(json.dumps(result["provider_receipt"],indent=2,sort_keys=True)+"\\n",encoding="utf-8")
-    args.cost_state.write_text(json.dumps(next_state,indent=2,sort_keys=True)+"\\n",encoding="utf-8")
+    write_json(args.output_dir/"builder_output.json",result["parsed_output"])
+    write_json(args.output_dir/"model_task_execution_receipt.json",result["execution_receipt"])
+    write_json(args.output_dir/"model_provider_receipt.json",result["provider_receipt"])
+    write_json(args.cost_state,next_state)
     print(json.dumps({
       "task_id":contract["task_id"],
       "status":result["status"],
