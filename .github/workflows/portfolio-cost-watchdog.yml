@@ -12,6 +12,10 @@ on:
     workflows: ["agent-heartbeat-sweep"]
     types: [completed]
     branches: ["main"]
+  push:
+    branches: ["main"]
+    paths:
+      - "operations/TRIGGER_WORKFLOW_LIVENESS"
   workflow_dispatch:
 
 permissions:
