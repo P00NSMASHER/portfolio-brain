@@ -669,7 +669,9 @@ def main():
     },indent=2)+"\n")
     (out/"experiment_proposals.json").write_text(json.dumps(receipt["experiment_proposals"],indent=2)+"\n")
     from hunting.proposal_state import build_proposal_state
-    proposal_state=build_proposal_state(state,receipt)
+    prior_proposal_path=Path("hunting/live/hunter_proposal_state.json")
+    prior_proposal_state=json.loads(prior_proposal_path.read_text()) if prior_proposal_path.exists() else None
+    proposal_state=build_proposal_state(state,receipt,prior_state=prior_proposal_state)
     (out/"hunter_proposal_state.json").write_text(json.dumps(proposal_state,indent=2,sort_keys=True)+"\n")
     total=sum(p.stat().st_size for p in out.iterdir() if p.is_file())
     if total>load_policy()["budgets"]["max_output_bytes"]: raise HunterError("Hunter output byte budget exceeded")
