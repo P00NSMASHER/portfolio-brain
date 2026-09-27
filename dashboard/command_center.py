@@ -482,11 +482,11 @@ def _badge(text: str, tone: str = "neutral") -> str:
 
 def _status_tone(value: str) -> str:
     upper = value.upper()
-    if upper in {"OPERATIONAL", "ACTIVE", "VERIFIED_FIXED", "RUNNING", "LIVE", "READY", "IDLE_HEALTHY"}:
+    if upper in {"OPERATIONAL", "ACTIVE", "VERIFIED_FIXED", "RUNNING", "LIVE", "READY", "IDLE_HEALTHY", "HEALTHY"}:
         return "good"
     if upper in {"BLOCKED", "CRITICAL", "HIGH", "ENGAGED", "DISABLED", "MISSING_CREDENTIAL", "BILLING_NOT_ACTIVE", "QUOTA_EXHAUSTED", "BUDGET_BLOCKED", "PROVIDER_ERROR", "STALLED"}:
         return "bad"
-    if upper in {"EVIDENCE_GAPS", "MEDIUM", "ACTIVE_RESEARCH_ONLY", "IN_DEVELOPMENT", "STALE", "FALLBACK", "DEGRADED", "RATE_LIMITED", "UNKNOWN"}:
+    if upper in {"EVIDENCE_GAPS", "MEDIUM", "ACTIVE_RESEARCH_ONLY", "IN_DEVELOPMENT", "STALE", "FALLBACK", "DEGRADED", "RATE_LIMITED", "UNKNOWN", "NO_VERIFIED_VALUE"}:
         return "warn"
     if upper in {"NOT TESTED", "WARMING UP"}:
         return "neutral"
@@ -502,6 +502,8 @@ def render_html(snapshot: dict[str, Any]) -> str:
     optimization = snapshot["optimization"]
     action_engine = snapshot["action_engine"]
     model_router = snapshot["model_router"]
+    learning_loop = snapshot["learning_loop"]
+    learning_integrity = learning_loop["integrity"]
     provider_readiness = model_router["provider_readiness"]
     sentinel = cost["sentinel"]
     gateway_health = action_engine["gateway_health"]
@@ -686,6 +688,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
         "agents":"Agent Fleet",
         "provider":"Model Provider",
         "model_feedback":"Verified Model Value",
+        "learning":"Continuous Learning",
     }
     source_rows = "".join(
         f"""
@@ -1799,6 +1802,32 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
     </table></div>
     <div class="mobile-records">{model_value_cards}</div>
     <p>Value evidence is credited only from durable VERIFIED feedback. This panel does not convert model output into authority, reuse rights, capability verification, deployment permission, or customer-value claims.</p>
+  </section>
+
+  <section class="card" id="learning-integrity" style="margin-top:14px">
+    <div class="section-head">
+      <div>
+        <h2>Verified Learning Integrity</h2>
+        <p>{_e(source_detail("learning"))} · cross-checks Hunter, model feedback, and continuous learning.</p>
+      </div>
+      {_badge(learning_integrity["status"], _status_tone(learning_integrity["status"]))}
+    </div>
+    <div class="spec-grid" style="margin-bottom:18px">
+      <div class="spec-item"><span>Verified value events</span><strong>{_e(learning_integrity["verified_value_event_count"])}</strong></div>
+      <div class="spec-item"><span>Independent builder/verifier events</span><strong>{_e(learning_integrity["independently_verified_event_count"])}</strong></div>
+      <div class="spec-item"><span>Reached continuous learning</span><strong>{_e(learning_integrity["continuous_learning_event_count"])}</strong></div>
+      <div class="spec-item"><span>Hunter verified value credit</span><strong>{_e(learning_integrity["hunter_verified_value_outcomes"])}</strong></div>
+      <div class="spec-item"><span>Learning observations</span><strong>{_e(learning_loop["observation_count"])}</strong></div>
+      <div class="spec-item"><span>Learning state sequence</span><strong>{_e(learning_loop["state_sequence"])}</strong></div>
+    </div>
+    <div class="table-wrap mobile-hide"><table>
+      <thead><tr><th>Integrity check</th><th>Status</th></tr></thead>
+      <tbody>{''.join(f'<tr><td>{_e(key.replace("_"," ").title())}</td><td>{_badge("PASS" if value else "FAIL","good" if value else "bad")}</td></tr>' for key,value in learning_integrity["checks"].items())}</tbody>
+    </table></div>
+    <div class="mobile-records">
+      {''.join(f'<article class="mobile-record"><div class="mobile-record-head"><div class="mobile-title"><strong>{_e(key.replace("_"," ").title())}</strong></div>{_badge("PASS" if value else "FAIL","good" if value else "bad")}</div></article>' for key,value in learning_integrity["checks"].items())}
+    </div>
+    <p>Green here means the same VERIFIED value evidence has reconciled across the durable model-feedback, Hunter-value, and continuous-learning layers. It does not mean policy is automatically promoted; policy effect remains {_e(learning_loop["policy_effect"])}.</p>
   </section>
 
   <section class="grid two" id="actions" style="margin-top:14px">
