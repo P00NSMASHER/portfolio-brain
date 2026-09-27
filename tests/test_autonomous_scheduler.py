@@ -30,13 +30,12 @@ def proposal_state():
     }
 
 class SchedulerTests(unittest.TestCase):
-    def test_on_demand_scheduler_trigger_is_isolated_and_rerunnable(self):
+    def test_scheduler_stays_out_of_push_fanout_and_keeps_rerunnable_job_concurrency(self):
         root=Path(__file__).resolve().parents[1]
         workflow=(root/".github/workflows/portfolio-autonomous-scheduler.yml").read_text()
         runtime=(root/".github/workflows/runtime-event-observe.yml").read_text()
-        self.assertIn('.github/triggers/scheduler-now.txt',workflow)
+        self.assertNotIn("\n  push:",workflow)
         self.assertGreater(workflow.index("concurrency:"),workflow.index("schedule:"))
-        self.assertIn('.github/triggers/scheduler-now.txt',runtime)
         self.assertIn('.github/workflows/portfolio-autonomous-scheduler.yml',runtime)
 
     def test_quality_gated_hunter_proposal_enters_read_only_research_queue(self):
