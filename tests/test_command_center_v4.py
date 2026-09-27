@@ -188,6 +188,11 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertIn("Hunter Proposal Inbox",public)
         self.assertIn("Discovery never grants reuse rights.",public)
         self.assertIn("exact-revision public candidates",public)
+        self.assertIn("hunter_proposal_reviews",snapshot["state_sources"]["sources"])
+        self.assertIn("review_state_sequence",proposals)
+        self.assertIn("evidence_reviewed_count",proposals)
+        self.assertLessEqual(proposals["evidence_reviewed_count"],proposals["proposal_count"])
+        self.assertIn("License metadata",public)
 
     def test_scheduler_executes_work_before_heartbeating_workers(self):
         workflow=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text()

@@ -68,6 +68,7 @@ class LiveStateBridgeTests(unittest.TestCase):
             "model_feedback":self.fake_restorer("model-feedback","2026-09-26T17:40:00Z",107,sequence=2),
             "learning":self.fake_restorer("learning-observation","2026-09-26T17:35:00Z",108,sequence=1),
             "hunter_proposals":self.fake_restorer("hunter-proposal","2026-09-26T17:42:00Z",109,sequence=9),
+            "hunter_proposal_reviews":self.fake_restorer("hunter-proposal-review","2026-09-26T17:44:00Z",110,sequence=2),
         }
         with tempfile.TemporaryDirectory() as td, patch.dict(bridge.RESTORERS,restorers,clear=True):
             root=Path(td)
@@ -86,6 +87,8 @@ class LiveStateBridgeTests(unittest.TestCase):
         self.assertEqual(receipt["sources"]["learning"]["state_sequence"],1)
         self.assertEqual(receipt["sources"]["hunter_proposals"]["status"],"LIVE")
         self.assertEqual(receipt["sources"]["hunter_proposals"]["state_sequence"],9)
+        self.assertEqual(receipt["sources"]["hunter_proposal_reviews"]["status"],"LIVE")
+        self.assertEqual(receipt["sources"]["hunter_proposal_reviews"]["state_sequence"],2)
         self.assertEqual(receipt["sources"]["scheduler"]["source_run_id"],102)
         self.assertEqual(receipt["sources"]["scheduler"]["artifact_created_at"],"2026-09-26T17:20:00Z")
 
@@ -103,6 +106,7 @@ class LiveStateBridgeTests(unittest.TestCase):
             "model_feedback":missing,
             "learning":missing,
             "hunter_proposals":missing,
+            "hunter_proposal_reviews":missing,
         }
         with tempfile.TemporaryDirectory() as td, patch.dict(bridge.RESTORERS,restorers,clear=True):
             root=Path(td)
@@ -113,8 +117,9 @@ class LiveStateBridgeTests(unittest.TestCase):
         self.assertEqual(receipt["sources"]["model_feedback"]["status"],"FALLBACK")
         self.assertEqual(receipt["sources"]["learning"]["status"],"FALLBACK")
         self.assertEqual(receipt["sources"]["hunter_proposals"]["status"],"FALLBACK")
+        self.assertEqual(receipt["sources"]["hunter_proposal_reviews"]["status"],"FALLBACK")
         self.assertEqual(set(receipt["health_sources"]),{"runtime","scheduler","hunter","cost","notifications"})
-        self.assertEqual(set(receipt["optional_observability_sources"]),{"agents","provider","model_feedback","learning","hunter_proposals"})
+        self.assertEqual(set(receipt["optional_observability_sources"]),{"agents","provider","model_feedback","learning","hunter_proposals","hunter_proposal_reviews"})
 
     def test_pages_workflow_restores_live_state_hourly_before_publish(self):
         workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text()

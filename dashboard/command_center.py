@@ -64,6 +64,7 @@ def load_state_sources() -> dict[str, Any]:
         "model_feedback":"model_router/MODEL_FEEDBACK_STATE_SEED.json",
         "learning":"learning/LIVE_OBSERVATION_STATE_SEED.json",
         "hunter_proposals":"hunting/HUNTER_PROPOSAL_STATE_SEED.json",
+        "hunter_proposal_reviews":"hunting/HUNTER_PROPOSAL_REVIEW_STATE_SEED.json",
     }
     for name, ref in seeds.items():
         data["sources"].setdefault(name, {
@@ -113,6 +114,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
     state_sources = load_state_sources()
     hunter_state = load_live_json("hunter_state.json","hunting/HUNTER_STATE_SEED.json")
     hunter_proposal_state = load_live_json("hunter_proposal_state.json","hunting/HUNTER_PROPOSAL_STATE_SEED.json")
+    hunter_proposal_review_state = load_live_json("hunter_proposal_review_state.json","hunting/HUNTER_PROPOSAL_REVIEW_STATE_SEED.json")
     scheduler_state = load_live_json("scheduler_state.json","scheduler/SCHEDULER_STATE_SEED.json")
     cost_policy = load_json("cost_governor/COST_GOVERNOR_POLICY.json")
     cost_state = load_live_json("cost_state.json","cost_governor/COST_STATE_SEED.json")
@@ -209,6 +211,13 @@ def build_command_center_snapshot() -> dict[str, Any]:
     proposal_findings = {
         row["proposal_id"]: row for row in hunter_proposal_state.get("findings", [])
     }
+    proposal_reviews = {}
+    for review in hunter_proposal_review_state.get("reviews", []):
+        proposal_id = review.get("proposal_id")
+        if isinstance(proposal_id, str):
+            current = proposal_reviews.get(proposal_id)
+            if current is None or (review.get("reviewed_at") or "") >= (current.get("reviewed_at") or ""):
+                proposal_reviews[proposal_id] = review
     scheduler_by_source = {}
     for work in scheduler_state.get("work_items", []):
         source_ref = work.get("source_ref")
@@ -220,8 +229,11 @@ def build_command_center_snapshot() -> dict[str, Any]:
         review_work = scheduler_by_source.get(proposal["proposal_id"], [])
         review_work.sort(key=lambda row: (row.get("created_at") or "", row.get("scheduler_work_id") or ""), reverse=True)
         current = review_work[0] if review_work else None
+        durable_review = proposal_reviews.get(proposal["proposal_id"])
         review_status = "AWAITING_SCHEDULER"
-        if current is not None:
+        if durable_review is not None:
+            review_status = "EVIDENCE_REVIEWED"
+        elif current is not None:
             review_status = {
                 "QUEUED":"REVIEW_QUEUED",
                 "ACTIVE":"REVIEW_ACTIVE",
@@ -243,6 +255,11 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "review_status": review_status,
             "scheduler_work_id": None if current is None else current.get("scheduler_work_id"),
             "scheduler_work_state": None if current is None else current.get("state"),
+            "license_spdx_id": None if durable_review is None else durable_review.get("license_spdx_id"),
+            "license_name": None if durable_review is None else durable_review.get("license_name"),
+            "license_state": None if durable_review is None else durable_review.get("license_state"),
+            "reviewed_at": None if durable_review is None else durable_review.get("reviewed_at"),
+            "review_hash": None if durable_review is None else durable_review.get("review_hash"),
         })
     healthy_agents = telemetry["agents"].get("live", 0) + telemetry["agents"].get("idle_healthy", 0)
     stalled_agents = telemetry["agents"].get("stalled", 0)
@@ -425,6 +442,9 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "queued_review_count": sum(1 for row in hunter_proposals if row["review_status"]=="REVIEW_QUEUED"),
             "active_review_count": sum(1 for row in hunter_proposals if row["review_status"]=="REVIEW_ACTIVE"),
             "completed_review_count": sum(1 for row in hunter_proposals if row["review_status"]=="REVIEW_COMPLETE"),
+            "evidence_reviewed_count": sum(1 for row in hunter_proposals if row["review_status"]=="EVIDENCE_REVIEWED"),
+            "review_state_sequence": hunter_proposal_review_state.get("sequence",0),
+            "review_state_updated_at": hunter_proposal_review_state.get("updated_at"),
             "proposals": hunter_proposals,
         },
         "learning_loop": {
@@ -505,6 +525,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
                     "hunting/HUNTER_STATE_SEED.json",
                     "hunting/HUNTER_PROPOSAL_STATE_SEED.json",
                     "hunting/proposal_state.py",
+                    "hunting/HUNTER_PROPOSAL_REVIEW_STATE_SEED.json",
+                    "hunting/proposal_review_state.py",
                     "cost_governor/COST_GOVERNOR_POLICY.json",
                     "cost_governor/COST_STATE_SEED.json",
                     "notifications/NOTIFICATION_POLICY.json",
@@ -697,7 +719,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
     )
 
     def proposal_status_tone(status: str) -> str:
-        if status == "REVIEW_COMPLETE":
+        if status in {"REVIEW_COMPLETE","EVIDENCE_REVIEWED"}:
             return "good"
         if status == "REVIEW_CANCELLED":
             return "bad"
@@ -714,11 +736,12 @@ def render_html(snapshot: dict[str, Any]) -> str:
           <td>{_badge(p["rank_band"], "good" if p["rank_band"]=="HIGH" else "warn")}</td>
           <td>{_badge(p["review_status"].replace("_"," "), proposal_status_tone(p["review_status"]))}</td>
           <td class="wrap">{_e(p["capability_key"] or "—")}</td>
+          <td>{_e(p["license_spdx_id"] or ("none" if p["license_state"] else "—"))}<span class="sub">{_e(p["license_state"] or "not reviewed")}</span></td>
           <td>{_e(p["rights_state"] or "—")}</td>
         </tr>
         """
         for p in snapshot["hunter_proposals"]["proposals"]
-    ) or '<tr><td colspan="7" class="empty">No quality-gated Hunter proposals in the durable inbox.</td></tr>'
+    ) or '<tr><td colspan="8" class="empty">No quality-gated Hunter proposals in the durable inbox.</td></tr>'
 
     proposal_cards = "".join(
         f"""
@@ -733,8 +756,10 @@ def render_html(snapshot: dict[str, Any]) -> str:
           <div class="mobile-stats mobile-stats-2">
             <div><span>Rank</span><strong>{_e(p["rank_band"])} · {_e(p["rank_score"])}/10</strong></div>
             <div><span>Projects</span><strong>{_e(", ".join(p["project_ids"]))}</strong></div>
+            <div><span>License metadata</span><strong>{_e(p["license_spdx_id"] or ("none" if p["license_state"] else "not reviewed"))}</strong></div>
             <div><span>Rights</span><strong>{_e(p["rights_state"] or "—")}</strong></div>
             <div><span>Capability</span><strong>{_e((p["capability_key"] or "—").replace("capability-coverage:",""))}</strong></div>
+            <div><span>Reviewed</span><strong>{_e(compact_timestamp(p["reviewed_at"]))}</strong></div>
           </div>
           <div class="mobile-meta">
             <span>Strategy</span><strong>{_e((p["strategy_id"] or "—").replace("STRAT:",""))}</strong>
@@ -796,6 +821,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
         "model_feedback":"Verified Model Value",
         "learning":"Continuous Learning",
         "hunter_proposals":"Hunter Proposal Inbox",
+        "hunter_proposal_reviews":"Hunter Proposal Reviews",
     }
     source_rows = "".join(
         f"""
@@ -1901,10 +1927,12 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       <div class="spec-item"><span>Inbox sequence</span><strong>{_e(snapshot["hunter_proposals"]["sequence"])}</strong></div>
       <div class="spec-item"><span>Awaiting scheduler</span><strong>{_e(snapshot["hunter_proposals"]["awaiting_scheduler_count"])}</strong></div>
       <div class="spec-item"><span>Queued / active review</span><strong>{_e(snapshot["hunter_proposals"]["queued_review_count"] + snapshot["hunter_proposals"]["active_review_count"])}</strong></div>
-      <div class="spec-item"><span>Completed review</span><strong>{_e(snapshot["hunter_proposals"]["completed_review_count"])}</strong></div>
+      <div class="spec-item"><span>Completed scheduler work</span><strong>{_e(snapshot["hunter_proposals"]["completed_review_count"])}</strong></div>
+      <div class="spec-item"><span>Durable evidence reviewed</span><strong>{_e(snapshot["hunter_proposals"]["evidence_reviewed_count"])}</strong></div>
+      <div class="spec-item"><span>Review state sequence</span><strong>{_e(snapshot["hunter_proposals"]["review_state_sequence"])}</strong></div>
     </div>
     <div class="table-wrap mobile-hide"><table>
-      <thead><tr><th>Proposal</th><th>Repository @ revision</th><th class="num">Score</th><th>Rank</th><th>Review</th><th>Capability</th><th>Rights</th></tr></thead>
+      <thead><tr><th>Proposal</th><th>Repository @ revision</th><th class="num">Score</th><th>Rank</th><th>Review</th><th>Capability</th><th>License metadata</th><th>Rights</th></tr></thead>
       <tbody>{proposal_rows}</tbody>
     </table></div>
     <div class="mobile-records">{proposal_cards}</div>
