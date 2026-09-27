@@ -1,4 +1,4 @@
-workflow-liveness-live-proof-v3
-reason=verify-exact-run-artifact-proof-after-6ef67101e695
+workflow-liveness-live-proof-v4
+reason=verify-redirect-safe-artifact-proof-after-674decd5316c
 authority=NONE
-source_commit=6ef67101e695ed838272817c3e9176c637b79e95
+source_commit=674decd5316c62026f29658aa0d5f6110d439422
