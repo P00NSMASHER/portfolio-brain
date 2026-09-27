@@ -77,8 +77,9 @@ def validate_state(state: dict[str, Any]) -> None:
     req(isinstance(state, dict) and set(state) == required, "agent heartbeat state fields changed")
     req(state["schema_version"] == "1.0.0" and state["state_id"] == STATE_ID, "agent heartbeat state identity mismatch")
     req(type(state["sequence"]) is int and state["sequence"] >= 0, "agent heartbeat sequence invalid")
+    updated_at = None
     if state["updated_at"] is not None:
-        _time(state["updated_at"], "updated_at")
+        updated_at = _time(state["updated_at"], "updated_at")
     req(isinstance(state["agents"], dict) and set(state["agents"]) == set(reg), "agent heartbeat coverage mismatch")
     for agent_id, row in state["agents"].items():
         fields = {
@@ -101,13 +102,17 @@ def validate_state(state: dict[str, Any]) -> None:
         )
     req(isinstance(state["recent_events"], list) and len(state["recent_events"]) <= MAX_EVENTS, "heartbeat event history invalid")
     seen = set()
+    prior_event_at: datetime | None = None
+    latest_by_agent: dict[str, dict[str, Any]] = {}
     for event in state["recent_events"]:
         fields = {"event_id", "agent_id", "at", "activity_kind", "source_workflow", "source_run_id", "work_ids"}
         req(isinstance(event, dict) and set(event) == fields, "heartbeat event fields changed")
         req(event["event_id"] not in seen and event["event_id"].startswith("AHB-"), "heartbeat event id invalid")
         seen.add(event["event_id"])
         req(event["agent_id"] in reg, "heartbeat event unknown agent")
-        _time(event["at"], "heartbeat event at")
+        event_at = _time(event["at"], "heartbeat event at")
+        req(prior_event_at is None or event_at >= prior_event_at, "heartbeat event history is not chronological")
+        prior_event_at = event_at
         for key in ("activity_kind", "source_workflow", "source_run_id"):
             req(isinstance(event[key], str) and 1 <= len(event[key]) <= 160, f"heartbeat event {key} invalid")
         req(
@@ -117,6 +122,25 @@ def validate_state(state: dict[str, Any]) -> None:
             and all(isinstance(x, str) and 1 <= len(x) <= 160 for x in event["work_ids"]),
             "heartbeat event work ids invalid",
         )
+        event_core = {key: event[key] for key in (
+            "agent_id", "at", "activity_kind", "source_workflow", "source_run_id", "work_ids"
+        )}
+        expected_event_id = "AHB-" + hashlib.sha256(canon(event_core).encode()).hexdigest()[:20].upper()
+        req(event["event_id"] == expected_event_id, "heartbeat event hash mismatch")
+        latest_by_agent[event["agent_id"]] = event
+
+    if state["recent_events"]:
+        req(updated_at == prior_event_at, "heartbeat updated_at does not match latest event")
+    else:
+        req(state["sequence"] == 0 and updated_at is None, "heartbeat state without events must be bootstrap state")
+
+    for agent_id, event in latest_by_agent.items():
+        row = state["agents"][agent_id]
+        req(row["last_heartbeat_at"] == event["at"], f"{agent_id} latest heartbeat is not event-backed")
+        req(row["last_activity_kind"] == event["activity_kind"], f"{agent_id} latest activity is not event-backed")
+        req(row["source_workflow"] == event["source_workflow"], f"{agent_id} source workflow is not event-backed")
+        req(row["source_run_id"] == event["source_run_id"], f"{agent_id} source run is not event-backed")
+        req(set(event["work_ids"]).issubset(row["recent_work_ids"]), f"{agent_id} latest work ids are not event-backed")
 
 
 def load_state(path: str | Path | None = None) -> dict[str, Any]:
@@ -147,7 +171,9 @@ def heartbeat(
     req(isinstance(source_workflow, str) and source_workflow, "source workflow required")
     req(isinstance(source_run_id, str) and source_run_id, "source run id required")
     at = at or _now()
-    _time(at, "heartbeat at")
+    heartbeat_at = _time(at, "heartbeat at")
+    if state["updated_at"] is not None:
+        req(heartbeat_at >= _time(state["updated_at"], "updated_at"), "heartbeat time cannot move backward")
     work_ids_by_agent = work_ids_by_agent or {}
 
     out = json.loads(json.dumps(state))

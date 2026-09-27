@@ -1,9 +1,10 @@
+import copy
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from agents.heartbeat_state import heartbeat, seed_state, validate_state
+from agents.heartbeat_state import AgentHeartbeatError, heartbeat, seed_state, validate_state
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -48,6 +49,85 @@ class AgentHeartbeatStateTests(unittest.TestCase):
         self.assertTrue(all(row["last_heartbeat_at"]=="2026-09-26T23:00:00Z" for row in out["agents"].values()))
         self.assertTrue(all(row["last_activity_kind"]=="HEALTH_CHECK" for row in out["agents"].values()))
         self.assertTrue(all(row["source_workflow"]=="agent-heartbeat-sweep" for row in out["agents"].values()))
+
+    def test_event_content_tampering_breaks_hash_validation(self):
+        state=heartbeat(
+            seed_state(),
+            agent_ids=["AGT-HUNTER"],
+            activity_kind="HUNTER_CYCLE",
+            source_workflow="hunter-autonomous-cycle",
+            source_run_id="trusted-run",
+            at="2026-09-26T18:00:00Z",
+        )
+        for field,value in (
+            ("activity_kind","FORGED_SUCCESS"),
+            ("source_run_id","forged-run"),
+            ("agent_id","AGT-AUDITOR"),
+        ):
+            poisoned=copy.deepcopy(state)
+            poisoned["recent_events"][0][field]=value
+            with self.subTest(field=field),self.assertRaisesRegex(AgentHeartbeatError,"hash mismatch"):
+                validate_state(poisoned)
+
+    def test_latest_agent_projection_must_match_event_history(self):
+        state=heartbeat(
+            seed_state(),
+            agent_ids=["AGT-HUNTER"],
+            activity_kind="HUNTER_CYCLE",
+            source_workflow="hunter-autonomous-cycle",
+            source_run_id="trusted-run",
+            work_ids_by_agent={"AGT-HUNTER":["SWORK-TRUSTED"]},
+            at="2026-09-26T18:00:00Z",
+        )
+        poisoned=copy.deepcopy(state)
+        poisoned["agents"]["AGT-HUNTER"]["source_run_id"]="forged-run"
+        with self.assertRaisesRegex(AgentHeartbeatError,"source run is not event-backed"):
+            validate_state(poisoned)
+        poisoned=copy.deepcopy(state)
+        poisoned["agents"]["AGT-HUNTER"]["recent_work_ids"]=[]
+        with self.assertRaisesRegex(AgentHeartbeatError,"work ids are not event-backed"):
+            validate_state(poisoned)
+
+    def test_heartbeat_time_cannot_roll_back_durable_state(self):
+        state=heartbeat(
+            seed_state(),
+            agent_ids=["AGT-HUNTER"],
+            activity_kind="HUNTER_CYCLE",
+            source_workflow="hunter-autonomous-cycle",
+            source_run_id="newer-run",
+            at="2026-09-26T18:00:00Z",
+        )
+        with self.assertRaisesRegex(AgentHeartbeatError,"cannot move backward"):
+            heartbeat(
+                state,
+                agent_ids=["AGT-HUNTER"],
+                activity_kind="HUNTER_CYCLE",
+                source_workflow="hunter-autonomous-cycle",
+                source_run_id="older-run",
+                at="2026-09-26T17:59:59Z",
+            )
+
+    def test_event_history_reordering_is_rejected(self):
+        state=heartbeat(
+            seed_state(),
+            agent_ids=["AGT-HUNTER"],
+            activity_kind="HUNTER_CYCLE",
+            source_workflow="hunter-autonomous-cycle",
+            source_run_id="run-1",
+            at="2026-09-26T18:00:00Z",
+        )
+        state=heartbeat(
+            state,
+            agent_ids=["AGT-AUDITOR"],
+            activity_kind="AUDIT",
+            source_workflow="hostile-regression",
+            source_run_id="run-2",
+            at="2026-09-26T18:01:00Z",
+        )
+        poisoned=copy.deepcopy(state)
+        poisoned["recent_events"].reverse()
+        with self.assertRaisesRegex(AgentHeartbeatError,"not chronological"):
+            validate_state(poisoned)
 
     def test_health_check_workflow_is_governed_and_recurring(self):
         body=(ROOT/".github/workflows/agent-heartbeat-sweep.yml").read_text()
