@@ -18,6 +18,7 @@ from typing import Any, Callable
 from agents.artifact_state import restore as restore_agents
 from cost_governor.artifact_state import restore as restore_cost
 from hunting.artifact_state import restore as restore_hunter
+from learning.artifact_state import restore as restore_learning
 from notifications.artifact_state import restore as restore_notifications
 from model_router.feedback_artifact_state import restore as restore_model_feedback
 from runtime.artifact_state import restore as restore_runtime
@@ -35,6 +36,7 @@ STALE_AFTER_MINUTES = {
     "provider": 1560,
     "agents": 180,
     "model_feedback": 10080,
+    "learning": 10080,
 }
 
 SEEDS = {
@@ -45,6 +47,7 @@ SEEDS = {
     "provider": "runtime/PROVIDER_HEALTH_SEED.json",
     "agents": "agents/AGENT_HEARTBEAT_STATE_SEED.json",
     "model_feedback": "model_router/MODEL_FEEDBACK_STATE_SEED.json",
+    "learning": "learning/LIVE_OBSERVATION_STATE_SEED.json",
 }
 
 RESTORERS: dict[str, Callable[..., str]] = {
@@ -55,10 +58,11 @@ RESTORERS: dict[str, Callable[..., str]] = {
     "notifications": restore_notifications,
     "agents": restore_agents,
     "model_feedback": restore_model_feedback,
+    "learning": restore_learning,
 }
 
 CORE_HEALTH_SOURCES = {"runtime","scheduler","hunter","cost","notifications"}
-OPTIONAL_OBSERVABILITY_SOURCES = {"agents","provider","model_feedback"}
+OPTIONAL_OBSERVABILITY_SOURCES = {"agents","provider","model_feedback","learning"}
 
 
 class LiveStateBridgeError(ValueError):
@@ -86,6 +90,7 @@ def _state_filename(name: str) -> str:
         "provider": "provider_health.json",
         "agents": "agent_heartbeat_state.json",
         "model_feedback": "model_feedback_state.json",
+        "learning": "learning_observation_state.json",
     }[name]
 
 

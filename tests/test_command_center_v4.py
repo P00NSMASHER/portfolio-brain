@@ -159,6 +159,19 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertIn("Verified Model Value",public)
         self.assertIn("Value evidence is credited only from durable VERIFIED feedback.",public)
 
+    def test_command_center_exposes_proof_carrying_learning_integrity(self):
+        snapshot=build_command_center_snapshot()
+        self.assertIn("learning_loop",snapshot)
+        integrity=snapshot["learning_loop"]["integrity"]
+        self.assertIn(integrity["status"],{"HEALTHY","DEGRADED","NO_VERIFIED_VALUE"})
+        self.assertFalse(integrity["authority_granted"])
+        self.assertFalse(integrity["policy_promoted"])
+        self.assertFalse(integrity["evidence_upgraded"])
+        self.assertIn("learning",snapshot["state_sources"]["sources"])
+        public=render_html(snapshot)
+        self.assertIn("Verified Learning Integrity",public)
+        self.assertIn("cross-checks Hunter, model feedback, and continuous learning",public)
+
     def test_scheduler_executes_work_before_heartbeating_workers(self):
         workflow=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text()
         self.assertIn("python -m scheduler.work_executor",workflow)
