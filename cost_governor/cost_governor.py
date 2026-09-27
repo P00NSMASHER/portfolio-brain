@@ -21,6 +21,7 @@ USAGE_FIELDS = (
     "github_job_starts",
     "github_runner_minutes",
 )
+PAID_USAGE_FIELDS = ("cost_usd", "input_tokens", "output_tokens", "model_calls", "api_calls")
 RESOURCE_KINDS = {"MODEL_CALL", "API_CALL", "GITHUB_JOB"}
 AUTHORITY_CLASSES = {"NONE", "OBSERVE", "EXPERIMENT", "MODIFY", "ACT"}
 DATA_CLASSES = {"PUBLIC", "SANITIZED", "PRIVATE_REFERENCE_ONLY"}
@@ -343,10 +344,16 @@ def preflight(state: dict[str, Any], request: dict[str, Any], *, at: str | None 
         return _finish_state(out, at, p), d
 
     is_killed, kill_reason = killed(p)
-    if is_killed:
+    if is_killed and request["resource_kind"] in {"MODEL_CALL", "API_CALL"}:
         d = _decision(request, at, "BLOCKED_KILL_SWITCH", ["SPEND_KILL_SWITCH", kill_reason or "kill switch"], None, False)
         _append_decision(out, d, p)
         return _finish_state(out, at, p), d
+    if request["resource_kind"] in {"MODEL_CALL", "API_CALL"}:
+        stop_reason = hard_stop_reason(out, at=at, policy_data=p)
+        if stop_reason is not None:
+            d = _decision(request, at, "BLOCKED_BUDGET", [f"HARD_STOP_ACTIVE:{stop_reason}"], None, False)
+            _append_decision(out, d, p)
+            return _finish_state(out, at, p), d
     if request["authority_class"] == "ACT":
         d = _decision(request, at, "BLOCKED_AUTHORITY", ["COST_BUDGET_CANNOT_AUTHORIZE_ACT"], None, False)
         _append_decision(out, d, p)
@@ -369,15 +376,16 @@ def preflight(state: dict[str, Any], request: dict[str, Any], *, at: str | None 
 
     estimate = request["estimated_usage"]
     reasons: list[str] = []
-    portfolio_used = _usage_for(out, at, lambda row: True)
-    reasons += _breaches(portfolio_used, estimate, p["portfolio_ceiling"], "portfolio")
-
-    for project_id in request["project_ids"]:
-        ceiling = p["project_overrides"].get(project_id, p["project_default_ceiling"])
-        used = _usage_for(out, at, lambda row, project_id=project_id: project_id in row["project_ids"])
-        reasons += _breaches(used, estimate, ceiling, f"project:{project_id}")
 
     if request["resource_kind"] in {"MODEL_CALL", "API_CALL"}:
+        portfolio_used = _usage_for(out, at, lambda row: True)
+        reasons += _breaches(portfolio_used, estimate, p["portfolio_ceiling"], "portfolio")
+
+        for project_id in request["project_ids"]:
+            ceiling = p["project_overrides"].get(project_id, p["project_default_ceiling"])
+            used = _usage_for(out, at, lambda row, project_id=project_id: project_id in row["project_ids"])
+            reasons += _breaches(used, estimate, ceiling, f"project:{project_id}")
+
         key = f'{request["provider_id"]}::{request["model_id"] or "NONE"}'
         ceiling = p["provider_model_overrides"].get(key, p["provider_model_default_ceiling"])
         used = _usage_for(out, at, lambda row, key=key: f'{row["provider_id"]}::{row["model_id"] or "NONE"}' == key)
@@ -388,11 +396,8 @@ def preflight(state: dict[str, Any], request: dict[str, Any], *, at: str | None 
         cfg = p["workflow_job_ceilings"].get(key)
         if cfg is None:
             reasons.append(f"UNCONFIGURED_WORKFLOW_JOB:{key}")
-        else:
-            if estimate["github_runner_minutes"] > cfg["max_minutes_per_job"]:
-                reasons.append(f"JOB_MINUTE_CEILING_EXCEEDED:{key}")
-            used = _usage_for(out, at, lambda row, key=key: f'{row["workflow_id"]}::{row["job_id"]}' == key)
-            reasons += _breaches(used, estimate, cfg["daily_ceiling"], f"workflow_job:{key}")
+        elif estimate["github_runner_minutes"] > cfg["max_minutes_per_job"]:
+            reasons.append(f"JOB_MINUTE_CEILING_EXCEEDED:{key}")
 
     if reasons:
         d = _decision(request, at, "BLOCKED_BUDGET", reasons, None, False)
@@ -445,7 +450,10 @@ def commit_reservation(state: dict[str, Any], reservation_id: str, actual_usage:
     if row["status"] in {"COMMITTED", "OVERAGE"}:
         return out, {"status": row["status"], "reservation_id": reservation_id}
     req(row["status"] == "RESERVED", "only active reservation may be committed")
-    over = [field for field in USAGE_FIELDS if actual_usage[field] > row["estimated_usage"][field] + (1e-12 if field == "cost_usd" else 0)]
+    over = [] if row["resource_kind"] == "GITHUB_JOB" else [
+        field for field in PAID_USAGE_FIELDS
+        if actual_usage[field] > row["estimated_usage"][field] + (1e-12 if field == "cost_usd" else 0)
+    ]
     row["actual_usage"] = copy.deepcopy(actual_usage)
     row["status"] = "OVERAGE" if over else "COMMITTED"
     row["committed_at"] = at
@@ -501,10 +509,15 @@ def hard_stop_reason(state: dict[str, Any], *, at: str | None = None, policy_dat
     if is_killed:
         return "KILL_SWITCH:" + (reason or "spend disabled")
     today = _day(at)
-    if any(row["status"] == "OVERAGE" and _day(row["created_at"]) == today for row in state["reservations"]):
-        return "CURRENT_DAY_RESERVATION_OVERAGE"
+    if any(
+        row["status"] == "OVERAGE"
+        and row["resource_kind"] in {"MODEL_CALL", "API_CALL"}
+        and _day(row["created_at"]) == today
+        for row in state["reservations"]
+    ):
+        return "CURRENT_DAY_PAID_RESERVATION_OVERAGE"
     used = _usage_for(_expire_and_compact(state, at, p), at, lambda row: True)
-    for field in USAGE_FIELDS:
+    for field in PAID_USAGE_FIELDS:
         if used[field] > p["portfolio_ceiling"][field] + (1e-12 if field == "cost_usd" else 0):
             return f"PORTFOLIO_BUDGET_BREACH:{field}"
     return None
