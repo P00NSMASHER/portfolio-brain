@@ -1,4 +1,5 @@
 import copy,os,tempfile,unittest
+from pathlib import Path
 from unittest.mock import patch
 from scheduler.autonomous_scheduler import _candidate,build_context,generate_candidates,load_state,mark_work,schedule_cycle
 
@@ -29,6 +30,15 @@ def proposal_state():
     }
 
 class SchedulerTests(unittest.TestCase):
+    def test_on_demand_scheduler_trigger_is_isolated_and_rerunnable(self):
+        root=Path(__file__).resolve().parents[1]
+        workflow=(root/".github/workflows/portfolio-autonomous-scheduler.yml").read_text()
+        runtime=(root/".github/workflows/runtime-event-observe.yml").read_text()
+        self.assertIn('.github/triggers/scheduler-now.txt',workflow)
+        self.assertGreater(workflow.index("concurrency:"),workflow.index("schedule:"))
+        self.assertIn('.github/triggers/scheduler-now.txt',runtime)
+        self.assertIn('.github/workflows/portfolio-autonomous-scheduler.yml',runtime)
+
     def test_quality_gated_hunter_proposal_enters_read_only_research_queue(self):
         ctx=build_context(hunter_proposal_state=proposal_state())
         candidates,_=generate_candidates(ctx)
