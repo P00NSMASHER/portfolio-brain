@@ -52,17 +52,20 @@ def required_tier(r):
     if r["task_kind"] in p["tier2_task_kinds"]:return 2
     raise ModelRouterError("unable to classify tier")
 
-def _feedback_task_summary(task_kind):
+def _feedback_task_summary(task_kind,feedback_state=None):
     cfg=policy().get("verified_feedback_routing") or {}
     if cfg.get("enabled") is not True:
         return {}
-    path=ROOT/cfg.get("state_path","model_router/live/model_feedback_state.json")
-    if not path.exists():
-        return {}
-    try:
-        state=json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+    if feedback_state is not None:
+        state=feedback_state
+    else:
+        path=ROOT/cfg.get("state_path","model_router/live/model_feedback_state.json")
+        if not path.exists():
+            return {}
+        try:
+            state=json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
     if not isinstance(state,dict) or state.get("state_id")!="portfolio-model-feedback-state":
         return {}
     summaries=state.get("routing_task_summaries")
@@ -92,10 +95,10 @@ def _cost(model,r):
         return float(pricing["fixed_call_usd"])+(r["max_input_tokens"]*float(pricing["input_usd_per_million_tokens"])+r["max_output_tokens"]*float(pricing["output_usd_per_million_tokens"]))/1_000_000
     raise ModelRouterError("provider lacks configured pre-call pricing")
 
-def _candidates(r,registry,tier):
+def _candidates(r,registry,tier,feedback_state=None):
     out=[]
     allowed=set(r["provider_allowlist"])
-    task_summary=_feedback_task_summary(r["task_kind"])
+    task_summary=_feedback_task_summary(r["task_kind"],feedback_state)
     feedback_cfg=policy().get("verified_feedback_routing") or {}
     minimum=int(feedback_cfg.get("minimum_verified_outcomes",1))
     for provider in registry["providers"]:
@@ -117,7 +120,7 @@ def _candidates(r,registry,tier):
         return sorted(out,key=lambda x:(-x[6],-x[5],x[0],x[1],x[2]))
     return sorted(out,key=lambda x:(x[0],x[1],x[2]))
 
-def route_request(r,registry=None):
+def route_request(r,registry=None,feedback_state=None):
     validate_request(r);registry=registry or provider_registry();tier=required_tier(r)
     if tier==0:
         provider=next(p for p in registry["providers"] if p["provider_id"]=="deterministic" and p["enabled"])
@@ -126,7 +129,7 @@ def route_request(r,registry=None):
         status="ROUTED"
         reasons=["DETERMINISTIC_SUFFICIENT","TIER0_PREFERRED"]
     else:
-        candidates=_candidates(r,registry,tier)
+        candidates=_candidates(r,registry,tier,feedback_state)
         if not candidates:
             status="BLOCKED_NO_ELIGIBLE_PROVIDER";selected=None
             reasons=["NO_ENABLED_COMPATIBLE_PROVIDER_WITHIN_COST_AND_DATA_BOUNDARIES"]
