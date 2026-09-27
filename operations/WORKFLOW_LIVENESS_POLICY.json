@@ -9,14 +9,16 @@
   "recent_failure_retry_after_minutes": 35,
   "authority_class": "NONE",
   "dispatch_authority_effect": "NONE",
-  "hard_stop_behavior": "NO_RECOVERY_DISPATCH",
+  "hard_stop_behavior": "ALLOW_NONPAID_RECOVERY",
   "targets": [
     {
       "workflow_name": "portfolio-autonomous-scheduler",
       "workflow_file": "portfolio-autonomous-scheduler.yml",
       "cost_workflow_id": "portfolio-autonomous-scheduler",
       "cost_job_id": "schedule",
-      "project_ids": ["PRJ-000"],
+      "project_ids": [
+        "PRJ-000"
+      ],
       "estimated_minutes": 5,
       "authority_class": "OBSERVE",
       "max_start_age_minutes": 100,
@@ -27,7 +29,9 @@
       "workflow_file": "runtime-hourly-sync.yml",
       "cost_workflow_id": "runtime-worker",
       "cost_job_id": "runtime-sync",
-      "project_ids": ["PRJ-000"],
+      "project_ids": [
+        "PRJ-000"
+      ],
       "estimated_minutes": 5,
       "authority_class": "OBSERVE",
       "max_start_age_minutes": 100,
@@ -38,7 +42,9 @@
       "workflow_file": "agent-heartbeat-sweep.yml",
       "cost_workflow_id": "agent-heartbeat-sweep",
       "cost_job_id": "heartbeat",
-      "project_ids": ["PRJ-000"],
+      "project_ids": [
+        "PRJ-000"
+      ],
       "estimated_minutes": 2,
       "authority_class": "OBSERVE",
       "max_start_age_minutes": 160,
@@ -49,7 +55,9 @@
       "workflow_file": "hunter-autonomous-cycle.yml",
       "cost_workflow_id": "hunter-autonomous-cycle",
       "cost_job_id": "hunt",
-      "project_ids": ["PRJ-000"],
+      "project_ids": [
+        "PRJ-000"
+      ],
       "estimated_minutes": 5,
       "authority_class": "OBSERVE",
       "max_start_age_minutes": 420,
@@ -60,7 +68,9 @@
       "workflow_file": "portfolio-notification-cycle.yml",
       "cost_workflow_id": "portfolio-notification-cycle",
       "cost_job_id": "notify",
-      "project_ids": ["PRJ-000"],
+      "project_ids": [
+        "PRJ-000"
+      ],
       "estimated_minutes": 2,
       "authority_class": "OBSERVE",
       "max_start_age_minutes": 420,
@@ -68,13 +78,13 @@
     }
   ],
   "invariants": [
-    "Recovery never bypasses a downstream workflow's own cost preflight, authority gates, kill switches, or concurrency controls.",
+    "Recovery never bypasses a target workflow's authority gates, subsystem kill switches, bounded timeout, duplicate suppression, or concurrency controls.",
     "A queued or in-progress target is never duplicated.",
-    "Only a trusted event for the exact governed workflow file on the default branch can prove target liveness.",
+    "Only a trusted event for the exact workflow file on the default branch can prove target liveness.",
     "A recent completed run suppresses recovery even when scheduled delivery is delayed.",
     "A failed/cancelled target may be retried only after the configured failure retry age.",
-    "Recovery previews the target's exact workflow/job budget and never dispatches a request that is already cost-blocked.",
+    "Recovery previews the target's configured workload control and never dispatches an unconfigured or over-time request.",
     "At most two workflow_dispatch calls may be emitted per watchdog cycle.",
-    "A cost hard stop or spend kill switch disables all recovery dispatch."
+    "A paid-spend hard stop or spend kill switch is reported but does not suppress recovery of these non-paid core workflows."
   ]
 }
