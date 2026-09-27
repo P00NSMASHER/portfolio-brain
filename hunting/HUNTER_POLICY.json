@@ -75,5 +75,13 @@
       },
       "value_credit_source": "VERIFIED_OUTCOMES_ONLY"
     }
+  },
+  "query_generation": {
+    "taxonomy_file": "hunting/QUERY_CONCEPTS.json",
+    "repository_search_mode": "METADATA_FIRST_THEN_EXACT_REVISION_STRUCTURAL_INSPECTION",
+    "portfolio_brand_names_default": false,
+    "rotate_queries_by_state_sequence": true,
+    "prefer_lowest_negative_hits": true,
+    "structural_ranking_uses_semantic_concepts": true
   }
 }
