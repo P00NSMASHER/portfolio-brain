@@ -3,7 +3,7 @@ from unittest.mock import patch
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from runtime.continuous_runtime import RequestBudget, RuntimePolicyError, run
-from runtime.state import RuntimeStateError, bootstrap_state, validate_state
+from runtime.state import RuntimeStateError, advance_cycle, bootstrap_state, canonical_hash, validate_state
 from runtime.validate_runtime import validate_runtime
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -35,6 +35,15 @@ def current_heads():
     return {by[rid]:item["cursor_sha"] for rid,item in curs.items() if rid!="REPO-006"}
 
 class RuntimeTests(unittest.TestCase):
+    def cycle_receipt(self,state,observation,*,finished_at="2026-09-25T18:00:00Z"):
+        receipt={
+            "schema_version":"1.0.0","cycle_id":"cycle-test","mode":"observe",
+            "started_at":finished_at,"finished_at":finished_at,"status":"PASS","reason":None,
+            "observations":[observation],"api_requests":1,
+        }
+        receipt["receipt_hash"]=canonical_hash(receipt)
+        return receipt
+
     def test_permanent_github_error_is_not_retried(self):
         calls=[]
         def missing(url):
@@ -108,6 +117,38 @@ class RuntimeTests(unittest.TestCase):
         state["repositories"]["REPO-001"]["cursor_sha"]="A"*40
         with self.assertRaisesRegex(RuntimeStateError,"lowercase"):
             validate_state(state)
+
+    def test_stale_observation_cannot_roll_durable_cursor_backward(self):
+        state=bootstrap_state(now="2026-09-25T17:00:00Z")
+        rid="REPO-001"; durable_sha=state["repositories"][rid]["cursor_sha"]
+        observation={
+            "repository_id":rid,"status":"CHANGED","source_ref":"main",
+            "prior_sha":"a"*40,"current_sha":"b"*40,
+            "observed_at":"2026-09-25T18:00:00Z",
+        }
+        with self.assertRaisesRegex(RuntimeStateError,"durable cursor"):
+            advance_cycle(state,self.cycle_receipt(state,observation))
+        self.assertEqual(state["repositories"][rid]["cursor_sha"],durable_sha)
+
+    def test_cycle_timestamp_cannot_roll_freshness_backward(self):
+        state=bootstrap_state(now="2026-09-25T19:00:00Z")
+        rid="REPO-001"; sha=state["repositories"][rid]["cursor_sha"]
+        observation={
+            "repository_id":rid,"status":"UNCHANGED","source_ref":"main",
+            "prior_sha":sha,"current_sha":sha,"observed_at":"2026-09-25T18:00:00Z",
+        }
+        with self.assertRaisesRegex(RuntimeStateError,"roll durable state backward"):
+            advance_cycle(state,self.cycle_receipt(state,observation,finished_at="2026-09-25T18:00:00Z"))
+
+    def test_observation_timestamp_must_match_cycle(self):
+        state=bootstrap_state(now="2026-09-25T17:00:00Z")
+        rid="REPO-001"; sha=state["repositories"][rid]["cursor_sha"]
+        observation={
+            "repository_id":rid,"status":"UNCHANGED","source_ref":"main",
+            "prior_sha":sha,"current_sha":sha,"observed_at":"2026-09-25T17:30:00Z",
+        }
+        with self.assertRaisesRegex(RuntimeStateError,"timestamp is not bound"):
+            advance_cycle(state,self.cycle_receipt(state,observation))
 
     def test_hourly_sync_skips_blocked_and_updates_changed_cursor(self):
         heads=current_heads()
