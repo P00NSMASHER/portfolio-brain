@@ -164,6 +164,23 @@ def build_repair_issues(snapshot: dict[str, Any]) -> list[dict[str, str]]:
     if snapshot["portfolio"]["blocked_action_count"]:
         add("REVIEW", "Work awaits a human gate", f"{snapshot['portfolio']['blocked_action_count']} blocked items.",
             "dashboard/executive_dashboard.py", "Summarize the exact approval or authority boundary for each item; do not bypass it.")
+    commercial=snapshot["commercial_validation"]
+    if commercial["evidence_status"]!="LIVE_VERIFIED":
+        add(
+            "REVIEW",
+            "Commercial outcome telemetry is historical-only",
+            (
+                f"FreightRecovery reply/payment counts come from a retired baseline "
+                f"({commercial['source_ref']}); live external evidence feed="
+                f"{commercial['live_external_evidence_feed']}."
+            ),
+            commercial["source_ref"],
+            (
+                "Do not interpret historical zero replies, checkout sessions, or payment intents as current state. "
+                "Design a sanitized, independently attributable evidence intake for current commercial outcomes; "
+                "until then keep current external outcome state UNKNOWN rather than zero."
+            ),
+        )
     return sorted(issues, key=lambda row: (0 if row["severity"] == "HIGH" else 1, row["title"]))
 
 
@@ -505,15 +522,30 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "controls_retained": optimization["controls_retained"],
         },
         "commercial_validation": {
-            "freightrecovery_first_contact_threads_sent": commercial["freightrecovery_first_contact_threads_sent"],
-            "freightrecovery_human_replies": commercial["freightrecovery_human_replies"],
-            "freightrecovery_related_auto_replies_observed": commercial[
+            "evidence_status": "HISTORICAL_BASELINE",
+            "source_kind": "RETIRED_STATIC_BASELINE",
+            "source_ref": "operations/VALIDATION_SPRINT_STATE.json",
+            "baseline_started_at": sprint["started_at"],
+            "baseline_superseded_at": sprint.get("superseded_at"),
+            "baseline_retired_at": sprint.get("retired_at"),
+            "live_external_evidence_feed": False,
+            "current_external_reply_state": "UNKNOWN",
+            "current_external_payment_state": "UNKNOWN",
+            "historical_freightrecovery_first_contact_threads_sent": commercial["freightrecovery_first_contact_threads_sent"],
+            "historical_freightrecovery_human_replies": commercial["freightrecovery_human_replies"],
+            "historical_freightrecovery_related_auto_replies_observed": commercial[
                 "freightrecovery_related_auto_replies_observed"
             ],
-            "freightrecovery_live_checkout_sessions": commercial["freightrecovery_live_checkout_sessions"],
-            "freightrecovery_live_payment_intents": commercial["freightrecovery_live_payment_intents"],
+            "historical_freightrecovery_checkout_sessions": commercial["freightrecovery_live_checkout_sessions"],
+            "historical_freightrecovery_payment_intents": commercial["freightrecovery_live_payment_intents"],
+            "checked_in_gateway_execution_receipts": len(action_executions),
+            "checked_in_gateway_sent_receipts": len(sent_actions),
             "followup_to_existing_contacts_allowed": commercial["followup_to_existing_contacts_allowed"],
             "outbound_state": commercial["outbound_state"],
+            "interpretation": (
+                "Historical counts are context only. Current human reply, checkout, payment, and verified external "
+                "outcome state remains UNKNOWN unless backed by a current sanitized evidence source."
+            ),
         },
         "portfolio": executive["portfolio"],
         "projects": executive["projects"],
@@ -2057,17 +2089,27 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       <div class="mobile-records">{agent_cards}</div>
     </div>
     <div class="card">
-      <div class="section-head"><div><h2>Commercial Validation</h2><p>Sanitized evidence counts only.</p></div>{_badge("NO PRIVATE PAYLOADS","neutral")}</div>
+      <div class="section-head"><div><h2>Commercial Evidence</h2><p>Historical baseline is separated from current verified state.</p></div>{_badge(commercial["evidence_status"],"warn")}</div>
       <table>
         <tbody>
-          <tr><td>FreightRecovery first-contact threads</td><td class="num">{commercial["freightrecovery_first_contact_threads_sent"]}</td></tr>
-          <tr><td>Genuine human replies</td><td class="num">{commercial["freightrecovery_human_replies"]}</td></tr>
-          <tr><td>Related auto replies</td><td class="num">{commercial["freightrecovery_related_auto_replies_observed"]}</td></tr>
-          <tr><td>Live checkout sessions</td><td class="num">{commercial["freightrecovery_live_checkout_sessions"]}</td></tr>
-          <tr><td>Live payment intents</td><td class="num">{commercial["freightrecovery_live_payment_intents"]}</td></tr>
+          <tr><td>Current human reply state</td><td class="num">{_e(commercial["current_external_reply_state"])}</td></tr>
+          <tr><td>Current payment/checkout state</td><td class="num">{_e(commercial["current_external_payment_state"])}</td></tr>
+          <tr><td>Live external evidence feed</td><td class="num">{_e(commercial["live_external_evidence_feed"])}</td></tr>
+          <tr><td>Checked-in gateway sent receipts</td><td class="num">{commercial["checked_in_gateway_sent_receipts"]}</td></tr>
         </tbody>
       </table>
-      <p><strong>Outbound:</strong> {_e(commercial["outbound_state"])}</p>
+      <div class="section-head" style="margin-top:16px"><div><h2>Retired FreightRecovery Baseline</h2><p>{_e(commercial["source_ref"])} · retired {_e(commercial["baseline_retired_at"] or "unknown")}</p></div>{_badge("HISTORICAL","neutral")}</div>
+      <table>
+        <tbody>
+          <tr><td>Historical first-contact threads</td><td class="num">{commercial["historical_freightrecovery_first_contact_threads_sent"]}</td></tr>
+          <tr><td>Historical human replies</td><td class="num">{commercial["historical_freightrecovery_human_replies"]}</td></tr>
+          <tr><td>Historical related auto replies</td><td class="num">{commercial["historical_freightrecovery_related_auto_replies_observed"]}</td></tr>
+          <tr><td>Historical checkout sessions</td><td class="num">{commercial["historical_freightrecovery_checkout_sessions"]}</td></tr>
+          <tr><td>Historical payment intents</td><td class="num">{commercial["historical_freightrecovery_payment_intents"]}</td></tr>
+        </tbody>
+      </table>
+      <p>{_e(commercial["interpretation"])}</p>
+      <p><strong>Outbound policy:</strong> {_e(commercial["outbound_state"])}</p>
     </div>
   </section>
 

@@ -202,6 +202,30 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertNotIn("<td>Daily GitHub job starts</td>",public)
         self.assertNotIn("Governed runner minutes committed",public)
 
+    def test_retired_commercial_baseline_never_masquerades_as_live_state(self):
+        snapshot=build_command_center_snapshot()
+        commercial=snapshot["commercial_validation"]
+        self.assertEqual(commercial["evidence_status"],"HISTORICAL_BASELINE")
+        self.assertEqual(commercial["source_kind"],"RETIRED_STATIC_BASELINE")
+        self.assertEqual(commercial["source_ref"],"operations/VALIDATION_SPRINT_STATE.json")
+        self.assertFalse(commercial["live_external_evidence_feed"])
+        self.assertEqual(commercial["current_external_reply_state"],"UNKNOWN")
+        self.assertEqual(commercial["current_external_payment_state"],"UNKNOWN")
+        self.assertIsNotNone(commercial["baseline_retired_at"])
+        self.assertEqual(commercial["historical_freightrecovery_first_contact_threads_sent"],18)
+        public=render_html(snapshot)
+        self.assertIn("Commercial Evidence",public)
+        self.assertIn("Retired FreightRecovery Baseline",public)
+        self.assertIn('Current human reply state</td><td class="num">UNKNOWN',public)
+        self.assertNotIn("Live checkout sessions</td>",public)
+        self.assertNotIn("Live payment intents</td>",public)
+        issue=next(
+            row for row in snapshot["repair_issues"]
+            if row["title"]=="Commercial outcome telemetry is historical-only"
+        )
+        self.assertEqual(issue["severity"],"REVIEW")
+        self.assertIn("UNKNOWN rather than zero",issue["prompt"])
+
     def test_command_center_exposes_hunter_proposal_inbox_without_rights_upgrade(self):
         snapshot=build_command_center_snapshot()
         self.assertIn("hunter_proposals",snapshot)
