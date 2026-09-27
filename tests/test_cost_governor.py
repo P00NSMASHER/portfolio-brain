@@ -42,6 +42,30 @@ def github_request(*, run_id="100", attempt=1, minutes=5, workflow="portfolio-au
 
 
 class CostGovernorTests(unittest.TestCase):
+    def test_every_governed_workflow_finalizes_cost_after_upstream_failure(self):
+        governed_workflows = [
+            "agent-heartbeat-sweep.yml",
+            "command-center-pages.yml",
+            "continuous-learning-bootstrap.yml",
+            "hunter-autonomous-cycle.yml",
+            "model-value-proof.yml",
+            "portfolio-autonomous-scheduler.yml",
+            "portfolio-notification-cycle.yml",
+            "runtime-worker.yml",
+            "software-factory-candidate.yml",
+            "verified-feedback-bootstrap.yml",
+        ]
+        for filename in governed_workflows:
+            with self.subTest(workflow=filename):
+                workflow = (ROOT / ".github/workflows" / filename).read_text()
+                finalize = workflow.index("python -m cost_governor.workflow_gate finalize")
+                preceding_step = workflow.rfind("      - name:", 0, finalize)
+                block = workflow[preceding_step:finalize]
+                self.assertIn(
+                    "if: ${{ always() && steps.cost.outputs.allowed == 'true' }}",
+                    block,
+                )
+
     def test_watchdog_polling_is_hourly_not_quarter_hourly(self):
         workflow = (ROOT / ".github/workflows/portfolio-cost-watchdog.yml").read_text()
         self.assertIn('cron: "53 * * * *"',workflow)
