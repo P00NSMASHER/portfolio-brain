@@ -3,15 +3,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from cost_governor.cost_governor import (
+    CostGovernorError,
     commit_reservation,
     load_state,
     make_github_job_request,
     now_iso,
     preflight,
+    zero_usage,
 )
 
 def _write_json(path: Path, value) -> None:
@@ -49,6 +53,34 @@ def governed_github_attempt(state, *, run_id: str, job_id: str, observed_attempt
     if observed_attempt <= highest:
         return observed_attempt
     return highest + 1
+
+
+def measured_github_usage(reservation: dict, *, at: str) -> dict:
+    """Return bounded elapsed usage for a governed GitHub job.
+
+    The reservation remains the fail-closed maximum while work is in flight or
+    its outcome is unknown. A successful finalize must commit the elapsed
+    governed execution, rounded up to whole runner minutes, instead of charging
+    every job its full reservation estimate.
+    """
+    if reservation.get("resource_kind") != "GITHUB_JOB" or reservation.get("status") != "RESERVED":
+        raise CostGovernorError("measured GitHub usage requires a reserved GitHub job")
+    try:
+        started = datetime.fromisoformat(str(reservation["created_at"]).replace("Z", "+00:00"))
+        finished = datetime.fromisoformat(str(at).replace("Z", "+00:00"))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise CostGovernorError("GitHub usage timestamps must be valid ISO-8601") from exc
+    if started.tzinfo is None or finished.tzinfo is None:
+        raise CostGovernorError("GitHub usage timestamps require timezone")
+    elapsed_seconds = (finished.astimezone(timezone.utc) - started.astimezone(timezone.utc)).total_seconds()
+    if elapsed_seconds < 0:
+        raise CostGovernorError("GitHub usage cannot finish before reservation")
+    actual = zero_usage()
+    actual.update({
+        "github_job_starts": 1,
+        "github_runner_minutes": max(1, math.ceil(elapsed_seconds / 60)),
+    })
+    return actual
 
 
 def preflight_command(args) -> int:
@@ -94,16 +126,19 @@ def preflight_command(args) -> int:
     return 0
 
 def finalize_command(args) -> int:
+    at = os.environ.get("PORTFOLIO_COST_NOW") or now_iso()
     state = load_state(args.state)
     decision = json.loads(Path(args.decision).read_text())
     reservation_id = decision.get("reservation_id")
     if reservation_id and decision.get("status") == "RESERVED":
         row = next((r for r in state["reservations"] if r["reservation_id"] == reservation_id), None)
         if row is not None and row["status"] == "RESERVED":
+            actual_usage = measured_github_usage(row, at=at)
             state, commit = commit_reservation(
                 state,
                 reservation_id,
-                row["estimated_usage"],
+                actual_usage,
+                at=at,
                 evidence_ref=f"github-run:{os.environ.get('GITHUB_RUN_ID','local-run')}:finalized",
             )
             print(json.dumps({"status": commit["status"], "reservation_id": reservation_id}, sort_keys=True))
