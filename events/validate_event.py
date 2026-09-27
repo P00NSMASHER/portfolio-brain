@@ -115,7 +115,7 @@ def validate_evidence(record: dict[str, Any]) -> None:
     _require(isinstance(source["source_ref"], str) and source["source_ref"], "source_ref required")
     revision = source["source_revision"]
     _require(revision is None or REVISION.fullmatch(revision) is not None, "invalid source_revision")
-    _parse_time(source["retrieved_at"], "source.retrieved_at")
+    retrieved_at = _parse_time(source["retrieved_at"], "source.retrieved_at")
     _require(isinstance(source["content_hash"], str) and SHA256.fullmatch(source["content_hash"]) is not None, "source.content_hash is required and must be sha256")
 
     actor = record["actor"]
@@ -123,6 +123,7 @@ def validate_evidence(record: dict[str, Any]) -> None:
     _require(actor["actor_type"] in ACTOR_TYPES, "invalid actor_type")
     _require(isinstance(actor["actor_id"], str) and actor["actor_id"], "actor_id required")
     observed_at = _parse_time(record["observed_at"], "observed_at")
+    _require(retrieved_at <= observed_at, "source.retrieved_at cannot follow observed_at")
 
     verification = record["verification"]
     _require(isinstance(verification, dict) and set(verification) == {
@@ -239,6 +240,16 @@ def validate_event(record: dict[str, Any], evidence_by_id: dict[str, dict[str, A
             _require(evidence_id in evidence_by_id, f"missing linked evidence: {evidence_id}")
             evidence = evidence_by_id[evidence_id]
             validate_evidence(evidence)
+            _require(
+                _parse_time(evidence["observed_at"], "evidence.observed_at") <= recorded,
+                f"event cannot rely on evidence observed after it was recorded: {evidence_id}",
+            )
+            evidence_verified_at = evidence["verification"]["verified_at"]
+            if evidence_verified_at is not None:
+                _require(
+                    _parse_time(evidence_verified_at, "evidence.verification.verified_at") <= recorded,
+                    f"event cannot rely on evidence verified after it was recorded: {evidence_id}",
+                )
             _require(evidence["project_id"] == record["project_id"], f"cross-project evidence link not allowed without explicit future bridge: {evidence_id}")
             evidence_targets = {
                 *evidence["subject_refs"],
@@ -264,6 +275,19 @@ def validate_event(record: dict[str, Any], evidence_by_id: dict[str, dict[str, A
             _require(
                 not any(event_targets & set(e["contradicts_refs"]) for e in linked),
                 "VERIFIED event cannot ignore linked contradictory evidence",
+            )
+            known_contradictions = [
+                evidence["evidence_id"]
+                for evidence in evidence_by_id.values()
+                if evidence["project_id"] == record["project_id"]
+                and evidence["evidence_state"] in {"OBSERVED", "VERIFIED"}
+                and bool(event_targets & set(evidence["contradicts_refs"]))
+                and _parse_time(evidence["observed_at"], "contradiction.observed_at") <= recorded
+            ]
+            _require(
+                not known_contradictions,
+                "VERIFIED event cannot omit known contradictory evidence: "
+                + ", ".join(sorted(known_contradictions)),
             )
         elif status == "INFERRED":
             _require(bool(states & {"VERIFIED","OBSERVED","INFERRED"}), "INFERRED event requires non-unknown basis")
