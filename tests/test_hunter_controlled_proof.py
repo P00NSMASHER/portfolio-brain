@@ -10,7 +10,7 @@ class FakeControlledProvider:
         self.meta={
           "pwenker/quizli":{"id":448679097,"full_name":"pwenker/quizli","default_branch":"main","private":False},
           "OpenLineage/OpenLineage":{"id":306977038,"full_name":"OpenLineage/OpenLineage","default_branch":"main","private":False},
-          "pytest-dev/pytest":{"id":37489525,"full_name":"pytest-dev/pytest","default_branch":"main","private":False},
+          "HypothesisWorks/hypothesis":{"id":8685799,"full_name":"HypothesisWorks/hypothesis","default_branch":"master","private":False},
         }
     def repository_metadata(self,full_name):
         self.requests+=1
@@ -25,7 +25,7 @@ class FakeControlledProvider:
             paths=["client/go/pkg/facets/lineage.go","client/go/pkg/facets/lineage_test.go","docs/lineage.md"]
             rev="b"*40
         else:
-            paths=["src/_pytest/main.py","testing/test_main.py","doc/en/index.rst"]
+            paths=["hypothesis/src/hypothesis/core.py","hypothesis/tests/test_core.py","guides/testing-hypothesis.rst"]
             rev="c"*40
         return {"revision":rev,"tree_sha":"d"*40,"paths":paths,"truncated":False}
 
