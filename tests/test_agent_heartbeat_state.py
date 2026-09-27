@@ -61,7 +61,7 @@ class AgentHeartbeatStateTests(unittest.TestCase):
 
     def test_operational_workflows_persist_heartbeat_artifacts(self):
         required={
-            ".github/workflows/portfolio-autonomous-scheduler.yml":"--selected-work scheduler/out/scheduled_work.json",
+            ".github/workflows/portfolio-autonomous-scheduler.yml":"--selected-work scheduler/out/executed_work.json",
             ".github/workflows/hunter-autonomous-cycle.yml":"--agent-id AGT-HUNTER",
             ".github/workflows/runtime-worker.yml":"--agent-id AGT-DATA-STEWARD",
             ".github/workflows/software-factory-candidate.yml":"--agent-id AGT-ENGINEER",
@@ -73,6 +73,8 @@ class AgentHeartbeatStateTests(unittest.TestCase):
             self.assertIn(marker,body,path)
             self.assertIn("name: portfolio-agent-heartbeat-state",body,path)
             self.assertIn("path: agents/out/agent_heartbeat_state.json",body,path)
+        scheduler=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text()
+        self.assertNotIn("--selected-work scheduler/out/scheduled_work.json",scheduler)
 
 
 if __name__=="__main__":
