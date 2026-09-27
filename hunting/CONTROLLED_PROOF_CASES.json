@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0.0",
+  "proof_id": "portfolio-hunter-controlled-proof-v1",
+  "authority_class": "OBSERVE",
+  "purpose": "Prove the live Hunter structural inspection and retention path against exact public repository revisions without downstream mutation or reuse-rights assumptions.",
+  "completion_gate": {
+    "min_retained_candidates": 3,
+    "min_distinct_strategies": 2,
+    "require_exact_revision": true,
+    "require_public_source": true,
+    "require_downstream_experiment_acceptance": true
+  },
+  "cases": [
+    {
+      "case_id": "HCP-QUIZLI",
+      "repository_full_name": "pwenker/quizli",
+      "expected_repository_id": 448679097,
+      "strategy_id": "STRAT:capability-conjunction-search-claim-tracing",
+      "project_ids": [
+        "PRJ-005"
+      ],
+      "gap_id": "HGAP-CONTROLLED-STARBLOX-QUIZ",
+      "capability_key": "capability-coverage:quiz",
+      "expected_min_rank": "MEDIUM"
+    },
+    {
+      "case_id": "HCP-OPENLINEAGE",
+      "repository_full_name": "OpenLineage/OpenLineage",
+      "expected_repository_id": 306977038,
+      "strategy_id": "STRAT:first-party-production-source-triangulation",
+      "project_ids": [
+        "PRJ-011"
+      ],
+      "gap_id": "HGAP-CONTROLLED-LINEAGE",
+      "capability_key": "capability-coverage:lineage",
+      "expected_min_rank": "MEDIUM"
+    },
+    {
+      "case_id": "HCP-PYTEST",
+      "repository_full_name": "pytest-dev/pytest",
+      "expected_repository_id": 37489525,
+      "strategy_id": "STRAT:fail-open-boundary-archaeology",
+      "project_ids": [
+        "PRJ-009"
+      ],
+      "gap_id": "HGAP-CONTROLLED-TESTING",
+      "capability_key": "capability-coverage:pytest",
+      "expected_min_rank": "MEDIUM"
+    }
+  ]
+}
