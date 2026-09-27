@@ -118,30 +118,34 @@ def generate_candidates(context):
         candidates.append(_source_candidate(unc_by,rec,"RESEARCH","AGT-RESEARCHER","RESEARCH_EVIDENCE","OBSERVE","MEDIUM","Step 15 allocated RESEARCH capacity to read-only evidence acquisition."))
     # Quality-gated Hunter proposals become read-only RESEARCH review work.
     proposal_state=context["hunter_proposal_state"]
-    findings_by_proposal={row["proposal_id"]:row for row in proposal_state["findings"]}
-    for proposal in proposal_state["proposals"]:
-        finding=findings_by_proposal[proposal["proposal_id"]]
-        consequence="HIGH" if proposal["candidate_rank_band"]=="HIGH" else "MEDIUM"
-        candidates.append(_candidate(
-            "RESEARCH",
-            proposal["proposal_id"],
-            proposal["project_ids"],
-            "AGT-RESEARCHER",
-            "RESEARCH_EVIDENCE",
-            "OBSERVE",
-            consequence,
-            rank=proposal["candidate_rank_order"],
-            reason="Quality-gated Hunter proposal is ready for exact-revision public metadata and rights-evidence review; no reuse or implementation authority is granted.",
-            evidence_refs=[
-                f"hunter-proposal:{proposal['proposal_id']}",
-                f"hunter-finding:{proposal['finding_id']}",
-                f"hunter-cycle:{proposal_state['cycle_id']}",
-                f"hunter-proposal-state-sequence:{proposal_state['sequence']}",
-                f"github:{finding['repository_full_name']}@{finding['revision']}",
-                f"candidate-rank:{proposal['candidate_rank_band']}:{proposal['candidate_rank_score']}",
-                "rights-state:NOT_GRANTED_BY_DISCOVERY",
-            ],
-        ))
+    handoff=p["hunter_proposal_handoff"]
+    req(proposal_state["state_id"]==handoff["source_state_id"],"Hunter proposal handoff source identity mismatch")
+    req(proposal_state["rights_state"]==handoff["rights_state"],"Hunter proposal handoff rights boundary mismatch")
+    if handoff["enabled"]:
+        findings_by_proposal={row["proposal_id"]:row for row in proposal_state["findings"]}
+        for proposal in proposal_state["proposals"]:
+            finding=findings_by_proposal[proposal["proposal_id"]]
+            consequence="HIGH" if proposal["candidate_rank_band"]=="HIGH" else "MEDIUM"
+            candidates.append(_candidate(
+                handoff["work_type"],
+                proposal["proposal_id"],
+                proposal["project_ids"],
+                handoff["agent_id"],
+                handoff["goal_type"],
+                handoff["authority_class"],
+                consequence,
+                rank=proposal["candidate_rank_order"],
+                reason="Quality-gated Hunter proposal is ready for exact-revision public metadata and rights-evidence review; no reuse or implementation authority is granted.",
+                evidence_refs=[
+                    f"hunter-proposal:{proposal['proposal_id']}",
+                    f"hunter-finding:{proposal['finding_id']}",
+                    f"hunter-cycle:{proposal_state['cycle_id']}",
+                    f"hunter-proposal-state-sequence:{proposal_state['sequence']}",
+                    f"github:{finding['repository_full_name']}@{finding['revision']}",
+                    f"candidate-rank:{proposal['candidate_rank_band']}:{proposal['candidate_rank_score']}",
+                    f"rights-state:{handoff['rights_state']}",
+                ],
+            ))
     # HUNT: capability-evidence gaps with explicit Hunter allocation.
     for rec in plans["HUNTER_RUNS"]["recommendations"]:
         candidates.append(_source_candidate(unc_by,rec,"HUNT","AGT-HUNTER","PUBLIC_HUNT","OBSERVE","MEDIUM","Step 15 allocated Hunter capacity to this capability-evidence gap."))
