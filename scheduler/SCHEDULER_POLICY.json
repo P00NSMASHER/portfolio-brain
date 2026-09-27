@@ -79,7 +79,8 @@
     "suppress work already queued/active/completed for the same immutable source fingerprint",
     "preserve live or stale external leases; scheduler never creates overlapping replacement work",
     "sort by explicit gate precedence",
-    "within a gate sort by source Pareto layer, source rank, allocation share, source identity",
+    "within a gate continue already-started evidence chains before unrelated new work",
+    "within the same continuation class sort by source Pareto layer, source rank, allocation share, source identity",
     "enqueue up to the configured per-agent open-work ceiling and at most eight new items per cycle"
   ],
   "invariants": [
@@ -97,7 +98,9 @@
     "The scheduler cannot send customer communications, move money, trade, merge PRs, deploy or grant authority.",
     "Quality-gated Hunter proposals may enter only OBSERVE-class Researcher review; exact revision is re-inspected and license metadata never grants reuse or implementation authority.",
     "Hunter proposal backlog work must preserve each proposal's original Hunter cycle/receipt provenance; the latest inbox cycle may not be substituted for an older proposal's origin.",
-    "Within Hunter proposal research work, higher structural rank is preferred and equal-rank backlog items are ordered by first-seen Hunter sequence to prevent starvation."
+    "Within Hunter proposal research work, higher structural rank is preferred and equal-rank backlog items are ordered by first-seen Hunter sequence to prevent starvation.",
+    "Continuation priority is an explicit scheduler class, not an opaque scalar score, and cannot change work authority or bypass per-agent/open-queue ceilings.",
+    "Quality-gated Hunter proposal review is CONTINUATION work within the RESEARCH gate so already-discovered evidence chains are reviewed before unrelated new Researcher work."
   ],
   "hunter_proposal_handoff": {
     "enabled": true,
@@ -110,6 +113,8 @@
     "exact_revision_reinspection_required": true,
     "license_metadata_is_not_reuse_authority": true,
     "origin_cycle_required": true,
-    "backlog_priority_mode": "RANK_SCORE_DESC_THEN_FIRST_SEEN_FIFO"
+    "backlog_priority_mode": "RANK_SCORE_DESC_THEN_FIRST_SEEN_FIFO",
+    "continuation_class": "CONTINUATION",
+    "continuation_priority_policy": "CONTINUATION_BEFORE_NEW_WORK_WITHIN_SAME_GATE"
   }
 }
