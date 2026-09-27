@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 import sys
 import unittest
@@ -13,6 +14,19 @@ from truth.truth_adapter import (
 
 H="a"*64
 
+def resign_receipt(value):
+    payload={
+        "claim_id":value["claim_id"],
+        "claim_hash":value["claim_hash"],
+        "verdict":value["verdict"],
+        "evaluated_at":value["evaluated_at"],
+        "findings":value["findings"],
+        "evidence_set_hash":value["evidence_set_hash"],
+    }
+    raw=json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+    value["receipt_hash"]=hashlib.sha256(raw).hexdigest()
+    return value
+
 def finding(status, *, required=True):
     return {
         "key":"k",
@@ -26,15 +40,15 @@ def finding(status, *, required=True):
     }
 
 def receipt(verdict,status):
-    return {
+    return resign_receipt({
         "claim_id":"claim-1",
         "claim_hash":H,
         "verdict":verdict,
         "evaluated_at":200.0,
         "findings":[finding(status)],
         "evidence_set_hash":"b"*64,
-        "receipt_hash":"c"*64,
-    }
+        "receipt_hash":"",
+    })
 
 class TruthIntegrationTests(unittest.TestCase):
     def test_pin_is_exact_and_source_is_not_copied(self):
@@ -79,8 +93,17 @@ class TruthIntegrationTests(unittest.TestCase):
     def test_repeated_support_does_not_change_verdict_without_upstream_proof(self):
         r=receipt("NOT_PROVEN","INSUFFICIENT_INDEPENDENCE")
         r["findings"][0]["supporting_evidence_ids"]=["a","b","c","d","e"]
+        resign_receipt(r)
         validate_upstream_receipt(r)
         self.assertEqual(project_truth_state(r),"UNKNOWN")
+
+    def test_tampered_receipt_body_fails_closed_even_when_shape_is_valid(self):
+        r=receipt("PROVEN","SATISFIED")
+        original_hash=r["receipt_hash"]
+        r["findings"][0]["reason"]="tampered after upstream evaluation"
+        self.assertEqual(r["receipt_hash"],original_hash)
+        with self.assertRaisesRegex(TruthIntegrationError,"does not bind"):
+            project_truth_state(r)
 
     def test_model_confidence_field_cannot_upgrade_receipt(self):
         r=receipt("NOT_PROVEN","INSUFFICIENT_SUPPORT")
@@ -110,7 +133,9 @@ class TruthIntegrationTests(unittest.TestCase):
     def test_optional_stale_finding_does_not_override_required_satisfied(self):
         r=receipt("PROVEN","SATISFIED")
         r["findings"].append(finding("STALE",required=False))
+        resign_receipt(r)
         self.assertEqual(project_truth_state(r),"VERIFIED")
 
 if __name__=="__main__":
     unittest.main()
+
