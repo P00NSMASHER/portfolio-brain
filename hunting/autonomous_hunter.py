@@ -671,7 +671,14 @@ def main():
     from hunting.proposal_state import backlog_summary, build_proposal_state
     prior_proposal_path=Path("hunting/live/hunter_proposal_state.json")
     prior_proposal_state=json.loads(prior_proposal_path.read_text()) if prior_proposal_path.exists() else None
-    proposal_state=build_proposal_state(state,receipt,prior_state=prior_proposal_state)
+    proposal_review_path=Path("hunting/live/hunter_proposal_review_state.json")
+    proposal_review_state=json.loads(proposal_review_path.read_text()) if proposal_review_path.exists() else None
+    proposal_state=build_proposal_state(
+        state,
+        receipt,
+        prior_state=prior_proposal_state,
+        review_state=proposal_review_state,
+    )
     proposal_summary=backlog_summary(proposal_state)
     (out/"hunter_proposal_state.json").write_text(json.dumps(proposal_state,indent=2,sort_keys=True)+"\n")
     (out/"hunter_proposal_backlog_summary.json").write_text(json.dumps(proposal_summary,indent=2,sort_keys=True)+"\n")
