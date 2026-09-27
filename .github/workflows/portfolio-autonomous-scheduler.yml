@@ -14,7 +14,7 @@ permissions:
 jobs:
   schedule:
     concurrency:
-      group: portfolio-cost-governed-autonomy
+      group: portfolio-discovery-scheduling
       cancel-in-progress: false
     if: ${{ vars.PORTFOLIO_SCHEDULER_DISABLED != 'true' }}
     runs-on: ubuntu-latest
@@ -31,7 +31,7 @@ jobs:
           python-version: "3.12"
       - name: Restore latest cost-governor state
         run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
-      - name: Reserve bounded scheduler compute
+      - name: Check scheduler workload controls
         id: cost
         run: >-
           python -m cost_governor.workflow_gate preflight
@@ -190,4 +190,4 @@ jobs:
       - name: Report governed no-work outcome
         if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
         run: |
-          echo "::notice title=Portfolio scheduler skipped::Cost governor status: ${{ steps.cost.outputs.decision_status }}"
+          echo "::notice title=Portfolio scheduler skipped::Workload control status: ${{ steps.cost.outputs.decision_status }}"
