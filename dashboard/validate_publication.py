@@ -54,6 +54,12 @@ def validate_publication() -> dict[str, object]:
     if publication["source_commit"] is not None:
         require(len(publication["source_commit"]) == 40, "public source commit is not a full SHA")
     require(snapshot["history"]["history_id"] == "portfolio-command-center-public-history-v1", "public history missing")
+    commercial=snapshot["commercial_validation"]
+    require(commercial["evidence_status"]=="HISTORICAL_BASELINE","public commercial baseline presented as live")
+    require(commercial["live_external_evidence_feed"] is False,"public snapshot invented live commercial evidence feed")
+    require(commercial["current_external_reply_state"]=="UNKNOWN","public snapshot misstates current reply state")
+    require(commercial["current_external_payment_state"]=="UNKNOWN","public snapshot misstates current payment state")
+    require(commercial["source_ref"]=="operations/VALIDATION_SPRINT_STATE.json","public commercial provenance missing")
 
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
@@ -85,6 +91,8 @@ def validate_publication() -> dict[str, object]:
     require('if [[ "$GITHUB_EVENT_NAME" == "push" ]]' in workflow, "source-change publication override missing")
     require("Verify deployed source commit" in workflow and "source-commit.txt" in workflow, "end-to-end Pages deployment proof missing")
     require("Operational Telemetry" in html_text and "History & Trends" in html_text, "public telemetry/trends panels missing")
+    require("Commercial Evidence" in html_text and "Retired FreightRecovery Baseline" in html_text, "public commercial provenance UI missing")
+    require("Live checkout sessions</td>" not in html_text and "Live payment intents</td>" not in html_text, "retired commercial baseline labeled live")
     require("Hunter Proposal Inbox" in html_text, "public Hunter proposal inbox panel missing")
     require(snapshot["hunter_proposals"]["authority_class"]=="OBSERVE","public Hunter proposal inbox widened authority")
     require(snapshot["hunter_proposals"]["rights_state"]=="NOT_GRANTED_BY_DISCOVERY","public Hunter proposal inbox granted reuse rights")
