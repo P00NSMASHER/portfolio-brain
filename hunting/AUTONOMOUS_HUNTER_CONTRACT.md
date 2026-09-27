@@ -20,9 +20,9 @@ This query expansion does not widen Hunter authority, add model calls, execute d
 
 ## Candidate inspection availability
 
-A public search result that cannot be resolved to an exact revision/tree because the repository is empty, temporarily unavailable, or returns a bounded GitHub read error is classified as **inspection unavailable**, not as negative capability evidence.
+A public repository search hit is not allowed to crash the entire Hunter cycle merely because that individual repository cannot be resolved to an inspectable exact revision. Candidate-level public GitHub inspection reads that terminate with repository/revision availability responses (404, 409, 410, or 422) are quarantined as `CANDIDATE_INSPECTION_UNAVAILABLE`, not treated as negative capability evidence.
 
-Inspection-unavailable candidates still consume the per-query and per-cycle inspection budget, are counted explicitly in the funnel, do not create findings or proposals, and do not train dead-end query knowledge. Hunter continues to the next bounded candidate instead of aborting the cycle. Search metadata also filters empty repositories before exact-revision inspection.
+Inspection-unavailable candidates still consume the per-query and per-cycle inspection budget, are counted explicitly in the funnel, create no finding, proposal, or value credit, and do not train dead-end query knowledge. Hunter continues to the next bounded candidate. Provider-budget exhaustion, authentication/rate-limit failures, network/control-plane failures, malformed evidence, and other Hunter errors remain fail-closed at the cycle level. Search metadata also filters empty repositories before exact-revision inspection.
 
 ## Inspection fairness and proposal quality
 
