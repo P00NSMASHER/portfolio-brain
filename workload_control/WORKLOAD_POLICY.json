@@ -49,6 +49,12 @@
       "concurrency_group": "portfolio-learning-bootstrap",
       "scheduled_cadence": "event_driven",
       "coalesce_pending": true
+    },
+    "step24-autonomous-learning-canary::canary": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-step24-canary",
+      "scheduled_cadence": "ci_validation",
+      "coalesce_pending": true
     }
   },
   "invariants": [
