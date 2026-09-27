@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0.0",
+  "verifier_id": "MVVERIFY-STARBLOX-QUIZLI-V1",
+  "purpose": "Independently verify that the builder's candidate assessment is evidence-bound, contract-compliant, and useful for a bounded follow-up decision without granting rights, authority, or verified capability status.",
+  "authority_class": "OBSERVE",
+  "data_classification": "PUBLIC",
+  "builder_requirements": {
+    "task_id": "MVTASK-STARBLOX-QUIZLI-V1",
+    "required_tier": 2,
+    "required_provider_id": "openai",
+    "required_model_id": "gpt-5.6-terra",
+    "required_independence_group": "openai-terra",
+    "required_status": "MODEL_CALL_SUCCESS"
+  },
+  "deterministic_checks": [
+    "Builder execution receipt hash and provider receipt hash must validate.",
+    "Builder output must re-validate against the Step 5 strict JSON contract.",
+    "Evidence pack must remain bound to the exact public repository revision.",
+    "Builder evidence paths must be a subset of the bound evidence manifest.",
+    "Rights state must remain UNKNOWN_REQUIRES_REVIEW.",
+    "No authority or evidence upgrade may be claimed."
+  ],
+  "model_contract": {
+    "task_kind": "PROMOTION_VERIFICATION",
+    "expected_tier": 3,
+    "provider_allowlist": [
+      "openai"
+    ],
+    "max_cost_usd": 0.05,
+    "max_input_tokens": 6000,
+    "max_output_tokens": 800,
+    "reasoning_effort": "high",
+    "requires_independent_adversarial": true,
+    "builder_independence_group": "openai-terra"
+  },
+  "output_contract": {
+    "format": "STRICT_JSON_OBJECT",
+    "required_keys": [
+      "verdict",
+      "evidence_supported",
+      "contract_compliant",
+      "useful_for_bounded_followup",
+      "reason",
+      "risks",
+      "confidence"
+    ],
+    "verdict_values": [
+      "PASS",
+      "FAIL"
+    ],
+    "confidence_min": 0,
+    "confidence_max": 1,
+    "markdown_fences_forbidden": true
+  },
+  "pass_condition": "Deterministic checks pass and the independently routed Tier-3 verifier returns PASS with evidence_supported=true, contract_compliant=true, and useful_for_bounded_followup=true.",
+  "provenance_refs": [
+    "model-task:MVTASK-STARBLOX-QUIZLI-V1",
+    "hunter-controlled-proof:portfolio-hunter-controlled-proof-v1",
+    "github:pwenker/quizli@d6538b13c16c093935ac2d0f175ac041aa5be4ef"
+  ]
+}
