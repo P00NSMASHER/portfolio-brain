@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 import dashboard.operational_telemetry as telemetry
@@ -77,6 +78,61 @@ class OperationalTelemetryTests(unittest.TestCase):
         self.assertEqual(out["cycles"]["latest_overall"]["subsystem"],"runtime")
         self.assertEqual(out["hunter"]["totals"]["candidates"],7)
         self.assertGreaterEqual(out["failures"]["count"],1)
+
+    def test_health_check_cannot_hide_stalled_assigned_work(self):
+        scheduler,receipt=schedule_cycle(
+            load_scheduler_state(),build_context(),at="2026-09-26T10:00:00Z"
+        )
+        hunt=next(row for row in receipt["selected_work"] if row["work_type"]=="HUNT")
+        scheduler["work_items"]=[hunt]
+        agents=seed_state()
+        agents=heartbeat(
+            agents,
+            agent_ids=list(agents["agents"]),
+            activity_kind="HEALTH_CHECK",
+            source_workflow="agent-heartbeat-sweep",
+            source_run_id="probe-1",
+            at=AT,
+        )
+        view=telemetry._agents(
+            agents,scheduler,at=datetime.fromisoformat(AT.replace("Z","+00:00")).astimezone(timezone.utc)
+        )
+        hunter=next(row for row in view["agents"] if row["agent_id"]=="AGT-HUNTER")
+        auditor=next(row for row in view["agents"] if row["agent_id"]=="AGT-AUDITOR")
+        self.assertEqual(hunter["heartbeat_health"],"STALLED")
+        self.assertEqual(hunter["open_work_count"],1)
+        self.assertEqual(auditor["heartbeat_health"],"IDLE_HEALTHY")
+        self.assertEqual(view["stalled"],1)
+
+    def test_real_activity_survives_later_health_probe(self):
+        scheduler,receipt=schedule_cycle(
+            load_scheduler_state(),build_context(),at="2026-09-26T10:00:00Z"
+        )
+        hunt=next(row for row in receipt["selected_work"] if row["work_type"]=="HUNT")
+        scheduler["work_items"]=[hunt]
+        agents=heartbeat(
+            seed_state(),
+            agent_ids=["AGT-HUNTER"],
+            activity_kind="HUNTER_CYCLE",
+            source_workflow="hunter-autonomous-cycle",
+            source_run_id="real-1",
+            at="2026-09-26T11:30:00Z",
+        )
+        agents=heartbeat(
+            agents,
+            agent_ids=list(agents["agents"]),
+            activity_kind="HEALTH_CHECK",
+            source_workflow="agent-heartbeat-sweep",
+            source_run_id="probe-2",
+            at=AT,
+        )
+        view=telemetry._agents(
+            agents,scheduler,at=datetime.fromisoformat(AT.replace("Z","+00:00")).astimezone(timezone.utc)
+        )
+        hunter=next(row for row in view["agents"] if row["agent_id"]=="AGT-HUNTER")
+        self.assertEqual(hunter["heartbeat_health"],"LIVE")
+        self.assertEqual(hunter["last_activity_kind"],"HUNTER_CYCLE")
+        self.assertEqual(hunter["source_run_id"],"real-1")
 
 
 if __name__=="__main__":
