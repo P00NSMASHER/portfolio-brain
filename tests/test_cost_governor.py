@@ -71,6 +71,8 @@ class CostGovernorTests(unittest.TestCase):
         self.assertIn('cron: "53 * * * *"',workflow)
         self.assertNotIn('cron: "*/15 * * * *"',workflow)
         self.assertIn("actions: write",workflow)
+        self.assertIn("workflow_run:",workflow)
+        self.assertIn('workflows: ["agent-heartbeat-sweep"]',workflow)
 
     def test_runtime_subbudget_cannot_starve_hourly_and_daily_reasoning(self):
         p=policy()
