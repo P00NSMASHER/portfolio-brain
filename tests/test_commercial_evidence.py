@@ -25,8 +25,8 @@ class CommercialEvidenceTests(unittest.TestCase):
         validate_observation(observation)
         self.assertEqual(observation["source_kind"],"CHATGPT_GMAIL_CONNECTOR_SANITIZED_OBSERVATION")
         self.assertEqual(observation["evidence_state"],"OBSERVED")
-        self.assertEqual(observation["threads_observed"],3)
-        self.assertEqual(observation["outbound_messages_observed"],6)
+        self.assertEqual(observation["threads_observed"],18)
+        self.assertEqual(observation["outbound_messages_observed"],21)
         self.assertEqual(observation["inbound_messages_observed"],0)
         self.assertEqual(observation["threads_with_human_reply"],0)
         self.assertFalse(observation["private_payloads_persisted"])
@@ -35,7 +35,7 @@ class CommercialEvidenceTests(unittest.TestCase):
         self.assertFalse(observation["recipient_identifiers_persisted"])
 
     def test_fresh_scoped_zero_reply_is_observed_not_global_zero_or_definitive_outcome(self):
-        projection=project_current(load_current(),at="2026-09-27T21:00:00Z")
+        projection=project_current(load_current(),at="2026-09-27T21:40:00Z")
         self.assertEqual(projection["evidence_status"],"CURRENT_SCOPE_OBSERVED")
         self.assertEqual(projection["current_reply_state"],"OBSERVED_NO_HUMAN_REPLY_IN_SCOPE")
         self.assertEqual(projection["current_payment_state"],"UNKNOWN")
