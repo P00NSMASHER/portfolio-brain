@@ -8,8 +8,9 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
-from runtime.artifact_state import ArtifactRestoreError, BudgetedHTTP
+from runtime.artifact_state import ArtifactRestoreError, BudgetedHTTP, validate_runtime_artifact_bundle
 from runtime.artifact_restore import InvalidStateArtifact, restore_latest_valid_state
+from runtime.state import advance_cycle, bootstrap_state, canonical_hash, cycle_id_for
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -25,7 +26,63 @@ def artifact(member, body, *, duplicate=False):
     return out.getvalue()
 
 
+def runtime_bundle(*,tamper_state=False,tamper_receipt=False,disabled=False,omit_receipt=False):
+    initial=bootstrap_state(now="2026-09-25T17:00:00Z")
+    if disabled:
+        receipt={
+          "schema_version":"1.0.0","cycle_id":"disabled","mode":"sync",
+          "started_at":"2026-09-25T18:00:00Z","finished_at":"2026-09-25T18:00:00Z",
+          "status":"DISABLED","reason":"test kill switch","observations":[],"api_requests":0,
+        }
+        receipt["receipt_hash"]=canonical_hash(receipt)
+        state=initial
+    else:
+        rid="REPO-001";sha=initial["repositories"][rid]["cursor_sha"]
+        observations=[{
+          "repository_id":rid,"status":"UNCHANGED","source_ref":"main",
+          "prior_sha":sha,"current_sha":sha,"observed_at":"2026-09-25T18:00:00Z",
+        }]
+        receipt={
+          "schema_version":"1.0.0",
+          "cycle_id":cycle_id_for(initial,mode="observe",target_repository_id=rid,observations=observations),
+          "mode":"observe","started_at":"2026-09-25T18:00:00Z","finished_at":"2026-09-25T18:00:00Z",
+          "status":"PASS","reason":None,"observations":observations,"api_requests":1,
+        }
+        receipt["receipt_hash"]=canonical_hash(receipt)
+        state=advance_cycle(initial,receipt)
+    if tamper_state and state["recent_cycles"]:
+        state=json.loads(json.dumps(state))
+        state["recent_cycles"][-1]["receipt_hash"]="sha256:"+"9"*64
+    if tamper_receipt:
+        receipt=json.loads(json.dumps(receipt))
+        receipt["api_requests"]+=1
+    out=io.BytesIO()
+    with zipfile.ZipFile(out,"w") as archive:
+        archive.writestr("runtime_state.json",json.dumps(state).encode())
+        if not omit_receipt:
+            archive.writestr("cycle_receipt.json",json.dumps(receipt).encode())
+    return out.getvalue()
+
+
 class ArtifactStateIntegrityTests(unittest.TestCase):
+    def test_runtime_artifact_bundle_binds_state_to_validated_cycle_receipt(self):
+        validate_runtime_artifact_bundle(runtime_bundle(),max_archive_bytes=100000,max_member_bytes=50000)
+
+    def test_runtime_artifact_bundle_rejects_tampered_receipt(self):
+        with self.assertRaisesRegex(InvalidStateArtifact|Exception,"hash"):
+            validate_runtime_artifact_bundle(runtime_bundle(tamper_receipt=True),max_archive_bytes=100000,max_member_bytes=50000)
+
+    def test_runtime_artifact_bundle_rejects_state_receipt_mismatch(self):
+        with self.assertRaisesRegex(InvalidStateArtifact,"state/receipt binding mismatch"):
+            validate_runtime_artifact_bundle(runtime_bundle(tamper_state=True),max_archive_bytes=100000,max_member_bytes=50000)
+
+    def test_runtime_artifact_bundle_requires_companion_cycle_receipt(self):
+        with self.assertRaisesRegex(InvalidStateArtifact,"cycle_receipt.json"):
+            validate_runtime_artifact_bundle(runtime_bundle(omit_receipt=True),max_archive_bytes=100000,max_member_bytes=50000)
+
+    def test_runtime_artifact_bundle_accepts_disabled_no_mutation_receipt(self):
+        validate_runtime_artifact_bundle(runtime_bundle(disabled=True),max_archive_bytes=100000,max_member_bytes=50000)
+
     def test_artifact_http_does_not_retry_permanent_failure(self):
         error=HTTPError("https://api.github.com/example",404,"not found",None,None)
         http=BudgetedHTTP("token",max_requests=6,retries=2,backoff=0)
