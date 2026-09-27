@@ -335,10 +335,22 @@ class CostGovernorTests(unittest.TestCase):
         self.assertEqual(decision["status"], "BLOCKED_AUTHORITY")
         self.assertFalse(decision["authority_granted"])
 
-    def test_environment_kill_switch_blocks_new_work(self):
+    def test_environment_kill_switch_blocks_paid_work_but_not_github_workload(self):
+        route = {
+            "status":"ROUTED","tier":2,"route_id":"MRT-KILL-SWITCH",
+            "provider_id":"approved-api-slot","model_id":"UNCONFIGURED_STRONG",
+            "max_estimated_cost_usd":0.01,"route_hash":"sha256:kill-switch",
+        }
+        request = {
+            "request_id":"MRQ-KILL-SWITCH","project_ids":["PRJ-000"],
+            "max_input_tokens":100,"max_output_tokens":100,
+            "authority_class":"OBSERVE","data_classification":"SANITIZED",
+        }
         with patch.dict(os.environ, {"PORTFOLIO_SPEND_DISABLED": "true"}):
-            _, decision = preflight(load_state(), github_request(), at=AT)
-        self.assertEqual(decision["status"], "BLOCKED_KILL_SWITCH")
+            _, workload = preflight(load_state(), github_request(), at=AT)
+            _, paid = reserve_model_execution(load_state(), route, request, at=AT)
+        self.assertEqual(workload["status"], "RESERVED")
+        self.assertEqual(paid["status"], "BLOCKED_KILL_SWITCH")
 
     def test_unconfigured_workflow_job_fails_closed(self):
         _, decision = preflight(load_state(), github_request(workflow="unknown-workflow"), at=AT)
