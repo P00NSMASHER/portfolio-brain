@@ -3,6 +3,8 @@ import io
 import json
 import os
 import unittest
+import urllib.error
+import urllib.request
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
@@ -10,6 +12,7 @@ from unittest.mock import patch
 from cost_governor.cost_governor import commit_reservation, load_state, reserve_model_execution, zero_usage
 from operations.workflow_liveness import (
     WorkflowLivenessError,
+    _download_artifact_archive,
     evaluate_target,
     fetch_run_work_proof,
     load_policy,
@@ -74,6 +77,8 @@ class WorkflowLivenessTests(unittest.TestCase):
         self.assertEqual(p["authority_class"],"NONE")
         self.assertEqual(p["dispatch_authority_effect"],"NONE")
         self.assertEqual(p["hard_stop_behavior"],"NONPAID_RECOVERY_CONTINUES")
+        self.assertGreaterEqual(p["unverified_work_retry_after_minutes"],10)
+        self.assertLessEqual(p["unverified_work_retry_after_minutes"],120)
         self.assertTrue(any(t["admission_domain"]=="WORKLOAD" for t in p["targets"]))
         self.assertTrue(any(t["admission_domain"]=="COST_WRAPPER" for t in p["targets"]))
         for target in p["targets"]:
@@ -108,10 +113,16 @@ class WorkflowLivenessTests(unittest.TestCase):
           run("portfolio-notification-cycle","2026-09-27T06:07:00Z",run_id=15),
         ]
         dispatched=[]
+        proofs={
+          12:{"status":"VERIFIED_WORK","reason":"TEST_PROOF","metrics":{},"authority_granted":False},
+          13:{"status":"VERIFIED_WORK","reason":"TEST_PROOF","metrics":{},"authority_granted":False},
+          14:{"status":"VERIFIED_WORK","reason":"TEST_PROOF","metrics":{},"authority_granted":False},
+          15:{"status":"VERIFIED_WORK","reason":"TEST_PROOF","metrics":{},"authority_granted":False},
+        }
         result=recover_overdue(
           load_state(),runs,
           dispatch=lambda workflow,branch:dispatched.append((workflow,branch)),
-          at=AT,policy_data=p,
+          at=AT,policy_data=p,run_proofs=proofs,
         )
         self.assertEqual(result["status"],"RECOVERY_DISPATCHED")
         self.assertEqual(dispatched,[("portfolio-autonomous-scheduler.yml","main")])
@@ -135,6 +146,26 @@ class WorkflowLivenessTests(unittest.TestCase):
         target=load_policy()["targets"][0]
         row=evaluate_target(target,[run(target["workflow_name"],"2026-09-27T08:50:00Z")],at=AT,failure_retry_minutes=35)
         self.assertEqual(row["status"],"RECENT_RUN_UNVERIFIED_WORK")
+        self.assertFalse(row["dispatch_required"])
+
+    def test_stale_success_without_work_proof_becomes_recoverable(self):
+        target=load_policy()["targets"][0]
+        row=evaluate_target(
+          target,[run(target["workflow_name"],"2026-09-27T08:10:00Z",run_id=76)],
+          at=AT,failure_retry_minutes=35,unverified_retry_minutes=30,
+        )
+        self.assertEqual(row["status"],"OVERDUE_UNVERIFIED_WORK")
+        self.assertTrue(row["dispatch_required"])
+        self.assertEqual(row["reason"],"WORK_PROOF_RETRY_WINDOW_ELAPSED")
+
+    def test_valid_work_proof_beats_unverified_retry_window(self):
+        target=load_policy()["targets"][0]
+        proof=verify_work_proof(target,scheduler_proof_doc(),run_id=75)
+        row=evaluate_target(
+          target,[run(target["workflow_name"],"2026-09-27T08:10:00Z",run_id=75)],
+          at=AT,failure_retry_minutes=35,unverified_retry_minutes=30,run_proofs={75:proof},
+        )
+        self.assertEqual(row["status"],"HEALTHY_VERIFIED_WORK")
         self.assertFalse(row["dispatch_required"])
 
     def test_exact_run_scheduler_receipt_upgrades_recent_run_to_verified_health(self):
@@ -193,14 +224,48 @@ class WorkflowLivenessTests(unittest.TestCase):
           "archive_download_url":"https://api.github.com/fake/archive"
         }]}).encode()
         calls=[]
+        downloads=[]
         def request(url,token,**kwargs):
             calls.append(url)
-            return artifact_json if "/artifacts?" in url else payload.getvalue()
-        proof=fetch_run_work_proof("P00NSMASHER/portfolio-brain","token",target,79,request=request)
+            return artifact_json
+        def download(url,token):
+            downloads.append(url)
+            return payload.getvalue()
+        proof=fetch_run_work_proof(
+          "P00NSMASHER/portfolio-brain","token",target,79,
+          request=request,download_archive=download,
+        )
         self.assertEqual(proof["status"],"VERIFIED_WORK")
         self.assertEqual(proof["artifact_id"],123)
-        self.assertEqual(len(calls),2)
+        self.assertEqual(len(calls),1)
+        self.assertEqual(len(downloads),1)
         self.assertIn("/actions/runs/79/artifacts?",calls[0])
+        self.assertEqual(downloads[0],"https://api.github.com/fake/archive")
+
+    def test_artifact_redirect_does_not_leak_github_authorization_to_storage(self):
+        captured={}
+        class FakeOpener:
+            def open(self,req,timeout=20):
+                captured["api_authorization"]=req.get_header("Authorization")
+                raise urllib.error.HTTPError(
+                  req.full_url,302,"Found",
+                  {"Location":"https://signed-storage.example/artifact.zip"},None,
+                )
+        class FakeResponse:
+            status=200
+            def __enter__(self): return self
+            def __exit__(self,*args): return False
+            def read(self): return b"zip-bytes"
+        def storage_open(req,timeout=20):
+            captured["storage_url"]=req.full_url
+            captured["storage_authorization"]=req.get_header("Authorization")
+            return FakeResponse()
+        with patch("urllib.request.build_opener",return_value=FakeOpener()), patch("urllib.request.urlopen",side_effect=storage_open):
+            body=_download_artifact_archive("https://api.github.com/fake/archive","secret-token")
+        self.assertEqual(body,b"zip-bytes")
+        self.assertEqual(captured["api_authorization"],"Bearer secret-token")
+        self.assertEqual(captured["storage_url"],"https://signed-storage.example/artifact.zip")
+        self.assertIsNone(captured["storage_authorization"])
 
     def test_all_recent_exact_run_proofs_produce_healthy_watchdog_status(self):
         p=load_policy()

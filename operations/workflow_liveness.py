@@ -62,7 +62,7 @@ def validate_policy(p:dict[str,Any])->None:
     required={
       "schema_version","liveness_id","enabled","default_branch","max_api_requests_per_cycle",
       "max_history_pages","max_dispatches_per_cycle","recent_failure_retry_after_minutes",
-      "authority_class","dispatch_authority_effect","hard_stop_behavior","targets","invariants"
+      "unverified_work_retry_after_minutes","authority_class","dispatch_authority_effect","hard_stop_behavior","targets","invariants"
     }
     req(isinstance(p,dict) and set(p)==required,"workflow liveness policy fields changed")
     req(p["schema_version"]=="1.0.0" and p["liveness_id"]=="portfolio-core-workflow-liveness-v1","workflow liveness policy identity mismatch")
@@ -72,6 +72,7 @@ def validate_policy(p:dict[str,Any])->None:
     req(type(p["max_history_pages"]) is int and 1<=p["max_history_pages"]<=5,"workflow liveness history-page bound invalid")
     req(type(p["max_dispatches_per_cycle"]) is int and 1<=p["max_dispatches_per_cycle"]<=2,"workflow liveness dispatch bound invalid")
     req(type(p["recent_failure_retry_after_minutes"]) is int and 20<=p["recent_failure_retry_after_minutes"]<=120,"workflow liveness failure retry window invalid")
+    req(type(p["unverified_work_retry_after_minutes"]) is int and 10<=p["unverified_work_retry_after_minutes"]<=120,"workflow liveness unverified-work retry window invalid")
     req(p["authority_class"]=="NONE" and p["dispatch_authority_effect"]=="NONE","workflow liveness authority widened")
     req(p["hard_stop_behavior"]=="NONPAID_RECOVERY_CONTINUES","workflow liveness hard-stop separation changed")
     req(isinstance(p["targets"],list) and 1<=len(p["targets"])<=8,"workflow liveness target set invalid")
@@ -264,6 +265,7 @@ def evaluate_target(
     failure_retry_minutes:int,
     default_branch:str="main",
     run_proofs:dict[int,dict[str,Any]]|None=None,
+    unverified_retry_minutes:int|None=None,
 )->dict[str,Any]:
     now=_time(at)
     matching=[
@@ -310,6 +312,8 @@ def evaluate_target(
         status="OVERDUE_MISSED_SCHEDULE";required=True;reason="LATEST_RUN_TOO_OLD"
     elif conclusion=="success" and proof is not None and proof.get("status")=="VERIFIED_WORK":
         status="HEALTHY_VERIFIED_WORK";required=False;reason="EXACT_RUN_SUBSTANTIVE_WORK_PROVEN"
+    elif conclusion=="success" and unverified_retry_minutes is not None and age>=unverified_retry_minutes:
+        status="OVERDUE_UNVERIFIED_WORK";required=True;reason="WORK_PROOF_RETRY_WINDOW_ELAPSED"
     else:
         # Actions conclusion proves a run occurred, not that its governed work
         # was admitted or that the intended output was produced.
@@ -348,6 +352,7 @@ def recover_overdue(
         failure_retry_minutes=p["recent_failure_retry_after_minutes"],
         default_branch=p["default_branch"],
         run_proofs=run_proofs,
+        unverified_retry_minutes=p["unverified_work_retry_after_minutes"],
       )
       for target in p["targets"]
     ]
@@ -433,6 +438,40 @@ def _request(url:str,token:str,*,method:str="GET",payload:dict[str,Any]|None=Non
     with urllib.request.urlopen(reqq,timeout=20) as response:
         return response.read()
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, reqq, fp, code, msg, headers, newurl):
+        return None
+
+def _download_artifact_archive(url:str,token:str)->bytes:
+    reqq=urllib.request.Request(
+      url,
+      headers={
+        "Accept":"application/vnd.github+json",
+        "Authorization":f"Bearer {token}",
+        "X-GitHub-Api-Version":"2022-11-28",
+        "User-Agent":"portfolio-brain-workflow-liveness/1.0",
+      },
+      method="GET",
+    )
+    opener=urllib.request.build_opener(_NoRedirect)
+    try:
+        with opener.open(reqq,timeout=20) as response:
+            req(getattr(response,"status",200)==200,"artifact archive API response invalid")
+            return response.read()
+    except urllib.error.HTTPError as exc:
+        if exc.code not in {301,302,303,307,308}:
+            raise
+        location=exc.headers.get("Location")
+        req(isinstance(location,str) and location.startswith("https://"),"artifact archive redirect missing")
+    storage_request=urllib.request.Request(
+      location,
+      headers={"User-Agent":"portfolio-brain-workflow-liveness/1.0"},
+      method="GET",
+    )
+    with urllib.request.urlopen(storage_request,timeout=20) as response:
+        req(getattr(response,"status",200)==200,"artifact storage response invalid")
+        return response.read()
+
 def fetch_run_work_proof(
     repo:str,
     token:str,
@@ -440,6 +479,7 @@ def fetch_run_work_proof(
     run_id:int,
     *,
     request:Callable[...,bytes]=_request,
+    download_archive:Callable[[str,str],bytes]=_download_artifact_archive,
 )->dict[str,Any]:
     try:
         artifact_name=target["proof_artifact_name"]
@@ -459,7 +499,7 @@ def fetch_run_work_proof(
         archive_url=artifact.get("archive_download_url")
         if not isinstance(archive_url,str) or not archive_url:
             return _proof("INVALID_WORK_PROOF","PROOF_ARCHIVE_URL_MISSING")
-        archive=request(archive_url,token)
+        archive=download_archive(archive_url,token)
         with zipfile.ZipFile(io.BytesIO(archive)) as zf:
             member=target["proof_member"]
             matches=[name for name in zf.namelist() if name==member or name.endswith("/"+member)]
@@ -499,6 +539,14 @@ def main()->int:
         requests+=1
         return raw
 
+    def api_download_archive(url:str,token_value:str)->bytes:
+        nonlocal requests
+        if requests>=p["max_api_requests_per_cycle"]:
+            raise WorkflowLivenessError("workflow liveness API request budget exceeded")
+        raw=_download_artifact_archive(url,token_value)
+        requests+=1
+        return raw
+
     runs=[]
     found=set()
     target_names={row["workflow_name"] for row in p["targets"]}
@@ -533,7 +581,11 @@ def main()->int:
         if row["status"]!="RECENT_RUN_UNVERIFIED_WORK" or row.get("latest_conclusion")!="success" or not isinstance(run_id,int):
             continue
         target=targets_by_name[row["workflow_name"]]
-        run_proofs[run_id]=fetch_run_work_proof(repo,token,target,run_id,request=api_request)
+        run_proofs[run_id]=fetch_run_work_proof(
+          repo,token,target,run_id,
+          request=api_request,
+          download_archive=api_download_archive,
+        )
 
     def dispatch(workflow_file:str,branch:str)->None:
         encoded=urllib.parse.quote(workflow_file,safe="")
