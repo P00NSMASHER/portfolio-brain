@@ -149,6 +149,16 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertIn('<div class="mobile-records">',public)
         self.assertIn('font-size:16px;min-height:44px',public)
 
+    def test_command_center_exposes_verified_model_value_without_inventing_it(self):
+        snapshot=build_command_center_snapshot()
+        self.assertIn("feedback_state",snapshot["model_router"])
+        self.assertIn("verified_feedback_records",snapshot["model_router"]["feedback_state"])
+        self.assertIn("verified_value_events",snapshot["model_router"]["feedback_state"])
+        self.assertIn("model_feedback",snapshot["state_sources"]["sources"])
+        public=render_html(snapshot)
+        self.assertIn("Verified Model Value",public)
+        self.assertIn("Value evidence is credited only from durable VERIFIED feedback.",public)
+
     def test_scheduler_executes_work_before_heartbeating_workers(self):
         workflow=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text()
         self.assertIn("python -m scheduler.work_executor",workflow)
