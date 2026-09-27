@@ -9,7 +9,7 @@ from urllib.error import HTTPError, URLError
 
 from adapters.github_readonly import AdapterError, GitHubReadOnlyClient, observe_repository
 from runtime.state import advance_cycle, bootstrap_state, canonical_hash, load_json, validate_state
-from learning.continuous_learning import rebuild_from_ledger
+from learning.continuous_learning import rebuild_from_sources
 from uncertainty.highest_value_uncertainty import build_snapshot as build_uncertainty_snapshot
 from experiments.experiment_engine import build_experiment_portfolio
 from allocator.portfolio_allocator import build_allocation_snapshot
@@ -183,7 +183,8 @@ def run(mode: str, *, state_path: Path, output_dir: Path, target_repository_id: 
     updated=advance_cycle(state,receipt)
 
     if mode=="daily":
-        learning_state=rebuild_from_ledger()
+        learning_live=ROOT/"learning"/"live"/"learning_observation_state.json"
+        learning_state=rebuild_from_sources(learning_live if learning_live.exists() else None)
         (output_dir/"portfolio_learning_state.json").write_text(json.dumps(learning_state,indent=2)+"\n")
         uncertainty_state=build_uncertainty_snapshot(generated_at=at)
         (output_dir/"highest_value_uncertainty.json").write_text(json.dumps(uncertainty_state,indent=2)+"\n")
