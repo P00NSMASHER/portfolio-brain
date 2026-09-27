@@ -177,6 +177,18 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertIn("name: github-pages-${{ github.run_attempt }}",workflow)
         self.assertIn("artifact_name: github-pages-${{ github.run_attempt }}",workflow)
 
+    def test_command_center_exposes_hunter_proposal_inbox_without_rights_upgrade(self):
+        snapshot=build_command_center_snapshot()
+        self.assertIn("hunter_proposals",snapshot)
+        proposals=snapshot["hunter_proposals"]
+        self.assertEqual(proposals["authority_class"],"OBSERVE")
+        self.assertEqual(proposals["rights_state"],"NOT_GRANTED_BY_DISCOVERY")
+        self.assertEqual(proposals["proposal_count"],len(proposals["proposals"]))
+        public=render_html(snapshot)
+        self.assertIn("Hunter Proposal Inbox",public)
+        self.assertIn("Discovery never grants reuse rights.",public)
+        self.assertIn("exact-revision public candidates",public)
+
     def test_scheduler_executes_work_before_heartbeating_workers(self):
         workflow=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text()
         self.assertIn("python -m scheduler.work_executor",workflow)
