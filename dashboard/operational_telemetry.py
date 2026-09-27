@@ -216,20 +216,92 @@ def _last_cycles(runtime: dict[str,Any],hunter: dict[str,Any],scheduler: dict[st
 
 
 def _runtime_sync_proof(runtime:dict[str,Any],cost:dict[str,Any],sources:dict[str,Any])->dict[str,Any]:
-    source=sources.get("sources",{}).get("runtime",{})
-    run_id=source.get("source_run_id")
-    cycles=[row for row in runtime.get("recent_cycles",[]) if row.get("mode")=="sync" and row.get("status")=="PASS" and row.get("receipt_hash")]
-    admitted=any(
-        row.get("workflow_id")=="runtime-worker" and row.get("job_id")=="runtime-sync"
-        and row.get("status")=="COMMITTED" and f"github-run:{run_id}" in row.get("evidence_refs",[])
-        for row in cost.get("reservations",[])
-    ) if run_id else False
-    verified=source.get("status")=="LIVE" and bool(cycles) and admitted
+    source_bundle=sources or {}
+    source_rows=source_bundle.get("sources",{})
+    runtime_source=source_rows.get("runtime",{})
+    cost_source=source_rows.get("cost",{})
+    checked_at=_time(source_bundle.get("generated_at"))
+
+    cycles=[
+        row for row in runtime.get("recent_cycles",[])
+        if row.get("mode")=="sync"
+        and row.get("status")=="PASS"
+        and row.get("receipt_hash")
+        and isinstance(row.get("finished_at"),str)
+    ]
+    cycles.sort(key=lambda row:row["finished_at"])
+    latest=cycles[-1] if cycles else None
+
+    liveness=load_json("operations/WORKFLOW_LIVENESS_POLICY.json")
+    sync_target=next(
+        row for row in liveness["targets"]
+        if row["workflow_name"]=="runtime-hourly-sync"
+    )
+    max_age=float(sync_target["max_start_age_minutes"])
+
+    cycle_at=_time(None if latest is None else latest.get("finished_at"))
+    age_minutes=None
+    if checked_at is not None and cycle_at is not None:
+        age_minutes=round(max(0.0,(checked_at-cycle_at).total_seconds()/60),1)
+
+    reservations=[]
+    if cycle_at is not None:
+        for row in cost.get("reservations",[]):
+            if not (
+                row.get("resource_kind")=="GITHUB_JOB"
+                and row.get("workflow_id")=="runtime-worker"
+                and row.get("job_id")=="runtime-sync"
+                and row.get("status")=="COMMITTED"
+                and isinstance(row.get("created_at"),str)
+                and isinstance(row.get("committed_at"),str)
+            ):
+                continue
+            created=_time(row["created_at"])
+            committed=_time(row["committed_at"])
+            if created is not None and committed is not None and created<=cycle_at<=committed:
+                reservations.append(row)
+
+    match=reservations[0] if len(reservations)==1 else None
+    sync_run_id=None
+    if match is not None:
+        for ref in match.get("evidence_refs",[]):
+            if isinstance(ref,str) and ref.startswith("github-run:") and ref.count(":")==1:
+                raw=ref.split(":",1)[1]
+                sync_run_id=int(raw) if raw.isdigit() else raw
+                break
+
+    sources_live=runtime_source.get("status")=="LIVE" and cost_source.get("status")=="LIVE"
+    fresh=age_minutes is not None and age_minutes<=max_age
+    verified=sources_live and latest is not None and fresh and match is not None and sync_run_id is not None
+
+    if verified:
+        reason="FRESH_SYNC_CYCLE_MATCHES_UNIQUE_COMMITTED_RUNTIME_SYNC_RESERVATION"
+    elif not sources_live:
+        reason="RUNTIME_OR_COST_SOURCE_NOT_LIVE"
+    elif latest is None:
+        reason="MISSING_SYNC_CYCLE"
+    elif age_minutes is None or not fresh:
+        reason="SYNC_CYCLE_TOO_OLD"
+    elif len(reservations)>1:
+        reason="AMBIGUOUS_SYNC_RESERVATION_MATCH"
+    elif match is None:
+        reason="MISSING_MATCHING_SYNC_RESERVATION"
+    else:
+        reason="MATCHING_SYNC_RESERVATION_MISSING_RUN_PROVENANCE"
+
     return {
         "status":"VERIFIED_SYNC_WORK" if verified else "UNVERIFIED_SYNC_WORK",
-        "source_run_id":run_id,"runtime_source_status":source.get("status","FALLBACK"),
-        "cycle_id":cycles[-1].get("cycle_id") if verified else None,
-        "reason":"CURRENT_RUNTIME_ARTIFACT_AND_GOVERNED_RECEIPT" if verified else "MISSING_FRESH_RUNTIME_CYCLE_OR_MATCHING_COST_RECEIPT",
+        "source_run_id":sync_run_id if verified else None,
+        "runtime_artifact_source_run_id":runtime_source.get("source_run_id"),
+        "cost_artifact_source_run_id":cost_source.get("source_run_id"),
+        "runtime_source_status":runtime_source.get("status","FALLBACK"),
+        "cost_source_status":cost_source.get("status","FALLBACK"),
+        "cycle_id":latest.get("cycle_id") if verified and latest else None,
+        "cycle_finished_at":latest.get("finished_at") if latest else None,
+        "sync_age_minutes":age_minutes,
+        "max_sync_age_minutes":max_age,
+        "reservation_id":match.get("reservation_id") if verified and match else None,
+        "reason":reason,
     }
 
 
