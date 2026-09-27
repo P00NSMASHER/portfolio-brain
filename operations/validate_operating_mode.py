@@ -212,14 +212,29 @@ def validate_operating_mode():
       "runtime-worker","hunter-autonomous-cycle","portfolio-autonomous-scheduler",
       "portfolio-notification-cycle","command-center-pages","agent-heartbeat-sweep"
     ]
-    for name in ["hunter-autonomous-cycle","portfolio-autonomous-scheduler","portfolio-notification-cycle","agent-heartbeat-sweep"]:
+    workload_groups={
+      "hunter-autonomous-cycle":"portfolio-discovery-scheduling",
+      "portfolio-autonomous-scheduler":"portfolio-discovery-scheduling",
+      "portfolio-notification-cycle":"portfolio-notification-cycle",
+      "agent-heartbeat-sweep":"portfolio-agent-heartbeat",
+      "command-center-pages":"portfolio-command-center-publish",
+    }
+    for name,group in workload_groups.items():
         body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
-        req("portfolio-cost-governed-autonomy" in body and "cost_governor.workflow_gate preflight" in body,f"{name} is not cost governed")
+        req(f"group: {group}" in body and "cost_governor.workflow_gate preflight" in body,
+            f"{name} workload-control lane drifted")
+        req("--state cost_governor/cost_state_seed.json" in body,
+            f"{name} does not use state-neutral workload admission")
+        req("cost_governor.artifact_state" not in body and "cost_governor.workflow_gate finalize" not in body,
+            f"{name} re-coupled to paid-ledger persistence")
+        req("portfolio_spend_disabled" not in body,
+            f"{name} re-coupled to the paid spend kill switch")
     for name in ["portfolio-autonomous-scheduler","agent-heartbeat-sweep"]:
         triggers=workflow_top_level_triggers(ROOT/".github/workflows"/f"{name}.yml")
-        req("push" not in triggers,f"{name} must not fan out on push inside the singleton cost-state concurrency lane")
+        req("push" not in triggers,f"{name} must not fan out on push inside its bounded workload lane")
     worker=(ROOT/".github/workflows/runtime-worker.yml").read_text().lower()
-    req("portfolio-cost-governed-autonomy" in worker and "cost_governor.workflow_gate preflight" in worker,"runtime worker is not cost governed")
+    req("portfolio-cost-governed-autonomy" in worker and "cost_governor.workflow_gate preflight" in worker,
+        "runtime worker lost paid-ledger serialization")
     for name in neutral_no_work_workflows:
         body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
         req("steps.cost.outputs.allowed != 'true'" in body,f"{name} lacks governed no-work reporting")
@@ -242,7 +257,11 @@ def validate_operating_mode():
     liveness=load("operations/WORKFLOW_LIVENESS_POLICY.json")
     req(liveness["schema_version"]=="1.0.0" and liveness["liveness_id"]=="portfolio-core-workflow-liveness-v1","workflow liveness policy identity mismatch")
     req(liveness["authority_class"]=="NONE" and liveness["dispatch_authority_effect"]=="NONE","workflow liveness recovery widened authority")
-    req(liveness["hard_stop_behavior"]=="NO_RECOVERY_DISPATCH","workflow liveness recovery can bypass cost hard stop")
+    req(liveness["hard_stop_behavior"]=="WORKLOAD_RECOVERY_CONTINUES_PAID_TARGETS_EXCLUDED",
+        "workflow liveness recovery re-coupled to paid hard stop")
+    paid_names=set(cost["paid_execution_workflow_names"])
+    req({row["workflow_name"] for row in liveness["targets"]}.isdisjoint(paid_names),
+        "workflow liveness targets paid-execution workflows")
     req(1<=liveness["max_dispatches_per_cycle"]<=2 and 1<=liveness["max_history_pages"]<=5,"workflow liveness recovery bounds invalid")
     recovery_names={row["workflow_name"] for row in liveness["targets"]}
     req(recovery_names<=set(expected),"workflow liveness recovery target is not an approved recurring workflow")
