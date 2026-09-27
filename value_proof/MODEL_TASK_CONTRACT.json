@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "MVTASK-STARBLOX-QUIZLI-V1",
+  "purpose": "Determine whether the exact public Quizli revision contains a bounded reusable design pattern worth deeper review for StarBlox's educational quiz/question experience.",
+  "project_ids": [
+    "PRJ-005"
+  ],
+  "authority_class": "OBSERVE",
+  "consequence": "LOW",
+  "data_classification": "PUBLIC",
+  "source_candidate": {
+    "finding_id": "HFD-CONTROLLED-HCP-QUIZLI",
+    "experiment_proposal_id": "HEXP-C0347811489FAD406302",
+    "repository_full_name": "pwenker/quizli",
+    "repository_id": 448679097,
+    "revision": "d6538b13c16c093935ac2d0f175ac041aa5be4ef",
+    "capability_key": "capability-coverage:quiz",
+    "hunter_rank_score": 10,
+    "hunter_rank_band": "HIGH",
+    "hunter_proof_hash": "sha256:acc72db61caf877308105e578e0711e34ff19ea5a44e4eb3cf35550a6ae5fb14",
+    "hunter_proof_workflow_run_id": 36290413988,
+    "hunter_proof_artifact_digest": "sha256:95745d5315d1f71bca4de01f642a484b5b880665708628e3ac7649723b9f23d5"
+  },
+  "evidence_manifest": {
+    "required_paths": [
+      "quizli/quiz.py",
+      "quizli/session.py",
+      "tests/test_quizli.py"
+    ],
+    "minimum_source_paths": 1,
+    "minimum_test_paths": 1,
+    "exact_revision_required": true,
+    "public_source_required": true
+  },
+  "model_contract": {
+    "task_kind": "OPPORTUNITY_REASONING",
+    "expected_tier": 2,
+    "provider_allowlist": [
+      "openai"
+    ],
+    "max_cost_usd": 0.03,
+    "max_input_tokens": 6000,
+    "max_output_tokens": 1200,
+    "reasoning_effort": "medium",
+    "requires_independent_adversarial": false,
+    "builder_independence_group": null
+  },
+  "output_contract": {
+    "format": "STRICT_JSON_OBJECT",
+    "required_keys": [
+      "summary",
+      "recommendation",
+      "evidence_paths",
+      "proposed_pattern",
+      "risks",
+      "rights_state",
+      "confidence"
+    ],
+    "recommendation_values": [
+      "DEEPER_BOUNDED_REVIEW",
+      "NO_FURTHER_REVIEW"
+    ],
+    "rights_state_value": "UNKNOWN_REQUIRES_REVIEW",
+    "confidence_min": 0,
+    "confidence_max": 1,
+    "evidence_paths_min": 2,
+    "evidence_paths_must_be_manifest_subset": true,
+    "markdown_fences_forbidden": true
+  },
+  "success_criteria": [
+    "Provider call is governed by the existing model router and cost governor.",
+    "The provider receipt records successful non-Tier-0 execution, exact usage, cost, hashes, and latency.",
+    "Output parses as the declared strict JSON object.",
+    "Output cites at least two evidence paths from the exact-revision evidence manifest.",
+    "Output preserves rights uncertainty and grants no authority or evidence upgrade."
+  ],
+  "prohibited_claims": [
+    "Do not claim discovery grants license or reuse rights.",
+    "Do not claim VERIFIED capability evidence.",
+    "Do not authorize downstream modification or deployment.",
+    "Do not infer private or child data."
+  ],
+  "provenance_refs": [
+    "hunter-controlled-proof:portfolio-hunter-controlled-proof-v1",
+    "github:pwenker/quizli@d6538b13c16c093935ac2d0f175ac041aa5be4ef",
+    "hunter-finding:HFD-CONTROLLED-HCP-QUIZLI",
+    "hunter-proposal:HEXP-C0347811489FAD406302"
+  ]
+}
