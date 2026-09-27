@@ -15,7 +15,7 @@ Portfolio Brain can autonomously:
 - enforce cost, retry and kill-switch limits; and
 - produce deduplicated evidence-gated notifications.
 
-The checked-in paid/model/API budget remains zero and no non-Tier-0 model is enabled.
+Paid model execution is enabled for governed OpenAI Luna, Terra, and Sol routes. The checked-in portfolio ceiling is $10, 40 model calls, and 80 API calls per UTC day; PRJ-000 has a $5 project ceiling. Individual calls still require an eligible route, a credential, a pre-execution reservation, and a valid usage receipt. A successful workflow run alone does not establish that useful work occurred.
 
 ## Permanent authority boundaries
 

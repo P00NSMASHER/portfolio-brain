@@ -172,7 +172,9 @@ def evaluate_target(
     elif age>target["max_start_age_minutes"]:
         status="OVERDUE_MISSED_SCHEDULE";required=True;reason="LATEST_RUN_TOO_OLD"
     else:
-        status="HEALTHY_RECENT_RUN";required=False;reason="RECENT_RUN_EXISTS"
+        # Actions conclusion proves a run occurred, not that its governed work
+        # was admitted or that the intended output was produced.
+        status="RECENT_RUN_UNVERIFIED_WORK";required=False;reason="RECENT_RUN_EXISTS_WORK_UNVERIFIED"
     return {
       "workflow_name":target["workflow_name"],
       "workflow_file":target["workflow_file"],
@@ -253,7 +255,9 @@ def recover_overdue(
         })
     return {
       "schema_version":"1.0.0",
-      "status":"RECOVERY_DISPATCHED" if dispatches else "HEALTHY",
+      "status":("RECOVERY_DISPATCHED" if dispatches else
+                "BLOCKED_COST_PREFLIGHT" if any(row["status"]=="BLOCKED_COST_PREFLIGHT" for row in evaluations) else
+                "RECENT_RUNS_WORK_UNVERIFIED"),
       "checked_at":at,
       "hard_stop_reason":None,
       "dispatches":dispatches,

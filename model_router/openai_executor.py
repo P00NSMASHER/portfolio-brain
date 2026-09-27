@@ -177,13 +177,30 @@ def execute_openai(
         exc.cost_state=failed_state
         exc.reservation_id=reservation_id
         raise
+    except Exception as cause:
+        reserved=next(row for row in next_state["reservations"] if row["reservation_id"]==reservation_id)
+        failed_state,_=commit_reservation(next_state,reservation_id,reserved["estimated_usage"],at=_now(),evidence_ref="provider-attempt:unknown-outcome")
+        raise OpenAIExecutorError("provider outcome unknown; charged reserved maximum",cost_state=failed_state,reservation_id=reservation_id) from cause
     latency_ms=max(0,int((time.monotonic()-t0)*1000))
     completed=_now()
-    text=_extract_output_text(data)
-    usage=data.get("usage") or {}
-    input_tokens=int(usage.get("input_tokens",0))
-    output_tokens=int(usage.get("output_tokens",0))
-    if input_tokens<0 or output_tokens<0:raise OpenAIExecutorError("invalid API usage")
+    try:
+        if not isinstance(data,dict) or data.get("status") not in {None,"completed"}:
+            raise OpenAIExecutorError("Responses API did not complete")
+        usage=data.get("usage")
+        if not isinstance(usage,dict) or any(type(usage.get(k)) is not int or usage[k]<0 for k in ("input_tokens","output_tokens")):
+            raise OpenAIExecutorError("Responses API usage missing or invalid")
+        input_tokens=usage["input_tokens"]
+        output_tokens=usage["output_tokens"]
+        text=_extract_output_text(data)
+    except OpenAIExecutorError as exc:
+        # A provider can charge for a response whose output or usage is invalid.
+        # Charge the reservation's conservative estimate and expose the state
+        # to the caller rather than releasing it or reporting zero usage.
+        reserved=next(row for row in next_state["reservations"] if row["reservation_id"]==reservation_id)
+        failed_state,_=commit_reservation(next_state,reservation_id,reserved["estimated_usage"],at=completed,evidence_ref="openai-response:unverified-usage")
+        exc.cost_state=failed_state
+        exc.reservation_id=reservation_id
+        raise
     cost=_actual_cost(model,input_tokens,output_tokens)
 
     actual=zero_usage()
