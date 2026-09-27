@@ -47,7 +47,7 @@ class WorkflowLivenessTests(unittest.TestCase):
         self.assertLessEqual(p["max_history_pages"],5)
         self.assertEqual(p["authority_class"],"NONE")
         self.assertEqual(p["dispatch_authority_effect"],"NONE")
-        self.assertEqual(p["hard_stop_behavior"],"NO_RECOVERY_DISPATCH")
+        self.assertEqual(p["hard_stop_behavior"],"ALLOW_NONPAID_RECOVERY")
         for target in p["targets"]:
             workflow=(ROOT/".github/workflows"/target["workflow_file"]).read_text()
             self.assertIn("workflow_dispatch:",workflow)
@@ -55,12 +55,12 @@ class WorkflowLivenessTests(unittest.TestCase):
     def test_liveness_cost_preview_must_match_target_preflight(self):
         p=load_policy()
         p["targets"][0]["cost_job_id"]="unrelated-cheap-job"
-        with self.assertRaisesRegex(WorkflowLivenessError,"cost scope is not governed"):
+        with self.assertRaisesRegex(WorkflowLivenessError,"workload scope is not controlled"):
             validate_policy(p)
 
         p=load_policy()
         p["targets"][0]["estimated_minutes"]=1
-        with self.assertRaisesRegex(WorkflowLivenessError,"cost preview drifted"):
+        with self.assertRaisesRegex(WorkflowLivenessError,"workload estimate invalid"):
             validate_policy(p)
 
     def test_overdue_scheduler_is_recovered_without_touching_recent_targets(self):
@@ -168,13 +168,10 @@ class WorkflowLivenessTests(unittest.TestCase):
         self.assertEqual(dispatched[1][0],"runtime-hourly-sync.yml")
         self.assertEqual(len(result["dispatches"]),2)
 
-    def test_recovery_does_not_dispatch_target_already_blocked_by_its_cost_scope(self):
+    def test_recovery_workload_preview_is_not_exhausted_by_prior_job_counts(self):
         p=load_policy()
         state=load_state()
-        runtime_target=next(x for x in p["targets"] if x["workflow_name"]=="runtime-hourly-sync")
-        # Fill only the runtime-worker job-start allocation. Other workflows retain
-        # capacity, proving this is a target-specific block rather than a hard stop.
-        for i in range(26):
+        for i in range(30):
             state["reservations"].append({
               "reservation_id":f"CRES-{i:020X}",
               "request_id":f"CGR-TEST-{i:04d}",
@@ -188,25 +185,17 @@ class WorkflowLivenessTests(unittest.TestCase):
               "status":"COMMITTED","created_at":"2026-09-27T01:00:00Z","expires_at":"2026-09-27T07:00:00Z","committed_at":"2026-09-27T01:01:00Z",
               "evidence_refs":[f"github-run:prior-{i}"]
             })
-        runs=[
-          run(target["workflow_name"],"2026-09-27T08:30:00Z",run_id=100+idx)
-          for idx,target in enumerate(p["targets"])
-          if target["workflow_name"]!="runtime-hourly-sync"
-        ]
         dispatched=[]
         result=recover_overdue(
-          state,runs,
+          state,[],
           dispatch=lambda workflow,branch:dispatched.append((workflow,branch)),
           at=AT,policy_data=p,
         )
-        runtime=next(x for x in result["targets"] if x["workflow_name"]==runtime_target["workflow_name"])
-        self.assertEqual(result["status"],"BLOCKED_COST_PREFLIGHT")
-        self.assertEqual(dispatched,[])
-        self.assertEqual(runtime["status"],"BLOCKED_COST_PREFLIGHT")
-        self.assertEqual(runtime["cost_gate_status"],"BLOCKED_BUDGET")
-        self.assertFalse(runtime["dispatch_required"])
+        self.assertEqual(result["status"],"RECOVERY_DISPATCHED")
+        self.assertEqual(len(dispatched),2)
+        self.assertTrue(all(x["workload_control_status"]=="RESERVED" for x in result["dispatches"]))
 
-    def test_spend_kill_switch_blocks_all_recovery_dispatches(self):
+    def test_spend_kill_switch_does_not_block_nonpaid_recovery_dispatches(self):
         dispatched=[]
         with patch.dict(os.environ,{"PORTFOLIO_SPEND_DISABLED":"true"}):
             result=recover_overdue(
@@ -214,8 +203,9 @@ class WorkflowLivenessTests(unittest.TestCase):
               dispatch=lambda workflow,branch:dispatched.append((workflow,branch)),
               at=AT,
             )
-        self.assertEqual(result["status"],"BLOCKED_SPEND_KILL_SWITCH")
-        self.assertEqual(dispatched,[])
+        self.assertEqual(result["status"],"RECOVERY_DISPATCHED")
+        self.assertEqual(len(dispatched),2)
+        self.assertTrue(str(result["hard_stop_reason"]).startswith("KILL_SWITCH:"))
         self.assertFalse(result["authority_granted"])
 
     def test_watchdog_workflow_persists_liveness_receipt_and_keeps_actions_write_only(self):
