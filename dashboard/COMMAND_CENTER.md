@@ -82,7 +82,7 @@ The bridge restores durable state for:
 
 The bridge never writes portfolio state back to GitHub. It only restores sanitized artifacts into the ephemeral Pages build workspace.
 
-Persistent role activity has its own sanitized `portfolio-agent-heartbeat-state` artifact. Heartbeats are emitted only when mapped workflows actually execute: Portfolio Manager for scheduler cycles, Hunter for Hunter cycles, Data Steward for runtime observation, and Engineer for software-factory actions. Roles without observed workflow activity remain NEVER/STALE rather than being invented as healthy.
+Persistent role activity has its own sanitized `portfolio-agent-heartbeat-state` artifact. Substantive workflows still emit role-specific activity heartbeats: Portfolio Manager for scheduler cycles, Hunter for Hunter cycles, Data Steward for runtime observation, and Engineer for software-factory actions. In addition, the governed `agent-heartbeat-sweep` runs every two hours and emits an explicit `HEALTH_CHECK` heartbeat for every registered role. This keeps connectivity/registration health current without pretending that a health check was substantive agent work; the Agent Fleet table exposes `HEALTH_CHECK` as the last activity when that is the newest evidence.
 
 ## Operational telemetry
 
