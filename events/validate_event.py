@@ -122,7 +122,7 @@ def validate_evidence(record: dict[str, Any]) -> None:
     _require(isinstance(actor, dict) and set(actor) == {"actor_type","actor_id"}, "invalid actor fields")
     _require(actor["actor_type"] in ACTOR_TYPES, "invalid actor_type")
     _require(isinstance(actor["actor_id"], str) and actor["actor_id"], "actor_id required")
-    _parse_time(record["observed_at"], "observed_at")
+    observed_at = _parse_time(record["observed_at"], "observed_at")
 
     verification = record["verification"]
     _require(isinstance(verification, dict) and set(verification) == {
@@ -134,7 +134,10 @@ def validate_evidence(record: dict[str, Any]) -> None:
     _require(verifier is None or (isinstance(verifier, str) and verifier), "invalid verifier_actor_id")
     verified_at = verification["verified_at"]
     if verified_at is not None:
-        _parse_time(verified_at, "verification.verified_at")
+        _require(
+            _parse_time(verified_at, "verification.verified_at") >= observed_at,
+            "verification.verified_at cannot precede observed_at",
+        )
     _unique_strings(verification["basis_evidence_ids"], "verification.basis_evidence_ids", pattern=EVD_ID)
     _require(record["evidence_id"] not in verification["basis_evidence_ids"], "evidence cannot depend on itself")
     reason = verification["reason"]
@@ -148,6 +151,12 @@ def validate_evidence(record: dict[str, Any]) -> None:
             "DIRECT_SOURCE","DETERMINISTIC_TEST","INDEPENDENT_VERIFIER","HUMAN_CONFIRMATION"
         }, "VERIFIED evidence requires non-model verification")
         _require(verifier is not None and verified_at is not None, "VERIFIED evidence requires verifier and verified_at")
+        if method == "INDEPENDENT_VERIFIER":
+            _require(verifier != actor["actor_id"], "independent verifier cannot be the evidence actor")
+            _require(
+                len(verification["basis_evidence_ids"]) >= 1,
+                "independent verification requires basis evidence",
+            )
         if record["evidence_type"] == "MODEL_OUTPUT":
             _require(verifier != actor["actor_id"], "model output cannot verify itself")
     elif state == "INFERRED":
@@ -225,16 +234,37 @@ def validate_event(record: dict[str, Any], evidence_by_id: dict[str, dict[str, A
 
     if evidence_by_id is not None:
         linked = []
+        event_targets = {record["event_id"], *record["subject_refs"]}
         for evidence_id in record["evidence_ids"]:
             _require(evidence_id in evidence_by_id, f"missing linked evidence: {evidence_id}")
             evidence = evidence_by_id[evidence_id]
             validate_evidence(evidence)
             _require(evidence["project_id"] == record["project_id"], f"cross-project evidence link not allowed without explicit future bridge: {evidence_id}")
+            evidence_targets = {
+                *evidence["subject_refs"],
+                *evidence["supports_refs"],
+                *evidence["contradicts_refs"],
+            }
+            _require(
+                bool(event_targets & evidence_targets),
+                f"linked evidence is unrelated to event subjects: {evidence_id}",
+            )
             linked.append(evidence)
 
         states = {e["evidence_state"] for e in linked}
         if status == "VERIFIED":
-            _require("VERIFIED" in states, "VERIFIED event requires linked VERIFIED evidence")
+            _require(
+                any(
+                    e["evidence_state"] == "VERIFIED"
+                    and bool(event_targets & set(e["supports_refs"]))
+                    for e in linked
+                ),
+                "VERIFIED event requires linked VERIFIED evidence that supports an event subject",
+            )
+            _require(
+                not any(event_targets & set(e["contradicts_refs"]) for e in linked),
+                "VERIFIED event cannot ignore linked contradictory evidence",
+            )
         elif status == "INFERRED":
             _require(bool(states & {"VERIFIED","OBSERVED","INFERRED"}), "INFERRED event requires non-unknown basis")
         elif status == "CONTRADICTED":

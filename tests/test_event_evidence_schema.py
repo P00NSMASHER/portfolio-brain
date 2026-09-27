@@ -183,6 +183,32 @@ class EvidenceEventContractTests(unittest.TestCase):
         with self.assertRaises(EventValidationError):
             validate_evidence(evd)
 
+    def test_independent_verifier_cannot_be_evidence_actor(self):
+        basis=evidence_record(evidence_id="EVD-BASIS-00000001",state="OBSERVED")
+        evd=evidence_record()
+        evd["verification"].update({
+            "method":"INDEPENDENT_VERIFIER",
+            "verifier_actor_id":evd["actor"]["actor_id"],
+            "basis_evidence_ids":[basis["evidence_id"]],
+        })
+        evd["evidence_hash"]=compute_evidence_hash(evd)
+        with self.assertRaisesRegex(EventValidationError,"independent verifier"):
+            validate_bundle([], [basis,evd])
+
+    def test_independent_verification_requires_basis_evidence(self):
+        evd=evidence_record()
+        evd["verification"]["method"]="INDEPENDENT_VERIFIER"
+        evd["evidence_hash"]=compute_evidence_hash(evd)
+        with self.assertRaisesRegex(EventValidationError,"requires basis evidence"):
+            validate_evidence(evd)
+
+    def test_verification_cannot_precede_observation(self):
+        evd=evidence_record()
+        evd["verification"]["verified_at"]="2026-09-25T14:59:59Z"
+        evd["evidence_hash"]=compute_evidence_hash(evd)
+        with self.assertRaisesRegex(EventValidationError,"cannot precede observed_at"):
+            validate_evidence(evd)
+
     def test_inference_requires_basis_evidence(self):
         evd=evidence_record(state="INFERRED",evidence_type="MODEL_OUTPUT",actor_type="MODEL",actor_id="model-a")
         evd["verification"]["method"]="MODEL_INFERENCE"
@@ -206,6 +232,40 @@ class EvidenceEventContractTests(unittest.TestCase):
         evt=event_record(status="VERIFIED")
         with self.assertRaises(EventValidationError):
             validate_event(evt,{evd["evidence_id"]:evd})
+
+    def test_unrelated_verified_evidence_cannot_verify_event(self):
+        evd=evidence_record()
+        evd["subject_refs"]=["other:subject"]
+        evd["supports_refs"]=["other:claim"]
+        evd["evidence_hash"]=compute_evidence_hash(evd)
+        evt=event_record()
+        with self.assertRaisesRegex(EventValidationError,"unrelated to event subjects"):
+            validate_event(evt,{evd["evidence_id"]:evd})
+
+    def test_verified_event_requires_explicit_verified_support(self):
+        evd=evidence_record()
+        evd["subject_refs"]=["step:3"]
+        evd["supports_refs"]=[]
+        evd["evidence_hash"]=compute_evidence_hash(evd)
+        evt=event_record()
+        with self.assertRaisesRegex(EventValidationError,"supports an event subject"):
+            validate_event(evt,{evd["evidence_id"]:evd})
+
+    def test_verified_event_cannot_ignore_direct_contradiction(self):
+        support=evidence_record(evidence_id="EVD-TEST-00000001")
+        contradiction=evidence_record(
+            evidence_id="EVD-TEST-00000002",
+            state="OBSERVED",
+            evidence_type="SYSTEM_OBSERVATION",
+        )
+        contradiction["supports_refs"]=[]
+        contradiction["contradicts_refs"]=["step:3"]
+        contradiction["evidence_hash"]=compute_evidence_hash(contradiction)
+        evt=event_record()
+        evt["evidence_ids"]=[support["evidence_id"],contradiction["evidence_id"]]
+        evt["event_hash"]=compute_event_hash(evt)
+        with self.assertRaisesRegex(EventValidationError,"cannot ignore linked contradictory evidence"):
+            validate_event(evt,{support["evidence_id"]:support,contradiction["evidence_id"]:contradiction})
 
     def test_cross_project_evidence_rejected(self):
         evd=evidence_record()
@@ -359,6 +419,7 @@ class EvidenceEventContractTests(unittest.TestCase):
     def test_inference_cannot_depend_on_future_evidence(self):
         basis=evidence_record(evidence_id="EVD-BASIS-00000001")
         basis["observed_at"]="2026-09-25T15:00:02Z"
+        basis["verification"]["verified_at"]="2026-09-25T15:00:03Z"
         basis["evidence_hash"]=compute_evidence_hash(basis)
         inferred=inferred_evidence(
             "EVD-INFERRED-00000001",
