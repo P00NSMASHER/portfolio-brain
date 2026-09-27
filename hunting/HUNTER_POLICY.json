@@ -35,7 +35,13 @@
     "exploration_floor_fraction": 0.2,
     "verified_outcome_strategy_priority": true,
     "verified_outcome_priority_mode": "ORDER_EXPLOIT_STRATEGIES_BY_VERIFIED_VALUE_OUTCOMES",
-    "unverified_activity_cannot_increase_strategy_priority": true
+    "unverified_activity_cannot_increase_strategy_priority": true,
+    "minimum_verified_outcomes_before_strategy_priority": 2,
+    "verified_outcome_priority_requires_existing_activity_maturity": true,
+    "priority_maturity_labels": {
+      "below_gate": "WARMUP",
+      "at_or_above_gate": "MATURE"
+    }
   },
   "state_persistence": {
     "mode": "GITHUB_ACTIONS_ARTIFACT",
