@@ -3,7 +3,7 @@ from pathlib import Path
 from hunting.autonomous_hunter import (
     HunterError, _queries, apply_verified_feedback, candidate_fingerprint, classify_candidate, detect_gaps,
     load_policy, load_seed_state, load_strategies, rank_candidate, run_cycle, search_concepts_for_gap,
-    select_objectives, structural_inspection, validate_state
+    select_objectives, strategy_priority_maturity, structural_inspection, validate_state
 )
 
 class FakeProvider:
@@ -299,16 +299,35 @@ class HunterTests(unittest.TestCase):
         bands=receipt["rejection_funnel"]["ranking_band_counts"]
         self.assertEqual(sum(bands.values()),receipt["rejection_funnel"]["inspection_attempted"])
 
-    def test_verified_value_outcome_reorders_exploit_strategy_priority(self):
+    def test_single_verified_value_outcome_remains_warmup_and_does_not_reorder(self):
         state=load_seed_state()
         target="STRAT:fail-open-boundary-archaeology"
-        state["strategy_stats"][target]["verified_value_outcomes"]=2
+        cfg=load_policy()["learning"]
+        state["strategy_stats"][target]["cycles"]=cfg["minimum_cycles_before_strategy_adjustment"]
+        state["strategy_stats"][target]["inspected"]=cfg["minimum_inspections_before_strategy_adjustment"]
+        state["strategy_stats"][target]["verified_value_outcomes"]=1
+        maturity=strategy_priority_maturity(state,target)
+        self.assertFalse(maturity["mature"])
+        self.assertEqual(maturity["status"],"WARMUP")
+        exploit=[x for x in select_objectives(state) if not x["exploration"]]
+        self.assertNotEqual(exploit[0]["strategy_id"],target)
+
+    def test_mature_verified_value_outcomes_reorder_exploit_strategy_priority(self):
+        state=load_seed_state()
+        target="STRAT:fail-open-boundary-archaeology"
+        cfg=load_policy()["learning"]
+        state["strategy_stats"][target]["cycles"]=cfg["minimum_cycles_before_strategy_adjustment"]
+        state["strategy_stats"][target]["inspected"]=cfg["minimum_inspections_before_strategy_adjustment"]
+        state["strategy_stats"][target]["verified_value_outcomes"]=cfg["minimum_verified_outcomes_before_strategy_priority"]
+        maturity=strategy_priority_maturity(state,target)
+        self.assertTrue(maturity["mature"])
         objectives=select_objectives(state)
         exploit=[x for x in objectives if not x["exploration"]]
         self.assertTrue(exploit)
         self.assertEqual(exploit[0]["strategy_id"],target)
-        self.assertEqual(exploit[0]["strategy_verified_value_outcomes"],2)
-        self.assertEqual(exploit[0]["strategy_selection_basis"],"VERIFIED_OUTCOME_PRIORITY_THEN_DETERMINISTIC_ORDER")
+        self.assertEqual(exploit[0]["strategy_verified_value_outcomes"],cfg["minimum_verified_outcomes_before_strategy_priority"])
+        self.assertEqual(exploit[0]["strategy_selection_basis"],"MATURE_VERIFIED_OUTCOME_PRIORITY_THEN_CONFIGURED_ORDER")
+        self.assertTrue(exploit[0]["strategy_priority_maturity"]["mature"])
         self.assertTrue(any(x["exploration"] for x in objectives))
 
     def test_repository_count_has_no_direct_reward(self):
