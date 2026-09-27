@@ -121,6 +121,8 @@ class WorkflowLivenessTests(unittest.TestCase):
         self.assertIn('workflows: ["agent-heartbeat-sweep"]',workflow)
         self.assertIn("types: [completed]",workflow)
         self.assertIn('branches: ["main"]',workflow)
+        self.assertIn('operations/TRIGGER_WORKFLOW_LIVENESS',workflow)
+        self.assertIn("\n  push:",workflow)
 
 
 if __name__=="__main__":
