@@ -56,9 +56,18 @@ class CostGovernorTests(unittest.TestCase):
         self.assertLessEqual(cfg["github_job_starts"],p["portfolio_ceiling"]["github_job_starts"])
         self.assertLessEqual(cfg["github_runner_minutes"],p["portfolio_ceiling"]["github_runner_minutes"])
 
-    def test_event_observe_ignores_dashboard_test_and_operator_churn(self):
+    def test_event_observe_ignores_dashboard_test_operator_and_one_shot_trigger_churn(self):
         workflow=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
-        for path in ['"dashboard/**"','"tests/**"','"operator_console/**"','"cost_governor/**"','".github/workflows/command-center-pages.yml"']:
+        for path in [
+            '"dashboard/**"','"tests/**"','"operator_console/**"','"cost_governor/**"',
+            '".github/workflows/command-center-pages.yml"',
+            '"value_proof/TRIGGER_END_TO_END_PROOF"',
+            '"value_proof/TRIGGER_VERIFIED_FEEDBACK_BOOTSTRAP"',
+            '"learning/TRIGGER_VERIFIED_OUTCOME_BOOTSTRAP"',
+            '".github/workflows/model-value-proof.yml"',
+            '".github/workflows/verified-feedback-bootstrap.yml"',
+            '".github/workflows/continuous-learning-bootstrap.yml"',
+        ]:
             self.assertIn(path,workflow)
 
     def test_agent_heartbeat_sweep_is_cost_governed_and_bounded(self):
