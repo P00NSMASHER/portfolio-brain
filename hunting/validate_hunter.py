@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from hunting.autonomous_hunter import detect_gaps, load_policy, load_seed_state, load_strategies, run_cycle, select_objectives, validate_state
+from hunting.calibration import run_calibration
 ROOT=Path(__file__).resolve().parents[1]
 class HunterValidationError(ValueError): pass
 def req(ok,msg):
@@ -49,11 +50,17 @@ def validate_hunter():
     req(funnel["disposition_accounting_reconciled"] is True,"Hunter disposition funnel does not reconcile")
     req(funnel["queries_executed"]>0 and funnel["queries_zero_results"]>0,"Hunter zero-result funnel evidence missing")
     req(len(probe_receipt["query_outcomes"])>0,"Hunter per-query rejection trace missing")
+    calibration=run_calibration()
+    req(calibration["status"]=="PASS","Hunter calibration corpus failed")
+    req(calibration["positive_cases"]>=10 and calibration["positive_retained"]==calibration["positive_cases"],"Hunter positive controls do not all retain")
+    req(calibration["negative_cases"]>=10 and calibration["negative_rejected"]==calibration["negative_cases"],"Hunter negative controls do not all reject")
+    req(calibration["ambiguous_cases"]>=3 and calibration["ambiguous_matched"]==calibration["ambiguous_cases"],"Hunter ambiguous controls drifted")
+    req(calibration["network_calls"]==0 and calibration["state_mutations"]==0,"Hunter calibration widened authority")
     wf=(ROOT/".github/workflows/hunter-autonomous-cycle.yml").read_text()
     for s in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_HUNTER_DISABLED","47 */6 * * *","cancel-in-progress: false","actions/upload-artifact@v4"]:
         req(s in wf,f"Hunter workflow missing {s}")
     low=wf.lower()
     for forbidden in ["contents: write","pull-requests: write","issues: write","id-token: write","git push","gh pr","openai","anthropic"]:
         req(forbidden not in low,f"forbidden Hunter workflow capability: {forbidden}")
-    return {"pinned_components":len(expected),"strategies":len(strategies),"detected_gaps":len(gaps),"selected_objectives":len(objectives),"exploration_objectives":sum(1 for x in objectives if x["exploration"]),"rejection_funnel_reconciled":True,"query_outcomes":len(probe_receipt["query_outcomes"]),"model_calls":0,"downstream_writes":0,"external_actions":0}
+    return {"pinned_components":len(expected),"strategies":len(strategies),"detected_gaps":len(gaps),"selected_objectives":len(objectives),"exploration_objectives":sum(1 for x in objectives if x["exploration"]),"rejection_funnel_reconciled":True,"query_outcomes":len(probe_receipt["query_outcomes"]),"calibration_cases":calibration["case_count"],"calibration_positive_retained":calibration["positive_retained"],"calibration_negative_rejected":calibration["negative_rejected"],"calibration_ambiguous_matched":calibration["ambiguous_matched"],"model_calls":0,"downstream_writes":0,"external_actions":0}
 if __name__=="__main__":print("portfolio-brain Step 9 Hunter: PASS",json.dumps(validate_hunter(),sort_keys=True))
