@@ -128,11 +128,14 @@ jobs:
         if: ${{ steps.cost.outputs.allowed == 'true' && steps.publication_gate.outputs.should_publish == 'true' && steps.pages.outcome == 'success' }}
         uses: actions/upload-pages-artifact@v4
         with:
+          name: github-pages-${{ github.run_attempt }}
           path: public
       - name: Deploy command center
         if: ${{ steps.cost.outputs.allowed == 'true' && steps.publication_gate.outputs.should_publish == 'true' && steps.pages.outcome == 'success' }}
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
       - name: Explain disabled Pages
         if: ${{ steps.cost.outputs.allowed == 'true' && steps.publication_gate.outputs.should_publish == 'true' && steps.pages.outcome != 'success' }}
         run: |
