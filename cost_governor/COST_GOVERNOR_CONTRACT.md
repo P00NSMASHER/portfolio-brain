@@ -1,45 +1,81 @@
-# Step 20 Cost Governor Contract
+# Step 20 Paid Cost + Workload Control Contract
 
-Step 20 is a fail-closed execution boundary. It does not decide what work is valuable and it grants no authority. It decides only whether already-authorized work may consume bounded model/API/GitHub resources.
+Step 20 grants no authority and does not decide what work is valuable. It now has two deliberately separate control planes:
 
-## Pre-execution reservation
+1. **Paid execution control** for non-Tier-0 model/API calls.
+2. **GitHub workload control** for ordinary Actions jobs.
 
-Every non-Tier-0 model/API invocation and every managed autonomous GitHub job must reserve its worst-case usage before substantive execution. Active reservations count against the same ceilings as committed usage. A reservation is identified by a deterministic idempotency key and retry group.
+A failure or limit in one control plane must not silently disable the other.
 
-The checked-in paid/model/API ceilings are finite and nonnegative. Enabling a provider or model is still insufficient to spend money or tokens: provider readiness, routing, authority, idempotency, retry, and pre-execution reservation gates must all pass independently.
+## Paid pre-execution reservation
 
-## Independent budget scopes
+Every non-Tier-0 model/API invocation must reserve its worst-case token/API/cash usage before substantive execution. Active paid reservations count against the same financial ceilings as committed usage. Reservations use deterministic idempotency keys and retry groups.
 
-A request must pass every applicable scope:
+The checked-in paid ceiling remains **USD 10 per UTC day**, with finite model/API and token ceilings. Provider readiness, routing, authority, idempotency, retry, spend kill switch, hard-stop state, and reservation capacity must all pass independently.
 
-1. portfolio daily ceiling;
-2. each referenced project daily ceiling;
-3. provider/model daily ceiling for model/API work;
-4. workflow/job daily and per-job ceiling for GitHub compute;
-5. retry sequence and retry-count ceiling.
+A paid reservation overage immediately creates a current-day hard stop. Every subsequent paid preflight checks that hard stop before it can reserve or execute.
 
-The strictest failing scope blocks execution.
+## GitHub workload admission
+
+Managed GitHub jobs do **not** consume paid-ledger reservations and are not blocked by daily job-start counts. The historical daily job-count fields remain in policy only for schema/telemetry compatibility and are non-enforcing.
+
+GitHub workload admission instead enforces:
+
+1. a configured workflow/job identity;
+2. a per-job timeout ceiling;
+3. bounded GitHub rerun attempts;
+4. authority boundaries;
+5. service-scoped concurrency and event coalescing.
+
+Workload admission is state-neutral: it cannot spend money, cannot consume paid budget headroom, and cannot create cost-ledger races.
+
+## Financial budget scopes
+
+A paid model/API request must pass every applicable financial scope:
+
+1. portfolio daily financial ceiling;
+2. each referenced project financial ceiling;
+3. provider/model daily financial ceiling;
+4. retry and idempotency controls.
+
+GitHub job starts and runner minutes are not included when deciding whether a paid request has financial headroom.
 
 ## Duplicate and retry safety
 
-Reusing the same idempotency key with the same immutable request is duplicate-suppressed and cannot create a second reservation. Reusing the key for a different request fails closed. Retry groups must start at attempt 1 and advance monotonically; attempt numbers cannot be reset to bypass the retry limit.
+Paid reservations preserve durable duplicate suppression and monotonic retry groups. GitHub workload reruns use the native GitHub run attempt and remain bounded by the configured workload retry limit. Service-scoped concurrency coalesces duplicate/pending workload where appropriate.
 
 ## Accounting
 
-Reservations store only sanitized IDs/hashes, project/provider/model/workflow identifiers, numeric token/cost/runner usage, timestamps and evidence references. Prompt text, payloads, credentials, customer data and private evidence are prohibited while BLK-005 remains open.
+The paid ledger stores only sanitized IDs/hashes, project/provider/model identifiers, numeric token/cost usage, timestamps and evidence references. Prompt text, payloads, credentials, customer data and private evidence remain prohibited.
 
-Actual usage is committed against the reservation. If execution disappears before commit, an expired reservation remains charged at its reserved maximum for the rest of that UTC accounting day; a crash can therefore reduce capacity but cannot silently create more spend headroom. If actual usage exceeds any reserved dimension, the reservation becomes OVERAGE and the watchdog treats the current day as a hard stop.
+Actual paid usage is reconciled against its reservation. If paid execution disappears before reconciliation, an expired paid reservation remains charged at its reserved maximum for the rest of that UTC accounting day. If actual paid usage exceeds any reserved dimension, the reservation becomes OVERAGE and the current day hard-stops further paid execution.
 
-## GitHub race prevention
+## Concurrency and race prevention
 
-Artifact-backed accounting is serialized through the shared `portfolio-cost-governed-autonomy` concurrency group. Managed autonomous workflows restore the latest cost artifact, reserve before substantive work, conservatively commit the reserved runner minutes, and upload the sanitized continuation state.
+Only workflows that can mutate paid model/API reservation state restore and persist the paid cost artifact. Those paths remain serialized through `portfolio-cost-governed-autonomy`.
+
+Unrelated workload uses service-scoped lanes instead:
+
+- command-center publication;
+- Hunter + Scheduler shared-state work;
+- agent heartbeat;
+- notification delivery;
+- software-factory work.
+
+This prevents unrelated pending jobs from displacing one another while preserving serialization where shared state requires it.
+
+## Reporting and operational health
+
+Command-center publication and other workload-only health paths do not restore or persist the paid ledger and do not receive the spend-kill environment variable. They can continue running to explain provider failures, paid hard stops, blocked work, and stale state.
+
+Workflow summaries report **attempted**, **blocked/reason**, **executed**, and **verified** outcomes separately where the operator needs to distinguish a successful workflow shell from substantive work.
 
 ## Kill switches and cancellation
 
-`cost_governor/COST_KILL_SWITCH.json` and the `PORTFOLIO_SPEND_DISABLED` repository variable can force a hard stop. The staged watchdog has `actions: write` only so it can cancel queued/in-progress managed autonomous runs when a kill switch or current-day overage is present. It never cancels foundation CI and cannot grant execution authority.
+`cost_governor/COST_KILL_SWITCH.json` and `PORTFOLIO_SPEND_DISABLED` stop paid execution. The watchdog may cancel only workflows listed in `paid_execution_workflow_names`; it must not cancel workload-only reporting, hunting, scheduling, or health jobs because paid spend is stopped.
 
-The watchdog polls hourly. Managed jobs are capped at five minutes, so quarter-hour polling could not reliably interrupt most jobs before completion and created 96 control-plane runs per day. Hourly polling retains an independent kill-switch backstop at 24 runs per day; preflight reservation checks and per-job timeouts remain the primary synchronous controls.
+Workload liveness recovery also remains available during a paid hard stop. Paid-execution workflows are excluded from that recovery lane.
 
 ## Authority boundary
 
-A cost reservation is not an approval. ACT requests are rejected by the governor. Customer communication, cash movement, payments, live trading, deployment and other consequential actions retain their existing human/governance gates even when budget is available.
+Budget capacity and workload admission are not approvals. ACT requests remain rejected by these control planes. Customer communication, cash movement, payments, live trading, deployment, and other consequential actions retain their independent authority/governance gates.
