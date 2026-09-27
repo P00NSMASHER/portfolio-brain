@@ -115,6 +115,11 @@ def validate_policy(p: dict[str, Any] | None = None) -> None:
     req(type(p["max_state_records"]) is int and p["max_state_records"] >= 100, "state record ceiling too small")
     req(type(p["recent_decision_limit"]) is int and p["recent_decision_limit"] >= 20, "decision retention too small")
     req(p["global_concurrency_group"] == "portfolio-cost-governed-autonomy", "global cost concurrency group changed")
+    managed=p["managed_workflow_names"]
+    paid_workflows=p["paid_execution_workflow_names"]
+    req(isinstance(managed,list) and managed and len(managed)==len(set(managed)), "managed workflow names invalid")
+    req(isinstance(paid_workflows,list) and paid_workflows and len(paid_workflows)==len(set(paid_workflows)), "paid workflow names invalid")
+    req(set(paid_workflows)<=set(managed), "paid workflow must also be managed")
     # Paid/model/API execution may be enabled, but only under finite checked-in
     # ceilings. Provider/model routing and pre-execution reservations remain
     # independent gates, so budget capacity alone never creates an executable route.
