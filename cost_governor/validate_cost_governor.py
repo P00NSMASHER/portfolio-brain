@@ -100,6 +100,24 @@ def validate_cost_governor():
         ]:
             req(text in body, f"{name} cost integration missing: {text}")
 
+    runtime_worker=governed_workflows["runtime-worker"].read_text()
+    runtime_keys=[
+      "runtime-worker::runtime-observe",
+      "runtime-worker::runtime-sync",
+      "runtime-worker::runtime-daily",
+      "runtime-worker::runtime-weekly",
+    ]
+    req("runtime-worker::runtime" not in p["workflow_job_ceilings"],"legacy shared runtime sub-budget still present")
+    req(all(key in p["workflow_job_ceilings"] for key in runtime_keys),"runtime mode sub-budgets incomplete")
+    req('--job-id "runtime-${RUNTIME_MODE}"' in runtime_worker,"runtime worker does not bind cost job identity to execution mode")
+    runtime_starts=sum(p["workflow_job_ceilings"][key]["daily_ceiling"]["github_job_starts"] for key in runtime_keys)
+    runtime_minutes=sum(p["workflow_job_ceilings"][key]["daily_ceiling"]["github_runner_minutes"] for key in runtime_keys)
+    req(runtime_starts<=p["portfolio_ceiling"]["github_job_starts"]//2,"combined runtime job-start sub-budgets exceed half portfolio ceiling")
+    req(runtime_minutes<=p["portfolio_ceiling"]["github_runner_minutes"]//2,"combined runtime minute sub-budgets exceed half portfolio ceiling")
+    req(p["workflow_job_ceilings"]["runtime-worker::runtime-sync"]["daily_ceiling"]["github_job_starts"]>=26,"runtime sync recovery capacity too small")
+    req(p["workflow_job_ceilings"]["runtime-worker::runtime-daily"]["daily_ceiling"]["github_job_starts"]>=2,"runtime daily reasoning capacity too small")
+    req(p["workflow_job_ceilings"]["runtime-worker::runtime-weekly"]["daily_ceiling"]["github_job_starts"]>=2,"runtime weekly reasoning capacity too small")
+
     command_center = (ROOT / ".github/workflows/command-center-pages.yml").read_text().lower()
     req('cron: "37 * * * *"' in command_center,"hourly command-center refresh schedule missing")
     req("actions: read" in command_center and "pages: write" in command_center,"command-center read/deploy permissions incomplete")
@@ -169,6 +187,9 @@ def validate_cost_governor():
         "overage_hard_stop": True,
         "workflow_liveness_recovery_targets": len(liveness["targets"]),
         "workflow_liveness_max_dispatches": liveness["max_dispatches_per_cycle"],
+        "runtime_mode_subbudgets": len(runtime_keys),
+        "runtime_combined_job_starts": runtime_starts,
+        "runtime_combined_runner_minutes": runtime_minutes,
         "authority_change": "NONE",
     }
 
