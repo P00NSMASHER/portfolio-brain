@@ -104,5 +104,12 @@
     "seed_file": "hunting/HUNTER_PROPOSAL_STATE_SEED.json",
     "sanitized_only": true,
     "downstream_authority": "OBSERVE"
+  },
+  "inspection_failure_handling": {
+    "candidate_disposition": "UNAVAILABLE_NOT_REJECTED",
+    "reason_code": "EXACT_REVISION_INSPECTION_UNAVAILABLE",
+    "counts_against_inspection_budget": true,
+    "records_negative_query_knowledge": false,
+    "cycle_behavior": "CONTINUE_BOUNDED"
   }
 }
