@@ -95,7 +95,9 @@
     "Cross-project transfer work is assessment only until target outcome evidence and MODIFY gates exist.",
     "Kill switches and STOP/governance boundaries override scheduling.",
     "The scheduler cannot send customer communications, move money, trade, merge PRs, deploy or grant authority.",
-    "Quality-gated Hunter proposals may enter only OBSERVE-class Researcher review; exact revision is re-inspected and license metadata never grants reuse or implementation authority."
+    "Quality-gated Hunter proposals may enter only OBSERVE-class Researcher review; exact revision is re-inspected and license metadata never grants reuse or implementation authority.",
+    "Hunter proposal backlog work must preserve each proposal's original Hunter cycle/receipt provenance; the latest inbox cycle may not be substituted for an older proposal's origin.",
+    "Within Hunter proposal research work, higher structural rank is preferred and equal-rank backlog items are ordered by first-seen Hunter sequence to prevent starvation."
   ],
   "hunter_proposal_handoff": {
     "enabled": true,
@@ -106,6 +108,8 @@
     "authority_class": "OBSERVE",
     "rights_state": "NOT_GRANTED_BY_DISCOVERY",
     "exact_revision_reinspection_required": true,
-    "license_metadata_is_not_reuse_authority": true
+    "license_metadata_is_not_reuse_authority": true,
+    "origin_cycle_required": true,
+    "backlog_priority_mode": "RANK_SCORE_DESC_THEN_FIRST_SEEN_FIFO"
   }
 }
