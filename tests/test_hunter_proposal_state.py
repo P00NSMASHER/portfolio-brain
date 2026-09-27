@@ -99,7 +99,7 @@ class HunterProposalStateTests(unittest.TestCase):
             hunter,receipt=run_cycle(
                 hunter,
                 BroadHighProvider(1000+cycle*10),
-                at=f"2026-09-{(cycle%3)+20:02d}T{cycle%24:02d}:30:00Z",
+                at=f"2026-09-27T{cycle:02d}:30:00Z",
             )
             backlog=build_proposal_state(hunter,receipt,prior_state=backlog)
             if cycle==0:
