@@ -75,13 +75,26 @@ class CostGovernorTests(unittest.TestCase):
         self.assertIn('workflows: ["agent-heartbeat-sweep"]',workflow)
         self.assertIn('operations/TRIGGER_WORKFLOW_LIVENESS',workflow)
 
-    def test_runtime_subbudget_cannot_starve_hourly_and_daily_reasoning(self):
+    def test_runtime_subbudgets_isolate_push_observation_from_scheduled_reasoning(self):
         p=policy()
-        cfg=p["workflow_job_ceilings"]["runtime-worker::runtime"]["daily_ceiling"]
-        self.assertGreaterEqual(cfg["github_job_starts"],48)
-        self.assertGreaterEqual(cfg["github_runner_minutes"],240)
-        self.assertLessEqual(cfg["github_job_starts"],p["portfolio_ceiling"]["github_job_starts"])
-        self.assertLessEqual(cfg["github_runner_minutes"],p["portfolio_ceiling"]["github_runner_minutes"])
+        keys={
+          "observe":"runtime-worker::runtime-observe",
+          "sync":"runtime-worker::runtime-sync",
+          "daily":"runtime-worker::runtime-daily",
+          "weekly":"runtime-worker::runtime-weekly",
+        }
+        cfg={mode:p["workflow_job_ceilings"][key]["daily_ceiling"] for mode,key in keys.items()}
+        self.assertEqual(sum(row["github_job_starts"] for row in cfg.values()),60)
+        self.assertLessEqual(
+            sum(row["github_job_starts"] for row in cfg.values()),
+            p["portfolio_ceiling"]["github_job_starts"]//2,
+        )
+        self.assertGreaterEqual(cfg["sync"]["github_job_starts"],26)
+        self.assertGreaterEqual(cfg["daily"]["github_job_starts"],2)
+        self.assertGreaterEqual(cfg["weekly"]["github_job_starts"],2)
+        self.assertLess(cfg["observe"]["github_job_starts"],sum(row["github_job_starts"] for row in cfg.values()))
+        workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text()
+        self.assertIn('--job-id "runtime-${RUNTIME_MODE}"',workflow)
 
     def test_event_observe_ignores_dashboard_test_operator_and_one_shot_trigger_churn(self):
         workflow=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
