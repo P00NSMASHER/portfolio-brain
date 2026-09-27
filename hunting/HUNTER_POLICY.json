@@ -24,7 +24,8 @@
     "max_output_bytes": 5242880,
     "max_runtime_seconds": 240,
     "retry_limit": 2,
-    "retry_backoff_seconds": 2
+    "retry_backoff_seconds": 2,
+    "max_candidates_inspected_per_query": 2
   },
   "learning": {
     "minimum_cycles_before_strategy_adjustment": 5,
@@ -73,6 +74,12 @@
           "min_score": 0
         }
       },
+      "value_credit_source": "VERIFIED_OUTCOMES_ONLY"
+    },
+    "proposal_gate": {
+      "minimum_rank_band": "MEDIUM",
+      "max_experiment_proposals_per_cycle": 6,
+      "low_rank_disposition": "RETAIN_OBSERVED_WITHOUT_PROPOSAL",
       "value_credit_source": "VERIFIED_OUTCOMES_ONLY"
     }
   },
