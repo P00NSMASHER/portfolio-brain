@@ -216,26 +216,84 @@ def _record_negative(state,objective,query,reason,at):
     })
     state["negative_knowledge"]=state["negative_knowledge"][-500:]
 
+def _new_rejection_funnel():
+    return {
+      "raw_search_results":0,
+      "normalized_candidates":0,
+      "inspection_attempted":0,
+      "inspection_budget_deferred":0,
+      "retained":0,
+      "duplicates":0,
+      "rejected":0,
+      "queries_executed":0,
+      "queries_zero_results":0,
+      "queries_suppressed":0,
+      "rejection_reasons":{},
+      "candidate_accounting_reconciled":True,
+      "disposition_accounting_reconciled":True,
+    }
+
+def _bump_reason(funnel,reason,count=1):
+    funnel["rejection_reasons"][reason]=funnel["rejection_reasons"].get(reason,0)+count
+
+def _finalize_rejection_funnel(funnel):
+    funnel["candidate_accounting_reconciled"] = (
+        funnel["normalized_candidates"] ==
+        funnel["inspection_attempted"] + funnel["inspection_budget_deferred"]
+    )
+    funnel["disposition_accounting_reconciled"] = (
+        funnel["inspection_attempted"] ==
+        funnel["retained"] + funnel["duplicates"] + funnel["rejected"]
+    )
+    req(funnel["candidate_accounting_reconciled"],"Hunter candidate funnel accounting drift")
+    req(funnel["disposition_accounting_reconciled"],"Hunter disposition funnel accounting drift")
+    return funnel
+
 def run_cycle(state,provider,*,at=None):
     validate_state(state); policy=load_policy(); at=at or now_iso()
     disabled,reason=killed()
     if disabled:
-        return state,{"schema_version":"1.0.0","cycle_id":"disabled","status":"DISABLED","reason":reason,"objectives":[],"findings":[],"experiment_proposals":[],"finished_at":at}
+        funnel=_finalize_rejection_funnel(_new_rejection_funnel())
+        return state,{"schema_version":"1.0.0","cycle_id":"disabled","status":"DISABLED","reason":reason,"objectives":[],"findings":[],"experiment_proposals":[],"query_outcomes":[],"rejection_funnel":funnel,"finished_at":at}
     started=time.monotonic(); objectives=select_objectives(state)
-    findings=[]; proposals=[]; total_inspected=0
+    findings=[]; proposals=[]; query_outcomes=[]; total_inspected=0
+    funnel=_new_rejection_funnel()
     for obj in objectives:
         stat=state["strategy_stats"][obj["strategy_id"]]; stat["cycles"]+=1
         objective_retained=0
         for query in obj["queries"]:
+            query_fp=digest({"strategy_id":obj["strategy_id"],"gap_id":obj["gap_id"],"query":" ".join(query.casefold().split())})
+            qout={
+              "objective_id":obj["objective_id"],"gap_id":obj["gap_id"],"strategy_id":obj["strategy_id"],
+              "query":query,"query_fingerprint":query_fp,"status":"PENDING",
+              "raw_results":0,"normalized_candidates":0,"inspected":0,"deferred_due_inspection_budget":0,
+              "retained":0,"duplicates":0,"rejected":0,"rejection_reasons":{}
+            }
             if negative_hits(state,obj["gap_id"],obj["strategy_id"],query)>=policy["learning"]["negative_query_suppression_after"]:
-                _record_negative(state,obj,query,"REPEATED_DEAD_END_SUPPRESSED",at); continue
-            stat["queries"]+=1
-            candidates=provider.search(query); stat["candidates"]+=len(candidates)
+                _record_negative(state,obj,query,"REPEATED_DEAD_END_SUPPRESSED",at)
+                qout["status"]="SUPPRESSED_REPEAT_DEAD_END"
+                qout["rejection_reasons"]["REPEATED_DEAD_END_SUPPRESSED"]=1
+                funnel["queries_suppressed"]+=1
+                _bump_reason(funnel,"REPEATED_DEAD_END_SUPPRESSED")
+                query_outcomes.append(qout)
+                continue
+            stat["queries"]+=1; funnel["queries_executed"]+=1
+            candidates=provider.search(query)
+            qout["status"]="EXECUTED"
+            qout["raw_results"]=len(candidates); qout["normalized_candidates"]=len(candidates)
+            funnel["raw_search_results"]+=len(candidates); funnel["normalized_candidates"]+=len(candidates)
+            stat["candidates"]+=len(candidates)
+            if not candidates: funnel["queries_zero_results"]+=1
             retained_this_query=0
-            for cand in candidates:
-                if total_inspected>=policy["budgets"]["max_candidates_inspected_per_cycle"]: break
+            for idx,cand in enumerate(candidates):
+                if total_inspected>=policy["budgets"]["max_candidates_inspected_per_cycle"]:
+                    deferred=len(candidates)-idx
+                    qout["deferred_due_inspection_budget"]+=deferred
+                    funnel["inspection_budget_deferred"]+=deferred
+                    break
                 req(cand.get("private") is False,"Hunter candidate must be public")
                 inspection=provider.inspect(cand); total_inspected+=1; stat["inspected"]+=1
+                qout["inspected"]+=1; funnel["inspection_attempted"]+=1
                 structural=structural_inspection(cand,inspection,obj)
                 fp=candidate_fingerprint(cand,inspection["revision"],obj)
                 core={"objective_id":obj["objective_id"],"fingerprint":fp}
@@ -249,6 +307,7 @@ def run_cycle(state,provider,*,at=None):
                     disposition="REJECT"; negative="NO_TEST_OR_REGRESSION_PATHS"
                 elif structural["keyword_hit_count"]==0:
                     disposition="REJECT"; negative="NO_STRUCTURAL_CAPABILITY_SIGNAL"
+                decision_reason=negative or "STRUCTURAL_GATES_PASSED"
                 finding={
                   "schema_version":"1.0.0","finding_id":fid,"objective_id":obj["objective_id"],"gap_id":obj["gap_id"],
                   "project_ids":obj["project_ids"],"strategy_id":obj["strategy_id"],"candidate_fingerprint":fp,
@@ -258,27 +317,64 @@ def run_cycle(state,provider,*,at=None):
                   "evidence_state":"OBSERVED" if disposition=="RETAIN" else "UNKNOWN",
                   "disposition":disposition,
                   "provenance_refs":[f"github:{cand['full_name']}@{inspection['revision']}",f"hunter-objective:{obj['objective_id']}"],
-                  "negative_reason":negative,"experiment_proposal_id":None
+                  "negative_reason":negative,
+                  "decision_trace":{
+                    "reason_code":decision_reason,
+                    "public_source_gate":cand.get("private") is False,
+                    "exact_revision_gate":isinstance(inspection.get("revision"),str) and len(inspection.get("revision",""))==40,
+                    "implementation_path_gate":structural["source_path_count"]>0,
+                    "test_or_regression_gate":structural["test_path_count"]>0,
+                    "structural_capability_signal_gate":structural["keyword_hit_count"]>0,
+                    "duplicate_gate":fp in state["seen_candidate_fingerprints"],
+                  },
+                  "experiment_proposal_id":None
                 }
                 if disposition=="RETAIN":
                     proposal=experiment_proposal(finding); finding["experiment_proposal_id"]=proposal["proposal_id"]
                     proposals.append(proposal); retained_this_query+=1; objective_retained+=1
                     stat["retained"]+=1; stat["experiment_proposals"]+=1
                     state["seen_candidate_fingerprints"][fp]={"finding_id":fid,"first_seen":at,"gap_id":obj["gap_id"]}
+                    qout["retained"]+=1; funnel["retained"]+=1
+                elif disposition=="DUPLICATE":
+                    qout["duplicates"]+=1; funnel["duplicates"]+=1
+                    qout["rejection_reasons"][negative]=qout["rejection_reasons"].get(negative,0)+1
+                    _bump_reason(funnel,negative)
+                else:
+                    qout["rejected"]+=1; funnel["rejected"]+=1
+                    qout["rejection_reasons"][negative]=qout["rejection_reasons"].get(negative,0)+1
+                    _bump_reason(funnel,negative)
                 findings.append(finding)
             if retained_this_query==0: _record_negative(state,obj,query,"NO_RETAINED_CANDIDATE",at)
+            query_outcomes.append(qout)
         if objective_retained==0:
             pass
+    funnel=_finalize_rejection_funnel(funnel)
     state["sequence"]+=1; state["updated_at"]=at
     state["exploration_cursor"]+=sum(1 for x in objectives if x["exploration"])
     cycle_seed={"sequence_before":state["sequence"]-1,"objectives":[x["objective_id"] for x in objectives],"finding_fingerprints":[x["candidate_fingerprint"] for x in findings]}
     cid="hunt-"+hashlib.sha256(canon(cycle_seed).encode()).hexdigest()[:24]
     receipt={"schema_version":"1.0.0","cycle_id":cid,"status":"PASS","reason":None,"finished_at":at,
              "objectives":objectives,"findings":findings,"experiment_proposals":proposals,
+             "query_outcomes":query_outcomes,"rejection_funnel":funnel,
              "api_requests":getattr(provider,"requests",None),"inspected_candidates":total_inspected,
              "objective_function":policy["objective_function"]}
     receipt["receipt_hash"]=digest(receipt)
-    state["recent_cycles"]=([*state["recent_cycles"],{"cycle_id":cid,"finished_at":at,"receipt_hash":receipt["receipt_hash"],"retained":sum(1 for x in findings if x["disposition"]=="RETAIN"),"proposals":len(proposals)}])[-20:]
+    state["recent_cycles"]=([*state["recent_cycles"],{
+      "cycle_id":cid,"finished_at":at,"receipt_hash":receipt["receipt_hash"],
+      "retained":funnel["retained"],"proposals":len(proposals),
+      "rejection_funnel":{
+        "raw_search_results":funnel["raw_search_results"],
+        "normalized_candidates":funnel["normalized_candidates"],
+        "inspection_attempted":funnel["inspection_attempted"],
+        "inspection_budget_deferred":funnel["inspection_budget_deferred"],
+        "retained":funnel["retained"],"duplicates":funnel["duplicates"],"rejected":funnel["rejected"],
+        "queries_executed":funnel["queries_executed"],"queries_zero_results":funnel["queries_zero_results"],
+        "queries_suppressed":funnel["queries_suppressed"],
+        "rejection_reasons":funnel["rejection_reasons"],
+        "candidate_accounting_reconciled":funnel["candidate_accounting_reconciled"],
+        "disposition_accounting_reconciled":funnel["disposition_accounting_reconciled"],
+      }
+    }])[-20:]
     if time.monotonic()-started>policy["budgets"]["max_runtime_seconds"]: raise HunterError("Hunter runtime budget exceeded")
     validate_state(state)
     return state,receipt
@@ -304,6 +400,11 @@ def main():
     (out/"hunt_cycle_receipt.json").write_text(json.dumps(receipt,indent=2)+"\n")
     (out/"hunt_objectives.json").write_text(json.dumps(receipt["objectives"],indent=2)+"\n")
     (out/"hunt_findings.json").write_text(json.dumps(receipt["findings"],indent=2)+"\n")
+    (out/"hunter_rejection_funnel.json").write_text(json.dumps({
+      "cycle_id":receipt["cycle_id"],
+      "query_outcomes":receipt.get("query_outcomes",[]),
+      "rejection_funnel":receipt.get("rejection_funnel",{}),
+    },indent=2)+"\n")
     (out/"experiment_proposals.json").write_text(json.dumps(receipt["experiment_proposals"],indent=2)+"\n")
     total=sum(p.stat().st_size for p in out.iterdir() if p.is_file())
     if total>load_policy()["budgets"]["max_output_bytes"]: raise HunterError("Hunter output byte budget exceeded")
