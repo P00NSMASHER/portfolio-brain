@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -29,7 +30,21 @@ def fingerprint(value: dict[str, Any]) -> str:
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 def should_publish(current: dict[str, Any], previous: dict[str, Any] | None) -> bool:
-    return previous is None or fingerprint(current) != fingerprint(previous)
+    if previous is None or fingerprint(current) != fingerprint(previous):
+        return True
+    # A static page needs a fresh timestamp even if its state is otherwise unchanged.
+    # This does not assert that the underlying work succeeded; the UI checks both.
+    def bridge_time(snapshot: dict[str, Any]) -> datetime | None:
+        value = snapshot.get("state_sources", {}).get("generated_at")
+        if not isinstance(value, str):
+            return None
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    now, then = bridge_time(current), bridge_time(previous)
+    return now is not None and (then is None or (now - then).total_seconds() >= 60 * 60)
 
 def main() -> None:
     parser = argparse.ArgumentParser()
