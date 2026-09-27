@@ -1,12 +1,13 @@
 import copy
+import hashlib
 import json
 import unittest
 from pathlib import Path
 
-from hunting.autonomous_hunter import load_seed_state
+from hunting.autonomous_hunter import HunterError, apply_verified_feedback, load_seed_state
 from model_router.feedback_state import load_seed_state as load_model_feedback_seed, validate_state as validate_model_feedback_state
 from model_router.model_router import hashv
-from value_proof.feedback_loop import FeedbackLoopError, apply_verified_value_feedback
+from value_proof.feedback_loop import FeedbackLoopError, _legacy_hunter_feedback_id, apply_verified_value_feedback
 from value_proof.model_task import digest, load_contract
 from value_proof.verifier import load_verifier_contract
 
@@ -137,6 +138,55 @@ class VerifiedFeedbackLoopTests(unittest.TestCase):
         self.assertEqual(model["sequence"],sequence)
         self.assertEqual(len(model["outcomes"]),2)
         strategy=second["hunter_strategy_id"]
+        self.assertEqual(hunter["strategy_stats"][strategy]["verified_value_outcomes"],1)
+
+    def test_direct_feedback_requires_matching_verified_outcome_and_canonical_id(self):
+        hunter=load_seed_state()
+        source=self.task["source_candidate"]
+        feedback={
+            "feedback_id":"HFB-INVALID-ALIAS",
+            "strategy_id":"STRAT:capability-conjunction-search-claim-tracing",
+            "finding_id":source["finding_id"],
+            "outcome_event_id":self.outcome["outcome_id"],
+            "evidence_state":"VERIFIED",
+            "value_realized":True,
+        }
+        def attempt(candidate,proof=self.outcome):
+            return apply_verified_feedback(hunter,candidate,task_contract=self.task,outcome=proof)
+        for change in (
+            {"finding_id":"HFD-NONEXISTENT"},
+            {"outcome_event_id":"EVT-NONEXISTENT"},
+            {"strategy_id":"STRAT:first-party-production-source-triangulation"},
+            {"evidence_state":"OBSERVED"},
+            {},
+        ):
+            with self.subTest(change=change),self.assertRaises(HunterError):
+                attempt({**feedback,**change})
+            self.assertEqual(hunter["feedback_ids"],[])
+        bad_outcome={**self.outcome,"hunter_finding_id":"HFD-NONEXISTENT"}
+        with self.assertRaises(FeedbackLoopError):attempt(feedback,bad_outcome)
+        self.assertEqual(hunter["feedback_ids"],[])
+
+        for field,value in (("hunter_finding_id","HFD-NONEXISTENT"),("revision","0"*40)):
+            bad={**self.outcome,field:value}
+            body=dict(bad);body.pop("outcome_hash");bad["outcome_hash"]=digest(body)
+            with self.subTest(field=field),self.assertRaises(HunterError):attempt(feedback,bad)
+            self.assertEqual(hunter["feedback_ids"],[])
+
+        valid={**feedback,"feedback_id":"HFB-"+hashlib.sha256(self.outcome["outcome_id"].encode()).hexdigest()[:24].upper()}
+        attempt(valid)
+        self.assertEqual(hunter["strategy_stats"][valid["strategy_id"]]["verified_value_outcomes"],1)
+        with self.assertRaises(HunterError):attempt({**valid,"feedback_id":"HFB-SECOND-ALIAS"})
+        with self.assertRaises(HunterError):attempt(valid)
+        self.assertEqual(hunter["strategy_stats"][valid["strategy_id"]]["verified_value_outcomes"],1)
+
+    def test_legacy_verified_feedback_is_not_credited_again(self):
+        hunter=load_seed_state()
+        strategy="STRAT:capability-conjunction-search-claim-tracing"
+        hunter["feedback_ids"].append(_legacy_hunter_feedback_id(task_id=self.task["task_id"],finding_id=self.task["source_candidate"]["finding_id"]))
+        hunter["strategy_stats"][strategy]["verified_value_outcomes"]=1
+        report=self.apply(hunter,load_model_feedback_seed())
+        self.assertFalse(report["hunter_feedback_applied"])
         self.assertEqual(hunter["strategy_stats"][strategy]["verified_value_outcomes"],1)
 
     def test_unverified_or_nonuseful_outcome_cannot_train(self):

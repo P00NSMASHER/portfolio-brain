@@ -73,7 +73,10 @@ def _resolve_strategy(task_contract:dict[str,Any],cases:dict[str,Any])->str:
     req(len(matches)==1,"unable to resolve unique Hunter strategy lineage")
     return matches[0]["strategy_id"]
 
-def _hunter_feedback_id(*,task_id:str,finding_id:str)->str:
+def _hunter_feedback_id(*,outcome_id:str)->str:
+    return "HFB-"+hashlib.sha256(outcome_id.encode()).hexdigest()[:24].upper()
+
+def _legacy_hunter_feedback_id(*,task_id:str,finding_id:str)->str:
     seed=json.dumps({"task_id":task_id,"finding_id":finding_id,"value_class":"TECHNICAL"},sort_keys=True,separators=(",",":"))
     return "HFB-"+hashlib.sha256(seed.encode()).hexdigest()[:24].upper()
 
@@ -112,9 +115,12 @@ def apply_verified_value_feedback(
     strategy_id=_resolve_strategy(task_contract,controlled_cases)
     req(strategy_id in hunter_state["strategy_stats"],"resolved Hunter strategy missing from state")
 
-    hfb_id=_hunter_feedback_id(task_id=task_contract["task_id"],finding_id=source["finding_id"])
+    hfb_id=_hunter_feedback_id(outcome_id=outcome["outcome_id"])
+    legacy_id=_legacy_hunter_feedback_id(task_id=task_contract["task_id"],finding_id=source["finding_id"])
     hunter_applied=False
-    if hfb_id not in hunter_state["feedback_ids"]:
+    if legacy_id in hunter_state["feedback_ids"]:
+        hfb_id=legacy_id
+    elif hfb_id not in hunter_state["feedback_ids"]:
         apply_verified_feedback(hunter_state,{
           "feedback_id":hfb_id,
           "strategy_id":strategy_id,
@@ -122,7 +128,7 @@ def apply_verified_value_feedback(
           "outcome_event_id":outcome["outcome_id"],
           "evidence_state":"VERIFIED",
           "value_realized":True,
-        })
+        },task_contract=task_contract,outcome=outcome)
         hunter_state["sequence"]+=1
         hunter_state["updated_at"]=at or verifier_provider_receipt["completed_at"]
         hunter_applied=True

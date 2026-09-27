@@ -641,16 +641,41 @@ def run_cycle(state,provider,*,at=None):
     validate_state(state)
     return state,receipt
 
-def apply_verified_feedback(state,feedback):
+def apply_verified_feedback(state,feedback,*,task_contract,outcome):
+    """Credit a controlled proof only after its outcome and source lineage validate.
+
+    The caller must independently verify the provider receipts before calling this
+    function; the shared state mutation also enforces the outcome's own contract.
+    """
+    from value_proof.feedback_loop import validate_value_outcome
+
     validate_state(state)
     required={"feedback_id","strategy_id","finding_id","outcome_event_id","evidence_state","value_realized"}
     req(isinstance(feedback,dict) and set(feedback)==required,"feedback fields changed")
+    validate_value_outcome(outcome)
+    source=task_contract["source_candidate"]
+    matching=[case for case in load("hunting/CONTROLLED_PROOF_CASES.json")["cases"] if (
+        "HFD-CONTROLLED-"+case["case_id"]==source["finding_id"]
+        and case["repository_full_name"]==source["repository_full_name"]
+        and case["expected_repository_id"]==source["repository_id"]
+        and set(case["project_ids"])==set(task_contract["project_ids"])
+    )]
+    req(len(matching)==1,"controlled Hunter source lineage mismatch")
+    req(feedback["finding_id"]==source["finding_id"] and feedback["strategy_id"]==matching[0]["strategy_id"],"feedback finding/strategy lineage mismatch")
+    req(outcome["task_id"]==task_contract["task_id"],"feedback task lineage mismatch")
+    req(outcome["hunter_finding_id"]==source["finding_id"] and outcome["hunter_experiment_proposal_id"]==source["experiment_proposal_id"],"feedback proposal lineage mismatch")
+    req(outcome["repository_full_name"]==source["repository_full_name"] and outcome["revision"]==source["revision"],"feedback revision lineage mismatch")
+    req(set(outcome["project_ids"])==set(task_contract["project_ids"]),"feedback project lineage mismatch")
+    req(source["capability_key"]==matching[0]["capability_key"],"feedback capability lineage mismatch")
+    req(isinstance(outcome["outcome_id"],str) and bool(outcome["outcome_id"].strip()),"feedback outcome identity invalid")
+    req(feedback["outcome_event_id"]==outcome["outcome_id"],"feedback outcome lineage mismatch")
+    req(feedback["feedback_id"]=="HFB-"+hashlib.sha256(outcome["outcome_id"].encode()).hexdigest()[:24].upper(),"feedback id must be derived from outcome identity")
     req(feedback["evidence_state"]=="VERIFIED","only VERIFIED feedback may train Hunter value")
     req(feedback["strategy_id"] in state["strategy_stats"],"unknown feedback strategy")
     req(feedback["feedback_id"] not in state["feedback_ids"],"duplicate feedback")
-    req(isinstance(feedback["value_realized"],bool),"value_realized must be boolean")
+    req(feedback["value_realized"] is True,"verified useful outcome must realize technical value")
     state["feedback_ids"].append(feedback["feedback_id"])
-    if feedback["value_realized"]: state["strategy_stats"][feedback["strategy_id"]]["verified_value_outcomes"]+=1
+    state["strategy_stats"][feedback["strategy_id"]]["verified_value_outcomes"]+=1
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("--state",default="hunting/live/hunter_state.json"); ap.add_argument("--output-dir",default="hunting/out")
