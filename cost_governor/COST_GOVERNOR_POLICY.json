@@ -233,5 +233,10 @@
       "event_coalescing": true,
       "minimum_schedule_interval_minutes": 10080
     }
-  }
+  },
+  "paid_workflow_names": [
+    "model-value-proof",
+    "runtime-daily-learning",
+    "runtime-weekly-synthesis"
+  ]
 }
