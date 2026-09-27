@@ -56,6 +56,7 @@
     "No self edges.",
     "An ACTIVE source/type/target triple is unique.",
     "Supersession preserves one contiguous non-branching temporal history with exactly one root and one ACTIVE or RETIRED terminal edge.",
+    "Only ACTIVE nodes and ACTIVE terminal edges may project into an upstream shape that omits lifecycle and validity fields.",
     "Private entities remain reference-only while Portfolio Brain is public.",
     "Canonicalization is reversible; source identities and conflicts are never destroyed."
   ],
