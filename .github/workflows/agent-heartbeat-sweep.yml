@@ -10,7 +10,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: portfolio-cost-governed-autonomy
+  group: portfolio-agent-heartbeat
   cancel-in-progress: false
 
 jobs:
@@ -29,7 +29,7 @@ jobs:
       - name: Restore latest cost-governor state
         run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
 
-      - name: Reserve bounded heartbeat compute
+      - name: Check heartbeat workload controls
         id: cost
         run: >-
           python -m cost_governor.workflow_gate preflight
@@ -93,4 +93,4 @@ jobs:
       - name: Report governed no-work outcome
         if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
         run: |
-          echo "::notice title=Agent heartbeat sweep skipped::Cost governor status: ${{ steps.cost.outputs.decision_status }}"
+          echo "::notice title=Agent heartbeat sweep skipped::Workload control status: ${{ steps.cost.outputs.decision_status }}"
