@@ -178,8 +178,9 @@ class GitHubPublicProvider:
 def structural_inspection(candidate,inspection,objective):
     paths=inspection["paths"]
     lower=[p.casefold() for p in paths]
-    source=[p for p in paths if any(p.casefold().endswith(ext) for ext in (".py",".js",".ts",".tsx",".jsx",".go",".rs",".java",".kt",".rb",".cs",".cpp",".c",".h",".lua"))]
+    code=[p for p in paths if any(p.casefold().endswith(ext) for ext in (".py",".js",".ts",".tsx",".jsx",".go",".rs",".java",".kt",".rb",".cs",".cpp",".c",".h",".lua"))]
     tests=[p for p in paths if any(k in p.casefold() for k in ("test","spec","fixture","regression"))]
+    source=[p for p in code if p not in tests]
     docs=[p for p in paths if any(k in p.casefold() for k in ("readme","docs/","doc/"))]
     tokens=[x for x in re.findall(r"[a-z0-9]+",objective["capability_key"].casefold()) if len(x)>3]
     def hit_count(items):
@@ -431,6 +432,9 @@ def run_cycle(state,provider,*,at=None):
         if objective_retained==0:
             pass
     funnel=_finalize_rejection_funnel(funnel)
+    proposals.sort(key=lambda x:(-(x.get("candidate_rank_score") or 0),x["proposal_id"]))
+    for idx,proposal in enumerate(proposals,start=1):
+        proposal["candidate_rank_order"]=idx
     state["sequence"]+=1; state["updated_at"]=at
     state["exploration_cursor"]+=sum(1 for x in objectives if x["exploration"])
     cycle_seed={"sequence_before":state["sequence"]-1,"objectives":[x["objective_id"] for x in objectives],"finding_fingerprints":[x["candidate_fingerprint"] for x in findings]}
@@ -438,6 +442,7 @@ def run_cycle(state,provider,*,at=None):
     receipt={"schema_version":"1.0.0","cycle_id":cid,"status":"PASS","reason":None,"finished_at":at,
              "objectives":objectives,"findings":findings,"experiment_proposals":proposals,
              "query_outcomes":query_outcomes,"rejection_funnel":funnel,
+             "proposal_ordering":"CANDIDATE_RANK_DESCENDING_NO_SOFT_SIGNAL_HARD_REJECT",
              "api_requests":getattr(provider,"requests",None),"inspected_candidates":total_inspected,
              "objective_function":policy["objective_function"]}
     receipt["receipt_hash"]=digest(receipt)
