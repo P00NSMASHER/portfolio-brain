@@ -89,6 +89,11 @@ def event_record(evidence_id="EVD-TEST-00000001", status="VERIFIED"):
     record["event_hash"]=compute_event_hash(record)
     return record
 
+def rehash_event(record):
+    record["idempotency_key"]=compute_idempotency_key(record)
+    record["event_hash"]=compute_event_hash(record)
+    return record
+
 def inferred_evidence(evidence_id, basis_id, *, project_id="PRJ-000", observed_at="2026-09-25T15:00:01Z"):
     record=evidence_record(
         evidence_id=evidence_id,
@@ -247,6 +252,68 @@ class EvidenceEventContractTests(unittest.TestCase):
         evt["event_hash"]=compute_event_hash(evt)
         with self.assertRaises(EventValidationError):
             validate_bundle([evt],[evd])
+
+    def test_event_dependency_cycle_fails_bundle(self):
+        evd=evidence_record()
+        first=event_record()
+        second=copy.deepcopy(first)
+        second["event_id"]="EVT-TEST-00000002"
+        second["occurred_at"]="2026-09-25T15:00:01Z"
+        second["source"]["source_ref"]="run:2"
+        first["dependency_event_ids"]=[second["event_id"]]
+        second["causal_event_ids"]=[first["event_id"]]
+        rehash_event(first); rehash_event(second)
+        with self.assertRaisesRegex(EventValidationError,"event lineage cycle"):
+            validate_bundle([first,second],[evd])
+
+    def test_event_cannot_claim_future_predecessor(self):
+        evd=evidence_record()
+        predecessor=event_record()
+        predecessor["event_id"]="EVT-TEST-00000002"
+        predecessor["occurred_at"]="2026-09-25T15:00:03Z"
+        predecessor["recorded_at"]="2026-09-25T15:00:04Z"
+        dependent=event_record()
+        dependent["dependency_event_ids"]=[predecessor["event_id"]]
+        rehash_event(predecessor); rehash_event(dependent)
+        with self.assertRaisesRegex(EventValidationError,"cannot occur after dependent event"):
+            validate_bundle([predecessor,dependent],[evd])
+
+    def test_cross_project_event_lineage_requires_explicit_bridge(self):
+        evd=evidence_record()
+        cross_evd=evidence_record(evidence_id="EVD-TEST-00000002")
+        cross_evd["project_id"]="PRJ-001"
+        cross_evd["evidence_hash"]=compute_evidence_hash(cross_evd)
+        predecessor=event_record(evidence_id=cross_evd["evidence_id"])
+        predecessor["event_id"]="EVT-TEST-00000002"
+        predecessor["project_id"]="PRJ-001"
+        dependent=event_record()
+        dependent["causal_event_ids"]=[predecessor["event_id"]]
+        rehash_event(predecessor); rehash_event(dependent)
+        with self.assertRaisesRegex(EventValidationError,"cross-project event lineage"):
+            validate_bundle([predecessor,dependent],[evd,cross_evd])
+
+    def test_same_predecessor_cannot_be_both_dependency_and_cause(self):
+        evd=evidence_record()
+        predecessor=event_record()
+        predecessor["event_id"]="EVT-TEST-00000002"
+        predecessor["source"]["source_ref"]="run:2"
+        dependent=event_record()
+        dependent["dependency_event_ids"]=[predecessor["event_id"]]
+        dependent["causal_event_ids"]=[predecessor["event_id"]]
+        rehash_event(predecessor); rehash_event(dependent)
+        with self.assertRaisesRegex(EventValidationError,"both dependency and cause"):
+            validate_bundle([predecessor,dependent],[evd])
+
+    def test_valid_event_lineage_chain_passes(self):
+        evd=evidence_record()
+        root=event_record()
+        root["event_id"]="EVT-TEST-00000002"
+        root["occurred_at"]="2026-09-25T14:59:59Z"
+        root["recorded_at"]="2026-09-25T15:00:00Z"
+        dependent=event_record()
+        dependent["dependency_event_ids"]=[root["event_id"]]
+        rehash_event(root); rehash_event(dependent)
+        self.assertEqual(validate_bundle([root,dependent],[evd]),{"events":2,"evidence":1})
 
     def test_missing_inference_basis_fails_bundle(self):
         evd=evidence_record(state="INFERRED",evidence_type="MODEL_OUTPUT",actor_type="MODEL",actor_id="model-a")

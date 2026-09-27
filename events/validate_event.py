@@ -293,6 +293,43 @@ def _validate_evidence_lineage(evidence_by_id: dict[str, dict[str, Any]]) -> Non
     for evidence_id in evidence_by_id:
         visit(evidence_id)
 
+def _validate_event_lineage(event_by_id: dict[str, dict[str, Any]]) -> None:
+    """Validate event dependencies/causes as a project-scoped causal DAG."""
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(event_id: str) -> None:
+        _require(event_id not in visiting, f"event lineage cycle detected: {event_id}")
+        if event_id in visited:
+            return
+
+        visiting.add(event_id)
+        item = event_by_id[event_id]
+        related_ids = [*item["dependency_event_ids"], *item["causal_event_ids"]]
+        _require(
+            len(related_ids) == len(set(related_ids)),
+            f"event cannot claim the same predecessor as both dependency and cause: {event_id}",
+        )
+        for predecessor_id in related_ids:
+            _require(predecessor_id in event_by_id, f"missing predecessor event: {predecessor_id}")
+            predecessor = event_by_id[predecessor_id]
+            _require(
+                predecessor["project_id"] == item["project_id"],
+                f"cross-project event lineage not allowed without explicit bridge: {predecessor_id}",
+            )
+            _require(
+                _parse_time(predecessor["occurred_at"], "predecessor.occurred_at")
+                <= _parse_time(item["occurred_at"], "occurred_at"),
+                f"predecessor event cannot occur after dependent event: {predecessor_id}",
+            )
+            visit(predecessor_id)
+
+        visiting.remove(event_id)
+        visited.add(event_id)
+
+    for event_id in event_by_id:
+        visit(event_id)
+
 def validate_bundle(events: Iterable[dict[str, Any]], evidence: Iterable[dict[str, Any]]) -> dict[str, int]:
     evidence_list = list(evidence)
     event_list = list(events)
@@ -321,11 +358,7 @@ def validate_bundle(events: Iterable[dict[str, Any]], evidence: Iterable[dict[st
 
     _validate_evidence_lineage(evidence_by_id)
 
-    for item in event_list:
-        for dependency in item["dependency_event_ids"]:
-            _require(dependency in event_by_id, f"missing dependency event: {dependency}")
-        for causal in item["causal_event_ids"]:
-            _require(causal in event_by_id, f"missing causal event: {causal}")
+    _validate_event_lineage(event_by_id)
 
     return {"events": len(event_list), "evidence": len(evidence_list)}
 
