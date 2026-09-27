@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse,hashlib,json,os
 from datetime import datetime,timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from allocator.portfolio_allocator import build_allocation_snapshot
 from experiments.experiment_engine import build_experiment_portfolio
@@ -224,6 +224,17 @@ def generate_candidates(context):
             reason="Cross-project transfer hypothesis is assessment-ready; implementation remains prohibited.",evidence_refs=[*proposal["provenance_refs"],f"transfer:{proposal['transfer_id']}"]))
     return candidates,blocked
 
+def is_hunter_proposal_continuation(candidate):
+    return (
+        candidate.get("work_type")=="RESEARCH"
+        and candidate.get("continuation_class")=="CONTINUATION"
+        and candidate.get("required_authority")=="OBSERVE"
+        and any(
+            isinstance(ref,str) and ref.startswith("hunter-proposal:")
+            for ref in candidate.get("evidence_refs",[])
+        )
+    )
+
 def _sort_key(c):
     p=policy()
     continuation_order={"CONTINUATION":0,"NEW_WORK":1}
@@ -266,12 +277,16 @@ def _compact_terminal_history(work_items,*,incoming_count,max_items):
     evicted=[w["fingerprint"] for i,w in enumerate(work_items) if w["state"] not in open_states and i not in keep_terminal]
     return retained,evicted
 
-def schedule_cycle(state,context=None,*,at=None):
+def schedule_cycle(state,context=None,*,at=None,candidate_filter:Callable[[dict[str,Any]],bool]|None=None,max_new_items:int|None=None):
     validate_state(state);at=at or now_iso();disabled,reason=killed()
     if disabled:
         receipt={"schema_version":"1.0.0","cycle_id":"disabled","status":"DISABLED","reason":reason,"finished_at":at,"selected_work":[],"blocked_work":[],"suppressed_duplicates":[],"stale_lease_holds":[]}
         return state,receipt
     context=context or build_context();candidates,blocked=generate_candidates(context)
+    if candidate_filter is not None:
+        req(callable(candidate_filter),"scheduler candidate filter invalid")
+        candidates=[candidate for candidate in candidates if candidate_filter(candidate)]
+        blocked=[candidate for candidate in blocked if candidate_filter(candidate)]
     completed=set(state["completed_fingerprints"]);open_fp=_nonterminal_fingerprints(state);open_counts=_open_agent_counts(state)
     suppressed=[];stale=[];eligible=[]
     for c in candidates:
@@ -289,8 +304,11 @@ def schedule_cycle(state,context=None,*,at=None):
             if expired:stale.append(w["fingerprint"])
     selected=[];new_counts={}
     scheduler_policy=policy();per_agent_limit=scheduler_policy["max_open_work_per_agent"]
+    configured_limit=scheduler_policy["max_new_work_per_cycle"]
+    requested_limit=configured_limit if max_new_items is None else max_new_items
+    req(type(requested_limit) is int and 0<=requested_limit<=configured_limit,"scheduler max_new_items exceeds configured cycle bound")
     open_capacity=scheduler_policy["max_queue_items"]-sum(open_counts.values())
-    selection_limit=min(scheduler_policy["max_new_work_per_cycle"],open_capacity)
+    selection_limit=min(requested_limit,open_capacity)
     for c in sorted(eligible,key=_sort_key):
         if len(selected)>=selection_limit:break
         agent=c["assigned_agent_id"]
