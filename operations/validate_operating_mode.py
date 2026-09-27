@@ -31,22 +31,49 @@ def workflow_schedule_crons(path):
         indent=len(raw)-len(raw.lstrip(" "))
         value=raw.strip()
         if indent==0:
-            in_on=value=="on:"
+            trigger=re.fullmatch(r"(?:on|'on'|\"on\")\s*:\s*(.*)",value)
+            in_on=trigger is not None
             in_schedule=False
+            if trigger is not None:
+                req(not trigger.group(1),f"workflow triggers must use a block mapping in {path}")
             continue
         if not in_on:
             continue
         if indent==2:
-            in_schedule=value=="schedule:"
+            req(not re.match(r"^<<\s*:",value),f"workflow trigger aliases are not allowed in {path}")
+            schedule=re.fullmatch(r"(?:schedule|'schedule'|\"schedule\")\s*:\s*(.*)",value)
+            in_schedule=schedule is not None
+            if schedule is not None:
+                req(not schedule.group(1),f"workflow schedules must use a block sequence in {path}")
             found_schedule=found_schedule or in_schedule
             continue
         if in_schedule and indent>=4:
-            match=re.match(r"^-\s+cron:\s*(.+?)\s*$",value)
+            match=re.match(r"^-\s+(?:cron|'cron'|\"cron\")\s*:\s*(.+?)\s*$",value)
             if match:
                 cron=match.group(1).split(" #",1)[0].strip().strip('"\'')
                 req(bool(cron),f"empty workflow cron in {path}")
                 crons.append(cron)
     return crons if found_schedule else None
+
+def scheduled_workflow_inventory(workflow_dir):
+    """Return the canonical scheduled-workflow inventory.
+
+    GitHub loads both ``.yml`` and ``.yaml`` workflow files. Treating only one
+    extension as governed lets an alternate-extension workflow bypass the
+    approved recurring inventory. Duplicate stems are also rejected so a
+    second extension cannot shadow the reviewed workflow identity.
+    """
+    workflow_dir=Path(workflow_dir)
+    paths=sorted((*workflow_dir.glob("*.yml"),*workflow_dir.glob("*.yaml")))
+    actual={}
+    seen=set()
+    for path in paths:
+        req(path.stem not in seen,f"duplicate workflow identity: {path.stem}")
+        seen.add(path.stem)
+        crons=workflow_schedule_crons(path)
+        if crons is not None:
+            actual[path.stem]=crons
+    return actual
 
 def validate_reasoning_fallback(data=None):
     d=load("operations/CHATGPT_REASONING_FALLBACK.json") if data is None else data
@@ -140,11 +167,7 @@ def validate_operating_mode():
     }
     req(set(p["approved_recurring_workflows"])==set(expected),"approved recurring workflow set changed")
     workflow_dir=ROOT/".github/workflows"
-    actual={}
-    for path in workflow_dir.glob("*.yml"):
-        crons=workflow_schedule_crons(path)
-        if crons is not None:
-            actual[path.stem]=crons
+    actual=scheduled_workflow_inventory(workflow_dir)
     req(set(actual)==set(expected),"scheduled workflow inventory differs from approved operating policy")
     for name,cron in expected.items():
         req(actual[name]==[cron],f"{name} cron mismatch")

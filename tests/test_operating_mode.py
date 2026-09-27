@@ -1,6 +1,6 @@
 import copy,json,unittest
 from pathlib import Path
-from operations.validate_operating_mode import OperatingModeValidationError,validate_operating_mode,validate_reasoning_fallback,workflow_schedule_crons
+from operations.validate_operating_mode import OperatingModeValidationError,scheduled_workflow_inventory,validate_operating_mode,validate_reasoning_fallback,workflow_schedule_crons
 ROOT=Path(__file__).resolve().parents[1]
 
 class OperatingModeTests(unittest.TestCase):
@@ -48,11 +48,7 @@ class OperatingModeTests(unittest.TestCase):
 
     def test_active_schedule_inventory_matches_operating_policy(self):
         policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
-        actual={}
-        for path in (ROOT/".github/workflows").glob("*.yml"):
-            crons=workflow_schedule_crons(path)
-            if crons is not None:
-                actual[path.stem]=crons
+        actual=scheduled_workflow_inventory(ROOT/".github/workflows")
         expected={name:[entry["cron"]] for name,entry in policy["approved_recurring_workflows"].items()}
         self.assertEqual(actual,expected)
 
@@ -62,6 +58,40 @@ class OperatingModeTests(unittest.TestCase):
             path=Path(directory)/"comment-only.yml"
             path.write_text('name: comment-only\n# schedule:\n#   - cron: "* * * * *"\non:\n  push:\n    branches: ["main"]\njobs: {}\n')
             self.assertIsNone(workflow_schedule_crons(path))
+
+    def test_alternate_yaml_extension_cannot_bypass_schedule_inventory(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as directory:
+            path=Path(directory)/"rogue.yaml"
+            path.write_text('name: rogue\non:\n  schedule:\n    - cron: "* * * * *"\njobs: {}\n')
+            self.assertEqual(scheduled_workflow_inventory(directory),{"rogue":["* * * * *"]})
+
+    def test_duplicate_workflow_stems_across_extensions_fail_closed(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as directory:
+            for suffix in ("yml","yaml"):
+                (Path(directory)/f"duplicate.{suffix}").write_text('name: duplicate\non:\n  push:\njobs: {}\n')
+            with self.assertRaises(OperatingModeValidationError):
+                scheduled_workflow_inventory(directory)
+
+    def test_quoted_schedule_keys_are_still_governed(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as directory:
+            path=Path(directory)/"quoted.yaml"
+            path.write_text('name: quoted\n"on":\n  \'schedule\':\n    - "cron": "17 * * * *"\njobs: {}\n')
+            self.assertEqual(workflow_schedule_crons(path),["17 * * * *"])
+
+    def test_inline_or_aliased_trigger_maps_fail_closed(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as directory:
+            inline=Path(directory)/"inline.yml"
+            inline.write_text('name: inline\non: {schedule: [{cron: "* * * * *"}]}\njobs: {}\n')
+            with self.assertRaises(OperatingModeValidationError):
+                workflow_schedule_crons(inline)
+            aliased=Path(directory)/"aliased.yml"
+            aliased.write_text('name: aliased\non:\n  <<: *triggers\njobs: {}\n')
+            with self.assertRaises(OperatingModeValidationError):
+                workflow_schedule_crons(aliased)
 
     def test_expected_cost_denials_are_neutral_for_recurring_observe_lanes(self):
         for name in [
