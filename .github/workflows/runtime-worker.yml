@@ -62,6 +62,14 @@ jobs:
       - name: Restore latest agent heartbeat state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m agents.artifact_state --output agents/live/agent_heartbeat_state.json
+      - name: Restore verified model feedback state
+        if: ${{ steps.cost.outputs.allowed == 'true' && (inputs.mode == 'daily' || inputs.mode == 'weekly') }}
+        run: |
+          mkdir -p model_router/live
+          python -m model_router.feedback_artifact_state --output model_router/live/model_feedback_state.json
+          if [ ! -f model_router/live/model_feedback_state.json ]; then
+            cp model_router/MODEL_FEEDBACK_STATE_SEED.json model_router/live/model_feedback_state.json
+          fi
       - name: Execute deterministic runtime cycle
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: >-
