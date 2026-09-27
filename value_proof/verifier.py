@@ -23,6 +23,7 @@ from value_proof.model_task import (
     parse_and_validate_output,
     validate_evidence_pack,
     validate_execution_receipt,
+    write_json,
 )
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -307,11 +308,11 @@ def main()->None:
       cost_state=cost_state,
     )
     args.output_dir.mkdir(parents=True,exist_ok=True)
-    (args.output_dir/"deterministic_verification_receipt.json").write_text(json.dumps(result["deterministic_receipt"],indent=2,sort_keys=True)+"\\n",encoding="utf-8")
-    (args.output_dir/"independent_verifier_output.json").write_text(json.dumps(result["verifier_output"],indent=2,sort_keys=True)+"\\n",encoding="utf-8")
-    (args.output_dir/"independent_verifier_provider_receipt.json").write_text(json.dumps(result["verifier_provider_receipt"],indent=2,sort_keys=True)+"\\n",encoding="utf-8")
-    (args.output_dir/"verification_receipt.json").write_text(json.dumps(result["verification_receipt"],indent=2,sort_keys=True)+"\\n",encoding="utf-8")
-    args.cost_state.write_text(json.dumps(next_state,indent=2,sort_keys=True)+"\\n",encoding="utf-8")
+    write_json(args.output_dir/"deterministic_verification_receipt.json",result["deterministic_receipt"])
+    write_json(args.output_dir/"independent_verifier_output.json",result["verifier_output"])
+    write_json(args.output_dir/"independent_verifier_provider_receipt.json",result["verifier_provider_receipt"])
+    write_json(args.output_dir/"verification_receipt.json",result["verification_receipt"])
+    write_json(args.cost_state,next_state)
     print(json.dumps({
       "status":result["status"],
       "verifier_model":result["verification_receipt"]["verifier_model_id"],
