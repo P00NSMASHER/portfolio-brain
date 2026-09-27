@@ -83,6 +83,7 @@ def validate_cost_governor():
         "software-factory-candidate": ROOT / ".github/workflows/software-factory-candidate.yml",
         "portfolio-notification-cycle": ROOT / ".github/workflows/portfolio-notification-cycle.yml",
         "command-center-pages": ROOT / ".github/workflows/command-center-pages.yml",
+        "agent-heartbeat-sweep": ROOT / ".github/workflows/agent-heartbeat-sweep.yml",
     }
     for name, path in governed_workflows.items():
         body = path.read_text().lower()
