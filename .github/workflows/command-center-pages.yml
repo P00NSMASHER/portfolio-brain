@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "dashboard/**"
+      - "commercial_evidence/**"
       - "workload_control/**"
       - "cost_governor/**"
       - "operations/**"
