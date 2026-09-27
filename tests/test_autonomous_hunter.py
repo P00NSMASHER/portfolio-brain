@@ -77,6 +77,55 @@ class HunterTests(unittest.TestCase):
         self.assertEqual(s["strategy_stats"][feedback["strategy_id"]]["verified_value_outcomes"],1)
         with self.assertRaises(HunterError):apply_verified_feedback(s,feedback)
 
+    def test_rejection_funnel_reconciles_every_inspected_candidate(self):
+        _,receipt=run_cycle(load_seed_state(),FakeProvider(),at="2026-09-25T18:00:00Z")
+        funnel=receipt["rejection_funnel"]
+        self.assertTrue(funnel["candidate_accounting_reconciled"])
+        self.assertTrue(funnel["disposition_accounting_reconciled"])
+        self.assertEqual(
+            funnel["inspection_attempted"],
+            funnel["retained"]+funnel["duplicates"]+funnel["rejected"]
+        )
+        self.assertEqual(
+            funnel["normalized_candidates"],
+            funnel["inspection_attempted"]+funnel["inspection_budget_deferred"]
+        )
+        self.assertEqual(len(receipt["query_outcomes"]),sum(len(x["queries"]) for x in receipt["objectives"]))
+
+    def test_every_nonretained_finding_has_machine_readable_reason_and_trace(self):
+        provider=FakeProvider(inspection={"revision":"a"*40,"tree_sha":"b"*40,"paths":["src/core.py","README.md"],"truncated":False})
+        _,receipt=run_cycle(load_seed_state(),provider,at="2026-09-25T18:00:00Z")
+        nonretained=[x for x in receipt["findings"] if x["disposition"]!="RETAIN"]
+        self.assertTrue(nonretained)
+        self.assertTrue(all(x["negative_reason"] for x in nonretained))
+        self.assertTrue(all(x["decision_trace"]["reason_code"]==x["negative_reason"] for x in nonretained))
+        counted=sum(receipt["rejection_funnel"]["rejection_reasons"].values())
+        self.assertEqual(counted,receipt["rejection_funnel"]["duplicates"]+receipt["rejection_funnel"]["rejected"]+receipt["rejection_funnel"]["queries_suppressed"])
+
+    def test_zero_result_and_suppressed_queries_are_visible_in_funnel(self):
+        s=load_seed_state()
+        s,r1=run_cycle(s,FakeProvider(results=[]),at="2026-09-25T18:00:00Z")
+        self.assertGreater(r1["rejection_funnel"]["queries_zero_results"],0)
+        s,_=run_cycle(s,FakeProvider(results=[]),at="2026-09-25T19:00:00Z")
+        s,r3=run_cycle(s,FakeProvider(results=[]),at="2026-09-25T20:00:00Z")
+        self.assertGreater(r3["rejection_funnel"]["queries_suppressed"],0)
+        self.assertTrue(any(x["status"]=="SUPPRESSED_REPEAT_DEAD_END" for x in r3["query_outcomes"]))
+        self.assertIn("REPEATED_DEAD_END_SUPPRESSED",r3["rejection_funnel"]["rejection_reasons"])
+
+    def test_inspection_budget_deferrals_are_counted_not_silently_dropped(self):
+        results=[
+          {"id":i,"full_name":f"public/example-{i}","default_branch":"main","private":False}
+          for i in range(1,6)
+        ]
+        _,receipt=run_cycle(load_seed_state(),FakeProvider(results=results),at="2026-09-25T18:00:00Z")
+        funnel=receipt["rejection_funnel"]
+        self.assertGreater(funnel["inspection_budget_deferred"],0)
+        self.assertTrue(funnel["candidate_accounting_reconciled"])
+        self.assertEqual(
+            funnel["normalized_candidates"],
+            funnel["inspection_attempted"]+funnel["inspection_budget_deferred"]
+        )
+
     def test_repository_count_has_no_direct_reward(self):
         from hunting.autonomous_hunter import load_policy
         self.assertEqual(load_policy()["repository_count_reward"],0)
