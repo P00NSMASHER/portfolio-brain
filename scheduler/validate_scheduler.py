@@ -27,6 +27,8 @@ def validate_scheduler():
     req(handoff["exact_revision_reinspection_required"] is True and handoff["license_metadata_is_not_reuse_authority"] is True,"Hunter proposal evidence safeguards weakened")
     req(handoff["origin_cycle_required"] is True,"Hunter proposal origin-cycle provenance disabled")
     req(handoff["backlog_priority_mode"]=="RANK_SCORE_DESC_THEN_FIRST_SEEN_FIFO","Hunter proposal backlog priority mode drifted")
+    req(handoff["continuation_class"]=="CONTINUATION","Hunter proposal review lost continuation classification")
+    req(handoff["continuation_priority_policy"]=="CONTINUATION_BEFORE_NEW_WORK_WITHIN_SAME_GATE","Hunter proposal continuation priority drifted")
     proposal_seed=load_hunter_proposal_seed();validate_hunter_proposal_state(proposal_seed)
     req(proposal_seed.get("origins")=={},"Hunter proposal seed origin map must be empty")
     proposal_review_seed=load_hunter_proposal_review_seed();validate_hunter_proposal_review_state(proposal_review_seed)
@@ -69,8 +71,10 @@ def validate_scheduler():
     scheduler_source=(ROOT/"scheduler/autonomous_scheduler.py").read_text()
     for token in ["hunter-origin-cycle:","hunter-origin-receipt:","hunter-origin-sequence:","hunter-last-seen-sequence:"]:
         req(token in scheduler_source,f"Hunter proposal scheduler provenance missing {token}")
+    for token in ['continuation_class="CONTINUATION"','"CONTINUATION":0','THEN_CONTINUATION_CLASS']:
+        req(token in scheduler_source,f"Scheduler continuation ordering missing {token}")
     for forbidden in ["contents: write","pull-requests: write","deployments: write","id-token: write","git push","gh pr","openai","anthropic"]:
         req(forbidden not in wf,f"forbidden scheduler workflow capability: {forbidden}")
     req("git push origin head:main" not in (ROOT/"scheduler/SCHEDULER_CONTRACT.md").read_text().lower(),"upstream direct-main behavior adopted")
-    return {"work_types":7,"selected_current":len(selected),"blocked_approval":0,"queued_agents":len({w["assigned_agent_id"] for w in selected}),"act_work":0,"max_new_per_cycle":p["max_new_work_per_cycle"],"hunter_proposal_handoff":"OBSERVE_RESEARCH","hunter_proposal_backlog_priority":handoff["backlog_priority_mode"],"hunter_proposal_seed_sequence":proposal_seed["sequence"],"hunter_proposal_review_seed_sequence":proposal_review_seed["sequence"]}
+    return {"work_types":7,"selected_current":len(selected),"blocked_approval":0,"queued_agents":len({w["assigned_agent_id"] for w in selected}),"act_work":0,"max_new_per_cycle":p["max_new_work_per_cycle"],"hunter_proposal_handoff":"OBSERVE_RESEARCH","hunter_proposal_backlog_priority":handoff["backlog_priority_mode"],"hunter_proposal_continuation_priority":handoff["continuation_priority_policy"],"hunter_proposal_seed_sequence":proposal_seed["sequence"],"hunter_proposal_review_seed_sequence":proposal_review_seed["sequence"]}
 if __name__=="__main__":print("portfolio-brain Step 19 scheduler: PASS",json.dumps(validate_scheduler(),sort_keys=True))

@@ -81,9 +81,10 @@ def build_context(*,factory_work_items=None,learning_state=None,hunter_proposal_
     hunter_proposal_state=normalize_hunter_proposal_state(hunter_proposal_state)
     return {"uncertainty":uncertainty,"experiments":experiments,"allocation":allocation,"learning":learning,"repair":repair,"transfer":transfer,"factory_work_items":factory,"hunter_proposal_state":hunter_proposal_state}
 
-def _candidate(work_type,source_ref,project_ids,assigned_agent_id,goal_type,authority,consequence,*,pareto=None,rank=None,share=None,approvals=None,blockers=None,reason,evidence_refs):
+def _candidate(work_type,source_ref,project_ids,assigned_agent_id,goal_type,authority,consequence,*,pareto=None,rank=None,share=None,approvals=None,blockers=None,continuation_class="NEW_WORK",reason,evidence_refs):
+    req(continuation_class in {"CONTINUATION","NEW_WORK"},"invalid scheduler continuation class")
     core={"work_type":work_type,"source_ref":source_ref,"project_ids":sorted(project_ids),"assigned_agent_id":assigned_agent_id,"agent_goal_type":goal_type}
-    return {"fingerprint":hashv(core),**core,"required_authority":authority,"consequence":consequence,"source_pareto_layer":pareto,"source_rank_order":rank,"allocation_share_basis_points":share,
+    return {"fingerprint":hashv(core),**core,"required_authority":authority,"consequence":consequence,"continuation_class":continuation_class,"source_pareto_layer":pareto,"source_rank_order":rank,"allocation_share_basis_points":share,
             "approval_requirements":sorted(set(approvals or [])),"hard_blockers":sorted(set(blockers or [])),"selection_reason":reason,"evidence_refs":list(dict.fromkeys(evidence_refs))}
 
 def _owner_approval(exp,u):
@@ -143,6 +144,7 @@ def generate_candidates(context):
                 handoff["authority_class"],
                 consequence,
                 rank=backlog_rank,
+                continuation_class="CONTINUATION",
                 reason="Quality-gated Hunter proposal is preserved in the durable backlog and ready for exact-revision public metadata and rights-evidence review; no reuse or implementation authority is granted.",
                 evidence_refs=[
                     f"hunter-proposal:{proposal['proposal_id']}",
@@ -223,8 +225,18 @@ def generate_candidates(context):
     return candidates,blocked
 
 def _sort_key(c):
-    p=policy();return (p["gate_precedence"][c["work_type"]],99 if c["source_pareto_layer"] is None else c["source_pareto_layer"],
-        9999 if c["source_rank_order"] is None else c["source_rank_order"],-(c["allocation_share_basis_points"] or 0),c["source_ref"],c["fingerprint"])
+    p=policy()
+    continuation_order={"CONTINUATION":0,"NEW_WORK":1}
+    req(c.get("continuation_class","NEW_WORK") in continuation_order,"invalid scheduler continuation class")
+    return (
+        p["gate_precedence"][c["work_type"]],
+        continuation_order[c.get("continuation_class","NEW_WORK")],
+        99 if c["source_pareto_layer"] is None else c["source_pareto_layer"],
+        9999 if c["source_rank_order"] is None else c["source_rank_order"],
+        -(c["allocation_share_basis_points"] or 0),
+        c["source_ref"],
+        c["fingerprint"],
+    )
 
 def _work_packet(c,created_at,state="QUEUED"):
     core={"schema_version":"1.0.0","scheduler_work_id":"SWORK-"+hashlib.sha256(c["fingerprint"].encode()).hexdigest()[:20].upper(),
@@ -294,7 +306,7 @@ def schedule_cycle(state,context=None,*,at=None):
              "candidate_count":len(candidates),"selected_work":selected,
              "blocked_work":[_work_packet(b,at,"BLOCKED_APPROVAL" if b["approval_requirements"] else "BLOCKED_POLICY") for b in blocked],
              "suppressed_duplicates":sorted(suppressed),"stale_lease_holds":sorted(stale),"compacted_terminal_work":compacted,
-             "selection_method":"EXPLICIT_GATE_PRECEDENCE_THEN_SOURCE_PARETO_RANK_ALLOCATION_SHARE_NO_SCALAR_SCORE"}
+             "selection_method":"EXPLICIT_GATE_PRECEDENCE_THEN_CONTINUATION_CLASS_SOURCE_PARETO_RANK_ALLOCATION_SHARE_NO_SCALAR_SCORE"}
     receipt["receipt_hash"]=hashv(receipt)
     new_state["recent_cycles"]=([*new_state["recent_cycles"],{"cycle_id":cid,"finished_at":at,"receipt_hash":receipt["receipt_hash"],"selected_count":len(selected)}])[-20:]
     validate_state(new_state);return new_state,receipt
