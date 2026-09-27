@@ -28,14 +28,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Restore latest cost-governor state
-        run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
-
       - name: Reserve bounded feedback-bootstrap compute
         id: cost
         run: >-
           python -m cost_governor.workflow_gate preflight
-          --state cost_governor/live/cost_state.json
+          --state cost_governor/COST_STATE_SEED.json
           --output-dir cost_governor/out
           --workflow-id verified-feedback-bootstrap
           --job-id feedback
@@ -152,15 +149,6 @@ jobs:
         with:
           name: portfolio-learning-observation-state
           path: value_proof/out/learning_observation_state.json
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Upload sanitized cost-governor continuation state
-        if: ${{ always() && hashFiles('cost_governor/out/cost_state.json') != '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: portfolio-cost-governor-state
-          path: cost_governor/out/
           if-no-files-found: error
           retention-days: 30
 
