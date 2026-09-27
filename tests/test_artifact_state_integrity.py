@@ -89,6 +89,47 @@ class ArtifactStateIntegrityTests(unittest.TestCase):
             self.assertEqual(status,"RESTORED_AFTER_REJECTING_1_INVALID")
             self.assertEqual(json.loads(output.read_text())["sequence"],4)
 
+    def test_later_uploaded_stale_snapshot_cannot_roll_state_backward(self):
+        with tempfile.TemporaryDirectory() as td:
+            output=Path(td)/"runtime_state.json"
+            metadata=Path(td)/"restore.json"
+            status=self.restore(
+                self.candidates(),
+                {
+                    "new":artifact("runtime_state.json",self.state(4)),
+                    "old":artifact("runtime_state.json",self.state(9)),
+                },
+                output,
+                metadata,
+            )
+            self.assertEqual(status,"RESTORED_HIGHEST_SEQUENCE")
+            self.assertEqual(json.loads(output.read_text())["sequence"],9)
+            receipt=json.loads(metadata.read_text())
+            self.assertEqual(receipt["artifact_id"],1)
+            self.assertEqual(receipt["source_sequence"],9)
+            self.assertEqual(receipt["candidates_inspected"],2)
+
+    def test_restore_scan_is_bounded(self):
+        data={"artifacts":[
+            {
+                "id":index,
+                "created_at":f"2026-09-26T{index:02d}:00:00Z",
+                "archive_download_url":f"artifact-{index}",
+                "workflow_run":{"id":index,"head_branch":"main"},
+            }
+            for index in range(10,0,-1)
+        ]}
+        downloads=[]
+        def download(url):
+            downloads.append(url)
+            return artifact("runtime_state.json",self.state(int(url.rsplit("-",1)[1])))
+        with tempfile.TemporaryDirectory() as td:
+            output=Path(td)/"runtime_state.json"
+            status=self.restore(data,download,output)
+            self.assertEqual(status,"RESTORED")
+            self.assertEqual(len(downloads),5)
+            self.assertEqual(json.loads(output.read_text())["sequence"],10)
+
     def test_unavailable_newest_falls_back_to_newest_valid_predecessor(self):
         with tempfile.TemporaryDirectory() as td:
             output=Path(td)/"runtime_state.json"

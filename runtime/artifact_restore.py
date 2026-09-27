@@ -23,7 +23,7 @@ def _validated_payload(
     max_archive_bytes: int,
     max_state_bytes: int,
     validator: Callable[[dict[str, Any]], None] | None,
-) -> bytes:
+) -> tuple[bytes, int]:
     if len(raw) > max_archive_bytes:
         raise InvalidStateArtifact("artifact archive exceeds byte budget")
     try:
@@ -54,7 +54,7 @@ def _validated_payload(
             validator(state)
         except Exception as exc:
             raise InvalidStateArtifact("state payload failed subsystem validation") from exc
-    return body
+    return body, state["sequence"]
 
 
 def _atomic_write(output: Path, payload: bytes) -> None:
@@ -91,7 +91,10 @@ def restore_latest_valid_state(
     max_state_bytes: int,
     validator: Callable[[dict[str, Any]], None] | None = None,
     metadata_output: Path | None = None,
+    max_candidates: int = 5,
 ) -> str:
+    if type(max_candidates) is not int or max_candidates < 1:
+        raise ValueError("max_candidates must be a positive integer")
     candidates = [
         item
         for item in data.get("artifacts", [])
@@ -117,7 +120,8 @@ def restore_latest_valid_state(
         return "NO_PRIOR_ARTIFACT"
     candidates.sort(key=lambda item: (item.get("created_at", ""), item.get("id", 0)), reverse=True)
     rejected = 0
-    for item in candidates:
+    valid: list[tuple[int, dict[str, Any], bytes]] = []
+    for item in candidates[:max_candidates]:
         url = item.get("archive_download_url")
         if not isinstance(url, str) or not url:
             rejected += 1
@@ -133,7 +137,7 @@ def restore_latest_valid_state(
             rejected += 1
             continue
         try:
-            payload = _validated_payload(
+            payload, sequence = _validated_payload(
                 raw,
                 member_name=member_name,
                 expected_state_id=expected_state_id,
@@ -144,19 +148,34 @@ def restore_latest_valid_state(
         except InvalidStateArtifact:
             rejected += 1
             continue
-        _atomic_write(output, payload)
-        status="RESTORED" if rejected == 0 else f"RESTORED_AFTER_REJECTING_{rejected}_INVALID"
-        if metadata_output is not None:
-            workflow_run=item.get("workflow_run") or {}
-            _atomic_write(metadata_output, (json.dumps({
-                "schema_version":"1.0.0",
-                "restore_status":status,
-                "artifact_id":item.get("id"),
-                "artifact_name":item.get("name"),
-                "artifact_created_at":item.get("created_at"),
-                "artifact_expires_at":item.get("expires_at"),
-                "source_run_id":workflow_run.get("id"),
-                "source_head_sha":workflow_run.get("head_sha"),
-            },sort_keys=True)+"\n").encode("utf-8"))
-        return status
-    raise InvalidStateArtifact("no valid prior state artifact found")
+        valid.append((sequence, item, payload))
+    if not valid:
+        raise InvalidStateArtifact("no valid prior state artifact found")
+
+    # Upload completion time is not a state-version clock. Concurrent or retried
+    # workflows can upload a stale snapshot after a more advanced predecessor.
+    # Choose the greatest validated sequence within the bounded restore window;
+    # creation time remains the deterministic tie-breaker because ``valid``
+    # preserves the newest-first candidate order.
+    highest_sequence = max(entry[0] for entry in valid)
+    sequence, item, payload = next(entry for entry in valid if entry[0] == highest_sequence)
+    selected_newest_valid = item is valid[0][1]
+    status = "RESTORED" if selected_newest_valid else "RESTORED_HIGHEST_SEQUENCE"
+    if rejected:
+        status += f"_AFTER_REJECTING_{rejected}_INVALID"
+    _atomic_write(output, payload)
+    if metadata_output is not None:
+        workflow_run=item.get("workflow_run") or {}
+        _atomic_write(metadata_output, (json.dumps({
+            "schema_version":"1.0.0",
+            "restore_status":status,
+            "artifact_id":item.get("id"),
+            "artifact_name":item.get("name"),
+            "artifact_created_at":item.get("created_at"),
+            "artifact_expires_at":item.get("expires_at"),
+            "source_run_id":workflow_run.get("id"),
+            "source_head_sha":workflow_run.get("head_sha"),
+            "source_sequence":sequence,
+            "candidates_inspected":min(len(candidates), max_candidates),
+        },sort_keys=True)+"\n").encode("utf-8"))
+    return status
