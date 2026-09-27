@@ -3,3 +3,4 @@ reason=validate-semantic-query-expansion
 model-calls=0
 authority=OBSERVE
 proof=2-fair-inspection-quality-gate
+proof=3-persist-proposal-inbox
