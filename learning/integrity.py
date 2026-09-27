@@ -21,15 +21,24 @@ def req(ok:bool,msg:str)->None:
     if not ok:
         raise LearningIntegrityError(msg)
 
-def _learning_outcome_ids(state:dict[str,Any])->set[str]:
-    ids=set()
+def _learning_sources(state:dict[str,Any])->dict[str,str]:
+    rows={}
     for key in state["applied_source_keys"]:
         if not isinstance(key,str) or not key.startswith("value-outcome:"):
             continue
         parts=key.split(":",2)
-        if len(parts)>=2 and parts[1]:
-            ids.add(parts[1])
-    return ids
+        if len(parts)==3 and parts[1] and parts[2].startswith("sha256:"):
+            rows[parts[1]]=parts[2]
+    return rows
+
+def _learning_observation_counts_by_outcome_hash(state:dict[str,Any])->dict[str,int]:
+    counts={}
+    for observation in state["observations"]:
+        for ref in observation["provenance_refs"]:
+            if isinstance(ref,str) and ref.startswith("value-outcome:sha256:"):
+                outcome_hash=ref[len("value-outcome:"):]
+                counts[outcome_hash]=counts.get(outcome_hash,0)+1
+    return counts
 
 def build_learning_integrity(
     hunter_state:dict[str,Any],
@@ -60,7 +69,9 @@ def build_learning_integrity(
         bucket["task_kinds"].add(ctx["task_kind"])
 
     event_ids=set(events)
-    learning_ids=_learning_outcome_ids(learning_state)
+    learning_sources=_learning_sources(learning_state)
+    learning_ids=set(learning_sources)
+    learning_observation_counts=_learning_observation_counts_by_outcome_hash(learning_state)
     hunter_verified=sum(
         int(stats.get("verified_value_outcomes",0))
         for stats in hunter_state["strategy_stats"].values()
@@ -72,9 +83,15 @@ def build_learning_integrity(
     }
     missing_learning=sorted(event_ids-learning_ids)
     orphan_learning=sorted(learning_ids-event_ids)
+    learning_payload_complete=all(
+        learning_observation_counts.get(learning_sources[event_id],0)>=3
+        for event_id in event_ids
+        if event_id in learning_sources
+    ) and not missing_learning
     checks={
       "all_verified_events_have_builder_and_verifier":fully_independent==event_ids,
       "all_verified_events_reach_continuous_learning":not missing_learning,
+      "continuous_learning_payloads_are_complete":learning_payload_complete,
       "no_orphan_learning_value_events":not orphan_learning,
       "hunter_value_credit_covers_verified_events":hunter_verified>=len(event_ids),
       "learning_observations_are_verified":all(
@@ -98,6 +115,7 @@ def build_learning_integrity(
           "task_kinds":sorted(bucket["task_kinds"]),
           "feedback_record_count":len(bucket["feedback_ids"]),
           "continuous_learning_present":event_id in learning_ids,
+          "continuous_learning_observations":0 if event_id not in learning_sources else learning_observation_counts.get(learning_sources[event_id],0),
           "builder_verifier_present":event_id in fully_independent,
         })
 
