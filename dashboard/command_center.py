@@ -106,6 +106,66 @@ def _kill_switch(name: str, path: str, field: str = "disabled") -> dict[str, Any
     }
 
 
+def build_repair_issues(snapshot: dict[str, Any]) -> list[dict[str, str]]:
+    """Actionable observations only; a receipt's presence is not proof of work."""
+    system = snapshot["system"]
+    telemetry = snapshot["telemetry"]
+    sources = snapshot["state_sources"]
+    issues: list[dict[str, str]] = []
+
+    def add(severity: str, title: str, detail: str, evidence: str, check: str) -> None:
+        prompt = (
+            "Audit P00NSMASHER/portfolio-brain on current main for: " + title + ". "
+            "Observed in the published snapshot: " + detail + " Evidence: " + evidence + ". "
+            "Check the latest GitHub Actions runs and durable artifacts first; distinguish stale publication "
+            "from a current failure. Reproduce the root cause, make the smallest safe repair on a branch, "
+            "run deterministic validation and verify a new end-to-end receipt. " + check + " "
+            "Do not weaken checks, alter cost or authority gates, merge, deploy, or claim success without evidence."
+        )
+        issues.append({"severity": severity, "title": title, "detail": detail, "evidence_ref": evidence, "prompt": prompt})
+
+    if sources["bridge_status"] != "LIVE":
+        add("HIGH", "Live state bridge is not current", f"Bridge reports {sources['bridge_status']}.",
+            "dashboard/live/state_sources.json", "Verify the Pages bridge restored the newest valid artifact for each required source.")
+    stale = [(name, row) for name, row in sources["sources"].items() if row["status"] != "LIVE"]
+    if stale:
+        detail = ", ".join(f"{name}={row['status']}" for name, row in stale)
+        add("HIGH", "Subsystem evidence needs refresh", detail, "dashboard/live/state_sources.json",
+            "Inspect artifact age, producing workflow and source run for each listed subsystem; keep fallback explicitly labeled.")
+    proof = telemetry["runtime_sync_proof"]
+    if proof["status"] != "VERIFIED_SYNC_WORK":
+        add("HIGH", "Scheduled sync lacks verified work", f"Sync proof: {proof['status']} ({proof['reason']}).",
+            "dashboard/operational_telemetry.py", "Verify the scheduled sync did governed work rather than only publishing a green receipt.")
+    stale_agents = [a["name"] for a in snapshot["agents"] if a["heartbeat_health"] in {"STALE", "NEVER"}]
+    if stale_agents:
+        add("HIGH", "Agent evidence is stale", f"{len(stale_agents)} of {system['agent_count']} agents: {', '.join(stale_agents)}.",
+            "dashboard/operational_telemetry.py", "Check recent substantive work separately from HEALTH_CHECK heartbeats; repair the producer or classification.")
+    if telemetry["queue"].get("stalled_open_count", 0) or system["stalled_agent_count"]:
+        add("HIGH", "Open work may be stalled",
+            f"Stalled work {telemetry['queue'].get('stalled_open_count', 0)}; stalled agents {system['stalled_agent_count']}.",
+            "scheduler/SCHEDULER_STATE_SEED.json; dashboard/operational_telemetry.py",
+            "Reconcile leases, assigned work, actual work receipts and retries without manufacturing heartbeat activity.")
+    if telemetry["failures"]["count"]:
+        add("HIGH", "Durable failures need diagnosis", f"{telemetry['failures']['count']} failure signals.",
+            "dashboard/operational_telemetry.py", "Classify each current failure, repair its root cause and check an independent run.")
+    provider = snapshot["model_router"]["provider_readiness"]
+    if snapshot["model_router"]["enabled_non_tier0_route_count"] and provider["status"] != "READY":
+        add("HIGH", "Model route is unverified", f"Provider status {provider['status']}; cost gate {provider.get('cost_gate_status') or 'unknown'}.",
+            "runtime/provider_health.py", "Verify one bounded governed model call if authorized; keep provider billing and cost limits separate.")
+    integrity = snapshot["learning_loop"]["integrity"]
+    if integrity["status"] == "DEGRADED":
+        add("HIGH", "Verified learning has not reconciled", f"Integrity status {integrity['status']}.",
+            "learning/integrity.py", "Trace the exact verified event through Hunter, model feedback and continuous learning.")
+    engaged = [k["name"] for k in snapshot["kill_switches"] if k["engaged"]]
+    if engaged:
+        add("REVIEW", "Kill switches are engaged", ", ".join(engaged), "runtime/KILL_SWITCH.json and subsystem switch files",
+            "Determine why each switch is engaged; require the owner's decision before changing any switch.")
+    if snapshot["portfolio"]["blocked_action_count"]:
+        add("REVIEW", "Work awaits a human gate", f"{snapshot['portfolio']['blocked_action_count']} blocked items.",
+            "dashboard/executive_dashboard.py", "Summarize the exact approval or authority boundary for each item; do not bypass it.")
+    return sorted(issues, key=lambda row: (0 if row["severity"] == "HIGH" else 1, row["title"]))
+
+
 def build_command_center_snapshot() -> dict[str, Any]:
     executive = build_dashboard_snapshot()
     operating = load_json("operations/OPERATING_MODE_STATUS.json")
@@ -287,6 +347,12 @@ def build_command_center_snapshot() -> dict[str, Any]:
         functional_reasons.append(f"{engaged_switches} kill switch(es) engaged")
     if stalled_agents:
         functional_reasons.append(f"{stalled_agents} agent(s) have stale queued work without productive activity")
+    stale_role_count = sum(1 for a in agents if a["heartbeat_health"] in {"STALE", "NEVER"})
+    if stale_role_count:
+        functional_reasons.append(f"{stale_role_count} agent(s) have stale or missing heartbeat evidence")
+    stale_source_count = sum(1 for src in state_sources["sources"].values() if src["status"] != "LIVE")
+    if stale_source_count:
+        functional_reasons.append(f"{stale_source_count} subsystem source(s) are stale or using fallback")
     if telemetry["failures"]["count"]:
         functional_reasons.append(f"{telemetry['failures']['count']} durable failure/stall signal(s)")
     if enabled_model_routes and provider_health["status"] != "READY":
@@ -563,6 +629,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
             )
         ),
     }
+    snapshot["repair_issues"] = build_repair_issues(snapshot)
     snapshot["snapshot_hash"] = hash_value(snapshot)
     return snapshot
 
@@ -716,6 +783,15 @@ def render_html(snapshot: dict[str, Any]) -> str:
     )
 
     workflow_rows = "".join(f"<li><code>{_e(name)}</code></li>" for name in snapshot["workflows"])
+    repair_issues = snapshot["repair_issues"]
+    repair_cards = "".join(
+        f'''<article class="repair-item">
+          <div class="repair-item-head"><span class="repair-index">{index:02d}</span><div><h3>{_e(issue['title'])}</h3><p>{_e(issue['detail'])}</p></div>{_badge(issue['severity'], 'bad' if issue['severity']=='HIGH' else 'warn')}</div>
+          <div class="repair-source">Evidence · <code>{_e(issue['evidence_ref'])}</code></div>
+          <details class="repair-details"><summary>View repair prompt</summary><div class="repair-prompt"><p id="repair-prompt-{index}">{_e(issue['prompt'])}</p><button type="button" class="copy-repair" data-copy-target="repair-prompt-{index}">Copy prompt</button></div></details>
+        </article>'''
+        for index, issue in enumerate(repair_issues, 1)
+    ) or '<p class="repair-empty">No defects detected in this snapshot. This is not a guarantee of complete operation; inspect the evidence age and recent end-to-end receipts.</p>'
     guardrails = "".join(f"<li>{_e(x)}</li>" for x in sprint["guardrails"])
     allowed = "".join(f"<li>{_e(x)}</li>" for x in snapshot["operator_boundary"]["allowed"])
     blocked = "".join(f"<li>{_e(x)}</li>" for x in snapshot["operator_boundary"]["not_allowed"])
@@ -1614,6 +1690,38 @@ li{{margin:.45rem 0;line-height:1.42}}
 .mono{{font-family:"SFMono-Regular",ui-monospace,Menlo,monospace}}
 .footer{{color:var(--muted);font-size:.7rem;text-align:center;padding:52px 0 10px}}
 .empty{{color:var(--muted);padding:20px 14px}}
+.repair-board{{position:relative;isolation:isolate;overflow:hidden;margin:0 0 20px;padding:28px;border:1px solid rgba(72,171,255,.32);border-radius:28px;background:linear-gradient(130deg,#080e20 0%,#0d1730 53%,#10112b 100%);color:#f3f8ff;box-shadow:0 22px 64px rgba(15,55,120,.20)}}
+.repair-board::before{{content:"";position:absolute;z-index:-1;inset:0;background:radial-gradient(ellipse 400px 250px at 93% 0%,rgba(85,91,254,.28),transparent),linear-gradient(90deg,transparent 98.8%,rgba(112,207,255,.06) 99%),linear-gradient(0deg,transparent 98.8%,rgba(112,207,255,.06) 99%);background-size:auto,28px 28px,28px 28px;pointer-events:none}}
+.repair-head{{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}}
+.repair-kicker{{font:650 .67rem/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;color:#79d7ff}}
+.repair-pulse{{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:8px;background:#55d5ff;box-shadow:0 0 0 4px rgba(85,213,255,.12),0 0 18px #55d5ff}}
+.repair-head h2{{font-size:clamp(1.6rem,3.5vw,2.7rem);letter-spacing:-.045em;line-height:1.08;margin:12px 0 8px;color:#fff}}
+.repair-head p{{max-width:650px;color:#aabbd3;font-size:.9rem}}
+.repair-count{{flex:none;min-width:84px;display:grid;place-items:center;padding:10px;border:1px solid rgba(124,210,255,.29);border-radius:17px;background:rgba(42,87,146,.20)}}
+.repair-count strong{{font-size:1.8rem;line-height:1;color:#fff;font-variant-numeric:tabular-nums}}
+.repair-count span{{font-size:.57rem;text-transform:uppercase;letter-spacing:.08em;color:#aabbd3;text-align:center}}
+.repair-meta{{display:flex;align-items:center;flex-wrap:wrap;gap:9px 15px;margin:18px 0;padding:12px 0;border-block:1px solid rgba(124,210,255,.16);color:#bdcde1;font-size:.72rem}}
+.repair-board .badge{{border-color:rgba(255,255,255,.18)}}
+.repair-list{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}}
+.repair-item{{min-width:0;padding:17px;border:1px solid rgba(126,185,240,.20);border-radius:17px;background:rgba(13,29,57,.78)}}
+.repair-item-head{{display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:start;gap:10px}}
+.repair-index{{color:#66d9ff;font:600 .72rem ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:4px}}
+.repair-item h3{{margin:0;color:#f7fbff;font-size:.97rem;line-height:1.25;letter-spacing:-.02em}}
+.repair-item p{{color:#afc2d9;font-size:.79rem;line-height:1.47;margin:6px 0 0;overflow-wrap:anywhere}}
+.repair-source{{margin:12px 0 0 34px;color:#92a9c3;font-size:.67rem;overflow-wrap:anywhere}}
+.repair-source code{{color:#84cfef;font-size:.65rem}}
+.repair-details{{margin:12px 0 0 34px}}
+.repair-details summary{{list-style:none;cursor:pointer;width:max-content;max-width:100%;color:#83dcff;font-size:.75rem;font-weight:680;padding:6px 0}}
+.repair-details summary::-webkit-details-marker{{display:none}}
+.repair-details summary::after{{content:" +"}}
+.repair-details[open] summary::after{{content:" −"}}
+.repair-prompt{{padding:11px 12px;border:1px solid rgba(124,210,255,.19);border-radius:11px;background:rgba(0,8,24,.46)}}
+.repair-prompt p{{white-space:pre-wrap;color:#d7e8f8;margin:0;font-size:.76rem}}
+.repair-board .copy-repair{{min-height:40px;margin-top:12px;padding:8px 13px;background:#58ccff;color:#08152a;border-radius:10px;font-size:.74rem;font-weight:720}}
+.repair-board .copy-repair:focus-visible,.repair-details summary:focus-visible{{outline:2px solid #fff;outline-offset:3px}}
+.repair-foot,.repair-board .repair-empty{{color:#aabbd3;font-size:.75rem;line-height:1.45;margin:16px 0 0}}
+.publication-stale{{margin-bottom:10px;border-color:rgba(255,197,107,.55)}}
+.publication-stale[hidden]{{display:none}}
 section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
 #live-state{{background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--blue) 4%,var(--surface-solid)))}}
 #operations{{background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--cyan) 3%,var(--surface-solid)))}}
@@ -1709,6 +1817,8 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
   .source-mobile-specs{{grid-template-columns:repeat(2,minmax(0,1fr))}}
   .project-mobile-badges{{max-width:52%}}
   .mobile-stats-3{{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  .repair-list{{grid-template-columns:1fr}}
+  .repair-board{{padding:18px;border-radius:22px}}
 }}
 
 @media(max-width:520px){{
@@ -1717,7 +1827,7 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
   nav a{{padding:7px 10px;font-size:.68rem}}
   .brand div:last-child{{font-size:0}}
   .brand div:last-child::after{{content:"Brain";font-size:.76rem}}
-  .topbar{{min-height:320px;padding-top:46px}}
+  .topbar{{min-height:0;padding:26px 6px 20px}}
   .eyebrow{{font-size:.66rem}}
   h1{{font-size:clamp(2.9rem,17vw,4.5rem)}}
   .hero-lede{{font-size:.98rem}}
@@ -1727,6 +1837,18 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
   .kpi .value{{font-size:2.15rem}}
   .switches{{grid-template-columns:1fr}}
   .mobile-stats-3{{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .repair-board{{margin-bottom:14px;padding:17px 14px}}
+  .repair-head{{gap:8px}}
+  .repair-head h2{{font-size:1.85rem}}
+  .repair-count{{min-width:58px;padding:7px 5px}}
+  .repair-count strong{{font-size:1.5rem}}
+  .repair-count span{{font-size:.5rem}}
+  .repair-meta{{gap:8px;font-size:.68rem}}
+  .repair-item{{padding:13px}}
+  .repair-item-head{{grid-template-columns:17px minmax(0,1fr) auto;gap:7px}}
+  .repair-item h3{{font-size:.87rem}}
+  .repair-item-head .badge{{font-size:.57rem;padding:5px 6px}}
+  .repair-details,.repair-source{{margin-left:24px}}
   .mobile-record{{padding:14px}}
   .mobile-record-head{{gap:9px}}
   .mobile-title strong{{font-size:.94rem}}
@@ -1761,6 +1883,14 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       <button type="button" onclick="navigator.clipboard && navigator.clipboard.writeText(document.getElementById('snapshotHash').textContent)">Copy hash</button>
     </div>
   </header>
+
+  <section class="repair-board" id="repair-board" aria-labelledby="repair-title" data-as-of="{_e(source_bundle.get('generated_at') or '')}">
+    <div class="repair-head"><div><div class="repair-kicker"><span class="repair-pulse"></span> SYSTEM DIAGNOSTICS · READ ONLY</div><h2 id="repair-title">Keep the Brain operational.</h2><p>Evidence-backed issues and a focused prompt for each repair. Recheck against the latest run before changing code.</p></div><div class="repair-count"><strong>{len(repair_issues)}</strong><span>snapshot issues</span></div></div>
+    <div class="repair-meta"><span>{_badge(system['functional_status'], _status_tone(system['functional_status']))}</span><span>Evidence captured <time>{_e(source_bundle.get('generated_at') or 'unknown')}</time></span><span id="snapshot-age" role="status">Checking publication age…</span></div>
+    <article class="repair-item publication-stale" id="publication-stale" hidden><div class="repair-item-head"><span class="repair-index">!</span><div><h3>Published view is out of date</h3><p id="publication-age-detail">The latest run may differ from this snapshot.</p></div>{_badge('CHECK NOW', 'warn')}</div><details class="repair-details"><summary>View repair prompt</summary><div class="repair-prompt"><p id="publication-repair-prompt">Audit the latest P00NSMASHER/portfolio-brain Pages workflow and its durable state bridge against current main. The public dashboard snapshot is older than the expected hourly refresh window or has no timestamp. Check the newest run, artifact continuity, publication gate and deployment status. Repair the root cause on a branch and verify a fresh published snapshot with valid source receipts. Do not change the cost ceiling, authority gates or tests to force green.</p><button type="button" class="copy-repair" data-copy-target="publication-repair-prompt">Copy prompt</button></div></details></article>
+    <div class="repair-list">{repair_cards}</div>
+    <p class="repair-foot">A healthy badge reflects only checks supported by this snapshot. A heartbeat check alone does not prove useful work. No action runs from this public page.</p>
+  </section>
 
   <section class="grid kpis">
     <div class="card kpi"><div class="label">Projects</div><div class="value">{system["project_count"]}</div><div class="hint">{len([p for p in snapshot["projects"] if p["lifecycle_status"] == "ACTIVE"])} active</div></div>
@@ -2063,6 +2193,29 @@ function filterProjects(q) {{
     item.style.display = item.dataset.project.indexOf(q) >= 0 ? "" : "none";
   }});
 }}
+function updatePublicationAge() {{
+  const board = document.getElementById("repair-board");
+  const captured = Date.parse(board.dataset.asOf || "");
+  const age = Number.isFinite(captured) ? Math.max(0, Math.floor((Date.now() - captured) / 60000)) : null;
+  const ageLabel = document.getElementById("snapshot-age");
+  const stale = age === null || age > 120;
+  ageLabel.textContent = age === null ? "Publication age unknown" : "Published evidence " + (age < 60 ? age + "m" : Math.floor(age / 60) + "h " + age % 60 + "m") + " old";
+  ageLabel.style.color = stale ? "#ffcf83" : "#9de6bf";
+  document.getElementById("publication-stale").hidden = !stale;
+  if (stale) document.getElementById("publication-age-detail").textContent = age === null ? "No valid publication timestamp is present." : "Published evidence is " + age + " minutes old; refresh is expected approximately hourly. Check the latest workflow before relying on these statuses.";
+}}
+updatePublicationAge();
+document.addEventListener("visibilitychange", function() {{ if (!document.hidden) updatePublicationAge(); }});
+document.querySelectorAll(".copy-repair").forEach(function(button) {{
+  button.addEventListener("click", function() {{
+    const target = document.getElementById(button.dataset.copyTarget);
+    if (!target || !navigator.clipboard) return;
+    navigator.clipboard.writeText(target.textContent).then(function() {{
+      button.textContent = "Copied";
+      setTimeout(function() {{ button.textContent = "Copy prompt"; }}, 1800);
+    }});
+  }});
+}});
 </script>
 </body>
 </html>
