@@ -62,7 +62,7 @@ class ModelRouterTests(unittest.TestCase):
         r=request(kind="ARCHITECTURE");r["provider_allowlist"]=["second"]
         self.assertEqual(route_request(r,registry())["status"],"BLOCKED_NO_ELIGIBLE_PROVIDER")
 
-    def test_verified_feedback_can_prefer_better_outcome_model_within_same_tier(self):
+    def _tier2_registry_with_alternative(self):
         reg=registry()
         reg["providers"][1]["models"].append({
           "model_id":"strong-better",
@@ -74,20 +74,39 @@ class ModelRouterTests(unittest.TestCase):
           "max_output_tokens":5000,
           "pricing":{"basis":"CONFIGURED_RATE","input_usd_per_million_tokens":4.0,"output_usd_per_million_tokens":7.0,"fixed_call_usd":0.0}
         })
+        return reg
+
+    def test_single_verified_outcome_is_warmup_and_cannot_override_cheapest_model(self):
         feedback={
           "state_id":"portfolio-model-feedback-state",
           "routing_task_summaries":{
             "ARCHITECTURE":{
-              "T2::api::strong":{"verified_outcomes":2,"mean_verified_outcome_value":0.2},
               "T2::api::strong-better":{"verified_outcomes":1,"mean_verified_outcome_value":1.0},
             }
           }
         }
-        route=route_request(request(kind="ARCHITECTURE"),reg,feedback)
+        route=route_request(request(kind="ARCHITECTURE"),self._tier2_registry_with_alternative(),feedback)
+        self.assertEqual(route["model_id"],"strong")
+        self.assertFalse(route["verified_feedback_mature"])
+        self.assertEqual(route["verified_feedback_minimum_required"],3)
+        self.assertNotIn("MATURE_VERIFIED_FEEDBACK_PREFERENCE_APPLIED",route["reason_codes"])
+
+    def test_mature_verified_feedback_can_prefer_better_outcome_model_within_same_tier(self):
+        feedback={
+          "state_id":"portfolio-model-feedback-state",
+          "routing_task_summaries":{
+            "ARCHITECTURE":{
+              "T2::api::strong":{"verified_outcomes":3,"mean_verified_outcome_value":0.2},
+              "T2::api::strong-better":{"verified_outcomes":3,"mean_verified_outcome_value":1.0},
+            }
+          }
+        }
+        route=route_request(request(kind="ARCHITECTURE"),self._tier2_registry_with_alternative(),feedback)
         self.assertEqual(route["model_id"],"strong-better")
-        self.assertIn("VERIFIED_FEEDBACK_PREFERENCE_APPLIED",route["reason_codes"])
-        self.assertEqual(route["verified_feedback_outcomes"],1)
+        self.assertIn("MATURE_VERIFIED_FEEDBACK_PREFERENCE_APPLIED",route["reason_codes"])
+        self.assertEqual(route["verified_feedback_outcomes"],3)
         self.assertEqual(route["verified_feedback_mean_value"],1.0)
+        self.assertTrue(route["verified_feedback_mature"])
         self.assertEqual(route["tier"],2)
 
     def test_verified_feedback_never_crosses_required_tier_or_independence_gate(self):
