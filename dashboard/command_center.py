@@ -540,6 +540,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
         "cost_governor": {
             "mode": cost_policy["mode"],
             "portfolio_ceiling": portfolio_ceiling,
+            "github_workload_control": cost_policy["github_workload_control"],
+            "paid_execution_workflow_names": cost_policy["paid_execution_workflow_names"],
             "reservation_count": len(cost_state["reservations"]),
             "recent_decision_count": len(cost_state["recent_decisions"]),
             "managed_workflow_names": cost_policy["managed_workflow_names"],
@@ -994,7 +996,6 @@ def render_html(snapshot: dict[str, Any]) -> str:
 
     usage_order = [
         ("cost_usd","USD"),("model_calls","Model calls"),("api_calls","API calls"),
-        ("github_job_starts","GitHub jobs"),("github_runner_minutes","Runner minutes"),
     ]
     usage_rows = "".join(
         f"""
@@ -2033,22 +2034,21 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       <div class="mobile-records">{strategy_cards}</div>
     </div>
     <div class="card" id="cost">
-      <div class="section-head"><div><h2>Cost Governor</h2><p>{_e(cost["mode"])} · {_e(source_detail("cost"))}</p></div>{source_badge("cost")}</div>
+      <div class="section-head"><div><h2>Paid Cost Governor</h2><p>Model/API spend only · {_e(source_detail("cost"))}</p></div>{source_badge("cost")}</div>
       <table><tbody>
         <tr><td>Actual cost today</td><td class="num">USD {_e(round(telemetry["cost"]["actual_usage_today"]["cost_usd"],4))}</td></tr>
         <tr><td>Actual model calls today</td><td class="num">{telemetry["cost"]["actual_usage_today"]["model_calls"]}</td></tr>
         <tr><td>Actual API calls today</td><td class="num">{telemetry["cost"]["actual_usage_today"]["api_calls"]}</td></tr>
-        <tr><td>Accounted runner minutes today</td><td class="num">{telemetry["cost"]["budget_accounted_usage_today"]["github_runner_minutes"]}</td></tr>
-        <tr><td>Daily GitHub job starts</td><td class="num">{cost["portfolio_ceiling"]["github_job_starts"]}</td></tr>
-        <tr><td>Daily runner minutes</td><td class="num">{cost["portfolio_ceiling"]["github_runner_minutes"]}</td></tr>
-        <tr><td>Paid model calls</td><td class="num">{cost["portfolio_ceiling"]["model_calls"]}</td></tr>
-        <tr><td>API calls</td><td class="num">{cost["portfolio_ceiling"]["api_calls"]}</td></tr>
-        <tr><td>Active durable reservations</td><td class="num">{cost["reservation_count"]}</td></tr>
+        <tr><td>Paid USD ceiling</td><td class="num">USD {_e(cost["portfolio_ceiling"]["cost_usd"])}/day</td></tr>
+        <tr><td>Paid model-call ceiling</td><td class="num">{cost["portfolio_ceiling"]["model_calls"]}/day</td></tr>
+        <tr><td>API-call ceiling</td><td class="num">{cost["portfolio_ceiling"]["api_calls"]}/day</td></tr>
+        <tr><td>GitHub daily job quotas</td><td class="num">OFF · workload-controlled</td></tr>
+        <tr><td>GitHub paid-ledger reservations</td><td class="num">OFF</td></tr>
+        <tr><td>Paid-execution workflow set</td><td class="num">{len(cost["paid_execution_workflow_names"])}</td></tr>
+        <tr><td>Active durable paid reservations</td><td class="num">{cost["reservation_count"]}</td></tr>
         <tr><td>Committed model/API spend</td><td class="num">${sentinel["budget"]["committed_usage"]["cost_usd"]:.4f}</td></tr>
-        <tr><td>Fail-closed expired reservation spend</td><td class="num">${sentinel["budget"]["fail_closed_expired_usage"]["cost_usd"]:.4f}</td></tr>
+        <tr><td>Fail-closed expired paid spend</td><td class="num">${sentinel["budget"]["fail_closed_expired_usage"]["cost_usd"]:.4f}</td></tr>
         <tr><td>Effective budget-accounted spend</td><td class="num">${sentinel["budget"]["effective_budget_usage"]["cost_usd"]:.4f}</td></tr>
-        <tr><td>Governed runner minutes committed</td><td class="num">{int(sentinel["github"]["governed_job_usage"]["committed_runner_minutes"])}</td></tr>
-        <tr><td>Watchdog max control-plane minutes/day</td><td class="num">{_e(sentinel["github"]["watchdog_control_plane_overhead"]["nominal_max_runner_minutes_per_day"])}</td></tr>
       </tbody></table>
       <div class="section-head" style="margin-top:16px"><h2>Kill Switches</h2>{_badge(f'{system["engaged_kill_switch_count"]} engaged', "bad" if system["engaged_kill_switch_count"] else "good")}</div>
       <div class="switches">{kill_rows}</div>
