@@ -60,6 +60,7 @@ def load_state_sources() -> dict[str, Any]:
         "notifications":"notifications/NOTIFICATION_STATE_SEED.json",
         "agents":"agents/AGENT_HEARTBEAT_STATE_SEED.json",
         "provider":"runtime/PROVIDER_HEALTH_SEED.json",
+        "model_feedback":"model_router/MODEL_FEEDBACK_STATE_SEED.json",
     }
     for name, ref in seeds.items():
         data["sources"].setdefault(name, {
@@ -118,13 +119,13 @@ def build_command_center_snapshot() -> dict[str, Any]:
     action_policy = load_json("action_engine/ACTION_POLICY.json")
     action_ledger = load_json("action_engine/GMAIL_GATEWAY_LEDGER.json")
     model_registry = load_json("model_router/PROVIDER_REGISTRY.json")
-    model_ledger = load_json("model_router/MODEL_ROUTING_LEDGER.json")
+    model_feedback_state = load_live_json("model_feedback_state.json", "model_router/MODEL_FEEDBACK_STATE_SEED.json")
     provider_health = load_live_json("provider_health.json", "runtime/PROVIDER_HEALTH_SEED.json")
     sentinel = build_sentinel_snapshot(
         cost_policy=cost_policy,
         cost_state=cost_state,
         provider_registry=model_registry,
-        model_ledger=model_ledger,
+        model_feedback_state=model_feedback_state,
         action_policy=action_policy,
         action_ledger=action_ledger,
         provider_health=provider_health,
@@ -376,6 +377,13 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "enabled_non_tier0_route_count": len(enabled_model_routes),
             "provider_readiness": provider_health,
             "model_efficiency": sentinel["model_efficiency"],
+            "feedback_state": {
+                "sequence": model_feedback_state.get("sequence", 0),
+                "updated_at": model_feedback_state.get("updated_at"),
+                "verified_feedback_records": sentinel["model_efficiency"]["verified_feedback_records"],
+                "verified_value_events": sentinel["model_efficiency"]["verified_value_events"],
+                "task_kind_count": len(sentinel["model_efficiency"]["task_summaries"]),
+            },
         },
         "action_engine": {
             "enabled": action_policy["enabled"],
@@ -425,7 +433,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
                     "action_engine/ACTION_POLICY.json",
                     "action_engine/GMAIL_GATEWAY_LEDGER.json",
                     "model_router/PROVIDER_REGISTRY.json",
-                    "model_router/MODEL_ROUTING_LEDGER.json",
+                    "model_router/MODEL_FEEDBACK_STATE_SEED.json",
+                    "model_router/feedback_state.py",
                     "runtime/PROVIDER_HEALTH_SEED.json",
                     "runtime/provider_health.py",
                     "dashboard/live/state_sources.json",
