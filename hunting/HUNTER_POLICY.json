@@ -120,5 +120,17 @@
     "sanitized_only": true,
     "authority_class": "OBSERVE",
     "rights_resolution": "NONE"
+  },
+  "candidate_preinspection": {
+    "metadata_relevance_rerank": true,
+    "metadata_fields": [
+      "name",
+      "description",
+      "topics"
+    ],
+    "popularity_role": "TIEBREAKER_ONLY",
+    "same_objective_repository_dedup": true,
+    "duplicate_disposition": "SKIPPED_PREINSPECTION_DUPLICATE",
+    "value_credit_source": "NONE"
   }
 }
