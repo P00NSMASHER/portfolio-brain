@@ -292,6 +292,14 @@ def rank_candidate(structural,policy=None):
       "value_credit_source":cfg["value_credit_source"],
     }
 
+def proposal_eligible(ranking,policy=None):
+    policy=policy or load_policy()
+    gate=policy["candidate_evaluation"]["proposal_gate"]
+    order={"LOW":0,"MEDIUM":1,"HIGH":2}
+    req(gate["minimum_rank_band"] in order,"Hunter proposal minimum rank invalid")
+    req(ranking["band"] in order,"Hunter candidate rank band invalid")
+    return order[ranking["band"]]>=order[gate["minimum_rank_band"]]
+
 def classify_candidate(state,fp,structural,policy=None):
     policy=policy or load_policy()
     evaluation=policy["candidate_evaluation"]
@@ -419,8 +427,10 @@ def run_cycle(state,provider,*,at=None):
             stat["candidates"]+=len(candidates)
             if not candidates: funnel["queries_zero_results"]+=1
             retained_this_query=0
+            per_query_cap=policy["budgets"]["max_candidates_inspected_per_query"]
+            req(type(per_query_cap) is int and per_query_cap>=1,"Hunter per-query inspection cap invalid")
             for idx,cand in enumerate(candidates):
-                if total_inspected>=policy["budgets"]["max_candidates_inspected_per_cycle"]:
+                if qout["inspected"]>=per_query_cap or total_inspected>=policy["budgets"]["max_candidates_inspected_per_cycle"]:
                     deferred=len(candidates)-idx
                     qout["deferred_due_inspection_budget"]+=deferred
                     funnel["inspection_budget_deferred"]+=deferred
@@ -450,6 +460,7 @@ def run_cycle(state,provider,*,at=None):
                   "provenance_refs":[f"github:{cand['full_name']}@{inspection['revision']}",f"hunter-objective:{obj['objective_id']}"],
                   "negative_reason":negative,
                   "ranking":ranking,
+                  "proposal_eligibility":"ELIGIBLE" if disposition=="RETAIN" and proposal_eligible(ranking,policy) else ("DEFER_LOW_RANK" if disposition=="RETAIN" else "NOT_APPLICABLE"),
                   "decision_trace":{
                     **classification_trace,
                     "public_source_gate":cand.get("private") is False,
@@ -458,9 +469,8 @@ def run_cycle(state,provider,*,at=None):
                   "experiment_proposal_id":None
                 }
                 if disposition=="RETAIN":
-                    proposal=experiment_proposal(finding); finding["experiment_proposal_id"]=proposal["proposal_id"]
-                    proposals.append(proposal); retained_this_query+=1; objective_retained+=1
-                    stat["retained"]+=1; stat["experiment_proposals"]+=1
+                    retained_this_query+=1; objective_retained+=1
+                    stat["retained"]+=1
                     state["seen_candidate_fingerprints"][fp]={"finding_id":fid,"first_seen":at,"gap_id":obj["gap_id"]}
                     qout["retained"]+=1; funnel["retained"]+=1
                 elif disposition=="DUPLICATE":
@@ -477,6 +487,23 @@ def run_cycle(state,provider,*,at=None):
         if objective_retained==0:
             pass
     funnel=_finalize_rejection_funnel(funnel)
+    proposal_gate=policy["candidate_evaluation"]["proposal_gate"]
+    eligible_findings=[
+      finding for finding in findings
+      if finding["disposition"]=="RETAIN" and proposal_eligible(finding["ranking"],policy)
+    ]
+    eligible_findings.sort(key=lambda x:(-x["ranking"]["score"],x["finding_id"]))
+    selected_findings=eligible_findings[:proposal_gate["max_experiment_proposals_per_cycle"]]
+    selected_ids={finding["finding_id"] for finding in selected_findings}
+    for finding in eligible_findings:
+        if finding["finding_id"] not in selected_ids:
+            finding["proposal_eligibility"]="DEFER_CYCLE_PROPOSAL_CAP"
+    for finding in selected_findings:
+        proposal=experiment_proposal(finding)
+        finding["experiment_proposal_id"]=proposal["proposal_id"]
+        finding["proposal_eligibility"]="SELECTED"
+        proposals.append(proposal)
+        state["strategy_stats"][finding["strategy_id"]]["experiment_proposals"]+=1
     proposals.sort(key=lambda x:(-(x.get("candidate_rank_score") or 0),x["proposal_id"]))
     for idx,proposal in enumerate(proposals,start=1):
         proposal["candidate_rank_order"]=idx
@@ -487,7 +514,15 @@ def run_cycle(state,provider,*,at=None):
     receipt={"schema_version":"1.0.0","cycle_id":cid,"status":"PASS","reason":None,"finished_at":at,
              "objectives":objectives,"findings":findings,"experiment_proposals":proposals,
              "query_outcomes":query_outcomes,"rejection_funnel":funnel,
-             "proposal_ordering":"CANDIDATE_RANK_DESCENDING_NO_SOFT_SIGNAL_HARD_REJECT",
+             "proposal_ordering":"QUALITY_GATED_RANK_DESCENDING",
+             "proposal_gate":{
+               "minimum_rank_band":proposal_gate["minimum_rank_band"],
+               "max_experiment_proposals_per_cycle":proposal_gate["max_experiment_proposals_per_cycle"],
+               "eligible_findings":len(eligible_findings),
+               "selected_proposals":len(proposals),
+               "deferred_low_rank":sum(1 for x in findings if x.get("proposal_eligibility")=="DEFER_LOW_RANK"),
+               "deferred_cycle_cap":sum(1 for x in findings if x.get("proposal_eligibility")=="DEFER_CYCLE_PROPOSAL_CAP"),
+             },
              "api_requests":getattr(provider,"requests",None),"inspected_candidates":total_inspected,
              "objective_function":policy["objective_function"]}
     receipt["receipt_hash"]=digest(receipt)

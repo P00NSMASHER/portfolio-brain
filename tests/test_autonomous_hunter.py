@@ -85,13 +85,14 @@ class HunterTests(unittest.TestCase):
         self.assertGreater(structural["test_keyword_hit_count"],0)
         self.assertGreaterEqual(rank_candidate(structural)["score"],8)
 
-    def test_public_exact_revision_candidate_can_be_retained_and_proposed(self):
+    def test_public_exact_revision_candidate_can_be_retained_without_forcing_downstream_proposal(self):
         state,receipt=run_cycle(load_seed_state(),FakeProvider(),at="2026-09-25T18:00:00Z")
         retained=[x for x in receipt["findings"] if x["disposition"]=="RETAIN"]
         self.assertGreaterEqual(len(retained),1)
-        self.assertEqual(len(receipt["experiment_proposals"]),len(retained))
+        self.assertLessEqual(len(receipt["experiment_proposals"]),len(retained))
         self.assertTrue(all(x["evidence_state"]=="OBSERVED" for x in retained))
         self.assertTrue(all(x["source"]["revision"]=="a"*40 for x in retained))
+        self.assertTrue(all(x["proposal_eligibility"] in {"SELECTED","DEFER_LOW_RANK","DEFER_CYCLE_PROPOSAL_CAP"} for x in retained))
 
     def test_missing_tests_or_capability_signal_are_soft_ranking_signals_not_rejects(self):
         provider=FakeProvider(inspection={"revision":"a"*40,"tree_sha":"b"*40,"paths":["src/core.py","README.md"],"truncated":False})
@@ -221,7 +222,7 @@ class HunterTests(unittest.TestCase):
         self.assertLess(low_rank["score"],high_rank["score"])
         self.assertEqual(high_rank["value_credit_source"],"VERIFIED_OUTCOMES_ONLY")
 
-    def test_retained_proposals_are_ordered_by_rank_without_soft_signal_rejection(self):
+    def test_low_rank_candidates_remain_observed_but_do_not_flood_experiment_proposals(self):
         objective=select_objectives(load_seed_state())[0]
         token=objective["capability_key"].replace("capability-coverage:","")
         class MixedProvider:
@@ -241,11 +242,57 @@ class HunterTests(unittest.TestCase):
         _,receipt=run_cycle(load_seed_state(),MixedProvider(),at="2026-09-25T18:00:00Z")
         proposals=receipt["experiment_proposals"]
         self.assertTrue(proposals)
+        self.assertTrue(all(p["candidate_rank_band"] in {"MEDIUM","HIGH"} for p in proposals))
         scores=[p["candidate_rank_score"] for p in proposals]
         self.assertEqual(scores,sorted(scores,reverse=True))
         self.assertEqual([p["candidate_rank_order"] for p in proposals],list(range(1,len(proposals)+1)))
-        self.assertEqual(receipt["proposal_ordering"],"CANDIDATE_RANK_DESCENDING_NO_SOFT_SIGNAL_HARD_REJECT")
-        self.assertTrue(any(p["candidate_rank_band"]=="LOW" for p in proposals))
+        self.assertEqual(receipt["proposal_ordering"],"QUALITY_GATED_RANK_DESCENDING")
+        lows=[x for x in receipt["findings"] if x["disposition"]=="RETAIN" and x["ranking"]["band"]=="LOW"]
+        self.assertTrue(lows)
+        self.assertTrue(all(x["experiment_proposal_id"] is None and x["proposal_eligibility"]=="DEFER_LOW_RANK" for x in lows))
+        self.assertGreater(receipt["proposal_gate"]["deferred_low_rank"],0)
+
+    def test_per_query_inspection_cap_prevents_early_objectives_from_starving_later_queries(self):
+        results=[
+          {"id":i,"full_name":f"public/example-{i}","default_branch":"main","private":False}
+          for i in range(1,6)
+        ]
+        _,receipt=run_cycle(load_seed_state(),FakeProvider(results=results),at="2026-09-25T18:00:00Z")
+        executed=[q for q in receipt["query_outcomes"] if q["status"]=="EXECUTED"]
+        nonempty=[q for q in executed if q["raw_results"]>0]
+        cap=load_policy()["budgets"]["max_candidates_inspected_per_query"]
+        self.assertEqual(cap,2)
+        self.assertTrue(nonempty)
+        self.assertTrue(all(q["inspected"]==min(q["raw_results"],cap) for q in nonempty))
+        self.assertTrue(all(q["inspected"]<=cap for q in executed))
+        self.assertEqual(receipt["rejection_funnel"]["inspection_attempted"],min(
+            load_policy()["budgets"]["max_candidates_inspected_per_cycle"],
+            sum(min(q["raw_results"],cap) for q in executed)
+        ))
+
+    def test_proposal_cycle_cap_bounds_downstream_review_queue(self):
+        token_path="src/government_contract_proposal_freight_audit_zoning_permits_claims_recovery_quiz_engine.py"
+        test_path="tests/test_government_contract_proposal_freight_audit_zoning_permits_claims_recovery_quiz_engine.py"
+        class BroadHighProvider:
+            def __init__(self):
+                self.requests=0
+            def search(self,q):
+                self.requests+=1
+                return [
+                  {"id":1,"full_name":"public/high-a","default_branch":"main","private":False},
+                  {"id":2,"full_name":"public/high-b","default_branch":"main","private":False},
+                  {"id":3,"full_name":"public/high-c","default_branch":"main","private":False},
+                ]
+            def inspect(self,c):
+                self.requests+=1
+                revision=chr(96+c["id"])*40
+                return {"revision":revision,"tree_sha":"f"*40,"paths":[token_path,test_path,"docs/provenance-lineage.md"],"truncated":False}
+        _,receipt=run_cycle(load_seed_state(),BroadHighProvider(),at="2026-09-25T18:00:00Z")
+        gate=load_policy()["candidate_evaluation"]["proposal_gate"]
+        self.assertEqual(len(receipt["experiment_proposals"]),gate["max_experiment_proposals_per_cycle"])
+        self.assertEqual(receipt["proposal_gate"]["selected_proposals"],gate["max_experiment_proposals_per_cycle"])
+        self.assertGreater(receipt["proposal_gate"]["deferred_cycle_cap"],0)
+        self.assertTrue(all(p["candidate_rank_band"] in {"MEDIUM","HIGH"} for p in receipt["experiment_proposals"]))
 
     def test_ranking_band_accounting_covers_every_inspected_candidate(self):
         _,receipt=run_cycle(load_seed_state(),FakeProvider(),at="2026-09-25T18:00:00Z")
