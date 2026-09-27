@@ -203,17 +203,22 @@ class GitHubPublicProvider:
         data=self._get("https://api.github.com/repos/"+urllib.parse.quote(full_name,safe="/"))
         req(data.get("private") is False,"Hunter controlled candidate must be public")
         return data
+    def inspect_revision(self,candidate,revision):
+        full=candidate["full_name"]
+        req(isinstance(revision,str) and len(revision)==40 and all(c in "0123456789abcdef" for c in revision),"candidate exact revision invalid")
+        base=f"https://api.github.com/repos/{full}"
+        tree=self._get(base+"/git/trees/"+revision+"?recursive=1")
+        paths=[x.get("path") for x in tree.get("tree",[]) if x.get("type")=="blob" and isinstance(x.get("path"),str)]
+        maxp=self.policy["budgets"]["max_tree_paths_per_candidate"]
+        truncated=bool(tree.get("truncated")) or len(paths)>maxp
+        paths=paths[:maxp]
+        return {"revision":revision,"tree_sha":tree.get("sha") or revision,"paths":paths,"truncated":truncated}
     def inspect(self,candidate):
         full=candidate["full_name"]; branch=candidate.get("default_branch") or "main"
         base=f"https://api.github.com/repos/{full}"
         commit=self._get(base+"/commits/"+urllib.parse.quote(branch,safe=""))
         sha=commit["sha"]; req(isinstance(sha,str) and len(sha)==40,"candidate missing exact revision")
-        tree=self._get(base+"/git/trees/"+sha+"?recursive=1")
-        paths=[x.get("path") for x in tree.get("tree",[]) if x.get("type")=="blob" and isinstance(x.get("path"),str)]
-        maxp=self.policy["budgets"]["max_tree_paths_per_candidate"]
-        truncated=bool(tree.get("truncated")) or len(paths)>maxp
-        paths=paths[:maxp]
-        return {"revision":sha,"tree_sha":tree.get("sha") or sha,"paths":paths,"truncated":truncated}
+        return self.inspect_revision(candidate,sha)
 
 def structural_inspection(candidate,inspection,objective):
     paths=inspection["paths"]
