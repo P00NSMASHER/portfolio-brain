@@ -183,6 +183,30 @@ def parse_and_validate_output(text:str,contract:dict[str,Any])->dict[str,Any]:
     req(type(data["confidence"]) in {int,float} and oc["confidence_min"]<=float(data["confidence"])<=oc["confidence_max"],"confidence outside contract")
     return data
 
+def validate_execution_receipt(receipt:dict[str,Any],contract:dict[str,Any],pack:dict[str,Any],provider_receipt:dict[str,Any],parsed:dict[str,Any])->None:
+    required={
+      "schema_version","task_id","contract_hash","evidence_pack_hash","request_id","route_id",
+      "tier","provider_id","model_id","provider_receipt_hash","provider_invocation_id",
+      "output_text_hash","parsed_output_hash","status","authority_granted","evidence_upgraded",
+      "downstream_outcome_ids","receipt_hash"
+    }
+    req(isinstance(receipt,dict) and set(receipt)==required,"model task execution receipt fields changed")
+    req(receipt["schema_version"]=="1.0.0","model task execution receipt schema mismatch")
+    req(receipt["task_id"]==contract["task_id"],"model task execution receipt task mismatch")
+    req(receipt["contract_hash"]==digest(contract),"model task execution receipt contract hash mismatch")
+    req(receipt["evidence_pack_hash"]==pack["pack_hash"],"model task execution receipt evidence hash mismatch")
+    req(receipt["status"]=="MODEL_CALL_SUCCESS","model task execution receipt status mismatch")
+    req(receipt["tier"]==contract["model_contract"]["expected_tier"],"model task execution receipt tier mismatch")
+    req(receipt["provider_id"]==provider_receipt["provider_id"] and receipt["model_id"]==provider_receipt["model_id"],"model task execution receipt provider mismatch")
+    req(receipt["provider_receipt_hash"]==provider_receipt["receipt_hash"],"model task execution receipt provider hash mismatch")
+    req(receipt["provider_invocation_id"]==provider_receipt["invocation_id"],"model task execution receipt invocation mismatch")
+    req(receipt["output_text_hash"]==provider_receipt["output_hash"],"model task execution receipt output hash mismatch")
+    req(receipt["parsed_output_hash"]==digest(parsed),"model task execution receipt parsed output hash mismatch")
+    req(receipt["authority_granted"] is False and receipt["evidence_upgraded"] is False,"model task execution receipt widened authority/evidence")
+    req(receipt["downstream_outcome_ids"]==[],"model task execution receipt cannot claim downstream outcome before verification")
+    body=dict(receipt);given=body.pop("receipt_hash")
+    req(given==digest(body),"model task execution receipt hash mismatch")
+
 def make_execution_receipt(contract:dict[str,Any],pack:dict[str,Any],request:dict[str,Any],result:dict[str,Any],parsed:dict[str,Any])->dict[str,Any]:
     route=result["route"];provider_receipt=result["receipt"]
     validate_call_receipt(provider_receipt,route,request)
@@ -225,6 +249,7 @@ def execute_task(*,contract:dict[str,Any],pack:dict[str,Any],cost_state:dict[str
     )
     parsed=parse_and_validate_output(result["output_text"],contract)
     receipt=make_execution_receipt(contract,pack,request,result,parsed)
+    validate_execution_receipt(receipt,contract,pack,result["receipt"],parsed)
     return next_state,{
       "schema_version":"1.0.0",
       "task_id":contract["task_id"],
