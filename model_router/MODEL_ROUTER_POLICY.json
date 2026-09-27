@@ -57,5 +57,21 @@
     "Prompt/payload content is not stored in routing ledgers; only sanitized IDs, hashes, usage and cost metadata are retained.",
     "Human-gated ACT, customer communication, payments and live trading remain governed outside the model router.",
     "Every routed non-Tier-0 provider execution must obtain a Step 20 cost-governor reservation before invocation; routing alone is never spend authorization."
-  ]
+  ],
+  "verified_feedback_routing": {
+    "enabled": true,
+    "state_path": "model_router/live/model_feedback_state.json",
+    "minimum_verified_outcomes": 1,
+    "within_required_tier_only": true,
+    "preserve_independence_gate": true,
+    "ordering": [
+      "higher_mean_verified_outcome_value",
+      "more_verified_outcomes",
+      "lower_configured_cost",
+      "provider_id",
+      "model_id"
+    ],
+    "no_cross_tier_promotion": true,
+    "no_authority_or_evidence_upgrade": true
+  }
 }
