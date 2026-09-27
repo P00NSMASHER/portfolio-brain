@@ -18,8 +18,8 @@
     "output_tokens": 250000,
     "model_calls": 40,
     "api_calls": 80,
-    "github_job_starts": 120,
-    "github_runner_minutes": 600
+    "github_job_starts": 0,
+    "github_runner_minutes": 0
   },
   "project_default_ceiling": {
     "cost_usd": 3,
@@ -27,8 +27,8 @@
     "output_tokens": 75000,
     "model_calls": 12,
     "api_calls": 24,
-    "github_job_starts": 40,
-    "github_runner_minutes": 200
+    "github_job_starts": 0,
+    "github_runner_minutes": 0
   },
   "project_overrides": {
     "PRJ-000": {
@@ -37,8 +37,8 @@
       "output_tokens": 125000,
       "model_calls": 20,
       "api_calls": 40,
-      "github_job_starts": 112,
-      "github_runner_minutes": 560
+      "github_job_starts": 0,
+      "github_runner_minutes": 0
     }
   },
   "provider_model_default_ceiling": {
@@ -97,176 +97,7 @@
       "github_runner_minutes": 0
     }
   },
-  "workflow_job_ceilings": {
-    "hunter-autonomous-cycle::hunt": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 6,
-        "github_runner_minutes": 30
-      },
-      "max_minutes_per_job": 5
-    },
-    "portfolio-autonomous-scheduler::schedule": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 26,
-        "github_runner_minutes": 130
-      },
-      "max_minutes_per_job": 5
-    },
-    "software-factory-candidate::execute-candidate-action": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 8,
-        "github_runner_minutes": 40
-      },
-      "max_minutes_per_job": 5
-    },
-    "portfolio-notification-cycle::notify": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 4,
-        "github_runner_minutes": 8
-      },
-      "max_minutes_per_job": 2
-    },
-    "step24-autonomous-learning-canary::canary": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 1,
-        "github_runner_minutes": 5
-      },
-      "max_minutes_per_job": 5
-    },
-    "command-center-pages::publish": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 30,
-        "github_runner_minutes": 150
-      },
-      "max_minutes_per_job": 5
-    },
-    "agent-heartbeat-sweep::heartbeat": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 13,
-        "github_runner_minutes": 26
-      },
-      "max_minutes_per_job": 2
-    },
-    "model-value-proof::proof": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 1,
-        "github_runner_minutes": 5
-      },
-      "max_minutes_per_job": 5
-    },
-    "verified-feedback-bootstrap::feedback": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 1,
-        "github_runner_minutes": 2
-      },
-      "max_minutes_per_job": 2
-    },
-    "continuous-learning-bootstrap::bootstrap": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 1,
-        "github_runner_minutes": 2
-      },
-      "max_minutes_per_job": 2
-    },
-    "runtime-worker::runtime-observe": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 30,
-        "github_runner_minutes": 120
-      },
-      "max_minutes_per_job": 5
-    },
-    "runtime-worker::runtime-sync": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 26,
-        "github_runner_minutes": 130
-      },
-      "max_minutes_per_job": 5
-    },
-    "runtime-worker::runtime-daily": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 2,
-        "github_runner_minutes": 10
-      },
-      "max_minutes_per_job": 5
-    },
-    "runtime-worker::runtime-weekly": {
-      "daily_ceiling": {
-        "cost_usd": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "model_calls": 0,
-        "api_calls": 0,
-        "github_job_starts": 2,
-        "github_runner_minutes": 10
-      },
-      "max_minutes_per_job": 5
-    }
-  },
+  "workflow_job_ceilings": {},
   "retry_limits": {
     "MODEL_CALL": 2,
     "API_CALL": 2,
@@ -283,7 +114,7 @@
     "repository_variable": "PORTFOLIO_SPEND_DISABLED",
     "file": "cost_governor/COST_KILL_SWITCH.json"
   },
-  "global_concurrency_group": "portfolio-cost-governed-autonomy",
+  "global_concurrency_group": "portfolio-paid-cost-ledger",
   "managed_workflow_names": [
     "portfolio-autonomous-scheduler",
     "hunter-autonomous-cycle",
@@ -303,22 +134,104 @@
   "max_cancellations_per_cycle": 8,
   "invariants": [
     "Budget approval never grants OBSERVE, EXPERIMENT, MODIFY or ACT authority.",
-    "Paid/model/API execution is finite-budget, reservation-gated, provider-gated, idempotent and kill-switch controlled; disabled providers still cannot execute.",
-    "Every non-deterministic model/API execution requires a durable reservation before invocation.",
-    "Every managed autonomous GitHub job requires a durable reservation before substantive work.",
-    "Portfolio, project, provider/model and workflow/job ceilings are checked independently; the strictest blocking scope wins.",
-    "Active reservations count against ceilings until committed, cancelled or expired.",
-    "Idempotency keys suppress duplicate spend and collisions fail closed.",
-    "Retry groups cannot reset attempt numbers to bypass retry ceilings.",
-    "Actual token and cost usage is committed against the reservation; an overage triggers a hard stop.",
-    "The shared concurrency group serializes autonomous reservations so artifact-backed accounting cannot race.",
-    "Kill switches and hard-stop overages can cancel managed jobs without ChatGPT.",
-    "Only sanitized IDs, hashes, numeric usage and evidence references may be persisted while BLK-005 is open.",
-    "Hourly command-center publication is cost-governed and shares the global autonomous GitHub-job concurrency/budget boundary.",
-    "Runtime-worker uses separate OBSERVE/SYNC/DAILY/WEEKLY job sub-budgets whose combined job-start ceiling remains half of the global GitHub-job ceiling; push observation traffic cannot consume scheduled sync/daily/weekly capacity.",
-    "Agent heartbeat sweep is telemetry-only, cost-governed, emits HEALTH_CHECK evidence for every registered role, and grants no new OBSERVE, MODIFY, EXPERIMENT, or ACT authority.",
-    "The one-shot model value proof is OBSERVE-only, executes at most one governed Tier-2 builder call and one independent Tier-3 verifier call under their own model reservations, and cannot claim customer value, reuse rights, deployment authority, or capability verification.",
-    "The one-shot verified-feedback bootstrap may consume at most one GitHub job start and two runner minutes under the unchanged global ceiling; it performs no model/API calls and only ingests an already VERIFIED value-proof artifact into durable learning state.",
-    "The continuous-learning bootstrap may consume one bounded GitHub job but performs no model/API calls; it only replays an already VERIFIED value proof through the existing feedback contract into durable advisory learning state."
-  ]
+    "The USD 10/day paid model/API ceiling remains finite, reservation-gated, provider-gated, idempotent and kill-switch controlled.",
+    "Ordinary GitHub workflow starts and runner minutes are workload, not paid model/API budget, and never consume the USD ceiling.",
+    "Every non-deterministic model/API execution requires a durable reservation immediately before provider invocation.",
+    "A paid reservation overage activates a preflight hard stop for subsequent paid model/API execution on the same UTC day.",
+    "GitHub workload controls use bounded timeouts, per-service concurrency/event coalescing, duplicate suppression in the owning subsystem and service-specific schedule rates instead of daily start quotas.",
+    "Essential reporting and health publication are independent from paid-spend admission and remain able to explain a paid block.",
+    "Paid model/API workflows share portfolio-paid-cost-ledger so artifact-backed financial accounting cannot race.",
+    "Non-paid workflows use service-specific concurrency groups so unrelated pending jobs cannot replace one another.",
+    "Idempotency keys suppress duplicate paid spend and collisions fail closed.",
+    "Retry groups cannot reset attempt numbers to bypass paid retry ceilings.",
+    "Actual token and cost usage is committed against the reservation; a paid overage triggers a hard stop.",
+    "Kill switches may stop paid execution without granting or widening action authority.",
+    "Only sanitized IDs, hashes, numeric usage and evidence references may be persisted while BLK-005 is open."
+  ],
+  "workflow_job_controls": {
+    "hunter-autonomous-cycle::hunt": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-workload-hunter",
+      "event_coalescing": true,
+      "minimum_schedule_interval_minutes": 360
+    },
+    "portfolio-autonomous-scheduler::schedule": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-workload-scheduler",
+      "event_coalescing": true,
+      "minimum_schedule_interval_minutes": 60
+    },
+    "software-factory-candidate::execute-candidate-action": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-workload-software-factory",
+      "event_coalescing": true,
+      "minimum_schedule_interval_minutes": 0
+    },
+    "portfolio-notification-cycle::notify": {
+      "max_minutes_per_job": 2,
+      "concurrency_group": "portfolio-telemetry-notifications",
+      "event_coalescing": true,
+      "minimum_schedule_interval_minutes": 60
+    },
+    "step24-autonomous-learning-canary::canary": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-learning-canary",
+      "event_coalescing": true,
+      "minimum_schedule_interval_minutes": 0
+    },
+    "command-center-pages::publish": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-reporting-command-center",
+      "event_coalescing": true,
+      "minimum_schedule_interval_minutes": 60
+    },
+    "agent-heartbeat-sweep::heartbeat": {
+      "max_minutes_per_job": 2,
+      "concurrency_group": "portfolio-telemetry-heartbeats",
+      "event_coalescing": true,
+      "minimum_schedule_interval_minutes": 60
+    },
+    "model-value-proof::proof": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-paid-cost-ledger",
+      "event_coalescing": true,
+      "minimum_schedule_interval_minutes": 0
+    },
+    "verified-feedback-bootstrap::feedback": {
+      "max_minutes_per_job": 2,
+      "concurrency_group": "portfolio-learning-feedback",
+      "event_coalescing": true,
+      "minimum_schedule_interval_minutes": 0
+    },
+    "continuous-learning-bootstrap::bootstrap": {
+      "max_minutes_per_job": 2,
+      "concurrency_group": "portfolio-learning-continuous",
+      "event_coalescing": true,
+      "minimum_schedule_interval_minutes": 0
+    },
+    "runtime-worker::runtime-observe": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-runtime-observe",
+      "event_coalescing": true,
+      "minimum_schedule_interval_minutes": 0
+    },
+    "runtime-worker::runtime-sync": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-runtime-sync",
+      "event_coalescing": true,
+      "minimum_schedule_interval_minutes": 60
+    },
+    "runtime-worker::runtime-daily": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-paid-cost-ledger",
+      "event_coalescing": true,
+      "minimum_schedule_interval_minutes": 1440
+    },
+    "runtime-worker::runtime-weekly": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-paid-cost-ledger",
+      "event_coalescing": true,
+      "minimum_schedule_interval_minutes": 10080
+    }
+  }
 }
