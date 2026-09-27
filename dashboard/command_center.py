@@ -1753,6 +1753,28 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
     </div>
   </section>
 
+  <section class="card" id="model-value" style="margin-top:14px">
+    <div class="section-head">
+      <div>
+        <h2>Verified Model Value</h2>
+        <p>{_e(source_detail("model_feedback"))} · {_e(sentinel["model_efficiency"]["feedback_source"])}</p>
+      </div>
+      {_badge(str(sentinel["model_efficiency"]["verified_value_events"]) + " verified value event(s)", "good" if sentinel["model_efficiency"]["verified_value_events"] else "neutral")}
+    </div>
+    <div class="spec-grid" style="margin-bottom:18px">
+      <div class="spec-item"><span>Feedback state sequence</span><strong>{_e(model_router["feedback_state"]["sequence"])}</strong></div>
+      <div class="spec-item"><span>Verified model feedback</span><strong>{_e(model_router["feedback_state"]["verified_feedback_records"])}</strong></div>
+      <div class="spec-item"><span>Unique value events</span><strong>{_e(model_router["feedback_state"]["verified_value_events"])}</strong></div>
+      <div class="spec-item"><span>Task kinds with evidence</span><strong>{_e(model_router["feedback_state"]["task_kind_count"])}</strong></div>
+    </div>
+    <div class="table-wrap mobile-hide"><table>
+      <thead><tr><th>Model</th><th class="num">Tier</th><th class="num">Calls today</th><th class="num">Spend today</th><th class="num">Verified feedback</th><th class="num">Value events</th><th class="num">Mean value</th><th class="num">Cost / verified</th><th>Evidence signal</th></tr></thead>
+      <tbody>{model_value_rows}</tbody>
+    </table></div>
+    <div class="mobile-records">{model_value_cards}</div>
+    <p>Value evidence is credited only from durable VERIFIED feedback. This panel does not convert model output into authority, reuse rights, capability verification, deployment permission, or customer-value claims.</p>
+  </section>
+
   <section class="grid two" id="actions" style="margin-top:14px">
     <div class="card">
       <div class="section-head"><div><h2>Bounded Action Engine</h2><p>{_e(action_engine["mode"])}</p></div>{_badge(action_engine["authority_class"],"warn")}</div>
