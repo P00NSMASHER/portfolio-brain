@@ -9,6 +9,7 @@ from cost_governor.cost_governor import (
     hard_stop_reason,
     load_state,
     make_github_job_request,
+    make_model_request,
     policy,
     preflight,
     validate_policy,
@@ -33,12 +34,21 @@ def validate_cost_governor():
     for field in ("cost_usd", "input_tokens", "output_tokens", "model_calls", "api_calls"):
         value=p["portfolio_ceiling"][field]
         req(type(value) in {int,float} and value>=0, f"invalid finite paid/model budget: {field}")
-    req(p["portfolio_ceiling"]["cost_usd"]>0 and p["portfolio_ceiling"]["model_calls"]>0,
-        "optimized cost governor requires finite nonzero model capacity")
-    req(p["global_concurrency_group"] == "portfolio-cost-governed-autonomy", "global cost serialization changed")
+    req(p["portfolio_ceiling"]["cost_usd"] == 10, "paid USD ceiling changed")
+    req(p["portfolio_ceiling"]["model_calls"] > 0, "paid model capacity disabled")
+    workload=p["github_workload_control"]
+    req(workload["daily_job_count_quotas_enforced"] is False, "GitHub daily job quotas re-enabled")
+    req(workload["durable_cost_reservations"] is False, "GitHub workload consumes paid ledger")
+    req(p["global_concurrency_group"] == "portfolio-cost-governed-autonomy", "paid ledger serialization changed")
+    paid_names=set(p["paid_execution_workflow_names"])
+    req({"model-value-proof","runtime-daily-learning","runtime-weekly-synthesis"} <= paid_names,
+        "paid execution workflow coverage incomplete")
+    req(paid_names <= set(p["managed_workflow_names"]), "paid execution workflow is unmanaged")
 
     at = "2026-09-25T12:00:00Z"
-    request = make_github_job_request(
+
+    # Ordinary GitHub workload is bounded but state-neutral and independent of spend.
+    workload_request = make_github_job_request(
         workflow_id="portfolio-autonomous-scheduler",
         job_id="schedule",
         run_id="step20-validator",
@@ -48,35 +58,54 @@ def validate_cost_governor():
         authority_class="OBSERVE",
         at=at,
     )
-    state, first = preflight(seed, request, at=at)
-    req(first["status"] == "RESERVED" and first["can_execute"] is True, "managed scheduler job did not reserve")
-    state, duplicate = preflight(state, request, at=at)
-    req(duplicate["status"] == "DUPLICATE_SUPPRESSED" and duplicate["can_execute"] is False, "duplicate spend was not suppressed")
+    state, admitted = preflight(seed, workload_request, at=at)
+    req(admitted["status"] == "WORKLOAD_ADMITTED" and admitted["can_execute"] is True,
+        "managed scheduler workload was not admitted")
+    req(state["sequence"] == seed["sequence"] and not state["reservations"],
+        "GitHub workload mutated the paid ledger")
+    state, admitted_again = preflight(state, workload_request, at=at)
+    req(admitted_again["status"] == "WORKLOAD_ADMITTED" and not state["reservations"],
+        "repeated workload admission consumed paid state")
 
-    actual = zero_usage()
-    actual.update({"github_job_starts": 1, "github_runner_minutes": 5})
-    state, committed = commit_reservation(state, first["reservation_id"], actual, at=at)
-    req(committed["status"] == "COMMITTED" and hard_stop_reason(state, at=at) is None, "valid reservation commit failed")
+    def paid_request(route_id: str, request_id: str):
+        route={
+            "status":"ROUTED","tier":2,"route_id":route_id,
+            "provider_id":"approved-api-slot","model_id":"UNCONFIGURED_STRONG",
+            "max_estimated_cost_usd":0.01,"route_hash":f"sha256:{route_id.lower()}",
+        }
+        model={
+            "request_id":request_id,"project_ids":["PRJ-000"],
+            "max_input_tokens":100,"max_output_tokens":100,
+            "authority_class":"OBSERVE","data_classification":"SANITIZED",
+        }
+        return make_model_request(route,model,at=at)
 
-    fresh = load_state()
-    short = make_github_job_request(
-        workflow_id="portfolio-autonomous-scheduler",
-        job_id="schedule",
-        run_id="step20-overage",
-        attempt=1,
-        project_ids=["PRJ-000"],
-        estimated_minutes=1,
-        authority_class="OBSERVE",
-        at=at,
-    )
-    fresh, reserved = preflight(fresh, short, at=at)
-    over = zero_usage()
-    over.update({"github_job_starts": 1, "github_runner_minutes": 2})
-    fresh, overage = commit_reservation(fresh, reserved["reservation_id"], over, at=at)
-    req(overage["status"] == "HARD_STOP_OVERAGE", "overage did not trip hard stop")
-    req(hard_stop_reason(fresh, at=at) == "CURRENT_DAY_RESERVATION_OVERAGE", "hard stop reason missing")
+    # Paid execution still reserves, suppresses duplicates, reconciles, and hard-stops.
+    paid=paid_request("MRT-VALIDATOR","MRQ-VALIDATOR")
+    paid_state, first = preflight(load_state(), paid, at=at)
+    req(first["status"] == "RESERVED" and first["can_execute"] is True,
+        "paid model request did not reserve")
+    paid_state, duplicate = preflight(paid_state, paid, at=at)
+    req(duplicate["status"] == "DUPLICATE_SUPPRESSED" and duplicate["can_execute"] is False,
+        "duplicate paid execution was not suppressed")
+    actual=zero_usage()
+    actual.update({"cost_usd":0.01,"input_tokens":100,"output_tokens":100,"model_calls":1,"api_calls":1})
+    paid_state, committed=commit_reservation(paid_state,first["reservation_id"],actual,at=at)
+    req(committed["status"]=="COMMITTED" and hard_stop_reason(paid_state,at=at) is None,
+        "valid paid reservation commit failed")
 
-    governed_workflows = {
+    over_state, reserved=preflight(load_state(),paid_request("MRT-OVERAGE","MRQ-OVERAGE"),at=at)
+    over=zero_usage()
+    over.update({"cost_usd":0.02,"input_tokens":50,"output_tokens":50,"model_calls":1,"api_calls":1})
+    over_state, overage=commit_reservation(over_state,reserved["reservation_id"],over,at=at)
+    req(overage["status"]=="HARD_STOP_OVERAGE","paid overage did not trip hard stop")
+    req(hard_stop_reason(over_state,at=at)=="CURRENT_DAY_PAID_RESERVATION_OVERAGE",
+        "paid hard stop reason missing")
+    _, blocked=preflight(over_state,paid_request("MRT-AFTER-OVERAGE","MRQ-AFTER-OVERAGE"),at=at)
+    req(blocked["status"]=="BLOCKED_HARD_STOP" and not blocked["can_execute"],
+        "paid hard stop did not block the next preflight")
+
+    workflows = {
         "portfolio-autonomous-scheduler": ROOT / ".github/workflows/portfolio-autonomous-scheduler.yml",
         "runtime-worker": ROOT / ".github/workflows/runtime-worker.yml",
         "hunter-autonomous-cycle": ROOT / ".github/workflows/hunter-autonomous-cycle.yml",
@@ -88,109 +117,108 @@ def validate_cost_governor():
         "verified-feedback-bootstrap": ROOT / ".github/workflows/verified-feedback-bootstrap.yml",
         "continuous-learning-bootstrap": ROOT / ".github/workflows/continuous-learning-bootstrap.yml",
     }
-    for name, path in governed_workflows.items():
-        body = path.read_text().lower()
-        for text in [
-            "portfolio-cost-governed-autonomy",
-            "cost_governor.artifact_state",
-            "cost_governor.workflow_gate preflight",
-            "cost_governor.workflow_gate finalize",
-            "portfolio_spend_disabled",
-            "portfolio-cost-governor-state",
-        ]:
-            req(text in body, f"{name} cost integration missing: {text}")
+    paid_ledger_workflows={"runtime-worker","model-value-proof"}
+    workload_only=set(workflows)-paid_ledger_workflows
+    for name,path in workflows.items():
+        body=path.read_text().lower()
+        req("cost_governor.workflow_gate preflight" in body,f"{name} workload preflight missing")
+        if name in paid_ledger_workflows:
+            for text in (
+                "portfolio-cost-governed-autonomy",
+                "cost_governor.artifact_state",
+                "cost_governor.workflow_gate finalize",
+                "portfolio_spend_disabled",
+                "portfolio-cost-governor-state",
+            ):
+                req(text in body,f"{name} paid-ledger integration missing: {text}")
+        else:
+            req("--state cost_governor/cost_state_seed.json" in body,
+                f"{name} does not use state-neutral workload seed")
+            req("cost_governor.artifact_state" not in body,
+                f"{name} still depends on paid-ledger restore")
+            req("cost_governor.workflow_gate finalize" not in body,
+                f"{name} still finalizes paid-ledger state")
+            req("portfolio-cost-governor-state" not in body,
+                f"{name} still publishes paid-ledger state")
 
-    runtime_worker=governed_workflows["runtime-worker"].read_text()
+    # Unrelated services get independent concurrency lanes; shared-state work keeps
+    # only the minimum serialization necessary for consistency.
+    pages=workflows["command-center-pages"].read_text()
+    hunter=workflows["hunter-autonomous-cycle"].read_text()
+    scheduler=workflows["portfolio-autonomous-scheduler"].read_text()
+    heartbeat=workflows["agent-heartbeat-sweep"].read_text()
+    notifications=workflows["portfolio-notification-cycle"].read_text()
+    factory=workflows["software-factory-candidate"].read_text()
+    req("group: portfolio-command-center-publish" in pages,"Pages lacks independent concurrency lane")
+    req("group: portfolio-discovery-scheduling" in hunter and "group: portfolio-discovery-scheduling" in scheduler,
+        "Hunter/Scheduler shared-state lane drifted")
+    req("group: portfolio-agent-heartbeat" in heartbeat,"heartbeat concurrency lane drifted")
+    req("group: portfolio-notification-cycle" in notifications,"notification concurrency lane drifted")
+    req("group: portfolio-software-factory" in factory,"software-factory concurrency lane drifted")
+
+    runtime_worker=workflows["runtime-worker"].read_text()
     runtime_keys=[
       "runtime-worker::runtime-observe",
       "runtime-worker::runtime-sync",
       "runtime-worker::runtime-daily",
       "runtime-worker::runtime-weekly",
     ]
-    req("runtime-worker::runtime" not in p["workflow_job_ceilings"],"legacy shared runtime sub-budget still present")
-    req(all(key in p["workflow_job_ceilings"] for key in runtime_keys),"runtime mode sub-budgets incomplete")
-    req('--job-id "runtime-${RUNTIME_MODE}"' in runtime_worker,"runtime worker does not bind cost job identity to execution mode")
-    runtime_starts=sum(p["workflow_job_ceilings"][key]["daily_ceiling"]["github_job_starts"] for key in runtime_keys)
-    runtime_minutes=sum(p["workflow_job_ceilings"][key]["daily_ceiling"]["github_runner_minutes"] for key in runtime_keys)
-    req(runtime_starts<=p["portfolio_ceiling"]["github_job_starts"]//2,"combined runtime job-start sub-budgets exceed half portfolio ceiling")
-    req(runtime_minutes<=p["portfolio_ceiling"]["github_runner_minutes"]//2,"combined runtime minute sub-budgets exceed half portfolio ceiling")
-    req(p["workflow_job_ceilings"]["runtime-worker::runtime-sync"]["daily_ceiling"]["github_job_starts"]>=26,"runtime sync recovery capacity too small")
-    req(p["workflow_job_ceilings"]["runtime-worker::runtime-daily"]["daily_ceiling"]["github_job_starts"]>=2,"runtime daily reasoning capacity too small")
-    req(p["workflow_job_ceilings"]["runtime-worker::runtime-weekly"]["daily_ceiling"]["github_job_starts"]>=2,"runtime weekly reasoning capacity too small")
+    req(all(key in p["workflow_job_ceilings"] for key in runtime_keys),"runtime workload controls incomplete")
+    req('--job-id "runtime-${RUNTIME_MODE}"' in runtime_worker,"runtime worker workload identity drifted")
+    req(all(p["workflow_job_ceilings"][key]["max_minutes_per_job"]<=5 for key in runtime_keys),
+        "runtime workload timeout widened")
 
-    command_center = (ROOT / ".github/workflows/command-center-pages.yml").read_text().lower()
+    command_center=pages.lower()
     req('cron: "37 * * * *"' in command_center,"hourly command-center refresh schedule missing")
-    req("actions: read" in command_center and "pages: write" in command_center,"command-center read/deploy permissions incomplete")
-    req("contents: write" not in command_center and "actions: write" not in command_center,"command-center publication write authority widened")
+    req("actions: read" in command_center and "pages: write" in command_center,
+        "command-center read/deploy permissions incomplete")
+    req("contents: write" not in command_center and "actions: write" not in command_center,
+        "command-center publication write authority widened")
     req("dashboard.live_state_bridge" in command_center,"command-center live-state restore missing")
-    req("command-center-pages::publish" in p["workflow_job_ceilings"],"command-center publication lacks cost ceiling")
-    req("command-center-pages" in p["managed_workflow_names"],"command-center publication is not cost managed")
-    value_proof = governed_workflows["model-value-proof"].read_text().lower()
-    req("model-value-proof::proof" in p["workflow_job_ceilings"],"model value proof lacks cost ceiling")
-    req("model-value-proof" in p["managed_workflow_names"],"model value proof is not cost managed")
+    req("summarize command-center execution status" in command_center,
+        "command-center lacks attempted/blocked/executed/verified receipt")
+
+    value_proof=workflows["model-value-proof"].read_text().lower()
     req("portfolio_model_api_key" in value_proof,"model value proof provider credential binding missing")
     req("value_proof.end_to_end" in value_proof,"model value proof finalization missing")
-    req("authority observe" in value_proof,"model value proof job reservation authority drifted")
-    req("contents: write" not in value_proof and "actions: write" not in value_proof,"model value proof workflow write authority widened")
+    req("authority observe" in value_proof,"model value proof authority drifted")
 
-    feedback_bootstrap=governed_workflows["verified-feedback-bootstrap"].read_text().lower()
-    req("verified-feedback-bootstrap::feedback" in p["workflow_job_ceilings"],"verified feedback bootstrap lacks cost ceiling")
-    req("verified-feedback-bootstrap" in p["managed_workflow_names"],"verified feedback bootstrap is not cost managed")
-    req("value_proof.proof_artifact_state" in feedback_bootstrap,"verified feedback bootstrap does not restore prior proof")
-    req("value_proof.feedback_loop" in feedback_bootstrap,"verified feedback bootstrap does not apply feedback")
-    req("portfolio_model_api_key" not in feedback_bootstrap,"feedback bootstrap may not bind model credentials")
-    req("python -m value_proof.model_task" not in feedback_bootstrap and "python -m value_proof.verifier" not in feedback_bootstrap,"feedback bootstrap may not execute model calls")
-    req("contents: write" not in feedback_bootstrap and "actions: write" not in feedback_bootstrap,"feedback bootstrap workflow write authority widened")
+    feedback=workflows["verified-feedback-bootstrap"].read_text().lower()
+    learning=workflows["continuous-learning-bootstrap"].read_text().lower()
+    for name,body in (("verified feedback",feedback),("continuous learning",learning)):
+        req("portfolio_model_api_key" not in body,f"{name} workload may not bind model credentials")
+        req("python -m value_proof.model_task" not in body and "python -m value_proof.verifier" not in body,
+            f"{name} workload may not execute model calls")
 
-    learning_bootstrap=governed_workflows["continuous-learning-bootstrap"].read_text().lower()
-    req("continuous-learning-bootstrap::bootstrap" in p["workflow_job_ceilings"],"continuous learning bootstrap lacks cost ceiling")
-    req("continuous-learning-bootstrap" in p["managed_workflow_names"],"continuous learning bootstrap is not cost managed")
-    req("value_proof.proof_artifact_state" in learning_bootstrap,"continuous learning bootstrap does not restore prior proof")
-    req("learning.live_observations" in learning_bootstrap,"continuous learning bootstrap does not ingest verified observations")
-    req("learning.integrity" in learning_bootstrap,"continuous learning bootstrap lacks cross-subsystem proof")
-    req("portfolio_model_api_key" not in learning_bootstrap,"continuous learning bootstrap may not bind model credentials")
-    req("python -m value_proof.model_task" not in learning_bootstrap and "python -m value_proof.verifier" not in learning_bootstrap,"continuous learning bootstrap may not execute model calls")
-    req("contents: write" not in learning_bootstrap and "actions: write" not in learning_bootstrap,"continuous learning bootstrap workflow write authority widened")
+    watchdog=(ROOT/".github/workflows/portfolio-cost-watchdog.yml").read_text().lower()
+    req("cancel only paid-execution runs on spend hard stop" in watchdog,
+        "watchdog cancellation scope is not explicit")
+    cancel_helper=(ROOT/"cost_governor/cancel_managed_jobs.py").read_text()
+    req('p["paid_execution_workflow_names"]' in cancel_helper,
+        "watchdog still targets all managed workload")
 
-    scheduler = governed_workflows["portfolio-autonomous-scheduler"].read_text().lower()
-    req("contents: write" not in scheduler and "actions: write" not in scheduler, "scheduler write authority widened")
-
-    watchdog = (ROOT / ".github/workflows/portfolio-cost-watchdog.yml").read_text().lower()
-    req("actions: write" in watchdog and "contents: read" in watchdog and "contents: write" not in watchdog, "watchdog permissions invalid")
-    req("cost_governor.cancel_managed_jobs" in watchdog, "watchdog cancellation helper missing")
-    req("operations.workflow_liveness" in watchdog, "watchdog liveness recovery helper missing")
-    req("portfolio-workflow-liveness" in watchdog, "watchdog liveness receipt artifact missing")
-    req("workflow_run:" in watchdog and 'workflows: ["agent-heartbeat-sweep"]' in watchdog and "types: [completed]" in watchdog, "watchdog secondary heartbeat trigger missing")
     liveness=json.loads((ROOT/"operations/WORKFLOW_LIVENESS_POLICY.json").read_text())
-    req(liveness["schema_version"]=="1.0.0" and liveness["liveness_id"]=="portfolio-core-workflow-liveness-v1","workflow liveness policy identity mismatch")
-    req(liveness["authority_class"]=="NONE" and liveness["dispatch_authority_effect"]=="NONE","workflow liveness recovery widened authority")
-    req(liveness["hard_stop_behavior"]=="NO_RECOVERY_DISPATCH","workflow liveness recovery can bypass hard stop")
-    req(1<=liveness["max_dispatches_per_cycle"]<=2,"workflow liveness recovery dispatch bound invalid")
-    req(1<=liveness["max_history_pages"]<=5,"workflow liveness history scan bound invalid")
+    req(liveness["hard_stop_behavior"]=="WORKLOAD_RECOVERY_CONTINUES_PAID_TARGETS_EXCLUDED",
+        "workload liveness is still coupled to paid hard stops")
     liveness_names={row["workflow_name"] for row in liveness["targets"]}
-    req(liveness_names<=set(p["managed_workflow_names"]),"workflow liveness recovery targets unmanaged workflows")
-    req("foundation-ci" not in liveness_names,"foundation CI may not be auto-recovered by watchdog")
-    req("foundation-ci" not in p["managed_workflow_names"], "foundation CI may not be cost-cancel managed")
+    req(liveness_names.isdisjoint(paid_names),"liveness recovery targets paid-execution workflows")
+    req(liveness_names<=set(p["managed_workflow_names"]),"workflow liveness targets unmanaged workflows")
+    req("foundation-ci" not in liveness_names,"foundation CI may not be auto-recovered")
 
     router_policy = json.loads((ROOT / "model_router/MODEL_ROUTER_POLICY.json").read_text())
-    req(any("cost governor" in x.lower().replace("-", " ") for x in router_policy["invariants"]), "model router missing cost-governor execution invariant")
+    req(any("cost governor" in x.lower().replace("-", " ") for x in router_policy["invariants"]),
+        "model router missing cost-governor execution invariant")
 
     return {
-        "paid_usd_ceiling": p["portfolio_ceiling"]["cost_usd"],
-        "paid_model_calls_ceiling": p["portfolio_ceiling"]["model_calls"],
-        "github_job_starts_ceiling": p["portfolio_ceiling"]["github_job_starts"],
-        "github_runner_minutes_ceiling": p["portfolio_ceiling"]["github_runner_minutes"],
-        "retry_limits": p["retry_limits"],
-        "managed_workflows": len(p["managed_workflow_names"]),
-        "governed_execution_workflows": len(governed_workflows),
-        "duplicate_suppression": True,
-        "overage_hard_stop": True,
-        "workflow_liveness_recovery_targets": len(liveness["targets"]),
-        "workflow_liveness_max_dispatches": liveness["max_dispatches_per_cycle"],
-        "runtime_mode_subbudgets": len(runtime_keys),
-        "runtime_combined_job_starts": runtime_starts,
-        "runtime_combined_runner_minutes": runtime_minutes,
-        "authority_change": "NONE",
+        "paid_usd_ceiling":p["portfolio_ceiling"]["cost_usd"],
+        "paid_model_calls_ceiling":p["portfolio_ceiling"]["model_calls"],
+        "github_daily_job_quotas_enforced":workload["daily_job_count_quotas_enforced"],
+        "github_workload_uses_paid_reservations":workload["durable_cost_reservations"],
+        "paid_execution_workflows":len(paid_names),
+        "workload_only_workflows":len(workload_only),
+        "paid_hard_stop_preflight_enforced":True,
+        "service_scoped_concurrency":True,
+        "authority_change":"NONE",
     }
 
 if __name__ == "__main__":
