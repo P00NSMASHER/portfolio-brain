@@ -86,6 +86,22 @@ jobs:
           --output-dir scheduler/out
           --hunter-output-dir hunting/out
           --max-items 8
+      - name: Reuse spare capacity for Hunter proposal continuation
+        id: hunter_continuation
+        if: ${{ steps.workload.outputs.allowed == 'true' && steps.execute.outputs.attempted_count != '8' }}
+        run: >-
+          python -m scheduler.same_cycle_continuation
+          --scheduler-state scheduler/out/scheduler_state.json
+          --runtime-state runtime/live/runtime_state.json
+          --hunter-state hunting/out/hunter_state.json
+          --hunter-state-fallback hunting/live/hunter_state.json
+          --hunter-proposal-state hunting/out/hunter_proposal_state.json
+          --hunter-proposal-state-fallback hunting/live/hunter_proposal_state.json
+          --primary-receipts scheduler/out/execution_receipts.json
+          --primary-executed scheduler/out/executed_work.json
+          --primary-cycle-receipt scheduler/out/execution_cycle_receipt.json
+          --output-dir scheduler/out
+          --max-items 8
       - name: Persist Hunter proposal evidence reviews
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
