@@ -74,6 +74,8 @@ def validate_runtime()->dict:
     req("repository_dispatch:" in texts[names[1]] and "push:" in texts[names[1]],"event triggers missing")
     req("paths-ignore:" in texts[names[1]] and "runtime/TRIGGER_DAILY_REASONING" in texts[names[1]],
         "daily reasoning trigger must not also launch event-observe")
+    req("group: runtime-event-observe-${{ github.event_name }}-${{ github.ref }}" in texts[names[1]],"runtime event-observe push coalescing group missing")
+    req("cancel-in-progress: ${{ github.event_name == 'push' }}" in texts[names[1]],"runtime event-observe push coalescing policy missing")
     for isolated in [
       "value_proof/TRIGGER_END_TO_END_PROOF",
       "value_proof/TRIGGER_VERIFIED_FEEDBACK_BOOTSTRAP",
@@ -86,6 +88,7 @@ def validate_runtime()->dict:
     return {"workflows":5,"model_calls":0,"governed_daily_model_calls":1,"governed_weekly_model_calls":1,
             "downstream_writes":0,"external_actions":0,
             "runtime_receipt_integrity":True,"runtime_artifact_companion_binding":True,
+            "push_observation_coalescing":True,
             "max_api_requests":b["max_api_requests_per_cycle"],"max_runtime_seconds":b["max_runtime_seconds"]}
 
 if __name__=="__main__":
