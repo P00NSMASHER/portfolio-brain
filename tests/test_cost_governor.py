@@ -426,7 +426,7 @@ class CostGovernorTests(unittest.TestCase):
         for ceiling in (
             p["portfolio_ceiling"],
             p["project_overrides"]["PRJ-000"],
-            p["workflow_job_ceilings"]["portfolio-autonomous-scheduler::schedule"]["daily_ceiling"],
+            p["workflow_job_ceilings"]["runtime-worker::runtime-sync"]["daily_ceiling"],
         ):
             ceiling["github_job_starts"] = 1
             ceiling["github_runner_minutes"] = 5
