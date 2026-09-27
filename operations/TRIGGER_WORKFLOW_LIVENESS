@@ -1,3 +1,4 @@
-workflow-liveness-live-proof-v2
-reason=verify-runtime-sync-mode-budget-after-repair
+workflow-liveness-live-proof-v3
+reason=verify-exact-run-artifact-proof-after-6ef67101e695
 authority=NONE
+source_commit=6ef67101e695ed838272817c3e9176c637b79e95
