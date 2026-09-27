@@ -123,6 +123,7 @@ def apply_verified_value_feedback(
           "evidence_state":"VERIFIED",
           "value_realized":True,
         })
+        hunter_state["sequence"]+=1
         hunter_state["updated_at"]=at or verifier_provider_receipt["completed_at"]
         hunter_applied=True
 
