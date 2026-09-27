@@ -31,6 +31,10 @@ from hunting.proposal_state import (
     load_seed_state as hunter_proposal_seed_state,
     validate_state as validate_hunter_proposal_state,
 )
+from hunting.proposal_review_state import (
+    load_seed_state as hunter_proposal_review_seed_state,
+    validate_state as validate_hunter_proposal_review_state,
+)
 from scheduler.autonomous_scheduler import (
     claim_work,
     complete_work,
@@ -412,11 +416,15 @@ def execute_cycle(
     proposal_path=ROOT/"hunting"/"live"/"hunter_proposal_state.json"
     proposal_state=load_json(proposal_path) if proposal_path.exists() else hunter_proposal_seed_state()
     validate_hunter_proposal_state(proposal_state)
+    proposal_review_path=ROOT/"hunting"/"live"/"hunter_proposal_review_state.json"
+    proposal_review_state=load_json(proposal_review_path) if proposal_review_path.exists() else hunter_proposal_review_seed_state()
+    validate_hunter_proposal_review_state(proposal_review_state)
     ctx: dict[str, Any] = {
         "at": at,
         "runtime_state": runtime_state,
         "hunter_state": hunter_state if hunter_state is not None else hunter_seed_state(),
         "hunter_proposal_state": proposal_state,
+        "hunter_proposal_review_state": proposal_review_state,
     }
     if context_overrides:
         ctx.update(context_overrides)
@@ -547,6 +555,7 @@ def write_outputs(
             state,
             cycle,
             prior_state=ctx.get("hunter_proposal_state"),
+            review_state=ctx.get("hunter_proposal_review_state"),
         )
         (hunter_output_dir / "hunter_proposal_state.json").write_text(json.dumps(proposal_state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
