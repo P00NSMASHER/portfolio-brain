@@ -33,13 +33,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Restore latest cost-governor state
-        run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
       - name: Check Hunter workload controls
         id: cost
         run: >-
           python -m cost_governor.workflow_gate preflight
-          --state cost_governor/live/cost_state.json
+          --state cost_governor/COST_STATE_SEED.json
           --output-dir cost_governor/out
           --workflow-id hunter-autonomous-cycle
           --job-id hunt
@@ -81,13 +79,6 @@ jobs:
         id: validation
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -c "import json; from hunting.autonomous_hunter import validate_state; validate_state(json.load(open('hunting/out/hunter_state.json')))"
-      - name: Commit conservative Hunter compute usage
-        if: ${{ always() && steps.cost.outputs.allowed == 'true' }}
-        run: >-
-          python -m cost_governor.workflow_gate finalize
-          --state cost_governor/out/cost_state.json
-          --decision cost_governor/out/cost_decision.json
-          --output cost_governor/out/cost_state.json
       - name: Upload sanitized Hunter continuation state
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         uses: actions/upload-artifact@v4
@@ -110,14 +101,6 @@ jobs:
         with:
           name: portfolio-agent-heartbeat-state
           path: agents/out/agent_heartbeat_state.json
-          if-no-files-found: error
-          retention-days: 30
-      - name: Upload sanitized cost-governor continuation state
-        if: ${{ always() && hashFiles('cost_governor/out/cost_state.json') != '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: portfolio-cost-governor-state
-          path: cost_governor/out/
           if-no-files-found: error
           retention-days: 30
       - name: Summarize Hunter execution status
