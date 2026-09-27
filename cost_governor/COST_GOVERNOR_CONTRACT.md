@@ -1,44 +1,48 @@
 # Step 20 Cost Governor Contract
 
-Step 20 is a fail-closed execution boundary. It does not decide what work is valuable and it grants no authority. It decides only whether already-authorized work may consume bounded model/API/GitHub resources.
+Step 20 is a fail-closed **paid model/API execution boundary**. It does not decide what work is valuable and it grants no authority. Ordinary GitHub-hosted workflow starts and runner minutes are workload controls, not paid-spend budget.
 
 ## Pre-execution reservation
 
-Every non-Tier-0 model/API invocation and every managed autonomous GitHub job must reserve its worst-case usage before substantive execution. Active reservations count against the same ceilings as committed usage. A reservation is identified by a deterministic idempotency key and retry group.
+Every non-Tier-0 model/API invocation must reserve its worst-case paid usage immediately before provider execution. Active paid reservations count against the same financial ceilings as committed usage. A reservation is identified by a deterministic idempotency key and retry group.
 
 The checked-in paid/model/API ceilings are finite and nonnegative. Enabling a provider or model is still insufficient to spend money or tokens: provider readiness, routing, authority, idempotency, retry, and pre-execution reservation gates must all pass independently.
 
-## Independent budget scopes
+## Financial budget scopes
 
-A request must pass every applicable scope:
+Paid model/API work must pass the portfolio, project, provider/model, and retry ceilings. The portfolio USD ceiling remains **$10 per UTC day**.
 
-1. portfolio daily ceiling;
-2. each referenced project daily ceiling;
-3. provider/model daily ceiling for model/API work;
-4. workflow/job daily and per-job ceiling for GitHub compute;
-5. retry sequence and retry-count ceiling.
+GitHub job starts and runner minutes are retained in the historical usage schema for backward compatibility and telemetry, but their paid-budget ceilings are zero and they are not evaluated as financial spend.
 
-The strictest failing scope blocks execution.
+## Workload controls
+
+Managed GitHub work is controlled separately with bounded per-job timeouts, subsystem duplicate suppression, service-specific concurrency groups, pending-event coalescing, service-specific schedule cadence, and bounded liveness recovery.
+
+There is no daily GitHub job-start quota in the cost governor. Essential command-center and health reporting therefore remain able to explain paid blocks instead of being blocked by them.
 
 ## Duplicate and retry safety
 
-Reusing the same idempotency key with the same immutable request is duplicate-suppressed and cannot create a second reservation. Reusing the key for a different request fails closed. Retry groups must start at attempt 1 and advance monotonically; attempt numbers cannot be reset to bypass the retry limit.
+Paid idempotency keys suppress duplicate spend. Reusing the same key for a different request fails closed. Retry groups cannot reset attempt numbers to bypass retry limits.
 
-## Accounting
+The compatibility GitHub workload preflight retains idempotency and max-runtime checks, but prior GitHub job counts do not consume paid budget or activate the paid hard stop.
 
-Reservations store only sanitized IDs/hashes, project/provider/model/workflow identifiers, numeric token/cost/runner usage, timestamps and evidence references. Prompt text, payloads, credentials, customer data and private evidence are prohibited while BLK-005 remains open.
+## Accounting and hard stops
 
-Actual usage is committed against the reservation. If execution disappears before commit, an expired reservation remains charged at its reserved maximum for the rest of that UTC accounting day; a crash can therefore reduce capacity but cannot silently create more spend headroom. If actual usage exceeds any reserved dimension, the reservation becomes OVERAGE and the watchdog treats the current day as a hard stop.
+Reservations store only sanitized IDs/hashes, project/provider/model/workflow identifiers, numeric usage, timestamps and evidence references. Prompt text, payloads, credentials, customer data and private evidence remain prohibited while BLK-005 is open.
 
-## GitHub race prevention
+Actual paid usage is committed against the reservation. If a paid execution disappears before commit, its expired reservation remains charged at the reserved maximum for the rest of that UTC accounting day. If actual paid usage exceeds its reservation, the reservation becomes `OVERAGE`, the decision becomes `HARD_STOP_OVERAGE`, and every subsequent paid model/API preflight is blocked with `BLOCKED_HARD_STOP`.
 
-Artifact-backed accounting is serialized through the shared `portfolio-cost-governed-autonomy` concurrency group. Managed autonomous workflows restore the latest cost artifact, reserve before substantive work, conservatively commit the reserved runner minutes, and upload the sanitized continuation state.
+A GitHub workload runtime overrun is reported as `WORKLOAD_OVERRUN`; it does **not** activate the paid-spend hard stop.
+
+## Paid-ledger race prevention
+
+Only workflows that can actually spend model/API money share the `portfolio-paid-cost-ledger` concurrency group. Non-paid workflows use service-specific concurrency groups, preventing unrelated pending jobs from replacing one another while preserving serialization of artifact-backed paid accounting.
 
 ## Kill switches and cancellation
 
-`cost_governor/COST_KILL_SWITCH.json` and the `PORTFOLIO_SPEND_DISABLED` repository variable can force a hard stop. The staged watchdog has `actions: write` only so it can cancel queued/in-progress managed autonomous runs when a kill switch or current-day overage is present. It never cancels foundation CI and cannot grant execution authority.
+`cost_governor/COST_KILL_SWITCH.json` and the `PORTFOLIO_SPEND_DISABLED` repository variable stop new paid model/API execution.
 
-The watchdog polls hourly. Managed jobs are capped at five minutes, so quarter-hour polling could not reliably interrupt most jobs before completion and created 96 control-plane runs per day. Hourly polling retains an independent kill-switch backstop at 24 runs per day; preflight reservation checks and per-job timeouts remain the primary synchronous controls.
+The watchdog may cancel only the explicit paid workflow allowlist. It does not cancel Pages, Hunter, heartbeats, notifications, the autonomous scheduler, foundation CI, or other non-paid control-plane work. Non-paid liveness recovery continues to operate and reports the paid hard-stop reason when one is active.
 
 ## Authority boundary
 
