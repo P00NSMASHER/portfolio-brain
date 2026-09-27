@@ -3,6 +3,10 @@ name: hunter-autonomous-cycle
 on:
   schedule:
     - cron: "47 */6 * * *"
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/triggers/hunter-autonomous-now.txt"
   repository_dispatch:
     types: ["portfolio_hunt"]
   workflow_dispatch:
@@ -11,12 +15,11 @@ permissions:
   contents: read
   actions: read
 
-concurrency:
-  group: portfolio-cost-governed-autonomy
-  cancel-in-progress: false
-
 jobs:
   hunt:
+    concurrency:
+      group: portfolio-cost-governed-autonomy
+      cancel-in-progress: false
     if: ${{ vars.PORTFOLIO_HUNTER_DISABLED != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
