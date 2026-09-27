@@ -104,6 +104,11 @@ def select_objectives(state):
     explore_slots=max(1,round(maxn*policy["budgets"]["exploration_fraction"]))
     exploit_slots=maxn-explore_slots
     exploit_strategies=[s for s in strategies if s["family"]!="EXPLORATION"]
+    if policy["learning"].get("verified_outcome_strategy_priority") is True:
+        exploit_strategies=sorted(
+          exploit_strategies,
+          key=lambda s:(-state["strategy_stats"][s["strategy_id"]]["verified_value_outcomes"],s["strategy_id"])
+        )
     exploration=next(s for s in strategies if s["family"]=="EXPLORATION")
     objectives=[]
     for idx,gap in enumerate(gaps[:exploit_slots]):
@@ -116,6 +121,8 @@ def select_objectives(state):
           "schema_version":"1.0.0","objective_id":oid,"gap_id":gap["gap_id"],"project_ids":gap["project_ids"],
           "need_type":gap["need_type"],"capability_key":gap["capability_key"],"strategy_id":strategy["strategy_id"],
           "exploration":False,
+          "strategy_verified_value_outcomes":state["strategy_stats"][strategy["strategy_id"]]["verified_value_outcomes"],
+          "strategy_selection_basis":"VERIFIED_OUTCOME_PRIORITY_THEN_DETERMINISTIC_ORDER" if policy["learning"].get("verified_outcome_strategy_priority") is True else "DETERMINISTIC_ORDER",
           "priority_components":{"importance":gap["importance"],"uncertainty":gap["uncertainty"],"downstream_reuse":gap["downstream_reuse"],"external_validation_value":gap["external_validation_value"],"dead_end_penalty":penalty},
           "queries":queries,
           "acceptance_target":"Retain only an exact public repository revision with structural implementation and test evidence relevant to the portfolio gap; discovery alone does not establish reuse rights or verified capability.",
