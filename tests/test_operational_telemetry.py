@@ -76,8 +76,17 @@ class OperationalTelemetryTests(unittest.TestCase):
         hunter_row=next(x for x in out["agents"]["agents"] if x["agent_id"]=="AGT-HUNTER")
         self.assertEqual(hunter_row["heartbeat_health"],"LIVE")
         self.assertEqual(out["cycles"]["latest_overall"]["subsystem"],"runtime")
+        self.assertEqual(out["runtime_sync_proof"]["status"],"UNVERIFIED_SYNC_WORK")
         self.assertEqual(out["hunter"]["totals"]["candidates"],7)
         self.assertGreaterEqual(out["failures"]["count"],1)
+
+    def test_runtime_sync_proof_requires_same_run_cost_receipt(self):
+        runtime={"recent_cycles":[{"mode":"sync","status":"PASS","cycle_id":"RC-1","receipt_hash":"sha256:"+"a"*64}]}
+        source={"sources":{"runtime":{"status":"LIVE","source_run_id":"42"}}}
+        cost={"reservations":[{"workflow_id":"runtime-worker","job_id":"runtime-sync","status":"COMMITTED","evidence_refs":["github-run:42"]}]}
+        self.assertEqual(telemetry._runtime_sync_proof(runtime,cost,source)["status"],"VERIFIED_SYNC_WORK")
+        cost["reservations"][0]["evidence_refs"]=["github-run:41"]
+        self.assertEqual(telemetry._runtime_sync_proof(runtime,cost,source)["status"],"UNVERIFIED_SYNC_WORK")
 
     def test_health_check_cannot_hide_stalled_assigned_work(self):
         scheduler,receipt=schedule_cycle(

@@ -281,6 +281,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
     functional_reasons = []
     if state_sources["bridge_status"] != "LIVE":
         functional_reasons.append(f"live-state bridge is {state_sources['bridge_status']}")
+    if telemetry["runtime_sync_proof"]["status"]!="VERIFIED_SYNC_WORK":
+        functional_reasons.append("scheduled runtime sync lacks a current governed work receipt")
     if engaged_switches:
         functional_reasons.append(f"{engaged_switches} kill switch(es) engaged")
     if stalled_agents:
@@ -1784,7 +1786,7 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
 
   <section class="card" id="operations" style="margin-bottom:14px">
     <div class="section-head">
-      <div><h2>Operational Telemetry</h2><p>Durable queue, governed usage, actions, failures, agent heartbeats, and successful-cycle evidence.</p></div>
+      <div><h2>Operational Telemetry</h2><p>Durable queue, governed usage, actions, failures, agent heartbeats, and successful-cycle evidence.</p><p>Scheduled sync: {_badge(telemetry['runtime_sync_proof']['status'], _status_tone(telemetry['runtime_sync_proof']['status']))} · source run {_e(telemetry['runtime_sync_proof']['source_run_id'] or 'unknown')} · {_e(telemetry['runtime_sync_proof']['reason'].replace('_',' ').lower())}</p></div>
       {_badge("LIVE DATA" if source_bundle["bridge_status"]=="LIVE" else source_bundle["bridge_status"], _status_tone(source_bundle["bridge_status"]))}
     </div>
     <div class="grid three">
