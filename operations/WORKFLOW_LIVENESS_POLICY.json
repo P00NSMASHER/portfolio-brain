@@ -3,7 +3,7 @@
   "liveness_id": "portfolio-core-workflow-liveness-v1",
   "enabled": true,
   "default_branch": "main",
-  "max_api_requests_per_cycle": 14,
+  "max_api_requests_per_cycle": 18,
   "max_history_pages": 3,
   "max_dispatches_per_cycle": 2,
   "recent_failure_retry_after_minutes": 35,
@@ -23,7 +23,10 @@
       "priority": 1,
       "admission_domain": "WORKLOAD",
       "admission_workflow_id": "portfolio-autonomous-scheduler",
-      "admission_job_id": "schedule"
+      "admission_job_id": "schedule",
+      "proof_artifact_name": "portfolio-scheduler-state",
+      "proof_member": "execution_cycle_receipt.json",
+      "proof_kind": "SCHEDULER_EXECUTION"
     },
     {
       "workflow_name": "runtime-hourly-sync",
@@ -37,7 +40,10 @@
       "priority": 2,
       "admission_domain": "COST_WRAPPER",
       "admission_workflow_id": "runtime-worker",
-      "admission_job_id": "runtime-sync"
+      "admission_job_id": "runtime-sync",
+      "proof_artifact_name": "portfolio-runtime-state",
+      "proof_member": "cycle_receipt.json",
+      "proof_kind": "RUNTIME_SYNC"
     },
     {
       "workflow_name": "agent-heartbeat-sweep",
@@ -51,7 +57,10 @@
       "priority": 3,
       "admission_domain": "WORKLOAD",
       "admission_workflow_id": "agent-heartbeat-sweep",
-      "admission_job_id": "heartbeat"
+      "admission_job_id": "heartbeat",
+      "proof_artifact_name": "portfolio-agent-heartbeat-state",
+      "proof_member": "agent_heartbeat_state.json",
+      "proof_kind": "HEARTBEAT_SWEEP"
     },
     {
       "workflow_name": "hunter-autonomous-cycle",
@@ -65,7 +74,10 @@
       "priority": 4,
       "admission_domain": "WORKLOAD",
       "admission_workflow_id": "hunter-autonomous-cycle",
-      "admission_job_id": "hunt"
+      "admission_job_id": "hunt",
+      "proof_artifact_name": "portfolio-hunter-state",
+      "proof_member": "hunt_cycle_receipt.json",
+      "proof_kind": "HUNTER_CYCLE"
     },
     {
       "workflow_name": "portfolio-notification-cycle",
@@ -79,18 +91,23 @@
       "priority": 5,
       "admission_domain": "WORKLOAD",
       "admission_workflow_id": "portfolio-notification-cycle",
-      "admission_job_id": "notify"
+      "admission_job_id": "notify",
+      "proof_artifact_name": "portfolio-notification-state",
+      "proof_member": "notification_cycle_receipt.json",
+      "proof_kind": "NOTIFICATION_CYCLE"
     }
   ],
   "invariants": [
     "Recovery never bypasses a target workflow's own workload/cost admission, authority gates, kill switches, or concurrency controls.",
     "A queued or in-progress target is never duplicated.",
     "Only a trusted event for the exact workflow file on the default branch can prove target liveness.",
-    "A recent completed run suppresses recovery even when scheduled delivery is delayed.",
     "A failed/cancelled target may be retried only after the configured failure retry age.",
     "Workload-controlled targets are previewed against workload_control/WORKLOAD_POLICY.json before dispatch.",
     "Paid-ledger wrapper targets are previewed against their bounded cost-wrapper admission before dispatch.",
     "A paid hard stop does not suppress recovery of non-paid workload targets.",
-    "At most two workflow_dispatch calls may be emitted per watchdog cycle."
+    "At most two workflow_dispatch calls may be emitted per watchdog cycle.",
+    "A recent completed run is healthy only when its exact run artifact contains valid substantive-work proof.",
+    "Proof artifacts are bound to the exact workflow run ID and are independently validated before they can suppress recovery.",
+    "Missing, expired, malformed, or semantically invalid proof remains explicitly unverified and never paints the target green."
   ]
 }
