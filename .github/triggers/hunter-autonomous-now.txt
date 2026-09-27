@@ -4,3 +4,4 @@ model-calls=0
 authority=OBSERVE
 proof=3-durable-proposal-inbox
 proof=4-inspection-resilience-proposal-inbox
+proof=4-proposal-backlog-continuity
