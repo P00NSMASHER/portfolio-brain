@@ -18,14 +18,13 @@ permissions:
 jobs:
   hunt:
     concurrency:
-      group: portfolio-cost-governed-autonomy
+      group: portfolio-workload-hunter
       cancel-in-progress: false
     if: ${{ vars.PORTFOLIO_HUNTER_DISABLED != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
       PORTFOLIO_HUNTER_DISABLED: ${{ vars.PORTFOLIO_HUNTER_DISABLED }}
-      PORTFOLIO_SPEND_DISABLED: ${{ vars.PORTFOLIO_SPEND_DISABLED }}
       PORTFOLIO_GITHUB_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
     steps:
@@ -33,24 +32,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Restore latest cost-governor state
-        run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
-      - name: Reserve bounded Hunter compute
-        id: cost
-        run: >-
-          python -m cost_governor.workflow_gate preflight
-          --state cost_governor/live/cost_state.json
-          --output-dir cost_governor/out
-          --workflow-id hunter-autonomous-cycle
-          --job-id hunt
-          --project-id PRJ-000
-          --estimated-minutes 5
-          --authority OBSERVE
       - name: Restore latest Hunter state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m hunting.artifact_state --output hunting/live/hunter_state.json
       - name: Restore latest Hunter proposal backlog
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: |
           mkdir -p hunting/live
           python -m hunting.proposal_artifact_state --output hunting/live/hunter_proposal_state.json
@@ -58,16 +42,12 @@ jobs:
             cp hunting/HUNTER_PROPOSAL_STATE_SEED.json hunting/live/hunter_proposal_state.json
           fi
       - name: Restore latest agent heartbeat state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m agents.artifact_state --output agents/live/agent_heartbeat_state.json
       - name: Verify Hunter calibration corpus
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m hunting.calibration --output hunting/out/calibration_report.json
       - name: Run autonomous bounded Hunter cycle
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m hunting.autonomous_hunter --state hunting/live/hunter_state.json --output-dir hunting/out
       - name: Heartbeat Hunter
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: >-
           python -m agents.heartbeat_state
           --state agents/live/agent_heartbeat_state.json
@@ -77,17 +57,8 @@ jobs:
           --source-workflow hunter-autonomous-cycle
           --source-run-id "${GITHUB_RUN_ID}"
       - name: Validate state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -c "import json; from hunting.autonomous_hunter import validate_state; validate_state(json.load(open('hunting/out/hunter_state.json')))"
-      - name: Commit conservative Hunter compute usage
-        if: ${{ always() && steps.cost.outputs.allowed == 'true' }}
-        run: >-
-          python -m cost_governor.workflow_gate finalize
-          --state cost_governor/out/cost_state.json
-          --decision cost_governor/out/cost_decision.json
-          --output cost_governor/out/cost_state.json
       - name: Upload sanitized Hunter continuation state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-hunter-state
@@ -95,7 +66,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Upload quality-gated Hunter proposal inbox
-        if: ${{ steps.cost.outputs.allowed == 'true' && hashFiles('hunting/out/hunter_proposal_state.json') != '' }}
+        if: ${{ hashFiles('hunting/out/hunter_proposal_state.json') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-hunter-proposal-state
@@ -103,22 +74,9 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Upload sanitized agent heartbeat state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-agent-heartbeat-state
           path: agents/out/agent_heartbeat_state.json
           if-no-files-found: error
           retention-days: 30
-      - name: Upload sanitized cost-governor continuation state
-        if: ${{ always() && hashFiles('cost_governor/out/cost_state.json') != '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: portfolio-cost-governor-state
-          path: cost_governor/out/
-          if-no-files-found: error
-          retention-days: 30
-      - name: Report governed no-work outcome
-        if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
-        run: |
-          echo "::notice title=Portfolio Hunter skipped::Cost governor status: ${{ steps.cost.outputs.decision_status }}"
