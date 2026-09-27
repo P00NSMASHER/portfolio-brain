@@ -208,26 +208,29 @@ def validate_operating_mode():
     req(set(actual)==set(expected),"scheduled workflow inventory differs from approved operating policy")
     for name,cron in expected.items():
         req(actual[name]==[cron],f"{name} cron mismatch")
-    neutral_no_work_workflows=[
-      "runtime-worker","hunter-autonomous-cycle","portfolio-autonomous-scheduler",
-      "portfolio-notification-cycle","command-center-pages","agent-heartbeat-sweep"
-    ]
-    for name in ["hunter-autonomous-cycle","portfolio-autonomous-scheduler","portfolio-notification-cycle","agent-heartbeat-sweep"]:
+    workload_groups={
+      "hunter-autonomous-cycle":"portfolio-workload-hunter",
+      "portfolio-autonomous-scheduler":"portfolio-workload-scheduler",
+      "portfolio-notification-cycle":"portfolio-telemetry-notifications",
+      "agent-heartbeat-sweep":"portfolio-telemetry-heartbeats",
+      "command-center-pages":"portfolio-reporting-command-center",
+    }
+    for name,group in workload_groups.items():
         body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
-        req("portfolio-cost-governed-autonomy" in body and "cost_governor.workflow_gate preflight" in body,f"{name} is not cost governed")
+        req(group in body,f"{name} workload concurrency group missing")
+        req("portfolio-cost-governed-autonomy" not in body,f"{name} still shares the paid-ledger pending queue")
+        req("cost_governor.workflow_gate" not in body,f"{name} still couples ordinary workload to paid budget")
     for name in ["portfolio-autonomous-scheduler","agent-heartbeat-sweep"]:
         triggers=workflow_top_level_triggers(ROOT/".github/workflows"/f"{name}.yml")
-        req("push" not in triggers,f"{name} must not fan out on push inside the singleton cost-state concurrency lane")
+        req("push" not in triggers,f"{name} must not fan out on every push")
     worker=(ROOT/".github/workflows/runtime-worker.yml").read_text().lower()
-    req("portfolio-cost-governed-autonomy" in worker and "cost_governor.workflow_gate preflight" in worker,"runtime worker is not cost governed")
-    for name in neutral_no_work_workflows:
-        body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
-        req("steps.cost.outputs.allowed != 'true'" in body,f"{name} lacks governed no-work reporting")
-        req("run: exit 3" not in body,f"{name} turns an expected cost denial into a workflow failure")
+    req("portfolio-paid-cost-ledger" in worker and "portfolio-runtime-{0}" in worker,
+        "runtime paid/free concurrency split missing")
+    req("cost_governor.workflow_gate" not in worker,"runtime still reserves ordinary GitHub workload in paid budget")
     factory=(ROOT/".github/workflows/software-factory-candidate.yml").read_text().lower()
     req("workflow_call" in factory and "schedule:" not in factory,"software factory unexpectedly recurring")
-    req("cost_governor.workflow_gate preflight" in factory,"software factory is not cost governed")
-    req("run: exit 3" in factory,"software factory must fail closed when modification authority is denied")
+    req("portfolio-workload-software-factory" in factory,"software factory workload concurrency group missing")
+    req("cost_governor.workflow_gate" not in factory,"software factory still couples free runner work to paid budget")
     event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text().lower()
     req("push:" in event and 'branches: ["main"]' in event,"main push observer missing")
     req('"operations/command_center_refresh_request.json"' in event,"trigger-only command-center refresh still creates redundant runtime work")
@@ -242,7 +245,7 @@ def validate_operating_mode():
     liveness=load("operations/WORKFLOW_LIVENESS_POLICY.json")
     req(liveness["schema_version"]=="1.0.0" and liveness["liveness_id"]=="portfolio-core-workflow-liveness-v1","workflow liveness policy identity mismatch")
     req(liveness["authority_class"]=="NONE" and liveness["dispatch_authority_effect"]=="NONE","workflow liveness recovery widened authority")
-    req(liveness["hard_stop_behavior"]=="NO_RECOVERY_DISPATCH","workflow liveness recovery can bypass cost hard stop")
+    req(liveness["hard_stop_behavior"]=="ALLOW_NONPAID_RECOVERY","workflow liveness paid-stop behavior changed")
     req(1<=liveness["max_dispatches_per_cycle"]<=2 and 1<=liveness["max_history_pages"]<=5,"workflow liveness recovery bounds invalid")
     recovery_names={row["workflow_name"] for row in liveness["targets"]}
     req(recovery_names<=set(expected),"workflow liveness recovery target is not an approved recurring workflow")
