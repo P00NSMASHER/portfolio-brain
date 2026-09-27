@@ -1,6 +1,11 @@
 name: command-center-pages
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - dashboard/**
+      - .github/workflows/command-center-pages.yml
   schedule:
     - cron: "37 * * * *"
   workflow_dispatch:
