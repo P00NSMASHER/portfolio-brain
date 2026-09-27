@@ -94,9 +94,11 @@ def validate_policy(p:dict[str,Any])->None:
         reusable_marker="uses: ./.github/workflows/runtime-worker.yml"
         if reusable_marker in workflow_body:
             workflow_body+="\n"+(ROOT/".github"/"workflows"/"runtime-worker.yml").read_text(encoding="utf-8")
+        job_marker = (f'--job-id {target["cost_job_id"]}' if target["cost_workflow_id"] != "runtime-worker"
+                      else '--job-id "runtime-${RUNTIME_MODE}"')
         for fragment in (
           f'--workflow-id {target["cost_workflow_id"]}',
-          f'--job-id {target["cost_job_id"]}',
+          job_marker,
           f'--estimated-minutes {target["estimated_minutes"]}',
           f'--authority {target["authority_class"]}',
           *(f'--project-id {project_id}' for project_id in target["project_ids"]),

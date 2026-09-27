@@ -57,6 +57,7 @@ def validate_runtime()->dict:
     for required in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_RUNTIME_DISABLED",
                      "PORTFOLIO_MODEL_API_KEY","runtime.model_analysis","actions/upload-artifact@v4","retention-days: 30","cancel-in-progress: false",
                      "--provider-health-output runtime/out/provider_health.json",
+                     '--job-id "runtime-${RUNTIME_MODE}"',
                      "Report governed no-work outcome","steps.cost.outputs.decision_status","GITHUB_STEP_SUMMARY"]:
         req(required in worker,f"runtime worker missing {required}")
     req("Fail closed when cost gate blocks" not in worker and "run: exit 3" not in worker,
@@ -90,7 +91,7 @@ def validate_runtime()->dict:
     return {"workflows":5,"model_calls":0,"governed_daily_model_calls":1,"governed_weekly_model_calls":1,
             "downstream_writes":0,"external_actions":0,
             "runtime_receipt_integrity":True,"runtime_artifact_companion_binding":True,
-            "push_observation_coalescing":True,
+            "push_observation_coalescing":True,"mode_isolated_cost_budgets":True,
             "max_api_requests":b["max_api_requests_per_cycle"],"max_runtime_seconds":b["max_runtime_seconds"]}
 
 if __name__=="__main__":

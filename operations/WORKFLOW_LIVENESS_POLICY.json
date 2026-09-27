@@ -26,7 +26,7 @@
       "workflow_name": "runtime-hourly-sync",
       "workflow_file": "runtime-hourly-sync.yml",
       "cost_workflow_id": "runtime-worker",
-      "cost_job_id": "runtime",
+      "cost_job_id": "runtime-sync",
       "project_ids": ["PRJ-000"],
       "estimated_minutes": 5,
       "authority_class": "OBSERVE",
