@@ -76,7 +76,7 @@ def validate_state(state:dict[str,Any])->None:
     finding_ids=set()
     for finding in state["findings"]:
         expected={
-          "finding_id","proposal_id","gap_id","project_ids","strategy_id","candidate_fingerprint",
+          "finding_id","proposal_id","gap_id","capability_key","project_ids","strategy_id","candidate_fingerprint",
           "repository_full_name","repository_id","revision","public","rank_score","rank_band",
           "soft_signals","inspection","provenance_refs"
         }
@@ -85,6 +85,7 @@ def validate_state(state:dict[str,Any])->None:
         req(finding["finding_id"] in proposal_by_finding,"proposal finding has no matching proposal")
         proposal=proposal_by_finding[finding["finding_id"]]
         req(finding["proposal_id"]==proposal["proposal_id"],"proposal/finding id lineage mismatch")
+        req(isinstance(finding["capability_key"],str) and finding["capability_key"].startswith("capability-coverage:"),"proposal finding capability key invalid")
         req(finding["project_ids"]==proposal["project_ids"],"proposal/finding project lineage mismatch")
         req(finding["rank_score"]==proposal["candidate_rank_score"] and finding["rank_band"]==proposal["candidate_rank_band"],"proposal/finding rank lineage mismatch")
         req(finding["public"] is True,"proposal finding source is not public")
@@ -104,6 +105,7 @@ def build_proposal_state(hunter_state:dict[str,Any],receipt:dict[str,Any])->dict
     req(isinstance(given,str) and given==digest(body),"Hunter cycle receipt hash mismatch")
     proposals=list(receipt.get("experiment_proposals") or [])
     by_finding={row["finding_id"]:row for row in receipt.get("findings") or []}
+    by_objective={row["objective_id"]:row for row in receipt.get("objectives") or []}
     findings=[]
     for proposal in proposals:
         finding=by_finding.get(proposal["finding_id"])
@@ -112,10 +114,13 @@ def build_proposal_state(hunter_state:dict[str,Any],receipt:dict[str,Any])->dict
         req(finding.get("proposal_eligibility")=="SELECTED","Hunter proposal finding did not pass proposal selection")
         req(finding.get("experiment_proposal_id")==proposal["proposal_id"],"Hunter proposal finding linkage mismatch")
         source=finding["source"];ranking=finding["ranking"]
+        objective=by_objective.get(finding["objective_id"])
+        req(objective is not None,"Hunter proposal finding objective missing")
         findings.append({
           "finding_id":finding["finding_id"],
           "proposal_id":proposal["proposal_id"],
           "gap_id":finding["gap_id"],
+          "capability_key":objective["capability_key"],
           "project_ids":finding["project_ids"],
           "strategy_id":finding["strategy_id"],
           "candidate_fingerprint":finding["candidate_fingerprint"],
