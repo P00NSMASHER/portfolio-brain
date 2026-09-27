@@ -10,6 +10,14 @@ Step 9 Hunter is OBSERVE-only. It may query public GitHub metadata and exact-rev
 
 A retained candidate remains OBSERVED. Discovery does not prove a reusable capability and does not grant license/reuse rights. Independent verification, rights review, and a bounded experiment are required before later promotion.
 
+## Query generation
+
+Hunter repository discovery uses a checked-in semantic concept taxonomy derived from project categories rather than defaulting to portfolio-specific brand or product names. Public GitHub repository search is treated as metadata discovery; implementation/test evidence is established only by the later exact-revision structural inspection.
+
+Each gap receives multiple reusable search concepts, query templates are rotated by durable Hunter sequence, and exact queries with prior dead-end evidence are deprioritized before suppression. Semantic concepts also contribute to structural path matching so a useful external implementation does not need to contain Portfolio Brain's private/internal project slug.
+
+This query expansion does not widen Hunter authority, add model calls, execute discovered code, or grant reuse rights.
+
 ## Candidate evaluation
 
 Hunter separates hard validity gates from soft ranking signals.
