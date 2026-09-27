@@ -1,4 +1,5 @@
 import copy, unittest
+from pathlib import Path
 from hunting.autonomous_hunter import (
     HunterError, _queries, apply_verified_feedback, candidate_fingerprint, classify_candidate, detect_gaps,
     load_policy, load_seed_state, load_strategies, rank_candidate, run_cycle, search_concepts_for_gap,
@@ -16,6 +17,18 @@ class FakeProvider:
         self.requests+=1;return copy.deepcopy(self.inspection)
 
 class HunterTests(unittest.TestCase):
+    def test_on_demand_hunter_trigger_is_isolated_and_rerunnable(self):
+        root=Path(__file__).resolve().parents[1]
+        workflow=(root/".github/workflows/hunter-autonomous-cycle.yml").read_text()
+        runtime=(root/".github/workflows/runtime-event-observe.yml").read_text()
+        trigger=(root/".github/triggers/hunter-autonomous-now.txt").read_text()
+        self.assertIn('.github/triggers/hunter-autonomous-now.txt',workflow)
+        self.assertGreater(workflow.index("concurrency:"),workflow.index("hunt:"))
+        self.assertIn('.github/triggers/hunter-autonomous-now.txt',runtime)
+        self.assertIn('.github/workflows/hunter-autonomous-cycle.yml',runtime)
+        self.assertIn("authority=OBSERVE",trigger)
+        self.assertIn("model-calls=0",trigger)
+
     def test_structural_gaps_are_detected_without_claiming_missing_functionality(self):
         gaps=detect_gaps()
         self.assertGreaterEqual(len(gaps),1)
