@@ -5,6 +5,8 @@ on:
     branches: ["main"]
     paths-ignore:
       - "runtime/TRIGGER_DAILY_REASONING"
+      - ".github/triggers/hunter-autonomous-now.txt"
+      - ".github/workflows/hunter-autonomous-cycle.yml"
       - "dashboard/**"
       - "tests/**"
       - "operator_console/**"
