@@ -21,7 +21,6 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ github.token }}
       PORTFOLIO_GITHUB_TOKEN: ${{ github.token }}
-      PORTFOLIO_SPEND_DISABLED: ${{ vars.PORTFOLIO_SPEND_DISABLED }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
