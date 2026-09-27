@@ -83,6 +83,7 @@ class CostGovernorTests(unittest.TestCase):
         self.assertIn("cost_governor.workflow_gate finalize",workflow)
         self.assertIn("PORTFOLIO_MODEL_API_KEY",workflow)
         self.assertIn("value_proof.end_to_end",workflow)
+        self.assertNotIn("\\${{",workflow)
         self.assertNotIn("\n  schedule:",workflow)
         p=policy()
         self.assertIn("model-value-proof",p["managed_workflow_names"])
