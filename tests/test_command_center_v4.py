@@ -172,6 +172,11 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertIn("Verified Learning Integrity",public)
         self.assertIn("cross-checks Hunter, model feedback, and continuous learning",public)
 
+    def test_pages_artifact_is_rerun_safe_and_attempt_scoped(self):
+        workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text()
+        self.assertIn("name: github-pages-${{ github.run_attempt }}",workflow)
+        self.assertIn("artifact_name: github-pages-${{ github.run_attempt }}",workflow)
+
     def test_scheduler_executes_work_before_heartbeating_workers(self):
         workflow=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text()
         self.assertIn("python -m scheduler.work_executor",workflow)
