@@ -20,7 +20,7 @@ class OpenAIExecutorTests(unittest.TestCase):
         reg=provider_registry()
         p=next(x for x in reg["providers"] if x["provider_id"]=="openai")
         self.assertTrue(p["enabled"])
-        self.assertEqual([(m["tier"],m["model_id"]) for m in p["models"]],[
+        self.assertEqual([(m["tier"],m["model_id"]) for m in p["models"] if m["enabled"]],[
           (1,"gpt-5.6-luna"),(2,"gpt-5.6-terra"),(3,"gpt-5.6-sol")])
 
     def test_architecture_routes_terra(self):

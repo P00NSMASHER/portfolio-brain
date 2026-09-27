@@ -86,6 +86,15 @@
       "api_calls": 8,
       "github_job_starts": 0,
       "github_runner_minutes": 0
+    },
+    "openai::gpt-6-astra": {
+      "cost_usd": 2.5,
+      "input_tokens": 80000,
+      "output_tokens": 24000,
+      "model_calls": 2,
+      "api_calls": 2,
+      "github_job_starts": 0,
+      "github_runner_minutes": 0
     }
   },
   "workflow_job_ceilings": {
