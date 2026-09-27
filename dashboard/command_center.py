@@ -2149,7 +2149,7 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
   </section>
 
   <section class="repair-board upgrade-board" id="recommended-upgrades" aria-labelledby="upgrade-title">
-    <div class="repair-head"><div><div class="repair-kicker upgrade-kicker">RECOMMENDED UPGRADES · EVIDENCE BACKED</div><h2 id="upgrade-title">Make the Brain better.</h2><p>Forward-looking improvements generated from the current snapshot. These are not defects; each item includes a ready-to-run prompt with the current evidence boundaries preserved.</p></div><div class="repair-count upgrade-count"><strong>{len(recommended_upgrades)}</strong><span>recommended</span></div></div>
+    <div class="repair-head"><div><div class="repair-kicker upgrade-kicker">RECOMMENDED UPGRADES · EVIDENCE BACKED</div><h2 id="upgrade-title">Recommended Upgrades</h2><p><strong>Make the Brain better.</strong> Forward-looking improvements generated from the current snapshot. These are not defects; each item includes a ready-to-run prompt with the current evidence boundaries preserved.</p></div><div class="repair-count upgrade-count"><strong>{len(recommended_upgrades)}</strong><span>recommended</span></div></div>
     <div class="repair-meta"><span>{_badge("READ ONLY","neutral")}</span><span>Source <code>{_e((publication.get('source_commit') or 'not stamped')[:12])}</code></span><span>Generated from current durable state</span></div>
     <div class="repair-list upgrade-list">{upgrade_cards}</div>
     <p class="repair-foot">Recommendations are prioritized from current evidence and should be rechecked against current main before implementation. Copying a prompt does not execute it.</p>
