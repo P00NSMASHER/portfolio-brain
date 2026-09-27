@@ -6,9 +6,9 @@ ROOT=Path(__file__).resolve().parents[1]
 class OperatingModeTests(unittest.TestCase):
     def test_operational_contract_passes(self):
         result=validate_operating_mode()
-        self.assertEqual(result["approved_recurring_workflows"],8)
-        self.assertEqual(result["neutral_no_work_workflows"],5)
-        self.assertEqual(result["durable_state_artifacts"],5)
+        self.assertEqual(result["approved_recurring_workflows"],9)
+        self.assertEqual(result["neutral_no_work_workflows"],6)
+        self.assertEqual(result["durable_state_artifacts"],6)
         self.assertEqual(result["gmail_gateway_account_ref"],"PRIMARY_GMAIL_CONNECTOR")
         self.assertEqual(result["enabled_nonzero_models"],3)
         self.assertFalse(result["interactive_chatgpt_runtime_dependency"])
@@ -43,7 +43,8 @@ class OperatingModeTests(unittest.TestCase):
         self.assertEqual(set(p["approved_recurring_workflows"]),{
           "runtime-hourly-sync","runtime-daily-learning","runtime-weekly-synthesis",
           "hunter-autonomous-cycle","portfolio-autonomous-scheduler",
-          "portfolio-cost-watchdog","portfolio-notification-cycle","command-center-pages"
+          "portfolio-cost-watchdog","portfolio-notification-cycle","command-center-pages",
+          "agent-heartbeat-sweep"
         })
 
     def test_active_schedule_inventory_matches_operating_policy(self):
@@ -96,7 +97,7 @@ class OperatingModeTests(unittest.TestCase):
     def test_expected_cost_denials_are_neutral_for_recurring_observe_lanes(self):
         for name in [
             "runtime-worker","hunter-autonomous-cycle","portfolio-autonomous-scheduler",
-            "portfolio-notification-cycle","command-center-pages",
+            "portfolio-notification-cycle","command-center-pages","agent-heartbeat-sweep",
         ]:
             body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
             self.assertIn("steps.cost.outputs.allowed != 'true'",body,name)
