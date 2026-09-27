@@ -3,7 +3,7 @@
 from __future__ import annotations
 import json
 from pathlib import Path
-from hunting.autonomous_hunter import detect_gaps, load_policy, load_seed_state, load_strategies, select_objectives, validate_state
+from hunting.autonomous_hunter import detect_gaps, load_policy, load_seed_state, load_strategies, run_cycle, select_objectives, validate_state
 ROOT=Path(__file__).resolve().parents[1]
 class HunterValidationError(ValueError): pass
 def req(ok,msg):
@@ -36,11 +36,24 @@ def validate_hunter():
     req(1<=len(objectives)<=policy["budgets"]["max_objectives_per_cycle"],"objective generation out of bounds")
     req(any(x["exploration"] for x in objectives),"exploration objective missing")
     req(all(x["authority_class"]=="OBSERVE" for x in objectives),"objective authority widened")
+    class NoResultProvider:
+        requests=0
+        def search(self,query):
+            self.requests+=1
+            return []
+        def inspect(self,candidate):
+            raise AssertionError("zero-result provider must never inspect")
+    _,probe_receipt=run_cycle(load_seed_state(),NoResultProvider(),at="2026-09-25T18:00:00Z")
+    funnel=probe_receipt["rejection_funnel"]
+    req(funnel["candidate_accounting_reconciled"] is True,"Hunter candidate funnel does not reconcile")
+    req(funnel["disposition_accounting_reconciled"] is True,"Hunter disposition funnel does not reconcile")
+    req(funnel["queries_executed"]>0 and funnel["queries_zero_results"]>0,"Hunter zero-result funnel evidence missing")
+    req(len(probe_receipt["query_outcomes"])>0,"Hunter per-query rejection trace missing")
     wf=(ROOT/".github/workflows/hunter-autonomous-cycle.yml").read_text()
     for s in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_HUNTER_DISABLED","47 */6 * * *","cancel-in-progress: false","actions/upload-artifact@v4"]:
         req(s in wf,f"Hunter workflow missing {s}")
     low=wf.lower()
     for forbidden in ["contents: write","pull-requests: write","issues: write","id-token: write","git push","gh pr","openai","anthropic"]:
         req(forbidden not in low,f"forbidden Hunter workflow capability: {forbidden}")
-    return {"pinned_components":len(expected),"strategies":len(strategies),"detected_gaps":len(gaps),"selected_objectives":len(objectives),"exploration_objectives":sum(1 for x in objectives if x["exploration"]),"model_calls":0,"downstream_writes":0,"external_actions":0}
+    return {"pinned_components":len(expected),"strategies":len(strategies),"detected_gaps":len(gaps),"selected_objectives":len(objectives),"exploration_objectives":sum(1 for x in objectives if x["exploration"]),"rejection_funnel_reconciled":True,"query_outcomes":len(probe_receipt["query_outcomes"]),"model_calls":0,"downstream_writes":0,"external_actions":0}
 if __name__=="__main__":print("portfolio-brain Step 9 Hunter: PASS",json.dumps(validate_hunter(),sort_keys=True))
