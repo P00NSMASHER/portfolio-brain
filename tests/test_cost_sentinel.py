@@ -67,6 +67,55 @@ class CostSentinelTests(unittest.TestCase):
         self.assertEqual(row["value_signal"],"NO_SUCCESSFUL_CALL_BASELINE")
         self.assertIsNone(row["spend_per_verified_outcome_usd"])
 
+    def test_durable_verified_feedback_is_attributed_per_model_not_globally(self):
+        feedback={
+            "schema_version":"1.0.0",
+            "state_id":"portfolio-model-feedback-state",
+            "sequence":2,
+            "updated_at":"2026-09-27T03:45:00Z",
+            "calls":[
+                {"invocation_id":"INV-TERRA","provider_id":"openai","model_id":"gpt-5.6-terra","cost_usd":0.01177},
+                {"invocation_id":"INV-SOL","provider_id":"openai","model_id":"gpt-5.6-sol","cost_usd":0.026428},
+            ],
+            "outcomes":[
+                {"feedback_id":"FB-TERRA","invocation_id":"INV-TERRA","outcome_event_id":"MVOUT-1","evidence_state":"VERIFIED","outcome_value":1.0},
+                {"feedback_id":"FB-SOL","invocation_id":"INV-SOL","outcome_event_id":"MVOUT-1","evidence_state":"VERIFIED","outcome_value":1.0},
+            ],
+            "routing_task_summaries":{
+                "OPPORTUNITY_REASONING":{"T2::openai::gpt-5.6-terra":{"verified_outcomes":1}},
+                "PROMOTION_VERIFICATION":{"T3::openai::gpt-5.6-sol":{"verified_outcomes":1}},
+            },
+        }
+        snapshot=build_sentinel_snapshot(
+            cost_policy={"portfolio_ceiling":{
+                "cost_usd":10,"input_tokens":1000000,"output_tokens":250000,
+                "model_calls":40,"api_calls":80,"github_job_starts":120,"github_runner_minutes":600,
+            }},
+            cost_state={"reservations":[]},
+            provider_registry={"providers":[{"provider_id":"openai","enabled":True,"models":[
+                {"model_id":"gpt-5.6-luna","tier":1,"enabled":True,"pricing":{"input_usd_per_million_tokens":0.2,"output_usd_per_million_tokens":1.2}},
+                {"model_id":"gpt-5.6-terra","tier":2,"enabled":True,"pricing":{"input_usd_per_million_tokens":2,"output_usd_per_million_tokens":12}},
+                {"model_id":"gpt-5.6-sol","tier":3,"enabled":True,"pricing":{"input_usd_per_million_tokens":4,"output_usd_per_million_tokens":20}},
+            ]}]},
+            model_feedback_state=feedback,
+            action_policy={"allowed_actions":{"CUSTOMER_EMAIL":{"max_per_utc_day":25}}},
+            action_ledger={"executions":[]},
+            provider_health={"status":"READY"},
+            at="2026-09-27T04:00:00Z",
+        )
+        self.assertEqual(snapshot["model_efficiency"]["feedback_source"],"DURABLE_VERIFIED_FEEDBACK")
+        self.assertEqual(snapshot["model_efficiency"]["verified_feedback_records"],2)
+        self.assertEqual(snapshot["model_efficiency"]["verified_value_events"],1)
+        rows={row["model_id"]:row for row in snapshot["model_efficiency"]["models"]}
+        self.assertEqual(rows["gpt-5.6-terra"]["verified_outcomes_recorded"],1)
+        self.assertEqual(rows["gpt-5.6-sol"]["verified_outcomes_recorded"],1)
+        self.assertEqual(rows["gpt-5.6-luna"]["verified_outcomes_recorded"],0)
+        self.assertEqual(rows["gpt-5.6-terra"]["value_signal"],"VERIFIED_VALUE_EVIDENCE")
+        self.assertEqual(rows["gpt-5.6-sol"]["value_signal"],"VERIFIED_VALUE_EVIDENCE")
+        self.assertEqual(rows["gpt-5.6-luna"]["value_signal"],"NO_SUCCESSFUL_CALL_BASELINE")
+        self.assertEqual(rows["gpt-5.6-terra"]["spend_per_verified_outcome_usd"],0.01177)
+        self.assertEqual(rows["gpt-5.6-sol"]["spend_per_verified_outcome_usd"],0.026428)
+
     def test_daily_budget_and_model_metrics_ignore_retained_prior_days(self):
         def reservation(created_at, *, cost, model_calls, status="COMMITTED", evidence_refs=None):
             usage={
