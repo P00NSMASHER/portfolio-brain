@@ -20,6 +20,7 @@
     "max_total_changed_files_per_cycle": 1500,
     "max_output_bytes": 5242880,
     "max_runtime_seconds": 240,
+    "max_state_restore_seconds": 45,
     "retry_limit": 2,
     "retry_backoff_seconds": 2
   },
