@@ -194,8 +194,35 @@ def rebuild_state(observations: list[dict[str,Any]])->dict[str,Any]:
       "state_hash":canonical_hash({"source_snapshot_hash":source_hash,"records":final,"learning_alerts":alerts})
     }
 
-def rebuild_from_ledger()->dict[str,Any]:
+def _checked_in_observations()->list[dict[str,Any]]:
     ledger=load("learning/LEARNING_OBSERVATION_LEDGER.json")
     req(ledger["schema_version"]=="1.0.0" and ledger["ledger_id"]=="portfolio-learning-observations","learning ledger identity mismatch")
     req(isinstance(ledger["observations"],list),"learning ledger observations must be list")
-    return rebuild_state(ledger["observations"])
+    return list(ledger["observations"])
+
+def rebuild_from_sources(live_state_path:Path|None=None)->dict[str,Any]:
+    rows=_checked_in_observations()
+    source_mode="CHECKED_IN_ONLY"
+    live_sequence=None
+    if live_state_path is not None and Path(live_state_path).exists():
+        from learning.live_observations import validate_state as validate_live_state
+        live=json.loads(Path(live_state_path).read_text(encoding="utf-8"))
+        validate_live_state(live)
+        rows.extend(live["observations"])
+        source_mode="CHECKED_IN_PLUS_DURABLE_VERIFIED"
+        live_sequence=live["sequence"]
+    rebuilt=rebuild_state(rows)
+    rebuilt["source_mode"]=source_mode
+    rebuilt["live_observation_state_sequence"]=live_sequence
+    rebuilt["live_observation_count"]=len(rows)-len(_checked_in_observations())
+    rebuilt["state_hash"]=canonical_hash({
+      "source_snapshot_hash":rebuilt["source_snapshot_hash"],
+      "records":rebuilt["records"],
+      "learning_alerts":rebuilt["learning_alerts"],
+      "source_mode":source_mode,
+      "live_observation_state_sequence":live_sequence,
+    })
+    return rebuilt
+
+def rebuild_from_ledger()->dict[str,Any]:
+    return rebuild_from_sources(None)
