@@ -41,6 +41,7 @@ def validate_hunter():
     req(query_policy["portfolio_brand_names_default"] is False,"Hunter query generation reverted to portfolio brand names")
     req(query_policy["rotate_queries_by_state_sequence"] is True and query_policy["prefer_lowest_negative_hits"] is True,"Hunter dead-end query rotation disabled")
     req(query_policy["structural_ranking_uses_semantic_concepts"] is True,"Hunter structural ranking lost semantic concepts")
+    req(policy["budgets"]["max_candidates_inspected_per_query"]==2,"Hunter per-query inspection fairness cap drifted")
     concepts=load_query_concepts()
     req(concepts["schema_version"]=="1.0.0" and concepts["taxonomy_id"]=="portfolio-hunter-query-concepts-v1","Hunter query concept taxonomy identity drifted")
     req(concepts["max_concepts_per_gap"]>=3,"Hunter query concept breadth too narrow")
@@ -59,6 +60,11 @@ def validate_hunter():
     req(sum(ranking["weights"].values())==ranking["max_score"],"Hunter ranking weights/max score mismatch")
     req(ranking["bands"]["HIGH"]["min_score"]>ranking["bands"]["MEDIUM"]["min_score"]>ranking["bands"]["LOW"]["min_score"],"Hunter ranking bands invalid")
     req(ranking["value_credit_source"]=="VERIFIED_OUTCOMES_ONLY","Hunter ranking may not create value credit")
+    proposal_gate=evaluation["proposal_gate"]
+    req(proposal_gate["minimum_rank_band"]=="MEDIUM","Hunter proposal quality floor weakened")
+    req(1<=proposal_gate["max_experiment_proposals_per_cycle"]<=policy["budgets"]["max_candidates_inspected_per_cycle"],"Hunter proposal cycle cap invalid")
+    req(proposal_gate["low_rank_disposition"]=="RETAIN_OBSERVED_WITHOUT_PROPOSAL","low-rank Hunter candidates are not kept as observed near misses")
+    req(proposal_gate["value_credit_source"]=="VERIFIED_OUTCOMES_ONLY","Hunter proposal gate may not create value credit")
     req(len(strategies)==4 and any(x["family"]=="EXPLORATION" for x in strategies),"strategy set/exploration missing")
     gaps=detect_gaps(); objectives=select_objectives(seed)
     req(len(gaps)>=1,"no structural portfolio gaps detected")
@@ -113,5 +119,5 @@ def validate_hunter():
     low=(wf+"\n"+proof_wf).lower()
     for forbidden in ["contents: write","pull-requests: write","issues: write","id-token: write","git push","gh pr","openai","anthropic"]:
         req(forbidden not in low,f"forbidden Hunter workflow capability: {forbidden}")
-    return {"pinned_components":len(expected),"strategies":len(strategies),"detected_gaps":len(gaps),"selected_objectives":len(objectives),"exploration_objectives":sum(1 for x in objectives if x["exploration"]),"hard_reject_reasons":evaluation["hard_reject_reasons"],"soft_signals_do_not_reject":evaluation["soft_signals_do_not_reject"],"ranking_max_score":ranking["max_score"],"rejection_funnel_reconciled":True,"query_outcomes":len(probe_receipt["query_outcomes"]),"calibration_cases":calibration["case_count"],"calibration_positive_retained":calibration["positive_retained"],"calibration_negative_rejected":calibration["negative_rejected"],"calibration_ambiguous_matched":calibration["ambiguous_matched"],"calibration_rank_bands":calibration["rank_band_counts"],"controlled_proof_cases":len(controlled["cases"]),"controlled_proof_min_retained":controlled["completion_gate"]["min_retained_candidates"],"controlled_proof_min_strategies":controlled["completion_gate"]["min_distinct_strategies"],"verified_outcome_strategy_priority":True,"semantic_query_taxonomy":concepts["taxonomy_id"],"semantic_query_categories":len(concepts["category_concepts"]),"model_calls":0,"downstream_writes":0,"external_actions":0}
+    return {"pinned_components":len(expected),"strategies":len(strategies),"detected_gaps":len(gaps),"selected_objectives":len(objectives),"exploration_objectives":sum(1 for x in objectives if x["exploration"]),"hard_reject_reasons":evaluation["hard_reject_reasons"],"soft_signals_do_not_reject":evaluation["soft_signals_do_not_reject"],"ranking_max_score":ranking["max_score"],"rejection_funnel_reconciled":True,"query_outcomes":len(probe_receipt["query_outcomes"]),"calibration_cases":calibration["case_count"],"calibration_positive_retained":calibration["positive_retained"],"calibration_negative_rejected":calibration["negative_rejected"],"calibration_ambiguous_matched":calibration["ambiguous_matched"],"calibration_rank_bands":calibration["rank_band_counts"],"controlled_proof_cases":len(controlled["cases"]),"controlled_proof_min_retained":controlled["completion_gate"]["min_retained_candidates"],"controlled_proof_min_strategies":controlled["completion_gate"]["min_distinct_strategies"],"verified_outcome_strategy_priority":True,"semantic_query_taxonomy":concepts["taxonomy_id"],"semantic_query_categories":len(concepts["category_concepts"]),"per_query_inspection_cap":policy["budgets"]["max_candidates_inspected_per_query"],"proposal_min_rank":proposal_gate["minimum_rank_band"],"proposal_cycle_cap":proposal_gate["max_experiment_proposals_per_cycle"],"model_calls":0,"downstream_writes":0,"external_actions":0}
 if __name__=="__main__":print("portfolio-brain Step 9 Hunter: PASS",json.dumps(validate_hunter(),sort_keys=True))
