@@ -18,6 +18,12 @@ Each gap receives multiple reusable search concepts, query templates are rotated
 
 This query expansion does not widen Hunter authority, add model calls, execute discovered code, or grant reuse rights.
 
+## Inspection fairness and proposal quality
+
+A single broad search query may not consume the entire cycle inspection budget. Hunter caps exact-revision inspections per query so later objectives and protected exploration receive evidence-gathering capacity in the same cycle.
+
+Retention and downstream proposal creation are separate decisions. A structurally valid LOW-ranked candidate remains an OBSERVED retained near miss, but it does not automatically create an experiment proposal. Only MEDIUM/HIGH candidates may enter the bounded proposal queue, and the number of new proposals per cycle is capped. This reduces downstream noise without converting soft evidence signals into hard rejection.
+
 ## Candidate evaluation
 
 Hunter separates hard validity gates from soft ranking signals.
