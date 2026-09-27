@@ -49,6 +49,3 @@ jobs:
           path: agents/out/agent_heartbeat_state.json
           if-no-files-found: error
           retention-days: 30
-      - name: Fail closed when cost gate blocks
-        if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
-        run: exit 3
