@@ -138,8 +138,19 @@ def validate_cost_governor():
     req("contents: write" not in scheduler and "actions: write" not in scheduler, "scheduler write authority widened")
 
     watchdog = (ROOT / ".github/workflows/portfolio-cost-watchdog.yml").read_text().lower()
-    req("actions: write" in watchdog, "watchdog cannot cancel managed jobs")
+    req("actions: write" in watchdog and "contents: read" in watchdog and "contents: write" not in watchdog, "watchdog permissions invalid")
     req("cost_governor.cancel_managed_jobs" in watchdog, "watchdog cancellation helper missing")
+    req("operations.workflow_liveness" in watchdog, "watchdog liveness recovery helper missing")
+    req("portfolio-workflow-liveness" in watchdog, "watchdog liveness receipt artifact missing")
+    liveness=json.loads((ROOT/"operations/WORKFLOW_LIVENESS_POLICY.json").read_text())
+    req(liveness["schema_version"]=="1.0.0" and liveness["liveness_id"]=="portfolio-core-workflow-liveness-v1","workflow liveness policy identity mismatch")
+    req(liveness["authority_class"]=="NONE" and liveness["dispatch_authority_effect"]=="NONE","workflow liveness recovery widened authority")
+    req(liveness["hard_stop_behavior"]=="NO_RECOVERY_DISPATCH","workflow liveness recovery can bypass hard stop")
+    req(1<=liveness["max_dispatches_per_cycle"]<=2,"workflow liveness recovery dispatch bound invalid")
+    req(1<=liveness["max_history_pages"]<=5,"workflow liveness history scan bound invalid")
+    liveness_names={row["workflow_name"] for row in liveness["targets"]}
+    req(liveness_names<=set(p["managed_workflow_names"]),"workflow liveness recovery targets unmanaged workflows")
+    req("foundation-ci" not in liveness_names,"foundation CI may not be auto-recovered by watchdog")
     req("foundation-ci" not in p["managed_workflow_names"], "foundation CI may not be cost-cancel managed")
 
     router_policy = json.loads((ROOT / "model_router/MODEL_ROUTER_POLICY.json").read_text())
@@ -155,6 +166,8 @@ def validate_cost_governor():
         "governed_execution_workflows": len(governed_workflows),
         "duplicate_suppression": True,
         "overage_hard_stop": True,
+        "workflow_liveness_recovery_targets": len(liveness["targets"]),
+        "workflow_liveness_max_dispatches": liveness["max_dispatches_per_cycle"],
         "authority_change": "NONE",
     }
 

@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0.0",
+  "liveness_id": "portfolio-core-workflow-liveness-v1",
+  "enabled": true,
+  "default_branch": "main",
+  "max_api_requests_per_cycle": 14,
+  "max_history_pages": 3,
+  "max_dispatches_per_cycle": 2,
+  "recent_failure_retry_after_minutes": 35,
+  "authority_class": "NONE",
+  "dispatch_authority_effect": "NONE",
+  "hard_stop_behavior": "NO_RECOVERY_DISPATCH",
+  "targets": [
+    {
+      "workflow_name": "portfolio-autonomous-scheduler",
+      "workflow_file": "portfolio-autonomous-scheduler.yml",
+      "max_start_age_minutes": 100,
+      "priority": 1
+    },
+    {
+      "workflow_name": "runtime-hourly-sync",
+      "workflow_file": "runtime-hourly-sync.yml",
+      "max_start_age_minutes": 100,
+      "priority": 2
+    },
+    {
+      "workflow_name": "agent-heartbeat-sweep",
+      "workflow_file": "agent-heartbeat-sweep.yml",
+      "max_start_age_minutes": 160,
+      "priority": 3
+    },
+    {
+      "workflow_name": "hunter-autonomous-cycle",
+      "workflow_file": "hunter-autonomous-cycle.yml",
+      "max_start_age_minutes": 420,
+      "priority": 4
+    },
+    {
+      "workflow_name": "portfolio-notification-cycle",
+      "workflow_file": "portfolio-notification-cycle.yml",
+      "max_start_age_minutes": 420,
+      "priority": 5
+    }
+  ],
+  "invariants": [
+    "Recovery never bypasses a downstream workflow's own cost preflight, authority gates, kill switches, or concurrency controls.",
+    "A queued or in-progress target is never duplicated.",
+    "A recent completed run suppresses recovery even when scheduled delivery is delayed.",
+    "A failed/cancelled target may be retried only after the configured failure retry age.",
+    "At most two workflow_dispatch calls may be emitted per watchdog cycle.",
+    "A cost hard stop or spend kill switch disables all recovery dispatch."
+  ]
+}
