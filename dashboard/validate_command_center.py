@@ -51,6 +51,13 @@ def validate_command_center() -> dict[str, object]:
     require(ceiling["cost_usd"] >= 0, "invalid portfolio cost ceiling")
     require(ceiling["model_calls"] >= 0, "invalid model-call ceiling")
     require(snapshot["model_router"]["enabled_non_tier0_route_count"] >= 1, "no enabled non-Tier-0 model route visible")
+    learning=snapshot["learning_loop"]
+    integrity=learning["integrity"]
+    require(integrity["status"] in {"HEALTHY","DEGRADED","NO_VERIFIED_VALUE"},"learning integrity status invalid")
+    require(integrity["authority_granted"] is False and integrity["policy_promoted"] is False and integrity["evidence_upgraded"] is False,"learning integrity widened authority/policy/evidence")
+    require(learning["policy_effect"]=="NONE","command-center learning policy effect widened")
+    if integrity["verified_value_event_count"]>0:
+        require(integrity["status"]=="HEALTHY" or snapshot["system"]["functional_status"]=="DEGRADED","incomplete verified learning propagation hidden behind operational health")
     readiness=snapshot["model_router"]["provider_readiness"]
     require(readiness["status"] in {"READY","MISSING_CREDENTIAL","BILLING_NOT_ACTIVE","QUOTA_EXHAUSTED","RATE_LIMITED","BUDGET_BLOCKED","PROVIDER_ERROR","UNKNOWN"}, "provider readiness status invalid")
     require(readiness["authority_granted"] is False and readiness["evidence_upgraded"] is False, "provider health widened authority/evidence")
@@ -82,6 +89,8 @@ def validate_command_center() -> dict[str, object]:
     require("Bounded Action Engine" in page, "action-engine panel missing")
     require("Enabled Model Routes" in page, "model-route panel missing")
     require("Provider Readiness" in page, "provider-readiness panel missing")
+    require("Verified Learning Integrity" in page, "verified learning-integrity panel missing")
+    require("cross-checks Hunter, model feedback, and continuous learning" in page, "learning-integrity explanation missing")
     require("Verified Model Value" in page, "verified model value panel missing")
     require("verified value event(s)" in page, "verified model value evidence badge missing")
     require(snapshot["model_router"]["feedback_state"]["verified_feedback_records"] == snapshot["model_router"]["model_efficiency"]["verified_feedback_records"], "model feedback count mismatch")
@@ -113,6 +122,7 @@ def validate_command_center() -> dict[str, object]:
         "kill_switches": len(snapshot["kill_switches"]),
         "daily_model_budget_usd": ceiling["cost_usd"],
         "enabled_non_tier0_model_routes": snapshot["model_router"]["enabled_non_tier0_route_count"],
+        "learning_integrity_status": integrity["status"],
         "action_receipts": action["execution_count"],
         "history_points": snapshot["history"]["point_count"],
         "queue_open": snapshot["telemetry"]["queue"]["open_total"],
