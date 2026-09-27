@@ -1,7 +1,7 @@
 import copy, unittest
 from pathlib import Path
 from hunting.autonomous_hunter import (
-    HunterError, _queries, apply_verified_feedback, candidate_fingerprint, classify_candidate, detect_gaps,
+    GitHubPublicProvider, HunterError, _queries, apply_verified_feedback, candidate_fingerprint, classify_candidate, detect_gaps,
     load_policy, load_seed_state, load_strategies, rank_candidate, run_cycle, search_concepts_for_gap,
     select_objectives, structural_inspection, validate_state
 )
@@ -134,6 +134,60 @@ class HunterTests(unittest.TestCase):
         self.assertTrue(saw_suppressed)
         self.assertTrue(any(x["reason_code"]=="REPEATED_DEAD_END_SUPPRESSED" for x in s["negative_knowledge"]))
 
+    def test_candidate_inspection_unavailable_does_not_abort_cycle_or_train_dead_end(self):
+        class UnavailableProvider(FakeProvider):
+            def inspect(self,c):
+                self.requests+=1
+                raise HunterError("synthetic 409")
+        state,receipt=run_cycle(load_seed_state(),UnavailableProvider(),at="2026-09-25T18:00:00Z")
+        funnel=receipt["rejection_funnel"]
+        self.assertEqual(receipt["status"],"PASS")
+        self.assertGreater(funnel["inspection_errors"],0)
+        self.assertEqual(funnel["inspection_succeeded"],0)
+        self.assertEqual(funnel["retained"],0)
+        self.assertEqual(funnel["rejected"],0)
+        self.assertTrue(funnel["candidate_accounting_reconciled"])
+        self.assertTrue(funnel["disposition_accounting_reconciled"])
+        self.assertIn("EXACT_REVISION_INSPECTION_UNAVAILABLE",funnel["inspection_error_reasons"])
+        self.assertTrue(any(q["status"]=="EXECUTED_WITH_INSPECTION_ERRORS" for q in receipt["query_outcomes"]))
+        self.assertFalse(any(x["reason_code"]=="NO_RETAINED_CANDIDATE" for x in state["negative_knowledge"]))
+
+    def test_mixed_inspection_failure_and_success_remains_accounted(self):
+        class MixedAvailabilityProvider(FakeProvider):
+            def inspect(self,c):
+                self.requests+=1
+                if c["id"]==1:
+                    raise HunterError("synthetic unavailable")
+                return copy.deepcopy(self.inspection)
+        results=[
+          {"id":1,"full_name":"public/unavailable","default_branch":"main","private":False},
+          {"id":2,"full_name":"public/usable","default_branch":"main","private":False},
+        ]
+        _,receipt=run_cycle(load_seed_state(),MixedAvailabilityProvider(results=results),at="2026-09-25T18:00:00Z")
+        funnel=receipt["rejection_funnel"]
+        self.assertGreater(funnel["inspection_errors"],0)
+        self.assertGreater(funnel["inspection_succeeded"],0)
+        self.assertEqual(
+            funnel["inspection_attempted"],
+            funnel["inspection_succeeded"]+funnel["inspection_errors"],
+        )
+        self.assertEqual(
+            funnel["inspection_succeeded"],
+            funnel["retained"]+funnel["duplicates"]+funnel["rejected"],
+        )
+
+    def test_repository_search_filters_empty_public_repositories_before_inspection(self):
+        provider=GitHubPublicProvider(policy=load_policy())
+        provider._get=lambda url:{
+          "items":[
+            {"id":1,"full_name":"public/empty","default_branch":"main","private":False,"size":0},
+            {"id":2,"full_name":"public/code","default_branch":"main","private":False,"size":12},
+            {"id":3,"full_name":"private/code","default_branch":"main","private":True,"size":12},
+          ]
+        }
+        rows=provider.search("example")
+        self.assertEqual([x["full_name"] for x in rows],["public/code"])
+
     def test_private_candidate_fails_closed(self):
         with self.assertRaises(HunterError):
             run_cycle(load_seed_state(),FakeProvider(results=[{"id":1,"full_name":"x/y","default_branch":"main","private":True}]),at="2026-09-25T18:00:00Z")
@@ -157,6 +211,10 @@ class HunterTests(unittest.TestCase):
         self.assertTrue(funnel["disposition_accounting_reconciled"])
         self.assertEqual(
             funnel["inspection_attempted"],
+            funnel["retained"]+funnel["duplicates"]+funnel["rejected"]+funnel["inspection_errors"]
+        )
+        self.assertEqual(
+            funnel["inspection_succeeded"],
             funnel["retained"]+funnel["duplicates"]+funnel["rejected"]
         )
         self.assertEqual(
