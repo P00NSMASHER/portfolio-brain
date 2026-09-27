@@ -56,6 +56,16 @@ def validate_command_center() -> dict[str, object]:
     require(snapshot["validation_sprint"]["target_end_at"] is None, "retired sprint still has a target end date")
     require(snapshot["validation_sprint"]["architecture_change_policy"] == "CONTINUOUS_OPTIMIZATION_NO_SPRINT_FREEZE", "continuous optimization policy drifted")
 
+    commercial=snapshot["commercial_validation"]
+    require(commercial["evidence_status"]=="HISTORICAL_BASELINE","retired commercial baseline presented as live evidence")
+    require(commercial["source_kind"]=="RETIRED_STATIC_BASELINE","commercial baseline source kind drifted")
+    require(commercial["source_ref"]=="operations/VALIDATION_SPRINT_STATE.json","commercial baseline provenance drifted")
+    require(commercial["live_external_evidence_feed"] is False,"command center invented live commercial evidence feed")
+    require(commercial["current_external_reply_state"]=="UNKNOWN","historical reply count presented as current")
+    require(commercial["current_external_payment_state"]=="UNKNOWN","historical payment count presented as current")
+    require(commercial["baseline_retired_at"] is not None,"commercial historical baseline missing retirement timestamp")
+    require(commercial["checked_in_gateway_sent_receipts"]<=commercial["checked_in_gateway_execution_receipts"],"commercial gateway receipt accounting invalid")
+
     ceiling = snapshot["cost_governor"]["portfolio_ceiling"]
     require(ceiling["cost_usd"] >= 0, "invalid portfolio cost ceiling")
     require(ceiling["model_calls"] >= 0, "invalid model-call ceiling")
@@ -88,6 +98,10 @@ def validate_command_center() -> dict[str, object]:
     require("Live State Bridge" in page, "live-state bridge panel missing")
     require("Operational Telemetry" in page, "operational telemetry panel missing")
     require("History & Trends" in page, "history/trends panel missing")
+    require("Commercial Evidence" in page and "Retired FreightRecovery Baseline" in page, "commercial evidence provenance UI missing")
+    require("Current human reply state</td><td class=\"num\">UNKNOWN" in page, "current commercial reply state is not fail-closed")
+    require("Current payment/checkout state</td><td class=\"num\">UNKNOWN" in page, "current commercial payment state is not fail-closed")
+    require("Live checkout sessions</td>" not in page and "Live payment intents</td>" not in page, "retired baseline still labeled live")
     require("Paid Cost Governor" in page, "paid-only cost governor label missing")
     require("GitHub Workload Controls" in page, "separate workload-control panel missing")
     require("Daily GitHub job-start quota</td><td class=\"num\">None" in page, "retired GitHub daily job quota is not explicit")
