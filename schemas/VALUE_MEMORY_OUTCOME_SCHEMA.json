@@ -8,7 +8,7 @@
     "schema_version","outcome_id","memory_id","event_id","project_id","objective_id",
     "reward","attribution_fraction","evidence_ids","evidence_state",
     "observer_actor_id","verifier_actor_id","verification_report_hash",
-    "observed_at","verified_at"
+    "observed_at","verified_at","outcome_hash"
   ],
   "properties": {
     "schema_version":{"const":"1.0.0"},
@@ -25,6 +25,7 @@
     "verifier_actor_id":{"type":["string","null"],"pattern":"^AGT-[A-Z0-9-]{3,}$","minLength":1,"maxLength":300},
     "verification_report_hash":{"type":["string","null"],"pattern":"^sha256:[0-9a-f]{64}$"},
     "observed_at":{"type":"string","format":"date-time"},
-    "verified_at":{"type":["string","null"],"format":"date-time"}
+    "verified_at":{"type":["string","null"],"format":"date-time"},
+    "outcome_hash":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}
   }
 }

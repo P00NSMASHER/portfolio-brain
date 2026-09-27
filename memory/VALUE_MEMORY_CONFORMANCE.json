@@ -15,6 +15,7 @@
     "verifier_eligibility": "REQUIRED",
     "independence_group_separation": "REQUIRED",
     "immutable_verification_decision": "REQUIRED",
+    "outcome_payload_integrity": "CANONICAL_SHA256_REQUIRED",
     "per_event_credit_conservation": "MAX_1_TOTAL",
     "objective_conditioning": "REQUIRED",
     "untested_memory_prior": "NEUTRAL",
