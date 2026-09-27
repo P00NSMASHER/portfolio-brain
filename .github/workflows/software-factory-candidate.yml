@@ -13,7 +13,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: portfolio-cost-governed-autonomy
+  group: portfolio-software-factory
   cancel-in-progress: false
 
 jobs:
