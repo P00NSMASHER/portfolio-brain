@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import hashlib,json,math
+import hashlib,json,math,re
 from datetime import datetime
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
+XOUT_ID=re.compile(r"^XOUT-[A-Z0-9-]+$")
+XFER_ID=re.compile(r"^XFER-[A-Z0-9-]+$")
+PRJ_ID=re.compile(r"^PRJ-[0-9]{3,}$")
+AGT_ID=re.compile(r"^AGT-[A-Z0-9-]+$")
+EVD_ID=re.compile(r"^EVD-[A-Z0-9-]{8,}$")
+EVT_ID=re.compile(r"^EVT-[A-Z0-9-]{8,}$")
 class TransferError(ValueError):pass
 def req(ok,msg):
     if not ok:raise TransferError(msg)
@@ -31,6 +37,20 @@ def _build_state_doc(build_state=None):return build_state or load("PORTFOLIO_BUI
 def _rule_for(key,rules=None):
     rows=(rules or rules_doc())["rules"];matches=[r for r in rows if r["capability_key"]==key]
     return matches[0] if len(matches)==1 else None
+def _agents():
+    registry=load("agents/AGENT_REGISTRY.json")
+    req(registry.get("schema_version")=="1.0.0","agent registry schema mismatch")
+    roles=registry.get("roles");req(isinstance(roles,list) and roles,"agent registry roles missing")
+    by_id={}
+    for role in roles:
+        agent_id=role.get("agent_id");req(isinstance(agent_id,str) and agent_id,"registered agent id missing")
+        req(agent_id not in by_id,"duplicate registered agent id");by_id[agent_id]=role
+    return by_id
+def _unique_strings(values,field,pattern=None):
+    req(isinstance(values,list) and values,f"{field} required")
+    req(all(isinstance(value,str) and value for value in values),f"{field} contains invalid value")
+    req(len(values)==len(set(values)),f"{field} must be unique")
+    if pattern is not None:req(all(pattern.fullmatch(value) for value in values),f"{field} contains invalid identifier")
 def _target_matches_rule(project,rule):
     if rule["universal"]:return True
     if rule["repository_required"] and project.get("repository_bindings"):return True
@@ -99,19 +119,49 @@ def validate_proposal(p):
 def validate_outcome(o,proposal):
     required={"schema_version","outcome_id","transfer_id","source_capability_key","target_project_id","result","evidence_state","actor_agent_id","verifier_agent_id","implementation_evidence_ids","measurement_evidence_ids","metric_name","metric_unit","metric_direction","baseline_value","observed_value","measurable_delta","authority_violations","started_at","completed_at","outcome_event_id","provenance_refs","outcome_hash"}
     req(isinstance(o,dict) and set(o)==required,"outcome fields changed");req(o["outcome_hash"]==hashv({k:v for k,v in o.items() if k!="outcome_hash"}),"outcome hash mismatch")
+    req(o["schema_version"]=="1.0.0","outcome schema mismatch")
+    req(XOUT_ID.fullmatch(o["outcome_id"]) is not None,"invalid outcome_id")
+    req(XFER_ID.fullmatch(o["transfer_id"]) is not None,"invalid transfer_id")
+    req(PRJ_ID.fullmatch(o["target_project_id"]) is not None,"invalid target_project_id")
+    req(EVT_ID.fullmatch(o["outcome_event_id"]) is not None,"invalid outcome_event_id")
+    req(isinstance(o["source_capability_key"],str) and o["source_capability_key"],"source_capability_key required")
     req(o["transfer_id"]==proposal["transfer_id"] and o["source_capability_key"]==proposal["source_capability_key"] and o["target_project_id"]==proposal["target_project_id"],"outcome/proposal binding mismatch")
-    req(o["result"] in policy()["outcome_results"],"invalid outcome result");req(o["implementation_evidence_ids"] and o["measurement_evidence_ids"] and o["provenance_refs"],"outcome evidence missing")
+    req(o["result"] in policy()["outcome_results"],"invalid outcome result")
+    _unique_strings(o["implementation_evidence_ids"],"implementation_evidence_ids",EVD_ID)
+    _unique_strings(o["measurement_evidence_ids"],"measurement_evidence_ids",EVD_ID)
+    req(set(o["implementation_evidence_ids"]).isdisjoint(o["measurement_evidence_ids"]),"implementation and measurement evidence must be independent receipts")
+    _unique_strings(o["provenance_refs"],"provenance_refs")
+    req(isinstance(o["metric_name"],str) and o["metric_name"],"metric_name required")
+    req(isinstance(o["metric_unit"],str) and o["metric_unit"],"metric_unit required")
+    req(o["metric_direction"] in {"HIGHER_BETTER","LOWER_BETTER"},"invalid metric_direction")
     req(_time(o["completed_at"],"completed_at")>=_time(o["started_at"],"started_at"),"outcome completes before start")
     for k in ["baseline_value","observed_value","measurable_delta"]:req(type(o[k]) in {int,float} and math.isfinite(float(o[k])),"invalid metric value")
-    req(o["measurable_delta"]>=0 and o["authority_violations"]>=0,"invalid delta/authority counter")
+    req(o["measurable_delta"]>=0,"invalid measurable_delta")
+    req(type(o["authority_violations"]) is int and o["authority_violations"]>=0,"invalid authority_violations")
+    agents=_agents();actor=o["actor_agent_id"];verifier=o["verifier_agent_id"]
+    req(isinstance(actor,str) and AGT_ID.fullmatch(actor) is not None,"invalid actor_agent_id")
+    req(actor in agents and agents[actor].get("status")=="ACTIVE","actor must be an active registered agent")
+    if o["evidence_state"]=="VERIFIED":
+        req(isinstance(verifier,str) and AGT_ID.fullmatch(verifier) is not None,"VERIFIED outcome requires verifier")
+        req(verifier in agents and agents[verifier].get("status")=="ACTIVE","verifier must be an active registered agent")
+        req(agents[verifier].get("verifier_eligible") is True,"VERIFIED outcome requires verifier-eligible agent")
+        req(verifier in policy()["independent_verifier_agent_ids"],"independent verifier required")
+        req(verifier!=actor,"actor cannot independently verify own transfer")
+        req(agents[verifier].get("independence_group")!=agents[actor].get("independence_group"),"actor and verifier independence groups must differ")
+    else:
+        req(verifier is None,"non-VERIFIED outcome cannot claim verifier")
     if o["result"] in {"VERIFIED_EFFECTIVE","VERIFIED_NO_VALUE"}:
-        req(o["evidence_state"]=="VERIFIED","definitive transfer outcome must be VERIFIED");req(o["verifier_agent_id"] in policy()["independent_verifier_agent_ids"],"independent verifier required");req(o["verifier_agent_id"]!=o["actor_agent_id"],"actor cannot independently verify own transfer")
+        req(o["evidence_state"]=="VERIFIED","definitive transfer outcome must be VERIFIED")
     if o["result"]=="VERIFIED_EFFECTIVE":
+        req(proposal["state"]=="ASSESSMENT_READY","blocked transfer cannot claim effective outcome")
         req(o["authority_violations"]==0,"effective transfer cannot contain authority violations")
         expected=float(o["observed_value"])-float(o["baseline_value"]) if o["metric_direction"]=="HIGHER_BETTER" else float(o["baseline_value"])-float(o["observed_value"])
         req(expected>0 and abs(float(o["measurable_delta"])-expected)<1e-9,"effective metric improvement mismatch")
-    if o["result"]=="VERIFIED_NO_VALUE":req(o["measurable_delta"]==0,"no-value outcome must have zero improvement")
+    if o["result"]=="VERIFIED_NO_VALUE":
+        expected=float(o["observed_value"])-float(o["baseline_value"]) if o["metric_direction"]=="HIGHER_BETTER" else float(o["baseline_value"])-float(o["observed_value"])
+        req(expected<=0 and o["measurable_delta"]==0,"no-value outcome cannot conceal measured improvement")
     if o["result"]=="INCONCLUSIVE":req(o["measurable_delta"]==0,"inconclusive outcome cannot claim improvement")
+    if o["result"]=="INVALID":req(o["evidence_state"]=="INVALID" and o["measurable_delta"]==0,"invalid outcome must preserve INVALID evidence state and zero improvement")
 
 def verified_success_edge_candidates(proposals,outcomes,graph=None):
     graph=_graph_doc(graph);proposal_by={p["transfer_id"]:p for p in proposals};project_node={n["canonical_key"]:n["node_id"] for n in graph["nodes"] if n["node_type"]=="PROJECT"};edges=[]

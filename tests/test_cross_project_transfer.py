@@ -34,6 +34,30 @@ class CrossProjectTransferTests(unittest.TestCase):
     def test_authority_violation_blocks_effective_claim(self):
         p=next(x for x in detect_transfer_hypotheses() if x["state"]=="ASSESSMENT_READY")
         with self.assertRaises(TransferError):validate_outcome(outcome(p,violations=1),p)
+    def test_unknown_metric_direction_cannot_silently_become_lower_better(self):
+        p=next(x for x in detect_transfer_hypotheses() if x["state"]=="ASSESSMENT_READY")
+        with self.assertRaisesRegex(TransferError,"invalid metric_direction"):
+            validate_outcome(outcome(p,direction="SIDEWAYS",baseline=10,observed=5,delta=5),p)
+    def test_no_value_cannot_conceal_measured_improvement(self):
+        p=next(x for x in detect_transfer_hypotheses() if x["state"]=="ASSESSMENT_READY")
+        with self.assertRaisesRegex(TransferError,"cannot conceal measured improvement"):
+            validate_outcome(outcome(p,result="VERIFIED_NO_VALUE",baseline=10,observed=15,delta=0),p)
+    def test_one_receipt_cannot_prove_implementation_and_measurement(self):
+        p=next(x for x in detect_transfer_hypotheses() if x["state"]=="ASSESSMENT_READY");o=outcome(p)
+        o["measurement_evidence_ids"]=list(o["implementation_evidence_ids"]);o["outcome_hash"]=hashv({k:v for k,v in o.items() if k!="outcome_hash"})
+        with self.assertRaisesRegex(TransferError,"independent receipts"):validate_outcome(o,p)
+    def test_unregistered_actor_cannot_author_transfer_outcome(self):
+        p=next(x for x in detect_transfer_hypotheses() if x["state"]=="ASSESSMENT_READY")
+        with self.assertRaisesRegex(TransferError,"active registered agent"):
+            validate_outcome(outcome(p,actor="AGT-INVENTED"),p)
+    def test_unverified_outcome_cannot_claim_verifier(self):
+        p=next(x for x in detect_transfer_hypotheses() if x["state"]=="ASSESSMENT_READY")
+        with self.assertRaisesRegex(TransferError,"cannot claim verifier"):
+            validate_outcome(outcome(p,result="INCONCLUSIVE",state="OBSERVED",delta=0),p)
+    def test_blocked_proposal_cannot_generate_verified_success(self):
+        p=next(x for x in detect_transfer_hypotheses() if x["state"]=="BLOCKED")
+        with self.assertRaisesRegex(TransferError,"blocked transfer"):
+            verified_success_edge_candidates([p],[outcome(p)],self.graph)
     def test_recovery_evidence_can_target_capturebrief_when_source_exists(self):
         g=add_capability(self.graph,"PRJ-001","recovery:evidence-architecture","GN-CAP-RECOVERY-EVIDENCE");ps=detect_transfer_hypotheses(g,self.projects,self.uncertainty,self.build)
         self.assertTrue(any(p["source_project_id"]=="PRJ-001" and p["target_project_id"]=="PRJ-004" and p["source_capability_key"]=="recovery:evidence-architecture" for p in ps))
