@@ -1,0 +1,122 @@
+name: model-value-proof
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "value_proof/TRIGGER_END_TO_END_PROOF"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: portfolio-cost-governed-autonomy
+  cancel-in-progress: false
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GITHUB_TOKEN: \${{ github.token }}
+      PORTFOLIO_GITHUB_TOKEN: \${{ github.token }}
+      PORTFOLIO_MODEL_API_KEY: \${{ secrets.PORTFOLIO_MODEL_API_KEY }}
+      PORTFOLIO_SPEND_DISABLED: \${{ vars.PORTFOLIO_SPEND_DISABLED }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore latest cost-governor state
+        run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
+
+      - name: Reserve bounded value-proof compute
+        id: cost
+        run: >-
+          python -m cost_governor.workflow_gate preflight
+          --state cost_governor/live/cost_state.json
+          --output-dir cost_governor/out
+          --workflow-id model-value-proof
+          --job-id proof
+          --project-id PRJ-005
+          --estimated-minutes 5
+          --authority OBSERVE
+
+      - name: Fetch exact-revision public evidence
+        if: \${{ steps.cost.outputs.allowed == 'true' }}
+        run: >-
+          python -m value_proof.fetch_evidence
+          --contract value_proof/MODEL_TASK_CONTRACT.json
+          --output value_proof/out/evidence_pack.json
+
+      - name: Execute governed Tier-2 builder model
+        if: \${{ steps.cost.outputs.allowed == 'true' }}
+        run: >-
+          python -m value_proof.model_task
+          --contract value_proof/MODEL_TASK_CONTRACT.json
+          --evidence-pack value_proof/out/evidence_pack.json
+          --cost-state cost_governor/out/cost_state.json
+          --output-dir value_proof/out
+
+      - name: Execute independent Tier-3 verifier
+        if: \${{ steps.cost.outputs.allowed == 'true' }}
+        run: >-
+          python -m value_proof.verifier
+          --task-contract value_proof/MODEL_TASK_CONTRACT.json
+          --verifier-contract value_proof/VERIFIER_CONTRACT.json
+          --evidence-pack value_proof/out/evidence_pack.json
+          --builder-output value_proof/out/builder_output.json
+          --builder-execution-receipt value_proof/out/model_task_execution_receipt.json
+          --builder-provider-receipt value_proof/out/model_provider_receipt.json
+          --cost-state cost_governor/out/cost_state.json
+          --output-dir value_proof/out
+
+      - name: Finalize verified technical value outcome
+        if: \${{ steps.cost.outputs.allowed == 'true' }}
+        run: >-
+          python -m value_proof.end_to_end
+          --task-contract value_proof/MODEL_TASK_CONTRACT.json
+          --verifier-contract value_proof/VERIFIER_CONTRACT.json
+          --evidence-pack value_proof/out/evidence_pack.json
+          --builder-output value_proof/out/builder_output.json
+          --builder-execution-receipt value_proof/out/model_task_execution_receipt.json
+          --builder-provider-receipt value_proof/out/model_provider_receipt.json
+          --deterministic-receipt value_proof/out/deterministic_verification_receipt.json
+          --verifier-output value_proof/out/independent_verifier_output.json
+          --verification-receipt value_proof/out/verification_receipt.json
+          --verifier-provider-receipt value_proof/out/independent_verifier_provider_receipt.json
+          --output value_proof/out/value_outcome.json
+
+      - name: Commit conservative value-proof job usage
+        if: \${{ always() && steps.cost.outputs.allowed == 'true' }}
+        run: >-
+          python -m cost_governor.workflow_gate finalize
+          --state cost_governor/out/cost_state.json
+          --decision cost_governor/out/cost_decision.json
+          --output cost_governor/out/cost_state.json
+
+      - name: Upload model value proof receipts
+        if: \${{ always() && steps.cost.outputs.allowed == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-model-value-proof
+          path: value_proof/out/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload sanitized cost-governor continuation state
+        if: \${{ always() && hashFiles('cost_governor/out/cost_state.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-cost-governor-state
+          path: cost_governor/out/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Report governed no-work outcome
+        if: \${{ always() && steps.cost.outputs.allowed != 'true' }}
+        run: |
+          echo "::notice title=Model value proof skipped::Cost governor status: \${{ steps.cost.outputs.decision_status }}"
