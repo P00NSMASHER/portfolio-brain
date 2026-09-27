@@ -3,6 +3,10 @@ name: portfolio-autonomous-scheduler
 on:
   schedule:
     - cron: "23 * * * *"
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/triggers/scheduler-now.txt"
   repository_dispatch:
     types: ["portfolio_schedule"]
   workflow_dispatch:
@@ -11,12 +15,11 @@ permissions:
   contents: read
   actions: read
 
-concurrency:
-  group: portfolio-cost-governed-autonomy
-  cancel-in-progress: false
-
 jobs:
   schedule:
+    concurrency:
+      group: portfolio-cost-governed-autonomy
+      cancel-in-progress: false
     if: ${{ vars.PORTFOLIO_SCHEDULER_DISABLED != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
