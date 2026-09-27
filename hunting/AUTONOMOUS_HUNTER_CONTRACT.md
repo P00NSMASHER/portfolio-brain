@@ -10,6 +10,14 @@ Step 9 Hunter is OBSERVE-only. It may query public GitHub metadata and exact-rev
 
 A retained candidate remains OBSERVED. Discovery does not prove a reusable capability and does not grant license/reuse rights. Independent verification, rights review, and a bounded experiment are required before later promotion.
 
+## Candidate evaluation
+
+Hunter separates hard validity gates from soft ranking signals.
+
+Hard rejection is reserved for candidates that do not contain implementation paths. Public-source enforcement, exact-revision requirements, duplicate suppression, bounded authority, and source allowlisting remain terminal controls outside or alongside the structural classifier.
+
+Missing tests, weak path-level capability signals, or a truncated repository tree do **not** become silent hard rejections. They are recorded as soft signals and reduce candidate rank. Retained candidates receive a bounded 0-10 rank with HIGH / MEDIUM / LOW bands. Rank orders bounded experiment proposals but cannot grant reuse rights, VERIFIED evidence, value credit, or additional authority.
+
 ## Learning
 
 Negative/no-find results are durable and suppress repeated dead ends after repeated failures. Exact repository revision + capability need forms the candidate fingerprint.

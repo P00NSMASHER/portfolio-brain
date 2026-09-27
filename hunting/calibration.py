@@ -52,6 +52,10 @@ def load_corpus(path: Path=CORPUS_PATH) -> dict[str,Any]:
         else:
             req(case.get("expected_disposition") in {"RETAIN","REJECT"},"gold case expected disposition invalid")
         req(isinstance(case.get("expected_reason"),str) and case["expected_reason"],"expected reason missing")
+        if "expected_rank_band" in case:
+            req(case["expected_rank_band"] in {"HIGH","MEDIUM","LOW"},"expected rank band invalid")
+        if "required_soft_signals" in case:
+            req(isinstance(case["required_soft_signals"],list) and len(case["required_soft_signals"])==len(set(case["required_soft_signals"])),"required soft signals invalid")
     req(classes["POSITIVE"]>=10,"calibration corpus needs at least 10 positive controls")
     req(classes["NEGATIVE"]>=10,"calibration corpus needs at least 10 negative controls")
     req(classes["AMBIGUOUS"]>=3,"calibration corpus needs at least 3 ambiguous controls")
@@ -84,20 +88,33 @@ def evaluate_case(case: dict[str,Any],index: int) -> dict[str,Any]:
           "gap_id":"HGAP-CALIBRATION",
         }
     disposition,reason,trace=classify_candidate(state,fp,structural)
-    reason=reason or "STRUCTURAL_GATES_PASSED"
+    reason=reason or "HARD_GATES_PASSED"
     allowed=case.get("allowed_dispositions") or [case["expected_disposition"]]
     disposition_match=disposition in allowed
     reason_match=reason==case["expected_reason"]
+    ranking=trace["ranking"]
+    expected_band=case.get("expected_rank_band")
+    rank_match=expected_band is None or ranking["band"]==expected_band
+    required_soft=set(case.get("required_soft_signals",[]))
+    actual_soft=set(ranking["soft_signal_codes"])
+    soft_signal_match=required_soft.issubset(actual_soft)
     return {
       "case_id":case["case_id"],
       "case_class":case["case_class"],
       "allowed_dispositions":allowed,
       "expected_reason":case["expected_reason"],
+      "expected_rank_band":expected_band,
+      "required_soft_signals":sorted(required_soft),
       "actual_disposition":disposition,
       "actual_reason":reason,
+      "actual_rank_band":ranking["band"],
+      "actual_rank_score":ranking["score"],
+      "actual_soft_signals":ranking["soft_signal_codes"],
       "disposition_match":disposition_match,
       "reason_match":reason_match,
-      "passed":bool(disposition_match and reason_match),
+      "rank_match":rank_match,
+      "soft_signal_match":soft_signal_match,
+      "passed":bool(disposition_match and reason_match and rank_match and soft_signal_match),
       "structural":structural,
       "decision_trace":trace,
       "ambiguity":case.get("ambiguity"),
@@ -135,6 +152,12 @@ def run_calibration(corpus: dict[str,Any] | None=None) -> dict[str,Any]:
       "negative_rejected":negative_rejected,
       "ambiguous_cases":len(ambiguous),
       "ambiguous_matched":ambiguous_matched,
+      "rank_band_counts":{
+        "HIGH":sum(x["actual_rank_band"]=="HIGH" for x in results),
+        "MEDIUM":sum(x["actual_rank_band"]=="MEDIUM" for x in results),
+        "LOW":sum(x["actual_rank_band"]=="LOW" for x in results),
+      },
+      "soft_signal_case_count":sum(bool(x["actual_soft_signals"]) for x in results),
       "failed_case_ids":failed,
       "results":results,
     }

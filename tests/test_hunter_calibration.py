@@ -24,31 +24,40 @@ class HunterCalibrationTests(unittest.TestCase):
         self.assertEqual(report["network_calls"],0)
         self.assertEqual(report["state_mutations"],0)
 
-    def test_negative_controls_cover_each_current_structural_rejection_reason(self):
+    def test_negative_controls_cover_only_the_remaining_structural_hard_reject(self):
         report=run_calibration()
         reasons={
             row["actual_reason"]
             for row in report["results"]
             if row["case_class"]=="NEGATIVE"
         }
-        self.assertEqual(reasons,{
-            "NO_IMPLEMENTATION_PATHS",
-            "NO_TEST_OR_REGRESSION_PATHS",
-            "NO_STRUCTURAL_CAPABILITY_SIGNAL",
-        })
+        self.assertEqual(reasons,{"NO_IMPLEMENTATION_PATHS"})
+        self.assertTrue(all(
+            row["decision_trace"]["hard_gate_status"]=="REJECT"
+            for row in report["results"]
+            if row["case_class"]=="NEGATIVE"
+        ))
 
-    def test_ambiguous_controls_are_explicit_and_do_not_count_as_positive_gold(self):
+    def test_ambiguous_controls_prove_soft_signals_rank_without_rejecting(self):
         report=run_calibration()
         ambiguous=[row for row in report["results"] if row["case_class"]=="AMBIGUOUS"]
-        self.assertGreaterEqual(len(ambiguous),3)
+        self.assertGreaterEqual(len(ambiguous),5)
         self.assertTrue(all(row["ambiguity"] for row in ambiguous))
         self.assertTrue(any(row["actual_disposition"]=="DUPLICATE" for row in ambiguous))
-        self.assertTrue(any(
-            row["actual_disposition"]=="RETAIN"
-            and row["structural"]["source_path_count"]>0
-            and row["structural"]["test_path_count"]>0
-            for row in ambiguous
-        ))
+        retained=[row for row in ambiguous if row["actual_disposition"]=="RETAIN"]
+        self.assertTrue(any(row["actual_rank_band"]=="MEDIUM" for row in retained))
+        self.assertTrue(any(row["actual_rank_band"]=="LOW" for row in retained))
+        self.assertTrue(any("NO_TEST_OR_REGRESSION_PATHS" in row["actual_soft_signals"] for row in retained))
+        self.assertTrue(any("NO_STRUCTURAL_CAPABILITY_SIGNAL" in row["actual_soft_signals"] for row in retained))
+        self.assertTrue(all(row["decision_trace"]["soft_signals_do_not_reject"] for row in retained))
+
+    def test_positive_controls_remain_high_ranked_and_all_retain(self):
+        report=run_calibration()
+        positives=[row for row in report["results"] if row["case_class"]=="POSITIVE"]
+        self.assertTrue(positives)
+        self.assertTrue(all(row["actual_disposition"]=="RETAIN" for row in positives))
+        self.assertTrue(all(row["actual_rank_band"]=="HIGH" for row in positives))
+        self.assertTrue(all(row["actual_rank_score"]>=8 for row in positives))
 
     def test_calibration_fails_closed_when_a_gold_expectation_is_corrupted(self):
         corpus=copy.deepcopy(load_corpus())

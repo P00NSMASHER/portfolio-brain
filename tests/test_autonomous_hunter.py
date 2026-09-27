@@ -1,7 +1,7 @@
 import copy, unittest
 from hunting.autonomous_hunter import (
-    HunterError, apply_verified_feedback, candidate_fingerprint, detect_gaps,
-    load_seed_state, run_cycle, select_objectives, validate_state
+    HunterError, apply_verified_feedback, candidate_fingerprint, classify_candidate, detect_gaps,
+    load_policy, load_seed_state, rank_candidate, run_cycle, select_objectives, validate_state
 )
 
 class FakeProvider:
@@ -33,12 +33,23 @@ class HunterTests(unittest.TestCase):
         self.assertTrue(all(x["evidence_state"]=="OBSERVED" for x in retained))
         self.assertTrue(all(x["source"]["revision"]=="a"*40 for x in retained))
 
-    def test_readme_only_or_no_tests_is_rejected(self):
+    def test_missing_tests_or_capability_signal_are_soft_ranking_signals_not_rejects(self):
         provider=FakeProvider(inspection={"revision":"a"*40,"tree_sha":"b"*40,"paths":["src/core.py","README.md"],"truncated":False})
         _,receipt=run_cycle(load_seed_state(),provider,at="2026-09-25T18:00:00Z")
+        retained=[x for x in receipt["findings"] if x["disposition"]=="RETAIN"]
+        self.assertTrue(retained)
+        self.assertFalse(any(x["disposition"]=="REJECT" and x["negative_reason"]=="NO_TEST_OR_REGRESSION_PATHS" for x in receipt["findings"]))
+        self.assertTrue(all("NO_TEST_OR_REGRESSION_PATHS" in x["ranking"]["soft_signal_codes"] for x in retained))
+        self.assertTrue(any(x["ranking"]["band"]=="LOW" for x in retained))
+        self.assertGreater(receipt["rejection_funnel"]["soft_signal_counts"].get("NO_TEST_OR_REGRESSION_PATHS",0),0)
+
+    def test_no_implementation_paths_remains_a_hard_reject(self):
+        provider=FakeProvider(inspection={"revision":"a"*40,"tree_sha":"b"*40,"paths":["README.md","docs/core.md","fixtures/core.json"],"truncated":False})
+        _,receipt=run_cycle(load_seed_state(),provider,at="2026-09-25T18:00:00Z")
         self.assertTrue(receipt["findings"])
-        self.assertTrue(all(x["disposition"]!="RETAIN" for x in receipt["findings"]))
-        self.assertTrue(any(x["negative_reason"]=="NO_TEST_OR_REGRESSION_PATHS" for x in receipt["findings"]))
+        self.assertTrue(all(x["disposition"]=="REJECT" for x in receipt["findings"]))
+        self.assertTrue(all(x["negative_reason"]=="NO_IMPLEMENTATION_PATHS" for x in receipt["findings"]))
+        self.assertTrue(all(x["decision_trace"]["hard_gate_status"]=="REJECT" for x in receipt["findings"]))
 
     def test_exact_revision_capability_deduplication(self):
         s=load_seed_state(); provider=FakeProvider()
@@ -93,7 +104,7 @@ class HunterTests(unittest.TestCase):
         self.assertEqual(len(receipt["query_outcomes"]),sum(len(x["queries"]) for x in receipt["objectives"]))
 
     def test_every_nonretained_finding_has_machine_readable_reason_and_trace(self):
-        provider=FakeProvider(inspection={"revision":"a"*40,"tree_sha":"b"*40,"paths":["src/core.py","README.md"],"truncated":False})
+        provider=FakeProvider(inspection={"revision":"a"*40,"tree_sha":"b"*40,"paths":["README.md","docs/core.md"],"truncated":False})
         _,receipt=run_cycle(load_seed_state(),provider,at="2026-09-25T18:00:00Z")
         nonretained=[x for x in receipt["findings"] if x["disposition"]!="RETAIN"]
         self.assertTrue(nonretained)
@@ -125,6 +136,56 @@ class HunterTests(unittest.TestCase):
             funnel["normalized_candidates"],
             funnel["inspection_attempted"]+funnel["inspection_budget_deferred"]
         )
+
+    def test_ranking_is_bounded_policy_driven_and_does_not_create_value_credit(self):
+        policy=load_policy()
+        high={
+          "source_path_count":1,"test_path_count":1,"docs_path_count":1,"keyword_hit_count":3,
+          "source_keyword_hit_count":1,"test_keyword_hit_count":1,"docs_keyword_hit_count":1,
+          "tree_truncated":False
+        }
+        low={
+          "source_path_count":1,"test_path_count":1,"docs_path_count":1,"keyword_hit_count":0,
+          "source_keyword_hit_count":0,"test_keyword_hit_count":0,"docs_keyword_hit_count":0,
+          "tree_truncated":False
+        }
+        high_rank=rank_candidate(high,policy); low_rank=rank_candidate(low,policy)
+        self.assertEqual(high_rank["band"],"HIGH")
+        self.assertEqual(high_rank["score"],policy["candidate_evaluation"]["ranking"]["max_score"])
+        self.assertEqual(low_rank["band"],"LOW")
+        self.assertLess(low_rank["score"],high_rank["score"])
+        self.assertEqual(high_rank["value_credit_source"],"VERIFIED_OUTCOMES_ONLY")
+
+    def test_retained_proposals_are_ordered_by_rank_without_soft_signal_rejection(self):
+        objective=select_objectives(load_seed_state())[0]
+        token=objective["capability_key"].replace("capability-coverage:","")
+        class MixedProvider:
+            def __init__(self):
+                self.requests=0
+            def search(self,q):
+                self.requests+=1
+                return [
+                  {"id":1,"full_name":"public/high","default_branch":"main","private":False},
+                  {"id":2,"full_name":"public/low","default_branch":"main","private":False},
+                ]
+            def inspect(self,c):
+                self.requests+=1
+                if c["id"]==1:
+                    return {"revision":"a"*40,"tree_sha":"b"*40,"paths":[f"src/{token}.py",f"tests/test_{token}.py",f"docs/{token}.md"],"truncated":False}
+                return {"revision":"c"*40,"tree_sha":"d"*40,"paths":["src/engine.py","tests/test_engine.py","README.md"],"truncated":False}
+        _,receipt=run_cycle(load_seed_state(),MixedProvider(),at="2026-09-25T18:00:00Z")
+        proposals=receipt["experiment_proposals"]
+        self.assertTrue(proposals)
+        scores=[p["candidate_rank_score"] for p in proposals]
+        self.assertEqual(scores,sorted(scores,reverse=True))
+        self.assertEqual([p["candidate_rank_order"] for p in proposals],list(range(1,len(proposals)+1)))
+        self.assertEqual(receipt["proposal_ordering"],"CANDIDATE_RANK_DESCENDING_NO_SOFT_SIGNAL_HARD_REJECT")
+        self.assertTrue(any(p["candidate_rank_band"]=="LOW" for p in proposals))
+
+    def test_ranking_band_accounting_covers_every_inspected_candidate(self):
+        _,receipt=run_cycle(load_seed_state(),FakeProvider(),at="2026-09-25T18:00:00Z")
+        bands=receipt["rejection_funnel"]["ranking_band_counts"]
+        self.assertEqual(sum(bands.values()),receipt["rejection_funnel"]["inspection_attempted"])
 
     def test_repository_count_has_no_direct_reward(self):
         from hunting.autonomous_hunter import load_policy

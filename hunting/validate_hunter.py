@@ -31,6 +31,14 @@ def validate_hunter():
     req(policy["repository_count_reward"]==0,"repository count must not be rewarded")
     req(policy["learning"]["verified_outcomes_only_for_value_credit"] is True,"Hunter value training must require verified outcomes")
     req(policy["learning"]["exploration_floor_fraction"]>=0.20,"exploration floor weakened")
+    evaluation=policy["candidate_evaluation"]
+    req(evaluation["hard_reject_reasons"]==["NO_IMPLEMENTATION_PATHS"],"Hunter structural hard-reject surface widened")
+    req(evaluation["terminal_duplicate_reason"]=="EXACT_REVISION_CAPABILITY_DUPLICATE","Hunter duplicate terminal reason drifted")
+    req(evaluation["soft_signals_do_not_reject"] is True,"Hunter soft signals became hard gates")
+    ranking=evaluation["ranking"]
+    req(sum(ranking["weights"].values())==ranking["max_score"],"Hunter ranking weights/max score mismatch")
+    req(ranking["bands"]["HIGH"]["min_score"]>ranking["bands"]["MEDIUM"]["min_score"]>ranking["bands"]["LOW"]["min_score"],"Hunter ranking bands invalid")
+    req(ranking["value_credit_source"]=="VERIFIED_OUTCOMES_ONLY","Hunter ranking may not create value credit")
     req(len(strategies)==4 and any(x["family"]=="EXPLORATION" for x in strategies),"strategy set/exploration missing")
     gaps=detect_gaps(); objectives=select_objectives(seed)
     req(len(gaps)>=1,"no structural portfolio gaps detected")
@@ -55,6 +63,8 @@ def validate_hunter():
     req(calibration["positive_cases"]>=10 and calibration["positive_retained"]==calibration["positive_cases"],"Hunter positive controls do not all retain")
     req(calibration["negative_cases"]>=10 and calibration["negative_rejected"]==calibration["negative_cases"],"Hunter negative controls do not all reject")
     req(calibration["ambiguous_cases"]>=3 and calibration["ambiguous_matched"]==calibration["ambiguous_cases"],"Hunter ambiguous controls drifted")
+    req(calibration["rank_band_counts"]["HIGH"]>0 and calibration["rank_band_counts"]["MEDIUM"]>0 and calibration["rank_band_counts"]["LOW"]>0,"Hunter calibration does not exercise all rank bands")
+    req(calibration["soft_signal_case_count"]>0,"Hunter calibration does not exercise soft ranking signals")
     req(calibration["network_calls"]==0 and calibration["state_mutations"]==0,"Hunter calibration widened authority")
     wf=(ROOT/".github/workflows/hunter-autonomous-cycle.yml").read_text()
     for s in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_HUNTER_DISABLED","47 */6 * * *","cancel-in-progress: false","actions/upload-artifact@v4","python -m hunting.calibration --output hunting/out/calibration_report.json"]:
@@ -62,5 +72,5 @@ def validate_hunter():
     low=wf.lower()
     for forbidden in ["contents: write","pull-requests: write","issues: write","id-token: write","git push","gh pr","openai","anthropic"]:
         req(forbidden not in low,f"forbidden Hunter workflow capability: {forbidden}")
-    return {"pinned_components":len(expected),"strategies":len(strategies),"detected_gaps":len(gaps),"selected_objectives":len(objectives),"exploration_objectives":sum(1 for x in objectives if x["exploration"]),"rejection_funnel_reconciled":True,"query_outcomes":len(probe_receipt["query_outcomes"]),"calibration_cases":calibration["case_count"],"calibration_positive_retained":calibration["positive_retained"],"calibration_negative_rejected":calibration["negative_rejected"],"calibration_ambiguous_matched":calibration["ambiguous_matched"],"model_calls":0,"downstream_writes":0,"external_actions":0}
+    return {"pinned_components":len(expected),"strategies":len(strategies),"detected_gaps":len(gaps),"selected_objectives":len(objectives),"exploration_objectives":sum(1 for x in objectives if x["exploration"]),"hard_reject_reasons":evaluation["hard_reject_reasons"],"soft_signals_do_not_reject":evaluation["soft_signals_do_not_reject"],"ranking_max_score":ranking["max_score"],"rejection_funnel_reconciled":True,"query_outcomes":len(probe_receipt["query_outcomes"]),"calibration_cases":calibration["case_count"],"calibration_positive_retained":calibration["positive_retained"],"calibration_negative_rejected":calibration["negative_rejected"],"calibration_ambiguous_matched":calibration["ambiguous_matched"],"calibration_rank_bands":calibration["rank_band_counts"],"model_calls":0,"downstream_writes":0,"external_actions":0}
 if __name__=="__main__":print("portfolio-brain Step 9 Hunter: PASS",json.dumps(validate_hunter(),sort_keys=True))

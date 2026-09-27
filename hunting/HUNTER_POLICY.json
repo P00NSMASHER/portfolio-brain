@@ -43,5 +43,34 @@
   "kill_switches": {
     "repository_variable": "PORTFOLIO_HUNTER_DISABLED",
     "file": "hunting/KILL_SWITCH.json"
+  },
+  "candidate_evaluation": {
+    "hard_reject_reasons": [
+      "NO_IMPLEMENTATION_PATHS"
+    ],
+    "terminal_duplicate_reason": "EXACT_REVISION_CAPABILITY_DUPLICATE",
+    "soft_signals_do_not_reject": true,
+    "ranking": {
+      "max_score": 10,
+      "weights": {
+        "implementation_presence": 2,
+        "source_capability_signal": 4,
+        "test_presence": 2,
+        "test_capability_signal": 1,
+        "docs_capability_signal": 1
+      },
+      "bands": {
+        "HIGH": {
+          "min_score": 8
+        },
+        "MEDIUM": {
+          "min_score": 5
+        },
+        "LOW": {
+          "min_score": 0
+        }
+      },
+      "value_credit_source": "VERIFIED_OUTCOMES_ONLY"
+    }
   }
 }
