@@ -9,7 +9,7 @@ from typing import Any
 from allocator.portfolio_allocator import build_allocation_snapshot
 from experiments.experiment_engine import build_experiment_portfolio
 from hunting.autonomous_hunter import load_seed_state as hunter_seed, select_objectives
-from hunting.proposal_state import load_seed_state as hunter_proposal_seed, validate_state as validate_hunter_proposal_state
+from hunting.proposal_state import load_seed_state as hunter_proposal_seed, normalize_state as normalize_hunter_proposal_state, validate_state as validate_hunter_proposal_state
 from learning.continuous_learning import rebuild_from_ledger
 from repair.repair_engine import build_repair_state
 from transfer.cross_project_transfer import build_transfer_state
@@ -78,6 +78,7 @@ def build_context(*,factory_work_items=None,learning_state=None,hunter_proposal_
         live=ROOT/"hunting"/"live"/"hunter_proposal_state.json"
         hunter_proposal_state=json.loads(live.read_text()) if live.exists() else hunter_proposal_seed()
     validate_hunter_proposal_state(hunter_proposal_state)
+    hunter_proposal_state=normalize_hunter_proposal_state(hunter_proposal_state)
     return {"uncertainty":uncertainty,"experiments":experiments,"allocation":allocation,"learning":learning,"repair":repair,"transfer":transfer,"factory_work_items":factory,"hunter_proposal_state":hunter_proposal_state}
 
 def _candidate(work_type,source_ref,project_ids,assigned_agent_id,goal_type,authority,consequence,*,pareto=None,rank=None,share=None,approvals=None,blockers=None,reason,evidence_refs):
@@ -123,9 +124,16 @@ def generate_candidates(context):
     req(proposal_state["rights_state"]==handoff["rights_state"],"Hunter proposal handoff rights boundary mismatch")
     if handoff["enabled"]:
         findings_by_proposal={row["proposal_id"]:row for row in proposal_state["findings"]}
+        origins=proposal_state["origins"]
         for proposal in proposal_state["proposals"]:
             finding=findings_by_proposal[proposal["proposal_id"]]
+            origin=origins[proposal["proposal_id"]]
             consequence="HIGH" if proposal["candidate_rank_band"]=="HIGH" else "MEDIUM"
+            backlog_rank=(
+                (10-proposal["candidate_rank_score"])*1_000_000_000_000
+                + origin["first_hunter_sequence"]*100
+                + proposal["candidate_rank_order"]
+            )
             candidates.append(_candidate(
                 handoff["work_type"],
                 proposal["proposal_id"],
@@ -134,13 +142,17 @@ def generate_candidates(context):
                 handoff["goal_type"],
                 handoff["authority_class"],
                 consequence,
-                rank=proposal["candidate_rank_order"],
-                reason="Quality-gated Hunter proposal is ready for exact-revision public metadata and rights-evidence review; no reuse or implementation authority is granted.",
+                rank=backlog_rank,
+                reason="Quality-gated Hunter proposal is preserved in the durable backlog and ready for exact-revision public metadata and rights-evidence review; no reuse or implementation authority is granted.",
                 evidence_refs=[
                     f"hunter-proposal:{proposal['proposal_id']}",
                     f"hunter-finding:{proposal['finding_id']}",
-                    f"hunter-cycle:{proposal_state['cycle_id']}",
-                    f"hunter-proposal-state-sequence:{proposal_state['sequence']}",
+                    f"hunter-origin-cycle:{origin['first_cycle_id']}",
+                    f"hunter-origin-receipt:{origin['first_cycle_receipt_hash']}",
+                    f"hunter-origin-sequence:{origin['first_hunter_sequence']}",
+                    f"hunter-last-seen-cycle:{origin['last_cycle_id']}",
+                    f"hunter-last-seen-sequence:{origin['last_hunter_sequence']}",
+                    f"hunter-proposal-backlog-sequence:{proposal_state['sequence']}",
                     f"github:{finding['repository_full_name']}@{finding['revision']}",
                     f"candidate-rank:{proposal['candidate_rank_band']}:{proposal['candidate_rank_score']}",
                     f"rights-state:{handoff['rights_state']}",
