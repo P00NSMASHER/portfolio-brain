@@ -82,10 +82,12 @@ class SchedulerWorkExecutorTests(unittest.TestCase):
         self.assertEqual(result["revision"],"a"*40)
         self.assertEqual(result["tree_sha"],"b"*40)
         self.assertEqual(result["license_spdx_id"],"MIT")
+        self.assertEqual(result["capability_key"],"capability-coverage:freight-audit")
         self.assertEqual(result["rights_state"],"UNKNOWN_REQUIRES_REVIEW")
         self.assertFalse(result["reuse_authorized"])
         self.assertFalse(result["implementation_authorized"])
         self.assertFalse(result["code_execution_performed"])
+        self.assertFalse(result["downstream_mutation_performed"])
         self.assertEqual(len(executed),1)
 
     def test_hunter_proposal_tree_drift_defers_and_never_paints_green(self):
