@@ -125,6 +125,7 @@ jobs:
           --source-workflow portfolio-autonomous-scheduler
           --source-run-id "${GITHUB_RUN_ID}"
       - name: Validate persisted scheduler state
+        id: validation
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -c "import json; from scheduler.autonomous_scheduler import validate_state; validate_state(json.load(open('scheduler/out/scheduler_state.json')))"
       - name: Validate Hunter state when executed
@@ -187,6 +188,20 @@ jobs:
           path: cost_governor/out/
           if-no-files-found: error
           retention-days: 30
+      - name: Summarize scheduler execution status
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          {
+            echo "### Scheduler execution status"
+            echo "- Attempted: yes"
+            echo "- Workload control: ${{ steps.cost.outputs.decision_status }}"
+            echo "- Blocked: ${{ steps.cost.outputs.allowed != 'true' }}"
+            echo "- Block reason: ${{ steps.cost.outputs.reason_codes }}"
+            echo "- Executed items: ${{ steps.execute.outputs.executed_count }}"
+            echo "- Execution step: ${{ steps.execute.outcome }}"
+            echo "- Verified scheduler state: ${{ steps.validation.outcome }}"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Report governed no-work outcome
         if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
         run: |
