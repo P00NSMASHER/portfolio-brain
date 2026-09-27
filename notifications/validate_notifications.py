@@ -21,12 +21,14 @@ def validate_notifications():
     req(second["emitted_alerts"]==[] and len(second["suppressed_fingerprints"])==1,"duplicate/cooldown suppression failed")
     req(all(r["status"]=="ACTIVE" for r in state["alert_records"]),"current alerts unexpectedly resolved")
     wf=(ROOT/".github/workflows/portfolio-notification-cycle.yml").read_text().lower()
-    for text in ["7 */6 * * *","portfolio-cost-governed-autonomy","cost_governor.workflow_gate preflight","notifications.artifact_state","notifications.notification_engine","notifications.github_sink","portfolio_notification_disabled"]:
+    for text in ["7 */6 * * *","portfolio-notification","workload_control.workload_gate preflight","notifications.artifact_state","notifications.notification_engine","notifications.github_sink","portfolio_notification_disabled"]:
         req(text in wf,f"notification workflow missing {text}")
     for forbidden in ["contents: write","issues: write","pull-requests: write","deployments: write","id-token: write","curl ","webhook","slack","sms","smtp"]:
         req(forbidden not in wf,f"notification workflow widened capability: {forbidden}")
-    cp=load("cost_governor/COST_GOVERNOR_POLICY.json")
-    req("portfolio-notification-cycle" in cp["managed_workflow_names"],"notification workflow missing from cost managed list")
-    req("portfolio-notification-cycle::notify" in cp["workflow_job_ceilings"],"notification workflow lacks cost ceiling")
+    wp=load("workload_control/WORKLOAD_POLICY.json")
+    req("portfolio-notification-cycle::notify" in wp["services"],"notification workflow missing from workload controls")
+    cfg=wp["services"]["portfolio-notification-cycle::notify"]
+    req(cfg["concurrency_group"]=="portfolio-notification","notification concurrency lane drifted")
+    req(cfg["max_minutes_per_job"]==2,"notification workload timeout drifted")
     return {"current_signals":first["signal_count"],"current_emitted":1,"current_active":1,"dedup_suppressed_next_cycle":1,"delivery_channels":2,"authority":"NONE"}
 if __name__=="__main__":print("portfolio-brain Step 22 notifications: PASS",json.dumps(validate_notifications(),sort_keys=True))
