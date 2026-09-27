@@ -42,8 +42,11 @@ def validate_runtime_artifact_bundle(raw:bytes,*,max_archive_bytes:int,max_membe
             receipt=_single_json_member(archive,"cycle_receipt.json",max_bytes=max_member_bytes)
     except zipfile.BadZipFile as exc:
         raise InvalidStateArtifact("runtime artifact is not a readable zip archive") from exc
-    validate_state(state)
-    validate_cycle_receipt(receipt,allow_disabled=True)
+    try:
+        validate_state(state)
+        validate_cycle_receipt(receipt,allow_disabled=True)
+    except Exception as exc:
+        raise InvalidStateArtifact(f"runtime artifact state/receipt validation failed: {exc}") from exc
     if receipt["status"]=="PASS":
         if not state["recent_cycles"]:
             raise InvalidStateArtifact("runtime artifact PASS receipt has no durable cycle history")
