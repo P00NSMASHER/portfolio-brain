@@ -241,7 +241,10 @@ class GitHubPublicProvider:
         per=self.policy["budgets"]["max_search_results_per_query"]
         q=urllib.parse.quote(query+" fork:false archived:false")
         data=self._get(f"https://api.github.com/search/repositories?q={q}&sort=stars&order=desc&per_page={per}")
-        return [x for x in data.get("items",[]) if x.get("private") is False][:per]
+        return [
+          x for x in data.get("items",[])
+          if x.get("private") is False and int(x.get("size") or 0)>0
+        ][:per]
     def repository_metadata(self,full_name):
         data=self._get("https://api.github.com/repos/"+urllib.parse.quote(full_name,safe="/"))
         req(data.get("private") is False,"Hunter controlled candidate must be public")
@@ -403,6 +406,9 @@ def _new_rejection_funnel():
       "raw_search_results":0,
       "normalized_candidates":0,
       "inspection_attempted":0,
+      "inspection_succeeded":0,
+      "inspection_errors":0,
+      "inspection_error_reasons":{},
       "inspection_budget_deferred":0,
       "retained":0,
       "duplicates":0,
@@ -432,7 +438,12 @@ def _finalize_rejection_funnel(funnel):
     )
     funnel["disposition_accounting_reconciled"] = (
         funnel["inspection_attempted"] ==
-        funnel["retained"] + funnel["duplicates"] + funnel["rejected"]
+        funnel["retained"] + funnel["duplicates"] + funnel["rejected"] + funnel["inspection_errors"]
+    )
+    req(
+        funnel["inspection_succeeded"] ==
+        funnel["retained"] + funnel["duplicates"] + funnel["rejected"],
+        "Hunter successful-inspection disposition accounting drift"
     )
     req(funnel["candidate_accounting_reconciled"],"Hunter candidate funnel accounting drift")
     req(funnel["disposition_accounting_reconciled"],"Hunter disposition funnel accounting drift")
@@ -455,7 +466,8 @@ def run_cycle(state,provider,*,at=None):
             qout={
               "objective_id":obj["objective_id"],"gap_id":obj["gap_id"],"strategy_id":obj["strategy_id"],
               "query":query,"query_fingerprint":query_fp,"status":"PENDING",
-              "raw_results":0,"normalized_candidates":0,"inspected":0,"deferred_due_inspection_budget":0,
+              "raw_results":0,"normalized_candidates":0,"inspection_attempted":0,"inspected":0,
+              "inspection_errors":0,"inspection_error_reasons":{},"deferred_due_inspection_budget":0,
               "retained":0,"duplicates":0,"rejected":0,"rejection_reasons":{},
               "ranking_band_counts":{"HIGH":0,"MEDIUM":0,"LOW":0},"soft_signal_counts":{}
             }
@@ -478,14 +490,32 @@ def run_cycle(state,provider,*,at=None):
             per_query_cap=policy["budgets"]["max_candidates_inspected_per_query"]
             req(type(per_query_cap) is int and per_query_cap>=1,"Hunter per-query inspection cap invalid")
             for idx,cand in enumerate(candidates):
-                if qout["inspected"]>=per_query_cap or total_inspected>=policy["budgets"]["max_candidates_inspected_per_cycle"]:
+                if qout["inspection_attempted"]>=per_query_cap or total_inspected>=policy["budgets"]["max_candidates_inspected_per_cycle"]:
                     deferred=len(candidates)-idx
                     qout["deferred_due_inspection_budget"]+=deferred
                     funnel["inspection_budget_deferred"]+=deferred
                     break
                 req(cand.get("private") is False,"Hunter candidate must be public")
-                inspection=provider.inspect(cand); total_inspected+=1; stat["inspected"]+=1
-                qout["inspected"]+=1; funnel["inspection_attempted"]+=1
+                total_inspected+=1
+                qout["inspection_attempted"]+=1
+                funnel["inspection_attempted"]+=1
+                try:
+                    inspection=provider.inspect(cand)
+                except HunterError:
+                    cfg=policy["inspection_failure_handling"]
+                    req(cfg["candidate_disposition"]=="UNAVAILABLE_NOT_REJECTED","Hunter inspection failure disposition widened")
+                    req(cfg["counts_against_inspection_budget"] is True,"Hunter inspection failures must remain budgeted")
+                    req(cfg["records_negative_query_knowledge"] is False,"Hunter inspection failures may not train dead-end knowledge")
+                    req(cfg["cycle_behavior"]=="CONTINUE_BOUNDED","Hunter inspection failure cycle behavior widened")
+                    reason=cfg["reason_code"]
+                    qout["inspection_errors"]+=1
+                    qout["inspection_error_reasons"][reason]=qout["inspection_error_reasons"].get(reason,0)+1
+                    funnel["inspection_errors"]+=1
+                    funnel["inspection_error_reasons"][reason]=funnel["inspection_error_reasons"].get(reason,0)+1
+                    continue
+                stat["inspected"]+=1
+                qout["inspected"]+=1
+                funnel["inspection_succeeded"]+=1
                 structural=structural_inspection(cand,inspection,obj)
                 fp=candidate_fingerprint(cand,inspection["revision"],obj)
                 core={"objective_id":obj["objective_id"],"fingerprint":fp}
@@ -530,7 +560,10 @@ def run_cycle(state,provider,*,at=None):
                     qout["rejection_reasons"][negative]=qout["rejection_reasons"].get(negative,0)+1
                     _bump_reason(funnel,negative)
                 findings.append(finding)
-            if retained_this_query==0: _record_negative(state,obj,query,"NO_RETAINED_CANDIDATE",at)
+            if qout["inspection_errors"]>0:
+                qout["status"]="EXECUTED_WITH_INSPECTION_ERRORS"
+            if retained_this_query==0 and qout["inspection_errors"]==0:
+                _record_negative(state,obj,query,"NO_RETAINED_CANDIDATE",at)
             query_outcomes.append(qout)
         if objective_retained==0:
             pass
@@ -581,6 +614,9 @@ def run_cycle(state,provider,*,at=None):
         "raw_search_results":funnel["raw_search_results"],
         "normalized_candidates":funnel["normalized_candidates"],
         "inspection_attempted":funnel["inspection_attempted"],
+        "inspection_succeeded":funnel["inspection_succeeded"],
+        "inspection_errors":funnel["inspection_errors"],
+        "inspection_error_reasons":funnel["inspection_error_reasons"],
         "inspection_budget_deferred":funnel["inspection_budget_deferred"],
         "retained":funnel["retained"],"duplicates":funnel["duplicates"],"rejected":funnel["rejected"],
         "queries_executed":funnel["queries_executed"],"queries_zero_results":funnel["queries_zero_results"],
