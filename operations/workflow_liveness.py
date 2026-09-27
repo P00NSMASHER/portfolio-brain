@@ -12,6 +12,7 @@ import hashlib
 import io
 import json
 import os
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
@@ -510,9 +511,10 @@ def main()->int:
         if target_names<=found or len(page_runs)<100:
             break
 
+    checked_at=now_iso()
     preliminary=[
       evaluate_target(
-        target,runs,at=now_iso(),
+        target,runs,at=checked_at,
         failure_retry_minutes=p["recent_failure_retry_after_minutes"],
         default_branch=p["default_branch"],
       )
@@ -535,7 +537,7 @@ def main()->int:
           method="POST",
           payload={"ref":branch},
         )
-    result=recover_overdue(load_state(args.state),runs,dispatch=dispatch,run_proofs=run_proofs)
+    result=recover_overdue(load_state(args.state),runs,dispatch=dispatch,at=checked_at,run_proofs=run_proofs)
     result["api_requests"]=requests
     result["verified_work_target_count"]=sum(1 for row in result["targets"] if row["status"]=="HEALTHY_VERIFIED_WORK")
     if args.output:
