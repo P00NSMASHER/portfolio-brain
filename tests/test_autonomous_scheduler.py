@@ -1,7 +1,7 @@
 import copy,os,tempfile,unittest
 from pathlib import Path
 from unittest.mock import patch
-from scheduler.autonomous_scheduler import _candidate,build_context,generate_candidates,load_state,mark_work,schedule_cycle
+from scheduler.autonomous_scheduler import _candidate,build_context,generate_candidates,is_hunter_proposal_continuation,load_state,mark_work,schedule_cycle
 
 def proposal_state():
     proposal={
@@ -81,6 +81,37 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(
             receipt["selection_method"],
             "EXPLICIT_GATE_PRECEDENCE_THEN_CONTINUATION_CLASS_SOURCE_PARETO_RANK_ALLOCATION_SHARE_NO_SCALAR_SCORE",
+        )
+
+    def test_filtered_continuation_scheduler_selects_only_hunter_proposal_review(self):
+        ctx=build_context(hunter_proposal_state=proposal_state())
+        _,receipt=schedule_cycle(
+            load_state(),ctx,at="2026-09-27T09:20:00Z",
+            candidate_filter=is_hunter_proposal_continuation,
+            max_new_items=1,
+        )
+        self.assertEqual(len(receipt["selected_work"]),1)
+        self.assertTrue(is_hunter_proposal_continuation(receipt["selected_work"][0]))
+        self.assertEqual(receipt["selected_work"][0]["required_authority"],"OBSERVE")
+        self.assertEqual(receipt["selected_work"][0]["source_ref"],"HEXP-TEST-INBOX")
+
+    def test_filtered_continuation_scheduler_cannot_widen_cycle_limit(self):
+        ctx=build_context(hunter_proposal_state=proposal_state())
+        with self.assertRaises(Exception):
+            schedule_cycle(
+                load_state(),ctx,at="2026-09-27T09:20:00Z",
+                candidate_filter=is_hunter_proposal_continuation,
+                max_new_items=9,
+            )
+
+    def test_same_cycle_continuation_step_precedes_review_persistence(self):
+        root=Path(__file__).resolve().parents[1]
+        workflow=(root/".github/workflows/portfolio-autonomous-scheduler.yml").read_text()
+        self.assertIn("scheduler.same_cycle_continuation",workflow)
+        self.assertIn("--max-items 8",workflow)
+        self.assertLess(
+            workflow.index("scheduler.same_cycle_continuation"),
+            workflow.index("python -m hunting.proposal_review_state"),
         )
 
     def test_proposal_backlog_priority_prefers_rank_then_first_seen_fifo(self):
