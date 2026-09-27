@@ -719,7 +719,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
     )
 
     def proposal_status_tone(status: str) -> str:
-        if status == "REVIEW_COMPLETE":
+        if status in {"REVIEW_COMPLETE","EVIDENCE_REVIEWED"}:
             return "good"
         if status == "REVIEW_CANCELLED":
             return "bad"
@@ -736,6 +736,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
           <td>{_badge(p["rank_band"], "good" if p["rank_band"]=="HIGH" else "warn")}</td>
           <td>{_badge(p["review_status"].replace("_"," "), proposal_status_tone(p["review_status"]))}</td>
           <td class="wrap">{_e(p["capability_key"] or "—")}</td>
+          <td>{_e(p["license_spdx_id"] or ("none" if p["license_state"] else "—"))}<span class="sub">{_e(p["license_state"] or "not reviewed")}</span></td>
           <td>{_e(p["rights_state"] or "—")}</td>
         </tr>
         """
@@ -755,8 +756,10 @@ def render_html(snapshot: dict[str, Any]) -> str:
           <div class="mobile-stats mobile-stats-2">
             <div><span>Rank</span><strong>{_e(p["rank_band"])} · {_e(p["rank_score"])}/10</strong></div>
             <div><span>Projects</span><strong>{_e(", ".join(p["project_ids"]))}</strong></div>
+            <div><span>License metadata</span><strong>{_e(p["license_spdx_id"] or ("none" if p["license_state"] else "not reviewed"))}</strong></div>
             <div><span>Rights</span><strong>{_e(p["rights_state"] or "—")}</strong></div>
             <div><span>Capability</span><strong>{_e((p["capability_key"] or "—").replace("capability-coverage:",""))}</strong></div>
+            <div><span>Reviewed</span><strong>{_e(compact_timestamp(p["reviewed_at"]))}</strong></div>
           </div>
           <div class="mobile-meta">
             <span>Strategy</span><strong>{_e((p["strategy_id"] or "—").replace("STRAT:",""))}</strong>
@@ -818,6 +821,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
         "model_feedback":"Verified Model Value",
         "learning":"Continuous Learning",
         "hunter_proposals":"Hunter Proposal Inbox",
+        "hunter_proposal_reviews":"Hunter Proposal Reviews",
     }
     source_rows = "".join(
         f"""
@@ -1923,10 +1927,12 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       <div class="spec-item"><span>Inbox sequence</span><strong>{_e(snapshot["hunter_proposals"]["sequence"])}</strong></div>
       <div class="spec-item"><span>Awaiting scheduler</span><strong>{_e(snapshot["hunter_proposals"]["awaiting_scheduler_count"])}</strong></div>
       <div class="spec-item"><span>Queued / active review</span><strong>{_e(snapshot["hunter_proposals"]["queued_review_count"] + snapshot["hunter_proposals"]["active_review_count"])}</strong></div>
-      <div class="spec-item"><span>Completed review</span><strong>{_e(snapshot["hunter_proposals"]["completed_review_count"])}</strong></div>
+      <div class="spec-item"><span>Completed scheduler work</span><strong>{_e(snapshot["hunter_proposals"]["completed_review_count"])}</strong></div>
+      <div class="spec-item"><span>Durable evidence reviewed</span><strong>{_e(snapshot["hunter_proposals"]["evidence_reviewed_count"])}</strong></div>
+      <div class="spec-item"><span>Review state sequence</span><strong>{_e(snapshot["hunter_proposals"]["review_state_sequence"])}</strong></div>
     </div>
     <div class="table-wrap mobile-hide"><table>
-      <thead><tr><th>Proposal</th><th>Repository @ revision</th><th class="num">Score</th><th>Rank</th><th>Review</th><th>Capability</th><th>Rights</th></tr></thead>
+      <thead><tr><th>Proposal</th><th>Repository @ revision</th><th class="num">Score</th><th>Rank</th><th>Review</th><th>Capability</th><th>License metadata</th><th>Rights</th></tr></thead>
       <tbody>{proposal_rows}</tbody>
     </table></div>
     <div class="mobile-records">{proposal_cards}</div>
