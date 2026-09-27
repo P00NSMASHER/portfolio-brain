@@ -50,6 +50,24 @@ class HostileExaminationTests(unittest.TestCase):
         with self.assertRaises(UniversalGraphError):
             validate_node(bad)
 
+    def test_unicode_compatibility_alias_cannot_duplicate_graph_identity(self):
+        graph=json.loads((ROOT/"graph/UNIVERSAL_GRAPH_LEDGER.json").read_text())
+        bad=copy.deepcopy(graph)
+        original=next(n for n in bad["nodes"] if n["canonical_key"]=="P00NSMASHER/portfolio-brain")
+        alias=copy.deepcopy(original)
+        alias["node_id"]="GN-REPOSITORY-CANONICAL1"
+        alias["canonical_key"]="Ｐ00NSMASHER/portfolio-brain"
+        bad["nodes"].append(alias)
+        with self.assertRaisesRegex(UniversalGraphError,"duplicate canonical identity"):
+            validate_graph(bad["nodes"],bad["edges"])
+
+    def test_invisible_character_cannot_split_graph_identity(self):
+        graph=json.loads((ROOT/"graph/UNIVERSAL_GRAPH_LEDGER.json").read_text())
+        bad=copy.deepcopy(next(n for n in graph["nodes"] if n["node_type"]=="CAPABILITY"))
+        bad["canonical_key"]="portfolio:\u200bevent-evidence"
+        with self.assertRaisesRegex(UniversalGraphError,"invisible format"):
+            validate_node(bad)
+
     def test_notification_entity_cannot_inject_second_workflow_command(self):
         alert={"kind":"COST_HARD_STOP","severity":"CRITICAL","project_ids":["PRJ-000"],
                "entity_refs":["SAFE\n::error title=PWNED::INJECT"],"evidence_refs":["evidence:test"]}

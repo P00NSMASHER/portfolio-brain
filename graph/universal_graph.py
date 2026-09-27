@@ -6,7 +6,7 @@ for its native vocabulary. This module validates the larger portfolio vocabulary
 keeps unsupported types lossless, and only projects compatible records upstream.
 """
 from __future__ import annotations
-import hashlib, json, re
+import hashlib, json, re, unicodedata
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +32,10 @@ def _require(ok: bool,msg: str)->None:
 def canonical_hash(value: Any)->str:
     raw=json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
     return "sha256:"+hashlib.sha256(raw).hexdigest()
+
+def canonical_identity(value: str)->str:
+    """Normalize an identity for collision detection without rewriting display data."""
+    return " ".join(unicodedata.normalize("NFKC",value).casefold().split())
 
 def _has_verification_anchor(refs: list[str])->bool:
     prefixes=("ci-run:","event:","evidence:","verification:","test-receipt:")
@@ -76,6 +80,9 @@ def validate_node(node: dict[str,Any], contract: dict[str,Any]|None=None)->None:
     _require(GN_ID.fullmatch(node["node_id"]) is not None,"invalid node_id")
     _require(node["node_type"] in contract["node_types"],"unsupported node_type")
     _require(isinstance(node["canonical_key"],str) and node["canonical_key"],"canonical_key required")
+    _require(node["canonical_key"]==node["canonical_key"].strip(),"canonical_key cannot contain surrounding whitespace")
+    _require(not any(unicodedata.category(ch) in {"Cc","Cf"} for ch in node["canonical_key"]),
+             "canonical_key cannot contain control or invisible format characters")
     _require(isinstance(node["label"],str) and node["label"],"label required")
     pids=node["project_ids"]; _require(isinstance(pids,list) and len(pids)==len(set(pids)),"project_ids invalid")
     _require(all(PRJ_ID.fullmatch(x) for x in pids),"invalid project_id")
@@ -142,7 +149,7 @@ def validate_graph(nodes: list[dict[str,Any]], edges: list[dict[str,Any]])->dict
     for node in nodes:
         validate_node(node,contract)
         _require(node["node_id"] not in nodes_by_id,"duplicate node_id")
-        key=(node["node_type"],node["canonical_key"].casefold())
+        key=(node["node_type"],canonical_identity(node["canonical_key"]))
         _require(key not in canonical,"duplicate canonical identity within node type")
         canonical.add(key); nodes_by_id[node["node_id"]]=node
 
