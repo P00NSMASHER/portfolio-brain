@@ -13,6 +13,7 @@ from typing import Any
 
 ROOT=Path(__file__).resolve().parents[1]
 class HunterError(RuntimeError): pass
+class CandidateInspectionError(HunterError): pass
 
 def req(ok,msg):
     if not ok: raise HunterError(msg)
@@ -249,11 +250,19 @@ class GitHubPublicProvider:
         data=self._get("https://api.github.com/repos/"+urllib.parse.quote(full_name,safe="/"))
         req(data.get("private") is False,"Hunter controlled candidate must be public")
         return data
+    def _candidate_get(self,url):
+        try:
+            return self._get(url)
+        except HunterError as exc:
+            message=str(exc)
+            if message.startswith("public GitHub read failed after bounded retries:") and re.search(r"HTTP Error (404|409|410|422)\b",message):
+                raise CandidateInspectionError(message) from exc
+            raise
     def inspect_revision(self,candidate,revision):
         full=candidate["full_name"]
         req(isinstance(revision,str) and len(revision)==40 and all(c in "0123456789abcdef" for c in revision),"candidate exact revision invalid")
         base=f"https://api.github.com/repos/{full}"
-        tree=self._get(base+"/git/trees/"+revision+"?recursive=1")
+        tree=self._candidate_get(base+"/git/trees/"+revision+"?recursive=1")
         paths=[x.get("path") for x in tree.get("tree",[]) if x.get("type")=="blob" and isinstance(x.get("path"),str)]
         maxp=self.policy["budgets"]["max_tree_paths_per_candidate"]
         truncated=bool(tree.get("truncated")) or len(paths)>maxp
@@ -262,7 +271,7 @@ class GitHubPublicProvider:
     def inspect(self,candidate):
         full=candidate["full_name"]; branch=candidate.get("default_branch") or "main"
         base=f"https://api.github.com/repos/{full}"
-        commit=self._get(base+"/commits/"+urllib.parse.quote(branch,safe=""))
+        commit=self._candidate_get(base+"/commits/"+urllib.parse.quote(branch,safe=""))
         sha=commit["sha"]; req(isinstance(sha,str) and len(sha)==40,"candidate missing exact revision")
         return self.inspect_revision(candidate,sha)
 
@@ -501,7 +510,7 @@ def run_cycle(state,provider,*,at=None):
                 funnel["inspection_attempted"]+=1
                 try:
                     inspection=provider.inspect(cand)
-                except HunterError:
+                except CandidateInspectionError:
                     cfg=policy["inspection_failure_handling"]
                     req(cfg["candidate_disposition"]=="UNAVAILABLE_NOT_REJECTED","Hunter inspection failure disposition widened")
                     req(cfg["counts_against_inspection_budget"] is True,"Hunter inspection failures must remain budgeted")

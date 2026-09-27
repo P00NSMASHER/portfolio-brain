@@ -1,7 +1,7 @@
 import copy, unittest
 from pathlib import Path
 from hunting.autonomous_hunter import (
-    GitHubPublicProvider, HunterError, _queries, apply_verified_feedback, candidate_fingerprint, classify_candidate, detect_gaps,
+    CandidateInspectionError, GitHubPublicProvider, HunterError, _queries, apply_verified_feedback, candidate_fingerprint, classify_candidate, detect_gaps,
     load_policy, load_seed_state, load_strategies, rank_candidate, run_cycle, search_concepts_for_gap,
     select_objectives, strategy_priority_maturity, structural_inspection, validate_state
 )
@@ -138,7 +138,7 @@ class HunterTests(unittest.TestCase):
         class UnavailableProvider(FakeProvider):
             def inspect(self,c):
                 self.requests+=1
-                raise HunterError("synthetic 409")
+                raise CandidateInspectionError("synthetic 409")
         state,receipt=run_cycle(load_seed_state(),UnavailableProvider(),at="2026-09-25T18:00:00Z")
         funnel=receipt["rejection_funnel"]
         self.assertEqual(receipt["status"],"PASS")
@@ -148,7 +148,7 @@ class HunterTests(unittest.TestCase):
         self.assertEqual(funnel["rejected"],0)
         self.assertTrue(funnel["candidate_accounting_reconciled"])
         self.assertTrue(funnel["disposition_accounting_reconciled"])
-        self.assertIn("EXACT_REVISION_INSPECTION_UNAVAILABLE",funnel["inspection_error_reasons"])
+        self.assertIn("CANDIDATE_INSPECTION_UNAVAILABLE",funnel["inspection_error_reasons"])
         self.assertTrue(any(q["status"]=="EXECUTED_WITH_INSPECTION_ERRORS" for q in receipt["query_outcomes"]))
         self.assertFalse(any(x["reason_code"]=="NO_RETAINED_CANDIDATE" for x in state["negative_knowledge"]))
 
@@ -157,7 +157,7 @@ class HunterTests(unittest.TestCase):
             def inspect(self,c):
                 self.requests+=1
                 if c["id"]==1:
-                    raise HunterError("synthetic unavailable")
+                    raise CandidateInspectionError("synthetic unavailable")
                 return copy.deepcopy(self.inspection)
         results=[
           {"id":1,"full_name":"public/unavailable","default_branch":"main","private":False},
@@ -169,6 +169,14 @@ class HunterTests(unittest.TestCase):
         self.assertGreater(funnel["inspection_succeeded"],0)
         self.assertEqual(funnel["inspection_attempted"],funnel["inspection_succeeded"]+funnel["inspection_errors"])
         self.assertEqual(funnel["inspection_succeeded"],funnel["retained"]+funnel["duplicates"]+funnel["rejected"])
+
+    def test_non_candidate_hunter_error_during_inspection_fails_closed(self):
+        class ControlPlaneFailureProvider(FakeProvider):
+            def inspect(self,c):
+                self.requests+=1
+                raise HunterError("Hunter API request budget exceeded")
+        with self.assertRaises(HunterError):
+            run_cycle(load_seed_state(),ControlPlaneFailureProvider(),at="2026-09-25T18:00:00Z")
 
     def test_repository_search_filters_empty_public_repositories_before_inspection(self):
         provider=GitHubPublicProvider(policy=load_policy())
