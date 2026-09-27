@@ -36,15 +36,15 @@
       "expected_min_rank": "MEDIUM"
     },
     {
-      "case_id": "HCP-PYTEST",
-      "repository_full_name": "pytest-dev/pytest",
-      "expected_repository_id": 37489525,
+      "case_id": "HCP-HYPOTHESIS",
+      "repository_full_name": "HypothesisWorks/hypothesis",
+      "expected_repository_id": 8685799,
       "strategy_id": "STRAT:fail-open-boundary-archaeology",
       "project_ids": [
         "PRJ-009"
       ],
-      "gap_id": "HGAP-CONTROLLED-TESTING",
-      "capability_key": "capability-coverage:pytest",
+      "gap_id": "HGAP-CONTROLLED-PROPERTY-TESTING",
+      "capability_key": "capability-coverage:hypothesis",
       "expected_min_rank": "MEDIUM"
     }
   ]
