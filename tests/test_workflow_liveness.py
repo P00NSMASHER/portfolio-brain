@@ -1,6 +1,9 @@
+import hashlib
+import io
 import json
 import os
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -8,9 +11,11 @@ from cost_governor.cost_governor import commit_reservation, load_state, reserve_
 from operations.workflow_liveness import (
     WorkflowLivenessError,
     evaluate_target,
+    fetch_run_work_proof,
     load_policy,
     recover_overdue,
     validate_policy,
+    verify_work_proof,
 )
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -40,6 +45,26 @@ def run(
     }
 
 
+def receipt(body):
+    value=dict(body)
+    raw=json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
+    value["receipt_hash"]="sha256:"+hashlib.sha256(raw).hexdigest()
+    return value
+
+
+def scheduler_proof_doc():
+    return receipt({
+      "schema_version":"1.0.0",
+      "cycle_id":"wexec-1234567890abcdef12345678",
+      "finished_at":"2026-09-27T08:50:00Z",
+      "attempted_count":3,
+      "completed_count":2,
+      "deferred_count":1,
+      "remaining_queued_count":0,
+      "authority_granted":False,
+    })
+
+
 class WorkflowLivenessTests(unittest.TestCase):
 
     def test_policy_is_bounded_and_targets_dispatchable_core_workflows(self):
@@ -53,7 +78,13 @@ class WorkflowLivenessTests(unittest.TestCase):
         self.assertTrue(any(t["admission_domain"]=="COST_WRAPPER" for t in p["targets"]))
         for target in p["targets"]:
             workflow=(ROOT/".github/workflows"/target["workflow_file"]).read_text()
-            self.assertIn("workflow_dispatch:",workflow)
+            if "uses: ./.github/workflows/runtime-worker.yml" in workflow:
+                workflow+="\n"+(ROOT/".github/workflows/runtime-worker.yml").read_text()
+            self.assertIn("workflow_dispatch:",(ROOT/".github/workflows"/target["workflow_file"]).read_text())
+            self.assertIn("proof_artifact_name",target)
+            self.assertIn("proof_member",target)
+            self.assertIn("proof_kind",target)
+            self.assertIn(f'name: {target["proof_artifact_name"]}',workflow)
 
 
     def test_liveness_admission_preview_must_match_target_controls(self):
@@ -105,6 +136,64 @@ class WorkflowLivenessTests(unittest.TestCase):
         row=evaluate_target(target,[run(target["workflow_name"],"2026-09-27T08:50:00Z")],at=AT,failure_retry_minutes=35)
         self.assertEqual(row["status"],"RECENT_RUN_UNVERIFIED_WORK")
         self.assertFalse(row["dispatch_required"])
+
+    def test_exact_run_scheduler_receipt_upgrades_recent_run_to_verified_health(self):
+        target=load_policy()["targets"][0]
+        proof=verify_work_proof(target,scheduler_proof_doc(),run_id=77)
+        self.assertEqual(proof["status"],"VERIFIED_WORK")
+        row=evaluate_target(
+          target,[run(target["workflow_name"],"2026-09-27T08:50:00Z",run_id=77)],
+          at=AT,failure_retry_minutes=35,run_proofs={77:proof},
+        )
+        self.assertEqual(row["status"],"HEALTHY_VERIFIED_WORK")
+        self.assertEqual(row["reason"],"EXACT_RUN_SUBSTANTIVE_WORK_PROVEN")
+        self.assertEqual(row["work_proof_metrics"]["attempted"],3)
+
+    def test_tampered_receipt_never_paints_liveness_green(self):
+        target=load_policy()["targets"][0]
+        doc=scheduler_proof_doc()
+        doc["completed_count"]=3
+        proof=verify_work_proof(target,doc,run_id=78)
+        self.assertEqual(proof["status"],"INVALID_WORK_PROOF")
+        row=evaluate_target(
+          target,[run(target["workflow_name"],"2026-09-27T08:50:00Z",run_id=78)],
+          at=AT,failure_retry_minutes=35,run_proofs={78:proof},
+        )
+        self.assertEqual(row["status"],"RECENT_RUN_UNVERIFIED_WORK")
+        self.assertEqual(row["work_proof_status"],"INVALID_WORK_PROOF")
+
+    def test_artifact_fetch_is_exact_run_bound_and_validates_inside_zip(self):
+        target=load_policy()["targets"][0]
+        payload=io.BytesIO()
+        with zipfile.ZipFile(payload,"w") as zf:
+            zf.writestr(target["proof_member"],json.dumps(scheduler_proof_doc()))
+        artifact_json=json.dumps({"artifacts":[{
+          "id":123,"name":target["proof_artifact_name"],"expired":False,
+          "archive_download_url":"https://api.github.com/fake/archive"
+        }]}).encode()
+        calls=[]
+        def request(url,token,**kwargs):
+            calls.append(url)
+            return artifact_json if "/artifacts?" in url else payload.getvalue()
+        proof=fetch_run_work_proof("P00NSMASHER/portfolio-brain","token",target,79,request=request)
+        self.assertEqual(proof["status"],"VERIFIED_WORK")
+        self.assertEqual(proof["artifact_id"],123)
+        self.assertEqual(len(calls),2)
+        self.assertIn("/actions/runs/79/artifacts?",calls[0])
+
+    def test_all_recent_exact_run_proofs_produce_healthy_watchdog_status(self):
+        p=load_policy()
+        runs=[]
+        proofs={}
+        for i,target in enumerate(p["targets"],start=1):
+            runs.append(run(target["workflow_name"],"2026-09-27T08:50:00Z",run_id=i,workflow_file=target["workflow_file"]))
+            proofs[i]={"status":"VERIFIED_WORK","reason":"TEST_PROOF","metrics":{},"authority_granted":False}
+        result=recover_overdue(
+          load_state(),runs,dispatch=lambda workflow,branch:None,
+          at=AT,policy_data=p,run_proofs=proofs,
+        )
+        self.assertEqual(result["status"],"HEALTHY_VERIFIED_WORK")
+        self.assertTrue(all(row["status"]=="HEALTHY_VERIFIED_WORK" for row in result["targets"]))
 
     def test_same_name_run_from_another_branch_cannot_mask_overdue_main(self):
         target=load_policy()["targets"][0]
