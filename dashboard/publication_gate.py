@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 VOLATILE_KEYS = {
-    "snapshot_hash", "generated_at", "age_minutes", "artifact_id",
+    "snapshot_hash", "publication", "generated_at", "age_minutes", "artifact_id",
     "source_run_id", "source_head_sha", "artifact_created_at", "artifact_expires_at",
 }
 
