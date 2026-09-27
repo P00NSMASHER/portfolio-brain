@@ -1,8 +1,45 @@
 import copy,os,tempfile,unittest
 from unittest.mock import patch
-from scheduler.autonomous_scheduler import _candidate,build_context,load_state,mark_work,schedule_cycle
+from scheduler.autonomous_scheduler import _candidate,build_context,generate_candidates,load_state,mark_work,schedule_cycle
+
+def proposal_state():
+    proposal={
+      "schema_version":"1.0.0","proposal_id":"HEXP-TEST-INBOX","finding_id":"HFD-TEST-INBOX",
+      "gap_id":"HGAP-TEST","project_ids":["PRJ-002"],"candidate_rank_score":8,
+      "candidate_rank_band":"HIGH","candidate_soft_signals":[],
+      "hypothesis":"bounded","baseline":"none","success_condition":"verify","failure_condition":"reject",
+      "evidence_requirements":["Exact source revision","License/rights verification"],
+      "cost_boundary":"read only","rollback":"none","candidate_rank_order":1
+    }
+    finding={
+      "finding_id":"HFD-TEST-INBOX","proposal_id":"HEXP-TEST-INBOX","gap_id":"HGAP-TEST",
+      "capability_key":"capability-coverage:freight-audit","project_ids":["PRJ-002"],
+      "strategy_id":"STRAT:capability-conjunction-search-claim-tracing",
+      "candidate_fingerprint":"sha256:"+"1"*64,
+      "repository_full_name":"public/freight-audit","repository_id":123,"revision":"a"*40,
+      "public":True,"rank_score":8,"rank_band":"HIGH","soft_signals":[],
+      "inspection":{"tree_sha":"b"*40,"tree_truncated":False,"path_count":3,"source_path_count":1,"test_path_count":1,"docs_path_count":1,"keyword_hit_count":2,"source_keyword_hit_count":1,"test_keyword_hit_count":1,"docs_keyword_hit_count":0,"sample_paths":["src/freight_audit.py","tests/test_freight_audit.py"]},
+      "provenance_refs":["github:public/freight-audit@"+"a"*40]
+    }
+    return {
+      "schema_version":"1.0.0","state_id":"portfolio-hunter-proposal-state","sequence":8,
+      "updated_at":"2026-09-27T06:30:00Z","cycle_id":"hunt-test","cycle_receipt_hash":"sha256:"+"2"*64,
+      "authority_class":"OBSERVE","rights_state":"NOT_GRANTED_BY_DISCOVERY",
+      "proposals":[proposal],"findings":[finding]
+    }
 
 class SchedulerTests(unittest.TestCase):
+    def test_quality_gated_hunter_proposal_enters_read_only_research_queue(self):
+        ctx=build_context(hunter_proposal_state=proposal_state())
+        candidates,_=generate_candidates(ctx)
+        review=next(c for c in candidates if c["source_ref"]=="HEXP-TEST-INBOX")
+        self.assertEqual(review["work_type"],"RESEARCH")
+        self.assertEqual(review["assigned_agent_id"],"AGT-RESEARCHER")
+        self.assertEqual(review["agent_goal_type"],"RESEARCH_EVIDENCE")
+        self.assertEqual(review["required_authority"],"OBSERVE")
+        self.assertIn("rights-state:NOT_GRANTED_BY_DISCOVERY",review["evidence_refs"])
+        self.assertIn("github:public/freight-audit@"+"a"*40,review["evidence_refs"])
+
     def test_current_cycle_includes_research_hunt_integration_with_bounded_parallelism(self):
         state,receipt=schedule_cycle(load_state(),build_context(),at="2026-09-25T20:40:00Z")
         types={w["work_type"] for w in receipt["selected_work"]}
