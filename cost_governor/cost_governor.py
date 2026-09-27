@@ -22,6 +22,8 @@ USAGE_FIELDS = (
     "github_runner_minutes",
 )
 RESOURCE_KINDS = {"MODEL_CALL", "API_CALL", "GITHUB_JOB"}
+PAID_RESOURCE_KINDS = {"MODEL_CALL", "API_CALL"}
+FINANCIAL_USAGE_FIELDS = ("cost_usd", "input_tokens", "output_tokens", "model_calls", "api_calls")
 AUTHORITY_CLASSES = {"NONE", "OBSERVE", "EXPERIMENT", "MODIFY", "ACT"}
 DATA_CLASSES = {"PUBLIC", "SANITIZED", "PRIVATE_REFERENCE_ONLY"}
 
@@ -100,6 +102,10 @@ def validate_policy(p: dict[str, Any] | None = None) -> None:
     for key, value in p["provider_model_overrides"].items():
         req("::" in key, "provider/model override key invalid")
         _budget_dict(value, f"provider/model {key}")
+    workload = p["github_workload_control"]
+    req(workload["mode"] == "NATIVE_TIMEOUTS_CONCURRENCY_AND_COALESCING", "unexpected GitHub workload mode")
+    req(workload["daily_job_count_quotas_enforced"] is False, "GitHub workload count quotas must remain non-enforcing")
+    req(workload["durable_cost_reservations"] is False, "GitHub workload may not consume the paid cost ledger")
     for key, value in p["workflow_job_ceilings"].items():
         req("::" in key, "workflow/job ceiling key invalid")
         _budget_dict(value["daily_ceiling"], f"workflow/job {key}")
@@ -181,7 +187,8 @@ def validate_decision_record(d: dict[str, Any]) -> None:
     statuses = {
         "RESERVED", "DUPLICATE_SUPPRESSED", "BLOCKED_IDEMPOTENCY_COLLISION",
         "BLOCKED_KILL_SWITCH", "BLOCKED_AUTHORITY", "BLOCKED_RETRY_LIMIT",
-        "BLOCKED_BUDGET", "COMMITTED", "HARD_STOP_OVERAGE",
+        "BLOCKED_BUDGET", "BLOCKED_HARD_STOP", "BLOCKED_WORKLOAD",
+        "WORKLOAD_ADMITTED", "COMMITTED", "HARD_STOP_OVERAGE",
     }
     req(d["status"] in statuses, "unknown cost decision status")
     req(isinstance(d["reason_codes"], list) and d["reason_codes"] and len(d["reason_codes"]) == len(set(d["reason_codes"])), "cost decision reasons invalid")
@@ -289,9 +296,16 @@ def _usage_for(state: dict[str, Any], at: str, predicate) -> dict[str, Any]:
             total = _add_usage(total, usage)
     return total
 
-def _breaches(used: dict[str, Any], estimate: dict[str, Any], ceiling: dict[str, Any], label: str) -> list[str]:
+def _breaches(
+    used: dict[str, Any],
+    estimate: dict[str, Any],
+    ceiling: dict[str, Any],
+    label: str,
+    *,
+    fields: tuple[str, ...] = USAGE_FIELDS,
+) -> list[str]:
     out = []
-    for field in USAGE_FIELDS:
+    for field in fields:
         if used[field] + estimate[field] > ceiling[field] + (1e-12 if field == "cost_usd" else 0):
             out.append(f"BUDGET_EXCEEDED:{label}:{field}")
     return out
@@ -323,6 +337,59 @@ def _finish_state(state: dict[str, Any], at: str, p: dict[str, Any]) -> dict[str
     validate_state(state, p)
     return state
 
+def workload_preflight(
+    state: dict[str, Any],
+    request: dict[str, Any],
+    *,
+    at: str | None = None,
+    policy_data: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Admit bounded GitHub workload without consuming the paid cost ledger.
+
+    GitHub-hosted workflow starts are controlled by native timeouts, scoped
+    concurrency/coalescing, retry bounds, and service-specific controls. They do
+    not reserve model/API spend and therefore must not mutate the financial
+    ledger or be blocked by a spend kill switch.
+    """
+    p = copy.deepcopy(policy_data or policy())
+    validate_policy(p)
+    validate_state(state, p)
+    validate_request(request)
+    req(request["resource_kind"] == "GITHUB_JOB", "workload preflight requires GITHUB_JOB")
+    at = at or request["requested_at"] or now_iso()
+    _time(at, "at")
+
+    if request["authority_class"] == "ACT":
+        return copy.deepcopy(state), _decision(
+            request, at, "BLOCKED_AUTHORITY",
+            ["WORKLOAD_CONTROL_CANNOT_AUTHORIZE_ACT"], None, False,
+        )
+
+    if request["attempt"] > p["retry_limits"]["GITHUB_JOB"]:
+        return copy.deepcopy(state), _decision(
+            request, at, "BLOCKED_RETRY_LIMIT",
+            ["RETRY_LIMIT_EXCEEDED"], None, False,
+        )
+
+    key = f'{request["workflow_id"]}::{request["job_id"]}'
+    cfg = p["workflow_job_ceilings"].get(key)
+    reasons: list[str] = []
+    if cfg is None:
+        reasons.append(f"UNCONFIGURED_WORKFLOW_JOB:{key}")
+    elif request["estimated_usage"]["github_runner_minutes"] > cfg["max_minutes_per_job"]:
+        reasons.append(f"JOB_MINUTE_CEILING_EXCEEDED:{key}")
+
+    if reasons:
+        return copy.deepcopy(state), _decision(
+            request, at, "BLOCKED_WORKLOAD", reasons, None, False,
+        )
+
+    return copy.deepcopy(state), _decision(
+        request, at, "WORKLOAD_ADMITTED",
+        ["WORKLOAD_CONTROLS_PASS", "PAID_LEDGER_NOT_CONSUMED"], None, True,
+    )
+
+
 def preflight(state: dict[str, Any], request: dict[str, Any], *, at: str | None = None, policy_data: dict[str, Any] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
     p = copy.deepcopy(policy_data or policy())
     validate_policy(p)
@@ -330,6 +397,10 @@ def preflight(state: dict[str, Any], request: dict[str, Any], *, at: str | None 
     validate_request(request)
     at = at or request["requested_at"] or now_iso()
     _time(at, "at")
+
+    if request["resource_kind"] == "GITHUB_JOB":
+        return workload_preflight(state, request, at=at, policy_data=p)
+
     out = _expire_and_compact(state, at, p)
     request_hash = hashv(request)
 
@@ -347,6 +418,13 @@ def preflight(state: dict[str, Any], request: dict[str, Any], *, at: str | None 
         d = _decision(request, at, "BLOCKED_KILL_SWITCH", ["SPEND_KILL_SWITCH", kill_reason or "kill switch"], None, False)
         _append_decision(out, d, p)
         return _finish_state(out, at, p), d
+
+    stop = hard_stop_reason(out, at=at, policy_data=p)
+    if stop is not None:
+        d = _decision(request, at, "BLOCKED_HARD_STOP", ["PAID_EXECUTION_HARD_STOP", stop], None, False)
+        _append_decision(out, d, p)
+        return _finish_state(out, at, p), d
+
     if request["authority_class"] == "ACT":
         d = _decision(request, at, "BLOCKED_AUTHORITY", ["COST_BUDGET_CANNOT_AUTHORIZE_ACT"], None, False)
         _append_decision(out, d, p)
@@ -370,29 +448,26 @@ def preflight(state: dict[str, Any], request: dict[str, Any], *, at: str | None 
     estimate = request["estimated_usage"]
     reasons: list[str] = []
     portfolio_used = _usage_for(out, at, lambda row: True)
-    reasons += _breaches(portfolio_used, estimate, p["portfolio_ceiling"], "portfolio")
+    reasons += _breaches(
+        portfolio_used, estimate, p["portfolio_ceiling"], "portfolio",
+        fields=FINANCIAL_USAGE_FIELDS,
+    )
 
     for project_id in request["project_ids"]:
         ceiling = p["project_overrides"].get(project_id, p["project_default_ceiling"])
         used = _usage_for(out, at, lambda row, project_id=project_id: project_id in row["project_ids"])
-        reasons += _breaches(used, estimate, ceiling, f"project:{project_id}")
+        reasons += _breaches(
+            used, estimate, ceiling, f"project:{project_id}",
+            fields=FINANCIAL_USAGE_FIELDS,
+        )
 
-    if request["resource_kind"] in {"MODEL_CALL", "API_CALL"}:
-        key = f'{request["provider_id"]}::{request["model_id"] or "NONE"}'
-        ceiling = p["provider_model_overrides"].get(key, p["provider_model_default_ceiling"])
-        used = _usage_for(out, at, lambda row, key=key: f'{row["provider_id"]}::{row["model_id"] or "NONE"}' == key)
-        reasons += _breaches(used, estimate, ceiling, f"provider_model:{key}")
-
-    if request["resource_kind"] == "GITHUB_JOB":
-        key = f'{request["workflow_id"]}::{request["job_id"]}'
-        cfg = p["workflow_job_ceilings"].get(key)
-        if cfg is None:
-            reasons.append(f"UNCONFIGURED_WORKFLOW_JOB:{key}")
-        else:
-            if estimate["github_runner_minutes"] > cfg["max_minutes_per_job"]:
-                reasons.append(f"JOB_MINUTE_CEILING_EXCEEDED:{key}")
-            used = _usage_for(out, at, lambda row, key=key: f'{row["workflow_id"]}::{row["job_id"]}' == key)
-            reasons += _breaches(used, estimate, cfg["daily_ceiling"], f"workflow_job:{key}")
+    key = f'{request["provider_id"]}::{request["model_id"] or "NONE"}'
+    ceiling = p["provider_model_overrides"].get(key, p["provider_model_default_ceiling"])
+    used = _usage_for(out, at, lambda row, key=key: f'{row["provider_id"]}::{row["model_id"] or "NONE"}' == key)
+    reasons += _breaches(
+        used, estimate, ceiling, f"provider_model:{key}",
+        fields=FINANCIAL_USAGE_FIELDS,
+    )
 
     if reasons:
         d = _decision(request, at, "BLOCKED_BUDGET", reasons, None, False)
@@ -501,10 +576,15 @@ def hard_stop_reason(state: dict[str, Any], *, at: str | None = None, policy_dat
     if is_killed:
         return "KILL_SWITCH:" + (reason or "spend disabled")
     today = _day(at)
-    if any(row["status"] == "OVERAGE" and _day(row["created_at"]) == today for row in state["reservations"]):
-        return "CURRENT_DAY_RESERVATION_OVERAGE"
-    used = _usage_for(_expire_and_compact(state, at, p), at, lambda row: True)
-    for field in USAGE_FIELDS:
+    if any(
+        row["status"] == "OVERAGE"
+        and row["resource_kind"] in PAID_RESOURCE_KINDS
+        and _day(row["created_at"]) == today
+        for row in state["reservations"]
+    ):
+        return "CURRENT_DAY_PAID_RESERVATION_OVERAGE"
+    used = _usage_for(_expire_and_compact(state, at, p), at, lambda row: row["resource_kind"] in PAID_RESOURCE_KINDS)
+    for field in FINANCIAL_USAGE_FIELDS:
         if used[field] > p["portfolio_ceiling"][field] + (1e-12 if field == "cost_usd" else 0):
             return f"PORTFOLIO_BUDGET_BREACH:{field}"
     return None
