@@ -18,6 +18,7 @@ from typing import Any, Callable
 from agents.artifact_state import restore as restore_agents
 from cost_governor.artifact_state import restore as restore_cost
 from hunting.artifact_state import restore as restore_hunter
+from hunting.proposal_artifact_state import restore as restore_hunter_proposals
 from learning.artifact_state import restore as restore_learning
 from notifications.artifact_state import restore as restore_notifications
 from model_router.feedback_artifact_state import restore as restore_model_feedback
@@ -37,6 +38,7 @@ STALE_AFTER_MINUTES = {
     "agents": 180,
     "model_feedback": 10080,
     "learning": 10080,
+    "hunter_proposals": 450,
 }
 
 SEEDS = {
@@ -48,6 +50,7 @@ SEEDS = {
     "agents": "agents/AGENT_HEARTBEAT_STATE_SEED.json",
     "model_feedback": "model_router/MODEL_FEEDBACK_STATE_SEED.json",
     "learning": "learning/LIVE_OBSERVATION_STATE_SEED.json",
+    "hunter_proposals": "hunting/HUNTER_PROPOSAL_STATE_SEED.json",
 }
 
 RESTORERS: dict[str, Callable[..., str]] = {
@@ -59,10 +62,11 @@ RESTORERS: dict[str, Callable[..., str]] = {
     "agents": restore_agents,
     "model_feedback": restore_model_feedback,
     "learning": restore_learning,
+    "hunter_proposals": restore_hunter_proposals,
 }
 
 CORE_HEALTH_SOURCES = {"runtime","scheduler","hunter","cost","notifications"}
-OPTIONAL_OBSERVABILITY_SOURCES = {"agents","provider","model_feedback","learning"}
+OPTIONAL_OBSERVABILITY_SOURCES = {"agents","provider","model_feedback","learning","hunter_proposals"}
 
 
 class LiveStateBridgeError(ValueError):
@@ -91,6 +95,7 @@ def _state_filename(name: str) -> str:
         "agents": "agent_heartbeat_state.json",
         "model_feedback": "model_feedback_state.json",
         "learning": "learning_observation_state.json",
+        "hunter_proposals": "hunter_proposal_state.json",
     }[name]
 
 
