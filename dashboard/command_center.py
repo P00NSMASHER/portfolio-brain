@@ -21,6 +21,7 @@ from dashboard.history_state import load_state as load_history_state, public_his
 from dashboard.operational_telemetry import build_operational_telemetry
 from cost_governor.sentinel import build_sentinel_snapshot
 from learning.integrity import build_learning_integrity
+from hunting.proposal_state import backlog_summary as build_hunter_proposal_backlog_summary, normalize_state as normalize_hunter_proposal_state
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -114,6 +115,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
     state_sources = load_state_sources()
     hunter_state = load_live_json("hunter_state.json","hunting/HUNTER_STATE_SEED.json")
     hunter_proposal_state = load_live_json("hunter_proposal_state.json","hunting/HUNTER_PROPOSAL_STATE_SEED.json")
+    hunter_proposal_state = normalize_hunter_proposal_state(hunter_proposal_state)
+    hunter_proposal_backlog = build_hunter_proposal_backlog_summary(hunter_proposal_state)
     hunter_proposal_review_state = load_live_json("hunter_proposal_review_state.json","hunting/HUNTER_PROPOSAL_REVIEW_STATE_SEED.json")
     scheduler_state = load_live_json("scheduler_state.json","scheduler/SCHEDULER_STATE_SEED.json")
     cost_policy = load_json("cost_governor/COST_GOVERNOR_POLICY.json")
@@ -211,6 +214,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
     proposal_findings = {
         row["proposal_id"]: row for row in hunter_proposal_state.get("findings", [])
     }
+    proposal_origins = hunter_proposal_state.get("origins", {})
     proposal_reviews = {}
     for review in hunter_proposal_review_state.get("reviews", []):
         proposal_id = review.get("proposal_id")
@@ -240,6 +244,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
                 "COMPLETE":"REVIEW_COMPLETE",
                 "CANCELLED":"REVIEW_CANCELLED",
             }.get(current.get("state"), "REVIEW_UNKNOWN")
+        origin = proposal_origins.get(proposal["proposal_id"], {})
         hunter_proposals.append({
             "proposal_id": proposal["proposal_id"],
             "finding_id": proposal["finding_id"],
@@ -260,6 +265,14 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "license_state": None if durable_review is None else durable_review.get("license_state"),
             "reviewed_at": None if durable_review is None else durable_review.get("reviewed_at"),
             "review_hash": None if durable_review is None else durable_review.get("review_hash"),
+            "first_cycle_id": origin.get("first_cycle_id"),
+            "first_cycle_receipt_hash": origin.get("first_cycle_receipt_hash"),
+            "first_seen_at": origin.get("first_seen_at"),
+            "first_hunter_sequence": origin.get("first_hunter_sequence"),
+            "last_cycle_id": origin.get("last_cycle_id"),
+            "last_seen_at": origin.get("last_seen_at"),
+            "last_hunter_sequence": origin.get("last_hunter_sequence"),
+            "carried_forward": origin.get("first_cycle_id") not in {None, hunter_proposal_state.get("cycle_id")},
         })
     healthy_agents = telemetry["agents"].get("live", 0) + telemetry["agents"].get("idle_healthy", 0)
     stalled_agents = telemetry["agents"].get("stalled", 0)
@@ -432,6 +445,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
         },
         "hunter_proposals": {
             "sequence": hunter_proposal_state.get("sequence", 0),
+            "backlog": hunter_proposal_backlog,
             "updated_at": hunter_proposal_state.get("updated_at"),
             "cycle_id": hunter_proposal_state.get("cycle_id"),
             "cycle_receipt_hash": hunter_proposal_state.get("cycle_receipt_hash"),
