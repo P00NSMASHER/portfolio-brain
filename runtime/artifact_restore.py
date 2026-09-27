@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import tempfile
 import zipfile
@@ -23,7 +24,7 @@ def _validated_payload(
     max_archive_bytes: int,
     max_state_bytes: int,
     validator: Callable[[dict[str, Any]], None] | None,
-) -> tuple[bytes, int]:
+) -> tuple[bytes, int, str]:
     if len(raw) > max_archive_bytes:
         raise InvalidStateArtifact("artifact archive exceeds byte budget")
     try:
@@ -54,7 +55,9 @@ def _validated_payload(
             validator(state)
         except Exception as exc:
             raise InvalidStateArtifact("state payload failed subsystem validation") from exc
-    return body, state["sequence"]
+    canonical = json.dumps(state, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    state_hash = "sha256:" + hashlib.sha256(canonical).hexdigest()
+    return body, state["sequence"], state_hash
 
 
 def _atomic_write(output: Path, payload: bytes) -> None:
@@ -120,7 +123,7 @@ def restore_latest_valid_state(
         return "NO_PRIOR_ARTIFACT"
     candidates.sort(key=lambda item: (item.get("created_at", ""), item.get("id", 0)), reverse=True)
     rejected = 0
-    valid: list[tuple[int, dict[str, Any], bytes]] = []
+    valid: list[tuple[int, dict[str, Any], bytes, str]] = []
     for item in candidates[:max_candidates]:
         url = item.get("archive_download_url")
         if not isinstance(url, str) or not url:
@@ -137,7 +140,7 @@ def restore_latest_valid_state(
             rejected += 1
             continue
         try:
-            payload, sequence = _validated_payload(
+            payload, sequence, state_hash = _validated_payload(
                 raw,
                 member_name=member_name,
                 expected_state_id=expected_state_id,
@@ -148,7 +151,7 @@ def restore_latest_valid_state(
         except InvalidStateArtifact:
             rejected += 1
             continue
-        valid.append((sequence, item, payload))
+        valid.append((sequence, item, payload, state_hash))
     if not valid:
         raise InvalidStateArtifact("no valid prior state artifact found")
 
@@ -158,7 +161,14 @@ def restore_latest_valid_state(
     # creation time remains the deterministic tie-breaker because ``valid``
     # preserves the newest-first candidate order.
     highest_sequence = max(entry[0] for entry in valid)
-    sequence, item, payload = next(entry for entry in valid if entry[0] == highest_sequence)
+    highest = [entry for entry in valid if entry[0] == highest_sequence]
+    if len({entry[3] for entry in highest}) != 1:
+        # A sequence is a durable-state version, not merely an ordering hint.
+        # Divergent payloads claiming the same latest version are an ambiguous
+        # fork caused by a race or corruption. Upload time cannot safely decide
+        # which branch contains every committed mutation, so fail closed.
+        raise InvalidStateArtifact("conflicting state artifacts at highest sequence")
+    sequence, item, payload, state_hash = highest[0]
     selected_newest_valid = item is valid[0][1]
     status = "RESTORED" if selected_newest_valid else "RESTORED_HIGHEST_SEQUENCE"
     if rejected:
@@ -176,6 +186,7 @@ def restore_latest_valid_state(
             "source_run_id":workflow_run.get("id"),
             "source_head_sha":workflow_run.get("head_sha"),
             "source_sequence":sequence,
+            "source_state_hash":state_hash,
             "candidates_inspected":min(len(candidates), max_candidates),
         },sort_keys=True)+"\n").encode("utf-8"))
     return status
