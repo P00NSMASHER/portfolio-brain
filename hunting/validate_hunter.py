@@ -3,7 +3,7 @@
 from __future__ import annotations
 import json
 from pathlib import Path
-from hunting.autonomous_hunter import _queries, detect_gaps, load_policy, load_query_concepts, load_seed_state, load_strategies, run_cycle, search_concepts_for_gap, select_objectives, strategy_priority_maturity, validate_state
+from hunting.autonomous_hunter import CandidateInspectionError, HunterError, _queries, detect_gaps, load_policy, load_query_concepts, load_seed_state, load_strategies, run_cycle, search_concepts_for_gap, select_objectives, strategy_priority_maturity, validate_state
 from hunting.calibration import run_calibration
 from hunting.controlled_proof import load_cases as load_controlled_cases
 from hunting.proposal_state import load_seed_state as load_proposal_seed, validate_state as validate_proposal_state
@@ -48,7 +48,7 @@ def validate_hunter():
     req(policy["budgets"]["max_candidates_inspected_per_query"]==2,"Hunter per-query inspection fairness cap drifted")
     failure_policy=policy["inspection_failure_handling"]
     req(failure_policy["candidate_disposition"]=="UNAVAILABLE_NOT_REJECTED","Hunter inspection failures became candidate rejection")
-    req(failure_policy["reason_code"]=="EXACT_REVISION_INSPECTION_UNAVAILABLE","Hunter inspection failure reason drifted")
+    req(failure_policy["reason_code"]=="CANDIDATE_INSPECTION_UNAVAILABLE","Hunter inspection failure reason drifted")
     req(failure_policy["counts_against_inspection_budget"] is True,"Hunter inspection errors escaped budget accounting")
     req(failure_policy["records_negative_query_knowledge"] is False,"Hunter transient inspection errors may train dead-end knowledge")
     req(failure_policy["cycle_behavior"]=="CONTINUE_BOUNDED","Hunter inspection failures may abort the whole cycle")
@@ -127,6 +127,37 @@ def validate_hunter():
     req(funnel["queries_executed"]>0 and funnel["queries_zero_results"]>0,"Hunter zero-result funnel evidence missing")
     req(funnel["inspection_errors"]==0 and funnel["inspection_succeeded"]==0,"zero-result probe inspection accounting drifted")
     req(len(probe_receipt["query_outcomes"])>0,"Hunter per-query rejection trace missing")
+    class CandidateUnavailableThenUsable:
+        requests=0
+        def search(self,query):
+            self.requests+=1
+            return [
+              {"id":1,"full_name":"public/unavailable","default_branch":"main","private":False},
+              {"id":2,"full_name":"public/usable","default_branch":"main","private":False},
+            ]
+        def inspect(self,candidate):
+            self.requests+=1
+            if candidate["id"]==1:
+                raise CandidateInspectionError("synthetic candidate unavailable")
+            return {"revision":"a"*40,"tree_sha":"b"*40,"paths":["src/recovery.py","tests/test_recovery.py"],"truncated":False}
+    _,failure_receipt=run_cycle(load_seed_state(),CandidateUnavailableThenUsable(),at="2026-09-25T18:00:00Z")
+    req(failure_receipt["status"]=="PASS","single unavailable Hunter candidate aborted cycle")
+    req(failure_receipt["rejection_funnel"]["inspection_errors"]>0,"Hunter inspection failure telemetry missing")
+    req(failure_receipt["rejection_funnel"]["inspection_succeeded"]>0,"Hunter did not continue after unavailable candidate")
+    req(failure_receipt["rejection_funnel"]["inspection_attempted"]==failure_receipt["rejection_funnel"]["inspection_errors"]+failure_receipt["rejection_funnel"]["inspection_succeeded"],"Hunter inspection budget accounting drifted")
+    class ControlPlaneFailure:
+        requests=0
+        def search(self,query):
+            self.requests+=1
+            return [{"id":1,"full_name":"public/control-plane","default_branch":"main","private":False}]
+        def inspect(self,candidate):
+            raise HunterError("Hunter API request budget exceeded")
+    try:
+        run_cycle(load_seed_state(),ControlPlaneFailure(),at="2026-09-25T18:00:00Z")
+    except HunterError:
+        pass
+    else:
+        raise HunterValidationError("Hunter control-plane inspection failure did not fail closed")
     calibration=run_calibration()
     req(calibration["status"]=="PASS","Hunter calibration corpus failed")
     req(calibration["positive_cases"]>=10 and calibration["positive_retained"]==calibration["positive_cases"],"Hunter positive controls do not all retain")
