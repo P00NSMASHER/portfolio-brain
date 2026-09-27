@@ -39,6 +39,16 @@ def validate_scheduler():
         req(s in wf,f"scheduler workflow missing {s}")
     for s in ["hunting.proposal_artifact_state","hunting/live/hunter_proposal_state.json","portfolio-hunter-proposal-state"]:
         req(s in wf,f"scheduler Hunter proposal inbox integration missing {s}")
+    executor=(ROOT/"scheduler/work_executor.py").read_text()
+    for token in [
+        "HUNTER_PROPOSAL_PUBLIC_EVIDENCE_REVIEW",
+        '"rights_state":"UNKNOWN_REQUIRES_REVIEW"',
+        '"reuse_authorized":False',
+        '"implementation_authorized":False',
+        '"code_execution_performed":False',
+        "inspect_revision",
+    ]:
+        req(token in executor,f"Hunter proposal evidence-review boundary missing {token}")
     for forbidden in ["contents: write","pull-requests: write","deployments: write","id-token: write","git push","gh pr","openai","anthropic"]:
         req(forbidden not in wf,f"forbidden scheduler workflow capability: {forbidden}")
     req("git push origin head:main" not in (ROOT/"scheduler/SCHEDULER_CONTRACT.md").read_text().lower(),"upstream direct-main behavior adopted")
