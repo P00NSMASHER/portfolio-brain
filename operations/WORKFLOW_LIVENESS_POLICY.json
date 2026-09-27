@@ -45,6 +45,7 @@
   "invariants": [
     "Recovery never bypasses a downstream workflow's own cost preflight, authority gates, kill switches, or concurrency controls.",
     "A queued or in-progress target is never duplicated.",
+    "Only a trusted event for the exact governed workflow file on the default branch can prove target liveness.",
     "A recent completed run suppresses recovery even when scheduled delivery is delayed.",
     "A failed/cancelled target may be retried only after the configured failure retry age.",
     "At most two workflow_dispatch calls may be emitted per watchdog cycle.",
