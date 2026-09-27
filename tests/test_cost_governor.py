@@ -73,6 +73,7 @@ class CostGovernorTests(unittest.TestCase):
         self.assertIn("actions: write",workflow)
         self.assertIn("workflow_run:",workflow)
         self.assertIn('workflows: ["agent-heartbeat-sweep"]',workflow)
+        self.assertIn('operations/TRIGGER_WORKFLOW_LIVENESS',workflow)
 
     def test_runtime_subbudget_cannot_starve_hourly_and_daily_reasoning(self):
         p=policy()
@@ -95,6 +96,8 @@ class CostGovernorTests(unittest.TestCase):
             '".github/workflows/model-value-proof.yml"',
             '".github/workflows/verified-feedback-bootstrap.yml"',
             '".github/workflows/continuous-learning-bootstrap.yml"',
+            '"operations/TRIGGER_WORKFLOW_LIVENESS"',
+            '".github/workflows/portfolio-cost-watchdog.yml"',
         ]:
             self.assertIn(path,workflow)
 
