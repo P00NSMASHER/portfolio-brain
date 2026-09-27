@@ -64,6 +64,7 @@ def load_state_sources() -> dict[str, Any]:
         "model_feedback":"model_router/MODEL_FEEDBACK_STATE_SEED.json",
         "learning":"learning/LIVE_OBSERVATION_STATE_SEED.json",
         "hunter_proposals":"hunting/HUNTER_PROPOSAL_STATE_SEED.json",
+        "hunter_proposal_reviews":"hunting/HUNTER_PROPOSAL_REVIEW_STATE_SEED.json",
     }
     for name, ref in seeds.items():
         data["sources"].setdefault(name, {
@@ -113,6 +114,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
     state_sources = load_state_sources()
     hunter_state = load_live_json("hunter_state.json","hunting/HUNTER_STATE_SEED.json")
     hunter_proposal_state = load_live_json("hunter_proposal_state.json","hunting/HUNTER_PROPOSAL_STATE_SEED.json")
+    hunter_proposal_review_state = load_live_json("hunter_proposal_review_state.json","hunting/HUNTER_PROPOSAL_REVIEW_STATE_SEED.json")
     scheduler_state = load_live_json("scheduler_state.json","scheduler/SCHEDULER_STATE_SEED.json")
     cost_policy = load_json("cost_governor/COST_GOVERNOR_POLICY.json")
     cost_state = load_live_json("cost_state.json","cost_governor/COST_STATE_SEED.json")
@@ -209,6 +211,13 @@ def build_command_center_snapshot() -> dict[str, Any]:
     proposal_findings = {
         row["proposal_id"]: row for row in hunter_proposal_state.get("findings", [])
     }
+    proposal_reviews = {}
+    for review in hunter_proposal_review_state.get("reviews", []):
+        proposal_id = review.get("proposal_id")
+        if isinstance(proposal_id, str):
+            current = proposal_reviews.get(proposal_id)
+            if current is None or (review.get("reviewed_at") or "") >= (current.get("reviewed_at") or ""):
+                proposal_reviews[proposal_id] = review
     scheduler_by_source = {}
     for work in scheduler_state.get("work_items", []):
         source_ref = work.get("source_ref")
@@ -220,8 +229,11 @@ def build_command_center_snapshot() -> dict[str, Any]:
         review_work = scheduler_by_source.get(proposal["proposal_id"], [])
         review_work.sort(key=lambda row: (row.get("created_at") or "", row.get("scheduler_work_id") or ""), reverse=True)
         current = review_work[0] if review_work else None
+        durable_review = proposal_reviews.get(proposal["proposal_id"])
         review_status = "AWAITING_SCHEDULER"
-        if current is not None:
+        if durable_review is not None:
+            review_status = "EVIDENCE_REVIEWED"
+        elif current is not None:
             review_status = {
                 "QUEUED":"REVIEW_QUEUED",
                 "ACTIVE":"REVIEW_ACTIVE",
@@ -243,6 +255,11 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "review_status": review_status,
             "scheduler_work_id": None if current is None else current.get("scheduler_work_id"),
             "scheduler_work_state": None if current is None else current.get("state"),
+            "license_spdx_id": None if durable_review is None else durable_review.get("license_spdx_id"),
+            "license_name": None if durable_review is None else durable_review.get("license_name"),
+            "license_state": None if durable_review is None else durable_review.get("license_state"),
+            "reviewed_at": None if durable_review is None else durable_review.get("reviewed_at"),
+            "review_hash": None if durable_review is None else durable_review.get("review_hash"),
         })
     healthy_agents = telemetry["agents"].get("live", 0) + telemetry["agents"].get("idle_healthy", 0)
     stalled_agents = telemetry["agents"].get("stalled", 0)
@@ -425,6 +442,9 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "queued_review_count": sum(1 for row in hunter_proposals if row["review_status"]=="REVIEW_QUEUED"),
             "active_review_count": sum(1 for row in hunter_proposals if row["review_status"]=="REVIEW_ACTIVE"),
             "completed_review_count": sum(1 for row in hunter_proposals if row["review_status"]=="REVIEW_COMPLETE"),
+            "evidence_reviewed_count": sum(1 for row in hunter_proposals if row["review_status"]=="EVIDENCE_REVIEWED"),
+            "review_state_sequence": hunter_proposal_review_state.get("sequence",0),
+            "review_state_updated_at": hunter_proposal_review_state.get("updated_at"),
             "proposals": hunter_proposals,
         },
         "learning_loop": {
@@ -505,6 +525,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
                     "hunting/HUNTER_STATE_SEED.json",
                     "hunting/HUNTER_PROPOSAL_STATE_SEED.json",
                     "hunting/proposal_state.py",
+                    "hunting/HUNTER_PROPOSAL_REVIEW_STATE_SEED.json",
+                    "hunting/proposal_review_state.py",
                     "cost_governor/COST_GOVERNOR_POLICY.json",
                     "cost_governor/COST_STATE_SEED.json",
                     "notifications/NOTIFICATION_POLICY.json",
