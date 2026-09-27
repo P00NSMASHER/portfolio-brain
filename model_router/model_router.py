@@ -101,6 +101,7 @@ def _candidates(r,registry,tier,feedback_state=None):
     task_summary=_feedback_task_summary(r["task_kind"],feedback_state)
     feedback_cfg=policy().get("verified_feedback_routing") or {}
     minimum=int(feedback_cfg.get("minimum_verified_outcomes",1))
+    req(minimum>=1,"verified feedback maturity minimum invalid")
     for provider in registry["providers"]:
         if not provider.get("enabled"):continue
         if allowed and provider["provider_id"] not in allowed:continue
@@ -112,12 +113,16 @@ def _candidates(r,registry,tier,feedback_state=None):
             try:cost=_cost(model,r)
             except ModelRouterError:continue
             if cost>float(r["max_cost_usd"])+1e-12:continue
-            count,mean=_feedback_metrics(task_summary,tier,provider["provider_id"],model["model_id"])
-            if count<minimum:
-                count,mean=0,0.0
-            out.append((cost,provider["provider_id"],model["model_id"],model["independence_group"],provider["adapter_kind"],count,mean))
+            raw_count,raw_mean=_feedback_metrics(task_summary,tier,provider["provider_id"],model["model_id"])
+            mature=raw_count>=minimum
+            preference_mean=raw_mean if mature else 0.0
+            preference_count=raw_count if mature else 0
+            out.append((
+              cost,provider["provider_id"],model["model_id"],model["independence_group"],provider["adapter_kind"],
+              raw_count,raw_mean,mature,preference_mean,preference_count
+            ))
     if feedback_cfg.get("enabled") is True:
-        return sorted(out,key=lambda x:(-x[6],-x[5],x[0],x[1],x[2]))
+        return sorted(out,key=lambda x:(-x[8],-x[9],x[0],x[1],x[2]))
     return sorted(out,key=lambda x:(x[0],x[1],x[2]))
 
 def route_request(r,registry=None,feedback_state=None):
@@ -138,9 +143,12 @@ def route_request(r,registry=None,feedback_state=None):
             selected=candidates[0];status="ROUTED";reasons=[f"TIER_{tier}_REQUIRED"]
             cheapest=min(candidates,key=lambda x:(x[0],x[1],x[2]))
             if selected[1:3]!=cheapest[1:3]:
-                reasons.append("VERIFIED_FEEDBACK_PREFERENCE_APPLIED")
+                req(selected[7] is True,"immature verified feedback may not override lowest configured cost")
+                reasons.append("MATURE_VERIFIED_FEEDBACK_PREFERENCE_APPLIED")
+            elif selected[7]:
+                reasons.append("MATURE_VERIFIED_FEEDBACK_SELECTED")
             elif selected[5]>0:
-                reasons.append("VERIFIED_FEEDBACK_AVAILABLE_SELECTED")
+                reasons.append("VERIFIED_FEEDBACK_WARMUP_SELECTED")
             else:
                 reasons.append("LOWEST_CONFIGURED_COST_WITHIN_TIER")
             if tier==3:reasons.append("INDEPENDENCE_GROUP_DIFFERS_FROM_BUILDER")
@@ -151,6 +159,8 @@ def route_request(r,registry=None,feedback_state=None):
       "max_estimated_cost_usd":selected[0] if selected else None,
       "verified_feedback_outcomes":selected[5] if selected and len(selected)>5 else 0,
       "verified_feedback_mean_value":selected[6] if selected and len(selected)>6 else 0.0,
+      "verified_feedback_mature":selected[7] if selected and len(selected)>7 else False,
+      "verified_feedback_minimum_required":int((policy().get("verified_feedback_routing") or {}).get("minimum_verified_outcomes",1)) if tier>0 else 0,
       "reason_codes":reasons,"can_grant_authority":False,"can_upgrade_evidence":False,
       "requires_independent_adversarial":r["requires_independent_adversarial"] or tier==3
     }
