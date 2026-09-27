@@ -26,7 +26,11 @@ from hunting.autonomous_hunter import (
     run_cycle as run_hunter_cycle,
     validate_state as validate_hunter_state,
 )
-from hunting.proposal_state import build_proposal_state
+from hunting.proposal_state import (
+    build_proposal_state,
+    load_seed_state as hunter_proposal_seed_state,
+    validate_state as validate_hunter_proposal_state,
+)
 from scheduler.autonomous_scheduler import (
     claim_work,
     complete_work,
@@ -89,7 +93,87 @@ def _runtime_cursor(runtime_state: dict[str, Any], adapter: dict[str, Any]) -> d
     return {"source_ref": repo["source_ref"], "cursor_sha": repo["cursor_sha"], "status": repo["status"]}
 
 
+def _hunter_proposal_review_handler(work: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+    state=ctx["hunter_proposal_state"]
+    validate_hunter_proposal_state(state)
+    proposals=[row for row in state["proposals"] if row["proposal_id"]==work["source_ref"]]
+    if len(proposals)!=1:
+        return {
+            "status":"DEFERRED",
+            "result_kind":"HUNTER_PROPOSAL_SOURCE_NOT_CURRENT",
+            "evidence_refs":[f"hunter-proposal:{work['source_ref']}"],
+            "result":{"proposal_id":work["source_ref"]},
+        }
+    proposal=proposals[0]
+    findings=[row for row in state["findings"] if row["proposal_id"]==proposal["proposal_id"]]
+    if len(findings)!=1:
+        raise WorkExecutionError("Hunter proposal finding missing/duplicate")
+    finding=findings[0]
+    provider=ctx.get("hunter_provider") or GitHubPublicProvider(os.environ.get("PORTFOLIO_GITHUB_TOKEN"))
+    metadata=provider.repository_metadata(finding["repository_full_name"])
+    if metadata.get("private") is not False or int(metadata.get("id",0))!=finding["repository_id"]:
+        return {
+            "status":"DEFERRED",
+            "result_kind":"HUNTER_PROPOSAL_REPOSITORY_IDENTITY_DRIFT",
+            "evidence_refs":[f"hunter-proposal:{proposal['proposal_id']}",f"repository:{finding['repository_full_name']}"],
+            "result":{"proposal_id":proposal["proposal_id"],"repository_full_name":finding["repository_full_name"]},
+        }
+    exact=provider.inspect_revision(
+        {
+          "id":finding["repository_id"],
+          "full_name":finding["repository_full_name"],
+          "default_branch":metadata.get("default_branch") or "main",
+          "private":False,
+        },
+        finding["revision"],
+    )
+    if exact["tree_sha"]!=finding["inspection"]["tree_sha"]:
+        return {
+            "status":"DEFERRED",
+            "result_kind":"HUNTER_PROPOSAL_EXACT_REVISION_TREE_DRIFT",
+            "evidence_refs":[f"hunter-proposal:{proposal['proposal_id']}",f"github:{finding['repository_full_name']}@{finding['revision']}"],
+            "result":{"proposal_id":proposal["proposal_id"],"expected_tree_sha":finding["inspection"]["tree_sha"],"observed_tree_sha":exact["tree_sha"]},
+        }
+    license_meta=metadata.get("license") if isinstance(metadata.get("license"),dict) else {}
+    spdx=license_meta.get("spdx_id") if isinstance(license_meta.get("spdx_id"),str) else None
+    license_name=license_meta.get("name") if isinstance(license_meta.get("name"),str) else None
+    usable_spdx=spdx if spdx not in {None,"","NOASSERTION","OTHER"} else None
+    license_state="LICENSE_METADATA_PRESENT_REQUIRES_REVIEW" if usable_spdx else "NO_LICENSE_METADATA_REQUIRES_REVIEW"
+    return {
+        "status":"SUCCESS",
+        "result_kind":"HUNTER_PROPOSAL_PUBLIC_EVIDENCE_REVIEW",
+        "evidence_refs":[
+          f"hunter-proposal:{proposal['proposal_id']}",
+          f"hunter-finding:{finding['finding_id']}",
+          f"hunter-cycle:{state['cycle_id']}",
+          f"github:{finding['repository_full_name']}@{finding['revision']}",
+          f"git-tree:{exact['tree_sha']}",
+          f"license-metadata:{usable_spdx or 'NONE'}",
+        ],
+        "result":{
+          "proposal_id":proposal["proposal_id"],
+          "finding_id":finding["finding_id"],
+          "repository_full_name":finding["repository_full_name"],
+          "repository_id":finding["repository_id"],
+          "revision":finding["revision"],
+          "tree_sha":exact["tree_sha"],
+          "rank_score":proposal["candidate_rank_score"],
+          "rank_band":proposal["candidate_rank_band"],
+          "license_spdx_id":usable_spdx,
+          "license_name":license_name,
+          "license_state":license_state,
+          "rights_state":"UNKNOWN_REQUIRES_REVIEW",
+          "reuse_authorized":False,
+          "implementation_authorized":False,
+          "code_execution_performed":False,
+          "downstream_mutation_performed":False,
+        },
+    }
+
+
 def _research_handler(work: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+    if work["source_ref"].startswith("HEXP-"):
+        return _hunter_proposal_review_handler(work,ctx)
     adapter = _project_adapter(work["project_ids"])
     if adapter is None:
         return {
@@ -324,10 +408,14 @@ def execute_cycle(
         raise WorkExecutionError("max_items exceeds bounded scheduler execution limit")
     at = _timestamp(at)
     active_handlers = dict(DEFAULT_HANDLERS if handlers is None else handlers)
+    proposal_path=ROOT/"hunting"/"live"/"hunter_proposal_state.json"
+    proposal_state=load_json(proposal_path) if proposal_path.exists() else hunter_proposal_seed_state()
+    validate_hunter_proposal_state(proposal_state)
     ctx: dict[str, Any] = {
         "at": at,
         "runtime_state": runtime_state,
         "hunter_state": hunter_state if hunter_state is not None else hunter_seed_state(),
+        "hunter_proposal_state": proposal_state,
     }
     if context_overrides:
         ctx.update(context_overrides)
