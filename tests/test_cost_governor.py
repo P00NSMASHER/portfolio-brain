@@ -189,19 +189,20 @@ class CostGovernorTests(unittest.TestCase):
         self.assertEqual(cfg["max_minutes_per_job"],2)
         self.assertEqual(cfg["concurrency_group"],"portfolio-learning-continuous")
 
-    def test_command_center_hourly_refresh_is_cost_governed(self):
+
+    def test_command_center_hourly_refresh_is_independent_of_paid_budget(self):
         workflow = (ROOT / ".github/workflows/command-center-pages.yml").read_text()
         self.assertIn('cron: "37 * * * *"',workflow)
         self.assertIn("workflow_dispatch:",workflow)
         self.assertNotIn("\n  push:",workflow)
-        self.assertIn("portfolio-cost-governed-autonomy",workflow)
-        self.assertIn("cost_governor.workflow_gate preflight",workflow)
-        self.assertIn("cost_governor.workflow_gate finalize",workflow)
+        self.assertIn("portfolio-reporting-command-center",workflow)
+        self.assertNotIn("cost_governor.workflow_gate",workflow)
+        self.assertIn("cost_governor.artifact_state",workflow)
+        self.assertNotIn("portfolio-cost-governor-state",workflow)
         self.assertIn("actions: read",workflow)
         self.assertNotIn("contents: write",workflow)
         p=policy()
-        self.assertIn("command-center-pages",p["managed_workflow_names"])
-        self.assertIn("command-center-pages::publish",p["workflow_job_ceilings"])
+        self.assertIn("command-center-pages::publish",p["workflow_job_controls"])
 
     def test_checked_in_paid_budget_is_finite_and_nonzero(self):
         p = policy()
@@ -349,41 +350,44 @@ class CostGovernorTests(unittest.TestCase):
         self.assertEqual(decision["status"], "BLOCKED_BUDGET")
         self.assertTrue(any(x.startswith("JOB_MINUTE_CEILING_EXCEEDED:") for x in decision["reason_codes"]))
 
-    def test_portfolio_scope_is_independent(self):
-        p = copy.deepcopy(policy())
-        p["portfolio_ceiling"]["github_job_starts"] = 0
-        p["portfolio_ceiling"]["github_runner_minutes"] = 0
-        _, decision = preflight(load_state(), github_request(), at=AT, policy_data=p)
-        self.assertEqual(decision["status"], "BLOCKED_BUDGET")
-        self.assertTrue(any("portfolio:github_job_starts" in x for x in decision["reason_codes"]))
 
-    def test_project_scope_is_independent(self):
+    def test_github_job_does_not_consume_paid_portfolio_budget(self):
         p = copy.deepcopy(policy())
-        p["project_overrides"]["PRJ-000"]["github_job_starts"] = 0
-        p["project_overrides"]["PRJ-000"]["github_runner_minutes"] = 0
+        self.assertEqual(p["portfolio_ceiling"]["github_job_starts"],0)
+        self.assertEqual(p["portfolio_ceiling"]["github_runner_minutes"],0)
         _, decision = preflight(load_state(), github_request(), at=AT, policy_data=p)
-        self.assertEqual(decision["status"], "BLOCKED_BUDGET")
-        self.assertTrue(any("project:PRJ-000:github_job_starts" in x for x in decision["reason_codes"]))
+        self.assertEqual(decision["status"], "RESERVED")
 
-    def test_workflow_job_scope_is_independent(self):
+
+    def test_github_job_does_not_consume_paid_project_budget(self):
         p = copy.deepcopy(policy())
-        cfg = p["workflow_job_ceilings"]["portfolio-autonomous-scheduler::schedule"]["daily_ceiling"]
-        cfg["github_job_starts"] = 0
-        cfg["github_runner_minutes"] = 0
+        self.assertEqual(p["project_overrides"]["PRJ-000"]["github_job_starts"],0)
+        self.assertEqual(p["project_overrides"]["PRJ-000"]["github_runner_minutes"],0)
         _, decision = preflight(load_state(), github_request(), at=AT, policy_data=p)
-        self.assertEqual(decision["status"], "BLOCKED_BUDGET")
-        self.assertTrue(any("workflow_job:portfolio-autonomous-scheduler::schedule:github_job_starts" in x for x in decision["reason_codes"]))
+        self.assertEqual(decision["status"], "RESERVED")
 
-    def test_expired_unknown_execution_remains_charged_for_day(self):
+
+    def test_workload_max_minutes_is_enforced_without_daily_job_quota(self):
         p = copy.deepcopy(policy())
-        for ceiling in (
-            p["portfolio_ceiling"],
-            p["project_overrides"]["PRJ-000"],
-            p["workflow_job_ceilings"]["portfolio-autonomous-scheduler::schedule"]["daily_ceiling"],
-        ):
-            ceiling["github_job_starts"] = 1
-            ceiling["github_runner_minutes"] = 5
+        p["workflow_job_controls"]["portfolio-autonomous-scheduler::schedule"]["max_minutes_per_job"]=4
+        _, decision = preflight(load_state(), github_request(minutes=5), at=AT, policy_data=p)
+        self.assertEqual(decision["status"], "BLOCKED_BUDGET")
+        self.assertIn(
+            "JOB_MINUTE_CEILING_EXCEEDED:portfolio-autonomous-scheduler::schedule",
+            decision["reason_codes"],
+        )
+
+
+    def test_expired_github_reservation_does_not_exhaust_daily_workload(self):
         first_at = "2026-09-25T00:00:00Z"
+        state, first = preflight(load_state(), github_request(run_id="1", at=first_at), at=first_at)
+        self.assertEqual(first["status"], "RESERVED")
+        later = "2026-09-25T07:00:00Z"
+        state, second = preflight(state, github_request(run_id="2", at=later), at=later)
+        self.assertEqual(state["reservations"][0]["status"], "EXPIRED")
+        self.assertEqual(second["status"], "RESERVED")
+
+Z"
         state, first = preflight(load_state(), github_request(run_id="1", at=first_at), at=first_at, policy_data=p)
         self.assertEqual(first["status"], "RESERVED")
         later = "2026-09-25T07:00:00Z"
@@ -391,27 +395,44 @@ class CostGovernorTests(unittest.TestCase):
         self.assertEqual(second["status"], "BLOCKED_BUDGET")
         self.assertEqual(state["reservations"][0]["status"], "EXPIRED")
 
-    def test_cancelled_reservation_releases_compute_capacity(self):
-        p = copy.deepcopy(policy())
-        for ceiling in (
-            p["portfolio_ceiling"],
-            p["project_overrides"]["PRJ-000"],
-            p["workflow_job_ceilings"]["portfolio-autonomous-scheduler::schedule"]["daily_ceiling"],
-        ):
-            ceiling["github_job_starts"] = 1
-            ceiling["github_runner_minutes"] = 5
-        state, first = preflight(load_state(), github_request(run_id="1"), at=AT, policy_data=p)
-        state = cancel_reservation(state, first["reservation_id"], at=AT, policy_data=p)
-        state, second = preflight(state, github_request(run_id="2"), at=AT, policy_data=p)
+
+    def test_cancelled_workload_reservation_does_not_block_later_work(self):
+        state, first = preflight(load_state(), github_request(run_id="1"), at=AT)
+        state = cancel_reservation(state, first["reservation_id"], at=AT)
+        state, second = preflight(state, github_request(run_id="2"), at=AT)
         self.assertEqual(second["status"], "RESERVED")
 
-    def test_actual_usage_overage_trips_hard_stop(self):
+
+    def test_github_workload_overrun_does_not_trip_paid_hard_stop(self):
         state, decision = preflight(load_state(), github_request(minutes=1), at=AT)
         actual = zero_usage()
         actual.update({"github_job_starts": 1, "github_runner_minutes": 2})
         state, commit = commit_reservation(state, decision["reservation_id"], actual, at=AT)
-        self.assertEqual(commit["status"], "HARD_STOP_OVERAGE")
-        self.assertEqual(hard_stop_reason(state, at=AT), "CURRENT_DAY_RESERVATION_OVERAGE")
+        self.assertEqual(commit["status"], "WORKLOAD_OVERRUN")
+        self.assertIsNone(hard_stop_reason(state, at=AT))
+
+    def test_paid_usage_overage_blocks_next_paid_preflight(self):
+        route1 = {
+            "status":"ROUTED","tier":2,"route_id":"MRT-PAID-OVERAGE-1",
+            "provider_id":"approved-api-slot","model_id":"UNCONFIGURED_STRONG",
+            "max_estimated_cost_usd":0.01,"route_hash":"sha256:paid-overage-1",
+        }
+        request1 = {
+            "request_id":"MRQ-PAID-OVERAGE-1","project_ids":["PRJ-000"],
+            "max_input_tokens":100,"max_output_tokens":100,
+            "authority_class":"OBSERVE","data_classification":"SANITIZED",
+        }
+        state, decision = reserve_model_execution(load_state(), route1, request1, at=AT)
+        actual = zero_usage()
+        actual.update({"cost_usd":0.02,"input_tokens":100,"output_tokens":100,"model_calls":1,"api_calls":1})
+        state, commit = commit_reservation(state, decision["reservation_id"], actual, at=AT)
+        self.assertEqual(commit["status"],"HARD_STOP_OVERAGE")
+        self.assertEqual(hard_stop_reason(state, at=AT),"CURRENT_DAY_PAID_RESERVATION_OVERAGE")
+        route2 = dict(route1, route_id="MRT-PAID-OVERAGE-2", route_hash="sha256:paid-overage-2")
+        request2 = dict(request1, request_id="MRQ-PAID-OVERAGE-2")
+        _, blocked = reserve_model_execution(state, route2, request2, at=AT)
+        self.assertEqual(blocked["status"],"BLOCKED_HARD_STOP")
+        self.assertFalse(blocked["can_execute"])
 
     def test_cost_request_rejects_payload_fields(self):
         request = github_request()
