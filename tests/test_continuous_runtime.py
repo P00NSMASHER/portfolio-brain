@@ -67,6 +67,29 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(len(calls),2)
         self.assertEqual(budget.used,2)
 
+    def test_runtime_deadline_stops_requests_before_budget_exhaustion(self):
+        now=[10.0]; calls=[]
+        def slow(url):
+            calls.append(url); now[0]+=6
+            return {"sha":"d"*40}
+        budget=RequestBudget(slow,limit=10,retries=2,backoff=0,deadline=15,clock=lambda:now[0])
+        with self.assertRaisesRegex(RuntimePolicyError,"time budget"):
+            budget("https://api.github.com/repos/example/repo")
+        self.assertEqual(len(calls),1)
+        self.assertEqual(budget.used,1)
+
+    def test_runtime_deadline_prevents_retry_backoff_overrun(self):
+        now=[10.0]; calls=[]; sleeps=[]
+        def temporary(url):
+            calls.append(url); now[0]+=1
+            raise URLError("temporary network failure")
+        budget=RequestBudget(temporary,limit=10,retries=2,backoff=2,deadline=12,
+                             clock=lambda:now[0],sleep=sleeps.append)
+        with self.assertRaisesRegex(RuntimePolicyError,"time budget"):
+            budget("https://api.github.com/repos/example/repo")
+        self.assertEqual(len(calls),1)
+        self.assertEqual(sleeps,[])
+
     def test_static_runtime_contract(self):
         result=validate_runtime()
         self.assertEqual(result["workflows"],5)

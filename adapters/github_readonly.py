@@ -52,7 +52,7 @@ def _nonnegative_int(value: Any, message: str) -> int:
 class GitHubReadOnlyClient:
     token: str | None = None
 
-    def get_json(self, url: str) -> dict[str, Any]:
+    def get_json(self, url: str, *, timeout: float=20) -> dict[str, Any]:
         _require(url.startswith("https://api.github.com/"), "only GitHub API GET endpoints are allowed")
         headers={
             "Accept":"application/vnd.github+json",
@@ -62,7 +62,8 @@ class GitHubReadOnlyClient:
         if self.token:
             headers["Authorization"]=f"Bearer {self.token}"
         request=urllib.request.Request(url,headers=headers,method="GET")
-        with urllib.request.urlopen(request,timeout=20) as response:
+        _require(timeout>0, "GitHub GET timeout must be positive")
+        with urllib.request.urlopen(request,timeout=min(timeout,20)) as response:
             _require(response.status==200, f"GitHub GET failed: HTTP {response.status}")
             return json.loads(response.read().decode("utf-8"))
 

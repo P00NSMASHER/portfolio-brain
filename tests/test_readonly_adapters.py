@@ -1,7 +1,8 @@
 import copy
 import unittest
+from unittest.mock import MagicMock, patch
 
-from adapters.github_readonly import AdapterError, next_cursor, observe_repository
+from adapters.github_readonly import AdapterError, GitHubReadOnlyClient, next_cursor, observe_repository
 
 BASE_ADAPTER={
  "schema_version":"1.0.0","adapter_id":"ADP-001","adapter_name":"example",
@@ -36,6 +37,14 @@ class FakeGitHub:
         raise AssertionError(url)
 
 class ReadOnlyAdapterTests(unittest.TestCase):
+    def test_client_honors_shorter_runtime_timeout(self):
+        response=MagicMock(); response.status=200; response.read.return_value=b'{"sha":"ok"}'
+        response.__enter__.return_value=response
+        with patch("adapters.github_readonly.urllib.request.urlopen",return_value=response) as open_url:
+            self.assertEqual(GitHubReadOnlyClient().get_json(
+                "https://api.github.com/repos/example/repo",timeout=3.5),{"sha":"ok"})
+        self.assertEqual(open_url.call_args.kwargs["timeout"],3.5)
+
     def test_unchanged_source_skips_compare(self):
         sha="a"*40
         fake=FakeGitHub(sha)

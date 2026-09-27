@@ -41,18 +41,31 @@ def killed()->tuple[bool,str|None]:
     return False,None
 
 class RequestBudget:
-    def __init__(self, fetch, *, limit: int, retries: int, backoff: float):
+    def __init__(self, fetch, *, limit: int, retries: int, backoff: float,
+                 deadline: float|None=None, clock=time.monotonic, sleep=time.sleep):
         self.fetch=fetch; self.limit=limit; self.retries=retries; self.backoff=backoff; self.used=0
+        self.deadline=deadline; self.clock=clock; self.sleep=sleep
+    def _require_time(self)->None:
+        if self.deadline is not None and self.clock()>=self.deadline:
+            raise RuntimePolicyError("runtime time budget exceeded")
     def __call__(self,url: str)->dict[str,Any]:
         last=None
         for attempt in range(self.retries+1):
+            self._require_time()
             if self.used>=self.limit: raise RuntimePolicyError("GitHub API request budget exceeded")
             self.used+=1
-            try: return self.fetch(url)
+            try:
+                result=self.fetch(url)
+                self._require_time()
+                return result
             except Exception as exc:
+                if isinstance(exc,RuntimePolicyError): raise
                 last=exc
                 if attempt<self.retries and _retryable_fetch_error(exc):
-                    time.sleep(self.backoff*(attempt+1))
+                    delay=self.backoff*(attempt+1)
+                    if self.deadline is not None and self.clock()+delay>=self.deadline:
+                        raise RuntimePolicyError("runtime time budget exceeded") from exc
+                    self.sleep(delay)
                     continue
                 break
         raise RuntimePolicyError(f"GitHub read failed after bounded retries: {last}")
@@ -75,7 +88,7 @@ def _sanitize_observation(obs: dict[str,Any], max_files: int)->dict[str,Any]:
     return result
 
 def observe(mode: str, state: dict[str,Any], *, target_repository_id: str|None, finished_at: str,
-            fetch_json=None)->tuple[list[dict[str,Any]],int]:
+            fetch_json=None, deadline: float|None=None)->tuple[list[dict[str,Any]],int]:
     policy=load_policy(); budgets=policy["budgets"]
     registry=load_json(ROOT/"adapters"/"ADAPTER_REGISTRY.json")["adapters"]
     by_id={a["repository_id"]:a for a in registry}
@@ -87,9 +100,13 @@ def observe(mode: str, state: dict[str,Any], *, target_repository_id: str|None, 
 
     if fetch_json is None:
         client=GitHubReadOnlyClient(os.environ.get("PORTFOLIO_GITHUB_TOKEN"))
-        fetch_json=client.get_json
+        def fetch_json(url: str)->dict[str,Any]:
+            remaining=20 if deadline is None else deadline-time.monotonic()
+            if remaining<=0: raise RuntimePolicyError("runtime time budget exceeded")
+            return client.get_json(url,timeout=min(20,remaining))
     budgeted=RequestBudget(fetch_json,limit=budgets["max_api_requests_per_cycle"],
-                           retries=budgets["retry_limit"],backoff=budgets["retry_backoff_seconds"])
+                           retries=budgets["retry_limit"],backoff=budgets["retry_backoff_seconds"],
+                           deadline=deadline)
     observations=[]; total_files=0
     for rid in ids:
         adapter=by_id[rid]
@@ -150,8 +167,10 @@ def run(mode: str, *, state_path: Path, output_dir: Path, target_repository_id: 
         (output_dir/"cycle_receipt.json").write_text(json.dumps(receipt,indent=2)+"\n")
         return receipt
     started=time.monotonic()
+    deadline=started+policy["budgets"]["max_runtime_seconds"]
     target=target_repository_id if mode=="observe" else None
-    observations,api_requests=observe(mode,state,target_repository_id=target,finished_at=at,fetch_json=fetch_json)
+    observations,api_requests=observe(mode,state,target_repository_id=target,finished_at=at,
+                                      fetch_json=fetch_json,deadline=deadline)
     if time.monotonic()-started>policy["budgets"]["max_runtime_seconds"]:
         raise RuntimePolicyError("runtime time budget exceeded")
     seed={"mode":mode,"target_repository_id":target,"prior_sequence":state["sequence"],
