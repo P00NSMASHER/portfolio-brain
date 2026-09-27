@@ -19,7 +19,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: portfolio-cost-governed-autonomy
+  group: ${{ (inputs.mode == 'daily' || inputs.mode == 'weekly') && 'portfolio-paid-cost-ledger' || format('portfolio-runtime-{0}', inputs.mode) }}
   cancel-in-progress: false
 
 jobs:
@@ -41,29 +41,19 @@ jobs:
         with:
           python-version: "3.12"
       - name: Restore latest cost-governor state
-        run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
-      - name: Reserve bounded runtime compute
-        id: cost
-        run: >-
-          python -m cost_governor.workflow_gate preflight
-          --state cost_governor/live/cost_state.json
-          --output-dir cost_governor/out
-          --workflow-id runtime-worker
-          --job-id "runtime-${RUNTIME_MODE}"
-          --project-id PRJ-000
-          --estimated-minutes 5
-          --authority OBSERVE
+        run: |
+          mkdir -p cost_governor/out
+          python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
+          cp cost_governor/live/cost_state.json cost_governor/out/cost_state.json
       - name: Restore latest runtime state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: >-
           python -m runtime.artifact_state
           --output runtime/live/runtime_state.json
           --provider-health-output runtime/out/provider_health.json
       - name: Restore latest agent heartbeat state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -m agents.artifact_state --output agents/live/agent_heartbeat_state.json
       - name: Restore verified model feedback state
-        if: ${{ steps.cost.outputs.allowed == 'true' && (inputs.mode == 'daily' || inputs.mode == 'weekly') }}
+        if: ${{ (inputs.mode == 'daily' || inputs.mode == 'weekly') }}
         run: |
           mkdir -p model_router/live
           python -m model_router.feedback_artifact_state --output model_router/live/model_feedback_state.json
@@ -71,7 +61,7 @@ jobs:
             cp model_router/MODEL_FEEDBACK_STATE_SEED.json model_router/live/model_feedback_state.json
           fi
       - name: Restore durable learning observations
-        if: ${{ steps.cost.outputs.allowed == 'true' && (inputs.mode == 'daily' || inputs.mode == 'weekly') }}
+        if: ${{ (inputs.mode == 'daily' || inputs.mode == 'weekly') }}
         run: |
           mkdir -p learning/live
           python -m learning.artifact_state --output learning/live/learning_observation_state.json
@@ -79,7 +69,6 @@ jobs:
             cp learning/LIVE_OBSERVATION_STATE_SEED.json learning/live/learning_observation_state.json
           fi
       - name: Execute deterministic runtime cycle
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: >-
           python -m runtime.continuous_runtime
           --mode "$RUNTIME_MODE"
@@ -87,7 +76,6 @@ jobs:
           --output-dir runtime/out
           ${TARGET_REPOSITORY_ID:+--target-repository-id "$TARGET_REPOSITORY_ID"}
       - name: Heartbeat Data Steward
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: >-
           python -m agents.heartbeat_state
           --state agents/live/agent_heartbeat_state.json
@@ -97,7 +85,7 @@ jobs:
           --source-workflow runtime-worker
           --source-run-id "${GITHUB_RUN_ID}"
       - name: Run governed model-assisted analysis
-        if: ${{ steps.cost.outputs.allowed == 'true' && (inputs.mode == 'daily' || inputs.mode == 'weekly') }}
+        if: ${{ (inputs.mode == 'daily' || inputs.mode == 'weekly') }}
         run: >-
           python -m runtime.model_analysis
           --mode "$RUNTIME_MODE"
@@ -105,17 +93,8 @@ jobs:
           --cost-state cost_governor/out/cost_state.json
           --output-dir runtime/out
       - name: Validate emitted runtime state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: python -c "import json; from runtime.state import validate_state; validate_state(json.load(open('runtime/out/runtime_state.json')))"
-      - name: Commit conservative runtime compute usage
-        if: ${{ always() && steps.cost.outputs.allowed == 'true' }}
-        run: >-
-          python -m cost_governor.workflow_gate finalize
-          --state cost_governor/out/cost_state.json
-          --decision cost_governor/out/cost_decision.json
-          --output cost_governor/out/cost_state.json
       - name: Upload sanitized runtime continuation state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-runtime-state
@@ -123,7 +102,6 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Upload sanitized agent heartbeat state
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-agent-heartbeat-state
@@ -131,15 +109,10 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Upload sanitized cost-governor continuation state
-        if: ${{ always() && hashFiles('cost_governor/out/cost_state.json') != '' }}
+        if: ${{ always() && (inputs.mode == 'daily' || inputs.mode == 'weekly') && hashFiles('cost_governor/out/cost_state.json') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-cost-governor-state
           path: cost_governor/out/
           if-no-files-found: error
           retention-days: 30
-      - name: Report governed no-work outcome
-        if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
-        run: |
-          echo "::notice title=Portfolio runtime skipped::Cost governor status: ${{ steps.cost.outputs.decision_status }}"
-          echo "Runtime work was skipped because the cost governor did not grant a reservation." >> "$GITHUB_STEP_SUMMARY"
