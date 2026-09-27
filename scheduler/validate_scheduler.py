@@ -64,10 +64,11 @@ def validate_scheduler():
         '"implementation_authorized":False',
         '"code_execution_performed":False',
         "inspect_revision",
-        "hunter-origin-cycle:",
-        "hunter-origin-receipt:",
     ]:
         req(token in executor,f"Hunter proposal evidence-review boundary missing {token}")
+    scheduler_source=(ROOT/"scheduler/autonomous_scheduler.py").read_text()
+    for token in ["hunter-origin-cycle:","hunter-origin-receipt:","hunter-origin-sequence:","hunter-last-seen-sequence:"]:
+        req(token in scheduler_source,f"Hunter proposal scheduler provenance missing {token}")
     for forbidden in ["contents: write","pull-requests: write","deployments: write","id-token: write","git push","gh pr","openai","anthropic"]:
         req(forbidden not in wf,f"forbidden scheduler workflow capability: {forbidden}")
     req("git push origin head:main" not in (ROOT/"scheduler/SCHEDULER_CONTRACT.md").read_text().lower(),"upstream direct-main behavior adopted")
