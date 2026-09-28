@@ -38,7 +38,7 @@ def validate_command_center() -> dict[str, object]:
     require(snapshot["workload_control"]["mode"] == "GITHUB_NATIVE_WORKLOAD_CONTROL", "workload controls missing")
     require(snapshot["workload_control"]["service_count"] >= 8, "workload service coverage incomplete")
     publication=snapshot["publication"]
-    require(publication["mode"] == "AUTO_ON_RELEVANT_MAIN_PUSH_PLUS_HOURLY_REFRESH", "publication mode drifted")
+    require(publication["mode"] == "AUTO_ON_RELEVANT_MAIN_PUSH_PLUS_DURABLE_STATE_EVENTS_AND_HOURLY_REFRESH", "publication mode drifted")
     if publication["source_commit"] is not None:
         require(len(publication["source_commit"]) == 40, "published source commit is not a full SHA")
     upgrades=snapshot["recommended_upgrades"]
