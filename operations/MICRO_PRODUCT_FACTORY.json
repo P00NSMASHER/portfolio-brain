@@ -1,0 +1,126 @@
+{
+  "schema_version": "1.0.0",
+  "factory_id": "micro-product-factory-v1",
+  "status": "ACTIVE",
+  "authority_class": "PLAN_ONLY",
+  "market": "Roblox Creator Store",
+  "product_type_priority": [
+    "MODEL",
+    "PLUGIN"
+  ],
+  "north_star": "VERIFIED_EXTERNAL_CASH",
+  "verified_revenue_usd": 0,
+  "verified_sales_count": 0,
+  "published_count": 0,
+  "build_caps": {
+    "max_hours_per_sku": 4,
+    "max_paid_ai_spend_usd_per_sku": 10,
+    "initial_price_min_usd": 2.99,
+    "initial_price_max_usd": 9.99
+  },
+  "portfolio_rules": [
+    "Models first because throughput is higher and publishing friction is lower than plugins.",
+    "One reusable core may power multiple SKUs, but each listing must solve a distinct buyer problem.",
+    "No Brookhaven-specific art, UI, names, proprietary assets, school-specific content, private data, or unverified third-party code.",
+    "A weak SKU does not earn extra engineering merely because time was already spent on it.",
+    "Sales, reviews, support requests and repeat demand outrank internal completion metrics."
+  ],
+  "skus": [
+    {
+      "sku_id": "SKU-001",
+      "rank": 1,
+      "name": "Answer-to-Earn Quiz Kit",
+      "format": "MODEL",
+      "status": "CANDIDATE",
+      "price_usd": 2.99,
+      "buyer_problem": "Creators need a drop-in way to reward correct answers without building quiz validation and reward wiring from scratch.",
+      "reuse_source": "P00NSMASHER/abvmschoolstarworld pages/study-games.js",
+      "reuse_boundary": "Genericize mechanics only; remove all school-specific questions, branding and content.",
+      "build_prompt": "Work only in P00NSMASHER/portfolio-brain and authorized source repositories. Prepare SKU-001 Answer-to-Earn Quiz Kit as an original generic Roblox model. Reuse only generic question-validation/reward patterns from the ABVM study engine; include no ABVM content or branding. Target drag-and-drop setup, server-authoritative rewards, a small sample question set, concise README/setup instructions and deterministic QA. Keep total new work within 4 hours and paid AI spend within $10. Do not publish or spend money. Stop with a ready-to-upload artifact plus validation evidence."
+    },
+    {
+      "sku_id": "SKU-002",
+      "rank": 2,
+      "name": "House Claim System",
+      "format": "MODEL",
+      "status": "CANDIDATE",
+      "price_usd": 3.99,
+      "buyer_problem": "Roleplay creators need reliable plot claiming, occupancy state and release behavior without writing ownership logic.",
+      "reuse_source": "P00NSMASHER/StarBlox compatibility/server/BrookhavenHouseCompat.server.luau",
+      "reuse_boundary": "Mechanics only; rebuild names, structure and implementation generically with no Brookhaven assets/UI/branding.",
+      "build_prompt": "Prepare SKU-002 House Claim System as an original generic Roblox model. Use the StarBlox house compatibility work only as engineering evidence for plot-claim edge cases; do not copy Brookhaven assets, UI, names or proprietary structure. Include plot discovery, claim/release, occupied-state handling, reconnect-safe cleanup, server authority, simple configuration and a minimal demo place. Keep work within 4 hours and $10 paid AI spend. Do not publish. Finish with validation evidence and setup documentation."
+    },
+    {
+      "sku_id": "SKU-003",
+      "rank": 3,
+      "name": "House Controls Pack",
+      "format": "MODEL",
+      "status": "CANDIDATE",
+      "price_usd": 2.99,
+      "buyer_problem": "Roleplay builders repeatedly reimplement lights, locks, garage and house-color controls.",
+      "reuse_source": "P00NSMASHER/StarBlox compatibility/server/BrookhavenHouseCompat.server.luau",
+      "reuse_boundary": "Generic mechanics only; no copied world assets, UI, names or proprietary content.",
+      "build_prompt": "Prepare SKU-003 House Controls Pack as an original generic Roblox model containing server-authoritative light, door-lock, garage and configurable house-color controls. Derive only generic mechanics from prior StarBlox engineering. No Brookhaven assets, UI, names or proprietary content. Include a demo house made from original primitive parts, configuration module and concise install guide. Keep under 4 hours and $10 paid AI spend. Do not publish."
+    },
+    {
+      "sku_id": "SKU-004",
+      "rank": 4,
+      "name": "Question Bank Rotator",
+      "format": "MODEL",
+      "status": "CANDIDATE",
+      "price_usd": 2.99,
+      "buyer_problem": "Quiz and education-game creators need answer validation, randomized rotation and no-repeat behavior without custom infrastructure.",
+      "reuse_source": "P00NSMASHER/abvmschoolstarworld pages/study-games.js",
+      "reuse_boundary": "Generic engine patterns only; zero school-specific source material.",
+      "build_prompt": "Prepare SKU-004 Question Bank Rotator as an original generic Roblox model. Implement configurable questions, randomized rotation, immediate-repeat suppression, server-side answer validation, optional hints/explanations and simple API hooks. Use no school-specific content. Include tests and a demo. Keep under 4 hours and $10 paid AI spend. Do not publish."
+    },
+    {
+      "sku_id": "SKU-005",
+      "rank": 5,
+      "name": "Mobile HUD Starter",
+      "format": "MODEL",
+      "status": "CANDIDATE",
+      "price_usd": 3.99,
+      "buyer_problem": "Small Roblox creators routinely ship desktop-first HUDs that break on phones.",
+      "reuse_source": "P00NSMASHER/abvmschoolstarworld tests/mobile-layout.spec.mjs plus mobile QA experience",
+      "reuse_boundary": "Use responsive-layout lessons only; create wholly original Roblox UI.",
+      "build_prompt": "Prepare SKU-005 Mobile HUD Starter as an original Roblox model with thumb-friendly responsive layout, safe-area aware positioning, scalable button sizing, optional compact/expanded states and configuration examples. Do not copy any existing game UI. Include phone/tablet/desktop QA guidance and a demo scene. Keep under 4 hours and $10 paid AI spend. Do not publish."
+    },
+    {
+      "sku_id": "SKU-006",
+      "rank": 6,
+      "name": "Starter Shop System",
+      "format": "MODEL",
+      "status": "BACKLOG",
+      "price_usd": 3.99,
+      "buyer_problem": "Creators need a small server-authoritative currency-to-item shop with ownership persistence hooks.",
+      "reuse_source": "Portfolio gameplay/shop work; implementation must be original and generic.",
+      "reuse_boundary": "No copied commercial game assets or UI.",
+      "build_prompt": "Prepare SKU-006 Starter Shop System as a small original Roblox model with server-authoritative purchase validation, configurable items/currency, ownership hooks and simple UI. Keep scope bounded and generic. Do not publish."
+    },
+    {
+      "sku_id": "SKU-007",
+      "rank": 7,
+      "name": "Redeem Code System",
+      "format": "MODEL",
+      "status": "BACKLOG",
+      "price_usd": 2.99,
+      "buyer_problem": "Creators need a safe configurable code-redemption mechanic without duplicate claims.",
+      "reuse_source": "Generic persistence/idempotency patterns from portfolio systems.",
+      "reuse_boundary": "Original implementation only.",
+      "build_prompt": "Prepare SKU-007 Redeem Code System with configurable codes, one-time redemption, expiration support, server authority and persistence hooks. Keep scope bounded. Do not publish."
+    },
+    {
+      "sku_id": "SKU-008",
+      "rank": 8,
+      "name": "Vibe Game Inspector",
+      "format": "PLUGIN",
+      "status": "BACKLOG",
+      "price_usd": 9.99,
+      "buyer_problem": "AI-assisted Roblox creators need fast detection of common structural, mobile, client/server and release problems.",
+      "reuse_source": "StarBlox failure history plus Portfolio Brain validation patterns.",
+      "reuse_boundary": "Inspection rules only; no copying third-party code or assets.",
+      "build_prompt": "Prepare a design and minimal validated prototype for SKU-008 Vibe Game Inspector only after model SKUs show buyer signal. It should scan for objective Roblox project defects and produce reproducible findings, not subjective scores. Do not publish or exceed bounded prototype limits."
+    }
+  ]
+}

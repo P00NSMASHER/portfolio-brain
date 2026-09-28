@@ -3,50 +3,51 @@
   "policy_id": "revenue-reset-2026-09-27",
   "status": "ACTIVE",
   "objective_ref": "OBJ-001",
-  "governing_principle": "Verified cash from pre-existing buyer demand outranks invented offers, startup creation, internal architecture, feature count, opportunity scores, and speculative market narratives.",
+  "governing_principle": "Verified cash from many cheap, bounded products outranks speculative startup creation, internal architecture, feature count, opportunity scores, and polished dashboards.",
   "freeze": {
     "net_new_startup_architecture": true,
     "speculative_vertical_expansion": true,
     "new_marketing_site": true,
     "new_payment_product": true,
     "new_brand_or_logo_work": true,
+    "bounded_micro_products_allowed": true,
     "existing_product_correctness_maintenance_allowed": true
   },
   "primary_experiment": {
-    "name": "Marketplace-first paid technical operator work",
-    "thesis": "Do not invent a business before demand. Pursue only buyer-posted work where the buyer has already stated the problem, budget, and intent to hire.",
-    "target_roles": [
-      "AI-native technical operator",
-      "Replit/Claude/AI-assisted application stabilization",
-      "GitHub/CI/deployment troubleshooting within demonstrated capability",
-      "small bounded automation or internal-tool work using tools already demonstrated"
+    "name": "Roblox micro-product factory",
+    "thesis": "Ship small reusable Creator Store products cheaply, measure actual buyer behavior, kill non-sellers, and concentrate engineering only where sales/reviews prove demand.",
+    "initial_market": "Roblox Creator Store",
+    "initial_format": "Paid models first; plugins only for genuinely tool-shaped functionality.",
+    "price_range_usd": [
+      2.99,
+      9.99
     ],
-    "disallowed_positioning": [
-      "senior software engineer unless the scope can be truthfully supported by demonstrated experience",
-      "AWS/GCP infrastructure expert without prior demonstrated delivery",
-      "native iOS/Android specialist",
-      "security/compliance specialist",
-      "n8n/Make/Zapier expert unless prior hands-on proof exists",
-      "any role requiring fabricated years of experience, fabricated clients, fabricated revenue impact, or fabricated case studies"
+    "max_build_hours_per_sku": 4,
+    "max_paid_ai_spend_usd_per_sku": 10,
+    "launch_batch_size": 5,
+    "first_sku_ids": [
+      "SKU-001",
+      "SKU-002",
+      "SKU-003",
+      "SKU-004",
+      "SKU-005"
     ],
-    "acquisition_spend_cap_usd": 15,
-    "acquisition_spend_note": "Do not purchase subscriptions, ads, boosts, domains, hosting, or build credits for this experiment. A one-time marketplace proposal-token test may spend no more than $15 with owner approval.",
-    "application_rule": "Apply only where at least 70% of the requested work maps to existing demonstrated capability and every claimed example can be shown.",
-    "portfolio_rule": "Use existing public repositories, live sites, CI evidence, and truthful screen recordings. Do not build speculative portfolio projects before applying.",
     "success_evidence": [
-      "buyer reply requesting substantive discussion",
-      "interview or scoped technical conversation",
-      "funded contract or verified payment",
-      "completed deliverable accepted by buyer"
+      "verified marketplace sale",
+      "verified marketplace review or support request demonstrating use",
+      "repeat sales without additional paid acquisition",
+      "buyer request for an adjacent feature or bundle"
     ],
-    "failure_rule": "After the first bounded batch of high-fit applications, if there are no substantive buyer responses, inspect positioning and target fit before spending more. No new product build is an allowed response to failed applications."
+    "failure_rule": "Do not rescue a weak SKU with more engineering. After reasonable marketplace exposure and at most one packaging/title/thumbnail iteration, a product with no buyer signal returns to HOLD or KILL while stronger SKUs receive the time.",
+    "build_rule": "Reuse proven generic mechanics where possible. A micro-product that exceeds the four-hour or ten-dollar cap must be split, explicitly re-approved, or stopped.",
+    "rights_rule": "Commercial SKUs must be original/generic implementations. Brookhaven-specific assets, proprietary UI/art, school-specific content, private data, and unverified third-party code are excluded."
   },
   "resource_rules": [
-    "Research may identify fresh buyer-posted opportunities and required application language only.",
-    "Engineering capacity stays idle until it supports a real application proof gap that can be closed cheaply or a funded customer contract.",
-    "Do not build a new SaaS, marketplace, diagnostic product, dashboard, agent hierarchy, recovery vertical, brand, payment page, or marketing site merely to create activity.",
-    "Do not use paid model/work credits to simulate customer work before a contract exists.",
-    "Existing portfolio projects are evidence assets, not presumed businesses."
+    "Engineering capacity goes first to the next bounded SKU or to fixes demanded by verified buyers.",
+    "Research may inspect marketplace demand, competing listings, pricing, reviews, and buyer language but may not invent demand.",
+    "Do not build a new SaaS, marketplace, enterprise diagnostic, dashboard feature, agent hierarchy, recovery vertical, brand, or marketing site merely to create activity.",
+    "Do not use paid model/work credits above the per-SKU cap without explicit owner approval.",
+    "Actual sales and support evidence determine which product families expand."
   ],
   "authority": {
     "cash_spend": "HUMAN_APPROVAL_REQUIRED",

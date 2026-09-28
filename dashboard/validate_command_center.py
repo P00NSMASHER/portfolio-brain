@@ -21,7 +21,7 @@ def validate_command_center() -> dict[str, object]:
     page = render_html(snapshot)
     lower = page.lower()
 
-    require(snapshot["command_center_id"] == "portfolio-brain-command-center-v4", "unexpected command-center id")
+    require(snapshot["command_center_id"] == "portfolio-brain-command-center-v5", "unexpected command-center id")
     require(snapshot["authority_class"] == "OBSERVE", "command center widened authority")
     require(snapshot["mutation_capability"] == "NONE", "command center gained mutation capability")
     require(snapshot["network_capability"] == "NONE", "command center gained outbound network capability")
@@ -61,6 +61,18 @@ def validate_command_center() -> dict[str, object]:
     require(snapshot["validation_sprint"]["status"] == "RETIRED", "legacy validation sprint not retired")
     require(snapshot["validation_sprint"]["target_end_at"] is None, "retired sprint still has a target end date")
     require(snapshot["validation_sprint"]["architecture_change_policy"] == "CONTINUOUS_OPTIMIZATION_NO_SPRINT_FREEZE", "continuous optimization policy drifted")
+
+    revenue=snapshot["revenue_focus"]
+    factory=snapshot["micro_product_factory"]
+    require(revenue["objective_id"]=="OBJ-001","revenue objective missing")
+    require(revenue["strategy_name"]=="Roblox micro-product factory","revenue strategy drifted")
+    require(revenue["market"]=="Roblox Creator Store","micro-product market drifted")
+    require(revenue["truth_state"] in {"UNPROVEN","EARNING"},"revenue truth state invalid")
+    require(factory["authority_class"]=="PLAN_ONLY","micro-product factory widened authority")
+    require(factory["build_caps"]["max_hours_per_sku"]<=4,"micro-product time cap widened")
+    require(factory["build_caps"]["max_paid_ai_spend_usd_per_sku"]<=10,"micro-product spend cap widened")
+    require(len(factory["skus"])>=5,"micro-product SKU set incomplete")
+    require(factory["verified_sales_count"]>=0 and factory["verified_revenue_usd"]>=0,"micro-product outcome values invalid")
 
     commercial=snapshot["commercial_validation"]
     require(commercial["evidence_status"] in {"CURRENT_SCOPE_OBSERVED","STALE_OR_UNAVAILABLE"},"commercial current evidence status invalid")
@@ -111,8 +123,11 @@ def validate_command_center() -> dict[str, object]:
     require(snapshot["snapshot_hash"].startswith("sha256:"), "snapshot hash missing")
     require("Portfolio Brain Command Center" in page, "command-center title missing")
     require("Live State Bridge" in page, "live-state bridge panel missing")
-    require("Recommended Upgrades" in page and "Make the Brain better." in page, "recommended upgrades board missing")
-    require(page.index("SYSTEM DIAGNOSTICS · READ ONLY") < page.index("RECOMMENDED UPGRADES · EVIDENCE BACKED") < page.index('class="grid kpis"'), "recommended upgrades board is not directly below diagnostics")
+    require("Brain improvements worth considering" in page and "IMPROVE NEXT · EVIDENCE BACKED" in page, "recommended upgrades board missing")
+    require("Verified cash, not activity." in page and "REVENUE NOT PROVEN" in page or "VERIFIED CASH EXISTS" in page, "revenue-first operator focus missing")
+    require("Micro-Product Factory" in page or "MICRO-PRODUCT FACTORY" in page, "micro-product factory board missing")
+    require("Answer-to-Earn Quiz Kit" in page and "House Claim System" in page, "initial micro-product SKUs missing")
+    require(page.index("Verified cash, not activity.") < page.index("FIX FIRST · SYSTEM DIAGNOSTICS") < page.index("MICRO-PRODUCT FACTORY · BOUNDED BETS") < page.index("IMPROVE NEXT · EVIDENCE BACKED") < page.index('class="grid kpis"'), "revenue-first dashboard hierarchy drifted")
     require("View upgrade prompt" in page and "upgrade-prompt-" in page, "recommended upgrade prompts missing")
     require("Operational Telemetry" in page, "operational telemetry panel missing")
     require("History & Trends" in page, "history/trends panel missing")
@@ -127,7 +142,7 @@ def validate_command_center() -> dict[str, object]:
     require("Daily runner-minute quota</td><td class=\"num\">None" in page, "retired runner-minute quota is not explicit")
     for retired_label in ("Accounted runner minutes today", "<td>Daily GitHub job starts</td>", "<td>Daily runner minutes</td>", "Governed runner minutes committed"):
         require(retired_label not in page, f"paid-cost UI still conflates GitHub workload: {retired_label}")
-    require('data-design="apple-inspired-v4-1"' in page, "v4.1 visual-design marker missing")
+    require('data-design="revenue-first-v5"' in page, "v5 visual-design marker missing")
     require("font-family:-apple-system" in page, "native system typography stack missing")
     require("-webkit-backdrop-filter" in page and "border-radius:var(--radius-xl)" in page, "premium glass/card design contract missing")
     require("Durable Work Queue" in page, "durable queue panel missing")
