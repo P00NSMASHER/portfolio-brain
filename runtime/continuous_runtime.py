@@ -82,9 +82,31 @@ def _repo_cursor(state: dict[str,Any], rid: str)->dict[str,Any]:
 def _sanitize_observation(obs: dict[str,Any], max_files: int)->dict[str,Any]:
     result=json.loads(json.dumps(obs))
     comp=result.get("compare")
-    if comp and isinstance(comp.get("files"),list):
-        if len(comp["files"])>max_files:
-            raise RuntimePolicyError("changed-file budget exceeded for repository")
+    if not comp:
+        return result
+    files=comp.get("files")
+    if not isinstance(files,list):
+        raise RuntimePolicyError("repository comparison files are invalid")
+    if len(files)>max_files:
+        raise RuntimePolicyError("changed-file budget exceeded for repository")
+    method=comp.get("comparison_method","GITHUB_COMPARE")
+    if method=="GITHUB_COMPARE":
+        if comp.get("files_complete") is not True or comp.get("changed_file_count",len(files))!=len(files):
+            raise RuntimePolicyError("GitHub compare detail is incomplete")
+    elif method=="GIT_TREE_SNAPSHOT":
+        proof=comp.get("tree_snapshot")
+        if (
+            comp.get("files_complete") is not False
+            or files
+            or not isinstance(proof,dict)
+            or proof.get("complete") is not True
+            or comp.get("changed_file_count")!=proof.get("changed_path_count")
+            or not isinstance(proof.get("changed_path_manifest_hash"),str)
+            or not proof["changed_path_manifest_hash"].startswith("sha256:")
+        ):
+            raise RuntimePolicyError("Git tree snapshot proof is incomplete")
+    else:
+        raise RuntimePolicyError("repository comparison method is unsupported")
     return result
 
 def observe(mode: str, state: dict[str,Any], *, target_repository_id: str|None, finished_at: str,
