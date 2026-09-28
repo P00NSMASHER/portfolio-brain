@@ -1,20 +1,23 @@
 import copy
 import unittest
 from verification.release_gate import verify_release
+from test_phase1_protection import protection_fixture
 
 
 class Phase1ReleaseGateTests(unittest.TestCase):
     def fixture(self):
         # Simulated provider responses only; these are not live integration proof.
         h='a'*40;b='b'*40
-        policy={'schema_version':'1.0.0','trusted_gate_app_id':900,'approved_reviewer_ids':[222], 'required_checks':[{'name':'validate','app_id':100,'workflow_id':123,'workflow_path':'.github/workflows/foundation-ci.yml','job_name':'validate','required_steps':['Run regression tests','Validate historical policy replay']} ]}
-        pr={'state':'open','draft':False,'head':{'sha':h,'repo':{'full_name':'owner/brain'}},'base':{'sha':b,'ref':'main'},'user':{'id':111}}
+        policy={'schema_version':'2.0.0','gate_check_name':'portfolio-phase1-gate','trusted_gate_app_id':900,'approved_reviewer_ids':[222], 'required_checks':[{'name':'validate','app_id':100,'workflow_id':123,'workflow_path':'.github/workflows/foundation-ci.yml','job_name':'validate','required_steps':['Run regression tests','Validate historical policy replay']} ]}
+        pr={'state':'open','draft':False,'head':{'sha':h,'repo':{'full_name':'owner/brain'}},'base':{'sha':b,'ref':'main','repo':{'full_name':'owner/brain'}},'user':{'id':111}}
         check={'id':1,'name':'validate','head_sha':h,'app':{'id':100},'status':'completed','conclusion':'success','details_url':'https://github.com/owner/brain/actions/runs/7/job/8'}
-        run={'id':7,'head_sha':h,'workflow_id':123,'path':'.github/workflows/foundation-ci.yml','status':'completed','conclusion':'success'}
-        job={'id':8,'name':'validate','head_sha':h,'conclusion':'success','steps':[{'name':n,'status':'completed','conclusion':'success'} for n in policy['required_checks'][0]['required_steps']]}
+        run={'id':7,'head_sha':h,'workflow_id':123,'path':'.github/workflows/foundation-ci.yml','status':'completed','conclusion':'success','run_attempt':1,'repository':{'full_name':'owner/brain'},'head_repository':{'full_name':'owner/brain'}}
+        job={'id':8,'run_id':7,'run_attempt':1,'status':'completed','check_run_url':'https://api.github.com/repos/owner/brain/check-runs/1','name':'validate','head_sha':h,'conclusion':'success','steps':[{'name':n,'status':'completed','conclusion':'success'} for n in policy['required_checks'][0]['required_steps']]}
         reviews=[{'id':10,'state':'APPROVED','commit_id':h,'user':{'id':222}}]
         prefix='https://api.github.com/repos/owner/brain'
         data={f'{prefix}/pulls/1':pr,f'{prefix}/branches/main':{'commit':{'sha':b}},f'{prefix}/commits/{h}/check-runs?filter=latest&per_page=100':{'total_count':1,'check_runs':[check]},f'{prefix}/actions/runs/7':run,f'{prefix}/actions/runs/7/jobs?filter=latest&per_page=100':{'total_count':1,'jobs':[job]},f'{prefix}/pulls/1/reviews?per_page=100':reviews}
+        data.update(protection_fixture())
+        data[f'{prefix}/compare/{b}...{h}']={'base_commit':{'sha':b},'merge_base_commit':{'sha':b},'behind_by':0,'status':'ahead'}
         return policy,data,pr,check,run,job,reviews
 
     def run_fixture(self,f):

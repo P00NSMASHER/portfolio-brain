@@ -1,6 +1,7 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "2.0.0",
   "trusted_gate_app_id": null,
   "approved_reviewer_ids": [],
-  "required_checks": []
+  "required_checks": [],
+  "gate_check_name": "portfolio-phase1-gate"
 }
