@@ -108,6 +108,58 @@ class OperationalTelemetryTests(unittest.TestCase):
         self.assertEqual(proof["reservation_id"],"CRES-SYNC")
         self.assertEqual(proof["cycle_id"],"RC-1")
 
+    def test_runtime_sync_proof_uses_exact_run_workload_proof_without_cost_reservation(self):
+        runtime={"recent_cycles":[{
+            "mode":"sync","status":"PASS","cycle_id":"RC-WORKLOAD",
+            "finished_at":"2026-09-26T11:59:30Z","receipt_hash":"sha256:"+"a"*64
+        }]}
+        source={"generated_at":"2026-09-26T12:01:00Z","sources":{
+            "runtime":{"status":"LIVE","source_run_id":42},
+            "cost":{"status":"FALLBACK","source_run_id":None},
+        }}
+        liveness={
+            "targets":[{
+                "workflow_name":"runtime-hourly-sync",
+                "status":"HEALTHY_VERIFIED_WORK",
+                "reason":"EXACT_RUN_SUBSTANTIVE_WORK_PROVEN",
+                "work_proof_status":"VERIFIED_WORK",
+                "work_proof_reason":"RUNTIME_SYNC_RECEIPT",
+                "latest_run_id":42,
+                "work_proof_metrics":{
+                    "observations":8,"api_requests":9,
+                    "cycle_id":"RC-WORKLOAD","finished_at":"2026-09-26T11:59:30Z",
+                },
+            }]
+        }
+        proof=telemetry._runtime_sync_proof(runtime,{"reservations":[]},source,liveness)
+        self.assertEqual(proof["status"],"VERIFIED_SYNC_WORK")
+        self.assertEqual(proof["source_run_id"],42)
+        self.assertEqual(proof["reason"],"FRESH_SYNC_CYCLE_MATCHES_EXACT_RUN_WORK_PROOF")
+        self.assertEqual(proof["proof_source"],"WORKFLOW_LIVENESS_EXACT_RUN")
+        self.assertIsNone(proof["reservation_id"])
+
+    def test_runtime_sync_exact_run_proof_must_bind_to_restored_cycle(self):
+        runtime={"recent_cycles":[{
+            "mode":"sync","status":"PASS","cycle_id":"RC-EXPECTED",
+            "finished_at":"2026-09-26T11:59:30Z","receipt_hash":"sha256:"+"a"*64
+        }]}
+        source={"generated_at":"2026-09-26T12:01:00Z","sources":{
+            "runtime":{"status":"LIVE","source_run_id":99},
+            "cost":{"status":"LIVE","source_run_id":7},
+        }}
+        liveness={"targets":[{
+            "workflow_name":"runtime-hourly-sync",
+            "status":"HEALTHY_VERIFIED_WORK",
+            "reason":"EXACT_RUN_SUBSTANTIVE_WORK_PROVEN",
+            "work_proof_status":"VERIFIED_WORK",
+            "work_proof_reason":"RUNTIME_SYNC_RECEIPT",
+            "latest_run_id":42,
+            "work_proof_metrics":{"cycle_id":"RC-OTHER","finished_at":"2026-09-26T11:58:00Z"},
+        }]}
+        proof=telemetry._runtime_sync_proof(runtime,{"reservations":[]},source,liveness)
+        self.assertEqual(proof["status"],"UNVERIFIED_SYNC_WORK")
+        self.assertEqual(proof["reason"],"WORK_PROOF_NOT_BOUND_TO_RESTORED_SYNC_CYCLE")
+
     def test_runtime_sync_proof_fails_closed_without_temporal_reservation_match(self):
         runtime={"recent_cycles":[{
             "mode":"sync","status":"PASS","cycle_id":"RC-1",
