@@ -6,6 +6,16 @@ on:
       - step-runtime-state-writer-serialization
     paths:
       - ".github/workflows/live-state-bridge-branch-proof.yml"
+      - ".github/workflows/runtime-worker.yml"
+      - "runtime/artifact_state.py"
+      - "agents/artifact_state.py"
+      - "dashboard/live_state_bridge.py"
+      - "dashboard/history_artifact_state.py"
+      - "dashboard/operational_telemetry.py"
+      - "dashboard/command_center.py"
+      - "operations/liveness_artifact_state.py"
+      - "operations/workflow_liveness.py"
+      - "workload_control/WORKLOAD_POLICY.json"
 
 permissions:
   contents: read
@@ -32,19 +42,22 @@ jobs:
       - name: Restore latest durable command-center state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
-          env GITHUB_REF_NAME=main python -m dashboard.live_state_bridge
+          python -m dashboard.live_state_bridge
+          --source-branch main
           --output-dir dashboard/live
           --receipt dashboard/live/state_sources.json
       - name: Restore exact-run workflow liveness proof
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
-          env GITHUB_REF_NAME=main python -m operations.liveness_artifact_state
+          python -m operations.liveness_artifact_state
+          --source-branch main
           --output dashboard/live/workflow_liveness_receipt.json
           --metadata-output dashboard/live/workflow_liveness_restore.json
       - name: Restore command-center history
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
-          env GITHUB_REF_NAME=main python -m dashboard.history_artifact_state
+          python -m dashboard.history_artifact_state
+          --source-branch main
           --output dashboard/live/history_state.json
           --metadata-output dashboard/live/history_restore.json
       - name: Append sanitized telemetry history
