@@ -57,6 +57,14 @@ def validate_publication() -> dict[str, object]:
     require(isinstance(upgrades,list) and 1<=len(upgrades)<=5,"public recommended upgrades invalid")
     require(all(row.get("prompt") and row.get("evidence_ref") for row in upgrades),"public recommended upgrade prompt/evidence missing")
     require(snapshot["history"]["history_id"] == "portfolio-command-center-public-history-v1", "public history missing")
+    revenue=snapshot["revenue_focus"]
+    factory=snapshot["micro_product_factory"]
+    require(revenue["objective_id"]=="OBJ-001","public revenue objective missing")
+    require(revenue["strategy_name"]=="Roblox micro-product factory","public revenue strategy drifted")
+    require(factory["authority_class"]=="PLAN_ONLY","public micro-product factory widened authority")
+    require(factory["build_caps"]["max_hours_per_sku"]<=4,"public micro-product time cap widened")
+    require(factory["build_caps"]["max_paid_ai_spend_usd_per_sku"]<=10,"public micro-product spend cap widened")
+
     commercial=snapshot["commercial_validation"]
     require(commercial["evidence_status"] in {"CURRENT_SCOPE_OBSERVED","STALE_OR_UNAVAILABLE"},"public commercial evidence status invalid")
     require(commercial["current_source_kind"]=="CHATGPT_GMAIL_CONNECTOR_SANITIZED_OBSERVATION","public current commercial source kind drifted")
@@ -103,8 +111,10 @@ def validate_publication() -> dict[str, object]:
     require("Stamp publication provenance" in workflow, "Pages publication provenance stamp missing")
     require('if [[ "$GITHUB_EVENT_NAME" == "push" ]]' in workflow, "source-change publication override missing")
     require("Verify deployed source commit" in workflow and "source-commit.txt" in workflow, "end-to-end Pages deployment proof missing")
-    require("Recommended Upgrades" in html_text and "RECOMMENDED UPGRADES · EVIDENCE BACKED" in html_text, "public recommended upgrades board missing")
-    require(html_text.index("SYSTEM DIAGNOSTICS · READ ONLY") < html_text.index("RECOMMENDED UPGRADES · EVIDENCE BACKED") < html_text.index('class="grid kpis"'), "public recommended upgrades placement drifted")
+    require("Brain improvements worth considering" in html_text and "IMPROVE NEXT · EVIDENCE BACKED" in html_text, "public recommended upgrades board missing")
+    require("Verified cash, not activity." in html_text, "public revenue-first operator focus missing")
+    require("MICRO-PRODUCT FACTORY · BOUNDED BETS" in html_text and "Answer-to-Earn Quiz Kit" in html_text, "public micro-product factory missing")
+    require(html_text.index("Verified cash, not activity.") < html_text.index("FIX FIRST · SYSTEM DIAGNOSTICS") < html_text.index("MICRO-PRODUCT FACTORY · BOUNDED BETS") < html_text.index("IMPROVE NEXT · EVIDENCE BACKED") < html_text.index('class="grid kpis"'), "public revenue-first hierarchy drifted")
     require("Operational Telemetry" in html_text and "History & Trends" in html_text, "public telemetry/trends panels missing")
     require("Commercial Evidence" in html_text and "Retired FreightRecovery Baseline" in html_text, "public commercial provenance UI missing")
     require("Observed gateway threads" in html_text and "Human-reply threads in scope" in html_text, "public scoped commercial evidence UI missing")
@@ -116,7 +126,7 @@ def validate_publication() -> dict[str, object]:
     require(snapshot["hunter_proposals"]["evidence_reviewed_count"]<=snapshot["hunter_proposals"]["proposal_count"],"public Hunter proposal review count invalid")
     require("Verified Model Value" in html_text, "public verified model value panel missing")
     require("project-mobile-card" in html_text and "project-desktop" in html_text, "public responsive portfolio view missing")
-    require('data-design="apple-inspired-v4-1"' in html_text, "public v4.1 design marker missing")
+    require('data-design="revenue-first-v5"' in html_text, "public v5 design marker missing")
     require("fonts.googleapis.com" not in lower and "<script src=" not in lower, "public redesign introduced external presentation dependency")
     require("operator-console" not in lower and "operator console" not in lower, "private operator console leaked into public command center")
 
