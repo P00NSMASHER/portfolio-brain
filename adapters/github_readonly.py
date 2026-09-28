@@ -48,6 +48,73 @@ def _nonnegative_int(value: Any, message: str) -> int:
     _require(isinstance(value,int) and not isinstance(value,bool) and value>=0, message)
     return value
 
+def _commit_tree_sha(commit: Any, message: str) -> str:
+    _require(isinstance(commit,dict), message)
+    git_commit=commit.get("commit")
+    _require(isinstance(git_commit,dict), message)
+    tree=git_commit.get("tree")
+    _require(isinstance(tree,dict), message)
+    return _exact_sha(tree.get("sha"), message)
+
+def _tree_leaf_snapshot(adapter: dict[str,Any], tree_sha: str, fetch_json: FetchJSON) -> dict[str,tuple[str,str,str]]:
+    payload=fetch_json(f"{_repo_api(adapter['repository_full_name'])}/git/trees/{tree_sha}?recursive=1")
+    _require(_exact_sha(payload.get("sha"), "GitHub tree response missing exact SHA")==tree_sha,
+             "GitHub tree response is not bound to the requested tree SHA")
+    _require(payload.get("truncated") is False, "GitHub recursive tree response is truncated")
+    raw_tree=payload.get("tree")
+    _require(isinstance(raw_tree,list), "GitHub tree response missing entries")
+    leaves={}
+    for item in raw_tree:
+        _require(isinstance(item,dict), "GitHub tree entry must be an object")
+        entry_type=item.get("type")
+        if entry_type=="tree":
+            continue
+        _require(entry_type in {"blob","commit"}, "GitHub tree entry has unsupported type")
+        path=_repo_path(item.get("path"), "GitHub tree entry has unsafe or missing path")
+        _require(path not in leaves, "GitHub tree response contains duplicate leaf paths")
+        mode=item.get("mode")
+        _require(isinstance(mode,str) and mode, "GitHub tree entry mode is invalid")
+        sha=_exact_sha(item.get("sha"), "GitHub tree entry is missing an exact lowercase SHA")
+        leaves[path]=(entry_type,mode,sha)
+    return leaves
+
+def _tree_snapshot_proof(
+    adapter: dict[str,Any],
+    base_commit: dict[str,Any],
+    head_commit: dict[str,Any],
+    fetch_json: FetchJSON,
+) -> dict[str,Any]:
+    base_tree_sha=_commit_tree_sha(base_commit, "GitHub compare base commit missing exact tree identity")
+    head_tree_sha=_commit_tree_sha(head_commit, "GitHub compare head commit missing exact tree identity")
+    base=_tree_leaf_snapshot(adapter,base_tree_sha,fetch_json)
+    head=_tree_leaf_snapshot(adapter,head_tree_sha,fetch_json)
+    changed=[]
+    added=removed=modified=0
+    for path in sorted(set(base)|set(head)):
+        before=base.get(path); after=head.get(path)
+        if before==after:
+            continue
+        if before is None:
+            status="added"; added+=1
+        elif after is None:
+            status="removed"; removed+=1
+        else:
+            status="modified"; modified+=1
+        changed.append({"path":path,"status":status,"before":before,"after":after})
+    _require(changed, "GitHub tree snapshot fallback found no changed paths")
+    return {
+        "complete":True,
+        "base_tree_sha":base_tree_sha,
+        "head_tree_sha":head_tree_sha,
+        "base_leaf_count":len(base),
+        "head_leaf_count":len(head),
+        "changed_path_count":len(changed),
+        "added_path_count":added,
+        "removed_path_count":removed,
+        "modified_path_count":modified,
+        "changed_path_manifest_hash":_canonical_hash(changed),
+    }
+
 @dataclass(frozen=True)
 class GitHubReadOnlyClient:
     token: str | None = None
@@ -108,16 +175,36 @@ def compare_range(adapter: dict[str,Any], base_sha: str, head_sha: str, fetch_js
              "GitHub compare response is not bound to the requested base SHA")
     _require(isinstance(merge_base_commit,dict) and _exact_sha(merge_base_commit.get("sha"), "GitHub compare merge base is invalid")==base_sha,
              "GitHub compare is not a linear fast-forward from the requested base SHA")
-    _require(isinstance(raw_commits,list), "GitHub compare response missing commits")
-    _require(len(raw_commits)<GITHUB_COMPARE_COMMIT_CAP, "GitHub compare commit list reached the 250-commit completeness boundary")
-    _require(len(raw_commits)==total_commits, "GitHub compare commit list is incomplete or inconsistent")
+    _require(isinstance(raw_commits,list) and raw_commits, "GitHub compare response missing commits")
+    commit_list_complete=len(raw_commits)<GITHUB_COMPARE_COMMIT_CAP
+    if commit_list_complete:
+        _require(len(raw_commits)==total_commits, "GitHub compare commit list is incomplete or inconsistent")
+    else:
+        _require(len(raw_commits)==GITHUB_COMPARE_COMMIT_CAP, "GitHub compare commit cap handling is inconsistent")
+        _require(total_commits>=len(raw_commits), "GitHub compare total commits is smaller than capped commit list")
     commit_shas=[_exact_sha(item.get("sha") if isinstance(item,dict) else None,
                             "GitHub compare commit is missing an exact lowercase SHA") for item in raw_commits]
     _require(len(set(commit_shas))==len(commit_shas), "GitHub compare commit list contains duplicates")
-    _require(commit_shas and commit_shas[-1]==head_sha,
+    _require(commit_shas[-1]==head_sha,
              "GitHub compare response is not bound to the requested head SHA")
     _require(isinstance(raw_files,list), "GitHub compare response missing changed files")
-    _require(len(raw_files)<GITHUB_COMPARE_FILE_CAP, "GitHub compare file list reached the 300-file completeness boundary")
+    if not commit_list_complete or len(raw_files)>=GITHUB_COMPARE_FILE_CAP:
+        proof=_tree_snapshot_proof(adapter,base_commit,raw_commits[-1],fetch_json)
+        return {
+            "compare_status":status,
+            "ahead_by":ahead_by,
+            "behind_by":behind_by,
+            "total_commits":total_commits,
+            "comparison_method":"GIT_TREE_SNAPSHOT",
+            "github_compare_commit_count":len(raw_commits),
+            "commit_list_complete":commit_list_complete,
+            "github_compare_file_count":len(raw_files),
+            "changed_file_count":proof["changed_path_count"],
+            "files_complete":False,
+            "files":[],
+            "tree_snapshot":proof,
+        }
+
     files=[]; seen_paths=set()
     for item in raw_files:
         _require(isinstance(item,dict), "GitHub compare file entry must be an object")
@@ -148,8 +235,12 @@ def compare_range(adapter: dict[str,Any], base_sha: str, head_sha: str, fetch_js
         "ahead_by":ahead_by,
         "behind_by":behind_by,
         "total_commits":total_commits,
+        "comparison_method":"GITHUB_COMPARE",
+        "github_compare_file_count":len(raw_files),
+        "changed_file_count":len(files),
         "files_complete":True,
         "files":files,
+        "tree_snapshot":None,
     }
 
 def observe_repository(

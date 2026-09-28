@@ -28,6 +28,7 @@ A restored `portfolio-runtime-state` artifact is accepted only when the same arc
 - Model calls are prohibited in Step 8.
 - All four autonomous triggers share the same serialized concurrency group.
 - Per-cycle repository/API/file/output/time budgets are finite.
+- A GitHub compare response that reaches either the 250-commit or 300-file API boundary is never trusted as a complete detail listing. The adapter instead requires exact, untruncated base/head recursive Git-tree snapshots and persists only a compact count/hash proof of that full transition; truncated or identity-mismatched tree evidence fails closed without advancing the cursor.
 - GitHub reads retry only transient network, timeout, 408/429, and 5xx failures; permanent client errors fail immediately without wasting request budget or backoff time.
 - Durable-state restore skips an unavailable or invalid newest artifact and uses only the next fully validated predecessor; if no candidate validates, restore fails closed without a partial state write.
 - Main-branch push observation is coalesced by event/ref: a newer push cancels an older redundant push-observation run, while scheduled sync/daily/weekly and manual/repository-dispatch observations remain in separate concurrency identities.

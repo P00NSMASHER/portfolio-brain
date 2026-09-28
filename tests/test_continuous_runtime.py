@@ -2,7 +2,7 @@ import copy, json, os, tempfile, unittest
 from unittest.mock import patch
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from runtime.continuous_runtime import RequestBudget, RuntimePolicyError, run
+from runtime.continuous_runtime import RequestBudget, RuntimePolicyError, _sanitize_observation, run
 from runtime.state import RuntimeStateError, advance_cycle, bootstrap_state, canonical_hash, cycle_id_for, validate_state
 from runtime.validate_runtime import validate_runtime
 
@@ -293,6 +293,37 @@ class RuntimeTests(unittest.TestCase):
             with self.assertRaises(RuntimePolicyError):
                 run("sync",state_path=Path(td)/"none.json",output_dir=Path(td)/"out",
                     fetch_json=fake,forced_now="2026-09-25T17:00:00Z")
+
+    def test_compact_tree_snapshot_proof_is_accepted_without_expanding_file_rows(self):
+        observation={"compare":{
+            "comparison_method":"GIT_TREE_SNAPSHOT",
+            "files_complete":False,
+            "files":[],
+            "changed_file_count":711,
+            "tree_snapshot":{
+                "complete":True,
+                "changed_path_count":711,
+                "changed_path_manifest_hash":"sha256:"+"a"*64,
+            },
+        }}
+        sanitized=_sanitize_observation(observation,500)
+        self.assertEqual(sanitized["compare"]["changed_file_count"],711)
+        self.assertEqual(sanitized["compare"]["files"],[])
+
+    def test_compact_tree_snapshot_proof_fails_closed_when_incomplete(self):
+        observation={"compare":{
+            "comparison_method":"GIT_TREE_SNAPSHOT",
+            "files_complete":False,
+            "files":[],
+            "changed_file_count":711,
+            "tree_snapshot":{
+                "complete":False,
+                "changed_path_count":711,
+                "changed_path_manifest_hash":"sha256:"+"a"*64,
+            },
+        }}
+        with self.assertRaisesRegex(RuntimePolicyError,"tree snapshot"):
+            _sanitize_observation(observation,500)
 
     def test_restored_state_advances_sequence(self):
         initial=bootstrap_state(now="2026-09-25T16:00:00Z")
