@@ -255,10 +255,15 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertLess(recommendations,kpis)
         self.assertIn("Brain improvements worth considering",public)
         self.assertIn("Answer-to-Earn Quiz Kit",public)
-        self.assertIn("View upgrade prompt",public)
+        self.assertIn("View upgrade action",public)
         self.assertIn("upgrade-prompt-1",public)
-        self.assertIn('data-copy-target="upgrade-prompt-1"',public)
+        self.assertIn("Run in ChatGPT",public)
+        self.assertIn("https://chatgpt.com/?prompt=",public)
         self.assertIn("next-sku-prompt",public)
+        self.assertIn("Build SKU-001",public)
+        self.assertIn("Refresh Brain",public)
+        self.assertIn("Run Scheduler",public)
+        self.assertIn("Run Hunter",public)
 
     def test_command_center_exposes_hunter_proposal_inbox_without_rights_upgrade(self):
         snapshot=build_command_center_snapshot()
