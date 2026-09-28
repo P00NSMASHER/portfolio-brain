@@ -235,7 +235,7 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertEqual(issue["severity"],"REVIEW")
         self.assertIn("Do not broaden the zero-reply result",issue["prompt"])
 
-    def test_recommended_upgrades_render_directly_below_system_diagnostics_with_copyable_prompts(self):
+    def test_revenue_first_hierarchy_keeps_repairs_products_and_upgrades_copyable(self):
         snapshot=build_command_center_snapshot()
         upgrades=snapshot["recommended_upgrades"]
         self.assertGreaterEqual(len(upgrades),1)
@@ -244,16 +244,21 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertTrue(all(row["prompt"] and row["evidence_ref"] for row in upgrades))
         self.assertTrue(all("P00NSMASHER/portfolio-brain" in row["prompt"] for row in upgrades))
         public=render_html(snapshot)
-        diagnostics=public.index("SYSTEM DIAGNOSTICS · READ ONLY")
-        recommendations=public.index("RECOMMENDED UPGRADES · EVIDENCE BACKED")
+        revenue=public.index("Verified cash, not activity.")
+        diagnostics=public.index("FIX FIRST · SYSTEM DIAGNOSTICS")
+        products=public.index("MICRO-PRODUCT FACTORY · BOUNDED BETS")
+        recommendations=public.index("IMPROVE NEXT · EVIDENCE BACKED")
         kpis=public.index('class="grid kpis"')
-        self.assertLess(diagnostics,recommendations)
+        self.assertLess(revenue,diagnostics)
+        self.assertLess(diagnostics,products)
+        self.assertLess(products,recommendations)
         self.assertLess(recommendations,kpis)
-        self.assertIn("Recommended Upgrades",public)
-        self.assertIn("Make the Brain better.",public)
+        self.assertIn("Brain improvements worth considering",public)
+        self.assertIn("Answer-to-Earn Quiz Kit",public)
         self.assertIn("View upgrade prompt",public)
         self.assertIn("upgrade-prompt-1",public)
         self.assertIn('data-copy-target="upgrade-prompt-1"',public)
+        self.assertIn("next-sku-prompt",public)
 
     def test_command_center_exposes_hunter_proposal_inbox_without_rights_upgrade(self):
         snapshot=build_command_center_snapshot()
@@ -312,7 +317,8 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertIn("functional_reasons",snapshot["system"])
         public=render_html(snapshot)
         self.assertIn("Functional health",public)
-        self.assertIn("EVIDENCE-DRIVEN",public)
+        self.assertIn("REVENUE NOT PROVEN",public)
+        self.assertIn("READ ONLY",public)
 
 
 if __name__=="__main__":
