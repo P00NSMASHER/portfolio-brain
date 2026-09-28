@@ -33,20 +33,20 @@
       "schema_version": "1.0.0",
       "objective_id": "OBJ-001",
       "project_id": "PRJ-000",
-      "title": "Produce verified cash from existing capabilities before new product expansion",
-      "statement": "Prioritize paid implementation work in categories buyers already purchase, starting with rescue and stabilization of AI-built applications and GitHub delivery systems. Freeze net-new startup architecture until verified external payment or explicit buyer evidence justifies expansion.",
+      "title": "Produce verified cash through bounded micro-products before new startup expansion",
+      "statement": "Prioritize many cheap, bounded digital products with low support burden and measurable marketplace demand, starting with Roblox Creator Store models built from reusable capabilities already present in the portfolio. Freeze large speculative startups until verified external payment proves where further investment belongs.",
       "status": "ACTIVE",
       "priority": "CRITICAL",
       "success_conditions": [
-        "At least one verified external payment is collected for a bounded service delivered primarily from existing portfolio capabilities.",
-        "Every active revenue experiment has a named buyer problem, bounded scope, explicit price, current demand evidence, and a kill rule.",
-        "Net-new startup architecture remains frozen until the first verified payment or a human explicitly overrides this objective."
+        "At least one micro-product records independently verified external payment.",
+        "Every SKU has a bounded build-time cap, paid-AI spend cap, explicit price hypothesis, testable buyer use case, and kill rule before engineering begins.",
+        "Further engineering allocation follows actual sales, reviews, or buyer support evidence rather than internal feature count or opportunity scoring."
       ],
       "constraints": [
-        "Do not fabricate demand, revenue, customer interest, delivery success, or payment.",
-        "Do not make purchases, send unapproved external communications, or create customer commitments outside existing human authority gates.",
-        "Existing high-friction product concepts may be maintained for correctness but do not receive expansion work without external evidence.",
-        "Prefer read-only or least-privilege access and keep customer secrets and private payloads out of the public repository."
+        "Do not fabricate demand, revenue, customer interest, sales, reviews, or payment.",
+        "Do not make purchases, publish paid listings, send unapproved external communications, or create customer commitments outside existing human authority gates.",
+        "Do not reuse copyrighted game assets, proprietary UI, trademarks, private code, or employer/customer data in commercial products without separate rights.",
+        "Prefer generic reusable mechanics built from existing portfolio capabilities and keep customer secrets and private payloads out of the public repository."
       ],
       "evidence_requirements": [
         "Provider-backed payment or settlement evidence tied to the specific engagement.",
