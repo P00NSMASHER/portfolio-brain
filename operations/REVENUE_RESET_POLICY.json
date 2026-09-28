@@ -3,42 +3,50 @@
   "policy_id": "revenue-reset-2026-09-27",
   "status": "ACTIVE",
   "objective_ref": "OBJ-001",
-  "governing_principle": "Verified cash and paid delivery outrank internal architecture, feature count, opportunity scores, and speculative startup creation.",
+  "governing_principle": "Verified cash from pre-existing buyer demand outranks invented offers, startup creation, internal architecture, feature count, opportunity scores, and speculative market narratives.",
   "freeze": {
     "net_new_startup_architecture": true,
     "speculative_vertical_expansion": true,
+    "new_marketing_site": true,
+    "new_payment_product": true,
+    "new_brand_or_logo_work": true,
     "existing_product_correctness_maintenance_allowed": true
   },
   "primary_experiment": {
-    "name": "AI-built app and GitHub rescue",
-    "buyer": "Founder or small team with an existing AI-assisted application that is broken, unstable, failing CI, failing deployment, or stuck before launch.",
-    "allowed_scope": [
-      "read-only codebase audit",
-      "root-cause diagnosis",
-      "GitHub Actions and CI repair",
-      "deployment repair",
-      "test and regression hardening",
-      "mobile/web UI defect repair where reproducible",
-      "plain-English handoff and verification evidence"
+    "name": "Marketplace-first paid technical operator work",
+    "thesis": "Do not invent a business before demand. Pursue only buyer-posted work where the buyer has already stated the problem, budget, and intent to hire.",
+    "target_roles": [
+      "AI-native technical operator",
+      "Replit/Claude/AI-assisted application stabilization",
+      "GitHub/CI/deployment troubleshooting within demonstrated capability",
+      "small bounded automation or internal-tool work using tools already demonstrated"
     ],
-    "initial_price_test_usd": {
-      "diagnostic": 199,
-      "fix_sprint": 750
-    },
-    "pricing_note": "Prices are experiments, not claims about market value. Change only from observed buyer response or explicit owner instruction.",
+    "disallowed_positioning": [
+      "senior software engineer unless the scope can be truthfully supported by demonstrated experience",
+      "AWS/GCP infrastructure expert without prior demonstrated delivery",
+      "native iOS/Android specialist",
+      "security/compliance specialist",
+      "n8n/Make/Zapier expert unless prior hands-on proof exists",
+      "any role requiring fabricated years of experience, fabricated clients, fabricated revenue impact, or fabricated case studies"
+    ],
+    "acquisition_spend_cap_usd": 15,
+    "acquisition_spend_note": "Do not purchase subscriptions, ads, boosts, domains, hosting, or build credits for this experiment. A one-time marketplace proposal-token test may spend no more than $15 with owner approval.",
+    "application_rule": "Apply only where at least 70% of the requested work maps to existing demonstrated capability and every claimed example can be shown.",
+    "portfolio_rule": "Use existing public repositories, live sites, CI evidence, and truthful screen recordings. Do not build speculative portfolio projects before applying.",
     "success_evidence": [
-      "verified payment",
-      "bounded scope accepted",
-      "deliverable completed",
-      "customer confirms the target problem is resolved or materially improved"
+      "buyer reply requesting substantive discussion",
+      "interview or scoped technical conversation",
+      "funded contract or verified payment",
+      "completed deliverable accepted by buyer"
     ],
-    "failure_rule": "If 20 qualified buyer attempts produce zero substantive replies, or 5 substantive buyer conversations produce zero paid engagements, stop and revise the offer, channel, price, or target before further expansion."
+    "failure_rule": "After the first bounded batch of high-fit applications, if there are no substantive buyer responses, inspect positioning and target fit before spending more. No new product build is an allowed response to failed applications."
   },
   "resource_rules": [
-    "Hunter and research may search only for current paid-work demand, buyer language, channel evidence, or a named delivery blocker.",
-    "Engineering and testing capacity should go first to paid customer work, then to reusable proof-of-work that directly supports the primary experiment.",
-    "Do not build a new SaaS, marketplace, dashboard, agent hierarchy, or recovery vertical merely to create activity.",
-    "StarBlox and market-surveillance research do not count as revenue experiments unless a real external buyer independently requests paid work."
+    "Research may identify fresh buyer-posted opportunities and required application language only.",
+    "Engineering capacity stays idle until it supports a real application proof gap that can be closed cheaply or a funded customer contract.",
+    "Do not build a new SaaS, marketplace, diagnostic product, dashboard, agent hierarchy, recovery vertical, brand, payment page, or marketing site merely to create activity.",
+    "Do not use paid model/work credits to simulate customer work before a contract exists.",
+    "Existing portfolio projects are evidence assets, not presumed businesses."
   ],
   "authority": {
     "cash_spend": "HUMAN_APPROVAL_REQUIRED",
