@@ -1,0 +1,40 @@
+name: phase1-verification
+
+on:
+  push:
+    branches: ["phase1/trust-boundary-20260928"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase1-verification-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  phase1-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Record exact source and baseline regression evidence
+        shell: bash
+        run: |
+          mkdir -p /tmp/phase1-proof
+          git archive --format=zip HEAD -o /tmp/phase1-proof/source.zip
+          git rev-parse HEAD > /tmp/phase1-proof/source-sha.txt
+          python -m unittest discover -s tests -p 'test_*.py' -v > /tmp/phase1-proof/regressions.txt 2>&1
+      - name: Preserve sanitized evidence even on test failure
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase1-proof-${{ github.sha }}
+          path: /tmp/phase1-proof/
+          if-no-files-found: error
+          retention-days: 30
