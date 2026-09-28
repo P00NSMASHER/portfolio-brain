@@ -8,6 +8,7 @@ from pathlib import Path
 from runtime.artifact_http import open_url
 from runtime.artifact_restore import restore_latest_valid_state
 from runtime.artifact_restore import InvalidStateArtifact
+from runtime.artifact_quarantine import apply_artifact_quarantine
 from runtime.provider_health import validate_provider_health
 from runtime.state import validate_cycle_receipt, validate_state
 
@@ -138,7 +139,10 @@ def restore(*, output: Path, metadata_output: Path | None = None,
                       retries=budgets["retry_limit"],backoff=budgets["retry_backoff_seconds"],
                       deadline=time.monotonic()+budgets["max_state_restore_seconds"])
     url=f"https://api.github.com/repos/{repository}/actions/artifacts?name={p['state_persistence']['artifact_name']}&per_page=100"
-    data=http.json(url)
+    data=apply_artifact_quarantine(
+        http.json(url),
+        expected_artifact_name=p["state_persistence"]["artifact_name"],
+    )
     archive_cache:dict[str,bytes]={}
     def download(url:str)->bytes:
         if url not in archive_cache:
