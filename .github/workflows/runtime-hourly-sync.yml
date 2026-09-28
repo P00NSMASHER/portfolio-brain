@@ -1,13 +1,8 @@
 name: runtime-hourly-sync
-# proof-retry: commit-cap-tree-proof
 
 on:
   schedule:
     - cron: "17 * * * *"
-  push:
-    branches: ["step8-runtime-sync-large-compare"]
-    paths:
-      - ".github/workflows/runtime-hourly-sync.yml"
   workflow_dispatch:
 
 permissions:
