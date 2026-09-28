@@ -34,6 +34,40 @@
       "verification_requirement": "VERIFIED",
       "aggregation": "COUNT",
       "status": "PROPOSED"
+    },
+    {
+      "schema_version": "1.0.0",
+      "metric_id": "MET-002",
+      "project_id": "PRJ-000",
+      "name": "Verified external cash collected",
+      "description": "Cumulative customer cash receipts that are independently verified and attributable to portfolio-delivered work.",
+      "kind": "OUTCOME",
+      "unit": "USD",
+      "direction": "HIGHER_IS_BETTER",
+      "source": {
+        "source_type": "EXTERNAL_VERIFIED_OUTCOME",
+        "source_ref": "provider-backed customer payment receipts"
+      },
+      "verification_requirement": "VERIFIED",
+      "aggregation": "SUM",
+      "status": "ACTIVE"
+    },
+    {
+      "schema_version": "1.0.0",
+      "metric_id": "MET-003",
+      "project_id": "PRJ-000",
+      "name": "Verified paid deliveries",
+      "description": "Count of customer engagements with verified payment plus evidence that the agreed bounded deliverable was completed.",
+      "kind": "OUTCOME",
+      "unit": "deliveries",
+      "direction": "HIGHER_IS_BETTER",
+      "source": {
+        "source_type": "EXTERNAL_VERIFIED_OUTCOME",
+        "source_ref": "payment plus delivery acceptance receipts"
+      },
+      "verification_requirement": "VERIFIED",
+      "aggregation": "COUNT",
+      "status": "ACTIVE"
     }
   ]
 }
