@@ -88,7 +88,7 @@ jobs:
       - name: Verify candidate exact-run accounting and review lineage
         run: |
           python - <<'PY'
-          import json, os
+          import json, os, subprocess
           from pathlib import Path
           from operations.workflow_liveness import load_policy, verify_work_proof
           from hunting.proposal_review_state import validate_state as validate_review_state
@@ -137,7 +137,7 @@ jobs:
 
           manifest={
             'schema_version':'1.0.0',
-            'candidate_head':os.environ.get('GITHUB_SHA'),
+            'candidate_head':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
             'workflow_run_id':int(os.environ['GITHUB_RUN_ID']),
             'audited_scheduler_run_id':36363972400,
             'audited_scheduler_artifact_id':10947200555,
