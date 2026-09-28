@@ -1677,12 +1677,12 @@ main{{
 }}
 .topbar{{
   position:relative;
-  min-height:460px;
+  min-height:300px;
   display:grid;
   grid-template-columns:minmax(0,1fr) auto;
   align-items:end;
   gap:40px;
-  padding:94px 22px 54px;
+  padding:64px 22px 36px;
   margin-bottom:18px;
   overflow:hidden;
 }}
@@ -1718,7 +1718,7 @@ main{{
 h1{{
   max-width:1050px;
   margin:0;
-  font-size:clamp(3.6rem,7vw,7.2rem);
+  font-size:clamp(3rem,5.8vw,5.4rem);
   line-height:.91;
   letter-spacing:-.065em;
   font-weight:720;
@@ -1733,8 +1733,8 @@ h2{{
 p{{color:var(--muted);margin:.45rem 0;line-height:1.48}}
 .hero-lede{{
   max-width:760px;
-  margin-top:24px;
-  font-size:clamp(1.08rem,1.6vw,1.42rem);
+  margin-top:16px;
+  font-size:clamp(1rem,1.35vw,1.22rem);
   line-height:1.42;
   letter-spacing:-.025em;
 }}
@@ -2117,8 +2117,8 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
     width:100%;
     padding:0 max(12px,env(safe-area-inset-right)) calc(46px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));
   }}
-  .topbar{{min-height:340px;display:block;padding:52px 6px 30px}}
-  h1{{font-size:clamp(3.25rem,16vw,5.6rem)}}
+  .topbar{{min-height:220px;display:block;padding:32px 6px 22px}}
+  h1{{font-size:clamp(2.65rem,12vw,4rem)}}
   .hero-lede{{font-size:1.05rem;max-width:92%}}
   .actions{{justify-content:flex-start;margin-top:28px}}
   .kpis{{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}}
@@ -2154,7 +2154,16 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
   .mobile-stats-3{{grid-template-columns:repeat(3,minmax(0,1fr))}}
   .repair-list{{grid-template-columns:1fr}}
   .repair-board{{padding:18px;border-radius:22px}}
+  body{{background:var(--page)}}
+  aside,.card{{-webkit-backdrop-filter:none;backdrop-filter:none}}
+  aside{{background:var(--surface-solid)}}
+  .card,.focus-card{{background:var(--surface-solid)}}
+  .topbar::before,.topbar::after{{display:none}}
+  .topbar,.kpis,.card{{animation:none!important}}
+  .readonly{{display:none}}
+  .advanced-nav{{display:none!important}}
 }}
+
 
 @media(max-width:520px){{
   :root{{--nav-h:94px}}
@@ -2162,9 +2171,9 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
   nav a{{padding:7px 10px;font-size:.68rem}}
   .brand div:last-child{{font-size:0}}
   .brand div:last-child::after{{content:"Brain";font-size:.76rem}}
-  .topbar{{min-height:0;padding:26px 6px 20px}}
+  .topbar{{min-height:0;padding:20px 4px 16px}}
   .eyebrow{{font-size:.66rem}}
-  h1{{font-size:clamp(2.9rem,17vw,4.5rem)}}
+  h1{{font-size:clamp(2.35rem,12.5vw,3.35rem)}}
   .hero-lede{{font-size:.98rem}}
   .kpis{{grid-template-columns:1fr 1fr}}
   .kpi{{min-height:145px}}
@@ -2190,7 +2199,26 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
   .mobile-stats{{gap:7px;margin-top:12px}}
   .mobile-stats>div{{padding:9px 10px}}
   .project-mobile-stats{{gap:6px}}
+  main{{padding-bottom:calc(92px + env(safe-area-inset-bottom))}}
+  .mobile-dock{{
+    position:fixed;left:10px;right:10px;bottom:calc(8px + env(safe-area-inset-bottom));z-index:120;
+    display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;
+    padding:7px;border:1px solid var(--line);border-radius:18px;background:var(--surface-solid);
+    box-shadow:0 12px 38px rgba(0,0,0,.18)
+  }}
+  .mobile-dock a,.mobile-dock button{{
+    min-width:0;min-height:44px;padding:9px 5px;border:0;border-radius:12px;
+    display:grid;place-items:center;text-decoration:none;background:var(--surface-soft);color:var(--text);
+    font-size:.68rem;font-weight:720;box-shadow:none
+  }}
+  .mobile-dock a:nth-child(2){{background:var(--blue);color:#fff}}
+  .mobile-dock button:hover,.mobile-dock a:hover{{transform:none}}
+  .actions{{gap:6px;margin-top:18px}}
+  .actions .header-action,.actions .detail-toggle{{min-height:42px;padding:8px 11px;font-size:.68rem}}
+  .hero-badges{{margin-top:14px}}
+  .truth-strip{{box-shadow:none}}
 }}
+
 
 
 /* Revenue-first v5 operator hierarchy */
@@ -2227,7 +2255,7 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
 .product-rank{{width:30px;height:30px;display:grid;place-items:center;border-radius:10px;background:rgba(0,113,227,.10);color:var(--blue);font-size:.7rem;font-weight:750}}
 .product-card h3{{margin:1px 0 4px;font-size:.95rem}}
 .product-card p{{margin:0;color:var(--muted);font-size:.74rem;line-height:1.45}}
-.product-stats{{display:grid;grid-template-columns:.7fr .7fr 1.6fr;gap:8px;margin:12px 0}}
+.product-stats{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}}
 .product-stats span{{min-width:0;padding:8px;border-radius:10px;background:var(--surface-solid);border:1px solid var(--line)}}
 .product-stats small{{display:block;color:var(--muted);font-size:.58rem;text-transform:uppercase;letter-spacing:.06em}}
 .product-stats strong{{display:block;margin-top:3px;font-size:.68rem;overflow-wrap:anywhere}}
@@ -2236,6 +2264,24 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
 .legacy-details>summary{{cursor:pointer;color:var(--muted);font-size:.74rem;font-weight:650}}
 .legacy-body{{padding-top:6px}}
 #repair-board,#recommended-upgrades,#micro-products,#revenue-focus,#operations,#projects,#hunter,#cost{{scroll-margin-top:72px}}
+body:not(.advanced-open) .advanced-nav{{display:none}}
+.advanced-content[hidden]{{display:none}}
+.advanced-content{{content-visibility:auto;contain-intrinsic-size:1800px}}
+.advanced-gate{{display:grid;place-items:center;text-align:center;padding:18px 0 8px}}
+.advanced-gate p{{font-size:.72rem;margin-top:7px}}
+.detail-toggle{{min-height:42px;border-radius:999px}}
+.detail-toggle-wide{{background:var(--surface-solid);color:var(--text);border:1px solid var(--line);box-shadow:var(--shadow-soft)}}
+.overflow-details{{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}}
+.overflow-details>summary,.product-meta>summary{{cursor:pointer;color:var(--blue);font-size:.74rem;font-weight:680;list-style:none}}
+.overflow-details>summary::-webkit-details-marker,.product-meta>summary::-webkit-details-marker{{display:none}}
+.overflow-details>summary::after,.product-meta>summary::after{{content:"+";float:right;color:var(--muted);font-size:.9rem}}
+.overflow-details[open]>summary::after,.product-meta[open]>summary::after{{content:"–"}}
+.overflow-list{{margin-top:10px}}
+.product-meta{{margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}}
+.product-meta p{{font-size:.68rem!important;margin-top:7px!important}}
+.primary-header-action{{background:var(--blue)!important;color:#fff!important;border-color:transparent!important}}
+.mobile-dock{{display:none}}
+
 @media(max-width:900px){{
   .focus-grid{{grid-template-columns:1fr}}
   .factory-scoreboard{{grid-template-columns:1fr 1fr}}
