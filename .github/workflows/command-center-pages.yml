@@ -21,6 +21,14 @@ on:
       - ".github/workflows/command-center-pages.yml"
   schedule:
     - cron: "37 * * * *"
+  # Scheduled delivery is best-effort. Re-publish after the hourly scheduler
+  # finishes so durable state changes cannot wait on a missed Pages cron.
+  workflow_run:
+    workflows:
+      - "portfolio-autonomous-scheduler"
+    types: [completed]
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
