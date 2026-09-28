@@ -1,13 +1,14 @@
 {
   "schema_version": "1.0.0",
-  "request_id": "command-center-all-agent-heartbeat-refresh-2026-09-27",
-  "requested_at": "2026-09-27T01:06:30Z",
-  "reason": "Publish the first successful all-agent HEALTH_CHECK sweep so every registered agent heartbeat is visible on the public command center.",
+  "request_id": "command-center-upstream-freshness-refresh-2026-09-28",
+  "requested_at": "2026-09-28T13:43:10Z",
+  "reason": "Publish the repaired upstream runtime, scheduler, agent, Hunter, notification, and cost artifacts after bounded liveness recovery.",
   "expected_effect": [
-    "restore portfolio-agent-heartbeat-state from run 36284491910",
-    "show all 10 registered agents with a real HEALTH_CHECK heartbeat",
-    "preserve role-specific substantive activity when newer than a health check",
-    "publish the refreshed Agent Fleet to GitHub Pages"
+    "restore the newest verified runtime sync artifact from main",
+    "restore fresh scheduler and all-agent heartbeat artifacts",
+    "restore fresh Hunter state and Hunter proposal state",
+    "restore fresh notification and cost-governor state",
+    "publish a command-center snapshot whose core durable sources are LIVE"
   ],
   "authority_class": "OBSERVE",
   "mutation_scope": "TRIGGER_ONLY"
