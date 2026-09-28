@@ -339,6 +339,12 @@ def build_command_center_snapshot() -> dict[str, Any]:
     runtime_state_path = LIVE_ROOT / "runtime_state.json"
     runtime_state = json.loads(runtime_state_path.read_text(encoding="utf-8")) if runtime_state_path.exists() else None
     optimization = load_json("operations/POST_RESTRICTION_OPTIMIZATION_STATUS.json")
+    revenue_policy = load_json("operations/REVENUE_RESET_POLICY.json")
+    micro_product_factory = load_json("operations/MICRO_PRODUCT_FACTORY.json")
+    objectives_doc = load_json("registry/objectives.json")
+    revenue_objective = next(
+        row for row in objectives_doc["objectives"] if row["objective_id"] == revenue_policy["objective_ref"]
+    )
     action_policy = load_json("action_engine/ACTION_POLICY.json")
     action_ledger = load_json("action_engine/GMAIL_GATEWAY_LEDGER.json")
     commercial_observation = load_commercial_observation()
@@ -614,7 +620,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
 
     snapshot = {
         "schema_version": "1.0.0",
-        "command_center_id": "portfolio-brain-command-center-v4",
+        "command_center_id": "portfolio-brain-command-center-v5",
         "authority_class": "OBSERVE",
         "mutation_capability": "NONE",
         "network_capability": "NONE",
@@ -665,6 +671,27 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "paid_model_calls_per_day": optimization["after"]["paid_model_calls_per_day"],
             "controls_retained": optimization["controls_retained"],
         },
+        "revenue_focus": {
+            "objective_id": revenue_objective["objective_id"],
+            "objective_title": revenue_objective["title"],
+            "objective_statement": revenue_objective["statement"],
+            "governing_principle": revenue_policy["governing_principle"],
+            "strategy_name": revenue_policy["primary_experiment"]["name"],
+            "market": micro_product_factory["market"],
+            "cash_evidence_state": current_commercial["current_payment_state"],
+            "cash_evidence_status": current_commercial["evidence_status"],
+            "micro_product_verified_revenue_usd": micro_product_factory["verified_revenue_usd"],
+            "micro_product_verified_sales_count": micro_product_factory["verified_sales_count"],
+            "micro_product_published_count": micro_product_factory["published_count"],
+            "paid_model_spend_today_usd": telemetry["cost"]["actual_usage_today"]["cost_usd"],
+            "max_hours_per_sku": micro_product_factory["build_caps"]["max_hours_per_sku"],
+            "max_paid_ai_spend_usd_per_sku": micro_product_factory["build_caps"]["max_paid_ai_spend_usd_per_sku"],
+            "price_min_usd": micro_product_factory["build_caps"]["initial_price_min_usd"],
+            "price_max_usd": micro_product_factory["build_caps"]["initial_price_max_usd"],
+            "next_sku": sorted(micro_product_factory["skus"], key=lambda row: row["rank"])[0],
+            "truth_state": "EARNING" if micro_product_factory["verified_sales_count"] > 0 else "UNPROVEN",
+        },
+        "micro_product_factory": micro_product_factory,
         "commercial_validation": {
             "evidence_status": current_commercial["evidence_status"],
             "live_external_evidence_feed": current_commercial["live_external_evidence_feed"],
@@ -845,6 +872,9 @@ def build_command_center_snapshot() -> dict[str, Any]:
                     "notifications/NOTIFICATION_POLICY.json",
                     "notifications/NOTIFICATION_STATE_SEED.json",
                     "operations/POST_RESTRICTION_OPTIMIZATION_STATUS.json",
+                    "operations/REVENUE_RESET_POLICY.json",
+                    "operations/MICRO_PRODUCT_FACTORY.json",
+                    "registry/objectives.json",
                     "action_engine/ACTION_POLICY.json",
                     "action_engine/GMAIL_GATEWAY_LEDGER.json",
                     "model_router/PROVIDER_REGISTRY.json",
@@ -891,6 +921,8 @@ def render_html(snapshot: dict[str, Any]) -> str:
     system = snapshot["system"]
     sprint = snapshot["validation_sprint"]
     commercial = snapshot["commercial_validation"]
+    revenue_focus = snapshot["revenue_focus"]
+    micro_factory = snapshot["micro_product_factory"]
     cost = snapshot["cost_governor"]
     portfolio = snapshot["portfolio"]
     optimization = snapshot["optimization"]
@@ -1036,6 +1068,19 @@ def render_html(snapshot: dict[str, Any]) -> str:
         </article>'''
         for index, upgrade in enumerate(recommended_upgrades, 1)
     ) or '<p class="repair-empty">No upgrade recommendations are currently generated from this snapshot.</p>'
+
+    ranked_skus = sorted(micro_factory["skus"], key=lambda row: row["rank"])
+    product_cards = "".join(
+        f'''<article class="product-card">
+          <div class="product-card-top"><span class="product-rank">#{sku["rank"]:02d}</span><div><h3>{_e(sku["name"])}</h3><p>{_e(sku["buyer_problem"])}</p></div>{_badge(sku["status"], "good" if sku["status"]=="READY" else "neutral")}</div>
+          <div class="product-stats"><span><small>Format</small><strong>{_e(sku["format"])}</strong></span><span><small>Price test</small><strong>${sku["price_usd"]:.2f}</strong></span><span><small>Source</small><strong>{_e(sku["reuse_source"])}</strong></span></div>
+          <p class="product-boundary"><strong>Boundary:</strong> {_e(sku["reuse_boundary"])}</p>
+          <details class="repair-details"><summary>Build prompt</summary><div class="repair-prompt"><p id="sku-prompt-{sku["sku_id"]}">{_e(sku["build_prompt"])}</p><button type="button" class="copy-repair" data-copy-target="sku-prompt-{sku["sku_id"]}">Copy prompt</button></div></details>
+        </article>'''
+        for sku in ranked_skus
+    )
+    next_sku = ranked_skus[0]
+    next_sku_prompt_id = "next-sku-prompt"
     guardrails = "".join(f"<li>{_e(x)}</li>" for x in sprint["guardrails"])
     allowed = "".join(f"<li>{_e(x)}</li>" for x in snapshot["operator_boundary"]["allowed"])
     blocked = "".join(f"<li>{_e(x)}</li>" for x in snapshot["operator_boundary"]["not_allowed"])
@@ -2113,16 +2158,74 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
   .project-mobile-stats{{gap:6px}}
 }}
 
+
+/* Revenue-first v5 operator hierarchy */
+.operator-focus{margin:0 0 16px;padding:0}
+.truth-strip{display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--line);border-radius:16px;margin-bottom:12px;font-size:.78rem;box-shadow:var(--shadow-soft)}
+.truth-strip strong{font-size:.72rem;letter-spacing:.08em;white-space:nowrap}
+.truth-strip span{color:var(--muted)}
+.truth-warn{background:linear-gradient(135deg,rgba(255,159,10,.10),rgba(255,69,58,.06));border-color:rgba(255,159,10,.24)}
+.truth-good{background:linear-gradient(135deg,rgba(48,209,88,.11),rgba(41,151,255,.05));border-color:rgba(48,209,88,.22)}
+.focus-grid{display:grid;grid-template-columns:1.02fr 1.15fr 1.15fr;gap:12px}
+.focus-card{position:relative;overflow:hidden;padding:22px;border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--surface);box-shadow:var(--shadow-soft)}
+.focus-card h2{margin:5px 0 8px;font-size:1.18rem;letter-spacing:-.035em}
+.focus-card p{margin:0;color:var(--muted);font-size:.79rem;line-height:1.48}
+.focus-label{font-size:.64rem;font-weight:760;letter-spacing:.12em;color:var(--blue);text-transform:uppercase}
+.money-number{font-size:3.05rem;font-weight:760;letter-spacing:-.065em;line-height:.95;margin:18px 0 8px;font-variant-numeric:tabular-nums}
+.focus-mini{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding-top:10px;margin-top:10px;font-size:.73rem;color:var(--muted)}
+.focus-mini strong{color:var(--text)}
+.guardrail-row{display:flex;flex-wrap:wrap;gap:7px;margin:16px 0 10px}
+.guardrail-row span{padding:6px 9px;border:1px solid var(--line);border-radius:999px;background:var(--surface-soft);font-size:.68rem;font-weight:650}
+.focus-note{margin-top:8px!important}
+.focus-next-price{display:flex;justify-content:space-between;align-items:center;margin:14px 0 10px;padding:9px 11px;border-radius:12px;background:var(--surface-soft);font-size:.72rem;color:var(--muted)}
+.focus-next-price strong{font-size:1rem;color:var(--text)}
+.compact-prompt{margin-top:8px}
+.compact-prompt p{max-height:80px;overflow:auto}
+.product-factory{margin:14px 0;border-color:rgba(0,113,227,.18)}
+.product-head{align-items:flex-start}
+.factory-scoreboard{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:16px 0}
+.factory-scoreboard div{padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--surface-soft)}
+.factory-scoreboard span{display:block;color:var(--muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.07em}
+.factory-scoreboard strong{display:block;margin-top:4px;font-size:1.05rem}
+.product-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.product-card{padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--surface-soft)}
+.product-card-top{display:grid;grid-template-columns:auto 1fr auto;gap:11px;align-items:start}
+.product-rank{width:30px;height:30px;display:grid;place-items:center;border-radius:10px;background:rgba(0,113,227,.10);color:var(--blue);font-size:.7rem;font-weight:750}
+.product-card h3{margin:1px 0 4px;font-size:.95rem}
+.product-card p{margin:0;color:var(--muted);font-size:.74rem;line-height:1.45}
+.product-stats{display:grid;grid-template-columns:.7fr .7fr 1.6fr;gap:8px;margin:12px 0}
+.product-stats span{min-width:0;padding:8px;border-radius:10px;background:var(--surface-solid);border:1px solid var(--line)}
+.product-stats small{display:block;color:var(--muted);font-size:.58rem;text-transform:uppercase;letter-spacing:.06em}
+.product-stats strong{display:block;margin-top:3px;font-size:.68rem;overflow-wrap:anywhere}
+.product-boundary{padding:9px 10px;border-left:3px solid var(--amber);background:rgba(255,159,10,.05);border-radius:8px}
+.legacy-details{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.legacy-details>summary{cursor:pointer;color:var(--muted);font-size:.74rem;font-weight:650}
+.legacy-body{padding-top:6px}
+#repair-board,#recommended-upgrades,#micro-products,#revenue-focus,#operations,#projects,#hunter,#cost{scroll-margin-top:72px}
+@media(max-width:900px){
+  .focus-grid{grid-template-columns:1fr}
+  .factory-scoreboard{grid-template-columns:1fr 1fr}
+  .product-grid{grid-template-columns:1fr}
+}
+@media(max-width:520px){
+  .truth-strip{align-items:flex-start;flex-direction:column;gap:4px;padding:11px 12px}
+  .focus-card{padding:17px}
+  .money-number{font-size:2.6rem}
+  .factory-scoreboard{grid-template-columns:1fr 1fr}
+  .product-stats{grid-template-columns:1fr 1fr}
+  .product-stats span:last-child{grid-column:1/-1}
+  .product-card-top{grid-template-columns:auto 1fr}
+  .product-card-top .badge{grid-column:2;justify-self:start}
+}
 </style>
 </head>
-<body data-design="apple-inspired-v4-1" data-mobile-optimized="true">
+<body data-design="revenue-first-v5" data-mobile-optimized="true">
 <div class="shell">
 <aside>
   <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Command Center v4.1</small></div></div>
   <nav>
-    <a href="#overview">Overview</a><a href="#live-state">Live</a><a href="#operations">Ops</a><a href="#trends">Trends</a><a href="#alerts">Alerts</a><a href="#projects">Portfolio</a>
-    <a href="#agents">Agents</a><a href="#actions">Actions</a><a href="#hunter">Hunter</a>
-    <a href="#cost">Cost</a><a href="#workflows">Workflows</a><a href="#boundary">Boundaries</a>
+    <a href="#overview">Today</a><a href="#repair-board">Fix</a><a href="#micro-products">Products</a><a href="#revenue-focus">Money</a>
+    <a href="#operations">Ops</a><a href="#projects">Portfolio</a><a href="#hunter">Hunter</a><a href="#cost">Controls</a>
   </nav>
   <div class="readonly"><strong>OBSERVE ONLY</strong><span>Public command center</span></div>
 </aside>
@@ -2131,8 +2234,8 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
     <div class="hero-copy">
       <div class="eyebrow"><span class="signal-dot"></span>Portfolio Intelligence System</div>
       <h1>Portfolio Brain Command Center</h1>
-      <p class="hero-lede">A live, evidence-backed view of your autonomous portfolio — work, agents, spend, outcomes, and operating boundaries in one place.</p>
-      <div class="hero-badges">{_badge(system["functional_status"], _status_tone(system["functional_status"]))} {_badge("EVIDENCE-DRIVEN", "neutral")} {_badge("READ ONLY", "neutral")}</div>
+      <p class="hero-lede">Revenue-first operator view: what is making money, what is broken, what to build next, and the evidence behind every status.</p>
+      <div class="hero-badges">{_badge(system["functional_status"], _status_tone(system["functional_status"]))} {_badge(revenue_focus["truth_state"], "good" if revenue_focus["truth_state"]=="EARNING" else "warn")} {_badge("READ ONLY", "neutral")}</div>
     </div>
     <div class="actions">
       <button type="button" onclick="location.reload()">Refresh</button>
@@ -2140,16 +2243,59 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
     </div>
   </header>
 
+  <section class="operator-focus" id="revenue-focus" aria-labelledby="revenue-title">
+    <div class="truth-strip {'truth-good' if revenue_focus['truth_state']=='EARNING' else 'truth-warn'}">
+      <strong>{'VERIFIED CASH EXISTS' if revenue_focus['truth_state']=='EARNING' else 'REVENUE NOT PROVEN'}</strong>
+      <span>{'Verified micro-product sales are recorded.' if revenue_focus['truth_state']=='EARNING' else 'No verified micro-product sale exists yet. Infrastructure health does not count as commercial success.'}</span>
+    </div>
+    <div class="focus-grid">
+      <article class="focus-card focus-money">
+        <div class="focus-label">NORTH STAR</div>
+        <h2 id="revenue-title">Verified cash, not activity.</h2>
+        <div class="money-number">${revenue_focus["micro_product_verified_revenue_usd"]:.2f}</div>
+        <p>Verified micro-product revenue · {revenue_focus["micro_product_verified_sales_count"]} sale(s) · {revenue_focus["micro_product_published_count"]} published SKU(s).</p>
+        <div class="focus-mini"><span>Payment evidence</span>{_badge(revenue_focus["cash_evidence_state"], "warn" if revenue_focus["cash_evidence_state"]=="UNKNOWN" else "good")}</div>
+        <div class="focus-mini"><span>Paid model/API spend today</span><strong>${revenue_focus["paid_model_spend_today_usd"]:.2f}</strong></div>
+      </article>
+      <article class="focus-card">
+        <div class="focus-label">CURRENT BET</div>
+        <h2>{_e(revenue_focus["strategy_name"])}</h2>
+        <p>{_e(revenue_focus["governing_principle"])}</p>
+        <div class="guardrail-row"><span>≤ {revenue_focus["max_hours_per_sku"]}h / SKU</span><span>≤ ${revenue_focus["max_paid_ai_spend_usd_per_sku"]} AI spend</span><span>${revenue_focus["price_min_usd"]:.2f}–${revenue_focus["price_max_usd"]:.2f}</span></div>
+        <p class="focus-note">Market: <strong>{_e(revenue_focus["market"])}</strong>. Large speculative startups remain frozen.</p>
+      </article>
+      <article class="focus-card focus-next">
+        <div class="focus-label">DO NEXT</div>
+        <h2>{_e(next_sku["sku_id"])} · {_e(next_sku["name"])}</h2>
+        <p>{_e(next_sku["buyer_problem"])}</p>
+        <div class="focus-next-price"><span>Price test</span><strong>${next_sku["price_usd"]:.2f}</strong></div>
+        <div class="repair-prompt compact-prompt"><p id="{next_sku_prompt_id}">{_e(next_sku["build_prompt"])}</p><button type="button" class="copy-repair" data-copy-target="{next_sku_prompt_id}">Copy build prompt</button></div>
+      </article>
+    </div>
+  </section>
+
   <section class="repair-board" id="repair-board" aria-labelledby="repair-title" data-as-of="{_e(publication.get('generated_at') or source_bundle.get('generated_at') or '')}">
-    <div class="repair-head"><div><div class="repair-kicker"><span class="repair-pulse"></span> SYSTEM DIAGNOSTICS · READ ONLY</div><h2 id="repair-title">Keep the Brain operational.</h2><p>Evidence-backed issues and a focused prompt for each repair. Recheck against the latest run before changing code.</p></div><div class="repair-count"><strong>{len(repair_issues)}</strong><span>snapshot issues</span></div></div>
+    <div class="repair-head"><div><div class="repair-kicker"><span class="repair-pulse"></span> FIX FIRST · SYSTEM DIAGNOSTICS</div><h2 id="repair-title">What is actually broken?</h2><p>Only evidence-backed defects belong here. Green infrastructure never substitutes for revenue.</p></div><div class="repair-count"><strong>{len(repair_issues)}</strong><span>snapshot issues</span></div></div>
     <div class="repair-meta"><span>{_badge(system['functional_status'], _status_tone(system['functional_status']))}</span><span>Published <time>{_e(publication.get('generated_at') or 'validation preview')}</time></span><span>Source <code>{_e((publication.get('source_commit') or 'not stamped')[:12])}</code></span><span>Evidence captured <time>{_e(source_bundle.get('generated_at') or 'unknown')}</time></span><span id="snapshot-age" role="status">Checking publication age…</span></div>
     <article class="repair-item publication-stale" id="publication-stale" hidden><div class="repair-item-head"><span class="repair-index">!</span><div><h3>Published view is out of date</h3><p id="publication-age-detail">The latest run may differ from this snapshot.</p></div>{_badge('CHECK NOW', 'warn')}</div><details class="repair-details"><summary>View repair prompt</summary><div class="repair-prompt"><p id="publication-repair-prompt">Audit the latest P00NSMASHER/portfolio-brain Pages workflow and its durable state bridge against current main. The public dashboard snapshot is older than the expected hourly refresh window or has no timestamp. Check the newest run, artifact continuity, publication gate and deployment status. Repair the root cause on a branch and verify a fresh published snapshot with valid source receipts. Do not change the cost ceiling, authority gates or tests to force green.</p><button type="button" class="copy-repair" data-copy-target="publication-repair-prompt">Copy prompt</button></div></details></article>
     <div class="repair-list">{repair_cards}</div>
     <p class="repair-foot">A healthy badge reflects only checks supported by this snapshot. A heartbeat check alone does not prove useful work. No action runs from this public page.</p>
   </section>
 
+  <section class="card product-factory" id="micro-products" aria-labelledby="products-title">
+    <div class="section-head product-head"><div><div class="focus-label">MICRO-PRODUCT FACTORY · BOUNDED BETS</div><h2 id="products-title">Build small. Publish. Measure. Kill losers.</h2><p>{_e(revenue_focus["objective_statement"])}</p></div>{_badge(str(len(ranked_skus)) + " tracked SKUs", "neutral")}</div>
+    <div class="factory-scoreboard">
+      <div><span>Published</span><strong>{micro_factory["published_count"]}</strong></div>
+      <div><span>Verified sales</span><strong>{micro_factory["verified_sales_count"]}</strong></div>
+      <div><span>Verified revenue</span><strong>${micro_factory["verified_revenue_usd"]:.2f}</strong></div>
+      <div><span>Build cap</span><strong>{micro_factory["build_caps"]["max_hours_per_sku"]}h / ${micro_factory["build_caps"]["max_paid_ai_spend_usd_per_sku"]}</strong></div>
+    </div>
+    <div class="product-grid">{product_cards}</div>
+    <p class="repair-foot">Candidate status is not demand. A SKU earns more engineering only from verified sales, reviews, support requests, or repeat buyer demand.</p>
+  </section>
+
   <section class="repair-board upgrade-board" id="recommended-upgrades" aria-labelledby="upgrade-title">
-    <div class="repair-head"><div><div class="repair-kicker upgrade-kicker">RECOMMENDED UPGRADES · EVIDENCE BACKED</div><h2 id="upgrade-title">Recommended Upgrades</h2><p><strong>Make the Brain better.</strong> Forward-looking improvements generated from the current snapshot. These are not defects; each item includes a ready-to-run prompt with the current evidence boundaries preserved.</p></div><div class="repair-count upgrade-count"><strong>{len(recommended_upgrades)}</strong><span>recommended</span></div></div>
+    <div class="repair-head"><div><div class="repair-kicker upgrade-kicker">IMPROVE NEXT · EVIDENCE BACKED</div><h2 id="upgrade-title">Brain improvements worth considering</h2><p>Internal improvements come after money and critical defects. Each item still requires current evidence before implementation.</p></div><div class="repair-count upgrade-count"><strong>{len(recommended_upgrades)}</strong><span>recommended</span></div></div>
     <div class="repair-meta"><span>{_badge("READ ONLY","neutral")}</span><span>Source <code>{_e((publication.get('source_commit') or 'not stamped')[:12])}</code></span><span>Generated from current durable state</span></div>
     <div class="repair-list upgrade-list">{upgrade_cards}</div>
     <p class="repair-foot">Recommendations are prioritized from current evidence and should be rechecked against current main before implementation. Copying a prompt does not execute it.</p>
@@ -2294,18 +2440,23 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       </table>
       <p><strong>Scope:</strong> <code>{_e(commercial["query_contract_id"])}</code> · {_e(commercial["coverage_scope"])}</p>
       <p>{_e(commercial["scope_note"])}</p>
-      <div class="section-head" style="margin-top:16px"><div><h2>Retired FreightRecovery Baseline</h2><p>{_e(commercial["historical_source_ref"])} · retired {_e(commercial["baseline_retired_at"] or "unknown")}</p></div>{_badge("HISTORICAL","neutral")}</div>
-      <table>
-        <tbody>
-          <tr><td>Historical first-contact threads</td><td class="num">{commercial["historical_freightrecovery_first_contact_threads_sent"]}</td></tr>
-          <tr><td>Historical human replies</td><td class="num">{commercial["historical_freightrecovery_human_replies"]}</td></tr>
-          <tr><td>Historical related auto replies</td><td class="num">{commercial["historical_freightrecovery_related_auto_replies_observed"]}</td></tr>
-          <tr><td>Historical checkout sessions</td><td class="num">{commercial["historical_freightrecovery_checkout_sessions"]}</td></tr>
-          <tr><td>Historical payment intents</td><td class="num">{commercial["historical_freightrecovery_payment_intents"]}</td></tr>
-        </tbody>
-      </table>
-      <p>{_e(commercial["interpretation"])}</p>
-      <p><strong>Outbound policy:</strong> {_e(commercial["outbound_state"])}</p>
+      <details class="legacy-details">
+        <summary>Historical FreightRecovery baseline</summary>
+        <div class="legacy-body">
+          <div class="section-head" style="margin-top:12px"><div><h2>Retired FreightRecovery Baseline</h2><p>{_e(commercial["historical_source_ref"])} · retired {_e(commercial["baseline_retired_at"] or "unknown")}</p></div>{_badge("HISTORICAL","neutral")}</div>
+          <table>
+            <tbody>
+              <tr><td>Historical first-contact threads</td><td class="num">{commercial["historical_freightrecovery_first_contact_threads_sent"]}</td></tr>
+              <tr><td>Historical human replies</td><td class="num">{commercial["historical_freightrecovery_human_replies"]}</td></tr>
+              <tr><td>Historical related auto replies</td><td class="num">{commercial["historical_freightrecovery_related_auto_replies_observed"]}</td></tr>
+              <tr><td>Historical checkout sessions</td><td class="num">{commercial["historical_freightrecovery_checkout_sessions"]}</td></tr>
+              <tr><td>Historical payment intents</td><td class="num">{commercial["historical_freightrecovery_payment_intents"]}</td></tr>
+            </tbody>
+          </table>
+          <p>{_e(commercial["interpretation"])}</p>
+          <p><strong>Outbound policy:</strong> {_e(commercial["outbound_state"])}</p>
+        </div>
+      </details>
     </div>
   </section>
 
