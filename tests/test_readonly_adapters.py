@@ -26,10 +26,17 @@ def compare_payload(old, new, *, ahead_by=1, files=None, **overrides):
     return payload
 
 class FakeGitHub:
-    def __init__(self, head, compare=None):
+    def __init__(self, head, compare=None, *, git_commits=None, trees=None):
         self.head=head; self.compare=compare or {}; self.urls=[]
+        self.git_commits=git_commits or {}; self.trees=trees or {}
     def __call__(self,url):
         self.urls.append(url)
+        if "/git/commits/" in url:
+            sha=url.rsplit("/",1)[1]
+            return {"sha":sha,"tree":{"sha":self.git_commits[sha]}}
+        if "/git/trees/" in url:
+            tree_sha=url.rsplit("/",1)[1].split("?",1)[0]
+            return self.trees[tree_sha]
         if "/commits/" in url:
             return {"sha":self.head}
         if "/compare/" in url:
@@ -132,12 +139,56 @@ class ReadOnlyAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(AdapterError,"not a fast-forward"):
             observe_repository(BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},fetch_json=fake,observed_at="2026-09-25T16:00:00Z")
 
-    def test_github_compare_file_cap_fails_closed(self):
-        old="a"*40; new="b"*40
-        files=[{"filename":f"f{i}.py","status":"modified","additions":1,"deletions":0,"changes":1} for i in range(300)]
-        fake=FakeGitHub(new,compare_payload(old,new,files=files))
-        with self.assertRaisesRegex(AdapterError,"300-file"):
-            observe_repository(BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},fetch_json=fake,observed_at="2026-09-25T16:00:00Z")
+    def test_github_compare_file_cap_uses_complete_tree_delta(self):
+        old="a"*40; new="b"*40; base_tree="c"*40; head_tree="d"*40
+        boundary=[{"filename":f"f{i}.py","status":"modified","additions":1,"deletions":0,"changes":1} for i in range(300)]
+        base_entries=[
+            {"path":"shared.py","type":"blob","mode":"100644","sha":"1"*40},
+            *[{"path":f"removed/f{i}.py","type":"blob","mode":"100644","sha":f"{i+2:040x}"} for i in range(699)],
+        ]
+        head_entries=[
+            {"path":"shared.py","type":"blob","mode":"100644","sha":"e"*40},
+            *[{"path":f"added/f{i}.py","type":"blob","mode":"100644","sha":f"{i+1000:040x}"} for i in range(11)],
+        ]
+        fake=FakeGitHub(
+            new,compare_payload(old,new,files=boundary),
+            git_commits={old:base_tree,new:head_tree},
+            trees={
+                base_tree:{"sha":base_tree,"truncated":False,"tree":base_entries},
+                head_tree:{"sha":head_tree,"truncated":False,"tree":head_entries},
+            },
+        )
+        receipt=observe_repository(
+            BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},
+            fetch_json=fake,observed_at="2026-09-25T16:00:00Z",
+        )
+        comp=receipt["compare"]
+        self.assertEqual(comp["comparison_method"],"TREE_DELTA_FALLBACK")
+        self.assertTrue(comp["files_complete"])
+        self.assertFalse(comp["files_materialized"])
+        self.assertEqual(comp["changed_file_count"],711)
+        self.assertEqual(comp["file_change_counts"],{"added":11,"removed":699,"modified":1})
+        self.assertEqual(comp["files"],[])
+        self.assertRegex(comp["file_manifest_hash"],r"^sha256:[0-9a-f]{64}$")
+        self.assertEqual(comp["tree_proof"],{"base_tree_sha":base_tree,"head_tree_sha":head_tree})
+        self.assertEqual(receipt["network_reads"],6)
+
+    def test_github_compare_file_cap_still_fails_closed_on_truncated_tree(self):
+        old="a"*40; new="b"*40; base_tree="c"*40; head_tree="d"*40
+        boundary=[{"filename":f"f{i}.py","status":"modified","additions":1,"deletions":0,"changes":1} for i in range(300)]
+        fake=FakeGitHub(
+            new,compare_payload(old,new,files=boundary),
+            git_commits={old:base_tree,new:head_tree},
+            trees={
+                base_tree:{"sha":base_tree,"truncated":True,"tree":[]},
+                head_tree:{"sha":head_tree,"truncated":False,"tree":[]},
+            },
+        )
+        with self.assertRaisesRegex(AdapterError,"truncated"):
+            observe_repository(
+                BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},
+                fetch_json=fake,observed_at="2026-09-25T16:00:00Z",
+            )
 
     def test_heads_and_cursors_require_canonical_lowercase_sha(self):
         with self.assertRaisesRegex(AdapterError,"lowercase"):
