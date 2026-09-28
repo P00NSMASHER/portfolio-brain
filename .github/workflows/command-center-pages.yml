@@ -21,6 +21,15 @@ on:
       - ".github/workflows/command-center-pages.yml"
   schedule:
     - cron: "37 * * * *"
+  # GitHub scheduled delivery can be delayed or skipped. Rebuild from the
+  # durable-state bridge when independent state producers complete so the
+  # public snapshot does not depend on this workflow's cron firing on time.
+  workflow_run:
+    workflows:
+      - "portfolio-autonomous-scheduler"
+      - "portfolio-cost-watchdog"
+    types: [completed]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
