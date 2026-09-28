@@ -182,6 +182,9 @@ class CommandCenterV4Tests(unittest.TestCase):
         workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text()
         self.assertIn("\n  push:\n",workflow)
         self.assertIn("      - main",workflow)
+        self.assertIn("\n  workflow_run:\n",workflow)
+        for producer in ("portfolio-autonomous-scheduler","runtime-hourly-sync","agent-heartbeat-sweep","hunter-autonomous-cycle","portfolio-notification-cycle","portfolio-cost-watchdog"):
+            self.assertIn(f'      - "{producer}"',workflow)
         self.assertIn("Stamp publication provenance",workflow)
         self.assertIn('if [[ "$GITHUB_EVENT_NAME" == "push" ]]',workflow)
         self.assertIn("Verify deployed source commit",workflow)
@@ -194,7 +197,7 @@ class CommandCenterV4Tests(unittest.TestCase):
 
     def test_cost_and_workload_controls_are_visually_separated(self):
         snapshot=build_command_center_snapshot()
-        self.assertEqual(snapshot["publication"]["mode"],"AUTO_ON_RELEVANT_MAIN_PUSH_PLUS_HOURLY_REFRESH")
+        self.assertEqual(snapshot["publication"]["mode"],"AUTO_ON_RELEVANT_MAIN_PUSH_PLUS_DURABLE_STATE_EVENTS_AND_HOURLY_REFRESH")
         public=render_html(snapshot)
         self.assertIn("Paid Cost Governor",public)
         self.assertIn("GitHub Workload Controls",public)

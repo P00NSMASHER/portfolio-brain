@@ -27,6 +27,10 @@ on:
   workflow_run:
     workflows:
       - "portfolio-autonomous-scheduler"
+      - "runtime-hourly-sync"
+      - "agent-heartbeat-sweep"
+      - "hunter-autonomous-cycle"
+      - "portfolio-notification-cycle"
       - "portfolio-cost-watchdog"
     types: [completed]
     branches: ["main"]

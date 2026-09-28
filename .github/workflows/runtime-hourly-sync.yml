@@ -3,6 +3,15 @@ name: runtime-hourly-sync
 on:
   schedule:
     - cron: "17 * * * *"
+  # Do not wait for best-effort cron after runtime/adapter repairs land on main.
+  # This remains the same governed OBSERVE-only sync job and does not widen authority.
+  push:
+    branches: ["main"]
+    paths:
+      - "adapters/**"
+      - "runtime/**"
+      - ".github/workflows/runtime-hourly-sync.yml"
+      - ".github/workflows/runtime-worker.yml"
   workflow_dispatch:
 
 permissions:

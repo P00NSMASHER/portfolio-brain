@@ -400,11 +400,21 @@ class WorkflowLivenessTests(unittest.TestCase):
         self.assertIn("contents: read",workflow)
         self.assertNotIn("contents: write",workflow)
         self.assertIn("workflow_run:",workflow)
-        self.assertIn('workflows: ["agent-heartbeat-sweep", "runtime-hourly-sync"]',workflow)
+        for producer in ("portfolio-autonomous-scheduler","runtime-hourly-sync","agent-heartbeat-sweep","hunter-autonomous-cycle","portfolio-notification-cycle"):
+            self.assertIn(f'      - "{producer}"',workflow)
         self.assertIn("types: [completed]",workflow)
         self.assertIn('branches: ["main"]',workflow)
         self.assertIn('operations/TRIGGER_WORKFLOW_LIVENESS',workflow)
         self.assertIn("\n  push:",workflow)
+
+
+    def test_runtime_sync_wakes_immediately_after_runtime_repairs_land_on_main(self):
+        workflow=(ROOT/".github/workflows/runtime-hourly-sync.yml").read_text()
+        self.assertIn("\n  push:\n",workflow)
+        self.assertIn('branches: ["main"]',workflow)
+        for path in ("adapters/**","runtime/**",".github/workflows/runtime-hourly-sync.yml",".github/workflows/runtime-worker.yml"):
+            self.assertIn(f'      - "{path}"',workflow)
+
 
 
 if __name__=="__main__":

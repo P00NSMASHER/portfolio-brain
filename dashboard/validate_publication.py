@@ -50,7 +50,7 @@ def validate_publication() -> dict[str, object]:
     require(snapshot["workload_control"]["mode"] == "GITHUB_NATIVE_WORKLOAD_CONTROL", "public workload controls missing")
     require(set(snapshot["execution_truth"]) == {"attempted","blocked","executed","verified","scope_note"}, "public execution truth missing")
     publication=snapshot["publication"]
-    require(publication["mode"] == "AUTO_ON_RELEVANT_MAIN_PUSH_PLUS_HOURLY_REFRESH", "public publication mode drifted")
+    require(publication["mode"] == "AUTO_ON_RELEVANT_MAIN_PUSH_PLUS_DURABLE_STATE_EVENTS_AND_HOURLY_REFRESH", "public publication mode drifted")
     if publication["source_commit"] is not None:
         require(len(publication["source_commit"]) == 40, "public source commit is not a full SHA")
     upgrades=snapshot["recommended_upgrades"]
@@ -108,6 +108,9 @@ def validate_publication() -> dict[str, object]:
     require("Paid Cost Governor" in html_text and "GitHub Workload Controls" in html_text, "public paid/workload separation missing")
     workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text(encoding="utf-8")
     require("\n  push:\n" in workflow and "      - main" in workflow, "Pages is not auto-triggered by relevant main pushes")
+    require("\n  workflow_run:\n" in workflow, "Pages durable-state event trigger missing")
+    for producer in ("portfolio-autonomous-scheduler","runtime-hourly-sync","agent-heartbeat-sweep","hunter-autonomous-cycle","portfolio-notification-cycle","portfolio-cost-watchdog"):
+        require(f'      - "{producer}"' in workflow, f"Pages is not coupled to durable producer {producer}")
     require("Stamp publication provenance" in workflow, "Pages publication provenance stamp missing")
     require('if [[ "$GITHUB_EVENT_NAME" == "push" ]]' in workflow, "source-change publication override missing")
     require("Verify deployed source commit" in workflow and "source-commit.txt" in workflow, "end-to-end Pages deployment proof missing")

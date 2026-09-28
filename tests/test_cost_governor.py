@@ -76,7 +76,8 @@ class CostGovernorTests(unittest.TestCase):
         self.assertNotIn('cron: "*/15 * * * *"',workflow)
         self.assertIn("actions: write",workflow)
         self.assertIn("workflow_run:",workflow)
-        self.assertIn('workflows: ["agent-heartbeat-sweep", "runtime-hourly-sync"]',workflow)
+        for producer in ("portfolio-autonomous-scheduler","runtime-hourly-sync","agent-heartbeat-sweep","hunter-autonomous-cycle","portfolio-notification-cycle"):
+            self.assertIn(f'      - "{producer}"',workflow)
         self.assertIn('operations/TRIGGER_WORKFLOW_LIVENESS',workflow)
 
 
