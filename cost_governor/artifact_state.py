@@ -69,7 +69,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True)
     parser.add_argument("--metadata-output", default=None)
+    parser.add_argument("--source-branch", default=None)
     args = parser.parse_args()
+    if args.source_branch is not None:
+        os.environ["GITHUB_REF_NAME"] = args.source_branch
     print(restore(Path(args.output), None if args.metadata_output is None else Path(args.metadata_output)))
 
 if __name__ == "__main__":
