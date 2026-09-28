@@ -108,7 +108,11 @@ class AgentHeartbeatStateTests(unittest.TestCase):
         self.assertEqual(merged["agents"]["AGT-PORTFOLIO-MANAGER"]["last_activity_kind"],"SCHEDULER_CYCLE")
         self.assertEqual(merged["agents"]["AGT-PRODUCT-ANALYST"]["last_activity_kind"],"WORK_EXECUTION")
         self.assertEqual(merged["agents"]["AGT-RESEARCHER"]["last_activity_kind"],"WORK_EXECUTION")
-        self.assertEqual(merged["agents"]["AGT-DATA-STEWARD"]["last_activity_kind"],"RUNTIME_OBSERVATION")
+        self.assertEqual(merged["agents"]["AGT-DATA-STEWARD"]["last_activity_kind"],"HEALTH_CHECK")
+        self.assertTrue(any(
+            event["agent_id"]=="AGT-DATA-STEWARD" and event["activity_kind"]=="RUNTIME_OBSERVATION"
+            for event in merged["recent_events"]
+        ))
         self.assertIn("SWORK-PRODUCT",merged["agents"]["AGT-PRODUCT-ANALYST"]["recent_work_ids"])
         self.assertIn("SWORK-RESEARCH",merged["agents"]["AGT-RESEARCHER"]["recent_work_ids"])
 
