@@ -127,7 +127,7 @@ def validate_command_center() -> dict[str, object]:
     require("Verified cash, not activity." in page and "REVENUE NOT PROVEN" in page or "VERIFIED CASH EXISTS" in page, "revenue-first operator focus missing")
     require("Micro-Product Factory" in page or "MICRO-PRODUCT FACTORY" in page, "micro-product factory board missing")
     require(
-        "Quiz & Reward Engine" in page
+        "Quiz &amp; Reward Engine" in page
         and "House Controls Pack" in page
         and "Redeem Code System" in page,
         "current first-launch-batch micro-product SKUs missing",
