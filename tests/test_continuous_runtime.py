@@ -2,7 +2,7 @@ import copy, json, os, tempfile, unittest
 from unittest.mock import patch
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from runtime.continuous_runtime import RequestBudget, RuntimePolicyError, run
+from runtime.continuous_runtime import RequestBudget, RuntimePolicyError, _sanitize_observation, run
 from runtime.state import RuntimeStateError, advance_cycle, bootstrap_state, canonical_hash, cycle_id_for, validate_state
 from runtime.validate_runtime import validate_runtime
 
@@ -21,6 +21,7 @@ class FakeGitHub:
             files=self.changed.get(repo,[])
             pair=url.rsplit("/compare/",1)[1]
             old,new=pair.split("...",1)
+            new=new.split("?",1)[0]
             return {"status":"ahead","ahead_by":1 if files else 0,"behind_by":0,
                     "total_commits":1 if files else 0,
                     "base_commit":{"sha":old},"merge_base_commit":{"sha":old},
@@ -104,6 +105,35 @@ class RuntimeTests(unittest.TestCase):
             budget("https://api.github.com/repos/example/repo")
         self.assertEqual(len(calls),1)
         self.assertEqual(sleeps,[])
+
+    def test_compact_tree_delta_keeps_complete_count_without_expanding_detail_records(self):
+        obs={"compare":{
+            "comparison_method":"TREE_DELTA_FALLBACK",
+            "files_complete":True,
+            "files_materialized":False,
+            "changed_file_count":711,
+            "file_change_counts":{"added":11,"removed":699,"modified":1},
+            "file_manifest_hash":"sha256:"+"a"*64,
+            "tree_proof":{"base_tree_sha":"b"*40,"head_tree_sha":"c"*40},
+            "files":[],
+        }}
+        sanitized=_sanitize_observation(obs,500)
+        self.assertEqual(sanitized["compare"]["changed_file_count"],711)
+        self.assertEqual(sanitized["compare"]["files"],[])
+
+    def test_compact_tree_delta_rejects_unverifiable_manifest(self):
+        obs={"compare":{
+            "comparison_method":"TREE_DELTA_FALLBACK",
+            "files_complete":True,
+            "files_materialized":False,
+            "changed_file_count":711,
+            "file_change_counts":{"added":11,"removed":699,"modified":1},
+            "file_manifest_hash":"sha256:not-a-digest",
+            "tree_proof":{"base_tree_sha":"b"*40,"head_tree_sha":"c"*40},
+            "files":[],
+        }}
+        with self.assertRaisesRegex(RuntimePolicyError,"manifest hash"):
+            _sanitize_observation(obs,500)
 
     def test_static_runtime_contract(self):
         result=validate_runtime()
