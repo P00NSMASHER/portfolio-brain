@@ -124,7 +124,76 @@ def _queue(scheduler: dict[str,Any], *, at: datetime) -> dict[str,Any]:
     }
 
 
-def _agents(agent_state: dict[str,Any], scheduler: dict[str,Any], *, at: datetime) -> dict[str,Any]:
+def _heartbeat_sweep_proof(
+    liveness:dict[str,Any]|None,
+    *,
+    at:datetime,
+    expected_agents:int,
+)->dict[str,Any]:
+    result={
+        "verified":False,
+        "source_run_id":None,
+        "age_minutes":None,
+        "max_age_minutes":None,
+        "agents_heartbeated":None,
+    }
+    if not isinstance(liveness,dict):
+        return result
+    checked_at=_time(liveness.get("checked_at"))
+    if checked_at is None:
+        return result
+    target=next(
+        (
+            row for row in liveness.get("targets",[])
+            if isinstance(row,dict)
+            and row.get("workflow_name")=="agent-heartbeat-sweep"
+        ),
+        None,
+    )
+    if target is None:
+        return result
+    metrics=target.get("work_proof_metrics")
+    metrics=metrics if isinstance(metrics,dict) else {}
+    observed=metrics.get("agents_heartbeated")
+    run_age=target.get("age_minutes")
+    if not isinstance(run_age,(int,float)) or run_age<0:
+        return result
+    policy_doc=load_json("operations/WORKFLOW_LIVENESS_POLICY.json")
+    policy_target=next(
+        row for row in policy_doc["targets"]
+        if row["workflow_name"]=="agent-heartbeat-sweep"
+    )
+    max_age=float(policy_target["max_start_age_minutes"])
+    proof_age=round(
+        max(0.0,(at-checked_at).total_seconds()/60.0)+float(run_age),
+        1,
+    )
+    verified=(
+        target.get("status")=="HEALTHY_VERIFIED_WORK"
+        and target.get("reason")=="EXACT_RUN_SUBSTANTIVE_WORK_PROVEN"
+        and target.get("work_proof_status")=="VERIFIED_WORK"
+        and target.get("work_proof_reason")=="HEARTBEAT_SWEEP_EVENT_PROOF"
+        and type(target.get("latest_run_id")) is int
+        and type(observed) is int
+        and observed==expected_agents
+        and proof_age<=max_age
+    )
+    return {
+        "verified":verified,
+        "source_run_id":target.get("latest_run_id") if verified else None,
+        "age_minutes":proof_age,
+        "max_age_minutes":max_age,
+        "agents_heartbeated":observed,
+    }
+
+
+def _agents(
+    agent_state:dict[str,Any],
+    scheduler:dict[str,Any],
+    *,
+    at:datetime,
+    liveness:dict[str,Any]|None=None,
+)->dict[str,Any]:
     events_by_agent={}
     for event in agent_state["recent_events"]:
         events_by_agent.setdefault(event["agent_id"],[]).append(event)
@@ -133,6 +202,12 @@ def _agents(agent_state: dict[str,Any], scheduler: dict[str,Any], *, at: datetim
     for work in scheduler["work_items"]:
         if work["state"] not in {"QUEUED","ACTIVE"}:continue
         open_by_agent.setdefault(work["assigned_agent_id"],[]).append(work)
+
+    sweep=_heartbeat_sweep_proof(
+        liveness,
+        at=at,
+        expected_agents=len(agent_state["agents"]),
+    )
 
     rows=[]
     for agent_id,row in sorted(agent_state["agents"].items()):
@@ -149,18 +224,31 @@ def _agents(agent_state: dict[str,Any], scheduler: dict[str,Any], *, at: datetim
 
         if productive_age is not None and productive_age<=PRODUCTIVE_ACTIVITY_WINDOW_MINUTES:
             health="LIVE"
+            health_basis="RECENT_PRODUCTIVE_ACTIVITY"
         elif open_work and oldest_open_age is not None and oldest_open_age>STALL_AFTER_MINUTES:
             health="STALLED"
+            health_basis="STALE_ASSIGNED_WORK"
         elif open_work:
             health="WARMING_UP"
+            health_basis="OPEN_ASSIGNED_WORK"
+        elif sweep["verified"]:
+            # Exact-run sweep proof establishes liveness, not productivity.
+            # Keep substantive activity fields unchanged and classify only an
+            # unassigned role as healthy-idle.
+            health="IDLE_HEALTHY"
+            health_basis="EXACT_RUN_HEARTBEAT_SWEEP"
         elif heartbeat_age is None:
             health="NEVER"
+            health_basis="NO_HEARTBEAT_EVIDENCE"
         elif heartbeat_age<=PRODUCTIVE_ACTIVITY_WINDOW_MINUTES:
             health="IDLE_HEALTHY"
+            health_basis="RECENT_DURABLE_HEARTBEAT"
         elif heartbeat_age<=720:
             health="STALE"
+            health_basis="DURABLE_HEARTBEAT_STALE"
         else:
             health="OFFLINE"
+            health_basis="DURABLE_HEARTBEAT_OFFLINE"
 
         activity=productive or ({
             "activity_kind":row["last_activity_kind"],
@@ -173,6 +261,7 @@ def _agents(agent_state: dict[str,Any], scheduler: dict[str,Any], *, at: datetim
             "role_key":row["role_key"],
             "status":row["status"],
             "heartbeat_health":health,
+            "heartbeat_health_basis":health_basis,
             "last_heartbeat_at":row["last_heartbeat_at"],
             "heartbeat_age_minutes":heartbeat_age,
             "last_productive_at":None if productive is None else productive["at"],
@@ -187,6 +276,7 @@ def _agents(agent_state: dict[str,Any], scheduler: dict[str,Any], *, at: datetim
     return {
         "sequence":agent_state["sequence"],
         "updated_at":agent_state["updated_at"],
+        "heartbeat_sweep_proof":sweep,
         "live":sum(1 for x in rows if x["heartbeat_health"]=="LIVE"),
         "idle_healthy":sum(1 for x in rows if x["heartbeat_health"]=="IDLE_HEALTHY"),
         "warming_up":sum(1 for x in rows if x["heartbeat_health"]=="WARMING_UP"),
@@ -197,7 +287,6 @@ def _agents(agent_state: dict[str,Any], scheduler: dict[str,Any], *, at: datetim
         "agents":rows,
         "recent_events":agent_state["recent_events"][-25:],
     }
-
 
 def _last_cycles(runtime: dict[str,Any],hunter: dict[str,Any],scheduler: dict[str,Any]) -> dict[str,Any]:
     rows=[]
@@ -419,7 +508,7 @@ def build_operational_telemetry(*, at: str | None=None) -> dict[str,Any]:
     cost_policy=load_json("cost_governor/COST_GOVERNOR_POLICY.json")
 
     queue=_queue(scheduler,at=now)
-    agent_view=_agents(agents,scheduler,at=now)
+    agent_view=_agents(agents,scheduler,at=now,liveness=liveness)
     accounted=usage_today(cost,at=at)
     actual=actual_usage_today(cost,at=at)
     ceilings=cost_policy["portfolio_ceiling"]
