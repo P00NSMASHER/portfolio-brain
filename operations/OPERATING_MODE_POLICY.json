@@ -10,7 +10,7 @@
   "approved_recurring_workflows": {
     "runtime-hourly-sync": {
       "cron": "17 * * * *",
-      "purpose": "repository observation synchronization"
+      "purpose": "non-paid repository observation synchronization with workload admission"
     },
     "runtime-daily-learning": {
       "cron": "37 9 * * *",
@@ -42,7 +42,7 @@
     },
     "agent-heartbeat-sweep": {
       "cron": "29 */2 * * *",
-      "purpose": "cost-governed health-check heartbeat for every registered persistent agent"
+      "purpose": "workload-controlled health-check heartbeat for every registered persistent agent"
     }
   },
   "event_driven_workflows": {
@@ -54,7 +54,7 @@
   "reusable_nonrecurring_workflows": {
     "runtime-worker": {
       "trigger": "workflow_call",
-      "purpose": "cost-governed deterministic runtime worker"
+      "purpose": "mode-aware runtime worker: sync/observe use workload control; daily/weekly model-assisted paths use paid cost governance"
     },
     "software-factory-candidate": {
       "trigger": "workflow_call",
@@ -108,8 +108,9 @@
     "GitHub workflows do not execute customer email; bounded commercial email is executed by the scheduled ChatGPT Gmail connector gateway under action-engine policy, Gmail duplicate checks, sanitized GitHub receipts and the action kill-switch file.",
     "While BLK-005 remains open, GitHub persistence is sanitized-only.",
     "The recurring agent heartbeat sweep is telemetry-only and records HEALTH_CHECK connectivity evidence without implying substantive role work or widening authority.",
-    "Specialized scheduler and heartbeat workflows remain scheduled or explicitly dispatched; they do not fan out on repository pushes because all cost-state writers share a singleton concurrency lane where excess pending runs would be canceled.",
-    "The command center refreshes hourly or by explicit dispatch; repository pushes do not fan out a redundant publication run into the serialized autonomous execution slot."
+    "Non-paid scheduler, heartbeat, runtime sync/observe, reporting, notification and learning-continuation work use independent workload lanes rather than the paid cost-state lane.",
+    "The command center refreshes hourly and from durable producer completion events without consuming paid model/API budget.",
+    "Runtime daily/weekly model-assisted analysis remains serialized through the finite paid cost governor, while sync/observe remain available during paid hard stops."
   ],
   "external_connector_gateways": {
     "gmail": {
