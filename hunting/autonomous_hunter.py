@@ -6,10 +6,12 @@ executor inspects repository metadata and exact-revision tree structure only; it
 does not execute discovered code or copy repository contents.
 """
 from __future__ import annotations
-import argparse, hashlib, json, os, re, time, urllib.parse, urllib.request
+import argparse, base64, hashlib, json, os, re, time, urllib.parse, urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from hunting.rights_gate import build_rights_record, validate_rights_record
 
 ROOT=Path(__file__).resolve().parents[1]
 class HunterError(RuntimeError): pass
@@ -275,6 +277,42 @@ class GitHubPublicProvider:
         sha=commit["sha"]; req(isinstance(sha,str) and len(sha)==40,"candidate missing exact revision")
         return self.inspect_revision(candidate,sha)
 
+    def rights_evidence(self,candidate,inspection):
+        """Fetch only the exact-revision repository license file, when present.
+
+        Raw license text is used transiently for hashing/classification and is not
+        persisted by Hunter.
+        """
+        names={"license","license.md","license.txt","copying","copying.md","copying.txt","unlicense"}
+        candidates=[
+          p for p in inspection.get("paths",[])
+          if Path(p).name.casefold() in names
+        ]
+        if not candidates:
+            return {}
+        license_path=sorted(candidates,key=lambda p:(p.count("/"),len(p),p.casefold()))[0]
+        full=candidate["full_name"]; revision=inspection["revision"]
+        url=(
+          f"https://api.github.com/repos/{full}/contents/"
+          +urllib.parse.quote(license_path,safe="/")
+          +"?ref="+urllib.parse.quote(revision,safe="")
+        )
+        try:
+            data=self._candidate_get(url)
+        except CandidateInspectionError:
+            return {"license_path":license_path}
+        raw=data.get("content")
+        if not isinstance(raw,str):
+            return {"license_path":license_path}
+        if data.get("encoding")=="base64":
+            try:
+                text=base64.b64decode(raw).decode("utf-8",errors="replace")
+            except Exception:
+                return {"license_path":license_path}
+        else:
+            text=raw
+        return {"license_path":license_path,"license_text":text}
+
 def structural_inspection(candidate,inspection,objective):
     paths=inspection["paths"]
     lower=[p.casefold() for p in paths]
@@ -393,7 +431,7 @@ def experiment_proposal(finding):
       "baseline":"No verified reusable capability is currently linked to this gap in Portfolio Brain.",
       "success_condition":"Independent exact-revision inspection confirms the implementation behavior, meaningful tests/negative controls, lawful reuse terms, and a bounded integration path.",
       "failure_condition":"The candidate is README-only, lacks meaningful tests, does not satisfy the capability need, has incompatible rights, or creates unsafe authority expansion.",
-      "evidence_requirements":["Exact source revision","Implementation-level evidence","Meaningful tests or negative controls","License/rights verification","Independent verifier receipt"],
+      "evidence_requirements":["Exact source revision","Implementation-level evidence","Meaningful tests or negative controls","License/rights verification",f"Discovery rights classification: {finding['rights']['rights_classification']}; no reuse authority is granted by discovery.","Independent verifier receipt"],
       "cost_boundary":"Observation and bounded isolated validation only; no downstream modification.",
       "rollback":"No rollback required because this proposal performs no downstream change."
     }
@@ -526,6 +564,9 @@ def run_cycle(state,provider,*,at=None):
                 qout["inspected"]+=1
                 funnel["inspection_succeeded"]+=1
                 structural=structural_inspection(cand,inspection,obj)
+                rights_evidence=provider.rights_evidence(cand,inspection) if callable(getattr(provider,"rights_evidence",None)) else {}
+                rights=build_rights_record(cand,inspection,rights_evidence)
+                validate_rights_record(rights)
                 fp=candidate_fingerprint(cand,inspection["revision"],obj)
                 core={"objective_id":obj["objective_id"],"fingerprint":fp}
                 fid="HFD-"+hashlib.sha256(canon(core).encode()).hexdigest()[:20].upper()
@@ -541,6 +582,7 @@ def run_cycle(state,provider,*,at=None):
                   "project_ids":obj["project_ids"],"strategy_id":obj["strategy_id"],"candidate_fingerprint":fp,
                   "source":{"source_kind":"PUBLIC_GITHUB","repository_full_name":cand["full_name"],"repository_id":cand["id"],"revision":inspection["revision"],"public":True},
                   "inspection":structural,
+                  "rights":rights,
                   "capability_hypothesis":f"{cand['full_name']}@{inspection['revision']} may contain a reusable implementation pattern for {obj['capability_key']}; this remains OBSERVED until independent verification.",
                   "evidence_state":"OBSERVED" if disposition=="RETAIN" else "UNKNOWN",
                   "disposition":disposition,
@@ -552,6 +594,9 @@ def run_cycle(state,provider,*,at=None):
                     **classification_trace,
                     "public_source_gate":cand.get("private") is False,
                     "exact_revision_gate":isinstance(inspection.get("revision"),str) and len(inspection.get("revision",""))==40,
+                    "rights_classification":rights["rights_classification"],
+                    "allowed_integration_mode":rights["allowed_integration_mode"],
+                    "automatic_reuse_authority_granted":rights["automatic_reuse_authority_granted"],
                   },
                   "experiment_proposal_id":None
                 }
