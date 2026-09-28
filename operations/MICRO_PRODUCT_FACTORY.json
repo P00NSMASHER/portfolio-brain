@@ -51,7 +51,8 @@
         "source_code_public": false,
         "shipped_third_party_code": false
       },
-      "commercial_source_policy": "ORIGINAL_DEPENDENCY_FREE"
+      "commercial_source_policy": "ORIGINAL_DEPENDENCY_FREE",
+      "build_prompt": "Use the existing original Quiz & Reward Engine v1.0 artifact. Preserve its dependency-free source and verified SHA. Complete only the remaining Roblox Creator Store upload/listing steps, keep the $3.99 launch price, and do not alter product code unless a new runtime defect is reproduced."
     },
     {
       "sku_id": "SKU-002",
@@ -78,7 +79,8 @@
         "source_location": "CHAT_ATTACHMENT_ONLY_NOT_GITHUB",
         "source_code_public": false,
         "shipped_third_party_code": false
-      }
+      },
+      "build_prompt": "Use the existing original House Controls Pack v1.0 artifact. Run the documented Roblox Studio runtime QA matrix for ownership isolation, lights, garage, lock enforcement, recolor, replay/spam resistance and mobile controls. Fix only reproduced defects. Do not publish until runtime QA passes."
     },
     {
       "sku_id": "SKU-003",
@@ -105,7 +107,8 @@
         "source_location": "CHAT_ATTACHMENT_ONLY_NOT_GITHUB",
         "source_code_public": false,
         "shipped_third_party_code": false
-      }
+      },
+      "build_prompt": "Use the existing original Redeem Code System v1.0 artifact. Run the documented Roblox Studio runtime QA for valid/invalid codes, expiration, one-time persistence, DataStore failure behavior, replay protection, two-player isolation and mobile controls. Fix only reproduced defects. Do not publish until runtime QA passes."
     },
     {
       "sku_id": "SKU-004",
