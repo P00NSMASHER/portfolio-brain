@@ -36,6 +36,19 @@ class FakeGitHub:
             return self.compare
         raise AssertionError(url)
 
+class TreeAwareFakeGitHub(FakeGitHub):
+    def __init__(self, head, compare, trees):
+        super().__init__(head,compare); self.trees=trees
+    def __call__(self,url):
+        if "/git/trees/" in url:
+            self.urls.append(url)
+            sha=url.split("/git/trees/",1)[1].split("?",1)[0]
+            return self.trees[sha]
+        return super().__call__(url)
+
+def tree_entry(path, sha):
+    return {"path":path,"mode":"100644","type":"blob","sha":sha}
+
 class ReadOnlyAdapterTests(unittest.TestCase):
     def test_client_honors_shorter_runtime_timeout(self):
         response=MagicMock(); response.status=200; response.read.return_value=b'{"sha":"ok"}'
@@ -132,12 +145,67 @@ class ReadOnlyAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(AdapterError,"not a fast-forward"):
             observe_repository(BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},fetch_json=fake,observed_at="2026-09-25T16:00:00Z")
 
-    def test_github_compare_file_cap_fails_closed(self):
+    def test_github_compare_file_cap_fails_closed_without_complete_tree_proof(self):
         old="a"*40; new="b"*40
         files=[{"filename":f"f{i}.py","status":"modified","additions":1,"deletions":0,"changes":1} for i in range(300)]
         fake=FakeGitHub(new,compare_payload(old,new,files=files))
-        with self.assertRaisesRegex(AdapterError,"300-file"):
+        with self.assertRaisesRegex(AdapterError,"tree identity"):
             observe_repository(BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},fetch_json=fake,observed_at="2026-09-25T16:00:00Z")
+
+    def test_github_compare_file_cap_uses_complete_tree_snapshot_proof(self):
+        old="a"*40; new="b"*40; base_tree="c"*40; head_tree="d"*40
+        files=[{"filename":f"capped-{i}.py","status":"modified","additions":1,"deletions":0,"changes":1} for i in range(300)]
+        payload=compare_payload(
+            old,new,files=files,
+            base_commit={"sha":old,"commit":{"tree":{"sha":base_tree}}},
+            commits=[{"sha":new,"commit":{"tree":{"sha":head_tree}}}],
+        )
+        base_entries=[tree_entry(f"old/f{i}.txt",f"{i+1:040x}") for i in range(700)]
+        head_entries=[tree_entry("old/f0.txt",f"{1:040x}")]
+        head_entries += [tree_entry(f"new/n{i}.txt",f"{1001+i:040x}") for i in range(12)]
+        fake=TreeAwareFakeGitHub(new,payload,{
+            base_tree:{"sha":base_tree,"truncated":False,"tree":base_entries},
+            head_tree:{"sha":head_tree,"truncated":False,"tree":head_entries},
+        })
+        receipt=observe_repository(
+            BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},
+            fetch_json=fake,observed_at="2026-09-25T16:00:00Z",
+        )
+        comp=receipt["compare"]; proof=comp["tree_snapshot"]
+        self.assertEqual(receipt["status"],"CHANGED")
+        self.assertEqual(receipt["current_sha"],new)
+        self.assertEqual(receipt["network_reads"],4)
+        self.assertEqual(comp["comparison_method"],"GIT_TREE_SNAPSHOT")
+        self.assertFalse(comp["files_complete"])
+        self.assertEqual(comp["files"],[])
+        self.assertEqual(comp["github_compare_file_count"],300)
+        self.assertEqual(comp["changed_file_count"],711)
+        self.assertTrue(proof["complete"])
+        self.assertEqual(proof["base_leaf_count"],700)
+        self.assertEqual(proof["head_leaf_count"],13)
+        self.assertEqual(proof["removed_path_count"],699)
+        self.assertEqual(proof["added_path_count"],12)
+        self.assertEqual(proof["modified_path_count"],0)
+        self.assertTrue(proof["changed_path_manifest_hash"].startswith("sha256:"))
+        self.assertEqual(next_cursor(receipt,{"source_ref":"main","cursor_sha":old})["cursor_sha"],new)
+
+    def test_github_compare_file_cap_rejects_truncated_tree_snapshot(self):
+        old="a"*40; new="b"*40; base_tree="c"*40; head_tree="d"*40
+        files=[{"filename":f"capped-{i}.py","status":"modified","additions":1,"deletions":0,"changes":1} for i in range(300)]
+        payload=compare_payload(
+            old,new,files=files,
+            base_commit={"sha":old,"commit":{"tree":{"sha":base_tree}}},
+            commits=[{"sha":new,"commit":{"tree":{"sha":head_tree}}}],
+        )
+        fake=TreeAwareFakeGitHub(new,payload,{
+            base_tree:{"sha":base_tree,"truncated":True,"tree":[]},
+            head_tree:{"sha":head_tree,"truncated":False,"tree":[]},
+        })
+        with self.assertRaisesRegex(AdapterError,"truncated"):
+            observe_repository(
+                BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},
+                fetch_json=fake,observed_at="2026-09-25T16:00:00Z",
+            )
 
     def test_heads_and_cursors_require_canonical_lowercase_sha(self):
         with self.assertRaisesRegex(AdapterError,"lowercase"):
