@@ -64,10 +64,10 @@
       "buyer_problem": "Roleplay builders repeatedly reimplement house lights, locks, garage and recolor controls.",
       "reuse_source": "Original implementation informed by generic failure cases observed in prior roleplay-game engineering.",
       "reuse_boundary": "No Brookhaven assets, UI, names, proprietary structure, StarBlox source, or third-party runtime code.",
-      "artifact_state": "BUILT_STATIC_QA_PASS_RUNTIME_STUDIO_QA_REQUIRED",
+      "artifact_state": "BUILT_V1_1_STATIC_QA_PASS_RUNTIME_STUDIO_QA_REQUIRED",
       "artifact_name": "HouseControlsPack.rbxmx",
       "bundle_name": "House_Controls_Pack_v1.0.zip",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "static_validation": "PASS",
       "runtime_validation": "REQUIRED_BEFORE_PUBLISH",
       "publication_status": "NOT_PUBLISHED",
@@ -75,10 +75,11 @@
       "external_dependencies": 0,
       "factory": "Roblox Micro-Product Factory v1",
       "build_evidence": {
-        "artifact_sha256": "32a9734f0d009d9f8188ab4e2ff724face32655f80e3cf6c945c2b842427e9a8",
+        "artifact_sha256": "8cbf8517b54d5aaea725ae5cabe4914a91a560ea5ae9629bfadd5283f4c774ac",
         "source_location": "CHAT_ATTACHMENT_ONLY_NOT_GITHUB",
         "source_code_public": false,
-        "shipped_third_party_code": false
+        "shipped_third_party_code": false,
+        "defect_fix": "release session-owned house when owner leaves"
       },
       "build_prompt": "Use the existing original House Controls Pack v1.0 artifact. Run the documented Roblox Studio runtime QA matrix for ownership isolation, lights, garage, lock enforcement, recolor, replay/spam resistance and mobile controls. Fix only reproduced defects. Do not publish until runtime QA passes."
     },
@@ -92,10 +93,10 @@
       "buyer_problem": "Creators need a small safe configurable code-redemption mechanic with expiration and one-time-per-player persistence.",
       "reuse_source": "Original implementation using generic server-authority and idempotency patterns.",
       "reuse_boundary": "Original implementation only; no external runtime dependency.",
-      "artifact_state": "BUILT_STATIC_QA_PASS_RUNTIME_STUDIO_QA_REQUIRED",
+      "artifact_state": "BUILT_V1_1_STATIC_QA_PASS_RUNTIME_STUDIO_QA_REQUIRED",
       "artifact_name": "RedeemCodeSystem.rbxmx",
       "bundle_name": "Redeem_Code_System_v1.0.zip",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "static_validation": "PASS",
       "runtime_validation": "REQUIRED_BEFORE_PUBLISH",
       "publication_status": "NOT_PUBLISHED",
@@ -103,10 +104,11 @@
       "external_dependencies": 0,
       "factory": "Roblox Micro-Product Factory v1",
       "build_evidence": {
-        "artifact_sha256": "a29069198e4c4c6b72d2a252c6b4d51052627b526aecce8faa1c87f8879c32e5",
+        "artifact_sha256": "cd4330a0df99fd5b62b79bbc3f25d7b706e9f92065c6f387eda2eb15d750f9f6",
         "source_location": "CHAT_ATTACHMENT_ONLY_NOT_GITHUB",
         "source_code_public": false,
-        "shipped_third_party_code": false
+        "shipped_third_party_code": false,
+        "defect_fix": "atomic one-time redemption reservation closes concurrent double-grant race"
       },
       "build_prompt": "Use the existing original Redeem Code System v1.0 artifact. Run the documented Roblox Studio runtime QA for valid/invalid codes, expiration, one-time persistence, DataStore failure behavior, replay protection, two-player isolation and mobile controls. Fix only reproduced defects. Do not publish until runtime QA passes."
     },
