@@ -79,12 +79,56 @@ def _repo_cursor(state: dict[str,Any], rid: str)->dict[str,Any]:
     item=state["repositories"][rid]
     return {"source_ref":item["source_ref"],"cursor_sha":item["cursor_sha"],"status":item["status"]}
 
+def _comparison_changed_file_count(comp: dict[str,Any])->int:
+    files=comp.get("files")
+    if not isinstance(files,list):
+        raise RuntimePolicyError("comparison files payload is invalid")
+    count=comp.get("changed_file_count",len(files))
+    if not isinstance(count,int) or isinstance(count,bool) or count<0:
+        raise RuntimePolicyError("comparison changed-file count is invalid")
+    return count
+
 def _sanitize_observation(obs: dict[str,Any], max_files: int)->dict[str,Any]:
     result=json.loads(json.dumps(obs))
     comp=result.get("compare")
-    if comp and isinstance(comp.get("files"),list):
-        if len(comp["files"])>max_files:
-            raise RuntimePolicyError("changed-file budget exceeded for repository")
+    if not comp:
+        return result
+    count=_comparison_changed_file_count(comp)
+    files=comp["files"]
+    if comp.get("files_materialized") is False:
+        if comp.get("comparison_method")!="TREE_DELTA_FALLBACK" or comp.get("files_complete") is not True:
+            raise RuntimePolicyError("compact comparison lacks complete tree proof")
+        if files:
+            raise RuntimePolicyError("compact comparison must not materialize changed files")
+        manifest=comp.get("file_manifest_hash")
+        if not isinstance(manifest,str) or not manifest.startswith("sha256:") or len(manifest)!=71:
+            raise RuntimePolicyError("compact comparison manifest hash is invalid")
+        try:
+            int(manifest.removeprefix("sha256:"),16)
+        except ValueError as exc:
+            raise RuntimePolicyError("compact comparison manifest hash is invalid") from exc
+        counts=comp.get("file_change_counts")
+        if not isinstance(counts,dict) or set(counts)!={"added","removed","modified"}:
+            raise RuntimePolicyError("compact comparison change counts are invalid")
+        if any(not isinstance(value,int) or isinstance(value,bool) or value<0 for value in counts.values()):
+            raise RuntimePolicyError("compact comparison change counts are invalid")
+        if sum(counts.values())!=count:
+            raise RuntimePolicyError("compact comparison change counts do not match manifest count")
+        proof=comp.get("tree_proof")
+        if not isinstance(proof,dict) or set(proof)!={"base_tree_sha","head_tree_sha"}:
+            raise RuntimePolicyError("compact comparison tree proof is invalid")
+        for value in proof.values():
+            if not isinstance(value,str) or len(value)!=40:
+                raise RuntimePolicyError("compact comparison tree proof is invalid")
+            try:
+                int(value,16)
+            except ValueError as exc:
+                raise RuntimePolicyError("compact comparison tree proof is invalid") from exc
+        return result
+    if count!=len(files):
+        raise RuntimePolicyError("comparison changed-file count does not match materialized files")
+    if count>max_files:
+        raise RuntimePolicyError("changed-file budget exceeded for repository")
     return result
 
 def observe(mode: str, state: dict[str,Any], *, target_repository_id: str|None, finished_at: str,
@@ -116,7 +160,7 @@ def observe(mode: str, state: dict[str,Any], *, target_repository_id: str|None, 
             raise RuntimePolicyError(f"repository observation failed closed for {rid}: {exc}") from exc
         obs=_sanitize_observation(obs,budgets["max_changed_files_per_repository"])
         if obs.get("compare"):
-            total_files+=len(obs["compare"].get("files",[]))
+            total_files+=_comparison_changed_file_count(obs["compare"])
             if total_files>budgets["max_total_changed_files_per_cycle"]:
                 raise RuntimePolicyError("total changed-file budget exceeded")
         observations.append(obs)
