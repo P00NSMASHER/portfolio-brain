@@ -11,6 +11,7 @@ from pathlib import Path
 
 from runtime.artifact_http import open_url
 from runtime.artifact_restore import restore_latest_valid_state
+from runtime.artifact_quarantine import apply_artifact_quarantine
 from agents.heartbeat_state import ARTIFACT_NAME, validate_state
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,8 +55,11 @@ def restore(output: Path, metadata_output: Path | None = None) -> str:
                     time.sleep(attempt + 1)
         raise RestoreError(str(last))
 
-    data = json.loads(
-        get(f"https://api.github.com/repos/{repo}/actions/artifacts?name={ARTIFACT_NAME}&per_page=100").decode()
+    data = apply_artifact_quarantine(
+        json.loads(
+            get(f"https://api.github.com/repos/{repo}/actions/artifacts?name={ARTIFACT_NAME}&per_page=100").decode()
+        ),
+        expected_artifact_name=ARTIFACT_NAME,
     )
     return restore_latest_valid_state(
         data,
