@@ -10,6 +10,7 @@ from urllib.error import HTTPError, URLError
 
 from runtime.artifact_state import ArtifactRestoreError, BudgetedHTTP, validate_runtime_artifact_bundle
 from runtime.artifact_restore import InvalidStateArtifact, restore_latest_valid_state
+from runtime.artifact_quarantine import apply_artifact_quarantine, load_quarantine
 from runtime.state import advance_cycle, bootstrap_state, canonical_hash, cycle_id_for
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -295,6 +296,52 @@ class ArtifactStateIntegrityTests(unittest.TestCase):
             self.assertEqual(status,"RESTORED")
             self.assertEqual(json.loads(output.read_text())["sequence"],8)
             self.assertEqual(downloads,["main"])
+
+
+    def test_exact_quarantine_removes_only_verified_superseded_sibling(self):
+        quarantine=load_quarantine()
+        entry=next(x for x in quarantine["artifacts"] if x["artifact_name"]=="portfolio-runtime-state")
+        bad={
+          "id":entry["artifact_id"],"name":entry["artifact_name"],
+          "workflow_run":{"id":entry["source_run_id"],"head_branch":"main","head_sha":entry["source_head_sha"]},
+        }
+        good={
+          "id":entry["superseded_by_artifact_id"],"name":entry["artifact_name"],
+          "workflow_run":{"id":entry["superseded_by_run_id"],"head_branch":"main","head_sha":entry["source_head_sha"]},
+        }
+        unrelated={"id":999,"name":entry["artifact_name"],"workflow_run":{"id":999,"head_branch":"main","head_sha":"9"*40}}
+        filtered=apply_artifact_quarantine(
+          {"artifacts":[bad,good,unrelated]},expected_artifact_name=entry["artifact_name"],quarantine=quarantine,
+        )
+        self.assertEqual([x["id"] for x in filtered["artifacts"]],[entry["superseded_by_artifact_id"],999])
+
+    def test_quarantine_fails_closed_without_exact_superseder(self):
+        quarantine=load_quarantine()
+        entry=next(x for x in quarantine["artifacts"] if x["artifact_name"]=="portfolio-runtime-state")
+        bad={
+          "id":entry["artifact_id"],"name":entry["artifact_name"],
+          "workflow_run":{"id":entry["source_run_id"],"head_branch":"main","head_sha":entry["source_head_sha"]},
+        }
+        with self.assertRaisesRegex(InvalidStateArtifact,"without its verified superseder"):
+            apply_artifact_quarantine(
+              {"artifacts":[bad]},expected_artifact_name=entry["artifact_name"],quarantine=quarantine,
+            )
+
+    def test_quarantine_metadata_mismatch_fails_closed(self):
+        quarantine=load_quarantine()
+        entry=next(x for x in quarantine["artifacts"] if x["artifact_name"]=="portfolio-agent-heartbeat-state")
+        bad={
+          "id":entry["artifact_id"],"name":entry["artifact_name"],
+          "workflow_run":{"id":entry["source_run_id"],"head_branch":"main","head_sha":"0"*40},
+        }
+        good={
+          "id":entry["superseded_by_artifact_id"],"name":entry["artifact_name"],
+          "workflow_run":{"id":entry["superseded_by_run_id"],"head_branch":"main","head_sha":entry["source_head_sha"]},
+        }
+        with self.assertRaisesRegex(InvalidStateArtifact,"metadata mismatch"):
+            apply_artifact_quarantine(
+              {"artifacts":[bad,good]},expected_artifact_name=entry["artifact_name"],quarantine=quarantine,
+            )
 
 
 if __name__=="__main__":unittest.main()
