@@ -3,6 +3,10 @@ name: runtime-hourly-sync
 on:
   schedule:
     - cron: "17 * * * *"
+  push:
+    branches: ["step8-runtime-sync-large-compare"]
+    paths:
+      - ".github/workflows/runtime-hourly-sync.yml"
   workflow_dispatch:
 
 permissions:
