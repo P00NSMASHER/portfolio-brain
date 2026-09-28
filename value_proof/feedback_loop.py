@@ -51,7 +51,7 @@ def validate_value_outcome(outcome:dict[str,Any])->None:
     req(outcome["useful_outcome"] is True,"feedback requires useful outcome")
     req(outcome["value_class"]=="TECHNICAL_RESEARCH_DECISION_UTILITY","unexpected value class")
     req(outcome["external_customer_value_claimed"] is False,"technical proof may not claim customer value")
-    req(outcome["rights_state"]=="UNKNOWN_REQUIRES_REVIEW","rights state improperly upgraded")
+    req(outcome["rights_state"] in {"OPERATOR_ASSUMED","UNKNOWN_REQUIRES_REVIEW"},"owner-assumed rights workflow state changed")
     req(outcome["capability_verification_claimed"] is False,"capability verification improperly claimed")
     req(outcome["deployment_authorized"] is False,"deployment authority improperly granted")
     req(outcome["authority_granted"] is False and outcome["evidence_upgraded"] is False,"feedback source widened authority/evidence")

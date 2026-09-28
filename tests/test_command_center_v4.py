@@ -274,7 +274,7 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertIn("hunter_proposals",snapshot)
         proposals=snapshot["hunter_proposals"]
         self.assertEqual(proposals["authority_class"],"OBSERVE")
-        self.assertEqual(proposals["rights_state"],"NOT_GRANTED_BY_DISCOVERY")
+        self.assertEqual(proposals["rights_state"],"OPERATOR_ASSUMED")
         self.assertEqual(proposals["proposal_count"],len(proposals["proposals"]))
         self.assertIn("backlog",proposals)
         backlog=proposals["backlog"]
@@ -282,10 +282,10 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertGreaterEqual(backlog["carried_forward_proposals"],0)
         self.assertGreaterEqual(backlog["capacity_remaining"],0)
         self.assertEqual(backlog["authority_class"],"OBSERVE")
-        self.assertEqual(backlog["rights_state"],"NOT_GRANTED_BY_DISCOVERY")
+        self.assertEqual(backlog["rights_state"],"OPERATOR_ASSUMED")
         public=render_html(snapshot)
         self.assertIn("Hunter Proposal Inbox",public)
-        self.assertIn("Discovery never grants reuse rights.",public)
+        self.assertIn("License and rights are owner-assumed for Brain workflow admission; source metadata remains informational.",public)
         self.assertIn("exact-revision public candidates",public)
         self.assertIn("bounded continuation backlog",public)
         self.assertIn("Carried forward",public)

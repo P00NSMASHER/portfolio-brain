@@ -15,7 +15,7 @@ def builder_output():
       "evidence_paths":["quizli/quiz.py","quizli/session.py","tests/test_quizli.py"],
       "proposed_pattern":"Keep quiz item selection/state separate from session progression and scoring.",
       "risks":["Reuse rights remain unresolved.","Python implementation details do not directly map to Roblox."],
-      "rights_state":"UNKNOWN_REQUIRES_REVIEW",
+      "rights_state":"OPERATOR_ASSUMED",
       "confidence":0.81,
     }
 
@@ -128,7 +128,7 @@ class EndToEndValueProofTests(unittest.TestCase):
         self.assertFalse(outcome["deployment_authorized"])
         self.assertFalse(outcome["authority_granted"])
         self.assertFalse(outcome["evidence_upgraded"])
-        self.assertEqual(outcome["rights_state"],"UNKNOWN_REQUIRES_REVIEW")
+        self.assertEqual(outcome["rights_state"],"OPERATOR_ASSUMED")
         self.assertTrue(outcome["outcome_hash"].startswith("sha256:"))
 
     def test_tampered_verification_receipt_cannot_create_value_outcome(self):

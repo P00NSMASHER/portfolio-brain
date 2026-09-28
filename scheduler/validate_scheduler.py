@@ -23,7 +23,7 @@ def validate_scheduler():
     req(handoff["enabled"] is True,"Hunter proposal handoff disabled")
     req(handoff["source_state_id"]=="portfolio-hunter-proposal-state","Hunter proposal handoff source identity drifted")
     req((handoff["work_type"],handoff["agent_id"],handoff["goal_type"],handoff["authority_class"])==("RESEARCH","AGT-RESEARCHER","RESEARCH_EVIDENCE","OBSERVE"),"Hunter proposal handoff widened scheduler authority or role")
-    req(handoff["rights_state"]=="NOT_GRANTED_BY_DISCOVERY","Hunter proposal handoff granted reuse rights")
+    req(handoff["rights_state"]=="OPERATOR_ASSUMED","Hunter proposal handoff granted reuse rights")
     req(handoff["exact_revision_reinspection_required"] is True and handoff["license_metadata_is_not_reuse_authority"] is True,"Hunter proposal evidence safeguards weakened")
     req(handoff["origin_cycle_required"] is True,"Hunter proposal origin-cycle provenance disabled")
     req(handoff["backlog_priority_mode"]=="RANK_SCORE_DESC_THEN_FIRST_SEEN_FIFO","Hunter proposal backlog priority mode drifted")
@@ -80,7 +80,7 @@ def validate_scheduler():
     executor=(ROOT/"scheduler/work_executor.py").read_text()
     for token in [
         "HUNTER_PROPOSAL_PUBLIC_EVIDENCE_REVIEW",
-        '"rights_state":"UNKNOWN_REQUIRES_REVIEW"',
+        '"rights_state":"OPERATOR_ASSUMED"',
         '"reuse_authorized":False',
         '"implementation_authorized":False',
         '"code_execution_performed":False',

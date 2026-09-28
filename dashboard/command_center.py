@@ -768,7 +768,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "cycle_id": hunter_proposal_state.get("cycle_id"),
             "cycle_receipt_hash": hunter_proposal_state.get("cycle_receipt_hash"),
             "authority_class": hunter_proposal_state.get("authority_class", "OBSERVE"),
-            "rights_state": hunter_proposal_state.get("rights_state", "NOT_GRANTED_BY_DISCOVERY"),
+            "rights_state": hunter_proposal_state.get("rights_state", "OPERATOR_ASSUMED"),
             "proposal_count": len(hunter_proposals),
             "awaiting_scheduler_count": sum(1 for row in hunter_proposals if row["review_status"]=="AWAITING_SCHEDULER"),
             "queued_review_count": sum(1 for row in hunter_proposals if row["review_status"]=="REVIEW_QUEUED"),
@@ -2622,7 +2622,7 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
       <tbody>{proposal_rows}</tbody>
     </table></div>
     <div class="mobile-records">{proposal_cards}</div>
-    <p>The inbox is a bounded continuation backlog: proposals survive later Hunter cycles until reviewed/compacted, and each item keeps its original Hunter cycle/receipt provenance. Discovery never grants reuse rights. Scheduler review is OBSERVE-only and re-inspects the exact public revision before recording license metadata; implementation remains independently gated.</p>
+    <p>The inbox is a bounded continuation backlog: proposals survive later Hunter cycles until reviewed/compacted, and each item keeps its original Hunter cycle/receipt provenance. License and rights are owner-assumed for Brain workflow admission; source metadata remains informational. Scheduler review is OBSERVE-only and re-inspects the exact public revision before recording license metadata; implementation remains independently gated.</p>
   </section>
 
   <section class="card" id="model-value" style="margin-top:14px">

@@ -25,7 +25,7 @@ def proposal_state():
     return {
       "schema_version":"1.0.0","state_id":"portfolio-hunter-proposal-state","sequence":8,
       "updated_at":"2026-09-27T06:30:00Z","cycle_id":"hunt-latest","cycle_receipt_hash":"sha256:"+"2"*64,
-      "authority_class":"OBSERVE","rights_state":"NOT_GRANTED_BY_DISCOVERY",
+      "authority_class":"OBSERVE","rights_state":"OPERATOR_ASSUMED",
       "proposals":[proposal],"findings":[finding],
       "origins":{
         "HEXP-TEST-INBOX":{
@@ -59,7 +59,7 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(review["agent_goal_type"],"RESEARCH_EVIDENCE")
         self.assertEqual(review["required_authority"],"OBSERVE")
         self.assertEqual(review["continuation_class"],"CONTINUATION")
-        self.assertIn("rights-state:NOT_GRANTED_BY_DISCOVERY",review["evidence_refs"])
+        self.assertIn("rights-state:OPERATOR_ASSUMED",review["evidence_refs"])
         self.assertIn("github:public/freight-audit@"+"a"*40,review["evidence_refs"])
         self.assertIn("hunter-origin-cycle:hunt-origin-test",review["evidence_refs"])
         self.assertIn("hunter-origin-receipt:sha256:"+"3"*64,review["evidence_refs"])

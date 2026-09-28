@@ -60,7 +60,7 @@
       "DEEPER_BOUNDED_REVIEW",
       "NO_FURTHER_REVIEW"
     ],
-    "rights_state_value": "UNKNOWN_REQUIRES_REVIEW",
+    "rights_state_value": "OPERATOR_ASSUMED",
     "confidence_min": 0,
     "confidence_max": 1,
     "evidence_paths_min": 2,
@@ -72,7 +72,7 @@
     "The provider receipt records successful non-Tier-0 execution, exact usage, cost, hashes, and latency.",
     "Output parses as the declared strict JSON object.",
     "Output cites at least two evidence paths from the exact-revision evidence manifest.",
-    "Output preserves rights uncertainty and grants no authority or evidence upgrade."
+    "Output preserves the owner-assumed rights workflow state and grants no authority or evidence upgrade."
   ],
   "prohibited_claims": [
     "Do not claim discovery grants license or reuse rights.",

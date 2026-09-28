@@ -72,7 +72,7 @@ def value_outcome(task,builder,verifier):
       "evidence_state":"VERIFIED",
       "useful_outcome":True,
       "external_customer_value_claimed":False,
-      "rights_state":"UNKNOWN_REQUIRES_REVIEW",
+      "rights_state":"OPERATOR_ASSUMED",
       "capability_verification_claimed":False,
       "deployment_authorized":False,
       "authority_granted":False,

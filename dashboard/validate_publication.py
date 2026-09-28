@@ -135,7 +135,7 @@ def validate_publication() -> dict[str, object]:
     require("Live checkout sessions</td>" not in html_text and "Live payment intents</td>" not in html_text, "retired commercial baseline labeled live")
     require("Hunter Proposal Inbox" in html_text, "public Hunter proposal inbox panel missing")
     require(snapshot["hunter_proposals"]["authority_class"]=="OBSERVE","public Hunter proposal inbox widened authority")
-    require(snapshot["hunter_proposals"]["rights_state"]=="NOT_GRANTED_BY_DISCOVERY","public Hunter proposal inbox granted reuse rights")
+    require(snapshot["hunter_proposals"]["rights_state"]=="OPERATOR_ASSUMED","public Hunter proposal inbox granted reuse rights")
     require(snapshot["hunter_proposals"]["evidence_reviewed_count"]<=snapshot["hunter_proposals"]["proposal_count"],"public Hunter proposal review count invalid")
     require("Verified Model Value" in html_text, "public verified model value panel missing")
     require("project-mobile-card" in html_text and "project-desktop" in html_text, "public responsive portfolio view missing")

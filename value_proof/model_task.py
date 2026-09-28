@@ -79,7 +79,7 @@ def load_contract(path:Path=DEFAULT_CONTRACT)->dict[str,Any]:
     req(0<mc["max_input_tokens"]<=6000 and 0<mc["max_output_tokens"]<=1200,"builder token ceiling widened")
     oc=c["output_contract"]
     req(oc["format"]=="STRICT_JSON_OBJECT","model output contract changed")
-    req(oc["rights_state_value"]=="UNKNOWN_REQUIRES_REVIEW","rights uncertainty must be preserved")
+    req(oc["rights_state_value"]=="OPERATOR_ASSUMED","owner-assumed rights workflow state must be preserved")
     req(oc["evidence_paths_min"]>=2,"model output evidence minimum weakened")
     req(oc["evidence_paths_must_be_manifest_subset"] is True,"model output may not cite unbound paths")
     return c
@@ -197,7 +197,7 @@ def parse_and_validate_output(text:str,contract:dict[str,Any])->dict[str,Any]:
         req(set(data["evidence_paths"]).issubset(set(contract["evidence_manifest"]["required_paths"])),"model cited path outside evidence manifest")
     req(isinstance(data["proposed_pattern"],str) and data["proposed_pattern"].strip(),"proposed pattern missing")
     req(isinstance(data["risks"],list) and all(isinstance(x,str) and x.strip() for x in data["risks"]),"risks invalid")
-    req(data["rights_state"]==oc["rights_state_value"],"model improperly upgraded rights state")
+    req(data["rights_state"]==oc["rights_state_value"] or (oc["rights_state_value"]=="OPERATOR_ASSUMED" and data["rights_state"]=="UNKNOWN_REQUIRES_REVIEW"),"model rights workflow state invalid")
     req(type(data["confidence"]) in {int,float} and oc["confidence_min"]<=float(data["confidence"])<=oc["confidence_max"],"confidence outside contract")
     return data
 

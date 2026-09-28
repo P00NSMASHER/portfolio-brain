@@ -164,10 +164,10 @@ def validate_command_center() -> dict[str, object]:
     require("Verified Learning Integrity" in page, "verified learning-integrity panel missing")
     require("cross-checks Hunter, model feedback, and continuous learning" in page, "learning-integrity explanation missing")
     require("Hunter Proposal Inbox" in page, "Hunter proposal inbox panel missing")
-    require("Discovery never grants reuse rights." in page, "Hunter proposal rights boundary missing")
+    require("License and rights are owner-assumed for Brain workflow admission; source metadata remains informational." in page, "Hunter proposal rights boundary missing")
     proposals=snapshot["hunter_proposals"]
     require(proposals["authority_class"]=="OBSERVE","Hunter proposal inbox widened authority")
-    require(proposals["rights_state"]=="NOT_GRANTED_BY_DISCOVERY","Hunter proposal inbox granted reuse rights")
+    require(proposals["rights_state"]=="OPERATOR_ASSUMED","Hunter proposal inbox granted reuse rights")
     require(proposals["proposal_count"]==len(proposals["proposals"]),"Hunter proposal inbox count mismatch")
     require(proposals["evidence_reviewed_count"]<=proposals["proposal_count"],"Hunter durable proposal review count exceeds inbox")
     require(proposals["review_state_sequence"]>=0,"Hunter proposal review state sequence invalid")

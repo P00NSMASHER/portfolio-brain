@@ -17,7 +17,7 @@
     "Builder output must re-validate against the Step 5 strict JSON contract.",
     "Evidence pack must remain bound to the exact public repository revision.",
     "Builder evidence paths must be a subset of the bound evidence manifest.",
-    "Rights state must remain UNKNOWN_REQUIRES_REVIEW.",
+    "Rights workflow state must remain OPERATOR_ASSUMED.",
     "No authority or evidence upgrade may be claimed."
   ],
   "model_contract": {

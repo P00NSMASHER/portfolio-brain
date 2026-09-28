@@ -31,7 +31,7 @@ def proposal_state():
     return {
       "schema_version":"1.0.0","state_id":"portfolio-hunter-proposal-state","sequence":8,
       "updated_at":"2026-09-27T06:30:00Z","cycle_id":"hunt-test","cycle_receipt_hash":"sha256:"+"2"*64,
-      "authority_class":"OBSERVE","rights_state":"NOT_GRANTED_BY_DISCOVERY",
+      "authority_class":"OBSERVE","rights_state":"OPERATOR_ASSUMED",
       "proposals":[proposal],"findings":[finding]
     }
 
@@ -83,7 +83,7 @@ class SchedulerWorkExecutorTests(unittest.TestCase):
         self.assertEqual(result["tree_sha"],"b"*40)
         self.assertEqual(result["license_spdx_id"],"MIT")
         self.assertEqual(result["capability_key"],"capability-coverage:freight-audit")
-        self.assertEqual(result["rights_state"],"UNKNOWN_REQUIRES_REVIEW")
+        self.assertEqual(result["rights_state"],"OPERATOR_ASSUMED")
         self.assertFalse(result["reuse_authorized"])
         self.assertFalse(result["implementation_authorized"])
         self.assertFalse(result["code_execution_performed"])

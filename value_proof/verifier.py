@@ -88,7 +88,7 @@ def deterministic_verify(*,task_contract:dict[str,Any],verifier_contract:dict[st
       "execution_receipt_valid":True,
       "exact_revision_bound":pack["revision"]==task_contract["source_candidate"]["revision"],
       "evidence_paths_bound":set(parsed["evidence_paths"]).issubset(set(task_contract["evidence_manifest"]["required_paths"])),
-      "rights_uncertainty_preserved":parsed["rights_state"]=="UNKNOWN_REQUIRES_REVIEW",
+      "rights_uncertainty_preserved":parsed["rights_state"] in {"OPERATOR_ASSUMED","UNKNOWN_REQUIRES_REVIEW"},
       "authority_not_granted":execution_receipt["authority_granted"] is False and provider_receipt["authority_granted"] is False,
       "evidence_not_upgraded":execution_receipt["evidence_upgraded"] is False and provider_receipt["evidence_upgraded"] is False,
     }

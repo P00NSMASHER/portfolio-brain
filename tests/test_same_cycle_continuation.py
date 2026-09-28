@@ -46,7 +46,7 @@ def proposal_state():
       "schema_version":"1.0.0","state_id":"portfolio-hunter-proposal-state","sequence":8,
       "updated_at":"2026-09-27T20:20:00Z","cycle_id":"hunt-same-cycle",
       "cycle_receipt_hash":"sha256:"+"2"*64,
-      "authority_class":"OBSERVE","rights_state":"NOT_GRANTED_BY_DISCOVERY",
+      "authority_class":"OBSERVE","rights_state":"OPERATOR_ASSUMED",
       "proposals":[proposal],"findings":[finding],
       "origins":{
         "HEXP-SAME-CYCLE":{

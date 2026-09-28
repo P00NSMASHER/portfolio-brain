@@ -24,7 +24,7 @@ def valid_output():
       "evidence_paths":["quizli/quiz.py","tests/test_quizli.py"],
       "proposed_pattern":"Separate quiz item selection from session progression while keeping scoring deterministic.",
       "risks":["License/reuse rights remain unresolved.","The candidate is not a drop-in StarBlox implementation."],
-      "rights_state":"UNKNOWN_REQUIRES_REVIEW",
+      "rights_state":"OPERATOR_ASSUMED",
       "confidence":0.78,
     }
 
@@ -128,7 +128,7 @@ class ModelTaskContractTests(unittest.TestCase):
     def test_model_output_must_preserve_rights_uncertainty(self):
         good=json.dumps(valid_output())
         parsed=parse_and_validate_output(good,self.contract)
-        self.assertEqual(parsed["rights_state"],"UNKNOWN_REQUIRES_REVIEW")
+        self.assertEqual(parsed["rights_state"],"OPERATOR_ASSUMED")
         bad=valid_output();bad["rights_state"]="LICENSE_VERIFIED"
         with self.assertRaises(ModelTaskError):
             parse_and_validate_output(json.dumps(bad),self.contract)
