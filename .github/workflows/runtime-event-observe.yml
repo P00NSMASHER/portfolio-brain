@@ -38,11 +38,12 @@ permissions:
   contents: read
   actions: read
 
+concurrency:
+  group: portfolio-runtime-observe
+  cancel-in-progress: false
+
 jobs:
   observe:
-    concurrency:
-      group: runtime-event-observe-${{ github.event_name }}-${{ github.ref }}
-      cancel-in-progress: ${{ github.event_name == 'push' }}
     uses: ./.github/workflows/runtime-worker.yml
     with:
       mode: observe

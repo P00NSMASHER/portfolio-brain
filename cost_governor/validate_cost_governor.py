@@ -144,7 +144,6 @@ def validate_cost_governor():
         "paid hard stop incorrectly blocked non-paid wrapper work")
 
     paid_workflows = {
-        "runtime-worker": ROOT / ".github/workflows/runtime-worker.yml",
         "model-value-proof": ROOT / ".github/workflows/model-value-proof.yml",
     }
     for name, workflow_path in paid_workflows.items():
@@ -157,6 +156,46 @@ def validate_cost_governor():
             "portfolio-cost-governor-state",
         ):
             req(fragment in body, f"{name} paid cost integration missing: {fragment}")
+
+    runtime_worker = (ROOT / ".github/workflows/runtime-worker.yml").read_text(encoding="utf-8")
+    for fragment in (
+        "workload_control.workload_gate preflight",
+        "cost_governor.artifact_state",
+        "cost_governor.workflow_gate preflight",
+        "cost_governor.workflow_gate finalize",
+        "portfolio-cost-governor-state",
+        "inputs.mode == 'sync' || inputs.mode == 'observe'",
+        "inputs.mode == 'daily' || inputs.mode == 'weekly'",
+    ):
+        req(fragment in runtime_worker, f"runtime mode routing missing: {fragment}")
+
+    for mode, group, caller in (
+        ("sync", "portfolio-runtime-sync", "runtime-hourly-sync.yml"),
+        ("observe", "portfolio-runtime-observe", "runtime-event-observe.yml"),
+    ):
+        decision = evaluate_workload(
+            workflow_id="runtime-worker",
+            job_id=f"runtime-{mode}",
+            estimated_minutes=5,
+        )
+        req(decision["status"] == "WORKLOAD_ALLOWED",
+            f"runtime-{mode} workload admission failed")
+        req(wp["services"][f"runtime-worker::runtime-{mode}"]["concurrency_group"] == group,
+            f"runtime-{mode} workload policy lane drifted")
+        caller_body = (ROOT / ".github/workflows" / caller).read_text(encoding="utf-8")
+        req(f"group: {group}" in caller_body,
+            f"runtime-{mode} caller missing independent concurrency lane")
+
+    for caller in ("runtime-daily-learning.yml", "runtime-weekly-synthesis.yml"):
+        caller_body = (ROOT / ".github/workflows" / caller).read_text(encoding="utf-8")
+        req("group: portfolio-cost-governed-autonomy" in caller_body,
+            f"{caller} paid runtime concurrency lane drifted")
+
+    managed=set(p["managed_workflow_names"])
+    req("runtime-hourly-sync" not in managed and "runtime-event-observe" not in managed and "runtime-worker" not in managed,
+        "paid hard-stop cancellation still targets non-paid runtime")
+    req({"runtime-daily-learning","runtime-weekly-synthesis","model-value-proof"} <= managed,
+        "paid hard-stop cancellation lost paid runtime/model workflows")
 
     nonpaid_workflows = {
         "portfolio-autonomous-scheduler": ("schedule", "portfolio-scheduler", 5),
@@ -235,10 +274,11 @@ def validate_cost_governor():
     liveness = json.loads((ROOT / "operations/WORKFLOW_LIVENESS_POLICY.json").read_text())
     req(liveness["hard_stop_behavior"] == "NONPAID_RECOVERY_CONTINUES",
         "workflow liveness still globally stops on paid hard stop")
-    req(any(t["admission_domain"] == "WORKLOAD" for t in liveness["targets"]),
-        "workflow liveness lacks workload-domain targets")
-    req(any(t["admission_domain"] == "COST_WRAPPER" for t in liveness["targets"]),
-        "workflow liveness lacks paid-wrapper target")
+    req(all(t["admission_domain"] == "WORKLOAD" for t in liveness["targets"]),
+        "core workflow liveness unexpectedly depends on paid cost-wrapper admission")
+    runtime_liveness=next(t for t in liveness["targets"] if t["workflow_name"]=="runtime-hourly-sync")
+    req(runtime_liveness["admission_workflow_id"]=="runtime-worker" and runtime_liveness["admission_job_id"]=="runtime-sync",
+        "runtime sync liveness admission scope drifted")
     req("foundation-ci" not in {t["workflow_name"] for t in liveness["targets"]},
         "foundation CI may not be auto-recovered by watchdog")
 
@@ -251,7 +291,7 @@ def validate_cost_governor():
         "paid_model_calls_ceiling": p["portfolio_ceiling"]["model_calls"],
         "github_daily_job_quota_enforced": p["workload_separation"]["github_daily_job_quotas_enforced"],
         "workload_services": len(wp["services"]),
-        "paid_cost_workflows": len(paid_workflows),
+        "paid_cost_workflows": len(paid_workflows) + 2,
         "nonpaid_workload_workflows": len(nonpaid_workflows),
         "duplicate_suppression": True,
         "paid_overage_hard_stop": True,

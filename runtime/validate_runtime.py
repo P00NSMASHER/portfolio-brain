@@ -55,10 +55,12 @@ def validate_runtime()->dict:
     texts={n:(ROOT/n).read_text() for n in names}
     worker=texts[names[0]]
     for required in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_RUNTIME_DISABLED",
-                     "PORTFOLIO_MODEL_API_KEY","runtime.model_analysis","actions/upload-artifact@v4","retention-days: 30","cancel-in-progress: false",
+                     "PORTFOLIO_MODEL_API_KEY","runtime.model_analysis","actions/upload-artifact@v4","retention-days: 30",
+                     "workload_control.workload_gate preflight","cost_governor.workflow_gate preflight",
                      "--provider-health-output runtime/out/provider_health.json",
                      '--job-id "runtime-${RUNTIME_MODE}"',
-                     "Report governed no-work outcome","steps.cost.outputs.decision_status","GITHUB_STEP_SUMMARY"]:
+                     "Resolve runtime admission domain","Report governed no-work outcome",
+                     "steps.admission.outputs.decision_status","GITHUB_STEP_SUMMARY"]:
         req(required in worker,f"runtime worker missing {required}")
     req("Fail closed when cost gate blocks" not in worker and "run: exit 3" not in worker,
         "expected cost denial still creates a false runtime failure")
@@ -75,8 +77,10 @@ def validate_runtime()->dict:
     req("repository_dispatch:" in texts[names[1]] and "push:" in texts[names[1]],"event triggers missing")
     req("paths-ignore:" in texts[names[1]] and "runtime/TRIGGER_DAILY_REASONING" in texts[names[1]],
         "daily reasoning trigger must not also launch event-observe")
-    req("group: runtime-event-observe-${{ github.event_name }}-${{ github.ref }}" in texts[names[1]],"runtime event-observe push coalescing group missing")
-    req("cancel-in-progress: ${{ github.event_name == 'push' }}" in texts[names[1]],"runtime event-observe push coalescing policy missing")
+    req("group: portfolio-runtime-observe" in texts[names[1]],"runtime event-observe workload lane missing")
+    req("cancel-in-progress: false" in texts[names[1]],"runtime event-observe pending coalescing policy missing")
+    req("group: portfolio-runtime-sync" in texts[names[2]] and "cancel-in-progress: false" in texts[names[2]],"runtime sync workload lane missing")
+    req("group: portfolio-cost-governed-autonomy" in texts[names[3]] and "group: portfolio-cost-governed-autonomy" in texts[names[4]],"paid runtime modes lost serialized concurrency")
     for isolated in [
       "value_proof/TRIGGER_END_TO_END_PROOF",
       "value_proof/TRIGGER_VERIFIED_FEEDBACK_BOOTSTRAP",

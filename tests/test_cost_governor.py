@@ -45,13 +45,29 @@ def github_request(*, run_id="100", attempt=1, minutes=5, workflow="runtime-work
 class CostGovernorTests(unittest.TestCase):
 
     def test_only_paid_workflows_finalize_cost_state(self):
-        paid_workflows = ["model-value-proof.yml", "runtime-worker.yml"]
-        for filename in paid_workflows:
-            with self.subTest(workflow=filename):
-                workflow = (ROOT / ".github/workflows" / filename).read_text()
-                self.assertIn("portfolio-cost-governed-autonomy", workflow)
-                self.assertIn("cost_governor.workflow_gate preflight", workflow)
-                self.assertIn("cost_governor.workflow_gate finalize", workflow)
+        model_proof = (ROOT / ".github/workflows/model-value-proof.yml").read_text()
+        self.assertIn("portfolio-cost-governed-autonomy", model_proof)
+        self.assertIn("cost_governor.workflow_gate preflight", model_proof)
+        self.assertIn("cost_governor.workflow_gate finalize", model_proof)
+
+        runtime_worker = (ROOT / ".github/workflows/runtime-worker.yml").read_text()
+        self.assertIn("workload_control.workload_gate preflight", runtime_worker)
+        self.assertIn("cost_governor.workflow_gate preflight", runtime_worker)
+        self.assertIn("cost_governor.workflow_gate finalize", runtime_worker)
+        self.assertIn("inputs.mode == 'sync' || inputs.mode == 'observe'", runtime_worker)
+        self.assertIn("inputs.mode == 'daily' || inputs.mode == 'weekly'", runtime_worker)
+
+        for filename, group in (
+            ("runtime-hourly-sync.yml", "portfolio-runtime-sync"),
+            ("runtime-event-observe.yml", "portfolio-runtime-observe"),
+        ):
+            caller=(ROOT/".github/workflows"/filename).read_text()
+            self.assertIn(f"group: {group}", caller)
+            self.assertNotIn("portfolio-cost-governed-autonomy", caller)
+
+        for filename in ("runtime-daily-learning.yml", "runtime-weekly-synthesis.yml"):
+            caller=(ROOT/".github/workflows"/filename).read_text()
+            self.assertIn("group: portfolio-cost-governed-autonomy", caller)
 
         nonpaid_workflows = [
             "agent-heartbeat-sweep.yml",
@@ -114,8 +130,8 @@ class CostGovernorTests(unittest.TestCase):
 
     def test_event_observe_ignores_dashboard_test_operator_and_one_shot_trigger_churn(self):
         workflow=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
-        self.assertIn("group: runtime-event-observe-${{ github.event_name }}-${{ github.ref }}",workflow)
-        self.assertIn("cancel-in-progress: ${{ github.event_name == 'push' }}",workflow)
+        self.assertIn("group: portfolio-runtime-observe",workflow)
+        self.assertIn("cancel-in-progress: false",workflow)
         for path in [
             '"dashboard/**"','"tests/**"','"operator_console/**"','"cost_governor/**"',
             '".github/workflows/command-center-pages.yml"',

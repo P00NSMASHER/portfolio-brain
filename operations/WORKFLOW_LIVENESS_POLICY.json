@@ -38,7 +38,7 @@
       "authority_class": "OBSERVE",
       "max_start_age_minutes": 100,
       "priority": 2,
-      "admission_domain": "COST_WRAPPER",
+      "admission_domain": "WORKLOAD",
       "admission_workflow_id": "runtime-worker",
       "admission_job_id": "runtime-sync",
       "proof_artifact_name": "portfolio-runtime-state",

@@ -177,11 +177,8 @@
   },
   "global_concurrency_group": "portfolio-cost-governed-autonomy",
   "managed_workflow_names": [
-    "runtime-worker",
-    "runtime-hourly-sync",
     "runtime-daily-learning",
     "runtime-weekly-synthesis",
-    "runtime-event-observe",
     "model-value-proof"
   ],
   "max_cancellations_per_cycle": 8,
