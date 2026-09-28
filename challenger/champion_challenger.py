@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Fail-closed champion/challenger promotion-review pipeline.
 
-The pipeline connects Hunter discovery, rights evidence, isolated adapter proof,
-historical policy replay, transparent challenger metrics, and a forward shadow
-canary. It can only make a candidate eligible for *human promotion review*.
-It cannot mutate active policy, grant authority, merge, deploy, or promote.
+The pipeline connects Hunter discovery, the owner's non-blocking rights policy,
+isolated adapter proof, historical replay, challenger metrics, and a forward
+shadow canary. It can only reach human promotion review, not mutate active
+policy, grant execution authority, merge, deploy, or promote.
 """
 from __future__ import annotations
 
@@ -13,7 +13,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from hunting.rights_gate import validate_rights_record
+from hunting.rights_gate import build_rights_record, validate_rights_record
+from hunting.rights_usage import evaluate_rights_usage
 from policy_replay.policy_backtester import validate_replay_receipt
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -202,17 +203,23 @@ def _validate_forward_canary(receipt: dict[str,Any],candidate_id: str) -> None:
 def assess_candidate(
     *,
     discovery: dict[str,Any],
-    rights_record: dict[str,Any],
+    rights_record: dict[str,Any] | None,
     adapter_receipt: dict[str,Any],
     replay_receipt: dict[str,Any],
     forward_canary_receipt: dict[str,Any],
 ) -> dict[str,Any]:
     p=policy()
     _validate_discovery(discovery)
+    if rights_record is None:
+        rights_record=build_rights_record(
+            {"full_name":discovery["repository_full_name"],"license":None},
+            {"revision":discovery["revision"],"paths":[]},
+        )
     validate_rights_record(rights_record)
     _req(rights_record["repository_full_name"]==discovery["repository_full_name"],"rights repository lineage mismatch")
     _req(rights_record["source_revision_sha"]==discovery["revision"],"rights exact-revision lineage mismatch")
     _req(rights_record["automatic_reuse_authority_granted"] is False,"rights discovery granted reuse authority")
+    usage=evaluate_rights_usage(rights_record)
 
     candidate_id="CHL-"+hashlib.sha256((
         discovery["candidate_fingerprint"]+"\0"+discovery["revision"]
@@ -222,13 +229,17 @@ def assess_candidate(
       {"stage":"DISCOVER","status":"PASS","evidence_refs":discovery["provenance_refs"]},
     ]
 
-    rights_ok=rights_record["rights_classification"] in set(p["integration_rights_classes"])
+    rights_ok=usage["allowed_by_brain_license_policy"]
     stages.append({
-      "stage":"RIGHTS_EVIDENCE_VERIFIED",
+      "stage":"RIGHTS_POLICY_SATISFIED",
       "status":"PASS" if rights_ok else "BLOCKED",
       "rights_classification":rights_record["rights_classification"],
-      "allowed_integration_mode":rights_record["allowed_integration_mode"],
-      "evidence_refs":rights_record["provenance_refs"],
+      "observed_integration_mode":rights_record["allowed_integration_mode"],
+      "allowed_integration_mode":usage["mode"],
+      "assumption_status":usage["assumption_status"],
+      "independently_verified":False,
+      "license_blocks_enabled":False,
+      "evidence_refs":[*rights_record["provenance_refs"],usage["policy_sha256"]],
     })
 
     adapter_ok=False
@@ -276,7 +287,7 @@ def assess_candidate(
     eligible=rights_ok and adapter_ok and replay_ok and metrics_ok and canary_ok
     decision="ELIGIBLE_FOR_HUMAN_PROMOTION_REVIEW" if eligible else "REMAIN_SHADOW_BLOCKED"
     body={
-      "schema_version":"1.0.0",
+      "schema_version":"1.1.0",
       "pipeline_id":p["pipeline_id"],
       "candidate_id":candidate_id,
       "finding_id":discovery["finding_id"],
@@ -285,6 +296,7 @@ def assess_candidate(
       "project_ids":discovery["project_ids"],
       "mode":p["mode"],
       "stages":stages,
+      "rights_usage_policy":usage,
       "replay_metrics":metrics,
       "decision":decision,
       "eligible_for_human_promotion_review":eligible,
@@ -296,6 +308,7 @@ def assess_candidate(
       "provenance_refs":list(dict.fromkeys([
         *discovery["provenance_refs"],
         *rights_record["provenance_refs"],
+        usage["policy_sha256"],
         *(adapter_receipt.get("evidence_refs",[]) if isinstance(adapter_receipt,dict) else []),
         *([replay_receipt["replay_hash"]] if isinstance(replay_receipt,dict) and replay_receipt.get("replay_hash") else []),
         *(forward_canary_receipt.get("evidence_refs",[]) if isinstance(forward_canary_receipt,dict) else []),
@@ -309,6 +322,13 @@ def validate_assessment(assessment: dict[str,Any]) -> None:
     _req(assessment.get("active_policy_changed") is False,"assessment changed active policy")
     _req(assessment.get("authority_granted") is False,"assessment granted authority")
     _req(assessment.get("human_promotion_review_required") is True,"human review requirement removed")
+    if assessment.get("schema_version")=="1.1.0":
+        from hunting.rights_usage import validate_usage_decision
+        validate_usage_decision(assessment.get("rights_usage_policy"))
+        rights_stages=[s for s in assessment["stages"] if s.get("stage")=="RIGHTS_POLICY_SATISFIED"]
+        _req(len(rights_stages)==1,"rights assumption stage missing")
+        _req(rights_stages[0].get("assumption_status")=="OPERATOR_ASSUMED","rights assumption mislabeled")
+        _req(rights_stages[0].get("independently_verified") is False,"rights assumption claimed verification")
     if assessment.get("eligible_for_human_promotion_review"):
         _req(all(stage["status"]=="PASS" for stage in assessment["stages"]),"eligible challenger has blocked stage")
         _req(assessment["decision"]=="ELIGIBLE_FOR_HUMAN_PROMOTION_REVIEW","eligible challenger decision mismatch")

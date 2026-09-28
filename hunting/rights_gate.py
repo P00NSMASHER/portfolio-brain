@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Fail-closed repository rights classifier for Hunter discoveries.
+"""Repository license observations plus the Brain owner's non-blocking policy.
 
-Discovery never grants code-reuse authority. This module records the best
-machine-readable rights evidence available at an exact revision and maps it to
-a conservative integration mode. Unknown/custom rights remain non-reusable
-until separately verified.
+Observed SPDX data, copyright, conditions, and source hashes remain unchanged.
+Operational admission is separate: the owner assumes rights for all candidates.
+That assumption is never labeled independently verified or execution authority.
 """
 from __future__ import annotations
 
@@ -13,6 +12,8 @@ import json
 import re
 from pathlib import Path
 from typing import Any
+
+from hunting.rights_usage import current_usage_decision, validate_usage_decision
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -70,6 +71,7 @@ def _dependency_manifests(paths: list[str]) -> list[str]:
     return sorted(p for p in paths if Path(p).name in names)
 
 def _classify(spdx: str | None) -> dict[str,Any]:
+    # Observational classification only. Internal admission uses rights_usage.
     p=_policy()
     normalized=None if spdx is None else str(spdx).strip()
     if not normalized or normalized.upper() in set(p["unknown_spdx_values"]):
@@ -174,6 +176,7 @@ def build_rights_record(candidate: dict[str,Any], inspection: dict[str,Any], evi
       "rights_classification":classification["rights_classification"],
       "allowed_integration_mode":classification["allowed_integration_mode"],
       "automatic_reuse_authority_granted":False,
+      "usage_policy":current_usage_decision(),
       "provenance_refs":[
         f"github:{candidate.get('full_name')}@{revision}",
         *( [f"github-license:{candidate.get('full_name')}@{revision}:{evidence.get('license_path')}"] if evidence.get("license_path") else [] )
@@ -189,7 +192,7 @@ def validate_rights_record(record: dict[str,Any]) -> None:
       "dependency_license_risk","dependency_manifest_paths","rights_classification",
       "allowed_integration_mode","automatic_reuse_authority_granted","provenance_refs","rights_hash"
     }
-    _req(isinstance(record,dict) and set(record)==required,"rights record fields changed")
+    _req(isinstance(record,dict) and set(record) in (required,required|{"usage_policy"}),"rights record fields changed")
     _req(record["schema_version"]=="1.0.0","rights schema mismatch")
     _req(isinstance(record["source_revision_sha"],str) and len(record["source_revision_sha"])==40,"rights revision invalid")
     _req(record["automatic_reuse_authority_granted"] is False,"discovery granted reuse authority")
@@ -197,5 +200,7 @@ def validate_rights_record(record: dict[str,Any]) -> None:
     _req(isinstance(record["redistribution_conditions"],list) and record["redistribution_conditions"],"redistribution conditions missing")
     _req(isinstance(record["dependency_manifest_paths"],list),"dependency manifest paths invalid")
     _req(isinstance(record["provenance_refs"],list) and record["provenance_refs"],"rights provenance missing")
+    if "usage_policy" in record:
+        validate_usage_decision(record["usage_policy"])
     body=dict(record);given=body.pop("rights_hash")
     _req(given==_hash(body),"rights_hash mismatch")

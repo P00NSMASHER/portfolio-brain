@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0.0",
+  "policy_id": "brain-operator-assumed-rights-v1",
+  "mode": "NON_BLOCKING_OPERATOR_ASSUMED",
+  "scope": "P00NSMASHER/portfolio-brain",
+  "license_blocks_enabled": false,
+  "assumption_status": "OPERATOR_ASSUMED",
+  "independently_verified": false,
+  "instruction_source": "USER_REQUEST_2026_09_28",
+  "instruction": "Remove license-based blocking in Portfolio Brain and apply the owner's standing rights assumption to all candidates.",
+  "preserve_license_observations": true,
+  "execution_authority_granted": false
+}

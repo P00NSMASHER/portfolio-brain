@@ -7,22 +7,15 @@
   "human_promotion_review_required": true,
   "required_sequence": [
     "DISCOVER",
-    "RIGHTS_EVIDENCE_VERIFIED",
+    "RIGHTS_POLICY_SATISFIED",
     "ISOLATED_ADAPTER_VERIFIED",
     "HISTORICAL_REPLAY_VERIFIED",
     "CHALLENGER_METRICS_VERIFIED",
     "FORWARD_CANARY_VERIFIED",
     "HUMAN_PROMOTION_REVIEW"
   ],
-  "integration_rights_classes": [
-    "PERMISSIVE_DEPENDENCY"
-  ],
-  "architecture_study_only_classes": [
-    "COPYLEFT_REVIEW",
-    "ARCHITECTURE_STUDY_ONLY",
-    "NO_LICENSE_NO_REUSE",
-    "SEPARATE_PERMISSION_REQUIRED"
-  ],
+  "rights_usage_policy": "hunting/RIGHTS_USAGE_POLICY.json",
+  "license_classes_are_non_blocking": true,
   "replay_required_mode": "SHADOW_ONLY",
   "replay_requires_forward_canary": true,
   "metric_directions": {
