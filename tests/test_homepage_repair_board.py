@@ -21,7 +21,9 @@ class RepairBoardTests(unittest.TestCase):
         self.assertLess(page.index('id="repair-board"'), page.index('class="grid kpis"'))
         self.assertIn('id="publication-stale"', page)
         self.assertIn('Date.now() - captured', page)
-        self.assertIn('data-copy-target="publication-repair-prompt"', page)
+        self.assertIn('id="publication-repair-prompt"', page)
+        self.assertIn("Fix in ChatGPT", page)
+        self.assertIn("https://chatgpt.com/?prompt=", page)
         self.assertNotIn("fetch(", page.lower())
 
     def test_static_page_republishes_if_unchanged_evidence_is_old(self):
