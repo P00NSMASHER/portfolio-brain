@@ -2038,14 +2038,14 @@ li{{margin:.45rem 0;line-height:1.42}}
 .upgrade-board .repair-index,.upgrade-board .repair-details summary{{color:#c6b0ff}}
 .upgrade-board .repair-source code{{color:#bda7ff}}
 .upgrade-board .copy-repair{{background:#b99cff;color:#151020}}
-.action-link,.header-action{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;cursor:pointer;border:0;border-radius:10px;font-weight:700;transition:transform .16s ease,opacity .16s ease}
-.action-link{margin-top:10px;padding:9px 12px;background:var(--blue);color:white;font-size:.72rem;box-shadow:0 6px 18px rgba(0,113,227,.18)}
-.action-link:hover,.header-action:hover{transform:translateY(-1px);opacity:.92}
-.primary-action{background:linear-gradient(135deg,var(--blue),var(--blue-2))}
-.large-action{width:100%;padding:11px 14px;font-size:.78rem}
-.header-action{padding:8px 11px;background:var(--surface-soft);border:1px solid var(--line);color:var(--text);font-size:.7rem;white-space:nowrap}
-.actions{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
-@media(max-width:700px){.header-action{font-size:.66rem;padding:7px 9px}.actions{justify-content:flex-start}.topbar .actions{width:100%}}
+.action-link,.header-action{{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;cursor:pointer;border:0;border-radius:10px;font-weight:700;transition:transform .16s ease,opacity .16s ease}}
+.action-link{{margin-top:10px;padding:9px 12px;background:var(--blue);color:white;font-size:.72rem;box-shadow:0 6px 18px rgba(0,113,227,.18)}}
+.action-link:hover,.header-action:hover{{transform:translateY(-1px);opacity:.92}}
+.primary-action{{background:linear-gradient(135deg,var(--blue),var(--blue-2))}}
+.large-action{{width:100%;padding:11px 14px;font-size:.78rem}}
+.header-action{{padding:8px 11px;background:var(--surface-soft);border:1px solid var(--line);color:var(--text);font-size:.7rem;white-space:nowrap}}
+.actions{{display:flex;gap:7px;flex-wrap:wrap;align-items:center}}
+@media(max-width:700px){{.header-action{{font-size:.66rem;padding:7px 9px}}.actions{{justify-content:flex-start}}.topbar .actions{{width:100%}}}}
 .upgrade-item{{background:rgba(28,24,60,.72);border-color:rgba(184,156,255,.18)}}
 section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
 #live-state{{background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--blue) 4%,var(--surface-solid)))}}
