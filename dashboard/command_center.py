@@ -1068,35 +1068,45 @@ def render_html(snapshot: dict[str, Any]) -> str:
     workflow_rows = "".join(f"<li><code>{_e(name)}</code></li>" for name in snapshot["workflows"])
     repair_issues = snapshot["repair_issues"]
     recommended_upgrades = snapshot["recommended_upgrades"]
-    repair_cards = "".join(
-        f'''<article class="repair-item">
+    def repair_card(issue: dict[str, Any], index: int) -> str:
+        return f'''<article class="repair-item">
           <div class="repair-item-head"><span class="repair-index">{index:02d}</span><div><h3>{_e(issue['title'])}</h3><p>{_e(issue['detail'])}</p></div>{_badge(issue['severity'], 'bad' if issue['severity']=='HIGH' else 'warn')}</div>
           <div class="repair-source">Evidence · <code>{_e(issue['evidence_ref'])}</code></div>
-          <details class="repair-details"><summary>View repair action</summary><div class="repair-prompt"><p id="repair-prompt-{index}">{_e(issue['prompt'])}</p><a class="action-link" href="{_e(_chatgpt_action_link(issue['prompt']))}" target="_blank" rel="noopener noreferrer">Fix in ChatGPT</a></div></details>
+          <a class="action-link" href="{_e(_chatgpt_action_link(issue['prompt']))}" target="_blank" rel="noopener noreferrer">Fix now</a>
         </article>'''
-        for index, issue in enumerate(repair_issues, 1)
-    ) or '<p class="repair-empty">No defects detected in this snapshot. This is not a guarantee of complete operation; inspect the evidence age and recent end-to-end receipts.</p>'
-    upgrade_cards = "".join(
-        f'''<article class="repair-item upgrade-item">
+
+    def upgrade_card(upgrade: dict[str, Any], index: int) -> str:
+        return f'''<article class="repair-item upgrade-item">
           <div class="repair-item-head"><span class="repair-index">{index:02d}</span><div><h3>{_e(upgrade['title'])}</h3><p>{_e(upgrade['detail'])}</p></div>{_badge(upgrade['priority'], 'warn' if upgrade['priority']=='HIGH VALUE' else 'neutral')}</div>
           <div class="repair-source">Evidence · <code>{_e(upgrade['evidence_ref'])}</code></div>
-          <details class="repair-details"><summary>View upgrade action</summary><div class="repair-prompt"><p id="upgrade-prompt-{index}">{_e(upgrade['prompt'])}</p><a class="action-link" href="{_e(_chatgpt_action_link(upgrade['prompt']))}" target="_blank" rel="noopener noreferrer">Run in ChatGPT</a></div></details>
+          <a class="action-link" href="{_e(_chatgpt_action_link(upgrade['prompt']))}" target="_blank" rel="noopener noreferrer">Run upgrade</a>
         </article>'''
-        for index, upgrade in enumerate(recommended_upgrades, 1)
-    ) or '<p class="repair-empty">No upgrade recommendations are currently generated from this snapshot.</p>'
+
+    repair_primary = repair_issues[:3]
+    repair_more = repair_issues[3:]
+    repair_cards = "".join(repair_card(issue,index) for index,issue in enumerate(repair_primary,1))
+    repair_more_cards = "".join(repair_card(issue,index) for index,issue in enumerate(repair_more,4))
+    if not repair_cards:
+        repair_cards = '<p class="repair-empty">No evidence-backed defects are currently detected.</p>'
+
+    upgrade_primary = recommended_upgrades[:2]
+    upgrade_more = recommended_upgrades[2:]
+    upgrade_cards = "".join(upgrade_card(upgrade,index) for index,upgrade in enumerate(upgrade_primary,1))
+    upgrade_more_cards = "".join(upgrade_card(upgrade,index) for index,upgrade in enumerate(upgrade_more,3))
+    if not upgrade_cards:
+        upgrade_cards = '<p class="repair-empty">No upgrade recommendations are currently generated from this snapshot.</p>'
 
     ranked_skus = sorted(micro_factory["skus"], key=lambda row: row["rank"])
-    product_cards = "".join(
-        f'''<article class="product-card">
+    def product_card(sku: dict[str, Any]) -> str:
+        return f'''<article class="product-card">
           <div class="product-card-top"><span class="product-rank">#{sku["rank"]:02d}</span><div><h3>{_e(sku["name"])}</h3><p>{_e(sku["buyer_problem"])}</p></div>{_badge(sku["status"], "good" if sku["status"]=="READY" else "neutral")}</div>
-          <div class="product-stats"><span><small>Format</small><strong>{_e(sku["format"])}</strong></span><span><small>Price test</small><strong>${sku["price_usd"]:.2f}</strong></span><span><small>Source</small><strong>{_e(sku["reuse_source"])}</strong></span></div>
-          <p class="product-boundary"><strong>Boundary:</strong> {_e(sku["reuse_boundary"])}</p>
-          <details class="repair-details"><summary>Build action</summary><div class="repair-prompt"><p id="sku-prompt-{sku["sku_id"]}">{_e(sku["build_prompt"])}</p><a class="action-link primary-action" href="{_e(_chatgpt_action_link(sku['build_prompt']))}" target="_blank" rel="noopener noreferrer">Build {_e(sku["sku_id"])}</a></div></details>
+          <div class="product-stats"><span><small>Format</small><strong>{_e(sku["format"])}</strong></span><span><small>Price</small><strong>${sku["price_usd"]:.2f}</strong></span></div>
+          <a class="action-link primary-action" href="{_e(_chatgpt_action_link(sku['build_prompt']))}" target="_blank" rel="noopener noreferrer">Build {_e(sku["sku_id"])}</a>
+          <details class="product-meta"><summary>Details</summary><p><strong>Source:</strong> {_e(sku["reuse_source"])}</p><p><strong>Boundary:</strong> {_e(sku["reuse_boundary"])}</p></details>
         </article>'''
-        for sku in ranked_skus
-    )
+    product_primary_cards = "".join(product_card(sku) for sku in ranked_skus[:3])
+    product_more_cards = "".join(product_card(sku) for sku in ranked_skus[3:])
     next_sku = ranked_skus[0]
-    next_sku_prompt_id = "next-sku-prompt"
     guardrails = "".join(f"<li>{_e(x)}</li>" for x in sprint["guardrails"])
     allowed = "".join(f"<li>{_e(x)}</li>" for x in snapshot["operator_boundary"]["allowed"])
     blocked = "".join(f"<li>{_e(x)}</li>" for x in snapshot["operator_boundary"]["not_allowed"])
@@ -2246,10 +2256,10 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
 <body data-design="revenue-first-v5" data-mobile-optimized="true">
 <div class="shell">
 <aside>
-  <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Command Center v4.1</small></div></div>
+  <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Simple operator mode</small></div></div>
   <nav>
-    <a href="#overview">Today</a><a href="#repair-board">Fix</a><a href="#micro-products">Products</a><a href="#revenue-focus">Money</a>
-    <a href="#operations">Ops</a><a href="#projects">Portfolio</a><a href="#hunter">Hunter</a><a href="#cost">Controls</a>
+    <a href="#overview">Today</a><a href="#repair-board">Fix</a><a href="#micro-products">Build</a><a href="#revenue-focus">Money</a>
+    <a class="advanced-nav" href="#operations">Ops</a><a class="advanced-nav" href="#projects">Portfolio</a><a class="advanced-nav" href="#hunter">Hunter</a><a class="advanced-nav" href="#cost">Controls</a>
   </nav>
   <div class="readonly"><strong>OBSERVE ONLY</strong><span>Public command center</span></div>
 </aside>
@@ -2262,10 +2272,9 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       <div class="hero-badges">{_badge(system["functional_status"], _status_tone(system["functional_status"]))} {_badge(revenue_focus["truth_state"], "good" if revenue_focus["truth_state"]=="EARNING" else "warn")} {_badge("READ ONLY", "neutral")}</div>
     </div>
     <div class="actions">
-      <button type="button" onclick="location.reload()">Refresh page</button>
+      <a class="header-action primary-header-action" href="{_e(_chatgpt_action_link(next_sku['build_prompt']))}" target="_blank" rel="noopener noreferrer">Build next product</a>
       <a class="header-action" href="{_e(_github_workflow_link('command-center-pages.yml'))}" target="_blank" rel="noopener noreferrer">Refresh Brain</a>
-      <a class="header-action" href="{_e(_github_workflow_link('portfolio-autonomous-scheduler.yml'))}" target="_blank" rel="noopener noreferrer">Run Scheduler</a>
-      <a class="header-action" href="{_e(_github_workflow_link('hunter-autonomous-cycle.yml'))}" target="_blank" rel="noopener noreferrer">Run Hunter</a>
+      <button class="detail-toggle" type="button" onclick="toggleAdvanced()">More details</button>
     </div>
   </header>
 
@@ -2295,7 +2304,7 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
         <h2>{_e(next_sku["sku_id"])} · {_e(next_sku["name"])}</h2>
         <p>{_e(next_sku["buyer_problem"])}</p>
         <div class="focus-next-price"><span>Price test</span><strong>${next_sku["price_usd"]:.2f}</strong></div>
-        <div class="repair-prompt compact-prompt"><p id="{next_sku_prompt_id}">{_e(next_sku["build_prompt"])}</p><a class="action-link primary-action large-action" href="{_e(_chatgpt_action_link(next_sku['build_prompt']))}" target="_blank" rel="noopener noreferrer">Build {_e(next_sku["sku_id"])} in ChatGPT</a></div>
+        <a class="action-link primary-action large-action" href="{_e(_chatgpt_action_link(next_sku['build_prompt']))}" target="_blank" rel="noopener noreferrer">Build {_e(next_sku["sku_id"])}</a>
       </article>
     </div>
   </section>
@@ -2303,8 +2312,9 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
   <section class="repair-board" id="repair-board" aria-labelledby="repair-title" data-as-of="{_e(publication.get('generated_at') or source_bundle.get('generated_at') or '')}">
     <div class="repair-head"><div><div class="repair-kicker"><span class="repair-pulse"></span> FIX FIRST · SYSTEM DIAGNOSTICS</div><h2 id="repair-title">What is actually broken?</h2><p>Only evidence-backed defects belong here. Green infrastructure never substitutes for revenue.</p></div><div class="repair-count"><strong>{len(repair_issues)}</strong><span>snapshot issues</span></div></div>
     <div class="repair-meta"><span>{_badge(system['functional_status'], _status_tone(system['functional_status']))}</span><span>Published <time>{_e(publication.get('generated_at') or 'validation preview')}</time></span><span>Source <code>{_e((publication.get('source_commit') or 'not stamped')[:12])}</code></span><span>Evidence captured <time>{_e(source_bundle.get('generated_at') or 'unknown')}</time></span><span id="snapshot-age" role="status">Checking publication age…</span></div>
-    <article class="repair-item publication-stale" id="publication-stale" hidden><div class="repair-item-head"><span class="repair-index">!</span><div><h3>Published view is out of date</h3><p id="publication-age-detail">The latest run may differ from this snapshot.</p></div>{_badge('CHECK NOW', 'warn')}</div><details class="repair-details"><summary>View repair prompt</summary><div class="repair-prompt"><p id="publication-repair-prompt">Audit the latest P00NSMASHER/portfolio-brain Pages workflow and its durable state bridge against current main. The public dashboard snapshot is older than the expected hourly refresh window or has no timestamp. Check the newest run, artifact continuity, publication gate and deployment status. Repair the root cause on a branch and verify a fresh published snapshot with valid source receipts. Do not change the cost ceiling, authority gates or tests to force green.</p><a class="action-link" href="{_e(_chatgpt_action_link('Audit the latest P00NSMASHER/portfolio-brain Pages workflow and its durable state bridge against current main. The public dashboard snapshot is older than the expected hourly refresh window or has no timestamp. Check the newest run, artifact continuity, publication gate and deployment status. Repair the root cause on a branch and verify a fresh published snapshot with valid source receipts. Do not change the cost ceiling, authority gates or tests to force green.'))}" target="_blank" rel="noopener noreferrer">Fix in ChatGPT</a></div></details></article>
+    <article class="repair-item publication-stale" id="publication-stale" hidden><div class="repair-item-head"><span class="repair-index">!</span><div><h3>Published view is out of date</h3><p id="publication-age-detail">The latest run may differ from this snapshot.</p></div>{_badge('CHECK NOW', 'warn')}</div><a class="action-link" href="{_e(_chatgpt_action_link('Audit the latest P00NSMASHER/portfolio-brain Pages workflow and its durable state bridge against current main. The public dashboard snapshot is older than the expected hourly refresh window or has no timestamp. Check the newest run, artifact continuity, publication gate and deployment status. Repair the root cause on a branch and verify a fresh published snapshot with valid source receipts. Do not change the cost ceiling, authority gates or tests to force green.'))}" target="_blank" rel="noopener noreferrer">Fix now</a></article>
     <div class="repair-list">{repair_cards}</div>
+    {('<details class="overflow-details"><summary>Show '+str(len(repair_more))+' more issue(s)</summary><div class="repair-list overflow-list">'+repair_more_cards+'</div></details>') if repair_more else ''}
     <p class="repair-foot">A healthy badge reflects only checks supported by this snapshot. A heartbeat check alone does not prove useful work. No action runs from this public page.</p>
   </section>
 
@@ -2316,7 +2326,8 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       <div><span>Verified revenue</span><strong>${micro_factory["verified_revenue_usd"]:.2f}</strong></div>
       <div><span>Build cap</span><strong>{micro_factory["build_caps"]["max_hours_per_sku"]}h / ${micro_factory["build_caps"]["max_paid_ai_spend_usd_per_sku"]}</strong></div>
     </div>
-    <div class="product-grid">{product_cards}</div>
+    <div class="product-grid">{product_primary_cards}</div>
+    {('<details class="overflow-details"><summary>Show '+str(len(ranked_skus)-3)+' more product(s)</summary><div class="product-grid overflow-list">'+product_more_cards+'</div></details>') if len(ranked_skus)>3 else ''}
     <p class="repair-foot">Candidate status is not demand. A SKU earns more engineering only from verified sales, reviews, support requests, or repeat buyer demand.</p>
   </section>
 
@@ -2324,9 +2335,15 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
     <div class="repair-head"><div><div class="repair-kicker upgrade-kicker">IMPROVE NEXT · EVIDENCE BACKED</div><h2 id="upgrade-title">Brain improvements worth considering</h2><p>Internal improvements come after money and critical defects. Each item still requires current evidence before implementation.</p></div><div class="repair-count upgrade-count"><strong>{len(recommended_upgrades)}</strong><span>recommended</span></div></div>
     <div class="repair-meta"><span>{_badge("READ ONLY","neutral")}</span><span>Source <code>{_e((publication.get('source_commit') or 'not stamped')[:12])}</code></span><span>Generated from current durable state</span></div>
     <div class="repair-list upgrade-list">{upgrade_cards}</div>
-    <p class="repair-foot">Recommendations are prioritized from current evidence and should be rechecked against current main before implementation. Copying a prompt does not execute it.</p>
+    {('<details class="overflow-details"><summary>Show '+str(len(upgrade_more))+' more recommendation(s)</summary><div class="repair-list overflow-list">'+upgrade_more_cards+'</div></details>') if upgrade_more else ''}
+    <p class="repair-foot">Internal upgrades stay behind revenue work and critical repairs.</p>
   </section>
 
+  <section class="advanced-gate">
+    <button class="detail-toggle detail-toggle-wide" type="button" onclick="toggleAdvanced()">Show operations & diagnostics</button>
+    <p>Hidden by default to keep the operator view fast and focused.</p>
+  </section>
+  <div id="advanced-content" class="advanced-content" hidden>
   <section class="grid kpis">
     <div class="card kpi"><div class="label">Projects</div><div class="value">{system["project_count"]}</div><div class="hint">{len([p for p in snapshot["projects"] if p["lifecycle_status"] == "ACTIVE"])} active</div></div>
     <div class="card kpi"><div class="label">Agents healthy</div><div class="value">{system["healthy_agent_count"]}/{system["agent_count"]}</div><div class="hint">{system["stalled_agent_count"]} stalled · {system["warming_agent_count"]} warming</div></div>
@@ -2648,6 +2665,13 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
     <div class="card"><div class="section-head"><h2>What this screen may not do</h2>{_badge("NO ACT","bad")}</div><ul>{blocked}</ul></div>
   </section>
 
+  </div>
+  <nav class="mobile-dock" aria-label="Quick actions">
+    <a href="#overview">Today</a>
+    <a href="{_e(_chatgpt_action_link(next_sku['build_prompt']))}" target="_blank" rel="noopener noreferrer">Build</a>
+    <a href="#repair-board">Fix</a>
+    <button type="button" onclick="toggleAdvanced()">More</button>
+  </nav>
   <div class="footer">
     Snapshot <code id="snapshotHash">{_e(snapshot["snapshot_hash"])}</code><br>
     Source executive dashboard <code>{_e(snapshot["source_dashboard_hash"])}</code><br>
@@ -2661,6 +2685,17 @@ function filterProjects(q) {{
   document.querySelectorAll("#projectRows tr, #projectCards .project-mobile-card").forEach(function(item) {{
     item.style.display = item.dataset.project.indexOf(q) >= 0 ? "" : "none";
   }});
+}}
+function toggleAdvanced() {{
+  const panel = document.getElementById("advanced-content");
+  if (!panel) return;
+  const willShow = panel.hidden;
+  panel.hidden = !willShow;
+  document.querySelectorAll(".detail-toggle").forEach(function(button) {{
+    button.textContent = willShow ? "Hide details" : (button.classList.contains("detail-toggle-wide") ? "Show operations & diagnostics" : "More details");
+  }});
+  document.body.classList.toggle("advanced-open", willShow);
+  if (willShow) panel.scrollIntoView({{behavior:"smooth",block:"start"}});
 }}
 function updatePublicationAge() {{
   const board = document.getElementById("repair-board");
