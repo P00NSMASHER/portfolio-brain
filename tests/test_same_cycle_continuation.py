@@ -94,6 +94,12 @@ class ProposalProvider:
           "truncated":False,
         }
 
+class DriftProvider(ProposalProvider):
+    def inspect_revision(self,candidate,revision):
+        result=super().inspect_revision(candidate,revision)
+        result["tree_sha"]="c"*40
+        return result
+
 
 def primary_summary(state,receipts=None,executed=None):
     receipts=list(receipts or [])
@@ -208,6 +214,45 @@ class SameCycleContinuationTests(unittest.TestCase):
         self.assertEqual(proof["metrics"]["attempted"],8)
         self.assertEqual(proof["metrics"]["completed"],8)
         self.assertEqual(proof["metrics"]["deferred"],0)
+
+    def test_deferred_first_wave_stops_second_wave_and_does_not_retry(self):
+        state=load_state()
+        pstate=proposal_state(count=3)
+        primary_receipts=[
+            {"execution_id":f"WEXEC-PRIMARY-{index}","status":"SUCCESS","receipt_hash":"sha256:"+str(index+1)*64}
+            for index in range(5)
+        ]
+        primary_executed=[{"execution_id":row["execution_id"]} for row in primary_receipts]
+        summary=primary_summary(state,primary_receipts,primary_executed)
+        updated,receipts,executed,combined,report,selected=run_same_cycle_continuation(
+            state,
+            runtime_state=bootstrap_state(now=AT),
+            hunter_state=hunter_seed_state(),
+            hunter_proposal_state=pstate,
+            primary_receipts=primary_receipts,
+            primary_executed=primary_executed,
+            primary_summary=summary,
+            max_items=8,
+            at=AT,
+            context_overrides={"hunter_provider":DriftProvider(pstate)},
+        )
+        self.assertEqual(report["status"],"EXECUTED")
+        self.assertEqual(report["pass_count"],1)
+        self.assertEqual(report["selected_count"],2)
+        self.assertEqual(report["attempted_count"],2)
+        self.assertEqual(report["completed_count"],0)
+        self.assertEqual(report["deferred_count"],2)
+        self.assertEqual(report["unused_capacity"],1)
+        self.assertEqual(report["stop_reason"],"DEFERRED_CONTINUATION_STOPS_FURTHER_PASSES")
+        self.assertEqual(len(receipts),7)
+        self.assertEqual(len(executed),5)
+        self.assertEqual(combined["attempted_count"],7)
+        self.assertEqual(combined["completed_count"],5)
+        self.assertEqual(combined["deferred_count"],2)
+        self.assertEqual(combined["continuation_pass_count"],1)
+        self.assertEqual(combined["remaining_queued_count"],2)
+        self.assertEqual(len(selected),2)
+        self.assertTrue(all(row["state"]=="QUEUED" for row in updated["work_items"] if row["source_ref"] in report["proposal_ids"]))
 
     def test_existing_primary_queued_work_prevents_same_cycle_retry(self):
         pstate=proposal_state()
