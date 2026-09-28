@@ -9,6 +9,10 @@ permissions:
   contents: read
   actions: read
 
+concurrency:
+  group: portfolio-cost-governed-autonomy
+  cancel-in-progress: false
+
 jobs:
   weekly:
     uses: ./.github/workflows/runtime-worker.yml
