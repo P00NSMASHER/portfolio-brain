@@ -83,6 +83,68 @@ def _validate_cursor(cursor: dict[str,Any] | None, ref: str) -> str | None:
     _require(cursor.get("source_ref")==ref, "cursor source_ref does not match configured adapter ref")
     return _exact_sha(cursor.get("cursor_sha"), "cursor requires an exact lowercase SHA")
 
+def _tree_snapshot(adapter: dict[str,Any], commit_sha: str, fetch_json: FetchJSON) -> tuple[str,dict[str,dict[str,str]]]:
+    """Return a complete non-directory Git tree snapshot bound to an exact commit."""
+    api=_repo_api(adapter["repository_full_name"])
+    commit=fetch_json(f"{api}/git/commits/{commit_sha}")
+    _require(
+        _exact_sha(commit.get("sha"), "GitHub git-commit response missing exact lowercase SHA")==commit_sha,
+        "GitHub git-commit response is not bound to the requested SHA",
+    )
+    tree=commit.get("tree")
+    _require(isinstance(tree,dict), "GitHub git-commit response missing tree")
+    tree_sha=_exact_sha(tree.get("sha"), "GitHub git-commit tree is invalid")
+    payload=fetch_json(f"{api}/git/trees/{tree_sha}?recursive=1")
+    _require(payload.get("truncated") is False, "GitHub recursive tree response is truncated")
+    _require(
+        _exact_sha(payload.get("sha"), "GitHub recursive tree response missing exact tree SHA")==tree_sha,
+        "GitHub recursive tree response is not bound to the requested tree",
+    )
+    raw=payload.get("tree")
+    _require(isinstance(raw,list), "GitHub recursive tree response missing tree entries")
+    files: dict[str,dict[str,str]]={}
+    for item in raw:
+        _require(isinstance(item,dict), "GitHub recursive tree entry must be an object")
+        path=_repo_path(item.get("path"), "GitHub recursive tree entry has unsafe or missing path")
+        kind=item.get("type")
+        _require(kind in {"tree","blob","commit"}, "GitHub recursive tree entry has unsupported type")
+        mode=item.get("mode")
+        _require(isinstance(mode,str) and mode, "GitHub recursive tree entry has invalid mode")
+        sha=_exact_sha(item.get("sha"), "GitHub recursive tree entry has invalid SHA")
+        if kind=="tree":
+            continue
+        _require(path not in files, "GitHub recursive tree contains duplicate file paths")
+        files[path]={"type":kind,"mode":mode,"sha":sha}
+    return tree_sha,files
+
+def _complete_tree_delta(adapter: dict[str,Any], base_sha: str, head_sha: str, fetch_json: FetchJSON) -> dict[str,Any]:
+    """Prove a complete path-level delta when GitHub's compare file list hits its 300-file ceiling."""
+    base_tree_sha,base_files=_tree_snapshot(adapter,base_sha,fetch_json)
+    head_tree_sha,head_files=_tree_snapshot(adapter,head_sha,fetch_json)
+    changes=[]; counts={"added":0,"removed":0,"modified":0}
+    for path in sorted(set(base_files) | set(head_files)):
+        before=base_files.get(path); after=head_files.get(path)
+        if before==after:
+            continue
+        if before is None:
+            status="added"
+        elif after is None:
+            status="removed"
+        else:
+            status="modified"
+        counts[status]+=1
+        changes.append({"path":path,"status":status,"before":before,"after":after})
+    return {
+        "comparison_method":"TREE_DELTA_FALLBACK",
+        "files_complete":True,
+        "files_materialized":False,
+        "changed_file_count":len(changes),
+        "file_change_counts":counts,
+        "file_manifest_hash":_canonical_hash(changes),
+        "tree_proof":{"base_tree_sha":base_tree_sha,"head_tree_sha":head_tree_sha},
+        "files":[],
+    }
+
 def resolve_head(adapter: dict[str,Any], fetch_json: FetchJSON) -> str:
     ref=_source_ref(adapter)
     payload=fetch_json(f"{_repo_api(adapter['repository_full_name'])}/commits/{urllib.parse.quote(ref,safe='')}")
@@ -117,7 +179,19 @@ def compare_range(adapter: dict[str,Any], base_sha: str, head_sha: str, fetch_js
     _require(commit_shas and commit_shas[-1]==head_sha,
              "GitHub compare response is not bound to the requested head SHA")
     _require(isinstance(raw_files,list), "GitHub compare response missing changed files")
-    _require(len(raw_files)<GITHUB_COMPARE_FILE_CAP, "GitHub compare file list reached the 300-file completeness boundary")
+    _require(len(raw_files)<=GITHUB_COMPARE_FILE_CAP, "GitHub compare file list exceeded the 300-file API boundary")
+    if len(raw_files)==GITHUB_COMPARE_FILE_CAP:
+        compact=_complete_tree_delta(adapter,base_sha,head_sha,fetch_json)
+        _require(
+            compact["changed_file_count"]>=GITHUB_COMPARE_FILE_CAP,
+            "complete tree delta is inconsistent with the GitHub compare boundary",
+        )
+        return {
+            "compare_status":status,
+            "ahead_by":ahead_by,
+            "behind_by":behind_by,
+            "total_commits":total_commits,
+        } | compact
     files=[]; seen_paths=set()
     for item in raw_files:
         _require(isinstance(item,dict), "GitHub compare file entry must be an object")
@@ -148,7 +222,11 @@ def compare_range(adapter: dict[str,Any], base_sha: str, head_sha: str, fetch_js
         "ahead_by":ahead_by,
         "behind_by":behind_by,
         "total_commits":total_commits,
+        "comparison_method":"GITHUB_COMPARE",
         "files_complete":True,
+        "files_materialized":True,
+        "changed_file_count":len(files),
+        "file_manifest_hash":_canonical_hash(files),
         "files":files,
     }
 
