@@ -33,7 +33,13 @@ class AttributionEngineTests(unittest.TestCase):
         snap = build_attribution_snapshot(self.fixture())
         validate_snapshot(snap)
         self.assertFalse(snap["opaque_score_used"])
-        self.assertNotIn("score", str(snap).lower())
+        def forbidden_key(value):
+            if isinstance(value, dict):
+                return any(k in {"score", "weighted_score", "composite_score"} or forbidden_key(v) for k, v in value.items())
+            if isinstance(value, list):
+                return any(forbidden_key(v) for v in value)
+            return False
+        self.assertFalse(forbidden_key(snap))
         dims = allocator_dimensions(snap)["PRJ-009"]
         self.assertEqual(dims["verified_outcomes"], 1)
         self.assertEqual(dims["proposal_to_experiment_conversion"], 1.0)
