@@ -126,7 +126,12 @@ def validate_command_center() -> dict[str, object]:
     require("Brain improvements worth considering" in page and "IMPROVE NEXT · EVIDENCE BACKED" in page, "recommended upgrades board missing")
     require("Verified cash, not activity." in page and "REVENUE NOT PROVEN" in page or "VERIFIED CASH EXISTS" in page, "revenue-first operator focus missing")
     require("Micro-Product Factory" in page or "MICRO-PRODUCT FACTORY" in page, "micro-product factory board missing")
-    require("Answer-to-Earn Quiz Kit" in page and "House Claim System" in page, "initial micro-product SKUs missing")
+    require(
+        "Quiz &amp; Reward Engine" in page
+        and "House Controls Pack" in page
+        and "Redeem Code System" in page,
+        "current first-launch-batch micro-product SKUs missing",
+    )
     require(page.index("Verified cash, not activity.") < page.index("FIX FIRST · SYSTEM DIAGNOSTICS") < page.index("MICRO-PRODUCT FACTORY · BOUNDED BETS") < page.index("IMPROVE NEXT · EVIDENCE BACKED") < page.index('class="grid kpis"'), "revenue-first dashboard hierarchy drifted")
     require("Run upgrade" in page and "https://chatgpt.com/?prompt=" in page, "recommended upgrade action buttons missing")
     require("Build SKU-001" in page and "Build next product" in page, "micro-product action links missing")

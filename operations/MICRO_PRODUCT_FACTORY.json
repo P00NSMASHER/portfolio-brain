@@ -29,57 +29,48 @@
     {
       "sku_id": "SKU-001",
       "rank": 1,
-      "name": "Answer-to-Earn Quiz Kit",
+      "name": "Quiz & Reward Engine",
       "format": "MODEL",
-      "status": "READY",
-      "price_usd": 2.99,
-      "buyer_problem": "Creators need a drop-in way to reward correct answers without building quiz validation and reward wiring from scratch.",
-      "reuse_source": "P00NSMASHER/abvmschoolstarworld pages/study-games.js",
-      "reuse_boundary": "Genericize mechanics only; remove all school-specific questions, branding and content.",
-      "build_prompt": "Work only in P00NSMASHER/portfolio-brain and authorized source repositories. Prepare SKU-001 Answer-to-Earn Quiz Kit as an original generic Roblox model. Reuse only generic question-validation/reward patterns from the ABVM study engine; include no ABVM content or branding. Target drag-and-drop setup, server-authoritative rewards, a small sample question set, concise README/setup instructions and deterministic QA. Keep total new work within 4 hours and paid AI spend within $10. Do not publish or spend money. Stop with a ready-to-upload artifact plus validation evidence.",
-      "artifact_state": "BUILT_STATIC_QA_PASS_RUNTIME_STUDIO_QA_REQUIRED",
+      "status": "READY_FOR_PUBLISH",
+      "price_usd": 3.99,
+      "buyer_problem": "Creators need a drop-in quiz system with randomized questions, server-side answer validation and configurable rewards.",
+      "reuse_source": "Original implementation informed by generic quiz-engine lessons.",
+      "reuse_boundary": "No ABVM questions, school-specific content, Brookhaven material, private data or third-party runtime code.",
+      "artifact_state": "BUILT_STATIC_QA_PASS_USER_CONFIRMED_STUDIO_SMOKE_TEST",
       "artifact_name": "QuizRewardEngine.rbxmx",
       "bundle_name": "Quiz_Reward_Engine_v1.0.zip",
       "version": "1.0.0",
-      "launch_price_usd": 3.99,
       "static_validation": "PASS",
-      "runtime_validation": "REQUIRED_BEFORE_PUBLISH",
+      "runtime_validation": "PASS_USER_CONFIRMED",
+      "publication_status": "NOT_PUBLISHED",
       "external_assets": 0,
       "external_dependencies": 0,
       "build_evidence": {
         "artifact_sha256": "60086850a0b6042cf6a0b0c7d12abea686d1697fda318529c0ce26333ad880b6",
         "source_location": "CHAT_ATTACHMENT_ONLY_NOT_GITHUB",
-        "source_code_public": false
+        "source_code_public": false,
+        "shipped_third_party_code": false
       },
       "commercial_source_policy": "ORIGINAL_DEPENDENCY_FREE",
-      "third_party_code_allowed": false,
-      "external_runtime_dependencies": []
+      "build_prompt": "Use the existing original Quiz & Reward Engine v1.0 artifact. Preserve its dependency-free source and verified SHA. Complete only the remaining Roblox Creator Store upload/listing steps, keep the $3.99 launch price, and do not alter product code unless a new runtime defect is reproduced."
     },
     {
       "sku_id": "SKU-002",
       "rank": 2,
-      "name": "House Claim System",
+      "name": "House Controls Pack",
       "format": "MODEL",
-      "status": "READY",
-      "price_usd": 3.99,
-      "buyer_problem": "Roleplay creators need reliable plot claiming, occupancy state and release behavior without writing ownership logic.",
-      "reuse_source": "P00NSMASHER/StarBlox compatibility/server/BrookhavenHouseCompat.server.luau",
-      "reuse_boundary": "Mechanics only; rebuild names, structure and implementation generically with no Brookhaven assets/UI/branding.",
-      "build_prompt": "Prepare SKU-002 House Claim System as an original generic Roblox model. Use the StarBlox house compatibility work only as engineering evidence for plot-claim edge cases; do not copy Brookhaven assets, UI, names or proprietary structure. Include plot discovery, claim/release, occupied-state handling, reconnect-safe cleanup, server authority, simple configuration and a minimal demo place. Keep work within 4 hours and $10 paid AI spend. Do not publish. Finish with validation evidence and setup documentation.",
-      "build_preconditions": [
-        "Use Roblox Micro-Product Factory v1",
-        "Define behavior-level QA matrix before implementation",
-        "Pass static QA and contract checks",
-        "Build through Rojo development pipeline",
-        "Pass Roblox Studio runtime QA before publication"
-      ],
+      "status": "READY_FOR_RUNTIME_QA",
+      "price_usd": 2.99,
+      "buyer_problem": "Roleplay builders repeatedly reimplement house lights, locks, garage and recolor controls.",
+      "reuse_source": "Original implementation informed by generic failure cases observed in prior roleplay-game engineering.",
+      "reuse_boundary": "No Brookhaven assets, UI, names, proprietary structure, StarBlox source, or third-party runtime code.",
       "artifact_state": "BUILT_STATIC_QA_PASS_RUNTIME_STUDIO_QA_REQUIRED",
       "artifact_name": "HouseControlsPack.rbxmx",
       "bundle_name": "House_Controls_Pack_v1.0.zip",
       "version": "1.0.0",
-      "launch_price_usd": 2.99,
       "static_validation": "PASS",
       "runtime_validation": "REQUIRED_BEFORE_PUBLISH",
+      "publication_status": "NOT_PUBLISHED",
       "external_assets": 0,
       "external_dependencies": 0,
       "factory": "Roblox Micro-Product Factory v1",
@@ -88,86 +79,103 @@
         "source_location": "CHAT_ATTACHMENT_ONLY_NOT_GITHUB",
         "source_code_public": false,
         "shipped_third_party_code": false
-      }
+      },
+      "build_prompt": "Use the existing original House Controls Pack v1.0 artifact. Run the documented Roblox Studio runtime QA matrix for ownership isolation, lights, garage, lock enforcement, recolor, replay/spam resistance and mobile controls. Fix only reproduced defects. Do not publish until runtime QA passes."
     },
     {
       "sku_id": "SKU-003",
       "rank": 3,
-      "name": "House Controls Pack",
+      "name": "Redeem Code System",
       "format": "MODEL",
-      "status": "CANDIDATE",
+      "status": "READY_FOR_RUNTIME_QA",
       "price_usd": 2.99,
-      "buyer_problem": "Roleplay builders repeatedly reimplement lights, locks, garage and house-color controls.",
-      "reuse_source": "P00NSMASHER/StarBlox compatibility/server/BrookhavenHouseCompat.server.luau",
-      "reuse_boundary": "Generic mechanics only; no copied world assets, UI, names or proprietary content.",
-      "build_prompt": "Prepare SKU-003 House Controls Pack as an original generic Roblox model containing server-authoritative light, door-lock, garage and configurable house-color controls. Derive only generic mechanics from prior StarBlox engineering. No Brookhaven assets, UI, names or proprietary content. Include a demo house made from original primitive parts, configuration module and concise install guide. Keep under 4 hours and $10 paid AI spend. Do not publish."
+      "buyer_problem": "Creators need a small safe configurable code-redemption mechanic with expiration and one-time-per-player persistence.",
+      "reuse_source": "Original implementation using generic server-authority and idempotency patterns.",
+      "reuse_boundary": "Original implementation only; no external runtime dependency.",
+      "artifact_state": "BUILT_STATIC_QA_PASS_RUNTIME_STUDIO_QA_REQUIRED",
+      "artifact_name": "RedeemCodeSystem.rbxmx",
+      "bundle_name": "Redeem_Code_System_v1.0.zip",
+      "version": "1.0.0",
+      "static_validation": "PASS",
+      "runtime_validation": "REQUIRED_BEFORE_PUBLISH",
+      "publication_status": "NOT_PUBLISHED",
+      "external_assets": 0,
+      "external_dependencies": 0,
+      "factory": "Roblox Micro-Product Factory v1",
+      "build_evidence": {
+        "artifact_sha256": "a29069198e4c4c6b72d2a252c6b4d51052627b526aecce8faa1c87f8879c32e5",
+        "source_location": "CHAT_ATTACHMENT_ONLY_NOT_GITHUB",
+        "source_code_public": false,
+        "shipped_third_party_code": false
+      },
+      "build_prompt": "Use the existing original Redeem Code System v1.0 artifact. Run the documented Roblox Studio runtime QA for valid/invalid codes, expiration, one-time persistence, DataStore failure behavior, replay protection, two-player isolation and mobile controls. Fix only reproduced defects. Do not publish until runtime QA passes."
     },
     {
       "sku_id": "SKU-004",
       "rank": 4,
       "name": "Question Bank Rotator",
       "format": "MODEL",
-      "status": "CANDIDATE",
+      "status": "MERGED_INTO_SKU-001",
       "price_usd": 2.99,
-      "buyer_problem": "Quiz and education-game creators need answer validation, randomized rotation and no-repeat behavior without custom infrastructure.",
-      "reuse_source": "P00NSMASHER/abvmschoolstarworld pages/study-games.js",
-      "reuse_boundary": "Generic engine patterns only; zero school-specific source material.",
-      "build_prompt": "Prepare SKU-004 Question Bank Rotator as an original generic Roblox model. Implement configurable questions, randomized rotation, immediate-repeat suppression, server-side answer validation, optional hints/explanations and simple API hooks. Use no school-specific content. Include tests and a demo. Keep under 4 hours and $10 paid AI spend. Do not publish."
+      "buyer_problem": "Randomized no-repeat question rotation is useful, but it is stronger as part of Quiz & Reward Engine than as a separate first-batch product.",
+      "reuse_source": "Generic quiz-engine patterns only.",
+      "reuse_boundary": "No school-specific source material.",
+      "build_prompt": "Do not build separately unless buyer evidence later shows demand for a standalone question-bank component."
     },
     {
       "sku_id": "SKU-005",
       "rank": 5,
-      "name": "Mobile HUD Starter",
+      "name": "House Claim System",
       "format": "MODEL",
-      "status": "CANDIDATE",
+      "status": "HOLD_COMPETITIVE",
       "price_usd": 3.99,
-      "buyer_problem": "Small Roblox creators routinely ship desktop-first HUDs that break on phones.",
-      "reuse_source": "P00NSMASHER/abvmschoolstarworld tests/mobile-layout.spec.mjs plus mobile QA experience",
-      "reuse_boundary": "Use responsive-layout lessons only; create wholly original Roblox UI.",
-      "build_prompt": "Prepare SKU-005 Mobile HUD Starter as an original Roblox model with thumb-friendly responsive layout, safe-area aware positioning, scalable button sizing, optional compact/expanded states and configuration examples. Do not copy any existing game UI. Include phone/tablet/desktop QA guidance and a demo scene. Keep under 4 hours and $10 paid AI spend. Do not publish."
+      "buyer_problem": "Roleplay creators need plot claiming and occupancy state, but current paid competition is stronger than the first-batch alternatives.",
+      "reuse_source": "Generic ownership/occupancy lessons only.",
+      "reuse_boundary": "No Brookhaven assets, UI, names or proprietary structure.",
+      "build_prompt": "Revisit only after live sales/support evidence from the first three products."
     },
     {
       "sku_id": "SKU-006",
       "rank": 6,
       "name": "Starter Shop System",
       "format": "MODEL",
-      "status": "BACKLOG",
+      "status": "HOLD_CROWDED",
       "price_usd": 3.99,
-      "buyer_problem": "Creators need a small server-authoritative currency-to-item shop with ownership persistence hooks.",
-      "reuse_source": "Portfolio gameplay/shop work; implementation must be original and generic.",
+      "buyer_problem": "Creators need shop systems, but the current Creator Store category is crowded with low-cost alternatives.",
+      "reuse_source": "Original generic implementation if revived.",
       "reuse_boundary": "No copied commercial game assets or UI.",
-      "build_prompt": "Prepare SKU-006 Starter Shop System as a small original Roblox model with server-authoritative purchase validation, configurable items/currency, ownership hooks and simple UI. Keep scope bounded and generic. Do not publish."
+      "build_prompt": "Do not build until buyer evidence justifies competing in a crowded category."
     },
     {
       "sku_id": "SKU-007",
       "rank": 7,
-      "name": "Redeem Code System",
+      "name": "Mobile HUD Starter",
       "format": "MODEL",
-      "status": "BACKLOG",
-      "price_usd": 2.99,
-      "buyer_problem": "Creators need a safe configurable code-redemption mechanic without duplicate claims.",
-      "reuse_source": "Generic persistence/idempotency patterns from portfolio systems.",
-      "reuse_boundary": "Original implementation only.",
-      "build_prompt": "Prepare SKU-007 Redeem Code System with configurable codes, one-time redemption, expiration support, server authority and persistence hooks. Keep scope bounded. Do not publish."
+      "status": "HOLD_CROWDED",
+      "price_usd": 3.99,
+      "buyer_problem": "Mobile UI problems are common, but current paid/free tooling competition is comparatively strong.",
+      "reuse_source": "Responsive-layout lessons only.",
+      "reuse_boundary": "Create wholly original Roblox UI if revived.",
+      "build_prompt": "Hold unless a narrower unmet mobile use case is identified."
     },
     {
       "sku_id": "SKU-008",
       "rank": 8,
       "name": "Vibe Game Inspector",
       "format": "PLUGIN",
-      "status": "BACKLOG",
+      "status": "BACKLOG_HIGH_UPSIDE",
       "price_usd": 9.99,
-      "buyer_problem": "AI-assisted Roblox creators need fast detection of common structural, mobile, client/server and release problems.",
-      "reuse_source": "StarBlox failure history plus Portfolio Brain validation patterns.",
-      "reuse_boundary": "Inspection rules only; no copying third-party code or assets.",
-      "build_prompt": "Prepare a design and minimal validated prototype for SKU-008 Vibe Game Inspector only after model SKUs show buyer signal. It should scan for objective Roblox project defects and produce reproducible findings, not subjective scores. Do not publish or exceed bounded prototype limits."
+      "buyer_problem": "AI-assisted Roblox creators need objective detection of common structural, mobile, client/server and release defects.",
+      "reuse_source": "Failure-pattern lessons plus original inspection rules.",
+      "reuse_boundary": "No copying third-party plugin code or assets.",
+      "build_prompt": "Prototype only after the model launch batch produces marketplace evidence."
     }
   ],
   "factory_guardrails": {
     "version": "1.0.0",
     "status": "READY",
     "sku001_policy": "ORIGINAL_DEPENDENCY_FREE",
-    "sku002_precondition": "USE_ROJO_QA_FACTORY",
+    "launch_batch_rule": "SKU-001 through SKU-003 are the only first-batch products.",
     "rojo_role": "DEVELOPMENT_BUILD_TOOL_ONLY",
     "internal_qa_only": [
       "command-console-style deterministic debug hooks",
@@ -175,6 +183,12 @@
       "critical-path coverage matrices",
       "remote abuse and replay testing"
     ],
-    "shipping_rule": "Do not ship Cmdr, test-runner, coverage, or other third-party dependencies unless a specific product-level need and license review justify it."
-  }
+    "shipping_rule": "Do not ship Cmdr, test-runner, coverage, Rojo runtime code, or other third-party dependencies unless a specific product-level need and license review justify it."
+  },
+  "first_launch_batch": [
+    "SKU-001",
+    "SKU-002",
+    "SKU-003"
+  ],
+  "launch_batch_state": "THREE_ARTIFACTS_BUILT_NOT_YET_PUBLISHED"
 }
