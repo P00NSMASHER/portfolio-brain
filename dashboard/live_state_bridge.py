@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -255,7 +256,10 @@ def main() -> None:
     parser.add_argument("--output-dir", default="dashboard/live")
     parser.add_argument("--receipt", default="dashboard/live/state_sources.json")
     parser.add_argument("--now", default=None)
+    parser.add_argument("--source-branch", default=None)
     args = parser.parse_args()
+    if args.source_branch is not None:
+        os.environ["GITHUB_REF_NAME"] = args.source_branch
     now = None if args.now is None else _time(args.now)
     receipt = build_live_state(
         output_dir=Path(args.output_dir),
