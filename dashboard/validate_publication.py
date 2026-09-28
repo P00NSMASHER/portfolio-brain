@@ -120,7 +120,13 @@ def validate_publication() -> dict[str, object]:
     require("Show operations & diagnostics" in html_text and 'id="advanced-content"' in html_text, "public simple-mode disclosure missing")
     require('class="mobile-dock"' in html_text, "public mobile quick-action dock missing")
     require("Verified cash, not activity." in html_text, "public revenue-first operator focus missing")
-    require("MICRO-PRODUCT FACTORY · BOUNDED BETS" in html_text and "Answer-to-Earn Quiz Kit" in html_text, "public micro-product factory missing")
+    require(
+        "MICRO-PRODUCT FACTORY · BOUNDED BETS" in html_text
+        and "Quiz &amp; Reward Engine" in html_text
+        and "House Controls Pack" in html_text
+        and "Redeem Code System" in html_text,
+        "public current first-launch-batch micro-product factory missing",
+    )
     require(html_text.index("Verified cash, not activity.") < html_text.index("FIX FIRST · SYSTEM DIAGNOSTICS") < html_text.index("MICRO-PRODUCT FACTORY · BOUNDED BETS") < html_text.index("IMPROVE NEXT · EVIDENCE BACKED") < html_text.index('class="grid kpis"'), "public revenue-first hierarchy drifted")
     require("Operational Telemetry" in html_text and "History & Trends" in html_text, "public telemetry/trends panels missing")
     require("Commercial Evidence" in html_text and "Retired FreightRecovery Baseline" in html_text, "public commercial provenance UI missing")
