@@ -153,6 +153,70 @@ def load_state(path: str | Path | None = None) -> dict[str, Any]:
     return state
 
 
+def merge_states(states: list[dict[str, Any]]) -> dict[str, Any]:
+    """Merge validated concurrent heartbeat snapshots without losing per-agent evidence."""
+    req(isinstance(states, list) and states, "heartbeat states required")
+    for state in states:
+        validate_state(state)
+
+    out = seed_state()
+    events: dict[str, dict[str, Any]] = {}
+    for state in states:
+        for event in state["recent_events"]:
+            existing = events.get(event["event_id"])
+            req(existing is None or existing == event, "heartbeat event id collision")
+            events[event["event_id"]] = json.loads(json.dumps(event))
+
+    ordered_events = sorted(
+        events.values(),
+        key=lambda event: (_time(event["at"], "heartbeat event at"), event["event_id"]),
+    )
+    out["recent_events"] = ordered_events[-MAX_EVENTS:]
+    out["sequence"] = max(state["sequence"] for state in states)
+    out["updated_at"] = out["recent_events"][-1]["at"] if out["recent_events"] else None
+
+    activity_fields = ("last_heartbeat_at", "last_activity_kind", "source_workflow", "source_run_id")
+    for agent_id in sorted(out["agents"]):
+        rows = [
+            state["agents"][agent_id]
+            for state in states
+            if state["agents"][agent_id]["last_heartbeat_at"] is not None
+        ]
+        if not rows:
+            continue
+        newest_at = max(_time(row["last_heartbeat_at"], f"{agent_id}.last_heartbeat_at") for row in rows)
+        newest = [
+            row for row in rows
+            if _time(row["last_heartbeat_at"], f"{agent_id}.last_heartbeat_at") == newest_at
+        ]
+        activity_signatures = {
+            canon({field: row[field] for field in activity_fields})
+            for row in newest
+        }
+        req(len(activity_signatures) == 1, f"{agent_id} conflicting latest heartbeat")
+
+        target = out["agents"][agent_id]
+        for field in activity_fields:
+            target[field] = newest[0][field]
+
+        work_ids: list[str] = []
+        for row in sorted(
+            rows,
+            key=lambda row: (
+                _time(row["last_heartbeat_at"], f"{agent_id}.last_heartbeat_at"),
+                canon(row["recent_work_ids"]),
+            ),
+            reverse=True,
+        ):
+            for work_id in row["recent_work_ids"]:
+                if work_id not in work_ids:
+                    work_ids.append(work_id)
+        target["recent_work_ids"] = work_ids[:MAX_WORK_IDS]
+
+    validate_state(out)
+    return out
+
+
 def heartbeat(
     state: dict[str, Any],
     *,

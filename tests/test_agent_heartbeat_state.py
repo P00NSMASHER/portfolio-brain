@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agents.heartbeat_state import AgentHeartbeatError, heartbeat, seed_state, validate_state
+from agents.heartbeat_state import AgentHeartbeatError, heartbeat, merge_states, seed_state, validate_state
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -49,6 +49,68 @@ class AgentHeartbeatStateTests(unittest.TestCase):
         self.assertTrue(all(row["last_heartbeat_at"]=="2026-09-26T23:00:00Z" for row in out["agents"].values()))
         self.assertTrue(all(row["last_activity_kind"]=="HEALTH_CHECK" for row in out["agents"].values()))
         self.assertTrue(all(row["source_workflow"]=="agent-heartbeat-sweep" for row in out["agents"].values()))
+
+    def test_concurrent_health_sweep_and_scheduler_updates_merge_without_lost_agents(self):
+        base=heartbeat(
+            seed_state(),
+            agent_ids=sorted(seed_state()["agents"]),
+            activity_kind="HEALTH_CHECK",
+            source_workflow="agent-heartbeat-sweep",
+            source_run_id="old-sweep",
+            at="2026-09-28T05:38:10Z",
+        )
+        runtime=heartbeat(
+            base,
+            agent_ids=["AGT-DATA-STEWARD"],
+            activity_kind="RUNTIME_OBSERVATION",
+            source_workflow="runtime-worker",
+            source_run_id="runtime-1",
+            at="2026-09-28T13:37:08Z",
+        )
+        sweep=heartbeat(
+            runtime,
+            agent_ids=sorted(runtime["agents"]),
+            activity_kind="HEALTH_CHECK",
+            source_workflow="agent-heartbeat-sweep",
+            source_run_id="sweep-2",
+            at="2026-09-28T13:37:48Z",
+        )
+        scheduler=heartbeat(
+            runtime,
+            agent_ids=["AGT-PORTFOLIO-MANAGER"],
+            activity_kind="SCHEDULER_CYCLE",
+            source_workflow="portfolio-autonomous-scheduler",
+            source_run_id="scheduler-1",
+            at="2026-09-28T13:37:53Z",
+        )
+        scheduler=heartbeat(
+            scheduler,
+            agent_ids=["AGT-PRODUCT-ANALYST","AGT-RESEARCHER"],
+            activity_kind="WORK_EXECUTION",
+            source_workflow="portfolio-autonomous-scheduler",
+            source_run_id="scheduler-1",
+            work_ids_by_agent={
+                "AGT-PRODUCT-ANALYST":["SWORK-PRODUCT"],
+                "AGT-RESEARCHER":["SWORK-RESEARCH"],
+            },
+            at="2026-09-28T13:37:54Z",
+        )
+
+        merged=merge_states([scheduler,sweep,runtime])
+        validate_state(merged)
+        self.assertEqual(merged["sequence"],scheduler["sequence"])
+        for agent_id in [
+            "AGT-AUDITOR","AGT-COMMERCIAL-ANALYST","AGT-ENGINEER","AGT-HUNTER",
+            "AGT-RED-TEAM","AGT-TESTER",
+        ]:
+            self.assertEqual(merged["agents"][agent_id]["last_heartbeat_at"],"2026-09-28T13:37:48Z")
+            self.assertEqual(merged["agents"][agent_id]["last_activity_kind"],"HEALTH_CHECK")
+        self.assertEqual(merged["agents"]["AGT-PORTFOLIO-MANAGER"]["last_activity_kind"],"SCHEDULER_CYCLE")
+        self.assertEqual(merged["agents"]["AGT-PRODUCT-ANALYST"]["last_activity_kind"],"WORK_EXECUTION")
+        self.assertEqual(merged["agents"]["AGT-RESEARCHER"]["last_activity_kind"],"WORK_EXECUTION")
+        self.assertEqual(merged["agents"]["AGT-DATA-STEWARD"]["last_activity_kind"],"RUNTIME_OBSERVATION")
+        self.assertIn("SWORK-PRODUCT",merged["agents"]["AGT-PRODUCT-ANALYST"]["recent_work_ids"])
+        self.assertIn("SWORK-RESEARCH",merged["agents"]["AGT-RESEARCHER"]["recent_work_ids"])
 
     def test_event_content_tampering_breaks_hash_validation(self):
         state=heartbeat(

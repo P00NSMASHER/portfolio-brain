@@ -11,7 +11,7 @@ from pathlib import Path
 
 from runtime.artifact_http import open_url
 from runtime.artifact_restore import restore_latest_valid_state
-from agents.heartbeat_state import ARTIFACT_NAME, validate_state
+from agents.heartbeat_state import ARTIFACT_NAME, merge_states, validate_state
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -69,6 +69,7 @@ def restore(output: Path, metadata_output: Path | None = None) -> str:
         max_state_bytes=1_048_576,
         validator=validate_state,
         metadata_output=metadata_output,
+        state_merger=merge_states,
     )
 
 
