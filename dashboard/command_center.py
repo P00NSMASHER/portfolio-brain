@@ -183,22 +183,6 @@ def build_repair_issues(snapshot: dict[str, Any]) -> list[dict[str, str]]:
                 "without VERIFIED evidence and independent verification."
             ),
         )
-    elif commercial["evidence_status"]=="CURRENT_SCOPE_OBSERVED":
-        add(
-            "REVIEW",
-            "Commercial evidence is current but scope-limited",
-            (
-                f"{commercial['threads_observed']} gateway-labeled thread(s) observed under "
-                f"{commercial['query_contract_id']}; human replies in that scope="
-                f"{commercial['threads_with_human_reply']}. Payment state remains UNKNOWN."
-            ),
-            commercial["current_source_ref"],
-            (
-                "Preserve the current scoped Gmail observation and add independently attributable coverage for the "
-                "remaining historical outreach and payment source. Do not broaden the zero-reply result outside the "
-                "recorded coverage scope, and do not convert OBSERVED evidence into a definitive experiment outcome."
-            ),
-        )
     return sorted(issues, key=lambda row: (0 if row["severity"] == "HIGH" else 1, row["title"]))
 
 

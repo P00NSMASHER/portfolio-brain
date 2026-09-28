@@ -231,12 +231,16 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertIn('Current payment/checkout state</td><td class="num">UNKNOWN',public)
         self.assertNotIn("Live checkout sessions</td>",public)
         self.assertNotIn("Live payment intents</td>",public)
-        issue=next(
-            row for row in snapshot["repair_issues"]
-            if row["title"]=="Commercial evidence is current but scope-limited"
+        self.assertNotIn(
+            "Commercial evidence is current but scope-limited",
+            {row["title"] for row in snapshot["repair_issues"]},
         )
-        self.assertEqual(issue["severity"],"REVIEW")
-        self.assertIn("Do not broaden the zero-reply result",issue["prompt"])
+        upgrade=next(
+            row for row in snapshot["recommended_upgrades"]
+            if row["title"]=="Add a sanitized payment-outcome observation"
+        )
+        self.assertIn("read-only",upgrade["prompt"])
+        self.assertIn("Persist only aggregate counts",upgrade["prompt"])
 
     def test_revenue_first_hierarchy_keeps_repairs_products_and_upgrades_copyable(self):
         snapshot=build_command_center_snapshot()

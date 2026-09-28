@@ -36,6 +36,9 @@ class LiveStateBridgeTests(unittest.TestCase):
                 "artifact_expires_at":"2026-10-26T18:00:00Z",
                 "source_run_id":run_id,
                 "source_head_sha":str(run_id).zfill(40)[-40:],
+                "source_sequence":sequence,
+                "source_state_hash":"sha256:"+"a"*64,
+                "candidates_inspected":3,
             })+"\n")
             provider_output=kwargs.get("provider_health_output")
             provider_metadata=kwargs.get("provider_health_metadata_output")
@@ -90,6 +93,9 @@ class LiveStateBridgeTests(unittest.TestCase):
         self.assertEqual(receipt["sources"]["hunter_proposal_reviews"]["status"],"LIVE")
         self.assertEqual(receipt["sources"]["hunter_proposal_reviews"]["state_sequence"],2)
         self.assertEqual(receipt["sources"]["scheduler"]["source_run_id"],102)
+        self.assertEqual(receipt["sources"]["scheduler"]["source_sequence"],7)
+        self.assertEqual(receipt["sources"]["scheduler"]["source_state_hash"],"sha256:"+"a"*64)
+        self.assertEqual(receipt["sources"]["scheduler"]["candidates_inspected"],3)
         self.assertEqual(receipt["sources"]["scheduler"]["artifact_created_at"],"2026-09-26T17:20:00Z")
 
     def test_optional_observability_fallback_does_not_degrade_healthy_core(self):

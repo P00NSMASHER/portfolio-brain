@@ -58,13 +58,13 @@
     },
     "runtime-worker::runtime-observe": {
       "max_minutes_per_job": 5,
-      "concurrency_group": "portfolio-runtime-observe",
+      "concurrency_group": "portfolio-runtime-nonpaid-state-writer",
       "scheduled_cadence": "event_driven",
       "coalesce_pending": true
     },
     "runtime-worker::runtime-sync": {
       "max_minutes_per_job": 5,
-      "concurrency_group": "portfolio-runtime-sync",
+      "concurrency_group": "portfolio-runtime-nonpaid-state-writer",
       "scheduled_cadence": "hourly_plus_event_driven",
       "coalesce_pending": true
     }
