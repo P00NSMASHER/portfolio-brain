@@ -42,7 +42,7 @@ class FakeGitHub:
             return {"sha":self.head}
         if "/compare/" in url:
             if self.compare_pages:
-                page=int(url.split("page=",1)[1].split("&",1)[0])
+                page=int(url.rsplit("page=",1)[1].split("&",1)[0])
                 return self.compare_pages[page]
             return self.compare
         raise AssertionError(url)
