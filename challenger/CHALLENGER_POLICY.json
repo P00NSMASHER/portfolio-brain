@@ -7,7 +7,7 @@
   "human_promotion_review_required": true,
   "required_sequence": [
     "DISCOVER",
-    "RIGHTS_EVIDENCE_VERIFIED",
+    "RIGHTS_POLICY_ADMISSION",
     "ISOLATED_ADAPTER_VERIFIED",
     "HISTORICAL_REPLAY_VERIFIED",
     "CHALLENGER_METRICS_VERIFIED",
@@ -45,5 +45,7 @@
     "authority_violations_max": 0,
     "forbidden_actions_attempted_max": 0,
     "promotion_allowed": false
-  }
+  },
+  "license_admission_policy": "hunting/LICENSE_ADMISSION_POLICY.json",
+  "rights_classes_apply_only_in_enforce_mode": true
 }

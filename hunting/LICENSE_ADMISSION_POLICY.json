@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0.0",
+  "mode": "ADVISORY_OWNER_ASSUMED",
+  "scope": "P00NSMASHER/portfolio-brain",
+  "request_date": "2026-09-28",
+  "decision_basis": "EXPLICIT_OWNER_REQUEST",
+  "license_based_blocking": false,
+  "rights_verification_claimed": false,
+  "source_records_must_remain_unchanged": true,
+  "security_access_budget_and_action_gates_unchanged": true,
+  "note": "The owner requested that Brain not block work on licensing. This is a workflow assumption, not independent verification or a new legal grant."
+}

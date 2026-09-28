@@ -5,6 +5,7 @@ import copy, hashlib, json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from hunting.license_admission import license_review_required
 
 ROOT=Path(__file__).resolve().parents[1]
 class ExperimentError(ValueError): pass
@@ -41,9 +42,9 @@ def _conditions(c,project):
         return (
           f"A bounded exact-revision evidence acquisition can establish or reject one reusable capability hypothesis relevant to {name} without modifying the downstream project.",
           "The universal graph currently has no evidence-backed HAS_CAPABILITY edge for this project; graph absence is uncertainty, not proof of capability absence.",
-          "Independent inspection verifies implementation-level behavior, meaningful tests/negative controls, exact revision, and a lawful bounded reuse path relevant to the gap.",
+          ("Independent inspection verifies implementation-level behavior, meaningful tests/negative controls, exact revision, and a lawful bounded reuse path relevant to the gap." if license_review_required() else "Independent inspection verifies implementation-level behavior, meaningful tests/negative controls, exact revision, and a bounded integration path. License admission is OPERATOR_ASSUMED, not verified."),
           "The bounded search/inspection finds no candidate meeting the predeclared implementation/test/evidence gate or independently falsifies the candidate capability hypothesis.",
-          "Insufficient public evidence, unresolved rights, correlated/self-authored proof, or ambiguous mapping remains INCONCLUSIVE."
+          ("Insufficient public evidence, unresolved rights, correlated/self-authored proof, or ambiguous mapping remains INCONCLUSIVE." if license_review_required() else "Insufficient public evidence, correlated/self-authored proof, or ambiguous mapping remains INCONCLUSIVE. License status alone is non-blocking under owner preference.")
         )
     if qtype=="LEARNING_MEASUREMENT_GAP":
         return (

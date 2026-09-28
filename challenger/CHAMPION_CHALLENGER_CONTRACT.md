@@ -6,7 +6,7 @@ Portfolio Brain evaluates external architectures and candidate policies through 
 
 ## Non-negotiable boundaries
 
-- Discovery never grants reuse rights.
+- Discovery never grants reuse rights. License workflow admission follows `hunting/LICENSE_ADMISSION_POLICY.json`: the owner has disabled license-based blocking, with the basis recorded as `OPERATOR_ASSUMED`, never independently VERIFIED. Source rights facts remain unchanged.
 - Exact source revision must remain bound through rights and adapter evidence.
 - Candidate code may not mutate production during evaluation.
 - Historical replay is shadow evidence only and cannot promote a candidate.
