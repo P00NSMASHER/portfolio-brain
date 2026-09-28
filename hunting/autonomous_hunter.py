@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from hunting.rights_gate import build_rights_record, validate_rights_record
+from hunting.license_admission import license_review_required, admission as license_admission
 
 ROOT=Path(__file__).resolve().parents[1]
 class HunterError(RuntimeError): pass
@@ -422,6 +423,8 @@ def experiment_proposal(finding):
     seed={"finding_id":finding["finding_id"],"candidate_fingerprint":finding["candidate_fingerprint"],"gap_id":finding["gap_id"]}
     hid="HEXP-"+hashlib.sha256(canon(seed).encode()).hexdigest()[:20].upper()
     rights_classification=finding.get("rights",{}).get("rights_classification","NO_LICENSE_NO_REUSE")
+    review_required=license_review_required()
+    license_requirement=["License/rights verification"] if review_required else ["License admission: OPERATOR_ASSUMED under owner preference; not independently verified."]
     return {
       "schema_version":"1.0.0","proposal_id":hid,"finding_id":finding["finding_id"],"gap_id":finding["gap_id"],
       "project_ids":finding["project_ids"],
@@ -430,9 +433,9 @@ def experiment_proposal(finding):
       "candidate_soft_signals":finding.get("ranking",{}).get("soft_signal_codes",[]),
       "hypothesis":"The exact-revision public candidate contains a reusable implementation pattern relevant to the mapped portfolio gap.",
       "baseline":"No verified reusable capability is currently linked to this gap in Portfolio Brain.",
-      "success_condition":"Independent exact-revision inspection confirms the implementation behavior, meaningful tests/negative controls, lawful reuse terms, and a bounded integration path.",
-      "failure_condition":"The candidate is README-only, lacks meaningful tests, does not satisfy the capability need, has incompatible rights, or creates unsafe authority expansion.",
-      "evidence_requirements":["Exact source revision","Implementation-level evidence","Meaningful tests or negative controls","License/rights verification",f"Discovery rights classification: {rights_classification}; no reuse authority is granted by discovery.","Independent verifier receipt"],
+      "success_condition":("Independent exact-revision inspection confirms implementation behavior, meaningful tests/negative controls, lawful reuse terms, and a bounded integration path." if review_required else "Independent exact-revision inspection confirms implementation behavior, meaningful tests/negative controls, and a bounded integration path; license admission is OPERATOR_ASSUMED, not verified."),
+      "failure_condition":("The candidate is README-only, lacks meaningful tests, does not satisfy the capability need, has incompatible rights, or creates unsafe authority expansion." if review_required else "The candidate is README-only, lacks meaningful tests, does not satisfy the capability need, or creates unsafe authority expansion."),
+      "evidence_requirements":["Exact source revision","Implementation-level evidence","Meaningful tests or negative controls",*license_requirement,f"Discovery rights classification: {rights_classification}; no reuse authority is granted by discovery.","Independent verifier receipt"],
       "cost_boundary":"Observation and bounded isolated validation only; no downstream modification.",
       "rollback":"No rollback required because this proposal performs no downstream change."
     }
@@ -565,7 +568,7 @@ def run_cycle(state,provider,*,at=None):
                 qout["inspected"]+=1
                 funnel["inspection_succeeded"]+=1
                 structural=structural_inspection(cand,inspection,obj)
-                rights_evidence=provider.rights_evidence(cand,inspection) if callable(getattr(provider,"rights_evidence",None)) else {}
+                rights_evidence=provider.rights_evidence(cand,inspection) if license_review_required() and callable(getattr(provider,"rights_evidence",None)) else {}
                 rights=build_rights_record(cand,inspection,rights_evidence)
                 validate_rights_record(rights)
                 fp=candidate_fingerprint(cand,inspection["revision"],obj)
@@ -595,6 +598,7 @@ def run_cycle(state,provider,*,at=None):
                     **classification_trace,
                     "public_source_gate":cand.get("private") is False,
                     "exact_revision_gate":isinstance(inspection.get("revision"),str) and len(inspection.get("revision",""))==40,
+                    "license_admission":license_admission(rights),
                     "rights_classification":rights["rights_classification"],
                     "allowed_integration_mode":rights["allowed_integration_mode"],
                     "automatic_reuse_authority_granted":rights["automatic_reuse_authority_granted"],

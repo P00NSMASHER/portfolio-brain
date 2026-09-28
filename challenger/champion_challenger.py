@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from hunting.rights_gate import validate_rights_record
+from hunting.license_admission import admission as license_admission
 from policy_replay.policy_backtester import validate_replay_receipt
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -222,9 +223,11 @@ def assess_candidate(
       {"stage":"DISCOVER","status":"PASS","evidence_refs":discovery["provenance_refs"]},
     ]
 
-    rights_ok=rights_record["rights_classification"] in set(p["integration_rights_classes"])
+    license_decision=license_admission(rights_record,p["integration_rights_classes"])
+    rights_ok=license_decision["allowed"]
     stages.append({
-      "stage":"RIGHTS_EVIDENCE_VERIFIED",
+      "stage":"RIGHTS_POLICY_ADMISSION",
+      "license_admission":license_decision,
       "status":"PASS" if rights_ok else "BLOCKED",
       "rights_classification":rights_record["rights_classification"],
       "allowed_integration_mode":rights_record["allowed_integration_mode"],

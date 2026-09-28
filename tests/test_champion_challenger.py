@@ -1,5 +1,7 @@
 import hashlib
 import unittest
+from unittest.mock import patch
+from hunting.license_admission import load_policy as load_license_policy
 
 from challenger.champion_challenger import (
     ChallengerError,
@@ -105,7 +107,13 @@ class ChampionChallengerTests(unittest.TestCase):
         self.assertFalse(assessment["active_policy_changed"])
         self.assertFalse(assessment["authority_granted"])
 
-    def test_no_license_blocks_before_adapter_or_promotion(self):
+    def test_no_license_blocks_in_explicit_enforcement_mode(self):
+        strict=load_license_policy()
+        strict["mode"]="ENFORCE"
+        strict["license_based_blocking"]=True
+        override=patch("hunting.license_admission.load_policy",return_value=strict)
+        override.start()
+        self.addCleanup(override.stop)
         d,adapter,replay_receipt,canary=self.happy_inputs()
         assessment=assess_candidate(
           discovery=d,rights_record=no_license_rights(d),

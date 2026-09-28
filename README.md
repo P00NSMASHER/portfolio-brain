@@ -31,3 +31,11 @@ Because this repository is currently public, persistent state remains sanitized-
 - `hostile/ATTACK_MATRIX.json` — Step 23 adversarial threat coverage.
 - `canary/CANARY_CONTRACT.md` — Step 24 no-prompt canary contract.
 - `.github/workflows/foundation-ci.yml` — deterministic full-chain validation.
+
+## Owner-requested license workflow preference
+
+`hunting/LICENSE_ADMISSION_POLICY.json` is the admission authority for **Brain-only license workflow decisions**. In `ADVISORY_OWNER_ASSUMED` mode, missing, copyleft, restricted, or custom license classifications do not block Hunter proposals, transfer planning, or shadow-challenger admission. Dedicated Hunter license-text fetches are skipped. The basis is recorded as `OPERATOR_ASSUMED`, not independently VERIFIED.
+
+Source classifications, copyright notices, hashes, license text, and historical rights states are not rewritten. A legacy `UNKNOWN_REQUIRES_REVIEW` source state describes evidence, not the current license-admission setting. This preference does not verify third-party permission, change downstream repositories, allow unauthorized access, or bypass budget, security, source-integrity, independent-verification, factory, action, deployment, or promotion controls.
+
+`ENFORCE` remains available by explicitly changing both `mode` and `license_based_blocking`; unknown or inconsistent settings fail validation. Deterministic synthetic controls run with `python -m hunting.validate_license_admission`.

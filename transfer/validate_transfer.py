@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from transfer.cross_project_transfer import build_transfer_state,policy
+from hunting.license_admission import license_review_required
 ROOT=Path(__file__).resolve().parents[1]
 class TransferValidationError(ValueError):pass
 def req(ok,msg):
@@ -19,7 +20,7 @@ def validate_transfer():
     req(state["checked_in_outcomes"]==0 and state["verified_success_edge_candidates"]==0,"transfer success fabricated")
     req(all(x["source_project_id"]=="PRJ-000" for x in state["proposals"]),"current proposals should originate only from PRJ-000")
     req({x["source_capability_key"] for x in state["proposals"]}=={"portfolio:event-evidence","portfolio:readonly-adapters","portfolio:truth-integration","portfolio:shared-value-memory"},"unexpected source capabilities")
-    req(all(x["rights_review_required"] and not x["implementation_allowed"] for x in state["proposals"]),"implementation/rights gate weakened")
+    req(all(x["rights_review_required"] is license_review_required() and not x["implementation_allowed"] for x in state["proposals"]),"implementation/rights gate weakened")
     req(sum(1 for x in state["proposals"] if x["target_project_id"]=="PRJ-003" and x["state"]=="BLOCKED")==4,"PermitPlate BLK-001 not preserved")
     build=load("PORTFOLIO_BUILD_STATE.json");req(build["repositories"]["REPO-001"]["last_inspected_sha"]==pin["source_revision"],"transfer source cursor drifted")
     runtime=(ROOT/"runtime/continuous_runtime.py").read_text();req("cross_project_transfer_state.json" in runtime and "build_transfer_state" in runtime,"daily runtime not connected")

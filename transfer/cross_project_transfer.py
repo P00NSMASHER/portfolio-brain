@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib,json,math,re
 from datetime import datetime
 from pathlib import Path
+from hunting.license_admission import license_review_required
 
 ROOT=Path(__file__).resolve().parents[1]
 XOUT_ID=re.compile(r"^XOUT-[A-Z0-9-]+$")
@@ -94,15 +95,15 @@ def detect_transfer_hypotheses(graph=None,projects=None,uncertainty_snapshot=Non
             blockers=_open_blockers_for_project(target,build);state="BLOCKED" if "BLK-001" in blockers else "ASSESSMENT_READY"
             core={"schema_version":"1.0.0","source_project_id":source_pid,"source_capability_node_id":cap["node_id"],"source_capability_key":cap["canonical_key"],
                   "target_project_id":tid,"target_need_uncertainty_id":need["uncertainty_id"],"applicability_rule_id":rule["rule_id"],"experiment_kind":rule["experiment_kind"],
-                  "state":state,"authority_requirement":"OBSERVE_ONLY","implementation_allowed":False,"hard_blockers":blockers,"rights_review_required":True,
+                  "state":state,"authority_requirement":"OBSERVE_ONLY","implementation_allowed":False,"hard_blockers":blockers,"rights_review_required":license_review_required(),
                   "source_capability_provenance":source_refs,"target_need_evidence_refs":list(dict.fromkeys([*need["evidence_refs"],f"uncertainty:{need['uncertainty_id']}"])),
                   "hypothesis":f"Capability {cap['canonical_key']} from {source_pid} may reduce the evidenced capability gap in {tid}; applicability and value remain unverified until a target-context experiment succeeds.",
                   "bounded_experiment":{
                     "baseline":"Target has an evidenced capability-coverage uncertainty and no VERIFIED matching HAS_CAPABILITY edge.",
                     "success_condition":"A bounded target-context implementation or interface experiment produces independently VERIFIED measurable improvement on a predeclared target metric with zero authority violations.",
-                    "failure_condition":"The target-context experiment produces independently VERIFIED no-value or regression evidence, or the capability cannot satisfy the target need without violating rights/data/authority boundaries.",
-                    "inconclusive_condition":"Target evidence, rights, implementation identity, measurement window, or verifier evidence is insufficient for a definitive value conclusion.",
-                    "evidence_requirements":["Exact source capability provenance and source project identity.","Target need evidence and predeclared target metric.","Rights/license verification before code or asset reuse.","Step 16 target-repository onboarding before any MODIFY.","Independent verifier receipt for a definitive target outcome."],
+                    "failure_condition":("The target-context experiment produces independently VERIFIED no-value or regression evidence, or the capability cannot satisfy the target need without violating rights/data/authority boundaries." if license_review_required() else "The target-context experiment produces independently VERIFIED no-value or regression evidence, or cannot satisfy the target need within data/access/authority boundaries."),
+                    "inconclusive_condition":("Target evidence, rights, implementation identity, measurement window, or verifier evidence is insufficient for a definitive value conclusion." if license_review_required() else "Target evidence, implementation identity, measurement window, or verifier evidence is insufficient for a definitive value conclusion."),
+                    "evidence_requirements":["Exact source capability provenance and source project identity.","Target need evidence and predeclared target metric.",("Rights/license verification before code or asset reuse." if license_review_required() else "License admission: OPERATOR_ASSUMED under owner preference, not verified; other controls remain required."),"Step 16 target-repository onboarding before any MODIFY.","Independent verifier receipt for a definitive target outcome."],
                     "measurement_requirement":"Record one predeclared numeric target metric with baseline, observed value, unit, direction, measurable delta, evidence IDs and target outcome event.",
                     "rollback":"Assessment is read-only. Any later implementation must be isolated/reversible through Step 16 and may not bypass Step 17 repair or human ACT gates."},
                   "provenance_refs":list(dict.fromkeys([*source_refs,*need["evidence_refs"],f"transfer-rule:{rule['rule_id']}"]))}
@@ -114,7 +115,7 @@ def validate_proposal(p):
     req(p["proposal_hash"]==hashv({k:v for k,v in p.items() if k!="proposal_hash"}),"proposal hash mismatch")
     req(p["source_project_id"]!=p["target_project_id"],"self transfer prohibited");req(p["state"] in policy()["proposal_states"],"invalid proposal state")
     req(p["authority_requirement"]=="OBSERVE_ONLY" and p["implementation_allowed"] is False,"proposal granted implementation authority")
-    req(p["rights_review_required"] is True,"rights review gate missing");req(p["source_capability_provenance"] and p["target_need_evidence_refs"] and p["provenance_refs"],"proposal provenance incomplete")
+    req(type(p["rights_review_required"]) is bool and (p["rights_review_required"] or not license_review_required()),"rights review setting inconsistent with admission policy");req(p["source_capability_provenance"] and p["target_need_evidence_refs"] and p["provenance_refs"],"proposal provenance incomplete")
 
 def validate_outcome(o,proposal):
     required={"schema_version","outcome_id","transfer_id","source_capability_key","target_project_id","result","evidence_state","actor_agent_id","verifier_agent_id","implementation_evidence_ids","measurement_evidence_ids","metric_name","metric_unit","metric_direction","baseline_value","observed_value","measurable_delta","authority_violations","started_at","completed_at","outcome_event_id","provenance_refs","outcome_hash"}
