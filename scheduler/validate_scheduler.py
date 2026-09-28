@@ -32,7 +32,7 @@ def validate_scheduler():
     continuation=p["same_cycle_continuation"]
     req(continuation["enabled"] is True,"same-cycle Hunter continuation disabled")
     req(continuation["continuation_class"]=="HUNTER_PROPOSAL_REVIEW","same-cycle continuation class drifted")
-    req(continuation["max_passes"]==1,"same-cycle continuation pass count widened")
+    req(continuation["max_passes"]==2,"same-cycle continuation pass count drifted")
     req(continuation["max_total_attempts_per_cycle"]==p["max_new_work_per_cycle"],"same-cycle attempt ceiling drifted")
     req(continuation["require_primary_queue_drained"] is True,"same-cycle continuation may retry primary queued work")
     req(continuation["authority_class"]=="OBSERVE","same-cycle continuation authority widened")
@@ -89,10 +89,12 @@ def validate_scheduler():
         req(token in executor,f"Hunter proposal evidence-review boundary missing {token}")
     continuation_source=(ROOT/"scheduler/same_cycle_continuation.py").read_text()
     for token in [
-        '"max_passes"]==1',
+        '"max_passes"]==2',
         '"require_primary_queue_drained"',
         "is_hunter_proposal_continuation",
         "len(merged_receipts)<=max_items",
+        'len(selected)<=policy["max_open_work_per_agent"]',
+        '"DEFERRED_CONTINUATION_STOPS_FURTHER_PASSES"',
         '"authority_granted":False',
     ]:
         req(token in continuation_source,f"same-cycle continuation boundary missing {token}")
