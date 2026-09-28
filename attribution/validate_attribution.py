@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from attribution.attribution_engine import allocator_dimensions, build_attribution_snapshot, validate_snapshot
+from attribution.attribution_engine import allocator_dimensions, preview_dimensions, build_attribution_snapshot, validate_snapshot
 
 def row(record_id, parent_id, stage, hour, *, result="NOT_APPLICABLE", evidence="OBSERVED", cost=0.0, calls=0, failure=None, source="SRC-A"):
     return {
@@ -31,7 +31,7 @@ def main() -> None:
     ]
     snap = build_attribution_snapshot(rows, generated_at="2026-09-20T14:00:00+00:00")
     validate_snapshot(snap)
-    dims = allocator_dimensions(snap)
+    dims = preview_dimensions(snap)["projects"]
     profile = dims["PRJ-001"]
     assert profile["verified_outcomes"] == 1
     assert profile["proposal_to_experiment_conversion"] == 1.0
