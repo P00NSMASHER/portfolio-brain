@@ -7,10 +7,14 @@ on:
     # the independent kill-switch backstop while cutting control-plane starts 75%.
     - cron: "53 * * * *"
   # GitHub scheduled delivery can be delayed or skipped. Recheck liveness after
-  # either the heartbeat sweep or the reliably recurring hourly runtime sync.
-  # Runtime completion is an independent recovery anchor when heartbeat cron is missed.
+  # any core producer finishes so one surviving trigger can recover overdue peers.
   workflow_run:
-    workflows: ["agent-heartbeat-sweep", "runtime-hourly-sync"]
+    workflows:
+      - "portfolio-autonomous-scheduler"
+      - "runtime-hourly-sync"
+      - "agent-heartbeat-sweep"
+      - "hunter-autonomous-cycle"
+      - "portfolio-notification-cycle"
     types: [completed]
     branches: ["main"]
   push:
