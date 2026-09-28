@@ -610,7 +610,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
         )
 
     publication = {
-        "mode": "AUTO_ON_RELEVANT_MAIN_PUSH_PLUS_HOURLY_REFRESH",
+        "mode": "AUTO_ON_RELEVANT_MAIN_PUSH_PLUS_DURABLE_STATE_EVENTS_AND_HOURLY_REFRESH",
         "generated_at": os.getenv("PORTFOLIO_PUBLICATION_GENERATED_AT"),
         "source_commit": os.getenv("PORTFOLIO_PUBLICATION_SOURCE_COMMIT"),
         "source_ref": os.getenv("PORTFOLIO_PUBLICATION_SOURCE_REF"),
