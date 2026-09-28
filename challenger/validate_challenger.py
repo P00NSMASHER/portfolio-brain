@@ -62,8 +62,8 @@ def main():
     )
     cycles=[
       cycle(1,cost=2.0,calls=2,api=3,jobs=2),
-      cycle(2,cost=3.0,calls=3,api=4,jobs=3,duplicate=True),
-      cycle(3,cost=2.0,calls=2,api=3,jobs=2,inconclusive=True),
+      cycle(2,cost=3.0,calls=3,api=4,jobs=3,duplicate=True,inconclusive=True),
+      cycle(3,cost=2.0,calls=2,api=3,jobs=2),
     ]
     replay_receipt=replay(cycles,{
       "candidate_id":"shadow-candidate-demo",
