@@ -125,7 +125,7 @@ def validate_policy(p:dict[str,Any])->None:
                 req(cfg["concurrency_group"]==f"portfolio-runtime-{mode}","runtime workload concurrency policy drifted")
                 fragments.extend([
                   '--job-id "runtime-${RUNTIME_MODE}"',
-                  "format('portfolio-runtime-{0}', inputs.mode)",
+                  "portfolio-runtime-nonpaid-state",
                 ])
             else:
                 fragments.extend([
