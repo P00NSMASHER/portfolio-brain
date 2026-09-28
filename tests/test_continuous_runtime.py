@@ -21,6 +21,7 @@ class FakeGitHub:
             files=self.changed.get(repo,[])
             pair=url.rsplit("/compare/",1)[1]
             old,new=pair.split("...",1)
+            new=new.split("?",1)[0]
             return {"status":"ahead","ahead_by":1 if files else 0,"behind_by":0,
                     "total_commits":1 if files else 0,
                     "base_commit":{"sha":old},"merge_base_commit":{"sha":old},
