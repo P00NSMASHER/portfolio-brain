@@ -236,12 +236,12 @@ def validate_operating_mode():
         "runtime worker lost serialized paid-wrapper governance")
     req("workload_control.workload_gate preflight" in worker,
         "runtime worker lost non-paid workload admission")
-    req("format('portfolio-runtime-{0}', inputs.mode)" in worker,
-        "runtime worker lost mode-specific non-paid concurrency")
+    req("'portfolio-runtime-nonpaid-state-writer'" in worker,
+        "runtime worker lost serialized non-paid state-writer concurrency")
     for mode in ("observe","sync"):
         scope=f"runtime-worker::runtime-{mode}"
         req(scope in workload["services"],f"runtime {mode} workload policy entry missing")
-        req(workload["services"][scope]["concurrency_group"]==f"portfolio-runtime-{mode}",
+        req(workload["services"][scope]["concurrency_group"]=="portfolio-runtime-nonpaid-state-writer",
             f"runtime {mode} workload lane drifted")
     req("steps.admission.outputs.allowed != 'true'" in worker and "exit 1" in worker,
         "runtime worker can still report green after mode-specific admission blocks")
