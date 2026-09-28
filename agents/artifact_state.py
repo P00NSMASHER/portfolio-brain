@@ -13,7 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from runtime.artifact_http import open_url
-from runtime.artifact_restore import InvalidStateArtifact, restore_latest_valid_state
+from runtime.artifact_restore import InvalidStateArtifact
+from runtime.artifact_restore import restore_latest_valid_state
 from agents.heartbeat_state import ARTIFACT_NAME, validate_state
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,9 +48,7 @@ def _state_from_archive(raw: bytes) -> dict:
     try:
         state = json.loads(body.decode("utf-8"))
         validate_state(state)
-    except (UnicodeDecodeError, json.JSONDecodeError, Exception) as exc:
-        if isinstance(exc, InvalidStateArtifact):
-            raise
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         raise InvalidStateArtifact("agent heartbeat artifact state invalid") from exc
     return state
 
