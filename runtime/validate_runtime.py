@@ -56,7 +56,8 @@ def validate_runtime()->dict:
     worker=texts[names[0]]
     for required in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_RUNTIME_DISABLED",
                      "PORTFOLIO_MODEL_API_KEY","runtime.model_analysis","actions/upload-artifact@v4","retention-days: 30",
-                     "cancel-in-progress: ${{ inputs.mode == 'observe' || inputs.mode == 'sync' }}",
+                     "(inputs.mode == 'observe' || inputs.mode == 'sync') && 'portfolio-runtime-nonpaid-state-writer'",
+                     "cancel-in-progress: false",
                      "workload_control.workload_gate preflight","format('portfolio-runtime-{0}', inputs.mode)",
                      "--provider-health-output runtime/out/provider_health.json",
                      '--job-id "runtime-${RUNTIME_MODE}"',
