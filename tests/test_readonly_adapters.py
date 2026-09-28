@@ -26,8 +26,9 @@ def compare_payload(old, new, *, ahead_by=1, files=None, **overrides):
     return payload
 
 class FakeGitHub:
-    def __init__(self, head, compare=None, *, git_commits=None, trees=None):
+    def __init__(self, head, compare=None, *, compare_pages=None, git_commits=None, trees=None):
         self.head=head; self.compare=compare or {}; self.urls=[]
+        self.compare_pages=compare_pages or {}
         self.git_commits=git_commits or {}; self.trees=trees or {}
     def __call__(self,url):
         self.urls.append(url)
@@ -40,6 +41,9 @@ class FakeGitHub:
         if "/commits/" in url:
             return {"sha":self.head}
         if "/compare/" in url:
+            if self.compare_pages:
+                page=int(url.split("page=",1)[1].split("&",1)[0])
+                return self.compare_pages[page]
             return self.compare
         raise AssertionError(url)
 
@@ -215,11 +219,41 @@ class ReadOnlyAdapterTests(unittest.TestCase):
                     fetch_json=FakeGitHub(new,payload),observed_at="2026-09-25T16:00:00Z",
                 )
 
-    def test_github_compare_commit_cap_fails_closed(self):
+    def test_github_compare_long_history_is_verified_with_pagination(self):
         old="a"*40; new="b"*40
-        fake=FakeGitHub(new,compare_payload(old,new,ahead_by=250))
-        with self.assertRaisesRegex(AdapterError,"250-commit"):
-            observe_repository(BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},fetch_json=fake,observed_at="2026-09-25T16:00:00Z")
+        shas=[f"{index:040x}" for index in range(1,250)] + [new]
+        def page(chunk, *, files=None):
+            payload=compare_payload(old,new,ahead_by=250,files=files or [])
+            payload["commits"]=[{"sha":sha} for sha in chunk]
+            return payload
+        pages={
+            1:page(shas[:100],files=[{"filename":"a.py","status":"modified","additions":2,"deletions":1,"changes":3}]),
+            2:page(shas[100:200]),
+            3:page(shas[200:]),
+        }
+        fake=FakeGitHub(new,compare_pages=pages)
+        receipt=observe_repository(
+            BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},
+            fetch_json=fake,observed_at="2026-09-25T16:00:00Z",
+        )
+        self.assertEqual(receipt["status"],"CHANGED")
+        self.assertEqual(receipt["compare"]["total_commits"],250)
+        self.assertEqual(receipt["compare"]["files"][0]["path"],"a.py")
+        self.assertEqual(receipt["network_reads"],4)
+
+    def test_github_compare_commit_pagination_fails_closed_if_page_ends_early(self):
+        old="a"*40; new="b"*40
+        shas=[f"{index:040x}" for index in range(1,121)]
+        def page(chunk):
+            payload=compare_payload(old,new,ahead_by=250)
+            payload["commits"]=[{"sha":sha} for sha in chunk]
+            return payload
+        fake=FakeGitHub(new,compare_pages={1:page(shas[:100]),2:page(shas[100:])})
+        with self.assertRaisesRegex(AdapterError,"pagination ended"):
+            observe_repository(
+                BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},
+                fetch_json=fake,observed_at="2026-09-25T16:00:00Z",
+            )
 
     def test_compare_file_metadata_is_validated_before_persistence(self):
         old="a"*40; new="b"*40
