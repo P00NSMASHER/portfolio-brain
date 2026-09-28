@@ -79,31 +79,62 @@ def _repo_cursor(state: dict[str,Any], rid: str)->dict[str,Any]:
     item=state["repositories"][rid]
     return {"source_ref":item["source_ref"],"cursor_sha":item["cursor_sha"],"status":item["status"]}
 
+def _comparison_changed_file_count(comp: dict[str,Any])->int:
+    files=comp.get("files")
+    if not isinstance(files,list):
+        raise RuntimePolicyError("repository comparison files are invalid")
+    count=comp.get("changed_file_count",len(files))
+    if not isinstance(count,int) or isinstance(count,bool) or count<0:
+        raise RuntimePolicyError("repository comparison changed-file count is invalid")
+    return count
+
 def _sanitize_observation(obs: dict[str,Any], max_files: int)->dict[str,Any]:
     result=json.loads(json.dumps(obs))
     comp=result.get("compare")
     if not comp:
         return result
     files=comp.get("files")
-    if not isinstance(files,list):
-        raise RuntimePolicyError("repository comparison files are invalid")
-    if len(files)>max_files:
-        raise RuntimePolicyError("changed-file budget exceeded for repository")
+    count=_comparison_changed_file_count(comp)
     method=comp.get("comparison_method","GITHUB_COMPARE")
     if method=="GITHUB_COMPARE":
-        if comp.get("files_complete") is not True or comp.get("changed_file_count",len(files))!=len(files):
+        if len(files)>max_files:
+            raise RuntimePolicyError("changed-file budget exceeded for repository")
+        if comp.get("files_complete") is not True or count!=len(files):
             raise RuntimePolicyError("GitHub compare detail is incomplete")
     elif method=="GIT_TREE_SNAPSHOT":
         proof=comp.get("tree_snapshot")
+        manifest=proof.get("changed_path_manifest_hash") if isinstance(proof,dict) else None
+        path_counts=(
+            proof.get("added_path_count"),
+            proof.get("removed_path_count"),
+            proof.get("modified_path_count"),
+        ) if isinstance(proof,dict) else ()
+        tree_shas=(
+            proof.get("base_tree_sha"),
+            proof.get("head_tree_sha"),
+        ) if isinstance(proof,dict) else ()
         if (
             comp.get("files_complete") is not False
             or files
             or not isinstance(proof,dict)
             or proof.get("complete") is not True
-            or comp.get("changed_file_count")!=proof.get("changed_path_count")
-            or not isinstance(proof.get("changed_path_manifest_hash"),str)
-            or not proof["changed_path_manifest_hash"].startswith("sha256:")
+            or count!=proof.get("changed_path_count")
+            or len(path_counts)!=3
+            or any(not isinstance(value,int) or isinstance(value,bool) or value<0 for value in path_counts)
+            or sum(path_counts)!=count
+            or not isinstance(manifest,str)
+            or len(manifest)!=71
+            or not manifest.startswith("sha256:")
+            or any(not isinstance(value,str) or len(value)!=40 for value in tree_shas)
         ):
+            raise RuntimePolicyError("Git tree snapshot proof is incomplete")
+        try:
+            int(manifest.removeprefix("sha256:"),16)
+            for value in tree_shas:
+                int(value,16)
+        except ValueError as exc:
+            raise RuntimePolicyError("Git tree snapshot proof is incomplete") from exc
+        if manifest!=manifest.lower() or any(value!=value.lower() for value in tree_shas):
             raise RuntimePolicyError("Git tree snapshot proof is incomplete")
     else:
         raise RuntimePolicyError("repository comparison method is unsupported")
@@ -138,7 +169,7 @@ def observe(mode: str, state: dict[str,Any], *, target_repository_id: str|None, 
             raise RuntimePolicyError(f"repository observation failed closed for {rid}: {exc}") from exc
         obs=_sanitize_observation(obs,budgets["max_changed_files_per_repository"])
         if obs.get("compare"):
-            total_files+=len(obs["compare"].get("files",[]))
+            total_files+=_comparison_changed_file_count(obs["compare"])
             if total_files>budgets["max_total_changed_files_per_cycle"]:
                 raise RuntimePolicyError("total changed-file budget exceeded")
         observations.append(obs)
