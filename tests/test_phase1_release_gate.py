@@ -18,6 +18,9 @@ class Phase1ReleaseGateTests(unittest.TestCase):
         data={f'{prefix}/pulls/1':pr,f'{prefix}/branches/main':{'commit':{'sha':b}},f'{prefix}/commits/{h}/check-runs?filter=latest&per_page=100':{'total_count':1,'check_runs':[check]},f'{prefix}/actions/runs/7':run,f'{prefix}/actions/runs/7/jobs?filter=latest&per_page=100':{'total_count':1,'jobs':[job]},f'{prefix}/pulls/1/reviews?per_page=100':reviews}
         data.update(protection_fixture())
         data[f'{prefix}/compare/{b}...{h}']={'base_commit':{'sha':b},'merge_base_commit':{'sha':b},'behind_by':0,'status':'ahead'}
+        workflow_sha='f'*40
+        data[f'{prefix}/contents/.github/workflows/foundation-ci.yml?ref={b}']={'type':'file','sha':workflow_sha}
+        data[f'{prefix}/contents/.github/workflows/foundation-ci.yml?ref={h}']={'type':'file','sha':workflow_sha}
         return policy,data,pr,check,run,job,reviews
 
     def run_fixture(self,f):

@@ -55,6 +55,14 @@ def verify_release(repository: str, pr_number: int, expected_head: str, *,
             and comparison.get('merge_base_commit', {}).get('sha') == base_sha
             and type(comparison.get('behind_by')) is int and comparison['behind_by'] == 0
             and comparison.get('status') in {'ahead', 'identical'}, 'candidate does not contain current main')
+    # Required workflow definitions are part of the trusted base. Candidate code
+    # may change application/tests, but it cannot rewrite the gate-producing
+    # workflow and then use that rewritten workflow as its own evidence.
+    for spec in p['required_checks']:
+        base_workflow = api(f"{base}/contents/{spec['workflow_path']}?ref={base_sha}")
+        head_workflow = api(f"{base}/contents/{spec['workflow_path']}?ref={expected_head}")
+        require(base_workflow.get('type') == 'file' and head_workflow.get('type') == 'file', 'required workflow file missing')
+        require(isinstance(base_workflow.get('sha'), str) and base_workflow['sha'] == head_workflow.get('sha'), 'required workflow changed in candidate')
     protection = inspect_main_protection(repository,
         [{'name': c['name'], 'app_id': c['app_id']} for c in p['required_checks']],
         gate_app_id=gate_app_id, gate_check_name=p['gate_check_name'], get_json=api)

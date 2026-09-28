@@ -12,6 +12,19 @@ class Phase1ReleaseEnforcementTests(unittest.TestCase):
         return verify_release('owner/brain',1,'a'*40,gate_app_id=900,policy=f[0],
                               get_json=api or (lambda u:copy.deepcopy(f[1][u])))
 
+    def test_candidate_cannot_rewrite_required_ci_workflow(self):
+        f=self.fixture(); prefix='https://api.github.com/repos/owner/brain'; b='b'*40; h='a'*40
+        f[1][f"{prefix}/contents/.github/workflows/foundation-ci.yml?ref={b}"]['sha']='1'*40
+        f[1][f"{prefix}/contents/.github/workflows/foundation-ci.yml?ref={h}"]['sha']='2'*40
+        with self.assertRaisesRegex(ValueError,'workflow changed'):
+            self.run_case(f)
+
+    def test_required_workflow_must_exist_on_base_and_head(self):
+        f=self.fixture(); prefix='https://api.github.com/repos/owner/brain'; b='b'*40
+        f[1][f"{prefix}/contents/.github/workflows/foundation-ci.yml?ref={b}"]['type']='dir'
+        with self.assertRaisesRegex(ValueError,'workflow file missing'):
+            self.run_case(f)
+
     def test_current_base_label_is_not_ancestry_proof(self):
         f=self.fixture(); c=next(v for k,v in f[1].items() if '/compare/' in k)
         c.update(status='diverged',behind_by=1,merge_base_commit={'sha':'c'*40})
