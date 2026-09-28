@@ -50,7 +50,10 @@
         "artifact_sha256": "60086850a0b6042cf6a0b0c7d12abea686d1697fda318529c0ce26333ad880b6",
         "source_location": "CHAT_ATTACHMENT_ONLY_NOT_GITHUB",
         "source_code_public": false
-      }
+      },
+      "commercial_source_policy": "ORIGINAL_DEPENDENCY_FREE",
+      "third_party_code_allowed": false,
+      "external_runtime_dependencies": []
     },
     {
       "sku_id": "SKU-002",
@@ -62,7 +65,14 @@
       "buyer_problem": "Roleplay creators need reliable plot claiming, occupancy state and release behavior without writing ownership logic.",
       "reuse_source": "P00NSMASHER/StarBlox compatibility/server/BrookhavenHouseCompat.server.luau",
       "reuse_boundary": "Mechanics only; rebuild names, structure and implementation generically with no Brookhaven assets/UI/branding.",
-      "build_prompt": "Prepare SKU-002 House Claim System as an original generic Roblox model. Use the StarBlox house compatibility work only as engineering evidence for plot-claim edge cases; do not copy Brookhaven assets, UI, names or proprietary structure. Include plot discovery, claim/release, occupied-state handling, reconnect-safe cleanup, server authority, simple configuration and a minimal demo place. Keep work within 4 hours and $10 paid AI spend. Do not publish. Finish with validation evidence and setup documentation."
+      "build_prompt": "Prepare SKU-002 House Claim System as an original generic Roblox model. Use the StarBlox house compatibility work only as engineering evidence for plot-claim edge cases; do not copy Brookhaven assets, UI, names or proprietary structure. Include plot discovery, claim/release, occupied-state handling, reconnect-safe cleanup, server authority, simple configuration and a minimal demo place. Keep work within 4 hours and $10 paid AI spend. Do not publish. Finish with validation evidence and setup documentation.",
+      "build_preconditions": [
+        "Use Roblox Micro-Product Factory v1",
+        "Define behavior-level QA matrix before implementation",
+        "Pass static QA and contract checks",
+        "Build through Rojo development pipeline",
+        "Pass Roblox Studio runtime QA before publication"
+      ]
     },
     {
       "sku_id": "SKU-003",
@@ -136,5 +146,19 @@
       "reuse_boundary": "Inspection rules only; no copying third-party code or assets.",
       "build_prompt": "Prepare a design and minimal validated prototype for SKU-008 Vibe Game Inspector only after model SKUs show buyer signal. It should scan for objective Roblox project defects and produce reproducible findings, not subjective scores. Do not publish or exceed bounded prototype limits."
     }
-  ]
+  ],
+  "factory_guardrails": {
+    "version": "1.0.0",
+    "status": "READY",
+    "sku001_policy": "ORIGINAL_DEPENDENCY_FREE",
+    "sku002_precondition": "USE_ROJO_QA_FACTORY",
+    "rojo_role": "DEVELOPMENT_BUILD_TOOL_ONLY",
+    "internal_qa_only": [
+      "command-console-style deterministic debug hooks",
+      "behavior-level regression tests",
+      "critical-path coverage matrices",
+      "remote abuse and replay testing"
+    ],
+    "shipping_rule": "Do not ship Cmdr, test-runner, coverage, or other third-party dependencies unless a specific product-level need and license review justify it."
+  }
 }
