@@ -40,8 +40,9 @@ jobs:
           python -m dashboard.validate_command_center
           python -m unittest discover -s tests -p 'test_*.py' -v
           git diff --exit-code
-      - name: Commit to the isolated request branch only
+      - name: Commit ordinary source changes to the isolated request branch only
         run: |
+          git restore --source=HEAD --staged --worktree .github/workflows/apply-owner-license-preference.yml .github/workflows/foundation-ci.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'Make Brain license checks advisory under explicit owner assumption'
