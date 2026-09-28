@@ -32,19 +32,19 @@ jobs:
       - name: Restore latest durable command-center state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
-          python -m dashboard.live_state_bridge
+          env GITHUB_REF_NAME=main python -m dashboard.live_state_bridge
           --output-dir dashboard/live
           --receipt dashboard/live/state_sources.json
       - name: Restore exact-run workflow liveness proof
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
-          python -m operations.liveness_artifact_state
+          env GITHUB_REF_NAME=main python -m operations.liveness_artifact_state
           --output dashboard/live/workflow_liveness_receipt.json
           --metadata-output dashboard/live/workflow_liveness_restore.json
       - name: Restore command-center history
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
-          python -m dashboard.history_artifact_state
+          env GITHUB_REF_NAME=main python -m dashboard.history_artifact_state
           --output dashboard/live/history_state.json
           --metadata-output dashboard/live/history_restore.json
       - name: Append sanitized telemetry history
