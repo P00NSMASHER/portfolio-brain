@@ -31,12 +31,26 @@
       "rank": 1,
       "name": "Answer-to-Earn Quiz Kit",
       "format": "MODEL",
-      "status": "CANDIDATE",
+      "status": "READY",
       "price_usd": 2.99,
       "buyer_problem": "Creators need a drop-in way to reward correct answers without building quiz validation and reward wiring from scratch.",
       "reuse_source": "P00NSMASHER/abvmschoolstarworld pages/study-games.js",
       "reuse_boundary": "Genericize mechanics only; remove all school-specific questions, branding and content.",
-      "build_prompt": "Work only in P00NSMASHER/portfolio-brain and authorized source repositories. Prepare SKU-001 Answer-to-Earn Quiz Kit as an original generic Roblox model. Reuse only generic question-validation/reward patterns from the ABVM study engine; include no ABVM content or branding. Target drag-and-drop setup, server-authoritative rewards, a small sample question set, concise README/setup instructions and deterministic QA. Keep total new work within 4 hours and paid AI spend within $10. Do not publish or spend money. Stop with a ready-to-upload artifact plus validation evidence."
+      "build_prompt": "Work only in P00NSMASHER/portfolio-brain and authorized source repositories. Prepare SKU-001 Answer-to-Earn Quiz Kit as an original generic Roblox model. Reuse only generic question-validation/reward patterns from the ABVM study engine; include no ABVM content or branding. Target drag-and-drop setup, server-authoritative rewards, a small sample question set, concise README/setup instructions and deterministic QA. Keep total new work within 4 hours and paid AI spend within $10. Do not publish or spend money. Stop with a ready-to-upload artifact plus validation evidence.",
+      "artifact_state": "BUILT_STATIC_QA_PASS_RUNTIME_STUDIO_QA_REQUIRED",
+      "artifact_name": "QuizRewardEngine.rbxmx",
+      "bundle_name": "Quiz_Reward_Engine_v1.0.zip",
+      "version": "1.0.0",
+      "launch_price_usd": 3.99,
+      "static_validation": "PASS",
+      "runtime_validation": "REQUIRED_BEFORE_PUBLISH",
+      "external_assets": 0,
+      "external_dependencies": 0,
+      "build_evidence": {
+        "artifact_sha256": "60086850a0b6042cf6a0b0c7d12abea686d1697fda318529c0ce26333ad880b6",
+        "source_location": "CHAT_ATTACHMENT_ONLY_NOT_GITHUB",
+        "source_code_public": false
+      }
     },
     {
       "sku_id": "SKU-002",
