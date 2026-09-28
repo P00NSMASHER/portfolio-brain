@@ -101,7 +101,7 @@
     "Within Hunter proposal research work, higher structural rank is preferred and equal-rank backlog items are ordered by first-seen Hunter sequence to prevent starvation.",
     "Continuation priority is an explicit scheduler class, not an opaque scalar score, and cannot change work authority or bypass per-agent/open-queue ceilings.",
     "Quality-gated Hunter proposal review is CONTINUATION work within the RESEARCH gate so already-discovered evidence chains are reviewed before unrelated new Researcher work.",
-    "Unused scheduler attempt capacity may be reused once in the same workflow run for Hunter proposal CONTINUATION review only, after the primary queue is fully drained; total attempts may never exceed max_new_work_per_cycle."
+    "Unused scheduler attempt capacity may be reused in at most two serial same-run Hunter proposal CONTINUATION review passes after the primary queue is fully drained; each pass must independently obey the per-agent open-work ceiling, and total attempts may never exceed max_new_work_per_cycle."
   ],
   "hunter_proposal_handoff": {
     "enabled": true,
@@ -121,7 +121,7 @@
   "same_cycle_continuation": {
     "enabled": true,
     "continuation_class": "HUNTER_PROPOSAL_REVIEW",
-    "max_passes": 1,
+    "max_passes": 2,
     "max_total_attempts_per_cycle": 8,
     "require_primary_queue_drained": true,
     "authority_class": "OBSERVE",
