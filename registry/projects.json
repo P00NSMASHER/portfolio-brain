@@ -22,11 +22,14 @@
       ],
       "autonomy_profile_id": "AUT-000",
       "objective_ids": [
-        "OBJ-000"
+        "OBJ-000",
+        "OBJ-001"
       ],
       "metric_ids": [
         "MET-000",
-        "MET-001"
+        "MET-001",
+        "MET-002",
+        "MET-003"
       ],
       "evidence_policy": "PROVENANCE_REQUIRED",
       "data_boundary": "SANITIZED_CODE_POLICY_AND_RECEIPTS_ONLY",

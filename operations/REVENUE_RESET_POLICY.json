@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0.0",
+  "policy_id": "revenue-reset-2026-09-27",
+  "status": "ACTIVE",
+  "objective_ref": "OBJ-001",
+  "governing_principle": "Verified cash and paid delivery outrank internal architecture, feature count, opportunity scores, and speculative startup creation.",
+  "freeze": {
+    "net_new_startup_architecture": true,
+    "speculative_vertical_expansion": true,
+    "existing_product_correctness_maintenance_allowed": true
+  },
+  "primary_experiment": {
+    "name": "AI-built app and GitHub rescue",
+    "buyer": "Founder or small team with an existing AI-assisted application that is broken, unstable, failing CI, failing deployment, or stuck before launch.",
+    "allowed_scope": [
+      "read-only codebase audit",
+      "root-cause diagnosis",
+      "GitHub Actions and CI repair",
+      "deployment repair",
+      "test and regression hardening",
+      "mobile/web UI defect repair where reproducible",
+      "plain-English handoff and verification evidence"
+    ],
+    "initial_price_test_usd": {
+      "diagnostic": 199,
+      "fix_sprint": 750
+    },
+    "pricing_note": "Prices are experiments, not claims about market value. Change only from observed buyer response or explicit owner instruction.",
+    "success_evidence": [
+      "verified payment",
+      "bounded scope accepted",
+      "deliverable completed",
+      "customer confirms the target problem is resolved or materially improved"
+    ],
+    "failure_rule": "If 20 qualified buyer attempts produce zero substantive replies, or 5 substantive buyer conversations produce zero paid engagements, stop and revise the offer, channel, price, or target before further expansion."
+  },
+  "resource_rules": [
+    "Hunter and research may search only for current paid-work demand, buyer language, channel evidence, or a named delivery blocker.",
+    "Engineering and testing capacity should go first to paid customer work, then to reusable proof-of-work that directly supports the primary experiment.",
+    "Do not build a new SaaS, marketplace, dashboard, agent hierarchy, or recovery vertical merely to create activity.",
+    "StarBlox and market-surveillance research do not count as revenue experiments unless a real external buyer independently requests paid work."
+  ],
+  "authority": {
+    "cash_spend": "HUMAN_APPROVAL_REQUIRED",
+    "external_customer_communication": "HUMAN_APPROVAL_REQUIRED",
+    "payment_collection_setup": "HUMAN_APPROVAL_REQUIRED",
+    "internal_research_and_repo_changes": "ALLOWED_WITH_EXISTING_GOVERNANCE"
+  }
+}
