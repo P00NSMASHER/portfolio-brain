@@ -6,6 +6,7 @@ from pathlib import Path
 from hunting.autonomous_hunter import CandidateInspectionError, HunterError, _queries, detect_gaps, load_policy, load_query_concepts, load_seed_state, load_strategies, run_cycle, search_concepts_for_gap, select_objectives, strategy_priority_maturity, validate_state
 from hunting.calibration import run_calibration
 from hunting.controlled_proof import load_cases as load_controlled_cases
+from hunting.rights_gate import build_rights_record, validate_rights_record
 from hunting.proposal_state import load_seed_state as load_proposal_seed, validate_state as validate_proposal_state
 from hunting.proposal_review_state import load_seed_state as load_proposal_review_seed, validate_state as validate_proposal_review_state
 ROOT=Path(__file__).resolve().parents[1]
@@ -31,6 +32,9 @@ def validate_hunter():
     req(policy["authority_class"]=="OBSERVE","Hunter authority changed")
     req(policy["model_calls_allowed"]==0 and policy["downstream_writes_allowed"]==0 and policy["external_actions_allowed"]==0,"Hunter authority widened")
     req(policy["source_allowlist"]==["PUBLIC_GITHUB"],"Hunter source allowlist widened")
+    rights_policy=load("hunting/RIGHTS_GATE_POLICY.json")
+    req(rights_policy["mode"]=="FAIL_CLOSED_NO_REUSE_AUTHORITY_FROM_DISCOVERY","Hunter rights gate mode weakened")
+    req(rights_policy["automatic_reuse_authority_granted"] is False,"Hunter discovery may not grant reuse authority")
     req(policy["repository_count_reward"]==0,"repository count must not be rewarded")
     req(policy["learning"]["verified_outcomes_only_for_value_credit"] is True,"Hunter value training must require verified outcomes")
     req(policy["learning"]["exploration_floor_fraction"]>=0.20,"exploration floor weakened")
@@ -149,6 +153,12 @@ def validate_hunter():
     req(failure_receipt["rejection_funnel"]["inspection_errors"]>0,"Hunter inspection failure telemetry missing")
     req(failure_receipt["rejection_funnel"]["inspection_succeeded"]>0,"Hunter did not continue after unavailable candidate")
     req(failure_receipt["rejection_funnel"]["inspection_attempted"]==failure_receipt["rejection_funnel"]["inspection_errors"]+failure_receipt["rejection_funnel"]["inspection_succeeded"],"Hunter inspection budget accounting drifted")
+    retained_rights=[x.get("rights") for x in failure_receipt["findings"] if x.get("disposition")=="RETAIN"]
+    req(retained_rights and all(isinstance(x,dict) for x in retained_rights),"Hunter retained findings missing rights records")
+    for rights in retained_rights:
+        validate_rights_record(rights)
+        req(rights["automatic_reuse_authority_granted"] is False,"Hunter discovery granted reuse authority")
+        req(rights["source_revision_sha"]=="a"*40,"Hunter rights record lost exact-revision binding")
     class ControlPlaneFailure:
         requests=0
         def search(self,query):
