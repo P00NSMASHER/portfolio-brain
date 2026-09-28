@@ -1,4 +1,5 @@
 name: runtime-hourly-sync
+# proof-retry: commit-cap-tree-proof
 
 on:
   schedule:
