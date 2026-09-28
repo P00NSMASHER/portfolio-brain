@@ -40,9 +40,7 @@ def restore(output:Path,metadata_output:Path|None=None)->str:
     )
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument("--output",required=True);ap.add_argument("--metadata-output",default=None);ap.add_argument("--source-branch",default=None)
-    a=ap.parse_args()
-    if a.source_branch is not None:os.environ["GITHUB_REF_NAME"]=a.source_branch
-    print(restore(Path(a.output),None if a.metadata_output is None else Path(a.metadata_output)))
+    ap=argparse.ArgumentParser();ap.add_argument("--output",required=True);ap.add_argument("--metadata-output",default=None)
+    a=ap.parse_args();print(restore(Path(a.output),None if a.metadata_output is None else Path(a.metadata_output)))
 
 if __name__=="__main__":main()
