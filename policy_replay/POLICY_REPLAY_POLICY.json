@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0.0",
+  "mode": "SHADOW_ONLY",
+  "minimum_completed_cycles": 3,
+  "promotion_requires_forward_canary": true,
+  "definitive_results": [
+    "PASSED",
+    "FAILED"
+  ],
+  "verified_evidence_state": "VERIFIED",
+  "decision_time_fields": [
+    "cycle_id",
+    "proposal_id",
+    "project_id",
+    "source_id",
+    "agent_id",
+    "estimated_cost_usd",
+    "planned_model_calls",
+    "planned_api_calls",
+    "planned_github_jobs",
+    "duplicate_candidate",
+    "defer_candidate"
+  ],
+  "comparison_metrics": [
+    "verified_outcomes",
+    "cost_per_verified_outcome_usd",
+    "median_time_to_evidence_hours",
+    "wasted_duplicate_work",
+    "inconclusive_rate",
+    "deferred_work_rate",
+    "authority_violations",
+    "model_calls",
+    "api_calls",
+    "github_jobs",
+    "cost_usd"
+  ]
+}
