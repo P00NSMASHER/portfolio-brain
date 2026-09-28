@@ -79,8 +79,10 @@ class WorkflowLivenessTests(unittest.TestCase):
         self.assertEqual(p["hard_stop_behavior"],"NONPAID_RECOVERY_CONTINUES")
         self.assertGreaterEqual(p["unverified_work_retry_after_minutes"],10)
         self.assertLessEqual(p["unverified_work_retry_after_minutes"],120)
-        self.assertTrue(any(t["admission_domain"]=="WORKLOAD" for t in p["targets"]))
-        self.assertTrue(any(t["admission_domain"]=="COST_WRAPPER" for t in p["targets"]))
+        self.assertTrue(all(t["admission_domain"]=="WORKLOAD" for t in p["targets"]))
+        runtime_target=next(t for t in p["targets"] if t["workflow_name"]=="runtime-hourly-sync")
+        self.assertEqual(runtime_target["admission_workflow_id"],"runtime-worker")
+        self.assertEqual(runtime_target["admission_job_id"],"runtime-sync")
         for target in p["targets"]:
             workflow=(ROOT/".github/workflows"/target["workflow_file"]).read_text()
             if "uses: ./.github/workflows/runtime-worker.yml" in workflow:
