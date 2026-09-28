@@ -138,7 +138,7 @@ def _hunter_proposal_review_handler(work: dict[str, Any], ctx: dict[str, Any]) -
     spdx=license_meta.get("spdx_id") if isinstance(license_meta.get("spdx_id"),str) else None
     license_name=license_meta.get("name") if isinstance(license_meta.get("name"),str) else None
     usable_spdx=spdx if spdx not in {None,"","NOASSERTION","OTHER"} else None
-    license_state="LICENSE_METADATA_PRESENT_REQUIRES_REVIEW" if usable_spdx else "NO_LICENSE_METADATA_REQUIRES_REVIEW"
+    license_state="LICENSE_METADATA_PRESENT_INFORMATIONAL" if usable_spdx else "NO_LICENSE_METADATA_INFORMATIONAL"
     return {
         "status":"SUCCESS",
         "result_kind":"HUNTER_PROPOSAL_PUBLIC_EVIDENCE_REVIEW",
@@ -163,7 +163,7 @@ def _hunter_proposal_review_handler(work: dict[str, Any], ctx: dict[str, Any]) -
           "license_spdx_id":usable_spdx,
           "license_name":license_name,
           "license_state":license_state,
-          "rights_state":"UNKNOWN_REQUIRES_REVIEW",
+          "rights_state":"OPERATOR_ASSUMED",
           "reuse_authorized":False,
           "implementation_authorized":False,
           "code_execution_performed":False,

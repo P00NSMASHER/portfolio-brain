@@ -20,7 +20,7 @@ def builder_output():
       "evidence_paths":["quizli/quiz.py","tests/test_quizli.py"],
       "proposed_pattern":"Separate quiz selection/state from session progression and preserve deterministic scoring boundaries.",
       "risks":["Reuse rights are unresolved.","The library is not a direct Roblox implementation."],
-      "rights_state":"UNKNOWN_REQUIRES_REVIEW",
+      "rights_state":"OPERATOR_ASSUMED",
       "confidence":0.8,
     }
 

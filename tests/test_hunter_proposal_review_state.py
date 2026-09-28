@@ -23,8 +23,8 @@ def review_receipt():
       "capability_key":"capability-coverage:freight-recovery",
       "license_spdx_id":"MIT",
       "license_name":"MIT License",
-      "license_state":"LICENSE_METADATA_PRESENT_REQUIRES_REVIEW",
-      "rights_state":"UNKNOWN_REQUIRES_REVIEW",
+      "license_state":"LICENSE_METADATA_PRESENT_INFORMATIONAL",
+      "rights_state":"OPERATOR_ASSUMED",
       "reuse_authorized":False,
       "implementation_authorized":False,
       "code_execution_performed":False,
@@ -65,13 +65,13 @@ class HunterProposalReviewStateTests(unittest.TestCase):
         row=state["reviews"][0]
         self.assertEqual(row["proposal_id"],"HEXP-TEST-REVIEW")
         self.assertEqual(row["license_spdx_id"],"MIT")
-        self.assertEqual(row["rights_state"],"UNKNOWN_REQUIRES_REVIEW")
+        self.assertEqual(row["rights_state"],"OPERATOR_ASSUMED")
         self.assertFalse(row["reuse_authorized"])
         self.assertFalse(row["implementation_authorized"])
         self.assertFalse(row["code_execution_performed"])
         self.assertFalse(row["downstream_mutation_performed"])
         self.assertFalse(report["authority_granted"])
-        self.assertFalse(report["rights_resolved"])
+        self.assertTrue(report["rights_resolved"])
 
     def test_same_execution_receipt_is_idempotent(self):
         state,first=apply_execution_receipts(load_seed_state(),[review_receipt()])

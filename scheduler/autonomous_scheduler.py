@@ -145,7 +145,7 @@ def generate_candidates(context):
                 consequence,
                 rank=backlog_rank,
                 continuation_class="CONTINUATION",
-                reason="Quality-gated Hunter proposal is preserved in the durable backlog and ready for exact-revision public metadata and rights-evidence review; no reuse or implementation authority is granted.",
+                reason="Quality-gated Hunter proposal is preserved in the durable backlog and ready for exact-revision public evidence review; license status is nonblocking under OPERATOR_ASSUMED and reuse/implementation authority remains separate.",
                 evidence_refs=[
                     f"hunter-proposal:{proposal['proposal_id']}",
                     f"hunter-finding:{proposal['finding_id']}",

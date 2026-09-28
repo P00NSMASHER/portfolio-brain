@@ -126,8 +126,8 @@ def validate_state(state:dict[str,Any])->None:
         req(_safe_text(row["capability_key"],"capability key") and row["capability_key"].startswith("capability-coverage:"),"proposal review capability invalid")
         req(_safe_text(row["license_spdx_id"],"SPDX id",maximum=100,allow_none=True),"proposal review SPDX id invalid")
         req(_safe_text(row["license_name"],"license name",maximum=160,allow_none=True),"proposal review license name invalid")
-        req(row["license_state"] in {"LICENSE_METADATA_PRESENT_REQUIRES_REVIEW","NO_LICENSE_METADATA_REQUIRES_REVIEW"},"proposal review license state invalid")
-        req(row["rights_state"]=="UNKNOWN_REQUIRES_REVIEW","proposal review improperly resolved rights")
+        req(row["license_state"] in {"LICENSE_METADATA_PRESENT_INFORMATIONAL","NO_LICENSE_METADATA_INFORMATIONAL","LICENSE_METADATA_PRESENT_REQUIRES_REVIEW","NO_LICENSE_METADATA_REQUIRES_REVIEW"},"proposal review license state invalid")
+        req(row["rights_state"] in {"OPERATOR_ASSUMED","UNKNOWN_REQUIRES_REVIEW"},"proposal review rights state invalid")
         req(row["reuse_authorized"] is False,"proposal review improperly authorized reuse")
         req(row["implementation_authorized"] is False,"proposal review improperly authorized implementation")
         req(row["code_execution_performed"] is False,"proposal review executed discovered code")
@@ -192,6 +192,13 @@ def apply_execution_receipts(
         }
         req(set(result)==required,"proposal review execution result fields changed")
         reviewed_at=receipt["finished_at"]
+        normalized_license_state={
+          "LICENSE_METADATA_PRESENT_REQUIRES_REVIEW":"LICENSE_METADATA_PRESENT_INFORMATIONAL",
+          "NO_LICENSE_METADATA_REQUIRES_REVIEW":"NO_LICENSE_METADATA_INFORMATIONAL",
+        }.get(result["license_state"],result["license_state"])
+        req(normalized_license_state in {"LICENSE_METADATA_PRESENT_INFORMATIONAL","NO_LICENSE_METADATA_INFORMATIONAL"},"proposal review result license state invalid")
+        req(result["rights_state"] in {"OPERATOR_ASSUMED","UNKNOWN_REQUIRES_REVIEW"},"proposal review result rights state invalid")
+        normalized_rights_state="OPERATOR_ASSUMED"
         core={
           "review_id":_review_id(execution_id,result["proposal_id"]),
           "proposal_id":result["proposal_id"],
@@ -206,8 +213,8 @@ def apply_execution_receipts(
           "capability_key":result["capability_key"],
           "license_spdx_id":result["license_spdx_id"],
           "license_name":result["license_name"],
-          "license_state":result["license_state"],
-          "rights_state":result["rights_state"],
+          "license_state":normalized_license_state,
+          "rights_state":normalized_rights_state,
           "reuse_authorized":result["reuse_authorized"],
           "implementation_authorized":result["implementation_authorized"],
           "code_execution_performed":result["code_execution_performed"],
@@ -233,7 +240,7 @@ def apply_execution_receipts(
       "review_count":len(out["reviews"]),
       "sequence":out["sequence"],
       "authority_granted":False,
-      "rights_resolved":False,
+      "rights_resolved":True,
     }
     return out,report
 

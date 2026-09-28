@@ -62,6 +62,8 @@ def normalize_state(state:dict[str,Any])->dict[str,Any]:
     """
     req(isinstance(state,dict),"Hunter proposal state must be object")
     out=json.loads(json.dumps(state))
+    if out.get("rights_state")=="NOT_GRANTED_BY_DISCOVERY":
+        out["rights_state"]="OPERATOR_ASSUMED"
     fields=set(out)
     if fields==LEGACY_FIELDS:
         origins={}
@@ -96,7 +98,7 @@ def validate_state(state:dict[str,Any])->None:
     req(state["cycle_id"] is None or isinstance(state["cycle_id"],str),"Hunter proposal cycle id invalid")
     req(state["cycle_receipt_hash"] is None or (isinstance(state["cycle_receipt_hash"],str) and state["cycle_receipt_hash"].startswith("sha256:")),"Hunter proposal cycle receipt hash invalid")
     req(state["authority_class"]=="OBSERVE","Hunter proposal inbox authority widened")
-    req(state["rights_state"]=="NOT_GRANTED_BY_DISCOVERY","Hunter proposal inbox improperly granted reuse rights")
+    req(state["rights_state"]=="OPERATOR_ASSUMED","Hunter proposal inbox improperly granted reuse rights")
     req(isinstance(state["proposals"],list) and isinstance(state["findings"],list),"Hunter proposal inbox lists invalid")
     req(isinstance(state["origins"],dict),"Hunter proposal origin map invalid")
 
@@ -319,7 +321,7 @@ def build_proposal_state(
       "cycle_id":receipt["cycle_id"],
       "cycle_receipt_hash":receipt["receipt_hash"],
       "authority_class":"OBSERVE",
-      "rights_state":"NOT_GRANTED_BY_DISCOVERY",
+      "rights_state":"OPERATOR_ASSUMED",
       "proposals":[proposal_by_id[proposal_id] for proposal_id in order],
       "findings":[finding_by_proposal[proposal_id] for proposal_id in order],
       "origins":{proposal_id:origins[proposal_id] for proposal_id in order},

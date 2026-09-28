@@ -43,7 +43,7 @@ class HunterProposalStateTests(unittest.TestCase):
         self.assertLessEqual(len(state["proposals"]),6)
         self.assertTrue(all(p["candidate_rank_band"] in {"MEDIUM","HIGH"} for p in state["proposals"]))
         self.assertTrue(all(f["capability_key"].startswith("capability-coverage:") for f in state["findings"]))
-        self.assertEqual(state["rights_state"],"NOT_GRANTED_BY_DISCOVERY")
+        self.assertEqual(state["rights_state"],"OPERATOR_ASSUMED")
         self.assertEqual(state["authority_class"],"OBSERVE")
         self.assertEqual(set(state["origins"]),{p["proposal_id"] for p in state["proposals"]})
         self.assertTrue(all(o["first_cycle_id"]==receipt["cycle_id"] for o in state["origins"].values()))
@@ -89,7 +89,7 @@ class HunterProposalStateTests(unittest.TestCase):
         self.assertGreaterEqual(summary["distinct_origin_cycles"],2)
         self.assertEqual(summary["capacity_remaining"],summary["capacity"]-summary["backlog_proposals"])
         self.assertEqual(summary["authority_class"],"OBSERVE")
-        self.assertEqual(summary["rights_state"],"NOT_GRANTED_BY_DISCOVERY")
+        self.assertEqual(summary["rights_state"],"OPERATOR_ASSUMED")
 
     def test_legacy_single_cycle_artifact_is_migrated_without_inventing_provenance(self):
         hunter,receipt=run_cycle(load_seed_state(),BroadHighProvider(),at="2026-09-27T06:30:00Z")
