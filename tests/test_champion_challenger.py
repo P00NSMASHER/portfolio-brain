@@ -60,9 +60,12 @@ def no_license_rights(d):
     )
 
 def good_replay():
+    duplicate=cycle("2",cost=3,calls=3,api=3,jobs=3,duplicate=True)
+    duplicate["result"]="INCONCLUSIVE"
+    duplicate["evidence_state"]="OBSERVED"
     cycles=[
       cycle("1",cost=2,calls=2,api=2,jobs=2),
-      cycle("2",cost=3,calls=3,api=3,jobs=3,duplicate=True),
+      duplicate,
       cycle("3",cost=2,calls=2,api=2,jobs=2),
     ]
     return replay(cycles,{
