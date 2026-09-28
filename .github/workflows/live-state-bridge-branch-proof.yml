@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/live-state-bridge-branch-proof.yml"
       - ".github/workflows/runtime-worker.yml"
+      - ".github/workflows/portfolio-cost-watchdog.yml"
       - "runtime/artifact_state.py"
       - "agents/artifact_state.py"
       - "dashboard/live_state_bridge.py"
@@ -105,6 +106,15 @@ jobs:
           present={row["title"] for row in snapshot["repair_issues"]}
           remaining=sorted(original & present)
 
+          print(json.dumps({
+            "heartbeat_sweep_proof":snapshot["telemetry"]["agents"].get("heartbeat_sweep_proof"),
+            "agent_health":[{
+              "name":row["name"],
+              "heartbeat_health":row["heartbeat_health"],
+              "last_productive_at":row.get("last_productive_at"),
+            } for row in snapshot["agents"]],
+            "remaining_original_diagnostics":remaining,
+          },sort_keys=True))
           assert sources["bridge_status"]=="LIVE", sources
           required=set(sources["health_sources"]) | set(sources["optional_observability_sources"])
           assert required==set(sources["sources"]), (required,set(sources["sources"]))
@@ -128,15 +138,6 @@ jobs:
           assert runtime_target["status"]=="HEALTHY_VERIFIED_WORK", runtime_target
           assert runtime_target["work_proof_status"]=="VERIFIED_WORK", runtime_target
           assert runtime_target["work_proof_reason"]=="RUNTIME_SYNC_RECEIPT", runtime_target
-          print(json.dumps({
-            "heartbeat_sweep_proof":snapshot["telemetry"]["agents"].get("heartbeat_sweep_proof"),
-            "agent_health":[{
-              "name":row["name"],
-              "heartbeat_health":row["heartbeat_health"],
-              "last_productive_at":row.get("last_productive_at"),
-            } for row in snapshot["agents"]],
-            "remaining_original_diagnostics":remaining,
-          },sort_keys=True))
           assert not remaining, remaining
 
           receipt={
