@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -129,6 +130,8 @@ def build_live_state(
     output_dir: Path,
     receipt_path: Path,
     now: datetime | None = None,
+    source_branch: str | None = None,
+    source_overrides: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     now = now or datetime.now(timezone.utc)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -136,11 +139,16 @@ def build_live_state(
     metadata_dir.mkdir(parents=True, exist_ok=True)
 
     sources: dict[str, Any] = {}
+    source_overrides = source_overrides or {}
     for name, restorer in RESTORERS.items():
         state_path = output_dir / _state_filename(name)
         metadata_path = metadata_dir / f"{name}.json"
         restore_status = "RESTORE_ERROR"
         error_class = None
+        selected_branch = source_overrides.get(name, source_branch)
+        prior_ref = os.environ.get("GITHUB_REF_NAME")
+        if selected_branch is not None:
+            os.environ["GITHUB_REF_NAME"] = selected_branch
         try:
             if name == "runtime":
                 restore_status = restorer(
@@ -154,6 +162,11 @@ def build_live_state(
         except Exception as exc:
             error_class = type(exc).__name__
             restore_status = "RESTORE_ERROR"
+        finally:
+            if prior_ref is None:
+                os.environ.pop("GITHUB_REF_NAME", None)
+            else:
+                os.environ["GITHUB_REF_NAME"] = prior_ref
 
         metadata: dict[str, Any] = {}
         if metadata_path.exists():
@@ -181,6 +194,9 @@ def build_live_state(
             "restore_status": restore_status,
             "source_run_id": metadata.get("source_run_id"),
             "source_head_sha": metadata.get("source_head_sha"),
+            "source_sequence": metadata.get("source_sequence"),
+            "source_state_hash": metadata.get("source_state_hash"),
+            "candidates_inspected": metadata.get("candidates_inspected"),
             "artifact_id": metadata.get("artifact_id"),
             "artifact_created_at": metadata.get("artifact_created_at"),
             "artifact_expires_at": metadata.get("artifact_expires_at"),
@@ -208,7 +224,11 @@ def build_live_state(
     sources["provider"]={
       "status":provider_freshness,"source_kind":provider_kind,"source_ref":provider_ref,
       "restore_status":provider_restore_status,"source_run_id":provider_metadata.get("source_run_id"),
-      "source_head_sha":provider_metadata.get("source_head_sha"),"artifact_id":provider_metadata.get("artifact_id"),
+      "source_head_sha":provider_metadata.get("source_head_sha"),
+      "source_sequence":provider_metadata.get("source_sequence"),
+      "source_state_hash":provider_metadata.get("source_state_hash"),
+      "candidates_inspected":provider_metadata.get("candidates_inspected"),
+      "artifact_id":provider_metadata.get("artifact_id"),
       "artifact_created_at":provider_metadata.get("artifact_created_at"),
       "artifact_expires_at":provider_metadata.get("artifact_expires_at"),"age_minutes":provider_age,
       "stale_after_minutes":STALE_AFTER_MINUTES["provider"],"state_sequence":provider_state.get("sequence"),
@@ -248,12 +268,27 @@ def main() -> None:
     parser.add_argument("--output-dir", default="dashboard/live")
     parser.add_argument("--receipt", default="dashboard/live/state_sources.json")
     parser.add_argument("--now", default=None)
+    parser.add_argument("--source-branch", default=None)
+    parser.add_argument("--source-override", action="append", default=[])
+    parser.add_argument("--current-run-id", default=None)
     args = parser.parse_args()
+    overrides: dict[str, str] = {}
+    for raw in args.source_override:
+        if "=" not in raw:
+            raise LiveStateBridgeError("source override must be NAME=BRANCH")
+        name, branch = raw.split("=", 1)
+        if name not in RESTORERS or not branch:
+            raise LiveStateBridgeError("source override is invalid")
+        overrides[name] = branch
+    if args.current_run_id is not None:
+        os.environ["GITHUB_RUN_ID"] = args.current_run_id
     now = None if args.now is None else _time(args.now)
     receipt = build_live_state(
         output_dir=Path(args.output_dir),
         receipt_path=Path(args.receipt),
         now=now,
+        source_branch=args.source_branch,
+        source_overrides=overrides,
     )
     print(json.dumps({
         "bridge_status": receipt["bridge_status"],

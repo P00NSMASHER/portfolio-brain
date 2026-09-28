@@ -19,8 +19,11 @@ permissions:
   actions: read
 
 concurrency:
-  group: ${{ (inputs.mode == 'daily' || inputs.mode == 'weekly') && 'portfolio-cost-governed-autonomy' || format('portfolio-runtime-{0}', inputs.mode) }}
-  cancel-in-progress: ${{ inputs.mode == 'observe' || inputs.mode == 'sync' }}
+  # observe and sync both advance the same runtime and agent durable-state
+  # artifacts. Serialize those writers so a later run restores the prior
+  # sequence instead of forking the same sequence from a shared base.
+  group: ${{ (inputs.mode == 'observe' || inputs.mode == 'sync') && 'portfolio-runtime-nonpaid-state-writer' || ((inputs.mode == 'daily' || inputs.mode == 'weekly') && 'portfolio-cost-governed-autonomy' || format('portfolio-runtime-{0}', inputs.mode)) }}
+  cancel-in-progress: false
 
 jobs:
   runtime:

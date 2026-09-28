@@ -168,7 +168,7 @@ class CostGovernorTests(unittest.TestCase):
     def test_runtime_sync_and_observe_are_nonpaid_workload_lanes(self):
         workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text()
         self.assertIn("workload_control.workload_gate preflight",workflow)
-        self.assertIn("format('portfolio-runtime-{0}', inputs.mode)",workflow)
+        self.assertIn("'portfolio-runtime-nonpaid-state-writer'",workflow)
         wp=workload_policy()
         for mode in ("observe","sync"):
             job=f"runtime-{mode}"
@@ -180,7 +180,7 @@ class CostGovernorTests(unittest.TestCase):
             self.assertEqual(decision["status"],"WORKLOAD_ALLOWED")
             self.assertEqual(
                 wp["services"][f"runtime-worker::{job}"]["concurrency_group"],
-                f"portfolio-runtime-{mode}",
+                "portfolio-runtime-nonpaid-state-writer",
             )
         p=policy()
         self.assertNotIn("runtime-hourly-sync",p["managed_workflow_names"])
