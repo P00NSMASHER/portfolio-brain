@@ -115,13 +115,24 @@ def validate_policy(p:dict[str,Any])->None:
 
         if target["admission_domain"]=="WORKLOAD":
             cfg=workload_jobs[scope]
-            for fragment in (
+            fragments=[
               "workload_control.workload_gate preflight",
               f'--workflow-id {target["admission_workflow_id"]}',
-              f'--job-id {target["admission_job_id"]}',
               f'--estimated-minutes {target["estimated_minutes"]}',
-              f'group: {cfg["concurrency_group"]}',
-            ):
+            ]
+            if target["admission_workflow_id"]=="runtime-worker":
+                mode=target["admission_job_id"].removeprefix("runtime-")
+                req(cfg["concurrency_group"]==f"portfolio-runtime-{mode}","runtime workload concurrency policy drifted")
+                fragments.extend([
+                  '--job-id "runtime-${RUNTIME_MODE}"',
+                  "format('portfolio-runtime-{0}', inputs.mode)",
+                ])
+            else:
+                fragments.extend([
+                  f'--job-id {target["admission_job_id"]}',
+                  f'group: {cfg["concurrency_group"]}',
+                ])
+            for fragment in fragments:
                 req(fragment in workflow_body,"workflow liveness workload admission drifted from target")
         else:
             job_marker = ('--job-id "runtime-${RUNTIME_MODE}"'
