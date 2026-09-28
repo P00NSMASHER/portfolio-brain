@@ -189,11 +189,11 @@ def validate_cost_governor():
     runtime_worker = paid_workflows["runtime-worker"].read_text(encoding="utf-8")
     req("workload_control.workload_gate preflight" in runtime_worker,
         "runtime worker missing non-paid workload admission")
-    req("format('portfolio-runtime-{0}', inputs.mode)" in runtime_worker,
-        "runtime worker missing mode-specific non-paid concurrency")
+    req("'portfolio-runtime-nonpaid-state-writer'" in runtime_worker,
+        "runtime worker missing serialized non-paid state-writer concurrency")
     for job_id, group in (
-        ("runtime-observe", "portfolio-runtime-observe"),
-        ("runtime-sync", "portfolio-runtime-sync"),
+        ("runtime-observe", "portfolio-runtime-nonpaid-state-writer"),
+        ("runtime-sync", "portfolio-runtime-nonpaid-state-writer"),
     ):
         decision = evaluate_workload(
             workflow_id="runtime-worker",
