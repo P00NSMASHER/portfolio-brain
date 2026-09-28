@@ -189,8 +189,12 @@ def validate_cost_governor():
     runtime_worker = paid_workflows["runtime-worker"].read_text(encoding="utf-8")
     req("workload_control.workload_gate preflight" in runtime_worker,
         "runtime worker missing non-paid workload admission")
-    req("format('portfolio-runtime-{0}', inputs.mode)" in runtime_worker,
-        "runtime worker missing mode-specific non-paid concurrency")
+    req("'portfolio-runtime-nonpaid-state'" in runtime_worker,
+        "runtime worker missing shared non-paid state-writer concurrency")
+    req("'portfolio-cost-governed-autonomy'" in runtime_worker,
+        "runtime worker lost paid cost-governed concurrency")
+    req("format('portfolio-runtime-{0}', inputs.mode)" not in runtime_worker,
+        "runtime worker still permits observe/sync state-writer forks")
     for job_id, group in (
         ("runtime-observe", "portfolio-runtime-observe"),
         ("runtime-sync", "portfolio-runtime-sync"),
