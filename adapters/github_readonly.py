@@ -23,7 +23,7 @@ class AdapterError(ValueError):
 
 SHA = re.compile(r"^[0-9a-f]{40}$")
 GITHUB_COMPARE_FILE_CAP = 300
-GITHUB_COMPARE_COMMIT_CAP = 250
+GITHUB_COMPARE_COMMIT_PAGE_SIZE = 100
 
 def _require(ok: bool, message: str) -> None:
     if not ok:
@@ -153,31 +153,57 @@ def resolve_head(adapter: dict[str,Any], fetch_json: FetchJSON) -> str:
 def compare_range(adapter: dict[str,Any], base_sha: str, head_sha: str, fetch_json: FetchJSON) -> dict[str,Any]:
     _require(SHA.fullmatch(base_sha) is not None and SHA.fullmatch(head_sha) is not None, "compare requires exact lowercase SHAs")
     url=f"{_repo_api(adapter['repository_full_name'])}/compare/{base_sha}...{head_sha}"
-    payload=fetch_json(url)
+    payload=fetch_json(f"{url}?per_page={GITHUB_COMPARE_COMMIT_PAGE_SIZE}&page=1")
     status=payload.get("status")
     ahead_by=_nonnegative_int(payload.get("ahead_by"), "GitHub compare ahead_by is invalid")
     behind_by=_nonnegative_int(payload.get("behind_by"), "GitHub compare behind_by is invalid")
     total_commits=_nonnegative_int(payload.get("total_commits"), "GitHub compare total_commits is invalid")
-    raw_files=payload.get("files")
-    raw_commits=payload.get("commits")
-    base_commit=payload.get("base_commit")
-    merge_base_commit=payload.get("merge_base_commit")
     _require(status=="ahead", f"source history is not a fast-forward: {status}")
     _require(ahead_by>0, "fast-forward compare requires positive ahead_by")
     _require(behind_by==0, "fast-forward compare cannot be behind the cursor")
     _require(total_commits==ahead_by, "GitHub compare commit count is incomplete or inconsistent")
-    _require(isinstance(base_commit,dict) and _exact_sha(base_commit.get("sha"), "GitHub compare base commit is invalid")==base_sha,
-             "GitHub compare response is not bound to the requested base SHA")
-    _require(isinstance(merge_base_commit,dict) and _exact_sha(merge_base_commit.get("sha"), "GitHub compare merge base is invalid")==base_sha,
-             "GitHub compare is not a linear fast-forward from the requested base SHA")
-    _require(isinstance(raw_commits,list), "GitHub compare response missing commits")
-    _require(len(raw_commits)<GITHUB_COMPARE_COMMIT_CAP, "GitHub compare commit list reached the 250-commit completeness boundary")
-    _require(len(raw_commits)==total_commits, "GitHub compare commit list is incomplete or inconsistent")
-    commit_shas=[_exact_sha(item.get("sha") if isinstance(item,dict) else None,
-                            "GitHub compare commit is missing an exact lowercase SHA") for item in raw_commits]
-    _require(len(set(commit_shas))==len(commit_shas), "GitHub compare commit list contains duplicates")
+
+    def page_commits(candidate: dict[str,Any]) -> list[dict[str,Any]]:
+        _require(candidate.get("status")==status, "GitHub compare pagination changed status")
+        _require(_nonnegative_int(candidate.get("ahead_by"), "GitHub compare page ahead_by is invalid")==ahead_by,
+                 "GitHub compare pagination changed ahead_by")
+        _require(_nonnegative_int(candidate.get("behind_by"), "GitHub compare page behind_by is invalid")==behind_by,
+                 "GitHub compare pagination changed behind_by")
+        _require(_nonnegative_int(candidate.get("total_commits"), "GitHub compare page total_commits is invalid")==total_commits,
+                 "GitHub compare pagination changed total_commits")
+        base_commit=candidate.get("base_commit")
+        merge_base_commit=candidate.get("merge_base_commit")
+        _require(isinstance(base_commit,dict) and _exact_sha(base_commit.get("sha"), "GitHub compare base commit is invalid")==base_sha,
+                 "GitHub compare response is not bound to the requested base SHA")
+        _require(isinstance(merge_base_commit,dict) and _exact_sha(merge_base_commit.get("sha"), "GitHub compare merge base is invalid")==base_sha,
+                 "GitHub compare is not a linear fast-forward from the requested base SHA")
+        commits=candidate.get("commits")
+        _require(isinstance(commits,list), "GitHub compare response missing commits")
+        _require(len(commits)<=GITHUB_COMPARE_COMMIT_PAGE_SIZE, "GitHub compare commit page exceeds requested page size")
+        return commits
+
+    commit_shas=[]; page=1; raw_commits=page_commits(payload)
+    while True:
+        for item in raw_commits:
+            sha=_exact_sha(item.get("sha") if isinstance(item,dict) else None,
+                           "GitHub compare commit is missing an exact lowercase SHA")
+            _require(sha not in commit_shas, "GitHub compare commit list contains duplicates")
+            commit_shas.append(sha)
+        if len(commit_shas)>=total_commits:
+            break
+        _require(
+            len(raw_commits)==GITHUB_COMPARE_COMMIT_PAGE_SIZE,
+            "GitHub compare commit pagination ended before total_commits",
+        )
+        page+=1
+        raw_commits=page_commits(fetch_json(
+            f"{url}?per_page={GITHUB_COMPARE_COMMIT_PAGE_SIZE}&page={page}"
+        ))
+    _require(len(commit_shas)==total_commits, "GitHub compare commit list is incomplete or inconsistent")
     _require(commit_shas and commit_shas[-1]==head_sha,
              "GitHub compare response is not bound to the requested head SHA")
+
+    raw_files=payload.get("files")
     _require(isinstance(raw_files,list), "GitHub compare response missing changed files")
     _require(len(raw_files)<=GITHUB_COMPARE_FILE_CAP, "GitHub compare file list exceeded the 300-file API boundary")
     if len(raw_files)==GITHUB_COMPARE_FILE_CAP:
