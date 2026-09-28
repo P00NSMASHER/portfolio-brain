@@ -255,7 +255,9 @@ def validate_operating_mode():
     req("actions: write" in watchdog and "contents: read" in watchdog and "contents: write" not in watchdog,"watchdog permissions invalid")
     watchdog_triggers=workflow_top_level_triggers(ROOT/".github/workflows/portfolio-cost-watchdog.yml")
     req({"schedule","workflow_run","push","workflow_dispatch"}<=watchdog_triggers,"watchdog independent recovery triggers incomplete")
-    req('workflows: ["agent-heartbeat-sweep", "runtime-hourly-sync"]' in watchdog and "types: [completed]" in watchdog and 'branches: ["main"]' in watchdog,"watchdog liveness recovery anchors drifted")
+    for producer in ("portfolio-autonomous-scheduler","runtime-hourly-sync","agent-heartbeat-sweep","hunter-autonomous-cycle","portfolio-notification-cycle"):
+        req(f'- "{producer}"' in watchdog,f"watchdog liveness recovery anchor missing: {producer}")
+    req("types: [completed]" in watchdog and 'branches: ["main"]' in watchdog,"watchdog liveness recovery anchors drifted")
     req('"operations/trigger_workflow_liveness"' in watchdog,"watchdog explicit liveness trigger path missing")
     req("paths:" in watchdog,"watchdog push trigger must remain path-scoped")
     req("operations.workflow_liveness" in watchdog and "portfolio-workflow-liveness" in watchdog,"watchdog core-workflow recovery missing")
