@@ -1,0 +1,43 @@
+{
+  "policy_id": "roblox-micro-product-factory-v1",
+  "status": "ACTIVE",
+  "effective_date": "2026-09-28",
+  "commercial_source_rule": "Every paid SKU is original by default.",
+  "sku001_freeze": {
+    "sku": "SKU-001",
+    "product": "Quiz & Reward Engine",
+    "rule": "Do not add third-party code or runtime dependencies."
+  },
+  "rojo": {
+    "role": "development/build tooling only",
+    "buyer_dependency": false
+  },
+  "internal_qa": {
+    "cmdr_concepts": "Use deterministic command-style test hooks internally; do not ship Cmdr by default.",
+    "testing_concepts": "Assert behavior and successful state transitions, not marker/object presence.",
+    "coverage_concepts": "Maintain a critical-path matrix and require at least one regression for every security-sensitive path."
+  },
+  "required_runtime_checks": [
+    "happy path",
+    "invalid input",
+    "duplicate or replay request",
+    "unauthorized player request",
+    "reset or rejoin behavior when relevant",
+    "two-player isolation when relevant",
+    "mobile interaction when relevant",
+    "failure behavior",
+    "server-authority check for sensitive state"
+  ],
+  "sku002_house_controls_required_paths": [
+    "authorized light toggle changes state",
+    "authorized garage control changes state exactly once",
+    "lock blocks unauthorized interaction",
+    "valid recolor applies and malformed payload is rejected",
+    "remote abuse produces no privileged state change",
+    "rapid duplicate requests do not duplicate side effects",
+    "one player cannot mutate another player's house",
+    "mobile controls remain usable",
+    "missing optional parts fail cleanly"
+  ],
+  "shipment_rule": "Internal dev harnesses and third-party QA dependencies must be excluded from release artifacts unless explicitly approved after license review."
+}
