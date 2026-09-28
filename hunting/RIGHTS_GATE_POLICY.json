@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0.0",
+  "mode": "FAIL_CLOSED_NO_REUSE_AUTHORITY_FROM_DISCOVERY",
+  "classifications": [
+    "PERMISSIVE_DEPENDENCY",
+    "COPYLEFT_REVIEW",
+    "ARCHITECTURE_STUDY_ONLY",
+    "NO_LICENSE_NO_REUSE",
+    "SEPARATE_PERMISSION_REQUIRED"
+  ],
+  "automatic_reuse_authority_granted": false,
+  "permissive_spdx": [
+    "0BSD",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "MIT",
+    "Unlicense",
+    "Zlib"
+  ],
+  "file_level_copyleft_spdx": [
+    "MPL-2.0"
+  ],
+  "copyleft_spdx": [
+    "GPL-2.0-only",
+    "GPL-2.0-or-later",
+    "GPL-3.0-only",
+    "GPL-3.0-or-later",
+    "LGPL-2.1-only",
+    "LGPL-2.1-or-later",
+    "LGPL-3.0-only",
+    "LGPL-3.0-or-later",
+    "AGPL-3.0-only",
+    "AGPL-3.0-or-later",
+    "SSPL-1.0"
+  ],
+  "source_available_or_restricted_spdx": [
+    "BUSL-1.1",
+    "Elastic-2.0",
+    "PolyForm-Noncommercial-1.0.0"
+  ],
+  "unknown_spdx_values": [
+    "NOASSERTION",
+    "OTHER",
+    "NONE",
+    ""
+  ],
+  "dependency_manifest_names": [
+    "package.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "requirements.txt",
+    "requirements.lock",
+    "poetry.lock",
+    "Pipfile.lock",
+    "Cargo.toml",
+    "Cargo.lock",
+    "go.mod",
+    "go.sum",
+    "pom.xml",
+    "build.gradle",
+    "Gemfile.lock",
+    "composer.lock"
+  ]
+}
