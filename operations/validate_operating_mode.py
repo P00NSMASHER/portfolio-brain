@@ -257,7 +257,11 @@ def validate_operating_mode():
     req({"schedule","workflow_run","push","workflow_dispatch"}<=watchdog_triggers,"watchdog independent recovery triggers incomplete")
     for producer in ("portfolio-autonomous-scheduler","runtime-hourly-sync","agent-heartbeat-sweep","hunter-autonomous-cycle","portfolio-notification-cycle"):
         req(f'- "{producer}"' in watchdog,f"watchdog liveness recovery anchor missing: {producer}")
+    for producer in ("portfolio-autonomous-scheduler","runtime-hourly-sync","agent-heartbeat-sweep","hunter-autonomous-cycle","portfolio-notification-cycle"):
+        req(f'- "{producer}"' in watchdog,f"watchdog missing liveness recovery anchor: {producer}")
     req("types: [completed]" in watchdog and 'branches: ["main"]' in watchdog,"watchdog liveness recovery anchors drifted")
+    runtime_sync=(ROOT/".github/workflows/runtime-hourly-sync.yml").read_text().lower()
+    req("push:" in runtime_sync and 'branches: ["main"]' in runtime_sync and '"adapters/**"' in runtime_sync and '"runtime/**"' in runtime_sync,"runtime repair wakeup trigger missing")
     req('"operations/trigger_workflow_liveness"' in watchdog,"watchdog explicit liveness trigger path missing")
     req("paths:" in watchdog,"watchdog push trigger must remain path-scoped")
     req("operations.workflow_liveness" in watchdog and "portfolio-workflow-liveness" in watchdog,"watchdog core-workflow recovery missing")
