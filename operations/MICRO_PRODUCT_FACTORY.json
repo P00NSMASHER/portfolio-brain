@@ -66,7 +66,7 @@
       "reuse_boundary": "No Brookhaven assets, UI, names, proprietary structure, StarBlox source, or third-party runtime code.",
       "artifact_state": "BUILT_V1_1_STATIC_QA_PASS_RUNTIME_STUDIO_QA_REQUIRED",
       "artifact_name": "HouseControlsPack.rbxmx",
-      "bundle_name": "House_Controls_Pack_v1.0.zip",
+      "bundle_name": "House_Controls_Pack_v1.1.zip",
       "version": "1.1.0",
       "static_validation": "PASS",
       "runtime_validation": "REQUIRED_BEFORE_PUBLISH",
@@ -81,7 +81,7 @@
         "shipped_third_party_code": false,
         "defect_fix": "release session-owned house when owner leaves"
       },
-      "build_prompt": "Use the existing original House Controls Pack v1.0 artifact. Run the documented Roblox Studio runtime QA matrix for ownership isolation, lights, garage, lock enforcement, recolor, replay/spam resistance and mobile controls. Fix only reproduced defects. Do not publish until runtime QA passes."
+      "build_prompt": "Use the existing original House Controls Pack v1.1 artifact. Run the documented Roblox Studio runtime QA matrix for ownership isolation, owner-leave release, lights, garage, lock enforcement, recolor, replay/spam resistance and mobile controls. Fix only reproduced defects. Do not publish until runtime QA passes."
     },
     {
       "sku_id": "SKU-003",
@@ -95,7 +95,7 @@
       "reuse_boundary": "Original implementation only; no external runtime dependency.",
       "artifact_state": "BUILT_V1_1_STATIC_QA_PASS_RUNTIME_STUDIO_QA_REQUIRED",
       "artifact_name": "RedeemCodeSystem.rbxmx",
-      "bundle_name": "Redeem_Code_System_v1.0.zip",
+      "bundle_name": "Redeem_Code_System_v1.1.zip",
       "version": "1.1.0",
       "static_validation": "PASS",
       "runtime_validation": "REQUIRED_BEFORE_PUBLISH",
@@ -110,7 +110,7 @@
         "shipped_third_party_code": false,
         "defect_fix": "atomic one-time redemption reservation closes concurrent double-grant race"
       },
-      "build_prompt": "Use the existing original Redeem Code System v1.0 artifact. Run the documented Roblox Studio runtime QA for valid/invalid codes, expiration, one-time persistence, DataStore failure behavior, replay protection, two-player isolation and mobile controls. Fix only reproduced defects. Do not publish until runtime QA passes."
+      "build_prompt": "Use the existing original Redeem Code System v1.1 artifact. Run the documented Roblox Studio runtime QA for valid/invalid codes, expiration, atomic one-time persistence, DataStore failure behavior, concurrent replay protection, two-player isolation and mobile controls. Fix only reproduced defects. Do not publish until runtime QA passes."
     },
     {
       "sku_id": "SKU-004",
