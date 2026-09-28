@@ -232,10 +232,18 @@ def validate_operating_mode():
         req("push" not in triggers,f"{name} must not fan out on push")
 
     worker=(ROOT/".github/workflows/runtime-worker.yml").read_text().lower()
-    req("portfolio-cost-governed-autonomy" in worker and "cost_governor.workflow_gate preflight" in worker,
-        "runtime worker lost serialized paid-wrapper governance")
-    req("steps.cost.outputs.allowed != 'true'" in worker and "exit 1" in worker,
-        "runtime worker can still report green after paid-wrapper admission blocks")
+    req("workload_control.workload_gate preflight" in worker and "cost_governor.workflow_gate preflight" in worker,
+        "runtime worker split admission routing missing")
+    req("inputs.mode == 'sync' || inputs.mode == 'observe'" in worker and "inputs.mode == 'daily' || inputs.mode == 'weekly'" in worker,
+        "runtime worker mode boundary drifted")
+    req("steps.admission.outputs.allowed != 'true'" in worker and "exit 1" in worker,
+        "runtime worker can still report green after selected admission blocks")
+    for caller,group in (("runtime-hourly-sync.yml","portfolio-runtime-sync"),("runtime-event-observe.yml","portfolio-runtime-observe")):
+        body=(ROOT/".github/workflows"/caller).read_text().lower()
+        req(f"group: {group}" in body,f"{caller} independent workload lane missing")
+    for caller in ("runtime-daily-learning.yml","runtime-weekly-synthesis.yml"):
+        body=(ROOT/".github/workflows"/caller).read_text().lower()
+        req("group: portfolio-cost-governed-autonomy" in body,f"{caller} paid concurrency lane drifted")
 
     proof=(ROOT/".github/workflows/model-value-proof.yml").read_text().lower()
     req("portfolio-cost-governed-autonomy" in proof and "cost_governor.workflow_gate preflight" in proof,
@@ -269,8 +277,9 @@ def validate_operating_mode():
     req(liveness["schema_version"]=="1.0.0" and liveness["liveness_id"]=="portfolio-core-workflow-liveness-v1","workflow liveness policy identity mismatch")
     req(liveness["authority_class"]=="NONE" and liveness["dispatch_authority_effect"]=="NONE","workflow liveness recovery widened authority")
     req(liveness["hard_stop_behavior"]=="NONPAID_RECOVERY_CONTINUES","workflow liveness paid/non-paid separation drifted")
-    req(any(row["admission_domain"]=="WORKLOAD" for row in liveness["targets"]),"workflow liveness lacks non-paid workload recovery")
-    req(any(row["admission_domain"]=="COST_WRAPPER" for row in liveness["targets"]),"workflow liveness lacks paid-wrapper recovery target")
+    req(all(row["admission_domain"]=="WORKLOAD" for row in liveness["targets"]),"core workflow liveness unexpectedly depends on paid admission")
+    runtime_liveness=next(row for row in liveness["targets"] if row["workflow_name"]=="runtime-hourly-sync")
+    req(runtime_liveness["admission_workflow_id"]=="runtime-worker" and runtime_liveness["admission_job_id"]=="runtime-sync","runtime sync liveness scope drifted")
     req(1<=liveness["max_dispatches_per_cycle"]<=2 and 1<=liveness["max_history_pages"]<=5,"workflow liveness recovery bounds invalid")
     recovery_names={row["workflow_name"] for row in liveness["targets"]}
     req(recovery_names<=set(expected),"workflow liveness recovery target is not an approved recurring workflow")
