@@ -40,6 +40,8 @@ jobs:
         run: python -m runtime.validate_runtime
       - name: Validate Step 9 autonomous Hunter
         run: python -m hunting.validate_hunter
+      - name: Validate owner license admission
+        run: python -m hunting.validate_license_admission --output hunting/out/license_admission_receipt.json
       - name: Validate Step 10 continuous learning
         run: python -m learning.validate_learning
       - name: Validate Step 11 highest-value uncertainty
@@ -93,5 +95,12 @@ jobs:
         with:
           name: portfolio-step24-canary-${{ github.sha }}
           path: canary/out/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload license admission controls
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-admission-${{ github.sha }}
+          path: hunting/out/license_admission_receipt.json
           if-no-files-found: error
           retention-days: 30
