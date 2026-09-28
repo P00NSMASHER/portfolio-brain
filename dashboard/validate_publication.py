@@ -112,6 +112,8 @@ def validate_publication() -> dict[str, object]:
     require('if [[ "$GITHUB_EVENT_NAME" == "push" ]]' in workflow, "source-change publication override missing")
     require("Verify deployed source commit" in workflow and "source-commit.txt" in workflow, "end-to-end Pages deployment proof missing")
     require("Brain improvements worth considering" in html_text and "IMPROVE NEXT · EVIDENCE BACKED" in html_text, "public recommended upgrades board missing")
+    require("Run in ChatGPT" in html_text and "Build SKU-001" in html_text and "https://chatgpt.com/?prompt=" in html_text, "public action-button UX missing")
+    require("Refresh Brain" in html_text and "Run Scheduler" in html_text and "Run Hunter" in html_text, "public workflow action links missing")
     require("Verified cash, not activity." in html_text, "public revenue-first operator focus missing")
     require("MICRO-PRODUCT FACTORY · BOUNDED BETS" in html_text and "Answer-to-Earn Quiz Kit" in html_text, "public micro-product factory missing")
     require(html_text.index("Verified cash, not activity.") < html_text.index("FIX FIRST · SYSTEM DIAGNOSTICS") < html_text.index("MICRO-PRODUCT FACTORY · BOUNDED BETS") < html_text.index("IMPROVE NEXT · EVIDENCE BACKED") < html_text.index('class="grid kpis"'), "public revenue-first hierarchy drifted")

@@ -16,6 +16,7 @@ import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from commercial_evidence.state import load_current as load_commercial_observation, project_current as project_commercial_observation
 from dashboard.executive_dashboard import build_dashboard_snapshot
@@ -903,6 +904,21 @@ def _e(value: Any) -> str:
 def _badge(text: str, tone: str = "neutral") -> str:
     return f'<span class="badge {tone}">{_e(text)}</span>'
 
+def _chatgpt_action_link(prompt: str) -> str:
+    # ChatGPT currently accepts prompt-prefill links, but external links do not
+    # receive execution authority from this read-only dashboard.
+    return "https://chatgpt.com/?prompt=" + quote(prompt, safe="")
+
+def _github_workflow_link(workflow: str) -> str:
+    allowed = {
+        "command-center-pages.yml",
+        "portfolio-autonomous-scheduler.yml",
+        "hunter-autonomous-cycle.yml",
+    }
+    if workflow not in allowed:
+        raise ValueError("workflow link is not allowlisted")
+    return "https://github.com/P00NSMASHER/portfolio-brain/actions/workflows/" + workflow
+
 
 def _status_tone(value: str) -> str:
     upper = value.upper()
@@ -1056,7 +1072,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
         f'''<article class="repair-item">
           <div class="repair-item-head"><span class="repair-index">{index:02d}</span><div><h3>{_e(issue['title'])}</h3><p>{_e(issue['detail'])}</p></div>{_badge(issue['severity'], 'bad' if issue['severity']=='HIGH' else 'warn')}</div>
           <div class="repair-source">Evidence · <code>{_e(issue['evidence_ref'])}</code></div>
-          <details class="repair-details"><summary>View repair prompt</summary><div class="repair-prompt"><p id="repair-prompt-{index}">{_e(issue['prompt'])}</p><button type="button" class="copy-repair" data-copy-target="repair-prompt-{index}">Copy prompt</button></div></details>
+          <details class="repair-details"><summary>View repair action</summary><div class="repair-prompt"><p id="repair-prompt-{index}">{_e(issue['prompt'])}</p><a class="action-link" href="{_e(_chatgpt_action_link(issue['prompt']))}" target="_blank" rel="noopener noreferrer">Fix in ChatGPT</a></div></details>
         </article>'''
         for index, issue in enumerate(repair_issues, 1)
     ) or '<p class="repair-empty">No defects detected in this snapshot. This is not a guarantee of complete operation; inspect the evidence age and recent end-to-end receipts.</p>'
@@ -1064,7 +1080,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
         f'''<article class="repair-item upgrade-item">
           <div class="repair-item-head"><span class="repair-index">{index:02d}</span><div><h3>{_e(upgrade['title'])}</h3><p>{_e(upgrade['detail'])}</p></div>{_badge(upgrade['priority'], 'warn' if upgrade['priority']=='HIGH VALUE' else 'neutral')}</div>
           <div class="repair-source">Evidence · <code>{_e(upgrade['evidence_ref'])}</code></div>
-          <details class="repair-details"><summary>View upgrade prompt</summary><div class="repair-prompt"><p id="upgrade-prompt-{index}">{_e(upgrade['prompt'])}</p><button type="button" class="copy-repair" data-copy-target="upgrade-prompt-{index}">Copy prompt</button></div></details>
+          <details class="repair-details"><summary>View upgrade action</summary><div class="repair-prompt"><p id="upgrade-prompt-{index}">{_e(upgrade['prompt'])}</p><a class="action-link" href="{_e(_chatgpt_action_link(upgrade['prompt']))}" target="_blank" rel="noopener noreferrer">Run in ChatGPT</a></div></details>
         </article>'''
         for index, upgrade in enumerate(recommended_upgrades, 1)
     ) or '<p class="repair-empty">No upgrade recommendations are currently generated from this snapshot.</p>'
@@ -1075,7 +1091,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
           <div class="product-card-top"><span class="product-rank">#{sku["rank"]:02d}</span><div><h3>{_e(sku["name"])}</h3><p>{_e(sku["buyer_problem"])}</p></div>{_badge(sku["status"], "good" if sku["status"]=="READY" else "neutral")}</div>
           <div class="product-stats"><span><small>Format</small><strong>{_e(sku["format"])}</strong></span><span><small>Price test</small><strong>${sku["price_usd"]:.2f}</strong></span><span><small>Source</small><strong>{_e(sku["reuse_source"])}</strong></span></div>
           <p class="product-boundary"><strong>Boundary:</strong> {_e(sku["reuse_boundary"])}</p>
-          <details class="repair-details"><summary>Build prompt</summary><div class="repair-prompt"><p id="sku-prompt-{sku["sku_id"]}">{_e(sku["build_prompt"])}</p><button type="button" class="copy-repair" data-copy-target="sku-prompt-{sku["sku_id"]}">Copy prompt</button></div></details>
+          <details class="repair-details"><summary>Build action</summary><div class="repair-prompt"><p id="sku-prompt-{sku["sku_id"]}">{_e(sku["build_prompt"])}</p><a class="action-link primary-action" href="{_e(_chatgpt_action_link(sku['build_prompt']))}" target="_blank" rel="noopener noreferrer">Build {_e(sku["sku_id"])}</a></div></details>
         </article>'''
         for sku in ranked_skus
     )
@@ -2022,6 +2038,14 @@ li{{margin:.45rem 0;line-height:1.42}}
 .upgrade-board .repair-index,.upgrade-board .repair-details summary{{color:#c6b0ff}}
 .upgrade-board .repair-source code{{color:#bda7ff}}
 .upgrade-board .copy-repair{{background:#b99cff;color:#151020}}
+.action-link,.header-action{{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;cursor:pointer;border:0;border-radius:10px;font-weight:700;transition:transform .16s ease,opacity .16s ease}}
+.action-link{{margin-top:10px;padding:9px 12px;background:var(--blue);color:white;font-size:.72rem;box-shadow:0 6px 18px rgba(0,113,227,.18)}}
+.action-link:hover,.header-action:hover{{transform:translateY(-1px);opacity:.92}}
+.primary-action{{background:linear-gradient(135deg,var(--blue),var(--blue-2))}}
+.large-action{{width:100%;padding:11px 14px;font-size:.78rem}}
+.header-action{{padding:8px 11px;background:var(--surface-soft);border:1px solid var(--line);color:var(--text);font-size:.7rem;white-space:nowrap}}
+.actions{{display:flex;gap:7px;flex-wrap:wrap;align-items:center}}
+@media(max-width:700px){{.header-action{{font-size:.66rem;padding:7px 9px}}.actions{{justify-content:flex-start}}.topbar .actions{{width:100%}}}}
 .upgrade-item{{background:rgba(28,24,60,.72);border-color:rgba(184,156,255,.18)}}
 section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
 #live-state{{background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--blue) 4%,var(--surface-solid)))}}
@@ -2238,8 +2262,10 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
       <div class="hero-badges">{_badge(system["functional_status"], _status_tone(system["functional_status"]))} {_badge(revenue_focus["truth_state"], "good" if revenue_focus["truth_state"]=="EARNING" else "warn")} {_badge("READ ONLY", "neutral")}</div>
     </div>
     <div class="actions">
-      <button type="button" onclick="location.reload()">Refresh</button>
-      <button type="button" onclick="navigator.clipboard && navigator.clipboard.writeText(document.getElementById('snapshotHash').textContent)">Copy hash</button>
+      <button type="button" onclick="location.reload()">Refresh page</button>
+      <a class="header-action" href="{_e(_github_workflow_link('command-center-pages.yml'))}" target="_blank" rel="noopener noreferrer">Refresh Brain</a>
+      <a class="header-action" href="{_e(_github_workflow_link('portfolio-autonomous-scheduler.yml'))}" target="_blank" rel="noopener noreferrer">Run Scheduler</a>
+      <a class="header-action" href="{_e(_github_workflow_link('hunter-autonomous-cycle.yml'))}" target="_blank" rel="noopener noreferrer">Run Hunter</a>
     </div>
   </header>
 
@@ -2269,7 +2295,7 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
         <h2>{_e(next_sku["sku_id"])} · {_e(next_sku["name"])}</h2>
         <p>{_e(next_sku["buyer_problem"])}</p>
         <div class="focus-next-price"><span>Price test</span><strong>${next_sku["price_usd"]:.2f}</strong></div>
-        <div class="repair-prompt compact-prompt"><p id="{next_sku_prompt_id}">{_e(next_sku["build_prompt"])}</p><button type="button" class="copy-repair" data-copy-target="{next_sku_prompt_id}">Copy build prompt</button></div>
+        <div class="repair-prompt compact-prompt"><p id="{next_sku_prompt_id}">{_e(next_sku["build_prompt"])}</p><a class="action-link primary-action large-action" href="{_e(_chatgpt_action_link(next_sku['build_prompt']))}" target="_blank" rel="noopener noreferrer">Build {_e(next_sku["sku_id"])} in ChatGPT</a></div>
       </article>
     </div>
   </section>
@@ -2277,7 +2303,7 @@ section{{scroll-margin-top:calc(var(--nav-h) + 18px);margin-top:18px!important}}
   <section class="repair-board" id="repair-board" aria-labelledby="repair-title" data-as-of="{_e(publication.get('generated_at') or source_bundle.get('generated_at') or '')}">
     <div class="repair-head"><div><div class="repair-kicker"><span class="repair-pulse"></span> FIX FIRST · SYSTEM DIAGNOSTICS</div><h2 id="repair-title">What is actually broken?</h2><p>Only evidence-backed defects belong here. Green infrastructure never substitutes for revenue.</p></div><div class="repair-count"><strong>{len(repair_issues)}</strong><span>snapshot issues</span></div></div>
     <div class="repair-meta"><span>{_badge(system['functional_status'], _status_tone(system['functional_status']))}</span><span>Published <time>{_e(publication.get('generated_at') or 'validation preview')}</time></span><span>Source <code>{_e((publication.get('source_commit') or 'not stamped')[:12])}</code></span><span>Evidence captured <time>{_e(source_bundle.get('generated_at') or 'unknown')}</time></span><span id="snapshot-age" role="status">Checking publication age…</span></div>
-    <article class="repair-item publication-stale" id="publication-stale" hidden><div class="repair-item-head"><span class="repair-index">!</span><div><h3>Published view is out of date</h3><p id="publication-age-detail">The latest run may differ from this snapshot.</p></div>{_badge('CHECK NOW', 'warn')}</div><details class="repair-details"><summary>View repair prompt</summary><div class="repair-prompt"><p id="publication-repair-prompt">Audit the latest P00NSMASHER/portfolio-brain Pages workflow and its durable state bridge against current main. The public dashboard snapshot is older than the expected hourly refresh window or has no timestamp. Check the newest run, artifact continuity, publication gate and deployment status. Repair the root cause on a branch and verify a fresh published snapshot with valid source receipts. Do not change the cost ceiling, authority gates or tests to force green.</p><button type="button" class="copy-repair" data-copy-target="publication-repair-prompt">Copy prompt</button></div></details></article>
+    <article class="repair-item publication-stale" id="publication-stale" hidden><div class="repair-item-head"><span class="repair-index">!</span><div><h3>Published view is out of date</h3><p id="publication-age-detail">The latest run may differ from this snapshot.</p></div>{_badge('CHECK NOW', 'warn')}</div><details class="repair-details"><summary>View repair prompt</summary><div class="repair-prompt"><p id="publication-repair-prompt">Audit the latest P00NSMASHER/portfolio-brain Pages workflow and its durable state bridge against current main. The public dashboard snapshot is older than the expected hourly refresh window or has no timestamp. Check the newest run, artifact continuity, publication gate and deployment status. Repair the root cause on a branch and verify a fresh published snapshot with valid source receipts. Do not change the cost ceiling, authority gates or tests to force green.</p><a class="action-link" href="{_e(_chatgpt_action_link('Audit the latest P00NSMASHER/portfolio-brain Pages workflow and its durable state bridge against current main. The public dashboard snapshot is older than the expected hourly refresh window or has no timestamp. Check the newest run, artifact continuity, publication gate and deployment status. Repair the root cause on a branch and verify a fresh published snapshot with valid source receipts. Do not change the cost ceiling, authority gates or tests to force green.'))}" target="_blank" rel="noopener noreferrer">Fix in ChatGPT</a></div></details></article>
     <div class="repair-list">{repair_cards}</div>
     <p class="repair-foot">A healthy badge reflects only checks supported by this snapshot. A heartbeat check alone does not prove useful work. No action runs from this public page.</p>
   </section>
@@ -2649,16 +2675,7 @@ function updatePublicationAge() {{
 }}
 updatePublicationAge();
 document.addEventListener("visibilitychange", function() {{ if (!document.hidden) updatePublicationAge(); }});
-document.querySelectorAll(".copy-repair").forEach(function(button) {{
-  button.addEventListener("click", function() {{
-    const target = document.getElementById(button.dataset.copyTarget);
-    if (!target || !navigator.clipboard) return;
-    navigator.clipboard.writeText(target.textContent).then(function() {{
-      button.textContent = "Copied";
-      setTimeout(function() {{ button.textContent = "Copy prompt"; }}, 1800);
-    }});
-  }});
-}});
+
 </script>
 </body>
 </html>
