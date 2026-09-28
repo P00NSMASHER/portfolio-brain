@@ -26,13 +26,24 @@ def compare_payload(old, new, *, ahead_by=1, files=None, **overrides):
     return payload
 
 class FakeGitHub:
-    def __init__(self, head, compare=None):
+    def __init__(self, head, compare=None, *, compare_pages=None, git_commits=None, trees=None):
         self.head=head; self.compare=compare or {}; self.urls=[]
+        self.compare_pages=compare_pages or {}
+        self.git_commits=git_commits or {}; self.trees=trees or {}
     def __call__(self,url):
         self.urls.append(url)
+        if "/git/commits/" in url:
+            sha=url.rsplit("/",1)[1]
+            return {"sha":sha,"tree":{"sha":self.git_commits[sha]}}
+        if "/git/trees/" in url:
+            tree_sha=url.rsplit("/",1)[1].split("?",1)[0]
+            return self.trees[tree_sha]
         if "/commits/" in url:
             return {"sha":self.head}
         if "/compare/" in url:
+            if self.compare_pages:
+                page=int(url.rsplit("page=",1)[1].split("&",1)[0])
+                return self.compare_pages[page]
             return self.compare
         raise AssertionError(url)
 
@@ -132,12 +143,56 @@ class ReadOnlyAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(AdapterError,"not a fast-forward"):
             observe_repository(BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},fetch_json=fake,observed_at="2026-09-25T16:00:00Z")
 
-    def test_github_compare_file_cap_fails_closed(self):
-        old="a"*40; new="b"*40
-        files=[{"filename":f"f{i}.py","status":"modified","additions":1,"deletions":0,"changes":1} for i in range(300)]
-        fake=FakeGitHub(new,compare_payload(old,new,files=files))
-        with self.assertRaisesRegex(AdapterError,"300-file"):
-            observe_repository(BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},fetch_json=fake,observed_at="2026-09-25T16:00:00Z")
+    def test_github_compare_file_cap_uses_complete_tree_delta(self):
+        old="a"*40; new="b"*40; base_tree="c"*40; head_tree="d"*40
+        boundary=[{"filename":f"f{i}.py","status":"modified","additions":1,"deletions":0,"changes":1} for i in range(300)]
+        base_entries=[
+            {"path":"shared.py","type":"blob","mode":"100644","sha":"1"*40},
+            *[{"path":f"removed/f{i}.py","type":"blob","mode":"100644","sha":f"{i+2:040x}"} for i in range(699)],
+        ]
+        head_entries=[
+            {"path":"shared.py","type":"blob","mode":"100644","sha":"e"*40},
+            *[{"path":f"added/f{i}.py","type":"blob","mode":"100644","sha":f"{i+1000:040x}"} for i in range(11)],
+        ]
+        fake=FakeGitHub(
+            new,compare_payload(old,new,files=boundary),
+            git_commits={old:base_tree,new:head_tree},
+            trees={
+                base_tree:{"sha":base_tree,"truncated":False,"tree":base_entries},
+                head_tree:{"sha":head_tree,"truncated":False,"tree":head_entries},
+            },
+        )
+        receipt=observe_repository(
+            BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},
+            fetch_json=fake,observed_at="2026-09-25T16:00:00Z",
+        )
+        comp=receipt["compare"]
+        self.assertEqual(comp["comparison_method"],"TREE_DELTA_FALLBACK")
+        self.assertTrue(comp["files_complete"])
+        self.assertFalse(comp["files_materialized"])
+        self.assertEqual(comp["changed_file_count"],711)
+        self.assertEqual(comp["file_change_counts"],{"added":11,"removed":699,"modified":1})
+        self.assertEqual(comp["files"],[])
+        self.assertRegex(comp["file_manifest_hash"],r"^sha256:[0-9a-f]{64}$")
+        self.assertEqual(comp["tree_proof"],{"base_tree_sha":base_tree,"head_tree_sha":head_tree})
+        self.assertEqual(receipt["network_reads"],6)
+
+    def test_github_compare_file_cap_still_fails_closed_on_truncated_tree(self):
+        old="a"*40; new="b"*40; base_tree="c"*40; head_tree="d"*40
+        boundary=[{"filename":f"f{i}.py","status":"modified","additions":1,"deletions":0,"changes":1} for i in range(300)]
+        fake=FakeGitHub(
+            new,compare_payload(old,new,files=boundary),
+            git_commits={old:base_tree,new:head_tree},
+            trees={
+                base_tree:{"sha":base_tree,"truncated":True,"tree":[]},
+                head_tree:{"sha":head_tree,"truncated":False,"tree":[]},
+            },
+        )
+        with self.assertRaisesRegex(AdapterError,"truncated"):
+            observe_repository(
+                BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},
+                fetch_json=fake,observed_at="2026-09-25T16:00:00Z",
+            )
 
     def test_heads_and_cursors_require_canonical_lowercase_sha(self):
         with self.assertRaisesRegex(AdapterError,"lowercase"):
@@ -164,11 +219,41 @@ class ReadOnlyAdapterTests(unittest.TestCase):
                     fetch_json=FakeGitHub(new,payload),observed_at="2026-09-25T16:00:00Z",
                 )
 
-    def test_github_compare_commit_cap_fails_closed(self):
+    def test_github_compare_long_history_is_verified_with_pagination(self):
         old="a"*40; new="b"*40
-        fake=FakeGitHub(new,compare_payload(old,new,ahead_by=250))
-        with self.assertRaisesRegex(AdapterError,"250-commit"):
-            observe_repository(BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},fetch_json=fake,observed_at="2026-09-25T16:00:00Z")
+        shas=[f"{index:040x}" for index in range(1,250)] + [new]
+        def page(chunk, *, files=None):
+            payload=compare_payload(old,new,ahead_by=250,files=files or [])
+            payload["commits"]=[{"sha":sha} for sha in chunk]
+            return payload
+        pages={
+            1:page(shas[:100],files=[{"filename":"a.py","status":"modified","additions":2,"deletions":1,"changes":3}]),
+            2:page(shas[100:200]),
+            3:page(shas[200:]),
+        }
+        fake=FakeGitHub(new,compare_pages=pages)
+        receipt=observe_repository(
+            BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},
+            fetch_json=fake,observed_at="2026-09-25T16:00:00Z",
+        )
+        self.assertEqual(receipt["status"],"CHANGED")
+        self.assertEqual(receipt["compare"]["total_commits"],250)
+        self.assertEqual(receipt["compare"]["files"][0]["path"],"a.py")
+        self.assertEqual(receipt["network_reads"],4)
+
+    def test_github_compare_commit_pagination_fails_closed_if_page_ends_early(self):
+        old="a"*40; new="b"*40
+        shas=[f"{index:040x}" for index in range(1,121)]
+        def page(chunk):
+            payload=compare_payload(old,new,ahead_by=250)
+            payload["commits"]=[{"sha":sha} for sha in chunk]
+            return payload
+        fake=FakeGitHub(new,compare_pages={1:page(shas[:100]),2:page(shas[100:])})
+        with self.assertRaisesRegex(AdapterError,"pagination ended"):
+            observe_repository(
+                BASE_ADAPTER,{"source_ref":"main","cursor_sha":old},
+                fetch_json=fake,observed_at="2026-09-25T16:00:00Z",
+            )
 
     def test_compare_file_metadata_is_validated_before_persistence(self):
         old="a"*40; new="b"*40
