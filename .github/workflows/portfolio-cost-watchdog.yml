@@ -52,6 +52,13 @@ jobs:
           python -m operations.workflow_liveness
           --state cost_governor/live/cost_state.json
           --output operations/out/workflow_liveness_receipt.json
+      - name: Upload validated cost-state continuity
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-cost-governor-state
+          path: cost_governor/live/cost_state.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload sanitized workflow liveness receipt
         if: ${{ always() && hashFiles('operations/out/workflow_liveness_receipt.json') != '' }}
         uses: actions/upload-artifact@v4
