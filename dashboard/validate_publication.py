@@ -108,6 +108,7 @@ def validate_publication() -> dict[str, object]:
     require("Paid Cost Governor" in html_text and "GitHub Workload Controls" in html_text, "public paid/workload separation missing")
     workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text(encoding="utf-8")
     require("\n  push:\n" in workflow and "      - main" in workflow, "Pages is not auto-triggered by relevant main pushes")
+    require("\n  workflow_run:\n" in workflow and '      - "portfolio-autonomous-scheduler"' in workflow and "    types: [completed]" in workflow, "Pages is not coupled to durable scheduler completion")
     require("Stamp publication provenance" in workflow, "Pages publication provenance stamp missing")
     require('if [[ "$GITHUB_EVENT_NAME" == "push" ]]' in workflow, "source-change publication override missing")
     require("Verify deployed source commit" in workflow and "source-commit.txt" in workflow, "end-to-end Pages deployment proof missing")
