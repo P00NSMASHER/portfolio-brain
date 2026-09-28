@@ -421,6 +421,7 @@ def classify_candidate(state,fp,structural,policy=None):
 def experiment_proposal(finding):
     seed={"finding_id":finding["finding_id"],"candidate_fingerprint":finding["candidate_fingerprint"],"gap_id":finding["gap_id"]}
     hid="HEXP-"+hashlib.sha256(canon(seed).encode()).hexdigest()[:20].upper()
+    rights_classification=finding.get("rights",{}).get("rights_classification","NO_LICENSE_NO_REUSE")
     return {
       "schema_version":"1.0.0","proposal_id":hid,"finding_id":finding["finding_id"],"gap_id":finding["gap_id"],
       "project_ids":finding["project_ids"],
@@ -431,7 +432,7 @@ def experiment_proposal(finding):
       "baseline":"No verified reusable capability is currently linked to this gap in Portfolio Brain.",
       "success_condition":"Independent exact-revision inspection confirms the implementation behavior, meaningful tests/negative controls, lawful reuse terms, and a bounded integration path.",
       "failure_condition":"The candidate is README-only, lacks meaningful tests, does not satisfy the capability need, has incompatible rights, or creates unsafe authority expansion.",
-      "evidence_requirements":["Exact source revision","Implementation-level evidence","Meaningful tests or negative controls","License/rights verification",f"Discovery rights classification: {finding['rights']['rights_classification']}; no reuse authority is granted by discovery.","Independent verifier receipt"],
+      "evidence_requirements":["Exact source revision","Implementation-level evidence","Meaningful tests or negative controls","License/rights verification",f"Discovery rights classification: {rights_classification}; no reuse authority is granted by discovery.","Independent verifier receipt"],
       "cost_boundary":"Observation and bounded isolated validation only; no downstream modification.",
       "rollback":"No rollback required because this proposal performs no downstream change."
     }
