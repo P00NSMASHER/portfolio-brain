@@ -211,6 +211,7 @@ def verify_work_proof(target:dict[str,Any],document:Any,*,run_id:int)->dict[str,
             return _proof("INVALID_WORK_PROOF","RUNTIME_SYNC_NO_SUBSTANTIVE_OBSERVATION")
         return _proof("VERIFIED_WORK","RUNTIME_SYNC_RECEIPT",{
           "observations":len(observations),"api_requests":document["api_requests"],
+          "cycle_id":document["cycle_id"],"finished_at":document["finished_at"],
         })
 
     if kind=="HUNTER_CYCLE":
