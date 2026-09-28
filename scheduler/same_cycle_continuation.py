@@ -96,6 +96,7 @@ def _combined_summary(
     at:str,
     primary_attempted:int,
     continuation_selected:int,
+    continuation_pass_count:int,
 )->dict[str,Any]:
     summary={
         "schema_version":"1.0.0",
@@ -110,6 +111,7 @@ def _combined_summary(
         "primary_attempted_count":primary_attempted,
         "continuation_selected_count":continuation_selected,
         "continuation_attempted_count":len(receipts)-primary_attempted,
+        "continuation_pass_count":continuation_pass_count,
         "authority_granted":False,
     }
     summary["receipt_hash"]=hashv(summary)
@@ -134,7 +136,7 @@ def run_same_cycle_continuation(
     cfg=policy["same_cycle_continuation"]
     req(cfg["enabled"] is True,"same-cycle continuation disabled")
     req(cfg["continuation_class"]=="HUNTER_PROPOSAL_REVIEW","same-cycle continuation class drifted")
-    req(cfg["max_passes"]==1,"same-cycle continuation pass count widened")
+    req(cfg["max_passes"]==2,"same-cycle continuation pass count drifted")
     req(cfg["authority_class"]=="OBSERVE","same-cycle continuation authority widened")
     req(cfg["reuse_spare_capacity_only"] is True,"same-cycle continuation spare-capacity boundary disabled")
     req(type(max_items) is int and 0<=max_items<=policy["max_new_work_per_cycle"],"same-cycle max_items outside scheduler bound")
@@ -145,75 +147,134 @@ def run_same_cycle_continuation(
 
     at=at or now_iso()
     primary_attempted=len(primary_receipts)
-    remaining=max_items-primary_attempted
+    initial_spare=max_items-primary_attempted
     open_work=[row for row in state["work_items"] if row["state"] in {"QUEUED","ACTIVE"}]
 
     base_report={
         "schema_version":"1.0.0",
         "policy":"HUNTER_PROPOSAL_REVIEW_SPARE_CAPACITY_ONLY",
         "max_total_attempts":max_items,
+        "max_passes":cfg["max_passes"],
         "primary_attempted_count":primary_attempted,
-        "spare_capacity":remaining,
+        "spare_capacity":initial_spare,
         "authority_granted":False,
     }
-    if remaining<=0:
-        return state,primary_receipts,primary_executed,primary_summary,{**base_report,"status":"NO_SPARE_CAPACITY","selected_count":0,"attempted_count":0,"completed_count":0},[]
+    if initial_spare<=0:
+        return state,primary_receipts,primary_executed,primary_summary,{
+            **base_report,"status":"NO_SPARE_CAPACITY","pass_count":0,"passes":[],
+            "selected_count":0,"attempted_count":0,"completed_count":0,"deferred_count":0,
+            "unused_capacity":0,
+        },[]
     if open_work:
-        return state,primary_receipts,primary_executed,primary_summary,{**base_report,"status":"SKIPPED_PRIMARY_QUEUE_NOT_DRAINED","selected_count":0,"attempted_count":0,"completed_count":0},[]
+        return state,primary_receipts,primary_executed,primary_summary,{
+            **base_report,"status":"SKIPPED_PRIMARY_QUEUE_NOT_DRAINED","pass_count":0,"passes":[],
+            "selected_count":0,"attempted_count":0,"completed_count":0,"deferred_count":0,
+            "unused_capacity":initial_spare,
+        },[]
 
     context=build_context(hunter_proposal_state=hunter_proposal_state)
-    scheduled,schedule_receipt=schedule_cycle(
-        state,
-        context,
-        at=at,
-        candidate_filter=is_hunter_proposal_continuation,
-        max_new_items=remaining,
-    )
-    selected=schedule_receipt["selected_work"]
-    req(all(is_hunter_proposal_continuation(row) for row in selected),"same-cycle scheduler selected non-Hunter continuation work")
-    if not selected:
-        return state,primary_receipts,primary_executed,primary_summary,{**base_report,"status":"NO_ELIGIBLE_CONTINUATION","selected_count":0,"attempted_count":0,"completed_count":0},[]
-
     overrides={"hunter_proposal_state":hunter_proposal_state}
     if context_overrides:
         overrides.update(context_overrides)
-    updated,secondary_receipts,secondary_executed,_=execute_cycle(
-        scheduled,
-        runtime_state=runtime_state,
-        hunter_state=hunter_state,
-        max_items=remaining,
-        worker_instance_id=worker_instance_id,
-        at=at,
-        context_overrides=overrides,
-    )
-    req(len(secondary_receipts)<=remaining,"same-cycle continuation exceeded spare capacity")
-    req(all(
-        any(row["scheduler_work_id"]==receipt["scheduler_work_id"] for row in selected)
-        for receipt in secondary_receipts
-    ),"same-cycle executor attempted work outside continuation selection")
 
-    merged_receipts=[*primary_receipts,*secondary_receipts]
-    merged_executed=[*primary_executed,*secondary_executed]
-    req(len(merged_receipts)<=max_items,"same-cycle total attempts exceeded scheduler cycle bound")
+    current_state=json.loads(json.dumps(state))
+    merged_receipts=list(primary_receipts)
+    merged_executed=list(primary_executed)
+    all_selected:list[dict[str,Any]]=[]
+    pass_reports:list[dict[str,Any]]=[]
+    stop_reason=None
+
+    for pass_index in range(1,cfg["max_passes"]+1):
+        remaining=max_items-len(merged_receipts)
+        if remaining<=0:
+            stop_reason="ATTEMPT_CEILING_REACHED"
+            break
+        if any(row["state"] in {"QUEUED","ACTIVE"} for row in current_state["work_items"]):
+            stop_reason="CONTINUATION_QUEUE_NOT_DRAINED"
+            break
+
+        scheduled,schedule_receipt=schedule_cycle(
+            current_state,
+            context,
+            at=at,
+            candidate_filter=is_hunter_proposal_continuation,
+            max_new_items=remaining,
+        )
+        selected=schedule_receipt["selected_work"]
+        req(all(is_hunter_proposal_continuation(row) for row in selected),"same-cycle scheduler selected non-Hunter continuation work")
+        req(len(selected)<=policy["max_open_work_per_agent"],"same-cycle continuation exceeded per-agent open-work ceiling")
+        if not selected:
+            stop_reason="NO_ELIGIBLE_CONTINUATION"
+            break
+
+        updated,secondary_receipts,secondary_executed,_=execute_cycle(
+            scheduled,
+            runtime_state=runtime_state,
+            hunter_state=hunter_state,
+            max_items=remaining,
+            worker_instance_id=f"{worker_instance_id}:pass-{pass_index}",
+            at=at,
+            context_overrides=overrides,
+        )
+        req(len(secondary_receipts)<=remaining,"same-cycle continuation exceeded spare capacity")
+        req(all(
+            any(row["scheduler_work_id"]==receipt["scheduler_work_id"] for row in selected)
+            for receipt in secondary_receipts
+        ),"same-cycle executor attempted work outside continuation selection")
+
+        pass_reports.append({
+            "pass_index":pass_index,
+            "selected_count":len(selected),
+            "attempted_count":len(secondary_receipts),
+            "completed_count":len(secondary_executed),
+            "deferred_count":sum(1 for row in secondary_receipts if row.get("status")=="DEFERRED"),
+            "proposal_ids":[row["source_ref"] for row in selected],
+            "execution_ids":[row["execution_id"] for row in secondary_receipts],
+            "receipt_hashes":[row["receipt_hash"] for row in secondary_receipts],
+        })
+        all_selected.extend(selected)
+        merged_receipts.extend(secondary_receipts)
+        merged_executed.extend(secondary_executed)
+        current_state=updated
+
+        req(len(merged_receipts)<=max_items,"same-cycle total attempts exceeded scheduler cycle bound")
+        if any(row.get("status")=="DEFERRED" for row in secondary_receipts):
+            stop_reason="DEFERRED_CONTINUATION_STOPS_FURTHER_PASSES"
+            break
+
+    if not pass_reports:
+        return state,primary_receipts,primary_executed,primary_summary,{
+            **base_report,"status":"NO_ELIGIBLE_CONTINUATION","pass_count":0,"passes":[],
+            "selected_count":0,"attempted_count":0,"completed_count":0,"deferred_count":0,
+            "unused_capacity":initial_spare,"stop_reason":stop_reason or "NO_ELIGIBLE_CONTINUATION",
+        },[]
+
     summary=_combined_summary(
         merged_receipts,
-        updated,
+        current_state,
         at=at,
         primary_attempted=primary_attempted,
-        continuation_selected=len(selected),
+        continuation_selected=len(all_selected),
+        continuation_pass_count=len(pass_reports),
     )
-    validate_scheduler_state(updated)
+    validate_scheduler_state(current_state)
+    continuation_receipts=merged_receipts[primary_attempted:]
+    continuation_executed=merged_executed[len(primary_executed):]
     report={
         **base_report,
         "status":"EXECUTED",
-        "selected_count":len(selected),
-        "attempted_count":len(secondary_receipts),
-        "completed_count":len(secondary_executed),
-        "deferred_count":sum(1 for row in secondary_receipts if row.get("status")=="DEFERRED"),
+        "pass_count":len(pass_reports),
+        "passes":pass_reports,
+        "selected_count":len(all_selected),
+        "attempted_count":len(continuation_receipts),
+        "completed_count":len(continuation_executed),
+        "deferred_count":sum(1 for row in continuation_receipts if row.get("status")=="DEFERRED"),
         "remaining_queued_count":summary["remaining_queued_count"],
-        "proposal_ids":[row["source_ref"] for row in selected],
+        "unused_capacity":max_items-len(merged_receipts),
+        "stop_reason":stop_reason,
+        "proposal_ids":[row["source_ref"] for row in all_selected],
     }
-    return updated,merged_receipts,merged_executed,summary,report,selected
+    return current_state,merged_receipts,merged_executed,summary,report,all_selected
 
 
 def main()->None:
