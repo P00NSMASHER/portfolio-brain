@@ -121,10 +121,15 @@ class OperatingModeTests(unittest.TestCase):
             self.assertIn("exit 1",body,name)
             self.assertNotIn("cost_governor.workflow_gate",body,name)
 
-        for name in ["runtime-worker","model-value-proof"]:
-            body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
-            self.assertIn("steps.cost.outputs.allowed != 'true'",body,name)
-            self.assertIn("exit 1",body,name)
+        runtime=(ROOT/".github/workflows/runtime-worker.yml").read_text().lower()
+        self.assertIn("workload_control.workload_gate preflight",runtime)
+        self.assertIn("cost_governor.workflow_gate preflight",runtime)
+        self.assertIn("steps.admission.outputs.allowed != 'true'",runtime)
+        self.assertIn("exit 1",runtime)
+
+        proof=(ROOT/".github/workflows/model-value-proof.yml").read_text().lower()
+        self.assertIn("steps.cost.outputs.allowed != 'true'",proof)
+        self.assertIn("exit 1",proof)
 
         factory=(ROOT/".github/workflows/software-factory-candidate.yml").read_text().lower()
         self.assertIn("workload_control.workload_gate preflight",factory)

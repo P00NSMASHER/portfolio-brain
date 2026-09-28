@@ -165,6 +165,30 @@ class CostGovernorTests(unittest.TestCase):
                 )
 
 
+    def test_runtime_sync_and_observe_are_nonpaid_workload_lanes(self):
+        workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text()
+        self.assertIn("workload_control.workload_gate preflight",workflow)
+        self.assertIn("format('portfolio-runtime-{0}', inputs.mode)",workflow)
+        wp=workload_policy()
+        for mode in ("observe","sync"):
+            job=f"runtime-{mode}"
+            decision=evaluate_workload(
+                workflow_id="runtime-worker",
+                job_id=job,
+                estimated_minutes=5,
+            )
+            self.assertEqual(decision["status"],"WORKLOAD_ALLOWED")
+            self.assertEqual(
+                wp["services"][f"runtime-worker::{job}"]["concurrency_group"],
+                f"portfolio-runtime-{mode}",
+            )
+        p=policy()
+        self.assertNotIn("runtime-hourly-sync",p["managed_workflow_names"])
+        self.assertNotIn("runtime-event-observe",p["managed_workflow_names"])
+        self.assertIn("runtime-daily-learning",p["managed_workflow_names"])
+        self.assertIn("runtime-weekly-synthesis",p["managed_workflow_names"])
+
+
     def test_model_value_proof_remains_paid_cost_governed_and_bounded(self):
         workflow=(ROOT/".github/workflows/model-value-proof.yml").read_text()
         self.assertIn("portfolio-cost-governed-autonomy",workflow)

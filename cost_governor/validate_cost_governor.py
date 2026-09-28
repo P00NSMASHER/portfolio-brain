@@ -58,7 +58,7 @@ def validate_cost_governor():
     # GitHub job-count quotas.
     wrapper = make_github_job_request(
         workflow_id="runtime-worker",
-        job_id="runtime-sync",
+        job_id="runtime-daily",
         run_id="step20-validator",
         attempt=1,
         project_ids=["PRJ-000"],
@@ -130,7 +130,7 @@ def validate_cost_governor():
         paid_state,
         make_github_job_request(
             workflow_id="runtime-worker",
-            job_id="runtime-sync",
+            job_id="runtime-daily",
             run_id="step20-after-paid-stop",
             attempt=1,
             project_ids=["PRJ-000"],
@@ -186,6 +186,31 @@ def validate_cost_governor():
         req(wp["services"][f"{workflow_id}::{job_id}"]["concurrency_group"] == group,
             f"{workflow_id} workload policy lane drifted")
 
+    runtime_worker = paid_workflows["runtime-worker"].read_text(encoding="utf-8")
+    req("workload_control.workload_gate preflight" in runtime_worker,
+        "runtime worker missing non-paid workload admission")
+    req("format('portfolio-runtime-{0}', inputs.mode)" in runtime_worker,
+        "runtime worker missing mode-specific non-paid concurrency")
+    for job_id, group in (
+        ("runtime-observe", "portfolio-runtime-observe"),
+        ("runtime-sync", "portfolio-runtime-sync"),
+    ):
+        decision = evaluate_workload(
+            workflow_id="runtime-worker",
+            job_id=job_id,
+            estimated_minutes=5,
+        )
+        req(decision["status"] == "WORKLOAD_ALLOWED",
+            f"{job_id} workload admission failed")
+        req(wp["services"][f"runtime-worker::{job_id}"]["concurrency_group"] == group,
+            f"{job_id} workload concurrency drifted")
+    req("runtime-hourly-sync" not in p["managed_workflow_names"],
+        "paid hard stop still targets non-paid runtime sync")
+    req("runtime-event-observe" not in p["managed_workflow_names"],
+        "paid hard stop still targets non-paid runtime observe")
+    for name in ("runtime-daily-learning", "runtime-weekly-synthesis", "model-value-proof"):
+        req(name in p["managed_workflow_names"], f"paid hard-stop target missing: {name}")
+
     runtime_keys = [
         "runtime-worker::runtime-observe",
         "runtime-worker::runtime-sync",
@@ -237,8 +262,8 @@ def validate_cost_governor():
         "workflow liveness still globally stops on paid hard stop")
     req(any(t["admission_domain"] == "WORKLOAD" for t in liveness["targets"]),
         "workflow liveness lacks workload-domain targets")
-    req(any(t["admission_domain"] == "COST_WRAPPER" for t in liveness["targets"]),
-        "workflow liveness lacks paid-wrapper target")
+    req(all(t["admission_domain"] == "WORKLOAD" for t in liveness["targets"]),
+        "core workflow liveness must recover only non-paid workload targets")
     req("foundation-ci" not in {t["workflow_name"] for t in liveness["targets"]},
         "foundation CI may not be auto-recovered by watchdog")
 
