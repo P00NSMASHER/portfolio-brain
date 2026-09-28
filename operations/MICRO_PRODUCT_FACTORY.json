@@ -60,7 +60,7 @@
       "rank": 2,
       "name": "House Claim System",
       "format": "MODEL",
-      "status": "CANDIDATE",
+      "status": "READY",
       "price_usd": 3.99,
       "buyer_problem": "Roleplay creators need reliable plot claiming, occupancy state and release behavior without writing ownership logic.",
       "reuse_source": "P00NSMASHER/StarBlox compatibility/server/BrookhavenHouseCompat.server.luau",
@@ -72,7 +72,23 @@
         "Pass static QA and contract checks",
         "Build through Rojo development pipeline",
         "Pass Roblox Studio runtime QA before publication"
-      ]
+      ],
+      "artifact_state": "BUILT_STATIC_QA_PASS_RUNTIME_STUDIO_QA_REQUIRED",
+      "artifact_name": "HouseControlsPack.rbxmx",
+      "bundle_name": "House_Controls_Pack_v1.0.zip",
+      "version": "1.0.0",
+      "launch_price_usd": 2.99,
+      "static_validation": "PASS",
+      "runtime_validation": "REQUIRED_BEFORE_PUBLISH",
+      "external_assets": 0,
+      "external_dependencies": 0,
+      "factory": "Roblox Micro-Product Factory v1",
+      "build_evidence": {
+        "artifact_sha256": "32a9734f0d009d9f8188ab4e2ff724face32655f80e3cf6c945c2b842427e9a8",
+        "source_location": "CHAT_ATTACHMENT_ONLY_NOT_GITHUB",
+        "source_code_public": false,
+        "shipped_third_party_code": false
+      }
     },
     {
       "sku_id": "SKU-003",
