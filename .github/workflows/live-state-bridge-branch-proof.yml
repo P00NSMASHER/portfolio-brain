@@ -1,0 +1,159 @@
+name: live-state-bridge-branch-proof
+
+on:
+  push:
+    branches:
+      - step-runtime-state-writer-serialization
+    paths:
+      - ".github/workflows/live-state-bridge-branch-proof.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check existing command-center workload controls
+        id: workload
+        run: >-
+          python -m workload_control.workload_gate preflight
+          --workflow-id command-center-pages
+          --job-id publish
+          --estimated-minutes 5
+      - name: Restore latest durable command-center state
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: >-
+          python -m dashboard.live_state_bridge
+          --output-dir dashboard/live
+          --receipt dashboard/live/state_sources.json
+      - name: Restore exact-run workflow liveness proof
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: >-
+          python -m operations.liveness_artifact_state
+          --output dashboard/live/workflow_liveness_receipt.json
+          --metadata-output dashboard/live/workflow_liveness_restore.json
+      - name: Restore command-center history
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: >-
+          python -m dashboard.history_artifact_state
+          --output dashboard/live/history_state.json
+          --metadata-output dashboard/live/history_restore.json
+      - name: Append sanitized telemetry history
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: >-
+          python -m dashboard.history_state
+          --state dashboard/live/history_state.json
+          --output dashboard/out/history_state.json
+          --public-output dashboard/out/history.json
+          --source-commit "${GITHUB_SHA}"
+      - name: Validate public command center without deploying
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: python -m dashboard.validate_publication
+      - name: Build proof snapshot
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: |
+          mkdir -p proof
+          PORTFOLIO_PUBLICATION_GENERATED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+          PORTFOLIO_PUBLICATION_SOURCE_COMMIT="${GITHUB_SHA}" \
+          PORTFOLIO_PUBLICATION_SOURCE_REF="${GITHUB_REF_NAME}" \
+          PORTFOLIO_PUBLICATION_RUN_ID="${GITHUB_RUN_ID}" \
+          PORTFOLIO_PUBLICATION_RUN_ATTEMPT="${GITHUB_RUN_ATTEMPT}" \
+          PORTFOLIO_PUBLICATION_EVENT="${GITHUB_EVENT_NAME}" \
+          python -m dashboard.command_center --write-html proof/index.html --write-json proof/snapshot.json
+      - name: Prove original six diagnostics cleared
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          sources=json.loads(Path("dashboard/live/state_sources.json").read_text())
+          snapshot=json.loads(Path("proof/snapshot.json").read_text())
+          liveness=json.loads(Path("dashboard/live/workflow_liveness_receipt.json").read_text())
+
+          original={
+            "Agent evidence is stale",
+            "Live state bridge is not current",
+            "Model route is unverified",
+            "Scheduled sync lacks verified work",
+            "Subsystem evidence needs refresh",
+            "Commercial evidence is current but scope-limited",
+          }
+          present={row["title"] for row in snapshot["repair_issues"]}
+          remaining=sorted(original & present)
+
+          assert sources["bridge_status"]=="LIVE", sources
+          required=set(sources["health_sources"]) | set(sources["optional_observability_sources"])
+          assert required==set(sources["sources"]), (required,set(sources["sources"]))
+          for name in sorted(required):
+              row=sources["sources"][name]
+              assert row["status"]=="LIVE", (name,row)
+              assert row["source_kind"]=="GITHUB_ACTIONS_ARTIFACT", (name,row)
+              assert row["restore_status"].startswith("RESTORED"), (name,row)
+              for key in ("artifact_id","source_run_id","source_sequence","source_state_hash","candidates_inspected"):
+                  assert row.get(key) is not None, (name,key,row)
+
+          provider=snapshot["model_router"]["provider_readiness"]
+          assert provider["status"]=="READY", provider
+          assert provider["cost_gate_status"]=="COMMITTED", provider
+          sync=snapshot["telemetry"]["runtime_sync_proof"]
+          assert sync["status"]=="VERIFIED_SYNC_WORK", sync
+          assert liveness["status"]=="HEALTHY_VERIFIED_WORK", liveness
+          assert not remaining, remaining
+
+          receipt={
+            "schema_version":"1.0.0",
+            "proof_id":"portfolio-six-diagnostic-branch-proof-v1",
+            "authority_class":"OBSERVE",
+            "mutation_capability":"NONE",
+            "source_commit":os.environ["GITHUB_SHA"],
+            "source_ref":os.environ["GITHUB_REF_NAME"],
+            "source_run_id":os.environ["GITHUB_RUN_ID"],
+            "bridge_status":sources["bridge_status"],
+            "required_sources": {
+              name: {
+                key:sources["sources"][name].get(key)
+                for key in (
+                  "status","restore_status","artifact_id","source_run_id",
+                  "source_sequence","source_state_hash","candidates_inspected",
+                )
+              }
+              for name in sorted(required)
+            },
+            "provider_status":provider["status"],
+            "provider_cost_gate_status":provider["cost_gate_status"],
+            "sync_proof_status":sync["status"],
+            "sync_proof_source_run_id":sync.get("source_run_id"),
+            "original_diagnostics_remaining":remaining,
+            "repair_issue_count":len(snapshot["repair_issues"]),
+          }
+          Path("proof/e2e_receipt.json").write_text(json.dumps(receipt,indent=2,sort_keys=True)+"\n")
+          print(json.dumps(receipt,sort_keys=True))
+          PY
+      - name: Upload non-deploying proof receipt
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-six-diagnostic-branch-proof-${{ github.sha }}
+          path: |
+            proof/e2e_receipt.json
+            proof/snapshot.json
+            dashboard/live/state_sources.json
+            dashboard/live/workflow_liveness_receipt.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Fail if workload admission blocked proof
+        if: ${{ always() && steps.workload.outputs.allowed != 'true' }}
+        run: |
+          echo "::error title=Branch proof blocked::Workload status: ${{ steps.workload.outputs.decision_status }}"
+          exit 1
