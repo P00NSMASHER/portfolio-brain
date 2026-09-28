@@ -175,16 +175,20 @@ def compare_range(adapter: dict[str,Any], base_sha: str, head_sha: str, fetch_js
              "GitHub compare response is not bound to the requested base SHA")
     _require(isinstance(merge_base_commit,dict) and _exact_sha(merge_base_commit.get("sha"), "GitHub compare merge base is invalid")==base_sha,
              "GitHub compare is not a linear fast-forward from the requested base SHA")
-    _require(isinstance(raw_commits,list), "GitHub compare response missing commits")
-    _require(len(raw_commits)<GITHUB_COMPARE_COMMIT_CAP, "GitHub compare commit list reached the 250-commit completeness boundary")
-    _require(len(raw_commits)==total_commits, "GitHub compare commit list is incomplete or inconsistent")
+    _require(isinstance(raw_commits,list) and raw_commits, "GitHub compare response missing commits")
+    commit_list_complete=len(raw_commits)<GITHUB_COMPARE_COMMIT_CAP
+    if commit_list_complete:
+        _require(len(raw_commits)==total_commits, "GitHub compare commit list is incomplete or inconsistent")
+    else:
+        _require(len(raw_commits)==GITHUB_COMPARE_COMMIT_CAP, "GitHub compare commit cap handling is inconsistent")
+        _require(total_commits>=len(raw_commits), "GitHub compare total commits is smaller than capped commit list")
     commit_shas=[_exact_sha(item.get("sha") if isinstance(item,dict) else None,
                             "GitHub compare commit is missing an exact lowercase SHA") for item in raw_commits]
     _require(len(set(commit_shas))==len(commit_shas), "GitHub compare commit list contains duplicates")
-    _require(commit_shas and commit_shas[-1]==head_sha,
+    _require(commit_shas[-1]==head_sha,
              "GitHub compare response is not bound to the requested head SHA")
     _require(isinstance(raw_files,list), "GitHub compare response missing changed files")
-    if len(raw_files)>=GITHUB_COMPARE_FILE_CAP:
+    if not commit_list_complete or len(raw_files)>=GITHUB_COMPARE_FILE_CAP:
         proof=_tree_snapshot_proof(adapter,base_commit,raw_commits[-1],fetch_json)
         return {
             "compare_status":status,
@@ -192,6 +196,8 @@ def compare_range(adapter: dict[str,Any], base_sha: str, head_sha: str, fetch_js
             "behind_by":behind_by,
             "total_commits":total_commits,
             "comparison_method":"GIT_TREE_SNAPSHOT",
+            "github_compare_commit_count":len(raw_commits),
+            "commit_list_complete":commit_list_complete,
             "github_compare_file_count":len(raw_files),
             "changed_file_count":proof["changed_path_count"],
             "files_complete":False,
