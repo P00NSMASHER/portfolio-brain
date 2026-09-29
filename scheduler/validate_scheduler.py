@@ -42,13 +42,19 @@ def validate_scheduler():
     proposal_review_seed=load_hunter_proposal_review_seed();validate_hunter_proposal_review_state(proposal_review_seed)
     req(proposal_review_seed["reviews"]==[] and proposal_review_seed["applied_execution_ids"]==[],"Hunter proposal review seed invented review evidence")
     context=build_context();state,receipt=schedule_cycle(seed,context,at="2026-09-25T20:40:00Z")
-    selected=receipt["selected_work"];types={w["work_type"] for w in selected}
-    req(3<=len(selected)<=p["max_new_work_per_cycle"] and {"RESEARCH","HUNT","INTEGRATION"}<=types,"unexpected current selected work")
-    req({"AGT-RESEARCHER","AGT-HUNTER","AGT-PRODUCT-ANALYST"}<={w["assigned_agent_id"] for w in selected},"unexpected current agent assignment")
-    req(receipt["blocked_work"]==[],"adult-only education validation still appears in blocked work")
-    req(not any(w["required_authority"]=="ACT" for w in [*selected,*receipt["blocked_work"]]),"scheduler created ACT work")
-    req(not any(w["work_type"] in {"REPAIR","TEST","VERIFICATION"} for w in selected),"scheduler invented gated repair/test/verification work")
-    req(any(w["work_type"]=="EXPERIMENT" and w["assigned_agent_id"]=="AGT-COMMERCIAL-ANALYST" for w in selected),"bounded commercial experiment prep not queued")
+    selected=receipt["selected_work"]
+    req(1<=len(selected)<=p["max_new_work_per_cycle"],"external-value scheduler selected no bounded work")
+    req(all(w["external_milestone"] in p["external_milestones"] for w in selected),"queued work missing external milestone")
+    req(all(w["value_lane"] in p["value_lane_precedence"] for w in selected),"queued work missing value lane")
+    req(all(w["required_authority"]!="ACT" for w in [*selected,*receipt["blocked_work"]]),"scheduler created ACT work")
+    req(not any(w["work_type"] in {"HUNT","RESEARCH","INTEGRATION"} for w in selected),"supply/internal activity entered queue without explicit external milestone")
+    req(any(w["work_type"]=="EXPERIMENT" and w["assigned_agent_id"]=="AGT-COMMERCIAL-ANALYST" and w["external_milestone"]=="VALIDATE_DEMAND" for w in selected),"bounded demand validation not queued")
+    req(any(w["work_type"]=="TEST" and w["source_ref"] in {"SKU-002","SKU-003"} and w["external_milestone"]=="PUBLISH_PRODUCT" for w in selected),"publish-blocking runtime QA not queued")
+    owner=[w for w in receipt["blocked_work"] if w["source_ref"].startswith("OACT-")]
+    req(len(owner)==1 and owner[0]["external_milestone"]=="PUBLISH_PRODUCT" and owner[0]["value_lane"]=="EXTERNAL_VALUE_BLOCKER","owner publish checkpoint missing")
+    req(receipt["suppressed_no_external_milestone"],"busywork without external milestones was not suppressed")
+    lane=[p["value_lane_precedence"][w["value_lane"]] for w in selected]
+    req(lane==sorted(lane),"value lane precedence did not dominate selection")
     req(len(state["work_items"])==len(selected),"scheduler state did not persist queue")
     wf=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text().lower()
     for token in ["contents: read","actions: read","23 * * * *","portfolio_scheduler_disabled","actions/upload-artifact@v4","cancel-in-progress: false"]:
@@ -104,5 +110,5 @@ def validate_scheduler():
     for forbidden in ["contents: write","pull-requests: write","deployments: write","id-token: write","git push","gh pr","openai","anthropic"]:
         req(forbidden not in wf,f"forbidden scheduler workflow capability: {forbidden}")
     req("git push origin head:main" not in (ROOT/"scheduler/SCHEDULER_CONTRACT.md").read_text().lower(),"upstream direct-main behavior adopted")
-    return {"work_types":7,"selected_current":len(selected),"blocked_approval":0,"queued_agents":len({w["assigned_agent_id"] for w in selected}),"act_work":0,"max_new_per_cycle":p["max_new_work_per_cycle"],"hunter_proposal_handoff":"OBSERVE_RESEARCH","hunter_proposal_backlog_priority":handoff["backlog_priority_mode"],"hunter_proposal_continuation_priority":handoff["continuation_priority_policy"],"same_cycle_hunter_continuation":continuation["enabled"],"hunter_proposal_seed_sequence":proposal_seed["sequence"],"hunter_proposal_review_seed_sequence":proposal_review_seed["sequence"]}
+    return {"work_types":7,"selected_current":len(selected),"blocked_approval":len(receipt["blocked_work"]),"queued_agents":len({w["assigned_agent_id"] for w in selected}),"act_work":0,"max_new_per_cycle":p["max_new_work_per_cycle"],"hunter_proposal_handoff":"OBSERVE_RESEARCH","hunter_proposal_backlog_priority":handoff["backlog_priority_mode"],"hunter_proposal_continuation_priority":handoff["continuation_priority_policy"],"same_cycle_hunter_continuation":continuation["enabled"],"hunter_proposal_seed_sequence":proposal_seed["sequence"],"hunter_proposal_review_seed_sequence":proposal_review_seed["sequence"]}
 if __name__=="__main__":print("portfolio-brain Step 19 scheduler: PASS",json.dumps(validate_scheduler(),sort_keys=True))

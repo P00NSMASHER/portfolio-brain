@@ -265,11 +265,32 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertIn("Run upgrade",public)
         self.assertIn("https://chatgpt.com/?prompt=",public)
         self.assertIn("Build SKU-001",public)
-        self.assertIn("Build next product",public)
-        self.assertIn("Refresh Brain",public)
         self.assertIn("Show operations & diagnostics",public)
+        self.assertIn("What matters right now",public)
         self.assertIn('id="advanced-content"',public)
         self.assertIn('class="mobile-dock"',public)
+
+    def test_primary_operator_surface_is_exactly_six_business_answers(self):
+        snapshot=build_command_center_snapshot()
+        primary=snapshot["primary_operator_view"]
+        self.assertEqual(set(primary),{
+            "money_earned",
+            "active_external_experiment",
+            "closest_external_milestone",
+            "current_blocker",
+            "action_required_from_owner",
+            "last_verified_customer_or_market_signal",
+        })
+        public=render_html(snapshot)
+        self.assertIn('id="operator-primary"',public)
+        self.assertIn('id="advanced-content" class="advanced-content" hidden',public)
+        self.assertLess(public.index('id="operator-primary"'),public.index('id="advanced-content"'))
+        for label in (
+            "Money earned","Active external experiment","Closest external milestone",
+            "Current blocker","Action required from you","Last verified customer / market signal",
+        ):
+            self.assertIn(label,public)
+        self.assertGreater(public.index("Operational Telemetry"),public.index('id="advanced-content"'))
 
     def test_command_center_exposes_hunter_proposal_inbox_without_rights_upgrade(self):
         snapshot=build_command_center_snapshot()

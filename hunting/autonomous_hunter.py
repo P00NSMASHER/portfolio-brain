@@ -750,6 +750,9 @@ def main():
     proposal_summary=backlog_summary(proposal_state)
     (out/"hunter_proposal_state.json").write_text(json.dumps(proposal_state,indent=2,sort_keys=True)+"\n")
     (out/"hunter_proposal_backlog_summary.json").write_text(json.dumps(proposal_summary,indent=2,sort_keys=True)+"\n")
+    from hunting.signal_router import build_hunter_signal_snapshot
+    signal_snapshot=build_hunter_signal_snapshot(proposal_state)
+    (out/"hunter_supply_demand_signals.json").write_text(json.dumps(signal_snapshot,indent=2,sort_keys=True)+"\n")
     total=sum(p.stat().st_size for p in out.iterdir() if p.is_file())
     if total>load_policy()["budgets"]["max_output_bytes"]: raise HunterError("Hunter output byte budget exceeded")
     print(json.dumps({
@@ -761,6 +764,9 @@ def main():
       "carried_forward_proposals":proposal_summary["carried_forward_proposals"],
       "originated_latest_cycle":proposal_summary["originated_latest_cycle"],
       "distinct_origin_cycles":proposal_summary["distinct_origin_cycles"],
+      "supply_signals":len(signal_snapshot["supply_signals"]),
+      "verified_demand_signals":signal_snapshot["verified_demand_count"],
+      "github_supply_creates_demand":signal_snapshot["github_supply_creates_demand"],
       "status":receipt["status"],
     },sort_keys=True))
 if __name__=="__main__": main()

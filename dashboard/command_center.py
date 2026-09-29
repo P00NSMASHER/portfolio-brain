@@ -24,6 +24,7 @@ from dashboard.history_state import load_state as load_history_state, public_his
 from dashboard.operational_telemetry import build_operational_telemetry
 from cost_governor.sentinel import build_sentinel_snapshot
 from learning.integrity import build_learning_integrity
+from operations.value_loop import build_value_loop_snapshot, primary_operator_view
 from hunting.proposal_state import backlog_summary as build_hunter_proposal_backlog_summary, normalize_state as normalize_hunter_proposal_state
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -358,6 +359,12 @@ def build_command_center_snapshot() -> dict[str, Any]:
         commercial_observation,
         at=commercial_projection_at,
     )
+    value_loop = build_value_loop_snapshot(
+        hunter_proposal_state=hunter_proposal_state,
+        commercial=commercial_observation,
+        factory=micro_product_factory,
+    )
+    operator_primary = primary_operator_view(value_loop)
     model_registry = load_json("model_router/PROVIDER_REGISTRY.json")
     model_feedback_state = load_live_json("model_feedback_state.json", "model_router/MODEL_FEEDBACK_STATE_SEED.json")
     learning_observation_state = load_live_json("learning_observation_state.json", "learning/LIVE_OBSERVATION_STATE_SEED.json")
@@ -627,6 +634,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
         "network_capability": "NONE",
         "data_boundary": "SANITIZED_CHECKED_IN_AND_DURABLE_ARTIFACT_STATE",
         "source_dashboard_hash": executive["snapshot_hash"],
+        "value_loop": value_loop,
+        "primary_operator_view": operator_primary,
         "publication": publication,
         "system": {
             "status": operating["status"],
@@ -938,6 +947,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
     sprint = snapshot["validation_sprint"]
     commercial = snapshot["commercial_validation"]
     revenue_focus = snapshot["revenue_focus"]
+    operator_primary = snapshot["primary_operator_view"]
     micro_factory = snapshot["micro_product_factory"]
     cost = snapshot["cost_governor"]
     portfolio = snapshot["portfolio"]
@@ -1505,6 +1515,16 @@ def render_html(snapshot: dict[str, Any]) -> str:
         """
         for m in momentum_sorted
     )
+
+    primary_last_signal = operator_primary["last_verified_customer_or_market_signal"]
+    primary_last_signal_text = (
+        "None verified yet"
+        if primary_last_signal is None
+        else f"{primary_last_signal.get('evidence_class') or 'VERIFIED'} · {primary_last_signal.get('source_kind') or primary_last_signal.get('source_ref') or 'external signal'}"
+    )
+    primary_experiment_text = operator_primary["active_external_experiment"] or "None active"
+    primary_blocker_text = operator_primary["current_blocker"] or "None"
+    primary_owner_action_text = operator_primary["action_required_from_owner"] or "None"
 
     last_cycle = telemetry["cycles"]["latest_overall"]
     if last_cycle is None:
@@ -2281,8 +2301,21 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
 .product-meta p{{font-size:.68rem!important;margin-top:7px!important}}
 .primary-header-action{{background:var(--blue)!important;color:#fff!important;border-color:transparent!important}}
 .mobile-dock{{display:none}}
+.primary-six{{margin:0 0 18px;padding:24px}}
+.primary-six h2{{font-size:1.6rem;margin:0 0 6px}}
+.primary-six .primary-sub{{color:var(--muted);margin:0 0 18px}}
+.primary-six-grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}}
+.primary-answer{{padding:18px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface-soft);min-height:126px}}
+.primary-answer span{{display:block;color:var(--muted);font-size:.72rem;font-weight:650;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}}
+.primary-answer strong{{display:block;font-size:1.05rem;line-height:1.35;overflow-wrap:anywhere}}
+.primary-answer.money strong{{font-size:2rem}}
+.primary-answer.owner{{grid-column:span 2}}
+.primary-diagnostics{{margin:0 0 18px;text-align:center}}
 
 @media(max-width:900px){{
+  .primary-six-grid{{grid-template-columns:1fr 1fr}}
+  .primary-answer.owner{{grid-column:1/-1}}
+
   .focus-grid{{grid-template-columns:1fr}}
   .factory-scoreboard{{grid-template-columns:1fr 1fr}}
   .product-grid{{grid-template-columns:1fr}}
@@ -2304,8 +2337,8 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
 <aside>
   <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Simple operator mode</small></div></div>
   <nav>
-    <a href="#overview">Today</a><a href="#repair-board">Fix</a><a href="#micro-products">Build</a><a href="#revenue-focus">Money</a>
-    <a class="advanced-nav" href="#operations">Ops</a><a class="advanced-nav" href="#projects">Portfolio</a><a class="advanced-nav" href="#hunter">Hunter</a><a class="advanced-nav" href="#cost">Controls</a>
+    <a href="#overview">Today</a>
+    <button class="detail-toggle" type="button" onclick="toggleAdvanced()">Diagnostics</button>
   </nav>
   <div class="readonly"><strong>OBSERVE ONLY</strong><span>Public command center</span></div>
 </aside>
@@ -2314,15 +2347,38 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
     <div class="hero-copy">
       <div class="eyebrow"><span class="signal-dot"></span>Portfolio Intelligence System</div>
       <h1>Portfolio Brain Command Center</h1>
-      <p class="hero-lede">Revenue-first operator view: what is making money, what is broken, what to build next, and the evidence behind every status.</p>
+      <p class="hero-lede">Six answers only: money, experiment, milestone, blocker, owner action, and verified market signal.</p>
       <div class="hero-badges">{_badge(system["functional_status"], _status_tone(system["functional_status"]))} {_badge(revenue_focus["truth_state"], "good" if revenue_focus["truth_state"]=="EARNING" else "warn")} {_badge("READ ONLY", "neutral")}</div>
     </div>
     <div class="actions">
-      <a class="header-action primary-header-action" href="{_e(_chatgpt_action_link(next_sku['build_prompt']))}" target="_blank" rel="noopener noreferrer">Build next product</a>
-      <a class="header-action" href="{_e(_github_workflow_link('command-center-pages.yml'))}" target="_blank" rel="noopener noreferrer">Refresh Brain</a>
-      <button class="detail-toggle" type="button" onclick="toggleAdvanced()">More details</button>
+      <button class="detail-toggle" type="button" onclick="toggleAdvanced()">Show diagnostics</button>
     </div>
   </header>
+
+  <section class="card primary-six" id="operator-primary" aria-labelledby="operator-primary-title">
+    <div class="section-head">
+      <div>
+        <div class="focus-label">PRIMARY OPERATOR VIEW</div>
+        <h2 id="operator-primary-title">What matters right now</h2>
+        <p class="primary-sub">Everything else is diagnostics.</p>
+      </div>
+      {_badge("EXTERNAL VALUE", "good" if operator_primary["money_earned"] != "$0.00" else "warn")}
+    </div>
+    <div class="primary-six-grid">
+      <article class="primary-answer money"><span>Money earned</span><strong>{_e(operator_primary["money_earned"])}</strong></article>
+      <article class="primary-answer"><span>Active external experiment</span><strong>{_e(primary_experiment_text)}</strong></article>
+      <article class="primary-answer"><span>Closest external milestone</span><strong>{_e(operator_primary["closest_external_milestone"])}</strong></article>
+      <article class="primary-answer"><span>Current blocker</span><strong>{_e(primary_blocker_text)}</strong></article>
+      <article class="primary-answer owner"><span>Action required from you</span><strong>{_e(primary_owner_action_text)}</strong></article>
+      <article class="primary-answer"><span>Last verified customer / market signal</span><strong>{_e(primary_last_signal_text)}</strong></article>
+    </div>
+  </section>
+
+  <section class="advanced-gate primary-diagnostics">
+    <button class="detail-toggle detail-toggle-wide" type="button" onclick="toggleAdvanced()">Show operations & diagnostics</button>
+    <p>Internal health, heartbeats, receipts, queues, Hunter, cost, products and repair detail are hidden by default.</p>
+  </section>
+  <div id="advanced-content" class="advanced-content" hidden>
 
   <section class="operator-focus" id="revenue-focus" aria-labelledby="revenue-title">
     <div class="truth-strip {'truth-good' if revenue_focus['truth_state']=='EARNING' else 'truth-warn'}">
@@ -2385,11 +2441,6 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
     <p class="repair-foot">Internal upgrades stay behind revenue work and critical repairs.</p>
   </section>
 
-  <section class="advanced-gate">
-    <button class="detail-toggle detail-toggle-wide" type="button" onclick="toggleAdvanced()">Show operations & diagnostics</button>
-    <p>Hidden by default to keep the operator view fast and focused.</p>
-  </section>
-  <div id="advanced-content" class="advanced-content" hidden>
   <section class="grid kpis">
     <div class="card kpi"><div class="label">Projects</div><div class="value">{system["project_count"]}</div><div class="hint">{len([p for p in snapshot["projects"] if p["lifecycle_status"] == "ACTIVE"])} active</div></div>
     <div class="card kpi"><div class="label">Agents healthy</div><div class="value">{system["healthy_agent_count"]}/{system["agent_count"]}</div><div class="hint">{system["stalled_agent_count"]} stalled · {system["warming_agent_count"]} warming</div></div>

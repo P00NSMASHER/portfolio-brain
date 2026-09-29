@@ -154,8 +154,8 @@ class OperationalTelemetryTests(unittest.TestCase):
         scheduler,receipt=schedule_cycle(
             load_scheduler_state(),build_context(),at="2026-09-26T10:00:00Z"
         )
-        hunt=next(row for row in receipt["selected_work"] if row["work_type"]=="HUNT")
-        scheduler["work_items"]=[hunt]
+        work=next(row for row in receipt["selected_work"] if row["work_type"]=="TEST")
+        scheduler["work_items"]=[work]
         agents=seed_state()
         agents=heartbeat(
             agents,
@@ -168,10 +168,10 @@ class OperationalTelemetryTests(unittest.TestCase):
         view=telemetry._agents(
             agents,scheduler,at=datetime.fromisoformat(AT.replace("Z","+00:00")).astimezone(timezone.utc)
         )
-        hunter=next(row for row in view["agents"] if row["agent_id"]=="AGT-HUNTER")
+        worker=next(row for row in view["agents"] if row["agent_id"]==work["assigned_agent_id"])
         auditor=next(row for row in view["agents"] if row["agent_id"]=="AGT-AUDITOR")
-        self.assertEqual(hunter["heartbeat_health"],"STALLED")
-        self.assertEqual(hunter["open_work_count"],1)
+        self.assertEqual(worker["heartbeat_health"],"STALLED")
+        self.assertEqual(worker["open_work_count"],1)
         self.assertEqual(auditor["heartbeat_health"],"IDLE_HEALTHY")
         self.assertEqual(view["stalled"],1)
 
@@ -179,13 +179,13 @@ class OperationalTelemetryTests(unittest.TestCase):
         scheduler,receipt=schedule_cycle(
             load_scheduler_state(),build_context(),at="2026-09-26T10:00:00Z"
         )
-        hunt=next(row for row in receipt["selected_work"] if row["work_type"]=="HUNT")
-        scheduler["work_items"]=[hunt]
+        work=next(row for row in receipt["selected_work"] if row["work_type"]=="TEST")
+        scheduler["work_items"]=[work]
         agents=heartbeat(
             seed_state(),
-            agent_ids=["AGT-HUNTER"],
-            activity_kind="HUNTER_CYCLE",
-            source_workflow="hunter-autonomous-cycle",
+            agent_ids=[work["assigned_agent_id"]],
+            activity_kind="WORK_EXECUTION",
+            source_workflow="portfolio-autonomous-scheduler",
             source_run_id="real-1",
             at="2026-09-26T11:30:00Z",
         )
@@ -200,10 +200,10 @@ class OperationalTelemetryTests(unittest.TestCase):
         view=telemetry._agents(
             agents,scheduler,at=datetime.fromisoformat(AT.replace("Z","+00:00")).astimezone(timezone.utc)
         )
-        hunter=next(row for row in view["agents"] if row["agent_id"]=="AGT-HUNTER")
-        self.assertEqual(hunter["heartbeat_health"],"LIVE")
-        self.assertEqual(hunter["last_activity_kind"],"HUNTER_CYCLE")
-        self.assertEqual(hunter["source_run_id"],"real-1")
+        worker=next(row for row in view["agents"] if row["agent_id"]==work["assigned_agent_id"])
+        self.assertEqual(worker["heartbeat_health"],"LIVE")
+        self.assertEqual(worker["last_activity_kind"],"WORK_EXECUTION")
+        self.assertEqual(worker["source_run_id"],"real-1")
 
 
 if __name__=="__main__":

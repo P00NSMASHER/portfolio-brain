@@ -5,3 +5,4 @@ Canonical production-reader acceptance rerun: wait for reducer success after eve
 Final canonical-reader acceptance rerun after reducer-independent catch-up barrier hotfix.
 Final Step 2 cached canonical-reader live acceptance rerun.
 Final acceptance rerun with realistic bounded producer timeout.
+Final proof: smoke explicitly dispatches reducer after each token-dispatched producer.

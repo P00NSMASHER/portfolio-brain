@@ -63,6 +63,29 @@
     "INTERNAL_ACTIVITY has zero reward weight.",
     "Global and project-scoped memory keys are distinct.",
     "Learning records remain advisory until the train and independent confirm gates pass.",
-    "No learning result can override governance, STOP, truth, or authority gates."
+    "No learning result can override governance, STOP, truth, or authority gates.",
+    "Technical verification may improve engineering/search/model routing but may not increase business investment.",
+    "Only MARKET_VERIFIED and REVENUE_VERIFIED evidence may increase business investment."
+  ],
+  "verification_classes": {
+    "TECHNICAL_VERIFIED": {
+      "source_signal_class": "VERIFIED_TECHNICAL",
+      "may_improve_technical_or_model_routing": true,
+      "may_increase_business_investment": false
+    },
+    "MARKET_VERIFIED": {
+      "source_signal_class": "VERIFIED_EXTERNAL_VALUE",
+      "may_improve_technical_or_model_routing": true,
+      "may_increase_business_investment": true
+    },
+    "REVENUE_VERIFIED": {
+      "source_signal_class": "VERIFIED_EXTERNAL_VALUE",
+      "may_improve_technical_or_model_routing": true,
+      "may_increase_business_investment": true
+    }
+  },
+  "business_investment_credit_classes": [
+    "MARKET_VERIFIED",
+    "REVENUE_VERIFIED"
   ]
 }

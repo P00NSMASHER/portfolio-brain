@@ -3,7 +3,7 @@
   "hunter_id": "portfolio-autonomous-hunter-v1",
   "enabled": true,
   "authority_class": "OBSERVE",
-  "objective_function": "DISCOVERY_TO_CAPABILITY_TO_EXPERIMENT_TO_VERIFIED_OUTCOME_VALUE",
+  "objective_function": "DISCOVER_SUPPLY_SEPARATELY_FROM_DEMAND_AND_ONLY_CONNECT_TO_EXTERNAL_VALUE_AFTER_MARKET_EVIDENCE",
   "repository_count_reward": 0,
   "source_allowlist": [
     "PUBLIC_GITHUB"
@@ -41,7 +41,10 @@
     "priority_maturity_labels": {
       "below_gate": "WARMUP",
       "at_or_above_gate": "MATURE"
-    }
+    },
+    "technical_feedback_class": "TECHNICAL_VERIFIED",
+    "technical_feedback_may_improve_hunter_search": true,
+    "technical_feedback_may_increase_business_investment": false
   },
   "state_persistence": {
     "mode": "GITHUB_ACTIONS_ARTIFACT",
@@ -124,5 +127,16 @@
     "sanitized_only": true,
     "authority_class": "OBSERVE",
     "rights_resolution": "NONE"
+  },
+  "signal_separation": {
+    "supply_sensor": "PUBLIC_GITHUB",
+    "demand_sensor": "PORTFOLIO_SANITIZED_MARKET_EVIDENCE",
+    "github_supply_is_demand": false,
+    "supply_only_can_authorize_commercial_build": false,
+    "demand_evidence_classes": [
+      "MARKET_VERIFIED",
+      "REVENUE_VERIFIED"
+    ],
+    "signal_router": "hunting/signal_router.py"
   }
 }
