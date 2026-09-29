@@ -1,8 +1,10 @@
+import copy
 import unittest
 
 from operations.value_loop import (
     build_signal_snapshot,
     build_value_loop_snapshot,
+    load,
     classify_technical_outcome,
     investment_credit_allowed,
     primary_operator_view,
@@ -32,6 +34,17 @@ class ValueLoopTests(unittest.TestCase):
         self.assertEqual(action["price_usd"],3.99)
         self.assertEqual(action["package"],"Quiz_Reward_Engine_v1.0.zip")
         self.assertIn("OWNER ACTION REQUIRED: Publish SKU-001",action["instruction"])
+
+    def test_owner_publish_checkpoint_resumes_from_source_evidence(self):
+        factory=copy.deepcopy(load("operations/MICRO_PRODUCT_FACTORY.json"))
+        factory["published_count"]=1
+        sku=next(row for row in factory["skus"] if row["sku_id"]=="SKU-001")
+        sku["publication_status"]="PUBLISHED"
+        sku["status"]="PUBLISHED"
+        snapshot=build_value_loop_snapshot(factory=factory)
+        self.assertEqual(snapshot["owner_action_queue"],[])
+        self.assertEqual(snapshot["closest_external_milestone"],"VALIDATE_DEMAND")
+        self.assertEqual(snapshot["active_external_experiment"]["kind"],"MARKET_DEMAND_OBSERVATION")
 
     def test_runtime_qa_only_exists_because_it_blocks_publish(self):
         snapshot=build_value_loop_snapshot()
