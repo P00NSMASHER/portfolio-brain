@@ -57,7 +57,7 @@ def _candidate(uid,qtype,question,pids,components,authority,actionability,approv
       "ranking":{"eligible":actionability!="BLOCKED","pareto_layer":None,"rank_order":None,"selection_reason":None}
     }
 
-def generate_candidates():
+def generate_candidates(*, learning_observation_count=None):
     projects,by_project,cap_count,commercial,children=_project_maps()
     candidates=[]
     # Real-world evidence gaps for businesses/products.
@@ -124,9 +124,14 @@ def generate_candidates():
           [pid],comps,"OBSERVE_ONLY","READY_FOR_INFORMATION_GATHERING",[],[],
           [f"registry:{pid}","graph:no-HAS_CAPABILITY-edge","hunter:public-exact-revision"]
         ))
-    # Empty learning ledger: instrument first decision-relevant evidence stream.
-    learning=load("learning/LEARNING_OBSERVATION_LEDGER.json")
-    if not learning["observations"]:
+    # Empty learning stream: use the rebuilt durable observation count when the runtime provides it.
+    # Fallback to the checked-in ledger for standalone/offline callers.
+    if learning_observation_count is None:
+        learning=load("learning/LEARNING_OBSERVATION_LEDGER.json")
+        learning_observation_count=len(learning["observations"])
+    req(type(learning_observation_count) is int and learning_observation_count>=0,
+        "learning observation count invalid")
+    if learning_observation_count==0:
         comps={
           "importance":component(5,"DERIVED","Portfolio learning cannot become empirical until at least one real observation stream is instrumented.","learning:ledger-empty"),
           "uncertainty":component(5,"DERIVED","No production learning observations exist yet, so cross-domain learning effectiveness is unknown.","learning:source-observations=0"),
@@ -232,8 +237,8 @@ def rank_candidates(candidates):
     rows.sort(key=lambda c:(c["ranking"]["rank_order"] is None,c["ranking"]["rank_order"] or 9999,c["uncertainty_id"]))
     return rows
 
-def build_snapshot(generated_at=None):
-    candidates=rank_candidates(generate_candidates())
+def build_snapshot(generated_at=None, *, learning_observation_count=None):
+    candidates=rank_candidates(generate_candidates(learning_observation_count=learning_observation_count))
     eligible=[c for c in candidates if c["ranking"]["eligible"]]
     req(eligible,"no eligible uncertainty candidates")
     selected=min(eligible,key=lambda c:c["ranking"]["rank_order"])
