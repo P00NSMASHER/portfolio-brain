@@ -62,6 +62,54 @@ class CanonicalProductionReaderTests(unittest.TestCase):
         self.assertEqual(meta["source_run_id"], 101)
         self.assertEqual(meta["source_head_sha"], "a" * 40)
         self.assertEqual(meta["domain_state_hash"], digest(seed_state()))
+
+    def test_second_restore_in_same_run_uses_validated_local_cache(self):
+        state = canonical_snapshot()
+        fake = FakeReader([snapshot_meta()])
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            cache = root / "canonical-cache.json"
+            first = root / "first.json"
+            second = root / "second.json"
+            first_meta = root / "first-meta.json"
+            second_meta = root / "second-meta.json"
+            env = {
+                "GITHUB_TOKEN": "token", "GITHUB_RUN_ID": "999",
+                "PORTFOLIO_CANONICAL_CACHE": str(cache),
+            }
+            with patch.dict(os.environ, env, clear=False), \
+                 patch("state_journal.production_reader.GitHubReader", return_value=fake) as reader_cls, \
+                 patch("state_journal.production_reader.restore_snapshot", return_value=state), \
+                 patch("state_journal.production_reader.artifact_digest"), \
+                 patch("state_journal.production_reader.extract_json", return_value=state):
+                self.assertEqual(restore_domain("heartbeat", first, first_meta), "RESTORED_CANONICAL")
+                self.assertTrue(cache.exists())
+                calls_after_first = reader_cls.call_count
+                self.assertEqual(restore_domain("heartbeat", second, second_meta), "RESTORED_CANONICAL_CACHED")
+                self.assertEqual(reader_cls.call_count, calls_after_first)
+            self.assertEqual(json.loads(first.read_text()), json.loads(second.read_text()))
+            self.assertEqual(json.loads(second_meta.read_text())["restore_status"], "RESTORED_CANONICAL_CACHED")
+
+    def test_cache_is_bound_to_exact_github_run(self):
+        state = canonical_snapshot()
+        fake = FakeReader([snapshot_meta()])
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            cache = root / "canonical-cache.json"
+            with patch.dict(os.environ, {
+                "GITHUB_TOKEN": "token", "GITHUB_RUN_ID": "999",
+                "PORTFOLIO_CANONICAL_CACHE": str(cache),
+            }, clear=False), \
+                 patch("state_journal.production_reader.GitHubReader", return_value=fake), \
+                 patch("state_journal.production_reader.restore_snapshot", return_value=state), \
+                 patch("state_journal.production_reader.artifact_digest"), \
+                 patch("state_journal.production_reader.extract_json", return_value=state):
+                restore_domain("heartbeat", root / "first.json")
+            with patch.dict(os.environ, {
+                "GITHUB_TOKEN": "token", "GITHUB_RUN_ID": "1000",
+                "PORTFOLIO_CANONICAL_CACHE": str(cache),
+            }, clear=False), self.assertRaisesRegex(JournalError, "another run"):
+                restore_domain("heartbeat", root / "second.json")
     def test_pending_event_waits_for_successful_reducer_evidence(self):
         pending = {
             "id": 12,
