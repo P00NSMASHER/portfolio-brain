@@ -1,7 +1,21 @@
 {
   "schema_version": "3.0.0",
-  "trusted_gate_app_id": null,
-  "required_checks": [],
+  "trusted_gate_app_id": 5121826,
+  "required_checks": [
+    {
+      "name": "validate",
+      "app_id": 15368,
+      "workflow_id": 367069846,
+      "workflow_path": ".github/workflows/foundation-ci.yml",
+      "job_name": "validate",
+      "required_steps": [
+        "Validate historical policy replay",
+        "Validate attribution engine",
+        "Validate champion challenger pipeline",
+        "Run regression tests"
+      ]
+    }
+  ],
   "gate_check_name": "portfolio-phase1-gate",
   "independence_model": "SEPARATE_VERIFIER_APP"
 }
