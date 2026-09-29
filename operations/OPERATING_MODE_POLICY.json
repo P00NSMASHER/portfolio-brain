@@ -59,6 +59,10 @@
     "software-factory-candidate": {
       "trigger": "workflow_call",
       "purpose": "isolated branch/commit/PR candidate execution only"
+    },
+    "repair-candidate-cycle": {
+      "trigger": "workflow_call",
+      "purpose": "paid model repair planning, isolated candidate build/replay, idempotent remote candidate submission, and scheduler repair completion; no verification, merge, or deployment"
     }
   },
   "durable_state_artifacts": {
