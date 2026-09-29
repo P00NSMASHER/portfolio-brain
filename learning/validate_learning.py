@@ -30,6 +30,11 @@ def validate_learning():
     req(schema["additionalProperties"] is False,"learning observation schema must be closed")
     req(set(p["domains"])=={"SEARCH","ENGINEERING","TEST","REGRESSION","PRODUCT","CUSTOMER","EXPERIMENT","MODEL","RESOURCE"},"learning domain set mismatch")
     req(p["reward_weights"]["VERIFIED_EXTERNAL_VALUE"]>p["reward_weights"]["VERIFIED_TECHNICAL"]>p["reward_weights"]["INTERNAL_ACTIVITY"],"reward evidence ordering weakened")
+    classes=p["verification_classes"]
+    req(set(classes)=={"TECHNICAL_VERIFIED","MARKET_VERIFIED","REVENUE_VERIFIED"},"verification class set drifted")
+    req(classes["TECHNICAL_VERIFIED"]["may_improve_technical_or_model_routing"] is True,"technical verification lost routing utility")
+    req(classes["TECHNICAL_VERIFIED"]["may_increase_business_investment"] is False,"technical verification can increase business investment")
+    req(p["business_investment_credit_classes"]==["MARKET_VERIFIED","REVENUE_VERIFIED"],"business investment evidence classes drifted")
     req(p["reward_weights"]["INTERNAL_ACTIVITY"]==0.0,"internal activity cannot receive value credit")
     req(p["automatic_policy_promotion"] is False and p["policy_effect"]=="NONE","learning became self-promoting")
     req(p["promotion_gate"]["minimum_train_observations"]>=5 and p["promotion_gate"]["minimum_train_sample_size"]>=20,"train evidence gate weakened")

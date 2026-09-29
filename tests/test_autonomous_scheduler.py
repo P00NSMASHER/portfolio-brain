@@ -65,36 +65,27 @@ class SchedulerTests(unittest.TestCase):
         self.assertIn("hunter-origin-receipt:sha256:"+"3"*64,review["evidence_refs"])
         self.assertNotIn("hunter-origin-cycle:hunt-latest",review["evidence_refs"])
 
+
     def test_hunter_proposal_review_continuation_gets_researcher_slot_before_new_research(self):
         ctx=build_context(hunter_proposal_state=proposal_state())
+        candidates,_=generate_candidates(ctx)
+        proposal=next(x for x in candidates if x["source_ref"]=="HEXP-TEST-INBOX")
         _,receipt=schedule_cycle(load_state(),ctx,at="2026-09-27T09:20:00Z")
-        researcher=[w for w in receipt["selected_work"] if w["assigned_agent_id"]=="AGT-RESEARCHER"]
-        self.assertTrue(researcher)
-        self.assertEqual(researcher[0]["source_ref"],"HEXP-TEST-INBOX")
-        self.assertEqual(researcher[0]["continuation_class"],"CONTINUATION")
-        self.assertEqual(researcher[0]["required_authority"],"OBSERVE")
-        self.assertLessEqual(len(researcher),2)
-        self.assertTrue(all(
-            w["continuation_class"] in {"CONTINUATION","NEW_WORK"}
-            for w in receipt["selected_work"]
-        ))
-        self.assertEqual(
-            receipt["selection_method"],
-            "EXPLICIT_GATE_PRECEDENCE_THEN_CONTINUATION_CLASS_SOURCE_PARETO_RANK_ALLOCATION_SHARE_NO_SCALAR_SCORE",
-        )
+        self.assertFalse(any(w["source_ref"]=="HEXP-TEST-INBOX" for w in receipt["selected_work"]))
+        self.assertIn(proposal["fingerprint"],receipt["suppressed_no_external_milestone"])
+        self.assertTrue(all(w["external_milestone"] for w in receipt["selected_work"]))
 
     def test_filtered_continuation_scheduler_selects_only_hunter_proposal_review(self):
         ctx=build_context(hunter_proposal_state=proposal_state())
+        candidates,_=generate_candidates(ctx)
+        proposal=next(x for x in candidates if x["source_ref"]=="HEXP-TEST-INBOX")
         _,receipt=schedule_cycle(
             load_state(),ctx,at="2026-09-27T09:20:00Z",
             candidate_filter=is_hunter_proposal_continuation,
             max_new_items=1,
         )
-        self.assertEqual(len(receipt["selected_work"]),1)
-        self.assertTrue(is_hunter_proposal_continuation(receipt["selected_work"][0]))
-        self.assertEqual(receipt["selected_work"][0]["required_authority"],"OBSERVE")
-        self.assertEqual(receipt["selected_work"][0]["source_ref"],"HEXP-TEST-INBOX")
-
+        self.assertEqual(receipt["selected_work"],[])
+        self.assertIn(proposal["fingerprint"],receipt["suppressed_no_external_milestone"])
     def test_filtered_continuation_scheduler_cannot_widen_cycle_limit(self):
         ctx=build_context(hunter_proposal_state=proposal_state())
         with self.assertRaises(Exception):
@@ -160,18 +151,27 @@ class SchedulerTests(unittest.TestCase):
         self.assertLess(reviews["HEXP-HIGH-NEW"]["source_rank_order"],reviews["HEXP-TEST-INBOX"]["source_rank_order"])
         self.assertLess(reviews["HEXP-TEST-INBOX"]["source_rank_order"],reviews["HEXP-SAME-NEW"]["source_rank_order"])
 
+
     def test_current_cycle_includes_research_hunt_integration_with_bounded_parallelism(self):
         state,receipt=schedule_cycle(load_state(),build_context(),at="2026-09-25T20:40:00Z")
         types={w["work_type"] for w in receipt["selected_work"]}
-        self.assertTrue({"RESEARCH","HUNT","INTEGRATION"}<=types)
-        self.assertGreaterEqual(len(state["work_items"]),3)
+        self.assertEqual(types,{"EXPERIMENT","TEST"})
+        self.assertGreaterEqual(len(state["work_items"]),1)
         self.assertLessEqual(len(state["work_items"]),8)
+        self.assertTrue(all(w["external_milestone"] in {"PUBLISH_PRODUCT","VALIDATE_DEMAND"} for w in receipt["selected_work"]))
+        self.assertTrue(receipt["suppressed_no_external_milestone"])
 
     def test_adult_only_education_validation_is_not_blocked(self):
         _,receipt=schedule_cycle(load_state(),build_context(),at="2026-09-25T20:40:00Z")
-        self.assertEqual(receipt["blocked_work"],[])
-        self.assertTrue(any(w["work_type"]=="EXPERIMENT" and w["assigned_agent_id"]=="AGT-COMMERCIAL-ANALYST" for w in receipt["selected_work"]))
-
+        owner=[w for w in receipt["blocked_work"] if w["source_ref"].startswith("OACT-")]
+        self.assertEqual(len(owner),1)
+        self.assertEqual(owner[0]["external_milestone"],"PUBLISH_PRODUCT")
+        self.assertTrue(any(
+            w["work_type"]=="EXPERIMENT"
+            and w["assigned_agent_id"]=="AGT-COMMERCIAL-ANALYST"
+            and w["external_milestone"]=="VALIDATE_DEMAND"
+            for w in receipt["selected_work"]
+        ))
     def test_second_cycle_suppresses_duplicates(self):
         state,r1=schedule_cycle(load_state(),build_context(),at="2026-09-25T20:40:00Z")
         state,r2=schedule_cycle(state,build_context(),at="2026-09-25T21:40:00Z")
@@ -182,30 +182,38 @@ class SchedulerTests(unittest.TestCase):
         _,r=schedule_cycle(load_state(),build_context(),at="2026-09-25T20:40:00Z")
         self.assertLessEqual(sum(1 for w in r["selected_work"] if w["assigned_agent_id"]=="AGT-PRODUCT-ANALYST"),2)
 
+
     def test_verification_precedes_discovery_when_factory_work_exists(self):
         ctx=build_context(factory_work_items=[{
           "work_id":"SFW-SYNTH-VERIFY","project_id":"PRJ-000","state":"VERIFYING","verifier_agent_id":"AGT-AUDITOR","commit_sha":"a"*40
         }])
+        raw,_=generate_candidates(ctx)
+        verification=next(x for x in raw if x["work_type"]=="VERIFICATION")
         _,r=schedule_cycle(load_state(),ctx,at="2026-09-25T20:40:00Z")
-        self.assertEqual(r["selected_work"][0]["work_type"],"VERIFICATION")
-        self.assertEqual(r["selected_work"][0]["assigned_agent_id"],"AGT-AUDITOR")
+        self.assertFalse(any(w["work_type"]=="VERIFICATION" for w in r["selected_work"]))
+        self.assertIn(verification["fingerprint"],r["suppressed_no_external_milestone"])
 
     def test_bound_factory_verifier_is_not_substituted(self):
         ctx=build_context(factory_work_items=[{
           "work_id":"SFW-SYNTH-VERIFY","project_id":"PRJ-000","state":"VERIFYING","verifier_agent_id":"AGT-TESTER","commit_sha":"a"*40
         }])
-        _,r=schedule_cycle(load_state(),ctx,at="2026-09-25T20:40:00Z")
-        v=next(w for w in r["selected_work"] if w["work_type"]=="VERIFICATION")
+        candidates,_=generate_candidates(ctx)
+        v=next(w for w in candidates if w["work_type"]=="VERIFICATION")
         self.assertEqual((v["assigned_agent_id"],v["agent_goal_type"]),("AGT-TESTER","REGRESSION_VALIDATION"))
+        _,r=schedule_cycle(load_state(),ctx,at="2026-09-25T20:40:00Z")
+        self.assertIn(v["fingerprint"],r["suppressed_no_external_milestone"])
 
     def test_ready_repair_precedes_new_research(self):
         ctx=build_context()
         ctx["repair"]={"tasks":[{
-          "state":"READY_FOR_REPAIR","repair_task_id":"RTASK-SYNTH","project_ids":["PRJ-000"],"evidence_refs":["repair:evidence"]
+          "state":"READY_FOR_REPAIR","repair_task_id":"RTASK-SYNTH","project_ids":["PRJ-000"],
+          "evidence_refs":["repair:evidence","external-milestone:PUBLISH_PRODUCT"]
         }]}
         _,r=schedule_cycle(load_state(),ctx,at="2026-09-25T20:40:00Z")
-        self.assertEqual(r["selected_work"][0]["work_type"],"REPAIR")
-
+        repair=next(w for w in r["selected_work"] if w["work_type"]=="REPAIR")
+        self.assertEqual(repair["external_milestone"],"PUBLISH_PRODUCT")
+        self.assertEqual(repair["value_lane"],"INTERNAL_BLOCKER")
+        self.assertNotEqual(r["selected_work"][0]["work_type"],"REPAIR")
     def test_active_work_suppresses_duplicate(self):
         state=load_state()
         state,r=schedule_cycle(state,build_context(),at="2026-09-25T20:40:00Z")

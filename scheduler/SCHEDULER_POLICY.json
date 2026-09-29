@@ -75,15 +75,21 @@
     "file": "scheduler/KILL_SWITCH.json"
   },
   "selection_order": [
+    "reject work with no defensible external_milestone",
     "filter authority, role, resource, blocker and source-state gates",
     "suppress work already queued/active/completed for the same immutable source fingerprint",
     "preserve live or stale external leases; scheduler never creates overlapping replacement work",
-    "sort by explicit gate precedence",
-    "within a gate continue already-started evidence chains before unrelated new work",
+    "sort by external value-lane precedence before internal work type",
+    "within one value lane continue already-started evidence chains before unrelated new work",
     "within the same continuation class sort by source Pareto layer, source rank, allocation share, source identity",
     "enqueue up to the configured per-agent open-work ceiling and at most eight new items per cycle"
   ],
   "invariants": [
+    "Every QUEUED or ACTIVE work item must carry an external_milestone from the explicit allowlist.",
+    "Work that cannot explain which external milestone it advances is suppressed rather than queued.",
+    "EXTERNAL_VALUE_BLOCKER outranks CUSTOMER_DEMAND_VALIDATION, which outranks PRODUCT_DELIVERABLE_COMPLETION, which outranks INTERNAL_BLOCKER.",
+    "Internal REPAIR, TEST and VERIFICATION may enter the queue only when their evidence binds them to an external milestone.",
+    "A stale heartbeat or generic internal maintenance signal can never outrank a publish, demand, delivery, payment or price milestone.",
     "The scheduler never uses an opaque scalar priority score.",
     "No work is created solely to satisfy a quota or keep an agent busy.",
     "Only work whose target agent goal type and autonomy ceiling already allow it may enter QUEUED.",
@@ -91,7 +97,6 @@
     "Open/leased work suppresses duplicate scheduling.",
     "Completed or cancelled immutable source fingerprints remain suppressed; retry requires a new source identity.",
     "An expired external lease is not blindly duplicated; it awaits agent-runtime reconciliation.",
-    "Verified repair/verification/test gates outrank new discovery work because they unblock already-started evidence chains.",
     "Step 15 resource HOLD prevents ordinary engineering/testing/model/art/cash work from being invented.",
     "Cross-project transfer work is assessment only until target outcome evidence and MODIFY gates exist.",
     "Kill switches and STOP/governance boundaries override scheduling.",
@@ -126,5 +131,19 @@
     "require_primary_queue_drained": true,
     "authority_class": "OBSERVE",
     "reuse_spare_capacity_only": true
-  }
+  },
+  "value_lane_precedence": {
+    "EXTERNAL_VALUE_BLOCKER": 0,
+    "CUSTOMER_DEMAND_VALIDATION": 1,
+    "PRODUCT_DELIVERABLE_COMPLETION": 2,
+    "INTERNAL_BLOCKER": 3
+  },
+  "external_milestones": [
+    "PUBLISH_PRODUCT",
+    "GET_BUYER_RESPONSE",
+    "DELIVER_PAID_WORK",
+    "VERIFY_PAYMENT",
+    "TEST_PRICE",
+    "VALIDATE_DEMAND"
+  ]
 }

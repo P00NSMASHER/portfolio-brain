@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0.0",
+  "policy_id": "portfolio-external-value-loop-v1",
+  "external_milestones": [
+    "PUBLISH_PRODUCT",
+    "GET_BUYER_RESPONSE",
+    "DELIVER_PAID_WORK",
+    "VERIFY_PAYMENT",
+    "TEST_PRICE",
+    "VALIDATE_DEMAND"
+  ],
+  "value_lanes": [
+    {
+      "name": "EXTERNAL_VALUE_BLOCKER",
+      "precedence": 0
+    },
+    {
+      "name": "CUSTOMER_DEMAND_VALIDATION",
+      "precedence": 1
+    },
+    {
+      "name": "PRODUCT_DELIVERABLE_COMPLETION",
+      "precedence": 2
+    },
+    {
+      "name": "INTERNAL_BLOCKER",
+      "precedence": 3
+    }
+  ],
+  "evidence_classes": [
+    "TECHNICAL_VERIFIED",
+    "MARKET_VERIFIED",
+    "REVENUE_VERIFIED"
+  ],
+  "investment_credit_classes": [
+    "MARKET_VERIFIED",
+    "REVENUE_VERIFIED"
+  ],
+  "technical_routing_credit_classes": [
+    "TECHNICAL_VERIFIED",
+    "MARKET_VERIFIED",
+    "REVENUE_VERIFIED"
+  ],
+  "owner_action_authority": "HUMAN_APPROVAL_REQUIRED",
+  "supply_sensor": "PUBLIC_GITHUB",
+  "demand_sensors": [
+    "SANITIZED_COMMERCIAL_EVIDENCE",
+    "VERIFIED_MARKETPLACE_SIGNAL",
+    "VERIFIED_PAYMENT"
+  ],
+  "invariants": [
+    "Every queued scheduler work item has one external_milestone.",
+    "Work without a defensible external milestone is suppressed rather than queued to keep the Brain busy.",
+    "External-value blockers outrank demand validation, which outranks deliverable completion, which outranks internal blockers.",
+    "Internal repair/test/verification may enter the queue only when it directly blocks an external milestone.",
+    "TECHNICAL_VERIFIED may improve technical/model routing but cannot increase business investment.",
+    "Only MARKET_VERIFIED and REVENUE_VERIFIED may increase business investment.",
+    "PUBLIC_GITHUB is a supply sensor only and never proves customer demand.",
+    "Publishing, spending, payment setup and consequential customer communication remain human-approved actions.",
+    "Owner-action completion is inferred only from new verified external/source evidence; the queue does not paint itself green."
+  ]
+}
