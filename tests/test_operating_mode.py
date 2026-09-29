@@ -55,6 +55,12 @@ class OperatingModeTests(unittest.TestCase):
         expected={name:[entry["cron"]] for name,entry in policy["approved_recurring_workflows"].items()}
         self.assertEqual(actual,expected)
 
+    def test_learning_crons_avoid_known_hourly_writer_collisions(self):
+        policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())["approved_recurring_workflows"]
+        minute=lambda name:policy[name]["cron"].split()[0]
+        self.assertNotEqual(minute("runtime-daily-learning"),minute("command-center-pages"))
+        self.assertNotEqual(minute("runtime-weekly-synthesis"),minute("runtime-hourly-sync"))
+
     def test_singleton_cost_state_lane_does_not_fan_out_specialized_push_runs(self):
         for name in ("portfolio-autonomous-scheduler","agent-heartbeat-sweep"):
             triggers=workflow_top_level_triggers(ROOT/".github/workflows"/f"{name}.yml")
