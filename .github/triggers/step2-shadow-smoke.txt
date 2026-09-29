@@ -6,3 +6,4 @@ Final canonical-reader acceptance rerun after reducer-independent catch-up barri
 Final Step 2 cached canonical-reader live acceptance rerun.
 Final acceptance rerun with realistic bounded producer timeout.
 Final proof: smoke explicitly dispatches reducer after each token-dispatched producer.
+Steps 1-8 final live acceptance on value-first main.
