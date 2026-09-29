@@ -1,0 +1,113 @@
+name: step2-stage-exact-candidate
+
+on:
+  push:
+    branches: ["step2-immutable-events-reducer-20260929"]
+    paths: [".step2/patch.part*", ".github/workflows/step2-stage.yml"]
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: step2-stage-exact-candidate
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate exact candidate and stage only mirror files
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import base64,gzip,hashlib,json,os,pathlib,re,shlex,subprocess
+          root=pathlib.Path.cwd(); out=pathlib.Path('/tmp/step2-stage-proof');out.mkdir()
+          base='1340dfabf7e0d108ab2939439f82fe737d13d285'
+          expected_tree='292aa75549bcda1600deb929d4e46f3e53fbe02f'
+          branch='step2-immutable-events-reducer-20260929'
+          def git(*args,env=None):
+              return subprocess.check_output(['git',*args],text=True,env=env).strip()
+          assert os.environ['GITHUB_REF']=='refs/heads/'+branch
+          assert git('rev-parse','HEAD^')==base,'unexpected staging base'
+          expected_parts=['e915de22ceae7eb3760434b14412796340815eaf','49636306d29850a211d0fe641612e0510b223a42','609e8d5ab53c0ff2adc3b36afc94827694c770ed','640019a1c61c7d85d9f75e3a0b1a413c9480113d','cb99552d59b868e7f14ebe220046f5f56fd2712c']
+          parts=[]
+          for i,sha in enumerate(expected_parts):
+              raw=(root/f'.step2/patch.part{i:02d}').read_bytes()
+              # Repair known transfer transcription, then enforce the original Git blob hash.
+              if i==0:
+                  text=base64.b64encode(raw).decode().replace('TWMTHOLJJ08','TWMTHOLJ08')+'4'
+                  raw=base64.b64decode(text,validate=True)
+              if i==2:
+                  text=base64.b64encode(raw).decode()
+                  fixes=[('htZB3h','htZ3h'),('NbWHg4Okt1O02','NbWHg8Okt3O02'),('VvO91tI7b','VvO91t7b'),('oHdLweLiz','oHdweLiz'),('fxUWvvor2d','fxUWv2d'),('CuN3M3Do','CuN3d2Do')]
+                  for old,new in fixes:
+                      assert text.count(old)==1
+                      text=text.replace(old,new)
+                  text=text[:7950]+'T6W2nhRrOrCs2WHVu3zzml5bNLrXIt09Kiz7nMfrmRe1m/v5vu'
+                  raw=base64.b64decode(text,validate=True)
+              actual=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+              assert actual==sha,(i,actual)
+              parts.append(raw)
+          patch=gzip.decompress(b''.join(parts))
+          assert len(patch)==114854
+          assert hashlib.sha256(patch).hexdigest()=='94d09b651ace9e6e9bd27e4c427843dedd512d638def75fadbde84670e30af7c'
+          (out/'candidate.patch').write_bytes(patch)
+          paths=re.findall(r'^\+\+\+ b/(.+)$',patch.decode(),re.M)
+          assert len(paths)==27 and len(set(paths))==27
+          assert all(re.fullmatch(r'[A-Za-z0-9_./-]+',p) and '..' not in p.split('/') for p in paths)
+          subprocess.run(['git','apply','--check',str(out/'candidate.patch')],check=True)
+          subprocess.run(['git','apply',str(out/'candidate.patch')],check=True)
+          assert (root/'.github/workflows/foundation-ci.yml').read_bytes()==subprocess.check_output(['git','show',base+':.github/workflows/foundation-ci.yml'])
+          entries=[{'path':p,'mode':'100644','type':'blob','sha':git('hash-object','-w',p)} for p in paths]
+          idx=dict(os.environ,GIT_INDEX_FILE='/tmp/step2-clean-index')
+          git('read-tree',base,env=idx)
+          for e in entries:
+              git('update-index','--add','--cacheinfo',e['mode']+','+e['sha']+','+e['path'],env=idx)
+          tree=git('write-tree',env=idx)
+          assert tree==expected_tree,(tree,expected_tree)
+          commands=[shlex.split(line.strip()[5:]) for line in (root/'.github/workflows/foundation-ci.yml').read_text().splitlines() if line.strip().startswith('run: python ')]
+          assert len(commands)==34
+          results=[]
+          for i,args in enumerate(commands,1):
+              result=subprocess.run(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=120)
+              log=f'validation-{i:02d}.log';(out/log).write_text(result.stdout)
+              results.append({'command':args,'exit_code':result.returncode,'log':log,'sha256':hashlib.sha256(result.stdout.encode()).hexdigest()})
+              print(i,result.returncode,' '.join(args),flush=True)
+              if result.returncode:
+                  print(result.stdout[-8000:],flush=True)
+                  raise SystemExit(result.returncode)
+          subprocess.run(['python','-m','state_journal.prove_archived','--fetch','--archive-dir','/tmp/step2-archives','--output',str(out/'archived-replay.json')],check=True,timeout=120)
+          for e in entries:
+              assert git('hash-object',e['path'])==e['sha'],'validation changed candidate'
+          with (out/'candidate.tar').open('wb') as f:
+              subprocess.run(['git','archive',tree],stdout=f,check=True)
+          receipt={'base_sha':base,'main_base_sha':'87a8ed87ec69eabe1a2be7f520b4c4b59ba50818','tree_sha':tree,'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'patch_sha256':hashlib.sha256(patch).hexdigest(),'files':entries,'validations':results,'production_cutover_complete':False,'canonical_state_modified':False,'steps_3_to_8_started':False}
+          (out/'manifest.json').write_text(json.dumps(receipt,indent=2)+'\n')
+          for e in entries:
+              dest=root/'.step2/staged'/e['path'];dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes((root/e['path']).read_bytes())
+          subprocess.run(['git','add','--','.step2/staged'],check=True)
+          assert set(git('diff','--cached','--name-only').splitlines())=={'.step2/staged/'+p for p in paths}
+          git('config','user.name','github-actions[bot]')
+          git('config','user.email','41898282+github-actions[bot]@users.noreply.github.com')
+          git('commit','-m','Stage exact-tested Step 2 candidate bytes; no canonical state writes')
+          git('push','origin','HEAD:refs/heads/'+branch)
+          print((out/'validation-34.log').read_text()[-500:],flush=True)
+          print('EXACT_CANDIDATE_TREE='+tree,flush=True)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: step2-staging-proof-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/step2-stage-proof/
+          if-no-files-found: error
+          retention-days: 30
