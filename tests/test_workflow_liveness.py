@@ -398,6 +398,8 @@ class WorkflowLivenessTests(unittest.TestCase):
         workflow=(ROOT/".github/workflows/portfolio-cost-watchdog.yml").read_text()
         self.assertIn("python -m operations.workflow_liveness",workflow)
         self.assertIn("portfolio-workflow-liveness",workflow)
+        self.assertIn("name: portfolio-cost-governor-state",workflow)
+        self.assertIn("path: cost_governor/live/cost_state.json",workflow)
         self.assertIn("actions: write",workflow)
         self.assertIn("contents: read",workflow)
         self.assertNotIn("contents: write",workflow)

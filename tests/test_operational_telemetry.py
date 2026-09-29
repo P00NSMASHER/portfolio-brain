@@ -108,6 +108,58 @@ class OperationalTelemetryTests(unittest.TestCase):
         self.assertEqual(proof["reservation_id"],"CRES-SYNC")
         self.assertEqual(proof["cycle_id"],"RC-1")
 
+    def test_runtime_sync_proof_uses_exact_run_workload_proof_without_cost_reservation(self):
+        runtime={"recent_cycles":[{
+            "mode":"sync","status":"PASS","cycle_id":"RC-WORKLOAD",
+            "finished_at":"2026-09-26T11:59:30Z","receipt_hash":"sha256:"+"a"*64
+        }]}
+        source={"generated_at":"2026-09-26T12:01:00Z","sources":{
+            "runtime":{"status":"LIVE","source_run_id":42},
+            "cost":{"status":"FALLBACK","source_run_id":None},
+        }}
+        liveness={
+            "targets":[{
+                "workflow_name":"runtime-hourly-sync",
+                "status":"HEALTHY_VERIFIED_WORK",
+                "reason":"EXACT_RUN_SUBSTANTIVE_WORK_PROVEN",
+                "work_proof_status":"VERIFIED_WORK",
+                "work_proof_reason":"RUNTIME_SYNC_RECEIPT",
+                "latest_run_id":42,
+                "work_proof_metrics":{
+                    "observations":8,"api_requests":9,
+                    "cycle_id":"RC-WORKLOAD","finished_at":"2026-09-26T11:59:30Z",
+                },
+            }]
+        }
+        proof=telemetry._runtime_sync_proof(runtime,{"reservations":[]},source,liveness)
+        self.assertEqual(proof["status"],"VERIFIED_SYNC_WORK")
+        self.assertEqual(proof["source_run_id"],42)
+        self.assertEqual(proof["reason"],"FRESH_SYNC_CYCLE_MATCHES_EXACT_RUN_WORK_PROOF")
+        self.assertEqual(proof["proof_source"],"WORKFLOW_LIVENESS_EXACT_RUN")
+        self.assertIsNone(proof["reservation_id"])
+
+    def test_runtime_sync_exact_run_proof_must_bind_to_restored_cycle(self):
+        runtime={"recent_cycles":[{
+            "mode":"sync","status":"PASS","cycle_id":"RC-EXPECTED",
+            "finished_at":"2026-09-26T11:59:30Z","receipt_hash":"sha256:"+"a"*64
+        }]}
+        source={"generated_at":"2026-09-26T12:01:00Z","sources":{
+            "runtime":{"status":"LIVE","source_run_id":99},
+            "cost":{"status":"LIVE","source_run_id":7},
+        }}
+        liveness={"targets":[{
+            "workflow_name":"runtime-hourly-sync",
+            "status":"HEALTHY_VERIFIED_WORK",
+            "reason":"EXACT_RUN_SUBSTANTIVE_WORK_PROVEN",
+            "work_proof_status":"VERIFIED_WORK",
+            "work_proof_reason":"RUNTIME_SYNC_RECEIPT",
+            "latest_run_id":42,
+            "work_proof_metrics":{"cycle_id":"RC-OTHER","finished_at":"2026-09-26T11:58:00Z"},
+        }]}
+        proof=telemetry._runtime_sync_proof(runtime,{"reservations":[]},source,liveness)
+        self.assertEqual(proof["status"],"UNVERIFIED_SYNC_WORK")
+        self.assertEqual(proof["reason"],"WORK_PROOF_NOT_BOUND_TO_RESTORED_SYNC_CYCLE")
+
     def test_runtime_sync_proof_fails_closed_without_temporal_reservation_match(self):
         runtime={"recent_cycles":[{
             "mode":"sync","status":"PASS","cycle_id":"RC-1",
@@ -149,6 +201,80 @@ class OperationalTelemetryTests(unittest.TestCase):
         proof=telemetry._runtime_sync_proof(runtime,cost,source)
         self.assertEqual(proof["status"],"UNVERIFIED_SYNC_WORK")
         self.assertEqual(proof["reason"],"SYNC_CYCLE_TOO_OLD")
+
+    def test_exact_run_heartbeat_sweep_keeps_unassigned_roles_idle_healthy_without_inventing_productivity(self):
+        scheduler=load_scheduler_state()
+        scheduler["work_items"]=[]
+        agents=heartbeat(
+            seed_state(),
+            agent_ids=list(seed_state()["agents"]),
+            activity_kind="HEALTH_CHECK",
+            source_workflow="agent-heartbeat-sweep",
+            source_run_id="old-sweep",
+            at="2026-09-26T08:00:00Z",
+        )
+        liveness={
+            "checked_at":"2026-09-26T11:55:00Z",
+            "targets":[{
+                "workflow_name":"agent-heartbeat-sweep",
+                "status":"HEALTHY_VERIFIED_WORK",
+                "reason":"EXACT_RUN_SUBSTANTIVE_WORK_PROVEN",
+                "work_proof_status":"VERIFIED_WORK",
+                "work_proof_reason":"HEARTBEAT_SWEEP_EVENT_PROOF",
+                "latest_run_id":77,
+                "age_minutes":5.0,
+                "work_proof_metrics":{"agents_heartbeated":10},
+            }],
+        }
+        view=telemetry._agents(
+            agents,
+            scheduler,
+            at=datetime.fromisoformat(AT.replace("Z","+00:00")).astimezone(timezone.utc),
+            liveness=liveness,
+        )
+        auditor=next(row for row in view["agents"] if row["agent_id"]=="AGT-AUDITOR")
+        self.assertEqual(auditor["heartbeat_health"],"IDLE_HEALTHY")
+        self.assertEqual(auditor["heartbeat_health_basis"],"EXACT_RUN_HEARTBEAT_SWEEP")
+        self.assertIsNone(auditor["last_productive_at"])
+        self.assertTrue(view["heartbeat_sweep_proof"]["verified"])
+        self.assertEqual(view["heartbeat_sweep_proof"]["source_run_id"],77)
+
+    def test_exact_run_heartbeat_sweep_cannot_hide_stalled_assigned_work(self):
+        scheduler,receipt=schedule_cycle(
+            load_scheduler_state(),build_context(),at="2026-09-26T10:00:00Z"
+        )
+        hunt=next(row for row in receipt["selected_work"] if row["work_type"]=="HUNT")
+        scheduler["work_items"]=[hunt]
+        agents=heartbeat(
+            seed_state(),
+            agent_ids=list(seed_state()["agents"]),
+            activity_kind="HEALTH_CHECK",
+            source_workflow="agent-heartbeat-sweep",
+            source_run_id="old-sweep",
+            at="2026-09-26T08:00:00Z",
+        )
+        liveness={
+            "checked_at":"2026-09-26T11:55:00Z",
+            "targets":[{
+                "workflow_name":"agent-heartbeat-sweep",
+                "status":"HEALTHY_VERIFIED_WORK",
+                "reason":"EXACT_RUN_SUBSTANTIVE_WORK_PROVEN",
+                "work_proof_status":"VERIFIED_WORK",
+                "work_proof_reason":"HEARTBEAT_SWEEP_EVENT_PROOF",
+                "latest_run_id":77,
+                "age_minutes":5.0,
+                "work_proof_metrics":{"agents_heartbeated":10},
+            }],
+        }
+        view=telemetry._agents(
+            agents,
+            scheduler,
+            at=datetime.fromisoformat(AT.replace("Z","+00:00")).astimezone(timezone.utc),
+            liveness=liveness,
+        )
+        hunter=next(row for row in view["agents"] if row["agent_id"]=="AGT-HUNTER")
+        self.assertEqual(hunter["heartbeat_health"],"STALLED")
+        self.assertEqual(hunter["heartbeat_health_basis"],"STALE_ASSIGNED_WORK")
 
     def test_health_check_cannot_hide_stalled_assigned_work(self):
         scheduler,receipt=schedule_cycle(

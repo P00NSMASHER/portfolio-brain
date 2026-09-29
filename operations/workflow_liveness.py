@@ -121,11 +121,10 @@ def validate_policy(p:dict[str,Any])->None:
               f'--estimated-minutes {target["estimated_minutes"]}',
             ]
             if target["admission_workflow_id"]=="runtime-worker":
-                mode=target["admission_job_id"].removeprefix("runtime-")
-                req(cfg["concurrency_group"]==f"portfolio-runtime-{mode}","runtime workload concurrency policy drifted")
+                req(cfg["concurrency_group"]=="portfolio-runtime-nonpaid-state-writer","runtime workload concurrency policy drifted")
                 fragments.extend([
                   '--job-id "runtime-${RUNTIME_MODE}"',
-                  "format('portfolio-runtime-{0}', inputs.mode)",
+                  "'portfolio-runtime-nonpaid-state-writer'",
                 ])
             else:
                 fragments.extend([
@@ -212,6 +211,7 @@ def verify_work_proof(target:dict[str,Any],document:Any,*,run_id:int)->dict[str,
             return _proof("INVALID_WORK_PROOF","RUNTIME_SYNC_NO_SUBSTANTIVE_OBSERVATION")
         return _proof("VERIFIED_WORK","RUNTIME_SYNC_RECEIPT",{
           "observations":len(observations),"api_requests":document["api_requests"],
+          "cycle_id":document["cycle_id"],"finished_at":document["finished_at"],
         })
 
     if kind=="HUNTER_CYCLE":
