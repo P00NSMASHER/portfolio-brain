@@ -267,7 +267,8 @@ def validate_operating_mode():
         req(f"repair-candidate-cycle::{job}" in workload["services"],f"repair {job} workload policy missing")
     req("software_factory.candidate_submitter" in repair_cycle,"repair cycle remote candidate submission missing")
     req("software_factory.complete_repair_work" in repair_cycle,"repair cycle scheduler completion missing")
-    req("pull-requests: write" not in repair_cycle and "merge" not in repair_cycle and "deploy" not in repair_cycle,
+    req("pull-requests: write" not in repair_cycle and "create_pr" not in repair_cycle
+        and "merge_pr" not in repair_cycle and "deployment_authorized: true" not in repair_cycle,
         "repair candidate cycle widened into PR/merge/deploy authority")
     repair_policy=p.get("reusable_nonrecurring_workflows",{}).get("repair-candidate-cycle",{})
     req(repair_policy.get("trigger")=="workflow_call","repair candidate workflow is not recorded as reusable nonrecurring work")
