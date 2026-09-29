@@ -8,6 +8,9 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from state_journal.contracts import JournalError
+from state_journal.production_reader import restore_domain
+
 REPOSITORY = "P00NSMASHER/portfolio-brain"
 TARGETS = (
     "hunter-autonomous-cycle.yml",
@@ -40,6 +43,25 @@ def request(token: str, method: str, suffix: str, payload: dict | None = None):
 
 def parse_time(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+
+
+def wait_for_canonical_freshness(output: Path = Path("state_journal/out/smoke/preflight-runtime.json")) -> None:
+    """Wait for the existing reducer to consume every published state event.
+
+    This never dispatches a reducer. It exercises the same canonical production
+    reader that target workflows use, retrying only the explicit stale-state
+    barrier while an already-triggered reducer catches up.
+    """
+    deadline = time.monotonic() + 300
+    while time.monotonic() < deadline:
+        try:
+            restore_domain("runtime", output)
+            return
+        except JournalError as exc:
+            if str(exc) != "STALE_CANONICAL_STATE_PENDING_REDUCTION":
+                raise SmokeError(f"Canonical freshness check failed: {exc}") from exc
+        time.sleep(3)
+    raise SmokeError("Timed out waiting for canonical reducer catch-up")
 
 
 def dispatch_and_wait(token: str, workflow: str) -> dict:
@@ -123,6 +145,7 @@ def main() -> None:
         raise SmokeError("GITHUB_TOKEN required")
     rows = []
     for workflow in TARGETS:
+        wait_for_canonical_freshness()
         source = dispatch_and_wait(token, workflow)
         reducer = wait_for_reducer(token, source_run={
             "id": source["run_id"],
