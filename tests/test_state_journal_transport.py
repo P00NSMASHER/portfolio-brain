@@ -220,8 +220,8 @@ class StateJournalTransportTests(unittest.TestCase):
         self.assertIn('row.get("event") == "workflow_dispatch"',source)
         self.assertNotIn('repository_dispatch',source)
         self.assertIn('time.monotonic() + 480',source)
-        self.assertIn('def wait_for_reducer',source)
-        self.assertIn('portfolio-state-reducer',source)
+        self.assertIn('REDUCER = "portfolio-state-reducer.yml"',source)
+        self.assertIn('dispatch_and_wait(token, REDUCER)',source)
         self.assertIn('STEP_2_CANONICAL_PRODUCTION_SMOKE',source)
         self.assertIn('canonical_reader_barrier_proven',source)
 
