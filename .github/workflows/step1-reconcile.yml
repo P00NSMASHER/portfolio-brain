@@ -21,92 +21,24 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Preserve current recovery work and test reconciled candidate
+      - name: Run pinned reconciliation with corrected strict group assertions
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/step1-reconciled
           python - <<'PY'
-          import hashlib,json,os,pathlib,shlex,subprocess
-          root=pathlib.Path.cwd(); out=pathlib.Path('/tmp/step1-reconciled')
-          old='ef18025b90e2ca66cc185e11ba5e1cb998347ca1'
-          main='c4c60350d687b32922a8b1f2c33df81b12bbe9cd'
-          previous='e4aeaf4369466680c4c2ffc1316192dd5ac16898'
-          def git(*args):return subprocess.check_output(['git',*args],text=True).strip()
-          assert git('merge-base',previous,'HEAD')==previous
-          assert git('diff','--name-only',previous,'HEAD')=='.github/workflows/step1-reconcile.yml'
-          delta=git('diff','--name-only',old,main).splitlines()
-          assert set(delta)=={
-              '.github/workflows/phase1-verification.yml','.github/workflows/runtime-event-observe.yml',
-              '.github/workflows/runtime-worker.yml','agents/artifact_state.py','runtime/artifact_state.py',
-              'runtime/validate_runtime.py','tests/test_agent_heartbeat_fork_recovery.py',
-              'tests/test_cost_governor.py','tests/test_runtime_fork_recovery.py','tests/test_runtime_resume_safety.py'}
-          subprocess.run(['git','checkout',main,'--',*delta],check=True)
-          p=root/'.github/workflows/runtime-worker.yml'; s=p.read_text()
-          assert s.count('group: portfolio-runtime-state-writer')==1
-          s=s.replace('group: portfolio-runtime-state-writer','group: portfolio-state-writer-v1')
-          assert s.count('  cancel-in-progress: false\n\njobs:')==1
-          s=s.replace('  cancel-in-progress: false\n\njobs:','  cancel-in-progress: false\n  queue: max\n\njobs:')
-          p.write_text(s)
-          for name in ('runtime/validate_runtime.py','tests/test_runtime_resume_safety.py'):
-              p=root/name;s=p.read_text(); assert 'portfolio-runtime-state-writer' in s
-              p.write_text(s.replace('portfolio-runtime-state-writer','portfolio-state-writer-v1'))
-          p=root/'tests/test_cost_governor.py';s=p.read_text()
-          groups=['portfolio-cost-governed-autonomy','portfolio-scheduler','portfolio-hunter-cycle','portfolio-reporting-pages','portfolio-heartbeat','portfolio-notification','portfolio-software-factory','portfolio-feedback-bootstrap','portfolio-learning-bootstrap','portfolio-runtime-observe','portfolio-runtime-sync']
-          for group in groups:
-              for quote in ('"',"'"):
-                  s=s.replace(quote+group+quote,quote+'portfolio-state-writer-v1'+quote)
-          s=s.replace("format('portfolio-runtime-{0}', inputs.mode)",'group: portfolio-state-writer-v1')
-          s=s.replace('f"portfolio-runtime-{mode}"','"portfolio-state-writer-v1"')
-          s=s.replace('self.assertNotIn("portfolio-state-writer-v1", workflow)','self.assertIn("queue: max", workflow)')
-          p.write_text(s)
-          p=root/'tests/test_artifact_state_integrity.py';s=p.read_text()
-          before='\n'.join(' '*16+x for x in ['self.assertEqual(len(locks), 1, "writer must have exactly one concurrency lock")','indent, block = locks[0]'])
-          lines=[
-              'if path.name == "runtime-worker.yml":',
-              '    # Keep the separate admission lock; the inner mutex owns state.',
-              '    self.assertEqual(len(locks), 2)',
-              '    outer_indent, outer = locks[0]',
-              '    self.assertEqual(outer_indent, "")',
-              '    self.assertNotIn("portfolio-state-writer-v1", outer)',
-              '    self.assertIn("  cancel-in-progress: false", outer)',
-              '    self.assertIn("  queue: max", outer)',
-              '    indent, block = locks[1]',
-              '    self.assertEqual(indent, "    ")',
-              'else:',
-              '    self.assertEqual(len(locks), 1, "writer must have exactly one state lock")',
-              '    indent, block = locks[0]',
-          ]
-          after='\n'.join(' '*16+x for x in lines)
-          assert s.count(before)==1
-          p.write_text(s.replace(before,after))
-          for name in ('runtime/artifact_restore.py','runtime/artifact_state.py','agents/artifact_state.py'):
-              assert (root/name).read_bytes()==subprocess.check_output(['git','show',main+':'+name])
-          subprocess.run(['git','diff','--check'],check=True)
-          commands=[line.split('run: ',1)[1] for line in (root/'.github/workflows/foundation-ci.yml').read_text().splitlines() if line.startswith('        run: ')]
-          assert len(commands)==34
-          results=[]
-          for i,command in enumerate(commands,1):
-              args=shlex.split(command); assert args[0]=='python'
-              r=subprocess.run(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
-              log=f'validation-{i:02d}.log'; (out/log).write_text(r.stdout)
-              results.append({'command':command,'exit':r.returncode,'log':log,'sha256':hashlib.sha256(r.stdout.encode()).hexdigest()})
-              print(i,r.returncode,command,flush=True)
-              if r.returncode:
-                  print(r.stdout[-20000:],flush=True);raise SystemExit(r.returncode)
-          paths=[p for p in git('diff','--name-only',main).splitlines() if p!='.github/workflows/step1-reconcile.yml']
-          assert len(paths)==24,(len(paths),paths)
-          entries=[{'path':p,'mode':'100644','type':'blob','sha':git('hash-object','-w',p)} for p in paths]
-          receipt={'base_sha':main,'previous_candidate':previous,'run_id':os.environ['GITHUB_RUN_ID'],'tree_entries':entries,'validations':results,'live_state_changed':False,'independent_authorization':False,'steps_2_through_8_started':False}
-          (out/'receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
-          print('TESTED_TREE_ENTRIES='+json.dumps(entries),flush=True)
-          print((out/'validation-34.log').read_text()[-1000:],flush=True)
-          for p in paths:
-              target=root/'.step1/candidate'/p;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes((root/p).read_bytes())
-          restore=set(delta)|set(paths)
-          subprocess.run(['git','restore','--source=HEAD','--staged','--worktree','--',*sorted(restore)],check=True)
-          subprocess.run(['git','add','--','.step1/candidate'],check=True)
-          assert set(git('diff','--cached','--name-only').splitlines())=={'.step1/candidate/'+p for p in paths}
+          import pathlib,subprocess,textwrap
+          # Reuse the exact previous isolated preparation script, not live code.
+          ref='4b126f6d6691916c0fca5f685299ea9100dd41c1:.github/workflows/step1-reconcile.yml'
+          source=subprocess.check_output(['git','show',ref],text=True)
+          code=textwrap.dedent(source.split("          python - <<'PY'\n",1)[1].split('          PY\n',1)[0])
+          needle="p.write_text(s)\np=root/'tests/test_artifact_state_integrity.py'"
+          assert code.count(needle)==1
+          correction="for group in groups:\n    s=s.replace('group: '+group,'group: portfolio-state-writer-v1')\n"
+          code=code.replace(needle,correction+needle)
+          target=pathlib.Path('/tmp/step1-reconciled/executed-reconciliation.py')
+          target.write_text(code)
+          exec(compile(code,str(target),'exec'),{'__name__':'__main__'})
           PY
       - name: Stage tested bytes on this branch only
         shell: bash
