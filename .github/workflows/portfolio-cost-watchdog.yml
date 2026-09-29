@@ -44,13 +44,14 @@ jobs:
         with:
           python-version: "3.12"
       - name: Restore latest cost-governor state
-        run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json
+        run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json --metadata-output cost_governor/live/cost_restore.json
       - name: Cancel only managed autonomous runs on hard stop
         run: python -m cost_governor.cancel_managed_jobs --state cost_governor/live/cost_state.json
       - name: Recover overdue core workflows when safe
         run: >-
           python -m operations.workflow_liveness
           --state cost_governor/live/cost_state.json
+          --state-metadata cost_governor/live/cost_restore.json
           --output operations/out/workflow_liveness_receipt.json
       - name: Upload sanitized workflow liveness receipt
         if: ${{ always() && hashFiles('operations/out/workflow_liveness_receipt.json') != '' }}

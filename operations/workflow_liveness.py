@@ -27,7 +27,9 @@ from cost_governor.cost_governor import (
     make_github_job_request,
     policy as cost_policy,
     preflight,
+    validate_state as validate_cost_state,
 )
+from runtime.state import validate_cycle_receipt
 from workload_control.workload_gate import evaluate as evaluate_workload, load_policy as workload_policy
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -206,12 +208,16 @@ def verify_work_proof(target:dict[str,Any],document:Any,*,run_id:int)->dict[str,
         observations=document.get("observations")
         if document.get("schema_version")!="1.0.0" or document.get("mode")!="sync" or document.get("status")!="PASS":
             return _proof("INVALID_WORK_PROOF","RUNTIME_SYNC_RECEIPT_IDENTITY_INVALID")
-        if not _valid_receipt_hash(document):
+        try:
+            validate_cycle_receipt(document)
+        except ValueError:
             return _proof("INVALID_WORK_PROOF","RUNTIME_SYNC_RECEIPT_INTEGRITY_INVALID")
         if not isinstance(observations,list) or len(observations)<1 or type(document.get("api_requests")) is not int or document["api_requests"]<1:
             return _proof("INVALID_WORK_PROOF","RUNTIME_SYNC_NO_SUBSTANTIVE_OBSERVATION")
         return _proof("VERIFIED_WORK","RUNTIME_SYNC_RECEIPT",{
           "observations":len(observations),"api_requests":document["api_requests"],
+          "cycle_id":document["cycle_id"], "finished_at":document["finished_at"],
+          "receipt_hash":document["receipt_hash"],
         })
 
     if kind=="HUNTER_CYCLE":
@@ -527,10 +533,33 @@ def fetch_run_work_proof(
     except (OSError,ValueError,KeyError,json.JSONDecodeError,zipfile.BadZipFile,urllib.error.URLError) as exc:
         return _proof("INVALID_WORK_PROOF",f"PROOF_FETCH_OR_PARSE_ERROR:{type(exc).__name__}")
 
+def cost_state_observation(state:dict[str,Any], metadata:dict[str,Any], *, at:str)->dict[str,Any]|None:
+    """Attest an actual validated restore, not a seed or a new financial event."""
+    validate_cost_state(state)
+    if not (isinstance(metadata,dict)
+            and str(metadata.get("restore_status", "")).startswith("RESTORED")
+            and metadata.get("artifact_name")=="portfolio-cost-governor-state"
+            and type(metadata.get("artifact_id")) is int and metadata["artifact_id"]>0
+            and type(metadata.get("source_run_id")) is int and metadata["source_run_id"]>0
+            and metadata.get("source_sequence")==state["sequence"]
+            and metadata.get("source_state_hash")==_hash_value(state)):
+        return None
+    if state["updated_at"] is not None and _time(state["updated_at"])>_time(at):
+        return None
+    return {
+        "status":"VERIFIED_UNCHANGED_STATE", "checked_at":at,
+        "state_sequence":state["sequence"], "state_hash":_hash_value(state),
+        "state_updated_at":state["updated_at"],
+        "source_artifact_id":metadata["artifact_id"],
+        "source_run_id":metadata["source_run_id"],
+        "state_mutated":False,
+    }
+
 def main()->int:
     ap=argparse.ArgumentParser()
     ap.add_argument("--state",default="cost_governor/live/cost_state.json")
     ap.add_argument("--output",default=None)
+    ap.add_argument("--state-metadata",default=None)
     args=ap.parse_args()
     p=load_policy();validate_policy(p)
     token=os.environ.get("GITHUB_TOKEN")
@@ -606,7 +635,11 @@ def main()->int:
           method="POST",
           payload={"ref":branch},
         )
-    result=recover_overdue(load_state(args.state),runs,dispatch=dispatch,at=checked_at,run_proofs=run_proofs)
+    state=load_state(args.state)
+    result=recover_overdue(state,runs,dispatch=dispatch,at=checked_at,run_proofs=run_proofs)
+    meta_path=None if args.state_metadata is None else Path(args.state_metadata)
+    metadata=json.loads(meta_path.read_text()) if meta_path is not None and meta_path.exists() else {}
+    result["cost_state_proof"]=cost_state_observation(state,metadata,at=checked_at)
     result["api_requests"]=requests
     result["verified_work_target_count"]=sum(1 for row in result["targets"] if row["status"]=="HEALTHY_VERIFIED_WORK")
     if args.output:
