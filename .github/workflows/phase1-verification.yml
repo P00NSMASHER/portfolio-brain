@@ -2,7 +2,7 @@ name: phase1-verification
 
 on:
   push:
-    branches: ["phase1/trust-boundary-20260928"]
+    branches: ["phase1/trust-boundary-20260928", "fix/runtime-resume-20260929"]
   workflow_dispatch:
 
 permissions:

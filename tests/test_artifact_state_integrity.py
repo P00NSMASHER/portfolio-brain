@@ -391,8 +391,19 @@ class ArtifactStateIntegrityTests(unittest.TestCase):
                 jobs = body.split("\njobs:\n", 1)[1]
                 self.assertEqual(len(re.findall(r"(?m)^  [a-zA-Z0-9_-]+:\s*$", jobs)), 1)
                 locks = re.findall(r"(?m)^( *)concurrency:\n((?: +[^\n]*\n)+)", body)
-                self.assertEqual(len(locks), 1, "writer must have exactly one concurrency lock")
-                indent, block = locks[0]
+                if path.name == "runtime-worker.yml":
+                    # Keep the separate admission lock; the inner mutex owns state.
+                    self.assertEqual(len(locks), 2)
+                    outer_indent, outer = locks[0]
+                    self.assertEqual(outer_indent, "")
+                    self.assertNotIn("portfolio-state-writer-v1", outer)
+                    self.assertIn("  cancel-in-progress: false", outer)
+                    self.assertIn("  queue: max", outer)
+                    indent, block = locks[1]
+                    self.assertEqual(indent, "    ")
+                else:
+                    self.assertEqual(len(locks), 1, "writer must have exactly one state lock")
+                    indent, block = locks[0]
                 self.assertIn(indent, ("", "    "))
                 pad = indent + "  "
                 fields = dict(re.findall(r"(?m)^" + pad + r"(group|cancel-in-progress|queue): ([^\n]+)$", block))
