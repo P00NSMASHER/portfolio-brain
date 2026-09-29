@@ -119,8 +119,16 @@ def validate_publication() -> dict[str, object]:
     require("Verify deployed source commit" in workflow and "source-commit.txt" in workflow, "end-to-end Pages deployment proof missing")
     require("Brain improvements worth considering" in html_text and "IMPROVE NEXT · EVIDENCE BACKED" in html_text, "public recommended upgrades board missing")
     require("Run upgrade" in html_text and "Build SKU-001" in html_text and "https://chatgpt.com/?prompt=" in html_text, "public action-button UX missing")
-    require("Refresh Brain" in html_text, "public refresh workflow link missing")
-    require("Show operations & diagnostics" in html_text and 'id="advanced-content"' in html_text, "public simple-mode disclosure missing")
+    primary=snapshot["primary_operator_view"]
+    require(set(primary)=={
+        "money_earned","active_external_experiment","closest_external_milestone",
+        "current_blocker","action_required_from_owner","last_verified_customer_or_market_signal",
+    },"public primary operator view is not exactly six business answers")
+    require("What matters right now" in html_text and "Money earned" in html_text and "Active external experiment" in html_text, "public six-answer primary surface missing")
+    require("Closest external milestone" in html_text and "Current blocker" in html_text and "Action required from you" in html_text and "Last verified customer / market signal" in html_text, "public six-answer labels incomplete")
+    require('id="operator-primary"' in html_text and 'id="advanced-content" class="advanced-content" hidden' in html_text, "public diagnostics are not hidden by default")
+    require(html_text.index('id="operator-primary"') < html_text.index('id="advanced-content"') < html_text.index('id="revenue-focus"'), "public primary/diagnostic hierarchy drifted")
+    require("Show operations & diagnostics" in html_text, "public diagnostic disclosure missing")
     require('class="mobile-dock"' in html_text, "public mobile quick-action dock missing")
     require("Verified cash, not activity." in html_text, "public revenue-first operator focus missing")
     require(
