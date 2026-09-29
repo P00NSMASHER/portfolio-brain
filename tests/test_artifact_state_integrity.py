@@ -139,6 +139,51 @@ class ArtifactStateIntegrityTests(unittest.TestCase):
         download=payloads if callable(payloads) else payloads.__getitem__
         return restore_latest_valid_state(data,current_run="99",expected_head_branch="main",download=download,output=output,member_name="runtime_state.json",expected_state_id="portfolio-runtime-state",max_archive_bytes=10000,max_state_bytes=1000,metadata_output=metadata_output)
 
+    def test_state_merger_reconciles_valid_concurrent_candidates_with_provenance(self):
+        data=self.candidates()
+        newer={
+            "schema_version":"1.0.0","state_id":"portfolio-runtime-state",
+            "sequence":9,"events":["scheduler"],
+        }
+        older={
+            "schema_version":"1.0.0","state_id":"portfolio-runtime-state",
+            "sequence":8,"events":["health-sweep"],
+        }
+        def merger(states):
+            return {
+                "schema_version":"1.0.0",
+                "state_id":"portfolio-runtime-state",
+                "sequence":max(state["sequence"] for state in states),
+                "events":sorted({event for state in states for event in state.get("events",[])}),
+            }
+        with tempfile.TemporaryDirectory() as td:
+            output=Path(td)/"runtime_state.json"
+            metadata=Path(td)/"restore.json"
+            status=restore_latest_valid_state(
+                data,
+                current_run="99",
+                expected_head_branch="main",
+                download={
+                    "new":artifact("runtime_state.json",json.dumps(newer).encode()),
+                    "old":artifact("runtime_state.json",json.dumps(older).encode()),
+                }.__getitem__,
+                output=output,
+                member_name="runtime_state.json",
+                expected_state_id="portfolio-runtime-state",
+                max_archive_bytes=10000,
+                max_state_bytes=1000,
+                metadata_output=metadata,
+                state_merger=merger,
+            )
+            self.assertEqual(status,"RESTORED_MERGED_VALID_CANDIDATES")
+            merged=json.loads(output.read_text())
+            self.assertEqual(merged["sequence"],9)
+            self.assertEqual(merged["events"],["health-sweep","scheduler"])
+            receipt=json.loads(metadata.read_text())
+            self.assertIsNone(receipt["artifact_id"])
+            self.assertEqual(receipt["source_artifact_ids"],[2,1])
+            self.assertEqual(receipt["source_sequences"],[9,8])
+
     def test_corrupt_newest_falls_back_to_newest_valid_predecessor(self):
         with tempfile.TemporaryDirectory() as td:
             output=Path(td)/"runtime_state.json"

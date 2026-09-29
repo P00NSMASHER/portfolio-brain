@@ -95,6 +95,7 @@ def restore_latest_valid_state(
     validator: Callable[[dict[str, Any]], None] | None = None,
     metadata_output: Path | None = None,
     max_candidates: int = 5,
+    state_merger: Callable[[list[dict[str, Any]]], dict[str, Any]] | None = None,
 ) -> str:
     if type(max_candidates) is not int or max_candidates < 1:
         raise ValueError("max_candidates must be a positive integer")
@@ -154,6 +155,80 @@ def restore_latest_valid_state(
         valid.append((sequence, item, payload, state_hash))
     if not valid:
         raise InvalidStateArtifact("no valid prior state artifact found")
+
+    if state_merger is not None:
+        try:
+            merged_state = state_merger([json.loads(entry[2].decode("utf-8")) for entry in valid])
+        except Exception as exc:
+            raise InvalidStateArtifact("state merge failed") from exc
+        if not isinstance(merged_state, dict):
+            raise InvalidStateArtifact("state merger must return an object")
+        if merged_state.get("schema_version") != "1.0.0" or merged_state.get("state_id") != expected_state_id:
+            raise InvalidStateArtifact("merged state identity mismatch")
+        if type(merged_state.get("sequence")) is not int or merged_state["sequence"] < 0:
+            raise InvalidStateArtifact("merged state sequence invalid")
+        if validator is not None:
+            try:
+                validator(merged_state)
+            except Exception as exc:
+                raise InvalidStateArtifact("merged state failed subsystem validation") from exc
+        canonical = json.dumps(
+            merged_state, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+        merged_hash = "sha256:" + hashlib.sha256(canonical).hexdigest()
+        merged_payload = (json.dumps(merged_state, indent=2, sort_keys=True) + "\n").encode("utf-8")
+        if len(merged_payload) > max_state_bytes:
+            raise InvalidStateArtifact("merged state exceeds byte budget")
+
+        exact = next((entry for entry in valid if entry[3] == merged_hash), None)
+        if exact is not None:
+            sequence, item, payload, state_hash = exact
+            status = "RESTORED" if item is valid[0][1] else "RESTORED_HIGHEST_SEQUENCE"
+            if rejected:
+                status += f"_AFTER_REJECTING_{rejected}_INVALID"
+            _atomic_write(output, payload)
+            if metadata_output is not None:
+                workflow_run = item.get("workflow_run") or {}
+                _atomic_write(metadata_output, (json.dumps({
+                    "schema_version":"1.0.0",
+                    "restore_status":status,
+                    "artifact_id":item.get("id"),
+                    "artifact_name":item.get("name"),
+                    "artifact_created_at":item.get("created_at"),
+                    "artifact_expires_at":item.get("expires_at"),
+                    "source_run_id":workflow_run.get("id"),
+                    "source_head_sha":workflow_run.get("head_sha"),
+                    "source_sequence":sequence,
+                    "source_state_hash":state_hash,
+                    "candidates_inspected":min(len(candidates), max_candidates),
+                    "merge_candidate_count":len(valid),
+                },sort_keys=True)+"\n").encode("utf-8"))
+            return status
+
+        newest_item = valid[0][1]
+        status = "RESTORED_MERGED_VALID_CANDIDATES"
+        if rejected:
+            status += f"_AFTER_REJECTING_{rejected}_INVALID"
+        _atomic_write(output, merged_payload)
+        if metadata_output is not None:
+            _atomic_write(metadata_output, (json.dumps({
+                "schema_version":"1.0.0",
+                "restore_status":status,
+                "artifact_id":None,
+                "artifact_name":newest_item.get("name"),
+                "artifact_created_at":newest_item.get("created_at"),
+                "artifact_expires_at":newest_item.get("expires_at"),
+                "source_run_id":None,
+                "source_head_sha":None,
+                "source_sequence":merged_state["sequence"],
+                "source_state_hash":merged_hash,
+                "candidates_inspected":min(len(candidates), max_candidates),
+                "merge_candidate_count":len(valid),
+                "source_artifact_ids":[entry[1].get("id") for entry in valid],
+                "source_run_ids":[(entry[1].get("workflow_run") or {}).get("id") for entry in valid],
+                "source_sequences":[entry[0] for entry in valid],
+            },sort_keys=True)+"\n").encode("utf-8"))
+        return status
 
     # Upload completion time is not a state-version clock. Concurrent or retried
     # workflows can upload a stale snapshot after a more advanced predecessor.
