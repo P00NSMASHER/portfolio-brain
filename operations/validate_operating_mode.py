@@ -257,6 +257,23 @@ def validate_operating_mode():
     req("workload_control.workload_gate preflight" in factory,"software factory is not workload controlled")
     req("cost_governor.workflow_gate" not in factory,"software factory is still coupled to paid cost governance")
     req("run: exit 3" in factory,"software factory must fail closed when workload admission is denied")
+    repair_cycle=(ROOT/".github/workflows/repair-candidate-cycle.yml").read_text().lower()
+    req("workflow_call" in repair_cycle and "schedule:" not in repair_cycle,"repair candidate cycle unexpectedly recurring")
+    req("group: portfolio-cost-governed-autonomy" in repair_cycle,"repair planning lost paid-state serialization")
+    req("cost_governor.workflow_gate preflight" in repair_cycle and "cost_governor.workflow_gate finalize" in repair_cycle,
+        "repair planning lost paid wrapper governance")
+    for job in ("replay","submit","finalize"):
+        req(f"--job-id {job}" in repair_cycle,f"repair {job} workload gate missing")
+        req(f"repair-candidate-cycle::{job}" in workload["services"],f"repair {job} workload policy missing")
+    req("software_factory.candidate_submitter" in repair_cycle,"repair cycle remote candidate submission missing")
+    req("software_factory.complete_repair_work" in repair_cycle,"repair cycle scheduler completion missing")
+    req("pull-requests: write" not in repair_cycle and "merge" not in repair_cycle and "deploy" not in repair_cycle,
+        "repair candidate cycle widened into PR/merge/deploy authority")
+    repair_policy=p.get("reusable_nonrecurring_workflows",{}).get("repair-candidate-cycle",{})
+    req(repair_policy.get("trigger")=="workflow_call","repair candidate workflow is not recorded as reusable nonrecurring work")
+    scheduler_body=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text().lower()
+    req("has_repair_work" in scheduler_body and "uses: ./.github/workflows/repair-candidate-cycle.yml" in scheduler_body,
+        "scheduler does not hand real repair work to the candidate cycle")
     event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text().lower()
     req("push:" in event and 'branches: ["main"]' in event,"main push observer missing")
     req('"operations/command_center_refresh_request.json"' in event,"trigger-only command-center refresh still creates redundant runtime work")
