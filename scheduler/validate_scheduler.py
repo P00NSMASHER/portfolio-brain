@@ -57,10 +57,10 @@ def validate_scheduler():
     req(wf.index("concurrency:",wf.index("  schedule:"))>wf.index("  schedule:"),"scheduler shared-state mutex must cover the writer job")
     runtime_event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
     req('".github/workflows/portfolio-autonomous-scheduler.yml"' in runtime_event,"scheduler workflow changes are not isolated from runtime-event churn")
-    for s in ["hunting.proposal_artifact_state","hunting/live/hunter_proposal_state.json","portfolio-hunter-proposal-state"]:
+    for s in ["state_journal.production_reader --domain proposals","hunting/live/hunter_proposal_state.json","portfolio-hunter-proposal-state"]:
         req(s in wf,f"scheduler Hunter proposal inbox integration missing {s}")
     for token in [
-        "hunting.proposal_review_artifact_state",
+        "state_journal.production_reader --domain reviews",
         "hunting.proposal_review_state",
         "hunter_proposal_review_state.json",
         "portfolio-hunter-proposal-review-state",
