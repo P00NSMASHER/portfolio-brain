@@ -13,11 +13,11 @@
       "purpose": "non-paid repository observation synchronization with workload admission"
     },
     "runtime-daily-learning": {
-      "cron": "37 9 * * *",
+      "cron": "43 9 * * *",
       "purpose": "deterministic learning/uncertainty/experiment/allocation rebuild"
     },
     "runtime-weekly-synthesis": {
-      "cron": "17 10 * * 1",
+      "cron": "43 10 * * 1",
       "purpose": "weekly deterministic portfolio synthesis"
     },
     "hunter-autonomous-cycle": {

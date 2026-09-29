@@ -193,8 +193,8 @@ def validate_operating_mode():
 
     expected={
       "runtime-hourly-sync":"17 * * * *",
-      "runtime-daily-learning":"37 9 * * *",
-      "runtime-weekly-synthesis":"17 10 * * 1",
+      "runtime-daily-learning":"43 9 * * *",
+      "runtime-weekly-synthesis":"43 10 * * 1",
       "hunter-autonomous-cycle":"47 */6 * * *",
       "portfolio-autonomous-scheduler":"23 * * * *",
       "portfolio-cost-watchdog":"53 * * * *",
@@ -202,6 +202,10 @@ def validate_operating_mode():
       "command-center-pages":"37 * * * *",
       "agent-heartbeat-sweep":"29 */2 * * *",
     }
+    req(expected["runtime-daily-learning"].split()[0] != expected["command-center-pages"].split()[0],
+        "daily learning must not collide with hourly command-center publication")
+    req(expected["runtime-weekly-synthesis"].split()[0] != expected["runtime-hourly-sync"].split()[0],
+        "weekly synthesis must not collide with hourly runtime sync")
     req(set(p["approved_recurring_workflows"])==set(expected),"approved recurring workflow set changed")
     workflow_dir=ROOT/".github/workflows"
     actual=scheduled_workflow_inventory(workflow_dir)

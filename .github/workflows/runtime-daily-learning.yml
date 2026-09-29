@@ -2,7 +2,7 @@ name: runtime-daily-learning
 
 on:
   schedule:
-    - cron: "37 9 * * *"
+    - cron: "43 9 * * *"
   workflow_dispatch:
   push:
     branches: ["main"]
