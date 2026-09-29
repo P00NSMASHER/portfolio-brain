@@ -24,6 +24,7 @@ from dashboard.history_state import load_state as load_history_state, public_his
 from dashboard.operational_telemetry import build_operational_telemetry
 from cost_governor.sentinel import build_sentinel_snapshot
 from learning.integrity import build_learning_integrity
+from operations.value_loop import build_value_loop_snapshot, primary_operator_view
 from hunting.proposal_state import backlog_summary as build_hunter_proposal_backlog_summary, normalize_state as normalize_hunter_proposal_state
 
 ROOT = Path(__file__).resolve().parents[1]
