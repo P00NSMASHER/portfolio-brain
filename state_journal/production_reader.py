@@ -1,6 +1,6 @@
 """Restore production state exclusively from the reducer-owned canonical snapshot."""
 from __future__ import annotations
-import argparse, os
+import argparse, os, time
 from pathlib import Path
 
 from runtime.artifact_restore import _atomic_write
@@ -10,6 +10,62 @@ from state_journal.reducer import validate_snapshot
 from state_journal.transport import EVENT_PREFIX, SNAPSHOT_ARTIFACT, GitHubReader, artifact_digest, extract_json
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _known_event_artifact_ids(state: dict) -> set[int]:
+    return {
+        ref["artifact_id"]
+        for refs in state["evidence"].values()
+        for ref in refs
+        if ref.get("kind") == "GITHUB_ACTIONS"
+    }
+
+
+def _pending_events(state: dict, artifacts: list[dict]) -> list[dict]:
+    known = _known_event_artifact_ids(state)
+    return [
+        artifact for artifact in artifacts
+        if artifact.get("name", "").startswith(EVENT_PREFIX)
+        and artifact.get("workflow_run", {}).get("head_branch") == "main"
+        and artifact.get("expired") is False
+        and artifact.get("id") not in known
+    ]
+
+
+def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, current_run: str,
+                        timeout_seconds: int = 90, poll_seconds: float = 3.0,
+                        clock=time.monotonic, sleep=time.sleep) -> tuple[GitHubReader, dict, list[dict]]:
+    require(pending, "Pending-event wait requires at least one event")
+    latest_event_time = max(str(row.get("created_at") or "") for row in pending)
+    pending_ids = {row["id"] for row in pending}
+    deadline = clock() + timeout_seconds
+    seen_reducers: set[int] = set()
+    poller = GitHubReader(token, max_requests=min(40, policy["limits"]["max_read_requests"]))
+    while clock() < deadline:
+        runs = poller.get("/actions/runs?branch=main&event=workflow_run&per_page=50").get("workflow_runs", [])
+        require(isinstance(runs, list), "Reducer run listing malformed")
+        successes = [
+            row for row in runs
+            if row.get("name") == "portfolio-state-reducer"
+            and row.get("head_branch") == "main"
+            and row.get("status") == "completed"
+            and row.get("conclusion") == "success"
+            and str(row.get("created_at") or "") >= latest_event_time
+            and type(row.get("id")) is int
+        ]
+        for reducer_run in sorted(successes, key=lambda row: row["id"]):
+            if reducer_run["id"] in seen_reducers:
+                continue
+            seen_reducers.add(reducer_run["id"])
+            fresh = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
+            artifacts = fresh.list_recent_artifacts(
+                policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]
+            )
+            state = restore_snapshot(fresh, artifacts, current_run=current_run)
+            if state is not None and pending_ids <= _known_event_artifact_ids(state):
+                return fresh, state, artifacts
+        sleep(poll_seconds)
+    require(False, "STALE_CANONICAL_STATE_REDUCTION_TIMEOUT")
 
 
 def restore_domain(domain: str, output: Path, metadata_output: Path | None = None) -> str:
@@ -48,19 +104,30 @@ def restore_domain(domain: str, output: Path, metadata_output: Path | None = Non
         matching_snapshot_artifacts,
         key=lambda row: (row.get("created_at", ""), row.get("id", 0)),
     )
-    known_artifacts = {
-        ref["artifact_id"]
-        for refs in state["evidence"].values()
-        for ref in refs
-        if ref.get("kind") == "GITHUB_ACTIONS"
-    }
-    pending = [
-        a for a in artifacts
-        if a.get("name", "").startswith(EVENT_PREFIX)
-        and a.get("workflow_run", {}).get("head_branch") == "main"
-        and a.get("id") not in known_artifacts
-    ]
-    require(not pending, "STALE_CANONICAL_STATE_PENDING_REDUCTION")
+    pending = _pending_events(state, artifacts)
+    waited_for_reducer = bool(pending)
+    if pending:
+        reader, state, artifacts = _wait_for_reduction(
+            token, policy, pending, current_run=current_run
+        )
+        require(state["mode"] == "CANONICAL" and state["production_authority"] is True,
+                "Reducer catch-up snapshot is not production-authoritative")
+        require(not _pending_events(state, artifacts), "STALE_CANONICAL_STATE_PENDING_REDUCTION")
+        matching_snapshot_artifacts = []
+        for artifact in artifacts:
+            if artifact.get("name") != SNAPSHOT_ARTIFACT:
+                continue
+            source = artifact.get("workflow_run", {})
+            if source.get("head_branch") != "main" or str(source.get("id")) == str(current_run) or artifact.get("expired"):
+                continue
+            raw = reader.archive(artifact["id"])
+            artifact_digest(artifact, raw)
+            candidate = extract_json(raw, "snapshot.json")
+            validate_snapshot(candidate)
+            if candidate["state_hash"] == state["state_hash"]:
+                matching_snapshot_artifacts.append(artifact)
+        require(matching_snapshot_artifacts, "Canonical snapshot provider metadata missing after reducer wait")
+        snapshot_meta = max(matching_snapshot_artifacts, key=lambda row: (row.get("created_at", ""), row.get("id", 0)))
     projected = state["projection"]["states"]
     require(domain in projected, "Canonical projection missing domain")
     value = projected[domain]
@@ -69,7 +136,7 @@ def restore_domain(domain: str, output: Path, metadata_output: Path | None = Non
     if metadata_output is not None:
         meta = {
             "schema_version": "1.0.0",
-            "restore_status": "RESTORED_CANONICAL",
+            "restore_status": "RESTORED_CANONICAL_AFTER_REDUCER_WAIT" if waited_for_reducer else "RESTORED_CANONICAL",
             "domain": domain,
             "canonical_sequence": state["sequence"],
             "canonical_state_hash": state["state_hash"],
