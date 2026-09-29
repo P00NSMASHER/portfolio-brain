@@ -153,6 +153,12 @@ class StateJournalTransportTests(unittest.TestCase):
         self.assertEqual(set(doc['states']),set(DOMAINS))
         self.assertEqual(set(doc['source_refs']),set(DOMAINS))
         self.assertTrue(all('github-actions:' in ref or 'repo-seed:' in ref for ref in doc['source_refs'].values()))
+        self.assertEqual(doc['states']['heartbeat']['sequence'],142)
+        self.assertEqual(doc['states']['history']['sequence'],144)
+        self.assertIn('artifact=11048615497',doc['source_refs']['heartbeat'])
+        self.assertIn('artifact=11048660700',doc['source_refs']['history'])
+        policy=json.loads((ROOT/'state_journal/POLICY.json').read_text())
+        self.assertEqual(policy['artifact_scan_start'],'2026-09-29T16:35:30Z')
 
     def test_legacy_parity_rejects_one_domain_drift(self):
         doc=strict_load(gzip.decompress((ROOT/'state_journal/CHECKPOINT.json.gz').read_bytes()))
