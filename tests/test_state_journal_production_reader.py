@@ -40,6 +40,12 @@ class FakeReader:
 
 
 class CanonicalProductionReaderTests(unittest.TestCase):
+    def test_default_reducer_wait_covers_real_queue_pressure(self):
+        source=(ROOT/"state_journal/production_reader.py").read_text()
+        self.assertIn("timeout_seconds: int = 300",source)
+        self.assertIn("poll_seconds: float = 5.0",source)
+        self.assertIn('max_requests=policy["limits"]["max_read_requests"]',source)
+
     def run_restore(self, artifacts):
         state = canonical_snapshot()
         fake = FakeReader(artifacts)
