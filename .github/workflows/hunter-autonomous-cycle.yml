@@ -46,20 +46,15 @@ jobs:
           --workflow-id hunter-autonomous-cycle
           --job-id hunt
           --estimated-minutes 5
-      - name: Restore latest Hunter state
+      - name: Restore canonical Hunter state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
-        run: python -m hunting.artifact_state --output hunting/live/hunter_state.json
-      - name: Restore latest Hunter proposal backlog
+        run: python -m state_journal.production_reader --domain hunter --output hunting/live/hunter_state.json
+      - name: Restore canonical Hunter proposal backlog
         if: ${{ steps.workload.outputs.allowed == 'true' }}
-        run: |
-          mkdir -p hunting/live
-          python -m hunting.proposal_artifact_state --output hunting/live/hunter_proposal_state.json
-          if [ ! -f hunting/live/hunter_proposal_state.json ]; then
-            cp hunting/HUNTER_PROPOSAL_STATE_SEED.json hunting/live/hunter_proposal_state.json
-          fi
-      - name: Restore latest agent heartbeat state
+        run: python -m state_journal.production_reader --domain proposals --output hunting/live/hunter_proposal_state.json
+      - name: Restore canonical agent heartbeat state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
-        run: python -m agents.artifact_state --output agents/live/agent_heartbeat_state.json
+        run: python -m state_journal.production_reader --domain heartbeat --output agents/live/agent_heartbeat_state.json
       - name: Verify Hunter calibration corpus
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m hunting.calibration --output hunting/out/calibration_report.json

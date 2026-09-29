@@ -58,7 +58,7 @@ class CommandCenterV4Tests(unittest.TestCase):
         }
         for path,agent in expected.items():
             body=(ROOT/path).read_text()
-            self.assertIn("python -m agents.artifact_state",body,path)
+            self.assertIn("python -m state_journal.production_reader --domain heartbeat",body,path)
             self.assertIn("python -m agents.heartbeat_state",body,path)
             self.assertIn(agent,body,path)
             self.assertIn("portfolio-agent-heartbeat-state",body,path)
@@ -135,7 +135,8 @@ class CommandCenterV4Tests(unittest.TestCase):
 
     def test_command_center_history_is_persisted_and_public_summary_only(self):
         workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text()
-        self.assertIn("dashboard.history_artifact_state",workflow)
+        self.assertIn("state_journal.production_reader",workflow)
+        self.assertIn("--domain history",workflow)
         self.assertIn("dashboard.history_state",workflow)
         self.assertIn("portfolio-command-center-history",workflow)
         self.assertIn("public/history.json",workflow)

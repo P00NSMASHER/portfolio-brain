@@ -86,10 +86,11 @@ jobs:
           python -m dashboard.live_state_bridge
           --output-dir dashboard/live
           --receipt dashboard/live/state_sources.json
-      - name: Restore command-center history
+      - name: Restore canonical command-center history
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
-          python -m dashboard.history_artifact_state
+          python -m state_journal.production_reader
+          --domain history
           --output dashboard/live/history_state.json
           --metadata-output dashboard/live/history_restore.json
       - name: Append sanitized telemetry history

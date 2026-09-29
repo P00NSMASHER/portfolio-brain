@@ -244,14 +244,21 @@ class StateJournalTransportTests(unittest.TestCase):
         rows=reader.list_recent_artifacts('2026-09-29T00:00:00Z')
         self.assertEqual(rows,[row])
 
-    def test_policy_cannot_enable_readers_before_cutover(self):
+    def test_policy_authority_flags_are_stage_consistent(self):
         policy=json.loads((ROOT/'state_journal/POLICY.json').read_text())
-        self.assertIn(policy['mode'],{'SHADOW','CANONICAL_READY'})
-        self.assertFalse(policy['production_readers_enabled'])
-        self.assertFalse(policy['production_cutover_complete'])
+        self.assertIn(policy['mode'],{'SHADOW','CANONICAL_READY','CANONICAL'})
         self.assertFalse(policy['steps_3_to_8_started'])
-        if policy['mode']=='CANONICAL_READY':
+        if policy['mode']=='SHADOW':
+            self.assertFalse(policy['production_readers_enabled'])
+            self.assertFalse(policy['production_cutover_complete'])
+        elif policy['mode']=='CANONICAL_READY':
             self.assertTrue(policy['canonical_snapshot_authorized'])
+            self.assertFalse(policy['production_readers_enabled'])
+            self.assertFalse(policy['production_cutover_complete'])
+        else:
+            self.assertTrue(policy['canonical_snapshot_authorized'])
+            self.assertTrue(policy['production_readers_enabled'])
+            self.assertTrue(policy['production_cutover_complete'])
 
 
 if __name__ == '__main__':unittest.main()

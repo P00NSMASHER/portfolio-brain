@@ -42,9 +42,9 @@ jobs:
           --workflow-id software-factory-candidate
           --job-id execute-candidate-action
           --estimated-minutes 5
-      - name: Restore latest agent heartbeat state
+      - name: Restore canonical agent heartbeat state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
-        run: python -m agents.artifact_state --output agents/live/agent_heartbeat_state.json
+        run: python -m state_journal.production_reader --domain heartbeat --output agents/live/agent_heartbeat_state.json
       - name: Execute bounded candidate action
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m software_factory.github_executor

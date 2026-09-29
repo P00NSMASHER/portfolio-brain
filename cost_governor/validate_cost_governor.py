@@ -151,7 +151,7 @@ def validate_cost_governor():
         body = workflow_path.read_text(encoding="utf-8").lower()
         for fragment in (
             "portfolio-cost-governed-autonomy",
-            "cost_governor.artifact_state",
+            "state_journal.production_reader --domain cost",
             "cost_governor.workflow_gate preflight",
             "cost_governor.workflow_gate finalize",
             "portfolio-cost-governor-state",

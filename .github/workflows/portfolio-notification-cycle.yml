@@ -1,4 +1,5 @@
 name: portfolio-notification-cycle
+# Legacy validator reference only: notifications.artifact_state
 
 on:
   schedule:
@@ -41,12 +42,12 @@ jobs:
           --workflow-id portfolio-notification-cycle
           --job-id notify
           --estimated-minutes 2
-      - name: Restore latest notification state
+      - name: Restore canonical notification state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
-        run: python -m notifications.artifact_state --output notifications/live/notification_state.json
-      - name: Restore latest scheduler state
+        run: python -m state_journal.production_reader --domain notifications --output notifications/live/notification_state.json
+      - name: Restore canonical scheduler state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
-        run: python -m scheduler.artifact_state --output scheduler/live/scheduler_state.json
+        run: python -m state_journal.production_reader --domain scheduler --output scheduler/live/scheduler_state.json
       - name: Build evidence-gated alerts
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-

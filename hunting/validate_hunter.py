@@ -190,7 +190,7 @@ def validate_hunter():
         req(s in wf,f"Hunter workflow missing {s}")
     req(wf.index("concurrency:",wf.index("hunt:"))>wf.index("hunt:"),"Hunter shared-state mutex must cover the writer job")
     req("portfolio-hunter-proposal-state" in wf and "hunting/out/hunter_proposal_state.json" in wf,"Hunter workflow does not persist proposal inbox")
-    req("python -m hunting.proposal_artifact_state --output hunting/live/hunter_proposal_state.json" in wf,"Hunter workflow does not restore prior proposal backlog")
+    req("python -m state_journal.production_reader --domain proposals --output hunting/live/hunter_proposal_state.json" in wf,"Hunter workflow does not restore canonical proposal backlog")
     trigger=(ROOT/".github/triggers/hunter-autonomous-now.txt").read_text()
     req("authority=OBSERVE" in trigger and "model-calls=0" in trigger,"Hunter on-demand trigger widened authority/cost")
     runtime_event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
