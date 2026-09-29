@@ -43,6 +43,10 @@
     "agent-heartbeat-sweep": {
       "cron": "29 */2 * * *",
       "purpose": "workload-controlled health-check heartbeat for every registered persistent agent"
+    },
+    "portfolio-liveness-watchdog": {
+      "cron": "7,37 * * * *",
+      "purpose": "twice-hourly exact-proof liveness recovery for stale or failed core autonomous workflows; bounded redispatch only"
     }
   },
   "event_driven_workflows": {
@@ -74,7 +78,8 @@
     "PORTFOLIO_HUNTER_DISABLED",
     "PORTFOLIO_SCHEDULER_DISABLED",
     "PORTFOLIO_SPEND_DISABLED",
-    "PORTFOLIO_NOTIFICATION_DISABLED"
+    "PORTFOLIO_NOTIFICATION_DISABLED",
+    "PORTFOLIO_LIVENESS_DISABLED"
   ],
   "activation_prerequisites": {
     "step23_unresolved_hostile_findings": 0,
@@ -112,7 +117,8 @@
     "Non-paid scheduler, heartbeat, runtime sync/observe, reporting, notification and learning-continuation work use independent workload lanes rather than the paid cost-state lane.",
     "The command center refreshes hourly and from durable producer completion events without consuming paid model/API budget.",
     "Runtime daily/weekly model-assisted analysis remains serialized through the finite paid cost governor, while sync/observe remain available during paid hard stops.",
-    "Merge authority is not human-gated; protected integration may merge only when the current PR head contains current main, required GitHub Actions validation is successful, the separately credentialed verifier App reports success on the exact head, and repository rules allow no bypass."
+    "Merge authority is not human-gated; protected integration may merge only when the current PR head contains current main, required GitHub Actions validation is successful, the separately credentialed verifier App reports success on the exact head, and repository rules allow no bypass.",
+    "The liveness watchdog may only redispatch approved core workflows after exact-run proof checks; it cannot modify repository contents, merge, deploy, move money, widen authority, or bypass target admission gates."
   ],
   "external_connector_gateways": {
     "gmail": {
