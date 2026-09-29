@@ -39,10 +39,8 @@ concurrency:
 
 jobs:
   reduce:
-    concurrency:
-      group: portfolio-state-writer-v1
-      cancel-in-progress: false
-      queue: max
+    # Sole canonical writer: independent reducer lane lets it catch up while a
+    # serialized producer waits at the stale-state barrier.
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
