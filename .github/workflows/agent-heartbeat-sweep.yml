@@ -12,9 +12,15 @@ permissions:
 concurrency:
   group: portfolio-heartbeat
   cancel-in-progress: false
+  queue: max
 
 jobs:
   heartbeat:
+    # Serialize the complete restore -> mutate -> upload transaction.
+    concurrency:
+      group: portfolio-state-writer-v1
+      cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:

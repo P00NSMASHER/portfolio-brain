@@ -50,7 +50,7 @@ class RuntimeResumeSafetyTests(unittest.TestCase):
     def test_all_runtime_modes_share_the_same_job_mutex_and_keep_paid_lock(self):
         text = (ROOT/'.github/workflows/runtime-worker.yml').read_text()
         job = text.split('  runtime:\n', 1)[1].split('    steps:', 1)[0]
-        self.assertIn('group: portfolio-runtime-state-writer', job)
+        self.assertIn('group: portfolio-state-writer-v1', job)
         self.assertIn('queue: max', job)
         self.assertIn('cancel-in-progress: false', job)
         group_line = next(x for x in job.splitlines() if 'group:' in x)
@@ -68,7 +68,7 @@ class RuntimeResumeSafetyTests(unittest.TestCase):
         def poisoned(path, *args, **kwargs):
             value = original(path, *args, **kwargs)
             if str(path).endswith('runtime-worker.yml'):
-                return value.replace('group: portfolio-runtime-state-writer', 'group: per-mode-writer')
+                return value.replace('group: portfolio-state-writer-v1', 'group: per-mode-writer')
             return value
         with patch.object(Path, 'read_text', poisoned):
             with self.assertRaises(RuntimeValidationError):

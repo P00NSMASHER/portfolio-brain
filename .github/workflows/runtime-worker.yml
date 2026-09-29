@@ -21,6 +21,7 @@ permissions:
 concurrency:
   group: ${{ (inputs.mode == 'daily' || inputs.mode == 'weekly') && 'portfolio-cost-governed-autonomy' || format('portfolio-runtime-{0}', inputs.mode) }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
   runtime:
@@ -28,7 +29,7 @@ jobs:
     # Every mode persists the same runtime state. Serialize its full transaction
     # while retaining the separate workflow-level paid-admission lock above.
     concurrency:
-      group: portfolio-runtime-state-writer
+      group: portfolio-state-writer-v1
       cancel-in-progress: false
       queue: max
     runs-on: ubuntu-latest

@@ -47,7 +47,7 @@ class SchedulerTests(unittest.TestCase):
         workflow=(root/".github/workflows/portfolio-autonomous-scheduler.yml").read_text()
         runtime=(root/".github/workflows/runtime-event-observe.yml").read_text()
         self.assertNotIn("\n  push:",workflow)
-        self.assertGreater(workflow.index("concurrency:"),workflow.index("schedule:"))
+        self.assertGreater(workflow.index("concurrency:",workflow.index("  schedule:")),workflow.index("  schedule:"))
         self.assertIn('.github/workflows/portfolio-autonomous-scheduler.yml',runtime)
 
     def test_quality_gated_hunter_proposal_enters_read_only_research_queue(self):

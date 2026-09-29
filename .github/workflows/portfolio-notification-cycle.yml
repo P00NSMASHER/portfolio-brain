@@ -14,9 +14,15 @@ permissions:
 concurrency:
   group: portfolio-notification
   cancel-in-progress: false
+  queue: max
 
 jobs:
   notify:
+    # Serialize the complete restore -> mutate -> upload transaction.
+    concurrency:
+      group: portfolio-state-writer-v1
+      cancel-in-progress: false
+      queue: max
     if: ${{ vars.PORTFOLIO_NOTIFICATION_DISABLED != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 2

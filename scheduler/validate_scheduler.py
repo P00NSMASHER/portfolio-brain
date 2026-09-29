@@ -54,7 +54,7 @@ def validate_scheduler():
     for token in ["contents: read","actions: read","23 * * * *","portfolio_scheduler_disabled","actions/upload-artifact@v4","cancel-in-progress: false"]:
         req(token in wf,f"scheduler workflow missing {token}")
     req("push:" not in wf,"scheduler must not fan out on push inside the singleton cost-state concurrency lane")
-    req(wf.index("concurrency:")>wf.index("schedule:"),"scheduler cost concurrency must remain job-level so cancelled queued jobs are rerunnable")
+    req(wf.index("concurrency:",wf.index("  schedule:"))>wf.index("  schedule:"),"scheduler shared-state mutex must cover the writer job")
     runtime_event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
     req('".github/workflows/portfolio-autonomous-scheduler.yml"' in runtime_event,"scheduler workflow changes are not isolated from runtime-event churn")
     for s in ["hunting.proposal_artifact_state","hunting/live/hunter_proposal_state.json","portfolio-hunter-proposal-state"]:

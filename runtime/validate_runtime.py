@@ -63,7 +63,7 @@ def validate_runtime()->dict:
                      "Report governed no-work outcome","steps.admission.outputs.decision_status","GITHUB_STEP_SUMMARY"]:
         req(required in worker,f"runtime worker missing {required}")
     job_header=worker.split("  runtime:\n",1)[1].split("    steps:",1)[0]
-    req(re.search(r"(?m)^    concurrency:\n      group: portfolio-runtime-state-writer\n      cancel-in-progress: false\n      queue: max$",job_header) is not None,
+    req(re.search(r"(?m)^    concurrency:\n      group: portfolio-state-writer-v1\n      cancel-in-progress: false\n      queue: max$",job_header) is not None,
         "runtime modes must share an unconditional queued state-writer mutex")
     req(not re.search(r"(?m)^  cancel-in-progress: (?!false$)",worker),
         "runtime outer admission lane may not cancel an active writer")
