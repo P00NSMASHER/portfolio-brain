@@ -13,8 +13,6 @@ permissions:
 
 jobs:
   schedule:
-    outputs:
-      has_repair_work: ${{ steps.repair_need.outputs.has_repair }}
     concurrency:
       group: portfolio-scheduler
       cancel-in-progress: false
@@ -135,18 +133,6 @@ jobs:
           --activity-kind WORK_EXECUTION
           --source-workflow portfolio-autonomous-scheduler
           --source-run-id "${GITHUB_RUN_ID}"
-      - name: Detect queued repair continuation
-        id: repair_need
-        if: ${{ steps.workload.outputs.allowed == 'true' }}
-        run: |
-          python - <<'PY'
-          import json, os
-          state=json.load(open("scheduler/out/scheduler_state.json"))
-          has=any(row.get("state")=="QUEUED" and row.get("work_type")=="REPAIR" for row in state["work_items"])
-          with open(os.environ["GITHUB_OUTPUT"],"a",encoding="utf-8") as handle:
-              handle.write("has_repair=" + ("true" if has else "false") + "\n")
-          print({"has_repair":has})
-          PY
       - name: Validate persisted scheduler state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -c "import json; from scheduler.autonomous_scheduler import validate_state; validate_state(json.load(open('scheduler/out/scheduler_state.json')))"
@@ -200,15 +186,3 @@ jobs:
         run: |
           echo "::error title=Portfolio scheduler skipped::Workload status: ${{ steps.workload.outputs.decision_status }}"
           exit 1
-
-
-  repair-candidate:
-    needs: schedule
-    if: ${{ needs.schedule.outputs.has_repair_work == 'true' }}
-    permissions:
-      contents: write
-      actions: read
-    uses: ./.github/workflows/repair-candidate-cycle.yml
-    with:
-      base_sha: ${{ github.sha }}
-    secrets: inherit
