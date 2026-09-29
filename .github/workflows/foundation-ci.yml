@@ -19,6 +19,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -90,6 +94,23 @@ jobs:
         run: python -m operations.validate_operating_mode
       - name: Run regression tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Prepare isolated candidate test image
+        id: candidate_image
+        timeout-minutes: 1
+        run: |
+          docker pull python:3.12-slim
+          image_id=$(docker image inspect python:3.12-slim --format '{{.Id}}')
+          echo "image_id=$image_id" >> "$GITHUB_OUTPUT"
+      - name: Prove scheduler to candidate build on pinned real source
+        run: python -m software_factory.validate_candidate_worker --image-id "${{ steps.candidate_image.outputs.image_id }}"
+      - name: Upload candidate worker proof
+        if: ${{ always() && hashFiles('candidate-worker-proof/pilot_receipt.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidate-worker-proof-${{ github.sha }}
+          path: candidate-worker-proof/
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload Step 24 sanitized canary receipts
         uses: actions/upload-artifact@v4
         with:
