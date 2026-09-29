@@ -142,9 +142,9 @@ def _qa_blockers(factory: dict) -> list[dict]:
     return rows
 
 
-def build_signal_snapshot(*, hunter_proposal_state: dict | None = None) -> dict:
-    commercial = load("commercial_evidence/CURRENT_SANITIZED_OBSERVATION.json")
-    factory = load("operations/MICRO_PRODUCT_FACTORY.json")
+def build_signal_snapshot(*, hunter_proposal_state: dict | None = None, commercial: dict | None = None, factory: dict | None = None) -> dict:
+    commercial = commercial or load("commercial_evidence/CURRENT_SANITIZED_OBSERVATION.json")
+    factory = factory or load("operations/MICRO_PRODUCT_FACTORY.json")
     supply = []
     if isinstance(hunter_proposal_state, dict):
         for proposal in hunter_proposal_state.get("proposals", []):
@@ -188,11 +188,11 @@ def build_signal_snapshot(*, hunter_proposal_state: dict | None = None) -> dict:
     }
 
 
-def build_value_loop_snapshot(*, hunter_proposal_state: dict | None = None) -> dict:
+def build_value_loop_snapshot(*, hunter_proposal_state: dict | None = None, commercial: dict | None = None, factory: dict | None = None) -> dict:
     p = policy()
-    factory = load("operations/MICRO_PRODUCT_FACTORY.json")
-    commercial = load("commercial_evidence/CURRENT_SANITIZED_OBSERVATION.json")
-    signals = build_signal_snapshot(hunter_proposal_state=hunter_proposal_state)
+    factory = factory or load("operations/MICRO_PRODUCT_FACTORY.json")
+    commercial = commercial or load("commercial_evidence/CURRENT_SANITIZED_OBSERVATION.json")
+    signals = build_signal_snapshot(hunter_proposal_state=hunter_proposal_state, commercial=commercial, factory=factory)
     ready = _publish_ready(factory)
     owner_actions = [_owner_action_for_publish(ready[0])] if ready else []
     blockers = _qa_blockers(factory)
