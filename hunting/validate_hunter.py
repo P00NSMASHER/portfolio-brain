@@ -188,7 +188,7 @@ def validate_hunter():
     wf=(ROOT/".github/workflows/hunter-autonomous-cycle.yml").read_text()
     for s in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_HUNTER_DISABLED","47 */6 * * *","cancel-in-progress: false","actions/upload-artifact@v4","python -m hunting.calibration --output hunting/out/calibration_report.json",".github/triggers/hunter-autonomous-now.txt"]:
         req(s in wf,f"Hunter workflow missing {s}")
-    req(wf.index("concurrency:")>wf.index("hunt:"),"Hunter cost concurrency must be job-level so cancelled queued jobs remain rerunnable")
+    req(wf.index("concurrency:",wf.index("hunt:"))>wf.index("hunt:"),"Hunter shared-state mutex must cover the writer job")
     req("portfolio-hunter-proposal-state" in wf and "hunting/out/hunter_proposal_state.json" in wf,"Hunter workflow does not persist proposal inbox")
     req("python -m hunting.proposal_artifact_state --output hunting/live/hunter_proposal_state.json" in wf,"Hunter workflow does not restore prior proposal backlog")
     trigger=(ROOT/".github/triggers/hunter-autonomous-now.txt").read_text()

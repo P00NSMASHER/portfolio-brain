@@ -11,11 +11,18 @@ permissions:
   contents: read
   actions: read
 
+concurrency:
+  group: portfolio-scheduler
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   schedule:
+    # Serialize the complete restore -> mutate -> upload transaction.
     concurrency:
-      group: portfolio-scheduler
+      group: portfolio-state-writer-v1
       cancel-in-progress: false
+      queue: max
     if: ${{ vars.PORTFOLIO_SCHEDULER_DISABLED != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5

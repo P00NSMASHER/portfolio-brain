@@ -115,7 +115,7 @@ class CostGovernorTests(unittest.TestCase):
     def test_event_observe_ignores_dashboard_test_operator_and_one_shot_trigger_churn(self):
         workflow=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
         self.assertIn("group: runtime-event-observe-${{ github.event_name }}-${{ github.ref }}",workflow)
-        self.assertIn("cancel-in-progress: ${{ github.event_name == 'push' }}",workflow)
+        self.assertIn("cancel-in-progress: false",workflow)
         for path in [
             '"dashboard/**"','"tests/**"','"operator_console/**"','"cost_governor/**"',
             '".github/workflows/command-center-pages.yml"',

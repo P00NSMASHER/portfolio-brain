@@ -45,9 +45,15 @@ permissions:
 concurrency:
   group: portfolio-reporting-pages
   cancel-in-progress: false
+  queue: max
 
 jobs:
   publish:
+    # Serialize the complete restore -> mutate -> upload transaction.
+    concurrency:
+      group: portfolio-state-writer-v1
+      cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment:

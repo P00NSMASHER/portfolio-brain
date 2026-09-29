@@ -80,11 +80,17 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: portfolio-operator-console
+  group: ${{ inputs.operation == 'EMERGENCY_STOP' && format('portfolio-emergency-entry-{0}', github.run_id) || 'portfolio-operator-console' }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
   operate:
+    # Serialize the complete restore -> mutate -> upload transaction.
+    concurrency:
+      group: ${{ inputs.operation == 'EMERGENCY_STOP' && format('portfolio-emergency-writer-bypass-{0}', github.run_id) || 'portfolio-state-writer-v1' }}
+      cancel-in-progress: false
+      queue: max
     if: ${{ github.actor == github.repository_owner }}
     runs-on: ubuntu-latest
     timeout-minutes: 10

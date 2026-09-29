@@ -42,7 +42,8 @@ jobs:
   observe:
     concurrency:
       group: runtime-event-observe-${{ github.event_name }}-${{ github.ref }}
-      cancel-in-progress: ${{ github.event_name == 'push' }}
+      cancel-in-progress: false
+      queue: max
     uses: ./.github/workflows/runtime-worker.yml
     with:
       mode: observe

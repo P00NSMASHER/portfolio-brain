@@ -20,10 +20,16 @@ permissions:
 
 concurrency:
   group: ${{ (inputs.mode == 'daily' || inputs.mode == 'weekly') && 'portfolio-cost-governed-autonomy' || format('portfolio-runtime-{0}', inputs.mode) }}
-  cancel-in-progress: ${{ inputs.mode == 'observe' || inputs.mode == 'sync' }}
+  cancel-in-progress: false
+  queue: max
 
 jobs:
   runtime:
+    # Serialize the complete restore -> mutate -> upload transaction.
+    concurrency:
+      group: portfolio-state-writer-v1
+      cancel-in-progress: false
+      queue: max
     if: ${{ vars.PORTFOLIO_RUNTIME_DISABLED != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5

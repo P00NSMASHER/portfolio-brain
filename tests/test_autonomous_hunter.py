@@ -23,7 +23,7 @@ class HunterTests(unittest.TestCase):
         runtime=(root/".github/workflows/runtime-event-observe.yml").read_text()
         trigger=(root/".github/triggers/hunter-autonomous-now.txt").read_text()
         self.assertIn('.github/triggers/hunter-autonomous-now.txt',workflow)
-        self.assertGreater(workflow.index("concurrency:"),workflow.index("hunt:"))
+        self.assertGreater(workflow.index("concurrency:",workflow.index("hunt:")),workflow.index("hunt:"))
         self.assertIn('.github/triggers/hunter-autonomous-now.txt',runtime)
         self.assertIn('.github/workflows/hunter-autonomous-cycle.yml',runtime)
         self.assertIn("authority=OBSERVE",trigger)
