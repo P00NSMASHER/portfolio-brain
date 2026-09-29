@@ -71,13 +71,13 @@ def good_replay():
       cycle("3",cost=2,calls=2,api=2,jobs=2),
     ]
     return replay(cycles,{
-      "candidate_id":"c-good",
+      "candidate_id":candidate_id(discovery()),
       "max_estimated_cost_usd":2.0,
       "max_planned_model_calls":2,
       "max_planned_api_calls":2,
       "max_planned_github_jobs":2,
       "suppress_duplicate_candidates":True,
-    })
+    }, provenance={"input_ref":"fixture:replay", "source_revision_sha":discovery()["revision"], "evaluator_revision_sha":"e"*40})
 
 def candidate_id(d):
     return "CHL-"+hashlib.sha256((d["candidate_fingerprint"]+"\0"+d["revision"]).encode()).hexdigest()[:20].upper()
@@ -85,16 +85,19 @@ def candidate_id(d):
 class ChampionChallengerTests(unittest.TestCase):
     def happy_inputs(self):
         d=discovery()
-        adapter=build_adapter_receipt(adapter_id="A",discovery=d,evidence_refs=["test-receipt:A"])
         replay_receipt=good_replay()
+        adapter=build_adapter_receipt(adapter_id="A",discovery=d,evidence_refs=["test-receipt:A"], candidate_policy_hash=replay_receipt["candidate_policy_hash"], evaluator_revision_sha="e"*40)
         canary=build_forward_canary_receipt(
           candidate_id=candidate_id(d),
-          evidence_refs=["canary:C"],
-          observed_cycles=2,
+          evidence_refs=["canary:C1", "canary:C2", "canary:C3"],
+          observed_cycles=3,
+          candidate_policy_hash=replay_receipt["candidate_policy_hash"],
+          source_revision_sha=d["revision"],
+          evaluator_revision_sha="e"*40,
         )
         return d,adapter,replay_receipt,canary
 
-    def test_happy_path_only_reaches_human_review(self):
+    def test_unresolved_demo_does_not_reach_human_review(self):
         d,adapter,replay_receipt,canary=self.happy_inputs()
         assessment=assess_candidate(
           discovery=d,rights_record=permissive_rights(d),
@@ -102,7 +105,7 @@ class ChampionChallengerTests(unittest.TestCase):
           forward_canary_receipt=canary,
         )
         validate_assessment(assessment)
-        self.assertTrue(assessment["eligible_for_human_promotion_review"])
+        self.assertFalse(assessment["eligible_for_human_promotion_review"])
         self.assertFalse(assessment["automatic_promotion_allowed"])
         self.assertFalse(assessment["active_policy_changed"])
         self.assertFalse(assessment["authority_granted"])

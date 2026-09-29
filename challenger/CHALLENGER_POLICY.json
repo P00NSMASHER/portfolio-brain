@@ -44,7 +44,8 @@
     "shadow_only": true,
     "authority_violations_max": 0,
     "forbidden_actions_attempted_max": 0,
-    "promotion_allowed": false
+    "promotion_allowed": false,
+    "minimum_unique_cycles": 3
   },
   "license_admission_policy": "hunting/LICENSE_ADMISSION_POLICY.json",
   "rights_classes_apply_only_in_enforce_mode": true

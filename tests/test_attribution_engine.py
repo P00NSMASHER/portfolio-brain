@@ -1,6 +1,6 @@
 import unittest
 
-from attribution.attribution_engine import AttributionError, allocator_dimensions, build_attribution_snapshot, validate_snapshot
+from attribution.attribution_engine import AttributionError, allocator_dimensions, preview_dimensions, build_attribution_snapshot, validate_snapshot
 
 def r(rid, parent, stage, hour, *, result="NOT_APPLICABLE", evidence="OBSERVED", failure=None):
     return {
@@ -40,7 +40,7 @@ class AttributionEngineTests(unittest.TestCase):
                 return any(forbidden_key(v) for v in value)
             return False
         self.assertFalse(forbidden_key(snap))
-        dims = allocator_dimensions(snap)["PRJ-009"]
+        dims = preview_dimensions(snap)["projects"]["PRJ-009"]
         self.assertEqual(dims["verified_outcomes"], 1)
         self.assertEqual(dims["proposal_to_experiment_conversion"], 1.0)
 

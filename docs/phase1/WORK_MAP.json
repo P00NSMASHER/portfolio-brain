@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0.0",
+  "scope": "PHASE_1_ONLY",
+  "baseline_main_sha": "bb60815ba1ed25c6914752eee03882c6d183e607",
+  "implementation_pr": 167,
+  "branch": "phase1/trust-boundary-20260928",
+  "phase1_accepted": false,
+  "work": [
+    {
+      "id": "PB-01",
+      "owner": "phase1-execution",
+      "status": "BASELINE_RECONCILED",
+      "next_owner": "verifier-app",
+      "evidence": {
+        "foundation_run": 36450048810,
+        "pages_run": 36450048427,
+        "pages_artifact": 10983215515,
+        "runtime_observe_failed_run": 36450049847,
+        "bridge_status": "DEGRADED"
+      }
+    },
+    {
+      "id": "PB-02",
+      "owner": "issue-65-admin",
+      "status": "BLOCKED_ADMIN_AND_VERIFIER_APP_REGISTRATION",
+      "next_owner": "authorized-repository-administrator",
+      "evidence": {
+        "branch_protected": false,
+        "protection_read_http_status": 403,
+        "browser_admin_session": "NOT_SIGNED_IN",
+        "trusted_gate_configured": false
+      }
+    },
+    {
+      "id": "PB-03",
+      "owner": "pr-167-implementation",
+      "status": "DRAFT_IMPLEMENTATION",
+      "next_owner": "verifier-app"
+    },
+    {
+      "id": "PB-04",
+      "owner": "pr-167-implementation",
+      "status": "DRAFT_IMPLEMENTATION",
+      "next_owner": "verifier-app"
+    }
+  ],
+  "deferred_phase2_prs": [
+    161,
+    160,
+    155,
+    154
+  ],
+  "other_open_prs_not_modified": [
+    151,
+    150,
+    149,
+    140
+  ],
+  "merged": false,
+  "deployed": false,
+  "authority_widened": false,
+  "business_rights_policy_changed": false,
+  "paid_model_calls": 0,
+  "independence_model": "SEPARATE_VERIFIER_APP",
+  "human_reviewer_required": false
+}
