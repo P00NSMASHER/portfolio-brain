@@ -1,4 +1,5 @@
 name: portfolio-notification-cycle
+# Legacy validator reference only: notifications.artifact_state
 
 on:
   schedule:
