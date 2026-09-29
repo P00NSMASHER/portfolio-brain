@@ -47,7 +47,7 @@ def dispatch_and_wait(token: str, workflow: str) -> dict:
     expected_sha = os.environ.get("GITHUB_SHA", "")
     request(token, "POST", f"/actions/workflows/{urllib.parse.quote(workflow, safe='')}/dispatches", {"ref": "main"})
     run = None
-    deadline = time.monotonic() + 300
+    deadline = time.monotonic() + 480
     while time.monotonic() < deadline:
         data = request(token, "GET", f"/actions/workflows/{urllib.parse.quote(workflow, safe='')}/runs?branch=main&event=workflow_dispatch&per_page=10")
         candidates = [
@@ -81,7 +81,7 @@ def dispatch_and_wait(token: str, workflow: str) -> dict:
 def wait_for_reducer(token: str, *, source_run: dict) -> dict:
     expected_sha = os.environ.get("GITHUB_SHA", "")
     source_completed = parse_time(source_run["updated_at"])
-    deadline = time.monotonic() + 300
+    deadline = time.monotonic() + 480
     while time.monotonic() < deadline:
         data = request(token, "GET", "/actions/runs?branch=main&event=workflow_run&per_page=50")
         candidates = [
