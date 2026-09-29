@@ -1,4 +1,1 @@
-workflow-liveness-live-proof-v5
-reason=continue-bounded-recovery-for-stale-hunter-and-notifications
-authority=NONE
-source_commit=3b1e384adf243137a1fd4033e191d13459c9ae16
+Existing cost/sync reporting recovery; no schedule or budget changes. Source c4c60350; 2026-09-29.
