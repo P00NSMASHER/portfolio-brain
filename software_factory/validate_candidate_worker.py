@@ -31,24 +31,36 @@ class FactoryPortablePathRegression(unittest.TestCase):
 '''
 
 
+def pilot_task(checkout: Path = ROOT) -> dict:
+    """Derive the frozen pilot contract from source, never from a build artifact."""
+    source_identity = {"base_sha": BASE, "repository": "P00NSMASHER/portfolio-brain"}
+    source = load_snapshot(checkout, source_identity)
+    path = "software_factory/software_factory.py"
+    before = 'req(isinstance(path,str) and path and not path.startswith("/") and ".." not in Path(path).parts,"invalid candidate path")'
+    after = r'req(isinstance(path,str) and path and "\\" not in path and ":" not in path and "\x00" not in path and not path.startswith("/") and ".." not in Path(path).parts,"invalid candidate path")'
+    return {"schema_version": 1, "driver": "exact-replacement-v1",
+            "task_id": "BUILD-CI-PORTABLE-FACTORY-PATH", "source_ref": "RPR-CI-PORTABLE-FACTORY-PATH",
+            "project_id": "PRJ-000", **source_identity, "timeout_seconds": 45,
+            "test_path": "tests/test_candidate_portable_path_regression.py", "test_source": TEST_SOURCE,
+            "baseline_failure_marker": "FACTORY_BACKSLASH_TRAVERSAL_REJECTED",
+            "edits": [{"path": path, "source_sha256": digest(source[path]), "before": before, "after": after}]}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--image-id", required=True)
     parser.add_argument("--output-dir", default="candidate-worker-proof")
     args = parser.parse_args()
     output = Path(args.output_dir).resolve()
-    source_identity = {"base_sha": BASE, "repository": "P00NSMASHER/portfolio-brain"}
-    source = load_snapshot(ROOT, source_identity)
-    path = "software_factory/software_factory.py"
-    before = 'req(isinstance(path,str) and path and not path.startswith("/") and ".." not in Path(path).parts,"invalid candidate path")'
-    after = r'req(isinstance(path,str) and path and "\\" not in path and ":" not in path and "\x00" not in path and not path.startswith("/") and ".." not in Path(path).parts,"invalid candidate path")'
-    task = {"schema_version": 1, "driver": "exact-replacement-v1",
-            "task_id": "BUILD-CI-PORTABLE-FACTORY-PATH", "source_ref": "RPR-CI-PORTABLE-FACTORY-PATH",
-            "project_id": "PRJ-000", **source_identity, "timeout_seconds": 45,
-            "test_path": "tests/test_candidate_portable_path_regression.py", "test_source": TEST_SOURCE,
-            "baseline_failure_marker": "FACTORY_BACKSLASH_TRAVERSAL_REJECTED",
-            "edits": [{"path": path, "source_sha256": digest(source[path]), "before": before, "after": after}]}
+    require(not output.exists(), "proof output exists; refusing overwrite")
+    task = pilot_task()
     task_hash = object_hash(task)
+    output.mkdir(parents=True)
+    # Tracked Git objects only: no runner environment, credentials or live state.
+    bundle = output / "worker-source.bundle"
+    subprocess.run(["git", "bundle", "create", str(bundle), "HEAD"], cwd=ROOT,
+                   check=True, timeout=30, capture_output=True)
+    (output / "pilot_task.json").write_text(json.dumps(task, indent=2) + "\n")
     configuration = {"tasks": [{"source_ref": task["source_ref"], "task_hash": task_hash, "task": task}],
                      "checkout": ROOT, "image_id": args.image_id,
                      "output_root": output / "candidate_builds"}
@@ -77,6 +89,7 @@ def main() -> None:
              "worker_head_sha": head, "pilot_base_sha": BASE,
              "run_id": os.environ.get("GITHUB_RUN_ID"), "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
              "image_id": args.image_id, "task_hash": task_hash,
+             "source_bundle_sha256": digest(bundle.read_bytes()),
              "queue_origin": "EXPLICIT_CI_PILOT_NOT_LIVE_ALLOCATION",
              "summary": meta["summary"], "independent_verification": False,
              "production_changed": False, "merged": False, "deployed": False}
