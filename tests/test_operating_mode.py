@@ -135,6 +135,26 @@ class OperatingModeTests(unittest.TestCase):
         self.assertIn("workload_control.workload_gate preflight",factory)
         self.assertIn("run: exit 3",factory)
 
+
+    def test_repair_candidate_cycle_is_nonrecurring_and_cannot_merge_or_deploy(self):
+        policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
+        repair=policy["reusable_nonrecurring_workflows"]["repair-candidate-cycle"]
+        self.assertEqual(repair["trigger"],"workflow_call")
+        workflow=(ROOT/".github/workflows/repair-candidate-cycle.yml").read_text()
+        self.assertIn("workflow_call:",workflow)
+        self.assertNotIn("\n  schedule:",workflow)
+        self.assertIn("group: portfolio-cost-governed-autonomy",workflow)
+        self.assertIn("software_factory.model_repair_planner",workflow)
+        self.assertIn("software_factory.candidate_submitter",workflow)
+        self.assertIn("software_factory.complete_repair_work",workflow)
+        self.assertNotIn("pull-requests: write",workflow)
+        self.assertNotIn("CREATE_PR",workflow)
+        self.assertNotIn("MERGE_PR",workflow)
+        scheduler=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text()
+        self.assertIn("has_repair_work",scheduler)
+        self.assertIn("uses: ./.github/workflows/repair-candidate-cycle.yml",scheduler)
+        self.assertIn("needs.schedule.outputs.has_repair_work == 'true'",scheduler)
+
     def test_high_risk_payment_trading_deploy_merge_boundaries_remain(self):
         p=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
         boundaries=set(p["permanent_authority_boundaries"])
