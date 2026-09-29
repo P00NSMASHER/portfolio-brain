@@ -2291,8 +2291,21 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
 .product-meta p{{font-size:.68rem!important;margin-top:7px!important}}
 .primary-header-action{{background:var(--blue)!important;color:#fff!important;border-color:transparent!important}}
 .mobile-dock{{display:none}}
+.primary-six{{margin:0 0 18px;padding:24px}}
+.primary-six h2{{font-size:1.6rem;margin:0 0 6px}}
+.primary-six .primary-sub{{color:var(--muted);margin:0 0 18px}}
+.primary-six-grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}}
+.primary-answer{{padding:18px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface-soft);min-height:126px}}
+.primary-answer span{{display:block;color:var(--muted);font-size:.72rem;font-weight:650;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}}
+.primary-answer strong{{display:block;font-size:1.05rem;line-height:1.35;overflow-wrap:anywhere}}
+.primary-answer.money strong{{font-size:2rem}}
+.primary-answer.owner{{grid-column:span 2}}
+.primary-diagnostics{{margin:0 0 18px;text-align:center}}
 
 @media(max-width:900px){{
+  .primary-six-grid{{grid-template-columns:1fr 1fr}}
+  .primary-answer.owner{{grid-column:1/-1}}
+
   .focus-grid{{grid-template-columns:1fr}}
   .factory-scoreboard{{grid-template-columns:1fr 1fr}}
   .product-grid{{grid-template-columns:1fr}}
