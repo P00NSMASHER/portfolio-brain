@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 REPOSITORY = "P00NSMASHER/portfolio-brain"
+REDUCER = "portfolio-state-reducer.yml"
 TARGETS = (
     "hunter-autonomous-cycle.yml",
     "portfolio-autonomous-scheduler.yml",
@@ -124,10 +125,7 @@ def main() -> None:
     rows = []
     for workflow in TARGETS:
         source = dispatch_and_wait(token, workflow)
-        reducer = wait_for_reducer(token, source_run={
-            "id": source["run_id"],
-            "updated_at": source["updated_at"],
-        })
+        reducer = dispatch_and_wait(token, REDUCER)
         rows.append({**source, "reducer": reducer})
     receipt = {
         "status": "PASS",
