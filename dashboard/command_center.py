@@ -947,6 +947,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
     sprint = snapshot["validation_sprint"]
     commercial = snapshot["commercial_validation"]
     revenue_focus = snapshot["revenue_focus"]
+    operator_primary = snapshot["primary_operator_view"]
     micro_factory = snapshot["micro_product_factory"]
     cost = snapshot["cost_governor"]
     portfolio = snapshot["portfolio"]
