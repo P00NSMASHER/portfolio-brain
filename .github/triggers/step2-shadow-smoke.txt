@@ -3,3 +3,4 @@ Retry after stable bounded artifact scan and queue-aware smoke hotfix.
 Provider-bound checkpoint repair root: sha256:f009eeeb2dea17e90c2b368b0a02f46672feb8aa9914cf1caff96c809c453466.
 Canonical production-reader acceptance rerun: wait for reducer success after every producer before continuing.
 Final canonical-reader acceptance rerun after reducer-independent catch-up barrier hotfix.
+Final Step 2 cached canonical-reader live acceptance rerun.
