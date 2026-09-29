@@ -47,7 +47,7 @@ def dispatch_and_wait(token: str, workflow: str) -> dict:
     expected_sha = os.environ.get("GITHUB_SHA", "")
     request(token, "POST", f"/actions/workflows/{urllib.parse.quote(workflow, safe='')}/dispatches", {"ref": "main"})
     run = None
-    deadline = time.monotonic() + 90
+    deadline = time.monotonic() + 300
     while time.monotonic() < deadline:
         data = request(token, "GET", f"/actions/workflows/{urllib.parse.quote(workflow, safe='')}/runs?branch=main&event=workflow_dispatch&per_page=10")
         candidates = [
