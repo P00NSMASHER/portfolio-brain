@@ -15,29 +15,45 @@ from state_journal.transport import EVENT_PREFIX, SNAPSHOT_ARTIFACT, GitHubReade
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _validated_snapshot(reader: GitHubReader, artifact: dict) -> dict:
+    source = artifact.get("workflow_run", {})
+    run = reader.get(f"/actions/runs/{source['id']}")
+    require(run.get("path") == ".github/workflows/portfolio-state-reducer.yml", "Snapshot did not come from sole reducer workflow")
+    require(run.get("head_branch") == "main" and run.get("head_sha") == source.get("head_sha"), "Snapshot source SHA/branch mismatch")
+    require(run.get("status") == "completed" and run.get("conclusion") == "success", "Snapshot producer did not succeed")
+    require(run.get("repository", {}).get("full_name") == REPOSITORY and run.get("head_repository", {}).get("full_name") == REPOSITORY,
+            "Snapshot source fork mismatch")
+    raw = reader.archive(artifact["id"]); artifact_digest(artifact, raw)
+    state = extract_json(raw, "snapshot.json"); validate_snapshot(state)
+    return state
+
+
 def restore_snapshot(reader: GitHubReader, artifacts: list[dict], *, current_run: str) -> dict | None:
     candidates = [a for a in artifacts if a.get("name") == SNAPSHOT_ARTIFACT
                   and a.get("workflow_run", {}).get("head_branch") == "main"
                   and str(a.get("workflow_run", {}).get("id")) != current_run]
     if not candidates:
         return None
-    require(any(not a.get("expired") for a in candidates), "Canonical journal expired; explicit recovery required")
-    require(len(candidates) <= 20, "Snapshot selection bound reached; no arbitrary truncation")
-    states = []
-    for a in candidates:
-        if a.get("expired"):
-            continue
-        source = a.get("workflow_run", {})
-        run = reader.get(f"/actions/runs/{source['id']}")
-        require(run.get("path") == ".github/workflows/portfolio-state-reducer.yml", "Snapshot did not come from sole reducer workflow")
-        require(run.get("head_branch") == "main" and run.get("head_sha") == source.get("head_sha"), "Snapshot source SHA/branch mismatch")
-        require(run.get("status") == "completed" and run.get("conclusion") == "success", "Snapshot producer did not succeed")
-        require(run.get("repository", {}).get("full_name") == REPOSITORY and run.get("head_repository", {}).get("full_name") == REPOSITORY,
-                "Snapshot source fork mismatch")
-        raw = reader.archive(a["id"]); artifact_digest(a, raw)
-        state = extract_json(raw, "snapshot.json"); validate_snapshot(state)
-        states.append(state)
-    return select_latest_snapshot(states)
+    live = [a for a in candidates if not a.get("expired")]
+    require(live, "Canonical journal expired; explicit recovery required")
+    for artifact in live:
+        require(isinstance(artifact.get("created_at"), str) and artifact["created_at"], "Snapshot created_at missing")
+        require(type(artifact.get("id")) is int and artifact["id"] > 0, "Snapshot artifact identity missing")
+    ordered = sorted(live, key=lambda a: (a["created_at"], a["id"]), reverse=True)
+    # The reducer is the sole non-cancelling canonical publisher. Therefore a
+    # later successful snapshot must never move sequence backward. Validate the
+    # newest snapshot and its immediate predecessor instead of re-downloading
+    # unbounded historical snapshots forever.
+    inspected = ordered[:2]
+    states = [_validated_snapshot(reader, artifact) for artifact in inspected]
+    newest = states[0]
+    if len(states) == 2:
+        previous = states[1]
+        require(newest["sequence"] >= previous["sequence"], "Canonical snapshot sequence rollback detected")
+        if newest["sequence"] == previous["sequence"]:
+            selected = select_latest_snapshot(states)
+            require(digest(selected) == digest(newest), "Newest same-sequence snapshot is not authoritative")
+    return newest
 
 
 def _authority_payload(state: dict) -> dict:
