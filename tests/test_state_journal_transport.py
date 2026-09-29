@@ -209,7 +209,7 @@ class StateJournalTransportTests(unittest.TestCase):
         self.assertNotIn('contents: write',workflow)
         self.assertIn('persist-credentials: false',workflow)
         self.assertIn('python -m state_journal.smoke_dispatch',workflow)
-        self.assertIn('timeout-minutes: 12',workflow)
+        self.assertIn('timeout-minutes: 40',workflow)
         for name in ('portfolio-autonomous-scheduler.yml','agent-heartbeat-sweep.yml'):
             text=(ROOT/'.github/workflows'/name).read_text()
             self.assertNotIn('\n  push:',text)
@@ -219,7 +219,7 @@ class StateJournalTransportTests(unittest.TestCase):
         self.assertIn('row.get("head_sha") == expected_sha',source)
         self.assertIn('row.get("event") == "workflow_dispatch"',source)
         self.assertNotIn('repository_dispatch',source)
-        self.assertIn('time.monotonic() + 300',source)
+        self.assertIn('time.monotonic() + 480',source)
         self.assertIn('def wait_for_reducer',source)
         self.assertIn('portfolio-state-reducer',source)
         self.assertIn('STEP_2_CANONICAL_PRODUCTION_SMOKE',source)
