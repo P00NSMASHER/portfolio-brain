@@ -39,8 +39,36 @@ def restore_snapshot(reader: GitHubReader, artifacts: list[dict], *, current_run
         states.append(state)
     highest = max(s["sequence"] for s in states)
     latest = [s for s in states if s["sequence"] == highest]
-    require(len({digest(s) for s in latest}) == 1, "Conflicting canonical snapshots; never select an arbitrary winner")
-    return latest[0]
+    full_digests = {digest(s) for s in latest}
+    if len(full_digests) == 1:
+        return latest[0]
+
+    # A protected CANONICAL_READY promotion intentionally republishes the exact
+    # same immutable journal payload with authority metadata changed from
+    # SHADOW/false to CANONICAL/true without advancing the journal sequence.
+    # Treat that one proven metadata-only transition as supersession, not a
+    # fork. Any payload divergence at the same sequence still fails closed.
+    def immutable_lineage(state: dict) -> str:
+        return digest({k: state[k] for k in (
+            "schema_version", "state_id", "sequence", "checkpoint", "events",
+            "evidence", "projection", "event_count",
+        )})
+
+    require(len({immutable_lineage(s) for s in latest}) == 1,
+            "Conflicting canonical snapshots; never select an arbitrary winner")
+    promoted = {digest(s): s for s in latest
+                if s["mode"] == "CANONICAL" and s["production_authority"] is True}
+    shadow = {digest(s): s for s in latest
+              if s["mode"] == "SHADOW" and s["production_authority"] is False}
+    require(len(promoted) == 1 and len(shadow) >= 1
+            and len(promoted) + len(shadow) == len(full_digests),
+            "Conflicting canonical snapshots; never select an arbitrary winner")
+    canonical_state = next(iter(promoted.values()))
+    shadow_state = next(iter(shadow.values()))
+    require(canonical(set_authority(shadow_state, mode="CANONICAL", production_authority=True))
+            == canonical(canonical_state),
+            "Conflicting canonical snapshots; never select an arbitrary winner")
+    return canonical_state
 
 
 def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
