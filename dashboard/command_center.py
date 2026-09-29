@@ -359,6 +359,12 @@ def build_command_center_snapshot() -> dict[str, Any]:
         commercial_observation,
         at=commercial_projection_at,
     )
+    value_loop = build_value_loop_snapshot(
+        hunter_proposal_state=hunter_proposal_state,
+        commercial=commercial_observation,
+        factory=micro_product_factory,
+    )
+    operator_primary = primary_operator_view(value_loop)
     model_registry = load_json("model_router/PROVIDER_REGISTRY.json")
     model_feedback_state = load_live_json("model_feedback_state.json", "model_router/MODEL_FEEDBACK_STATE_SEED.json")
     learning_observation_state = load_live_json("learning_observation_state.json", "learning/LIVE_OBSERVATION_STATE_SEED.json")
