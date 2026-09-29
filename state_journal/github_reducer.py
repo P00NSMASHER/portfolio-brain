@@ -37,10 +37,35 @@ def restore_snapshot(reader: GitHubReader, artifacts: list[dict], *, current_run
         raw = reader.archive(a["id"]); artifact_digest(a, raw)
         state = extract_json(raw, "snapshot.json"); validate_snapshot(state)
         states.append(state)
+    return select_latest_snapshot(states)
+
+
+def _authority_payload(state: dict) -> dict:
+    return {
+        key: state[key]
+        for key in (
+            "schema_version", "state_id", "sequence", "checkpoint", "events",
+            "evidence", "projection", "event_count",
+        )
+    }
+
+
+def select_latest_snapshot(states: list[dict]) -> dict:
+    require(states, "No valid canonical snapshots")
     highest = max(s["sequence"] for s in states)
     latest = [s for s in states if s["sequence"] == highest]
-    require(len({digest(s) for s in latest}) == 1, "Conflicting canonical snapshots; never select an arbitrary winner")
-    return latest[0]
+    by_hash = {digest(s): s for s in latest}
+    if len(by_hash) == 1:
+        return next(iter(by_hash.values()))
+    candidates = [
+        s for s in by_hash.values()
+        if s["mode"] == "CANONICAL" and s["production_authority"] is True
+    ]
+    if len(candidates) == 1:
+        promoted = candidates[0]
+        if all(_authority_payload(other) == _authority_payload(promoted) for other in by_hash.values()):
+            return promoted
+    raise JournalError("Conflicting canonical snapshots; never select an arbitrary winner")
 
 
 def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
