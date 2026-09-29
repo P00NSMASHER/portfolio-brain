@@ -112,6 +112,40 @@ class CostGovernorTests(unittest.TestCase):
             self.assertEqual(decision["status"], "RESERVED")
             self.assertTrue(decision["can_execute"])
 
+    def test_github_workload_usage_does_not_block_paid_model_admission(self):
+        state, wrapper = preflight(
+            load_state(),
+            github_request(run_id="paid-admission-regression"),
+            at=AT,
+        )
+        self.assertEqual(wrapper["status"], "RESERVED")
+
+        route = {
+            "status": "ROUTED",
+            "tier": 2,
+            "route_id": "MRT-GITHUB-WORKLOAD-ISOLATION",
+            "provider_id": "openai",
+            "model_id": "gpt-5.6-luna",
+            "max_estimated_cost_usd": 0.01,
+            "route_hash": "sha256:github-workload-isolation",
+        }
+        request = {
+            "request_id": "MRQ-GITHUB-WORKLOAD-ISOLATION",
+            "project_ids": ["PRJ-000"],
+            "max_input_tokens": 100,
+            "max_output_tokens": 100,
+            "authority_class": "OBSERVE",
+            "data_classification": "SANITIZED",
+        }
+        _, decision = reserve_model_execution(state, route, request, at=AT)
+        self.assertEqual(decision["status"], "RESERVED")
+        self.assertTrue(decision["can_execute"])
+        self.assertFalse(any(
+            reason.endswith(":github_job_starts") or reason.endswith(":github_runner_minutes")
+            for reason in decision["reason_codes"]
+        ))
+
+
     def test_event_observe_ignores_dashboard_test_operator_and_one_shot_trigger_churn(self):
         workflow=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
         self.assertIn("group: runtime-event-observe-${{ github.event_name }}-${{ github.ref }}",workflow)

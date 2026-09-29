@@ -290,9 +290,16 @@ def _usage_for(state: dict[str, Any], at: str, predicate) -> dict[str, Any]:
             total = _add_usage(total, usage)
     return total
 
-def _breaches(used: dict[str, Any], estimate: dict[str, Any], ceiling: dict[str, Any], label: str) -> list[str]:
+def _breaches(
+    used: dict[str, Any],
+    estimate: dict[str, Any],
+    ceiling: dict[str, Any],
+    label: str,
+    *,
+    fields: tuple[str, ...] = USAGE_FIELDS,
+) -> list[str]:
     out = []
-    for field in USAGE_FIELDS:
+    for field in fields:
         if used[field] + estimate[field] > ceiling[field] + (1e-12 if field == "cost_usd" else 0):
             out.append(f"BUDGET_EXCEEDED:{label}:{field}")
     return out
@@ -379,17 +386,17 @@ def preflight(state: dict[str, Any], request: dict[str, Any], *, at: str | None 
 
     if request["resource_kind"] in {"MODEL_CALL", "API_CALL"}:
         portfolio_used = _usage_for(out, at, lambda row: True)
-        reasons += _breaches(portfolio_used, estimate, p["portfolio_ceiling"], "portfolio")
+        reasons += _breaches(portfolio_used, estimate, p["portfolio_ceiling"], "portfolio", fields=PAID_USAGE_FIELDS)
 
         for project_id in request["project_ids"]:
             ceiling = p["project_overrides"].get(project_id, p["project_default_ceiling"])
             used = _usage_for(out, at, lambda row, project_id=project_id: project_id in row["project_ids"])
-            reasons += _breaches(used, estimate, ceiling, f"project:{project_id}")
+            reasons += _breaches(used, estimate, ceiling, f"project:{project_id}", fields=PAID_USAGE_FIELDS)
 
         key = f'{request["provider_id"]}::{request["model_id"] or "NONE"}'
         ceiling = p["provider_model_overrides"].get(key, p["provider_model_default_ceiling"])
         used = _usage_for(out, at, lambda row, key=key: f'{row["provider_id"]}::{row["model_id"] or "NONE"}' == key)
-        reasons += _breaches(used, estimate, ceiling, f"provider_model:{key}")
+        reasons += _breaches(used, estimate, ceiling, f"provider_model:{key}", fields=PAID_USAGE_FIELDS)
 
     if request["resource_kind"] == "GITHUB_JOB":
         key = f'{request["workflow_id"]}::{request["job_id"]}'
