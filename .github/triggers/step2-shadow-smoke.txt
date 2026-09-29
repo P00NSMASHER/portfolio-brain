@@ -7,3 +7,4 @@ Final Step 2 cached canonical-reader live acceptance rerun.
 Final acceptance rerun with realistic bounded producer timeout.
 Final proof: smoke explicitly dispatches reducer after each token-dispatched producer.
 Final Steps 1-8 exact-main acceptance after five-minute canonical catch-up fix.
+Post-PR203 live acceptance: verify bounded canonical snapshot selection under accumulated history.
