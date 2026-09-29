@@ -4,3 +4,4 @@ Provider-bound checkpoint repair root: sha256:f009eeeb2dea17e90c2b368b0a02f46672
 Canonical production-reader acceptance rerun: wait for reducer success after every producer before continuing.
 Final canonical-reader acceptance rerun after reducer-independent catch-up barrier hotfix.
 Final Step 2 cached canonical-reader live acceptance rerun.
+Acceptance harness timeout correction after Hunter completed 9 seconds beyond prior bound.
