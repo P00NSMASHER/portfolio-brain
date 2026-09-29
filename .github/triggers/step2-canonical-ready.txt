@@ -1,0 +1,1 @@
+Trigger one protected canonical-ready reducer publication after Step-2 live parity.

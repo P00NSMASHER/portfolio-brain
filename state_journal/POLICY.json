@@ -1,10 +1,11 @@
 {
   "schema_version": "1.0.0",
-  "mode": "SHADOW",
+  "mode": "CANONICAL_READY",
+  "canonical_snapshot_authorized": true,
   "production_readers_enabled": false,
   "explicit_checkpoint_required": true,
   "artifact_scan_start": "2026-09-29T16:35:30Z",
-  "scope": "STEP_2_LIVE_SHADOW_PARITY",
+  "scope": "STEP_2_CANONICAL_READY",
   "limits": {
     "max_archive_bytes": 16777216,
     "max_events": 2000,

@@ -1,6 +1,10 @@
 name: portfolio-state-reducer
 
 on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/triggers/step2-canonical-ready.txt"
   workflow_run:
     workflows:
       - agent-heartbeat-sweep

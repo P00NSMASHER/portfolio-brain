@@ -8,7 +8,7 @@ from pathlib import Path
 
 from runtime.artifact_restore import _atomic_write
 from state_journal.contracts import REPOSITORY, JournalError, canonical, digest, require, strict_load
-from state_journal.reducer import make_snapshot, validate_snapshot, validate_checkpoint, advance
+from state_journal.reducer import make_snapshot, validate_snapshot, validate_checkpoint, advance, set_authority
 from state_journal.legacy_parity import verify as verify_legacy_parity
 from state_journal.transport import EVENT_PREFIX, SNAPSHOT_ARTIFACT, GitHubReader, artifact_digest, extract_json
 
@@ -86,7 +86,16 @@ def main() -> None:
         require(os.environ.get("GITHUB_REF") == "refs/heads/main", "Reducer publishes only from main")
         require(os.environ.get("GITHUB_WORKFLOW") == "portfolio-state-reducer", "Only the reducer workflow owns canonical publication")
         policy = strict_load((ROOT / "state_journal/POLICY.json").read_bytes())
-        require(policy["mode"] == "SHADOW" and policy["production_readers_enabled"] is False, "Production cutover is not authorized by this migration")
+        require(policy["mode"] in {"SHADOW", "CANONICAL_READY", "CANONICAL"}, "Unknown state-journal mode")
+        require(type(policy.get("canonical_snapshot_authorized")) is bool, "Canonical snapshot authorization flag missing")
+        require(type(policy["production_readers_enabled"]) is bool and type(policy["production_cutover_complete"]) is bool,
+                "State-journal authority flags invalid")
+        require(policy["production_readers_enabled"] == policy["production_cutover_complete"],
+                "Reader authority and cutover completion must move together")
+        if policy["mode"] == "CANONICAL_READY":
+            require(policy["canonical_snapshot_authorized"] is True, "Canonical-ready mode requires explicit snapshot authorization")
+            require(policy["production_readers_enabled"] is False and policy["production_cutover_complete"] is False,
+                    "Canonical-ready stage may not enable production readers")
         checkpoint_path = args.checkpoint or (ROOT / "state_journal/CHECKPOINT.json.gz")
         require(checkpoint_path.is_file(), "Reviewed source-bound checkpoint is missing")
         raw_checkpoint = checkpoint_path.read_bytes()
@@ -108,6 +117,10 @@ def main() -> None:
         parity = verify_legacy_parity(state["projection"]["states"], args.output_dir / "legacy-parity-work")
         receipt["legacy_parity"] = parity["status"]
         receipt["legacy_domain_count"] = len(parity["domains"])
+        if policy["canonical_snapshot_authorized"] is True and policy["mode"] in {"CANONICAL_READY", "CANONICAL"}:
+            state = set_authority(state, mode="CANONICAL", production_authority=True)
+        receipt["mode"] = state["mode"]
+        receipt["production_authority"] = state["production_authority"]
         _atomic_write(args.output_dir / "legacy_parity.json", canonical(parity) + b"\n")
         _atomic_write(args.output_dir / "snapshot.json", canonical(state) + b"\n")
         _atomic_write(args.output_dir / "receipt.json", canonical(receipt) + b"\n")

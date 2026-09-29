@@ -244,12 +244,14 @@ class StateJournalTransportTests(unittest.TestCase):
         rows=reader.list_recent_artifacts('2026-09-29T00:00:00Z')
         self.assertEqual(rows,[row])
 
-    def test_policy_cannot_claim_this_partial_migration_is_production_cutover(self):
+    def test_policy_cannot_enable_readers_before_cutover(self):
         policy=json.loads((ROOT/'state_journal/POLICY.json').read_text())
-        self.assertEqual(policy['mode'],'SHADOW')
+        self.assertIn(policy['mode'],{'SHADOW','CANONICAL_READY'})
         self.assertFalse(policy['production_readers_enabled'])
         self.assertFalse(policy['production_cutover_complete'])
         self.assertFalse(policy['steps_3_to_8_started'])
+        if policy['mode']=='CANONICAL_READY':
+            self.assertTrue(policy['canonical_snapshot_authorized'])
 
 
 if __name__ == '__main__':unittest.main()
