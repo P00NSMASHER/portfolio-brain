@@ -29,8 +29,11 @@ permissions:
   actions: read
 
 concurrency:
+  # Source events are immutable and replayed from provider artifacts. If a newer
+  # completion arrives while a shadow reduction is running, keep only the newest
+  # reduction request; cancelled shadow output is never trusted by restore.
   group: portfolio-state-reducer
-  cancel-in-progress: false
+  cancel-in-progress: true
   queue: max
 
 jobs:

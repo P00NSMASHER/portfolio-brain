@@ -191,6 +191,11 @@ class StateJournalTransportTests(unittest.TestCase):
         self.assertEqual(publishers,['portfolio-state-reducer.yml'])
         text=(ROOT/'.github/workflows/portfolio-state-reducer.yml').read_text()
         self.assertIn('group: portfolio-state-writer-v1',text)
+        self.assertIn('group: portfolio-state-reducer',text)
+        self.assertIn('cancel-in-progress: true',text.split('jobs:',1)[0])
+        job=text.split('jobs:',1)[1]
+        self.assertIn('group: portfolio-state-writer-v1',job)
+        self.assertIn('cancel-in-progress: false',job)
         self.assertNotIn('contents: write',text)
         self.assertIn('persist-credentials: false',text)
         self.assertNotIn('PORTFOLIO_STATE_JOURNAL_ENABLED',text)
