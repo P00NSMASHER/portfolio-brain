@@ -65,6 +65,7 @@ def replay_fixture(root: Path):
         "status": "REPLAY_PASSED_AWAITING_INDEPENDENT_REVIEW",
         "task_id": "BUILD-AUTO-FIXTURE",
         "task_hash": "sha256:" + "6" * 64,
+        "source_ref": "RTASK-SUBMIT-FIXTURE",
         "repository": REPO,
         "base_sha": BASE,
         "candidate_commit_sha": LOCAL,
