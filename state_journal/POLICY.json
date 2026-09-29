@@ -1,17 +1,17 @@
 {
   "schema_version": "1.0.0",
-  "mode": "CANONICAL_READY",
+  "mode": "CANONICAL",
   "canonical_snapshot_authorized": true,
-  "production_readers_enabled": false,
+  "production_readers_enabled": true,
   "explicit_checkpoint_required": true,
   "artifact_scan_start": "2026-09-29T16:35:30Z",
-  "scope": "STEP_2_CANONICAL_READY",
+  "scope": "STEP_2_CANONICAL_PRODUCTION",
   "limits": {
     "max_archive_bytes": 16777216,
     "max_events": 2000,
     "max_artifact_pages": 20,
     "max_read_requests": 100
   },
-  "production_cutover_complete": false,
+  "production_cutover_complete": true,
   "steps_3_to_8_started": false
 }

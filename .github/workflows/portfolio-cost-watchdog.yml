@@ -44,8 +44,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Restore latest cost-governor state
-        run: python -m cost_governor.artifact_state --output cost_governor/live/cost_state.json --metadata-output cost_governor/live/cost_restore.json
+      - name: Restore canonical cost-governor state
+        run: python -m state_journal.production_reader --domain cost --output cost_governor/live/cost_state.json --metadata-output cost_governor/live/cost_restore.json
       - name: Cancel only managed autonomous runs on hard stop
         run: python -m cost_governor.cancel_managed_jobs --state cost_governor/live/cost_state.json
       - name: Recover overdue core workflows when safe

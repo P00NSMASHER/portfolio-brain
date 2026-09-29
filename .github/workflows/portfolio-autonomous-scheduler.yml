@@ -42,37 +42,24 @@ jobs:
           --workflow-id portfolio-autonomous-scheduler
           --job-id schedule
           --estimated-minutes 5
-      - name: Restore latest scheduler state
+      - name: Restore canonical scheduler state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
-        run: python -m scheduler.artifact_state --output scheduler/live/scheduler_state.json
-      - name: Restore latest Hunter state
+        run: python -m state_journal.production_reader --domain scheduler --output scheduler/live/scheduler_state.json
+      - name: Restore canonical Hunter state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
-        run: python -m hunting.artifact_state --output hunting/live/hunter_state.json
-      - name: Restore latest Hunter proposal inbox
+        run: python -m state_journal.production_reader --domain hunter --output hunting/live/hunter_state.json
+      - name: Restore canonical Hunter proposal inbox
         if: ${{ steps.workload.outputs.allowed == 'true' }}
-        run: |
-          mkdir -p hunting/live
-          python -m hunting.proposal_artifact_state --output hunting/live/hunter_proposal_state.json
-          if [ ! -f hunting/live/hunter_proposal_state.json ]; then
-            cp hunting/HUNTER_PROPOSAL_STATE_SEED.json hunting/live/hunter_proposal_state.json
-          fi
-      - name: Restore latest Hunter proposal review state
+        run: python -m state_journal.production_reader --domain proposals --output hunting/live/hunter_proposal_state.json
+      - name: Restore canonical Hunter proposal review state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
-        run: |
-          mkdir -p hunting/live
-          python -m hunting.proposal_review_artifact_state --output hunting/live/hunter_proposal_review_state.json
-          if [ ! -f hunting/live/hunter_proposal_review_state.json ]; then
-            cp hunting/HUNTER_PROPOSAL_REVIEW_STATE_SEED.json hunting/live/hunter_proposal_review_state.json
-          fi
-      - name: Restore latest runtime state
+        run: python -m state_journal.production_reader --domain reviews --output hunting/live/hunter_proposal_review_state.json
+      - name: Restore canonical runtime state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
-        run: >-
-          python -m runtime.artifact_state
-          --output runtime/live/runtime_state.json
-          --provider-health-output runtime/live/provider_health.json
-      - name: Restore latest agent heartbeat state
+        run: python -m state_journal.production_reader --domain runtime --output runtime/live/runtime_state.json
+      - name: Restore canonical agent heartbeat state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
-        run: python -m agents.artifact_state --output agents/live/agent_heartbeat_state.json
+        run: python -m state_journal.production_reader --domain heartbeat --output agents/live/agent_heartbeat_state.json
       - name: Select bounded work
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m scheduler.autonomous_scheduler --state scheduler/live/scheduler_state.json --output-dir scheduler/out

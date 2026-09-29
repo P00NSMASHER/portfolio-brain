@@ -47,32 +47,17 @@ jobs:
           python -m value_proof.proof_artifact_state
           --output-dir value_proof/live/verified-proof
 
-      - name: Restore latest Hunter learning state
+      - name: Restore canonical Hunter learning state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
-        run: |
-          mkdir -p hunting/live
-          python -m hunting.artifact_state --output hunting/live/hunter_state.json
-          if [ ! -f hunting/live/hunter_state.json ]; then
-            cp hunting/HUNTER_STATE_SEED.json hunting/live/hunter_state.json
-          fi
+        run: python -m state_journal.production_reader --domain hunter --output hunting/live/hunter_state.json
 
-      - name: Restore latest model feedback state
+      - name: Restore canonical model feedback state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
-        run: |
-          mkdir -p model_router/live
-          python -m model_router.feedback_artifact_state --output model_router/live/model_feedback_state.json
-          if [ ! -f model_router/live/model_feedback_state.json ]; then
-            cp model_router/MODEL_FEEDBACK_STATE_SEED.json model_router/live/model_feedback_state.json
-          fi
+        run: python -m state_journal.production_reader --domain model_feedback --output model_router/live/model_feedback_state.json
 
-      - name: Restore latest learning observation state
+      - name: Restore canonical learning observation state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
-        run: |
-          mkdir -p learning/live
-          python -m learning.artifact_state --output learning/live/learning_observation_state.json
-          if [ ! -f learning/live/learning_observation_state.json ]; then
-            cp learning/LIVE_OBSERVATION_STATE_SEED.json learning/live/learning_observation_state.json
-          fi
+        run: python -m state_journal.production_reader --domain learning --output learning/live/learning_observation_state.json
 
       - name: Apply VERIFIED outcome feedback
         if: ${{ steps.workload.outputs.allowed == 'true' }}

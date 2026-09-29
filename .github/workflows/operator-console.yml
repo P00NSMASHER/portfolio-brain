@@ -113,7 +113,8 @@ jobs:
         if: ${{ inputs.operation == 'STATUS' || inputs.operation == 'EVIDENCE_REPORT' || inputs.operation == 'CANCEL_QUEUE_ITEM' }}
         run: |
           python -m dashboard.live_state_bridge --output-dir dashboard/live --receipt dashboard/live/state_sources.json
-          python -m dashboard.history_artifact_state --output dashboard/live/history_state.json --metadata-output dashboard/live/history_restore.json || true
+          python -m state_journal.production_reader --domain scheduler --output dashboard/live/scheduler_state.json
+          python -m state_journal.production_reader --domain history --output dashboard/live/history_state.json --metadata-output dashboard/live/history_restore.json
 
       - name: Build operator status/evidence report
         if: ${{ inputs.operation == 'STATUS' || inputs.operation == 'EVIDENCE_REPORT' }}
