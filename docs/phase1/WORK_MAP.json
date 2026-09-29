@@ -10,7 +10,7 @@
       "id": "PB-01",
       "owner": "phase1-execution",
       "status": "BASELINE_RECONCILED",
-      "next_owner": "independent-reviewer",
+      "next_owner": "verifier-app",
       "evidence": {
         "foundation_run": 36450048810,
         "pages_run": 36450048427,
@@ -22,7 +22,7 @@
     {
       "id": "PB-02",
       "owner": "issue-65-admin",
-      "status": "BLOCKED_ADMIN_AND_INDEPENDENT_IDENTITY",
+      "status": "BLOCKED_ADMIN_AND_VERIFIER_APP_REGISTRATION",
       "next_owner": "authorized-repository-administrator",
       "evidence": {
         "branch_protected": false,
@@ -35,13 +35,13 @@
       "id": "PB-03",
       "owner": "pr-167-implementation",
       "status": "DRAFT_IMPLEMENTATION",
-      "next_owner": "independent-reviewer"
+      "next_owner": "verifier-app"
     },
     {
       "id": "PB-04",
       "owner": "pr-167-implementation",
       "status": "DRAFT_IMPLEMENTATION",
-      "next_owner": "independent-reviewer"
+      "next_owner": "verifier-app"
     }
   ],
   "deferred_phase2_prs": [
@@ -60,5 +60,7 @@
   "deployed": false,
   "authority_widened": false,
   "business_rights_policy_changed": false,
-  "paid_model_calls": 0
+  "paid_model_calls": 0,
+  "independence_model": "SEPARATE_VERIFIER_APP",
+  "human_reviewer_required": false
 }

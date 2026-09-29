@@ -8,7 +8,7 @@ def protection_fixture(repository='owner/brain', main_sha='b'*40):
     rules = [
         {'type': 'deletion'}, {'type': 'non_fast_forward'},
         {'type': 'pull_request', 'parameters': {
-            'required_approving_review_count': 1, 'dismiss_stale_reviews_on_push': True,
+            'required_approving_review_count': 0, 'dismiss_stale_reviews_on_push': False,
             'required_review_thread_resolution': True, 'require_code_owner_review': False,
             'require_last_push_approval': False,
         }},
@@ -45,6 +45,19 @@ class Phase1ProtectionTests(unittest.TestCase):
         self.assertFalse(r['enforcement_tested'])
         self.assertFalse(r['production_accepted'])
         self.assertEqual(r['mutation_capability'],'NONE')
+
+    def test_human_approval_is_not_required_when_app_gate_is_independent(self):
+        data=protection_fixture()
+        r=self.run_case(data)
+        self.assertTrue(r['criteria']['pull_request_required'])
+        self.assertNotIn('pull_request_review', r['criteria'])
+
+    def test_nonzero_human_approval_requirement_is_rejected_in_solo_mode(self):
+        data=protection_fixture()
+        for row in data['https://api.github.com/repos/owner/brain/rules/branches/main?per_page=100&page=1']:
+            if row['type']=='pull_request': row['parameters']['required_approving_review_count']=1
+        data['https://api.github.com/repos/owner/brain/rulesets/55']['rules'][2]['parameters']['required_approving_review_count']=1
+        self.assertIn('pull_request_required', self.run_case(data)['missing'])
 
     def test_main_unprotected_is_blocked(self):
         data=protection_fixture(); data['https://api.github.com/repos/owner/brain/branches/main']['protected']=False

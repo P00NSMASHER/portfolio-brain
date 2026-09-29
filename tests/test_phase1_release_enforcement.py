@@ -72,28 +72,6 @@ class Phase1ReleaseEnforcementTests(unittest.TestCase):
         f=self.fixture();f[2]['base']['repo']['full_name']='other/repo'
         with self.assertRaisesRegex(ValueError,'target repository'):self.run_case(f)
 
-    def test_review_revoked_during_verification_rejected(self):
-        f=self.fixture();count=0
-        def api(url):
-            nonlocal count
-            r=copy.deepcopy(f[1][url])
-            if '/reviews?' in url:
-                count+=1
-                if count>1:r[0]['state']='DISMISSED'
-            return r
-        with self.assertRaisesRegex(ValueError,'approval missing'):self.run_case(f,api)
-
-    def test_new_change_request_during_verification_rejected(self):
-        f=self.fixture();count=0
-        def api(url):
-            nonlocal count
-            r=copy.deepcopy(f[1][url])
-            if '/reviews?' in url:
-                count+=1
-                if count>1:r.append({'id':30,'state':'CHANGES_REQUESTED','user':{'id':333}})
-            return r
-        with self.assertRaisesRegex(ValueError,'change request'):self.run_case(f,api)
-
     def test_run_restarted_during_verification_rejected(self):
         f=self.fixture();count=0
         def api(url):

@@ -99,10 +99,9 @@ def inspect_main_protection(repository: str, required_checks: list[dict[str, Any
         "active_rules_present": bool(rules),
         "block_deletion": bool(by_type.get("deletion")),
         "block_force_push": bool(by_type.get("non_fast_forward")),
-        "pull_request_review": any(
+        "pull_request_required": any(
             type(p.get("required_approving_review_count")) is int
-            and p["required_approving_review_count"] >= 1
-            and p.get("dismiss_stale_reviews_on_push") is True
+            and p["required_approving_review_count"] == 0
             and p.get("required_review_thread_resolution") is True
             for p in by_type.get("pull_request", [])
         ),

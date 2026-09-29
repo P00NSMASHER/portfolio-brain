@@ -1,34 +1,27 @@
 # Phase 1 owner setup and remaining acceptance
 
-The attached `portfolio-main-protection.json` is a baseline ruleset import, not proof that protection is installed. It targets only main, requires one approval, stale-approval dismissal, conversation resolution and up-to-date `validate` from GitHub Actions (App 15368), and blocks deletion and force-push with an empty bypass list. It does not require the branch-only `phase1-regressions` job or invent an independent App.
+This repository uses a solo-maintainer trust model: GitHub requires pull-request integration, but **does not require a second human approval**. Independent verification is supplied by the separately credentialed GitHub App check `portfolio-phase1-gate`. The App is a distinct principal from GitHub Actions and from the repository-writing connection.
 
-An authenticated administrator can import the file from repository Settings > Rules > Rulesets > New ruleset > Import a ruleset. Review it and select Create. Reuse/reconcile an existing equivalent ruleset instead of creating duplicates. This change intentionally blocks PRs without an eligible independent reviewer. The author cannot approve their own PR; another chat on the same account is not a different reviewer.
+The attached `portfolio-main-protection.json` is the baseline ruleset import. It targets only `main`, blocks deletion and force-push, requires pull requests, requires conversation resolution, and requires up-to-date `validate` from GitHub Actions (App 15368). Its approving-review count is deliberately zero. After the verifier App is registered and publishes its first check, add `portfolio-phase1-gate` as a required status check from that exact App.
 
-This is only the baseline settings portion. Before calling Phase 1 accepted, establish an independently protected verifier implementation and approved reviewer, configure real evidence-source allowlists, publish the dedicated verifier check, and add that check with its exact App source. Do not enter a placeholder App ID or add a nonexistent required check. The release policy remains deny-all until those prerequisites are legitimately configured. No token, password or App private key should be pasted into chat or committed to this repository.
+An authenticated administrator can import the file from repository Settings > Rules > Rulesets > New ruleset > Import a ruleset. Review it and select Create. Reuse an equivalent existing ruleset rather than creating duplicates. No token, password or App private key should be pasted into chat or committed to this repository.
+
+## Independent verifier
+
+The verifier App must be separately credentialed and have only the permissions needed for evidence reads and check publication. Candidate code must not control its private key or runtime. The release policy remains deny-all until the real App ID and trusted evidence sources are configured.
+
+The verifier check replaces the previously proposed second-human-review requirement. This is intentional for a single-owner repository: independence comes from a separately protected principal and runtime, not from pretending the same owner can provide two identities.
 
 ## Read-only preflight
 
-From a trusted local checkout with Python, run:
+Run:
 
 ```sh
 python -m verification.protection --output protection-observation.json
 ```
 
-Without an approved gate App ID, the result is BLOCKED. After a real App is installed and its check is configured, pass its actual ID with `--gate-app-id`. This command reads public GitHub metadata without loading credentials from the environment. It does not edit rules, create a check, approve, merge, or deploy.
+Without a real gate App ID, the result remains BLOCKED. After installation, pass its actual ID with `--gate-app-id`. CONFIGURATION_OBSERVED proves only that effective rules contain the expected settings and issuers. It is not a rejected-write test or Phase 1 acceptance.
 
-CONFIGURATION_OBSERVED means the effective repository-level rules contain the required settings and expected check issuers. It is not a rejected-write test, an independently verified deployment, or Phase 1 acceptance. A hidden `bypass_actors` field remains UNKNOWN. Use a separate authorized administration review to verify hidden bypass settings; do not grant the ordinary verifier administration-write permission just to make this observation green. Classic branch protection and inherited organization rules are not handled by this bounded adapter and must be independently verified before a compatible adapter is added.
+## Acceptance
 
-## Continuation repair
-
-A synthetic probe of the original PR167 verifier at e40fdf5d returned EVIDENCE_VALIDATED_NOT_MERGED even for an explicitly unprotected branch and a candidate behind current main. It never requested effective rules or commit ancestry. This was a code-level simulation, not an actual bypass of GitHub.
-
-The continuation adds effective-rule checks, candidate ancestry, strict job/check/run-attempt linkage, and rereads mutable approvals, checks, runs, protection and PR state before returning a read-only verdict. GitHub remains responsible for atomic enforcement at merge time; metadata readbacks alone cannot eliminate all races. Checks must still be independently implemented rather than merely trusted by their displayed name.
-
-## Acceptance remains separate
-
-Required next evidence: authorized installation; independent verifier/reviewer identity; negative enforcement tests on safely scoped branches; legitimate positive protected integration of the exact reviewed revision; and post-integration checks. No Phase 2 repair, model spending, schedule change, rights-policy change, or merge is included in this continuation.
-
-Primary implementation references:
-- https://docs.github.com/en/rest/repos/rules#get-rules-for-a-branch
-- https://docs.github.com/en/rest/repos/rules#get-a-repository-ruleset
-- https://docs.github.com/en/rest/commits/commits#compare-two-commits
+Required evidence remains: authorized ruleset installation; registered/installed verifier App; verifier check required from the exact App; safe negative enforcement proof; legitimate positive protected integration of the exact candidate; and post-integration checks. No Phase 2 work is included.

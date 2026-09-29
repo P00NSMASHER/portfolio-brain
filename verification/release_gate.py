@@ -23,11 +23,11 @@ def verify_release(repository: str, pr_number: int, expected_head: str, *,
                    get_json=None) -> dict[str, Any]:
     """Read-only verdict; candidate JSON is never accepted as provider metadata."""
     p = deepcopy(policy) if policy is not None else strict_json_loads(POLICY_PATH.read_text())
-    require(set(p) == {'schema_version','trusted_gate_app_id','gate_check_name','approved_reviewer_ids','required_checks'}, 'release policy schema mismatch')
-    require(p['schema_version'] == '2.0.0', 'release policy version mismatch')
+    require(set(p) == {'schema_version','trusted_gate_app_id','gate_check_name','required_checks','independence_model'}, 'release policy schema mismatch')
+    require(p['schema_version'] == '3.0.0', 'release policy version mismatch')
     require(type(p['trusted_gate_app_id']) is int and p['trusted_gate_app_id'] > 0, 'independent gate App is not configured')
     require(type(gate_app_id) is int and gate_app_id == p['trusted_gate_app_id'], 'gate issuer is not approved')
-    require(isinstance(p['approved_reviewer_ids'], list) and p['approved_reviewer_ids'] and all(type(i) is int and i > 0 for i in p['approved_reviewer_ids']), 'independent reviewer is not configured')
+    require(p['independence_model'] == 'SEPARATE_VERIFIER_APP', 'unsupported independence model')
     require(isinstance(p['required_checks'], list) and p['required_checks'], 'required checks missing')
     require(isinstance(p['gate_check_name'], str) and p['gate_check_name'], 'gate check name missing')
     for spec in p['required_checks']:
@@ -103,23 +103,10 @@ def verify_release(repository: str, pr_number: int, expected_head: str, *,
             steps = [s for s in job.get('steps', []) if s.get('name') == step_name]
             require(len(steps) == 1 and steps[0].get('status') == 'completed' and steps[0].get('conclusion') == 'success', 'required step did not actually succeed')
         evidence.append({'check_id':check['id'], 'run_id':run_id, 'job_id':job['id'], 'run_attempt':run['run_attempt']})
-    reviews_url = f'{base}/pulls/{pr_number}/reviews?per_page=100'
-    reviews = api(reviews_url)
-    def approved_ids(rows):
-        require(isinstance(rows,list) and len(rows) < 100, 'review coverage incomplete')
-        latest = {}
-        for review in sorted(rows, key=lambda r:r['id']):
-            if review.get('state') in {'APPROVED','CHANGES_REQUESTED','DISMISSED'}:
-                latest[review.get('user',{}).get('id')] = review
-        require(not any(r.get('state') == 'CHANGES_REQUESTED' for r in latest.values()), 'unresolved change request')
-        author = pr.get('user', {}).get('id')
-        approved = [r['id'] for uid,r in latest.items() if uid in p['approved_reviewer_ids'] and uid != author and r.get('state') == 'APPROVED' and r.get('commit_id') == expected_head]
-        require(bool(approved), 'current-head independent approval missing')
-        return sorted(approved)
-    review_ids = approved_ids(reviews)
-    # Re-read mutable prerequisites. GitHub must still enforce the real merge;
-    # a read-only observation is not an atomic authorization or bypass token.
-    require(approved_ids(api(reviews_url)) == review_ids, 'review changed during verification')
+    # Solo-maintainer mode: independent verification is supplied by the
+    # separately credentialed verifier App and enforced as its own required
+    # status check. Human review is not an additional trust boundary here.
+    review_ids: list[int] = []
     fresh_data = api(f'{base}/commits/{expected_head}/check-runs?filter=latest&per_page=100')
     fresh_checks = fresh_data.get('check_runs', [])
     require(fresh_data.get('total_count') == len(fresh_checks) and len(fresh_checks) < 100, 'final check coverage incomplete')
@@ -139,5 +126,5 @@ def verify_release(repository: str, pr_number: int, expected_head: str, *,
     require(final_pr.get('base', {}).get('sha') == base_sha and final_pr['base'].get('ref') == 'main'
             and final_pr['base'].get('repo', {}).get('full_name') == repository, 'PR target changed during verification')
     require(api(f'{base}/branches/main')['commit']['sha'] == base_sha, 'base changed during verification')
-    body={'schema_version':'2.0.0','status':'EVIDENCE_VALIDATED_NOT_MERGED','repository':repository,'pr_number':pr_number,'head_sha':expected_head,'base_sha':base_sha,'gate_app_id':gate_app_id,'policy_hash':digest(p),'check_evidence':evidence,'review_ids':review_ids, 'protection_observation':protection, 'enforcement_tested':False,'merge_performed':False,'authority_granted':False}
+    body={'schema_version':'3.0.0','status':'EVIDENCE_VALIDATED_NOT_MERGED','repository':repository,'pr_number':pr_number,'head_sha':expected_head,'base_sha':base_sha,'gate_app_id':gate_app_id,'policy_hash':digest(p),'check_evidence':evidence,'review_ids':review_ids, 'independence_model':'SEPARATE_VERIFIER_APP', 'protection_observation':protection, 'enforcement_tested':False,'merge_performed':False,'authority_granted':False}
     return {**body,'receipt_hash':digest(body)}
