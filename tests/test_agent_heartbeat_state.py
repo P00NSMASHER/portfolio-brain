@@ -149,7 +149,7 @@ class AgentHeartbeatStateTests(unittest.TestCase):
         }
         for path,marker in required.items():
             body=(ROOT/path).read_text()
-            self.assertIn("python -m agents.artifact_state",body,path)
+            self.assertIn("python -m state_journal.production_reader --domain heartbeat",body,path)
             self.assertIn("python -m agents.heartbeat_state",body,path)
             self.assertIn(marker,body,path)
             self.assertIn("name: portfolio-agent-heartbeat-state",body,path)
