@@ -67,6 +67,24 @@
       "concurrency_group": "portfolio-runtime-sync",
       "scheduled_cadence": "hourly_plus_event_driven",
       "coalesce_pending": true
+    },
+    "repair-candidate-cycle::replay": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-repair-replay",
+      "scheduled_cadence": "event_driven",
+      "coalesce_pending": true
+    },
+    "repair-candidate-cycle::submit": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-software-factory",
+      "scheduled_cadence": "event_driven",
+      "coalesce_pending": true
+    },
+    "repair-candidate-cycle::finalize": {
+      "max_minutes_per_job": 3,
+      "concurrency_group": "portfolio-scheduler",
+      "scheduled_cadence": "event_driven",
+      "coalesce_pending": true
     }
   },
   "invariants": [
