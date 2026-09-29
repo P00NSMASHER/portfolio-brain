@@ -67,14 +67,14 @@ def _pending_events(state: dict, artifacts: list[dict]) -> list[dict]:
 
 
 def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, current_run: str,
-                        timeout_seconds: int = 90, poll_seconds: float = 3.0,
+                        timeout_seconds: int = 300, poll_seconds: float = 5.0,
                         clock=time.monotonic, sleep=time.sleep) -> tuple[GitHubReader, dict, list[dict]]:
     require(pending, "Pending-event wait requires at least one event")
     latest_event_time = max(str(row.get("created_at") or "") for row in pending)
     pending_ids = {row["id"] for row in pending}
     deadline = clock() + timeout_seconds
     seen_reducers: set[int] = set()
-    poller = GitHubReader(token, max_requests=min(40, policy["limits"]["max_read_requests"]))
+    poller = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
     while clock() < deadline:
         runs = poller.get("/actions/runs?branch=main&event=workflow_run&per_page=50").get("workflow_runs", [])
         require(isinstance(runs, list), "Reducer run listing malformed")
