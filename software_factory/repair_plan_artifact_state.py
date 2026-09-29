@@ -84,8 +84,6 @@ def restore(*, lineage_id: str, output: Path, token: str | None = None,
         run = row.get("workflow_run") or {}
         if expected_branch and run.get("head_branch") != expected_branch:
             continue
-        if current_run_id and str(run.get("id")) == str(current_run_id):
-            continue
         if not isinstance(row.get("archive_download_url"), str):
             continue
         eligible.append(row)
