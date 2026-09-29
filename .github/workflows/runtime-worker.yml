@@ -96,6 +96,13 @@ jobs:
         if: ${{ steps.admission.outputs.allowed == 'true' }}
         run: python -m state_journal.production_reader --domain runtime --output runtime/live/runtime_state.json
 
+      - name: Restore provider-health observability only
+        if: ${{ steps.admission.outputs.allowed == 'true' }}
+        run: >-
+          python -m runtime.artifact_state
+          --output runtime/out/non_authoritative_runtime_restore.json
+          --provider-health-output runtime/out/provider_health.json
+
       - name: Restore canonical agent heartbeat state
         if: ${{ steps.admission.outputs.allowed == 'true' }}
         run: python -m state_journal.production_reader --domain heartbeat --output agents/live/agent_heartbeat_state.json
