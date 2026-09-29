@@ -118,23 +118,29 @@ class GitHubReader:
     def list_recent_artifacts(self, since: str, *, max_pages: int = 20) -> list[dict]:
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
-        result = []
-        previous_time = None
+        result = {}
         for page in range(1, max_pages + 1):
             response = self.get(f"/actions/artifacts?per_page=100&page={page}")
             rows = response.get("artifacts")
             require(isinstance(rows, list), "Artifact listing malformed")
-            crossed = False
             for row in rows:
-                at = datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
-                require(previous_time is None or at <= previous_time, "Artifact listing order changed; no silent cursor skip")
-                previous_time = at
-                if at < boundary:
-                    crossed = True
+                artifact_id = row.get("id")
+                require(type(artifact_id) is int and artifact_id > 0, "Artifact listing identity missing")
+                created = row.get("created_at")
+                require(isinstance(created, str), "Artifact created_at missing")
+                at = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                require(at.tzinfo is not None, "Artifact created_at requires timezone")
+                previous = result.get(artifact_id)
+                if previous is not None:
+                    require(previous == row, "Artifact metadata changed during bounded scan")
                 else:
-                    result.append(row)
-            if crossed or len(rows) < 100:
-                return result
+                    result[artifact_id] = row
+            if len(rows) < 100:
+                selected = [
+                    row for row in result.values()
+                    if datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")) >= boundary
+                ]
+                return sorted(selected, key=lambda row: (row["created_at"], row["id"]), reverse=True)
         raise JournalError("Artifact scan incomplete at page bound; checkpoint/archive required")
 
     def event(self, meta: dict, upload_steps: dict) -> tuple[dict, dict]:
