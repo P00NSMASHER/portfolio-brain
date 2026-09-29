@@ -19,7 +19,7 @@ Paid model execution is enabled for governed OpenAI Luna, Terra, and Sol routes.
 
 ## Permanent authority boundaries
 
-Autonomous operation allows only narrowly bounded customer email through the action-engine policy. Education-product validation is limited to verified adult stakeholders and cannot contact minors, collect child data, or make consequential child-facing changes. Payment/cash movement, live trading or brokerage execution, deployment, merge authority, secret changes, and unapproved consequential child-facing changes remain human-gated or prohibited.
+Autonomous operation allows only narrowly bounded customer email through the action-engine policy. Education-product validation is limited to verified adult stakeholders and cannot contact minors, collect child data, or make consequential child-facing changes. Payment/cash movement, live trading or brokerage execution, deployment, secret changes, and unapproved consequential child-facing changes remain human-gated or prohibited. Merge authority is not human-gated: it is allowed only through the protected pull-request path after exact-head `validate` and the independent verifier App check both succeed, with no bypass.
 
 Because this repository is currently public, persistent state remains sanitized-only. Private customer/operational payloads, credentials, secrets and sensitive evidence bodies are not stored here.
 
