@@ -33,7 +33,8 @@ jobs:
           main='c4c60350d687b32922a8b1f2c33df81b12bbe9cd'
           previous='e4aeaf4369466680c4c2ffc1316192dd5ac16898'
           def git(*args):return subprocess.check_output(['git',*args],text=True).strip()
-          assert git('rev-parse','HEAD^')==previous
+          assert git('merge-base',previous,'HEAD')==previous
+          assert git('diff','--name-only',previous,'HEAD')=='.github/workflows/step1-reconcile.yml'
           delta=git('diff','--name-only',old,main).splitlines()
           assert set(delta)=={
               '.github/workflows/phase1-verification.yml','.github/workflows/runtime-event-observe.yml',
@@ -60,24 +61,23 @@ jobs:
           s=s.replace('self.assertNotIn("portfolio-state-writer-v1", workflow)','self.assertIn("queue: max", workflow)')
           p.write_text(s)
           p=root/'tests/test_artifact_state_integrity.py';s=p.read_text()
-          before='''                self.assertEqual(len(locks), 1, "writer must have exactly one concurrency lock")
-                          indent, block = locks[0]'''
-          before=before.replace('                          indent','                indent')
-          after='''                if path.name == "runtime-worker.yml":
-                              # Preserve the separate admission lock added on current main.
-                              # Only the unconditional inner mutex owns the state transaction.
-                              self.assertEqual(len(locks), 2)
-                              outer_indent, outer = locks[0]
-                              self.assertEqual(outer_indent, "")
-                              self.assertNotIn("portfolio-state-writer-v1", outer)
-                              self.assertIn("  cancel-in-progress: false", outer)
-                              self.assertIn("  queue: max", outer)
-                              indent, block = locks[1]
-                              self.assertEqual(indent, "    ")
-                          else:
-                              self.assertEqual(len(locks), 1, "writer must have exactly one state lock")
-                              indent, block = locks[0]'''
-          after='\n'.join(line[10:] if i else line for i,line in enumerate(after.splitlines()))
+          before='\n'.join(' '*16+x for x in ['self.assertEqual(len(locks), 1, "writer must have exactly one concurrency lock")','indent, block = locks[0]'])
+          lines=[
+              'if path.name == "runtime-worker.yml":',
+              '    # Keep the separate admission lock; the inner mutex owns state.',
+              '    self.assertEqual(len(locks), 2)',
+              '    outer_indent, outer = locks[0]',
+              '    self.assertEqual(outer_indent, "")',
+              '    self.assertNotIn("portfolio-state-writer-v1", outer)',
+              '    self.assertIn("  cancel-in-progress: false", outer)',
+              '    self.assertIn("  queue: max", outer)',
+              '    indent, block = locks[1]',
+              '    self.assertEqual(indent, "    ")',
+              'else:',
+              '    self.assertEqual(len(locks), 1, "writer must have exactly one state lock")',
+              '    indent, block = locks[0]',
+          ]
+          after='\n'.join(' '*16+x for x in lines)
           assert s.count(before)==1
           p.write_text(s.replace(before,after))
           for name in ('runtime/artifact_restore.py','runtime/artifact_state.py','agents/artifact_state.py'):
