@@ -135,10 +135,20 @@ def _parse_output(text: str, *, evidence: list[dict[str, str]], targets: list[st
                   project_id: str, cost_state: dict) -> dict:
     _req(isinstance(text, str) and text.strip(), "repair model output empty", cost_state=cost_state)
     _req("```" not in text, "repair model output contains code fence", cost_state=cost_state)
+    def pairs(items):
+        out = {}
+        for key, value in items:
+            _req(key not in out, "repair model output contains duplicate JSON field", cost_state=cost_state)
+            out[key] = value
+        return out
+    def constant(value):
+        raise RepairPlannerError("repair model output contains nonfinite JSON value", cost_state=cost_state)
     try:
-        data = strict_json_loads(text)
-    except StrictJSONError as exc:
-        raise RepairPlannerError("repair model output is not strict JSON", cost_state=cost_state) from exc
+        data = json.loads(text, object_pairs_hook=pairs, parse_constant=constant)
+    except RepairPlannerError:
+        raise
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise RepairPlannerError("repair model output is not valid JSON", cost_state=cost_state) from exc
     _req(isinstance(data, dict) and set(data) == {"edits", "test_source", "baseline_failure_marker"},
          "repair model output fields changed", cost_state=cost_state)
     edits = data["edits"]
