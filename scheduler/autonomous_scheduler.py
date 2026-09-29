@@ -186,7 +186,7 @@ def generate_candidates(context):
         elif exp["status"]=="READY_FOR_BOUNDED_EXECUTION" and exp["execution_mode"]=="BOUNDED_EXTERNAL_VALIDATION":
             u=unc_by[exp["uncertainty_id"]]
             candidates.append(_candidate("EXPERIMENT",exp["experiment_id"],exp["project_ids"],"AGT-COMMERCIAL-ANALYST","EXTERNAL_EVIDENCE_ANALYSIS","OBSERVE","HIGH",
-                pareto=u["ranking"]["pareto_layer"],rank=u["ranking"]["rank_order"],
+                pareto=u["ranking"]["pareto_layer"],rank=u["ranking"]["rank_order"],external_milestone="VALIDATE_DEMAND",value_lane="CUSTOMER_DEMAND_VALIDATION",
                 reason="Bounded commercial validation is ready; scheduler prepares evidence work while action_engine independently gates channel ACT.",
                 evidence_refs=[*u["evidence_refs"],f"experiment:{exp['experiment_id']}","action-policy:action_engine/ACTION_POLICY.json"]))
         elif exp["status"]=="READY_FOR_ISOLATED_EXECUTION" and exp["execution_mode"]=="ISOLATED_SYNTHETIC_TEST":
