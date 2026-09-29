@@ -289,6 +289,7 @@ def replay_candidate(task: dict, *, approved_hash: str, checkout: Path,
                     == [commit, tree, task["base_sha"]], "imported candidate identity mismatch")
             receipt = {"schema_version": 1, "status": "REPLAY_PASSED_AWAITING_INDEPENDENT_REVIEW",
                        "task_id": task["task_id"], "task_hash": approved_hash,
+                       "source_ref": task["source_ref"],
                        "repository": task["repository"], "base_sha": task["base_sha"],
                        "builder_receipt_hash": build["receipt_hash"], "patch_sha256": build["patch_sha256"],
                        "candidate_commit_sha": commit, "candidate_git_tree_sha": tree,
