@@ -5,7 +5,7 @@ import tempfile
 import unittest
 import zipfile
 
-from repair.repair_engine import failure_to_task
+from repair.repair_engine import failure_to_task, hashv
 from scheduler.autonomous_scheduler import _candidate, _work_packet, load_state
 from software_factory.candidate_worker import object_hash
 from software_factory.complete_repair_work import finalize_scheduler_repair
@@ -103,6 +103,9 @@ class RepairCycleActivationTests(unittest.TestCase):
         state, _ = scheduler_with(task)
         task = json.loads(json.dumps(task))
         task["state"] = "BLOCKED"
+        body = dict(task)
+        body.pop("task_hash")
+        task["task_hash"] = hashv(body)
         with self.assertRaisesRegex(RepairCycleInputError, "READY_FOR_REPAIR"):
             select_repair(state, base_sha="a" * 40, repair_state={"tasks": [task]})
 
