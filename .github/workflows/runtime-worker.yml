@@ -19,8 +19,11 @@ permissions:
   actions: read
 
 concurrency:
-  group: ${{ (inputs.mode == 'daily' || inputs.mode == 'weekly') && 'portfolio-cost-governed-autonomy' || format('portfolio-runtime-{0}', inputs.mode) }}
-  cancel-in-progress: ${{ inputs.mode == 'observe' || inputs.mode == 'sync' }}
+  # All non-paid modes advance the same durable runtime state. They must share
+  # one writer lane or concurrent observe/sync runs can fork the same sequence.
+  # Paid daily/weekly work keeps its separate cost-governed serialization.
+  group: ${{ (inputs.mode == 'daily' || inputs.mode == 'weekly') && 'portfolio-cost-governed-autonomy' || 'portfolio-runtime-nonpaid-state' }}
+  cancel-in-progress: false
 
 jobs:
   runtime:

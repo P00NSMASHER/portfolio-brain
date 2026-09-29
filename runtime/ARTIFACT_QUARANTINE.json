@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0.0",
+  "incident_id": "runtime-sequence-122-sibling-fork-2026-09-28",
+  "policy": "EXACT_METADATA_QUARANTINE_ONLY",
+  "artifacts": [
+    {
+      "artifact_id": 10973532611,
+      "artifact_name": "portfolio-runtime-state",
+      "source_run_id": 36431526781,
+      "source_head_sha": "c1b3b93d81899ffac1ce8ead1296b58dd4479f1c",
+      "source_state_hash": "sha256:926a00c334bed920f86a2f03f5a7eb918fb9aa83d266136e9b47e620d53271e2",
+      "source_sequence": 122,
+      "superseded_by_artifact_id": 10973711724,
+      "superseded_by_run_id": 36431527048,
+      "superseded_by_state_hash": "sha256:6fe4910fb14b17801abdda69b335427fb5dc52f34c23ec610fae9162c525b337",
+      "parent_state_hash": "sha256:5a95072d448a4b4ad12ef17e579d1cc337d13f1574e7ea57a4b5c9a0079f2c79",
+      "reason": "Concurrent observe/sync sibling from sequence 121. The later sync sibling preserves the same REPO-008 cursor and also advances REPO-003, so this observe sibling is superseded."
+    },
+    {
+      "artifact_id": 10973462871,
+      "artifact_name": "portfolio-agent-heartbeat-state",
+      "source_run_id": 36431526781,
+      "source_head_sha": "c1b3b93d81899ffac1ce8ead1296b58dd4479f1c",
+      "source_state_hash": "sha256:f86f30a089fd85c7b5a646196ae357c2d1ddb8a0e6e5a0b79a1d8b60faec07a0",
+      "source_sequence": 128,
+      "superseded_by_artifact_id": 10973971508,
+      "superseded_by_run_id": 36431527048,
+      "superseded_by_state_hash": "sha256:a0dcfed1693b4a2a133bdfa720c68a28b318bc05d33d11252a69b94e14427381",
+      "reason": "Concurrent Data Steward heartbeat sibling. The later sync heartbeat supersedes the earlier observe heartbeat for the same agent."
+    }
+  ]
+}

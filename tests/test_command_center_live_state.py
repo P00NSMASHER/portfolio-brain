@@ -36,6 +36,9 @@ class LiveStateBridgeTests(unittest.TestCase):
                 "artifact_expires_at":"2026-10-26T18:00:00Z",
                 "source_run_id":run_id,
                 "source_head_sha":str(run_id).zfill(40)[-40:],
+                "source_sequence":sequence,
+                "source_state_hash":"sha256:"+str(run_id).zfill(64)[-64:],
+                "candidates_inspected":3,
             })+"\n")
             provider_output=kwargs.get("provider_health_output")
             provider_metadata=kwargs.get("provider_health_metadata_output")
@@ -52,6 +55,9 @@ class LiveStateBridgeTests(unittest.TestCase):
                   "artifact_name":"portfolio-runtime-state","artifact_created_at":created_at,
                   "artifact_expires_at":"2026-10-26T18:00:00Z","source_run_id":run_id,
                   "source_head_sha":str(run_id).zfill(40)[-40:],
+                  "source_sequence":sequence,
+                  "source_state_hash":"sha256:"+str(run_id).zfill(64)[-64:],
+                  "candidates_inspected":3,
                 })+"\n")
             return "RESTORED"
         return restore
@@ -91,6 +97,10 @@ class LiveStateBridgeTests(unittest.TestCase):
         self.assertEqual(receipt["sources"]["hunter_proposal_reviews"]["state_sequence"],2)
         self.assertEqual(receipt["sources"]["scheduler"]["source_run_id"],102)
         self.assertEqual(receipt["sources"]["scheduler"]["artifact_created_at"],"2026-09-26T17:20:00Z")
+        self.assertEqual(receipt["sources"]["scheduler"]["source_sequence"],7)
+        self.assertTrue(receipt["sources"]["scheduler"]["source_state_hash"].startswith("sha256:"))
+        self.assertEqual(receipt["sources"]["scheduler"]["candidates_inspected"],3)
+        self.assertEqual(receipt["sources"]["provider"]["source_sequence"],7)
 
     def test_optional_observability_fallback_does_not_degrade_healthy_core(self):
         now=datetime(2026,9,26,18,0,tzinfo=timezone.utc)
