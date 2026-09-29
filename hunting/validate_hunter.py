@@ -32,6 +32,12 @@ def validate_hunter():
     req(policy["authority_class"]=="OBSERVE","Hunter authority changed")
     req(policy["model_calls_allowed"]==0 and policy["downstream_writes_allowed"]==0 and policy["external_actions_allowed"]==0,"Hunter authority widened")
     req(policy["source_allowlist"]==["PUBLIC_GITHUB"],"Hunter source allowlist widened")
+    separation=policy["signal_separation"]
+    req(separation["supply_sensor"]=="PUBLIC_GITHUB","Hunter supply sensor drifted")
+    req(separation["demand_sensor"]=="PORTFOLIO_SANITIZED_MARKET_EVIDENCE","Hunter demand sensor drifted")
+    req(separation["github_supply_is_demand"] is False,"GitHub supply was allowed to masquerade as demand")
+    req(separation["supply_only_can_authorize_commercial_build"] is False,"supply-only discovery can authorize commercial build")
+    req(separation["demand_evidence_classes"]==["MARKET_VERIFIED","REVENUE_VERIFIED"],"Hunter demand evidence classes drifted")
     rights_policy=load("hunting/RIGHTS_GATE_POLICY.json")
     req(rights_policy["mode"]=="FAIL_CLOSED_NO_REUSE_AUTHORITY_FROM_DISCOVERY","Hunter rights gate mode weakened")
     req(rights_policy["automatic_reuse_authority_granted"] is False,"Hunter discovery may not grant reuse authority")
@@ -185,6 +191,10 @@ def validate_hunter():
     req(controlled["completion_gate"]["min_retained_candidates"]>=3,"controlled Hunter proof retained gate too weak")
     req(controlled["completion_gate"]["min_distinct_strategies"]>=2,"controlled Hunter proof strategy gate too weak")
     req(len({x["strategy_id"] for x in controlled["cases"]})>=2,"controlled Hunter proof lacks strategy diversity")
+    hunter_source=(ROOT/"hunting/autonomous_hunter.py").read_text()
+    req("build_hunter_signal_snapshot" in hunter_source and "hunter_supply_demand_signals.json" in hunter_source,"Hunter does not emit separated supply/demand evidence")
+    signal_source=(ROOT/"hunting/signal_router.py").read_text()
+    req('"github_supply_creates_demand":False' in signal_source and '"commercial_build_authorized_by_supply_only":False' in signal_source,"Hunter signal router weakened supply/demand boundary")
     wf=(ROOT/".github/workflows/hunter-autonomous-cycle.yml").read_text()
     for s in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_HUNTER_DISABLED","47 */6 * * *","cancel-in-progress: false","actions/upload-artifact@v4","python -m hunting.calibration --output hunting/out/calibration_report.json",".github/triggers/hunter-autonomous-now.txt"]:
         req(s in wf,f"Hunter workflow missing {s}")
