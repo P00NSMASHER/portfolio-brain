@@ -183,8 +183,9 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertIn("\n  push:\n",workflow)
         self.assertIn("      - main",workflow)
         self.assertIn("\n  workflow_run:\n",workflow)
-        for producer in ("portfolio-autonomous-scheduler","runtime-hourly-sync","agent-heartbeat-sweep","hunter-autonomous-cycle","portfolio-notification-cycle","portfolio-cost-watchdog"):
-            self.assertIn(f'      - "{producer}"',workflow)
+        self.assertIn('      - "portfolio-cost-watchdog"',workflow)
+        for producer in ("portfolio-autonomous-scheduler","runtime-hourly-sync","agent-heartbeat-sweep","hunter-autonomous-cycle","portfolio-notification-cycle"):
+            self.assertNotIn(f'      - "{producer}"',workflow)
         self.assertIn("Stamp publication provenance",workflow)
         self.assertIn('if [[ "$GITHUB_EVENT_NAME" == "push" ]]',workflow)
         self.assertIn("Verify deployed source commit",workflow)
