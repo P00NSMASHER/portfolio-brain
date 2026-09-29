@@ -45,7 +45,7 @@ def validate_learning():
     req("rebuild_from_sources" in runtime,"daily runtime not connected to durable Step 10 learner")
     req("learning_observation_state.json" in runtime,"daily runtime does not consume durable learning observations")
     runtime_workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text()
-    req("python -m learning.artifact_state --output learning/live/learning_observation_state.json" in runtime_workflow,"runtime does not restore durable learning observations")
+    req("python -m state_journal.production_reader --domain learning --output learning/live/learning_observation_state.json" in runtime_workflow,"runtime does not restore canonical learning observations")
     proof_workflow=(ROOT/".github/workflows/model-value-proof.yml").read_text()
     bootstrap_workflow=(ROOT/".github/workflows/verified-feedback-bootstrap.yml").read_text()
     for body,label in ((proof_workflow,"model value proof"),(bootstrap_workflow,"verified feedback bootstrap")):
