@@ -13,8 +13,9 @@ permissions:
   actions: read
 
 concurrency:
-  group: portfolio-software-factory
+  group: portfolio-state-writer-v1
   cancel-in-progress: false
+  queue: max
 
 jobs:
   execute-candidate-action:

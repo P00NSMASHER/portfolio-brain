@@ -18,8 +18,9 @@ permissions:
 jobs:
   hunt:
     concurrency:
-      group: portfolio-hunter-cycle
+      group: portfolio-state-writer-v1
       cancel-in-progress: false
+      queue: max
     if: ${{ vars.PORTFOLIO_HUNTER_DISABLED != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5

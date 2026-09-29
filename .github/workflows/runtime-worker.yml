@@ -19,8 +19,9 @@ permissions:
   actions: read
 
 concurrency:
-  group: ${{ (inputs.mode == 'daily' || inputs.mode == 'weekly') && 'portfolio-cost-governed-autonomy' || format('portfolio-runtime-{0}', inputs.mode) }}
-  cancel-in-progress: ${{ inputs.mode == 'observe' || inputs.mode == 'sync' }}
+  group: portfolio-state-writer-v1
+  cancel-in-progress: false
+  queue: max
 
 jobs:
   runtime:

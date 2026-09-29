@@ -49,7 +49,7 @@ def validate_cost_governor():
         "daily GitHub job quotas unexpectedly re-enabled")
     req(p["workload_separation"]["reporting_remains_available_during_paid_hard_stop"] is True,
         "reporting no longer survives paid hard stops")
-    req(p["global_concurrency_group"] == "portfolio-cost-governed-autonomy",
+    req(p["global_concurrency_group"] == "portfolio-state-writer-v1",
         "paid cost serialization changed")
 
     at = "2026-09-25T12:00:00Z"
@@ -150,7 +150,7 @@ def validate_cost_governor():
     for name, workflow_path in paid_workflows.items():
         body = workflow_path.read_text(encoding="utf-8").lower()
         for fragment in (
-            "portfolio-cost-governed-autonomy",
+            "portfolio-state-writer-v1",
             "cost_governor.artifact_state",
             "cost_governor.workflow_gate preflight",
             "cost_governor.workflow_gate finalize",
@@ -159,14 +159,14 @@ def validate_cost_governor():
             req(fragment in body, f"{name} paid cost integration missing: {fragment}")
 
     nonpaid_workflows = {
-        "portfolio-autonomous-scheduler": ("schedule", "portfolio-scheduler", 5),
-        "hunter-autonomous-cycle": ("hunt", "portfolio-hunter-cycle", 5),
-        "command-center-pages": ("publish", "portfolio-reporting-pages", 5),
-        "agent-heartbeat-sweep": ("heartbeat", "portfolio-heartbeat", 2),
-        "portfolio-notification-cycle": ("notify", "portfolio-notification", 2),
-        "software-factory-candidate": ("execute-candidate-action", "portfolio-software-factory", 5),
-        "verified-feedback-bootstrap": ("feedback", "portfolio-feedback-bootstrap", 2),
-        "continuous-learning-bootstrap": ("bootstrap", "portfolio-learning-bootstrap", 2),
+        "portfolio-autonomous-scheduler": ("schedule", "portfolio-state-writer-v1", 5),
+        "hunter-autonomous-cycle": ("hunt", "portfolio-state-writer-v1", 5),
+        "command-center-pages": ("publish", "portfolio-state-writer-v1", 5),
+        "agent-heartbeat-sweep": ("heartbeat", "portfolio-state-writer-v1", 2),
+        "portfolio-notification-cycle": ("notify", "portfolio-state-writer-v1", 2),
+        "software-factory-candidate": ("execute-candidate-action", "portfolio-state-writer-v1", 5),
+        "verified-feedback-bootstrap": ("feedback", "portfolio-state-writer-v1", 2),
+        "continuous-learning-bootstrap": ("bootstrap", "portfolio-state-writer-v1", 2),
     }
     for workflow_id, (job_id, group, minutes) in nonpaid_workflows.items():
         body = (ROOT / ".github/workflows" / f"{workflow_id}.yml").read_text(encoding="utf-8")
@@ -175,7 +175,7 @@ def validate_cost_governor():
         req("cost_governor.workflow_gate" not in body,
             f"{workflow_id} still coupled to paid cost gate")
         req(f"group: {group}" in body,
-            f"{workflow_id} missing independent concurrency lane")
+            f"{workflow_id} missing global state-writer lane")
         decision = evaluate_workload(
             workflow_id=workflow_id,
             job_id=job_id,
@@ -189,11 +189,11 @@ def validate_cost_governor():
     runtime_worker = paid_workflows["runtime-worker"].read_text(encoding="utf-8")
     req("workload_control.workload_gate preflight" in runtime_worker,
         "runtime worker missing non-paid workload admission")
-    req("format('portfolio-runtime-{0}', inputs.mode)" in runtime_worker,
-        "runtime worker missing mode-specific non-paid concurrency")
+    req("group: portfolio-state-writer-v1" in runtime_worker,
+        "runtime worker missing shared state-writer concurrency")
     for job_id, group in (
-        ("runtime-observe", "portfolio-runtime-observe"),
-        ("runtime-sync", "portfolio-runtime-sync"),
+        ("runtime-observe", "portfolio-state-writer-v1"),
+        ("runtime-sync", "portfolio-state-writer-v1"),
     ):
         decision = evaluate_workload(
             workflow_id="runtime-worker",

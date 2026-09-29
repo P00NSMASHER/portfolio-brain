@@ -211,17 +211,17 @@ def validate_operating_mode():
     workload=load("workload_control/WORKLOAD_POLICY.json")
     req(workload["mode"]=="GITHUB_NATIVE_WORKLOAD_CONTROL","workload control mode changed")
     workload_workflows={
-      "hunter-autonomous-cycle":("hunt","portfolio-hunter-cycle"),
-      "portfolio-autonomous-scheduler":("schedule","portfolio-scheduler"),
-      "portfolio-notification-cycle":("notify","portfolio-notification"),
-      "command-center-pages":("publish","portfolio-reporting-pages"),
-      "agent-heartbeat-sweep":("heartbeat","portfolio-heartbeat"),
+      "hunter-autonomous-cycle":("hunt","portfolio-state-writer-v1"),
+      "portfolio-autonomous-scheduler":("schedule","portfolio-state-writer-v1"),
+      "portfolio-notification-cycle":("notify","portfolio-state-writer-v1"),
+      "command-center-pages":("publish","portfolio-state-writer-v1"),
+      "agent-heartbeat-sweep":("heartbeat","portfolio-state-writer-v1"),
     }
     for name,(job_id,group) in workload_workflows.items():
         body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
         req("workload_control.workload_gate preflight" in body,f"{name} is not workload controlled")
         req("cost_governor.workflow_gate" not in body,f"{name} is still coupled to paid cost governance")
-        req(f"group: {group}" in body,f"{name} independent concurrency lane missing")
+        req(f"group: {group}" in body,f"{name} global state-writer lane missing")
         req("steps.workload.outputs.allowed != 'true'" in body,f"{name} lacks blocked-work reporting")
         req("exit 1" in body,f"{name} can still report green after workload admission blocks")
         scope=f"{name}::{job_id}"
@@ -232,22 +232,22 @@ def validate_operating_mode():
         req("push" not in triggers,f"{name} must not fan out on push")
 
     worker=(ROOT/".github/workflows/runtime-worker.yml").read_text().lower()
-    req("portfolio-cost-governed-autonomy" in worker and "cost_governor.workflow_gate preflight" in worker,
+    req("portfolio-state-writer-v1" in worker and "cost_governor.workflow_gate preflight" in worker,
         "runtime worker lost serialized paid-wrapper governance")
     req("workload_control.workload_gate preflight" in worker,
         "runtime worker lost non-paid workload admission")
-    req("format('portfolio-runtime-{0}', inputs.mode)" in worker,
-        "runtime worker lost mode-specific non-paid concurrency")
+    req("group: portfolio-state-writer-v1" in worker,
+        "runtime worker lost shared state-writer concurrency")
     for mode in ("observe","sync"):
         scope=f"runtime-worker::runtime-{mode}"
         req(scope in workload["services"],f"runtime {mode} workload policy entry missing")
-        req(workload["services"][scope]["concurrency_group"]==f"portfolio-runtime-{mode}",
+        req(workload["services"][scope]["concurrency_group"]=="portfolio-state-writer-v1",
             f"runtime {mode} workload lane drifted")
     req("steps.admission.outputs.allowed != 'true'" in worker and "exit 1" in worker,
         "runtime worker can still report green after mode-specific admission blocks")
 
     proof=(ROOT/".github/workflows/model-value-proof.yml").read_text().lower()
-    req("portfolio-cost-governed-autonomy" in proof and "cost_governor.workflow_gate preflight" in proof,
+    req("portfolio-state-writer-v1" in proof and "cost_governor.workflow_gate preflight" in proof,
         "model value proof lost paid cost governance")
     req("steps.cost.outputs.allowed != 'true'" in proof and "exit 1" in proof,
         "model value proof can still report green after paid admission blocks")

@@ -49,7 +49,7 @@ class CostGovernorTests(unittest.TestCase):
         for filename in paid_workflows:
             with self.subTest(workflow=filename):
                 workflow = (ROOT / ".github/workflows" / filename).read_text()
-                self.assertIn("portfolio-cost-governed-autonomy", workflow)
+                self.assertIn("portfolio-state-writer-v1", workflow)
                 self.assertIn("cost_governor.workflow_gate preflight", workflow)
                 self.assertIn("cost_governor.workflow_gate finalize", workflow)
 
@@ -115,7 +115,7 @@ class CostGovernorTests(unittest.TestCase):
     def test_event_observe_ignores_dashboard_test_operator_and_one_shot_trigger_churn(self):
         workflow=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
         self.assertIn("group: runtime-event-observe-${{ github.event_name }}-${{ github.ref }}",workflow)
-        self.assertIn("cancel-in-progress: ${{ github.event_name == 'push' }}",workflow)
+        self.assertIn("cancel-in-progress: false",workflow)
         for path in [
             '"dashboard/**"','"tests/**"','"operator_console/**"','"cost_governor/**"',
             '".github/workflows/command-center-pages.yml"',
@@ -133,14 +133,14 @@ class CostGovernorTests(unittest.TestCase):
 
     def test_nonpaid_workflows_use_independent_workload_controls(self):
         expected = {
-            "agent-heartbeat-sweep.yml": ("agent-heartbeat-sweep", "heartbeat", "portfolio-heartbeat", 2),
-            "command-center-pages.yml": ("command-center-pages", "publish", "portfolio-reporting-pages", 5),
-            "continuous-learning-bootstrap.yml": ("continuous-learning-bootstrap", "bootstrap", "portfolio-learning-bootstrap", 2),
-            "hunter-autonomous-cycle.yml": ("hunter-autonomous-cycle", "hunt", "portfolio-hunter-cycle", 5),
-            "portfolio-autonomous-scheduler.yml": ("portfolio-autonomous-scheduler", "schedule", "portfolio-scheduler", 5),
-            "portfolio-notification-cycle.yml": ("portfolio-notification-cycle", "notify", "portfolio-notification", 2),
-            "software-factory-candidate.yml": ("software-factory-candidate", "execute-candidate-action", "portfolio-software-factory", 5),
-            "verified-feedback-bootstrap.yml": ("verified-feedback-bootstrap", "feedback", "portfolio-feedback-bootstrap", 2),
+            "agent-heartbeat-sweep.yml": ("agent-heartbeat-sweep", "heartbeat", "portfolio-state-writer-v1", 2),
+            "command-center-pages.yml": ("command-center-pages", "publish", "portfolio-state-writer-v1", 5),
+            "continuous-learning-bootstrap.yml": ("continuous-learning-bootstrap", "bootstrap", "portfolio-state-writer-v1", 2),
+            "hunter-autonomous-cycle.yml": ("hunter-autonomous-cycle", "hunt", "portfolio-state-writer-v1", 5),
+            "portfolio-autonomous-scheduler.yml": ("portfolio-autonomous-scheduler", "schedule", "portfolio-state-writer-v1", 5),
+            "portfolio-notification-cycle.yml": ("portfolio-notification-cycle", "notify", "portfolio-state-writer-v1", 2),
+            "software-factory-candidate.yml": ("software-factory-candidate", "execute-candidate-action", "portfolio-state-writer-v1", 5),
+            "verified-feedback-bootstrap.yml": ("verified-feedback-bootstrap", "feedback", "portfolio-state-writer-v1", 2),
         }
         wp = workload_policy()
         for filename, values in expected.items():
@@ -150,7 +150,7 @@ class CostGovernorTests(unittest.TestCase):
                 self.assertIn(f"group: {group}", workflow)
                 self.assertIn("cancel-in-progress: false", workflow)
                 self.assertIn("workload_control.workload_gate preflight", workflow)
-                self.assertNotIn("portfolio-cost-governed-autonomy", workflow)
+                self.assertIn("queue: max", workflow)
                 self.assertNotIn("cost_governor.workflow_gate", workflow)
                 decision = evaluate_workload(
                     workflow_id=workflow_id,
@@ -168,7 +168,7 @@ class CostGovernorTests(unittest.TestCase):
     def test_runtime_sync_and_observe_are_nonpaid_workload_lanes(self):
         workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text()
         self.assertIn("workload_control.workload_gate preflight",workflow)
-        self.assertIn("format('portfolio-runtime-{0}', inputs.mode)",workflow)
+        self.assertIn("group: portfolio-state-writer-v1",workflow)
         wp=workload_policy()
         for mode in ("observe","sync"):
             job=f"runtime-{mode}"
@@ -180,7 +180,7 @@ class CostGovernorTests(unittest.TestCase):
             self.assertEqual(decision["status"],"WORKLOAD_ALLOWED")
             self.assertEqual(
                 wp["services"][f"runtime-worker::{job}"]["concurrency_group"],
-                f"portfolio-runtime-{mode}",
+                "portfolio-state-writer-v1",
             )
         p=policy()
         self.assertNotIn("runtime-hourly-sync",p["managed_workflow_names"])
@@ -191,7 +191,7 @@ class CostGovernorTests(unittest.TestCase):
 
     def test_model_value_proof_remains_paid_cost_governed_and_bounded(self):
         workflow=(ROOT/".github/workflows/model-value-proof.yml").read_text()
-        self.assertIn("portfolio-cost-governed-autonomy",workflow)
+        self.assertIn("portfolio-state-writer-v1",workflow)
         self.assertIn("cost_governor.workflow_gate preflight",workflow)
         self.assertIn("cost_governor.workflow_gate finalize",workflow)
         self.assertIn("PORTFOLIO_MODEL_API_KEY",workflow)
@@ -207,7 +207,7 @@ class CostGovernorTests(unittest.TestCase):
 
     def test_verified_feedback_bootstrap_is_workload_controlled_and_model_free(self):
         workflow=(ROOT/".github/workflows/verified-feedback-bootstrap.yml").read_text()
-        self.assertIn("group: portfolio-feedback-bootstrap",workflow)
+        self.assertIn("group: portfolio-state-writer-v1",workflow)
         self.assertIn("workload_control.workload_gate preflight",workflow)
         self.assertNotIn("cost_governor.workflow_gate",workflow)
         self.assertIn("value_proof.proof_artifact_state",workflow)
@@ -220,7 +220,7 @@ class CostGovernorTests(unittest.TestCase):
 
     def test_continuous_learning_bootstrap_is_workload_controlled_and_model_free(self):
         workflow=(ROOT/".github/workflows/continuous-learning-bootstrap.yml").read_text()
-        self.assertIn("group: portfolio-learning-bootstrap",workflow)
+        self.assertIn("group: portfolio-state-writer-v1",workflow)
         self.assertIn("workload_control.workload_gate preflight",workflow)
         self.assertNotIn("cost_governor.workflow_gate",workflow)
         self.assertIn("value_proof.proof_artifact_state",workflow)
@@ -239,7 +239,7 @@ class CostGovernorTests(unittest.TestCase):
         self.assertIn("\n  push:",workflow)
         self.assertIn("      - main",workflow)
         self.assertIn("dashboard/**",workflow)
-        self.assertIn("group: portfolio-reporting-pages",workflow)
+        self.assertIn("group: portfolio-state-writer-v1",workflow)
         self.assertIn("workload_control.workload_gate preflight",workflow)
         self.assertNotIn("cost_governor.workflow_gate",workflow)
         self.assertNotIn("PORTFOLIO_SPEND_DISABLED",workflow)

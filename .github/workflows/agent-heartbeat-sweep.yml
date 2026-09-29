@@ -10,8 +10,9 @@ permissions:
   actions: read
 
 concurrency:
-  group: portfolio-heartbeat
+  group: portfolio-state-writer-v1
   cancel-in-progress: false
+  queue: max
 
 jobs:
   heartbeat:

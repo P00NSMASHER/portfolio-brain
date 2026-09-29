@@ -56,8 +56,8 @@ def validate_runtime()->dict:
     worker=texts[names[0]]
     for required in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_RUNTIME_DISABLED",
                      "PORTFOLIO_MODEL_API_KEY","runtime.model_analysis","actions/upload-artifact@v4","retention-days: 30",
-                     "cancel-in-progress: ${{ inputs.mode == 'observe' || inputs.mode == 'sync' }}",
-                     "workload_control.workload_gate preflight","format('portfolio-runtime-{0}', inputs.mode)",
+                     "cancel-in-progress: false",
+                     "workload_control.workload_gate preflight","group: portfolio-state-writer-v1",
                      "--provider-health-output runtime/out/provider_health.json",
                      '--job-id "runtime-${RUNTIME_MODE}"',
                      "Report governed no-work outcome","steps.admission.outputs.decision_status","GITHUB_STEP_SUMMARY"]:
@@ -77,8 +77,8 @@ def validate_runtime()->dict:
     req("repository_dispatch:" in texts[names[1]] and "push:" in texts[names[1]],"event triggers missing")
     req("paths-ignore:" in texts[names[1]] and "runtime/TRIGGER_DAILY_REASONING" in texts[names[1]],
         "daily reasoning trigger must not also launch event-observe")
-    req("group: runtime-event-observe-${{ github.event_name }}-${{ github.ref }}" in texts[names[1]],"runtime event-observe push coalescing group missing")
-    req("cancel-in-progress: ${{ github.event_name == 'push' }}" in texts[names[1]],"runtime event-observe push coalescing policy missing")
+    req("group: runtime-event-observe-${{ github.event_name }}-${{ github.ref }}" in texts[names[1]],"runtime event-observe caller queue missing")
+    req("cancel-in-progress: false" in texts[names[1]],"runtime event-observe caller must not cancel a running state writer")
     for isolated in [
       "value_proof/TRIGGER_END_TO_END_PROOF",
       "value_proof/TRIGGER_VERIFIED_FEEDBACK_BOOTSTRAP",

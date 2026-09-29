@@ -30,7 +30,10 @@ def load_policy() -> dict:
             raise WorkloadControlError(f"invalid max minutes: {key}")
         if not isinstance(cfg.get("concurrency_group"), str) or not cfg["concurrency_group"]:
             raise WorkloadControlError(f"missing concurrency group: {key}")
-        if cfg.get("coalesce_pending") is not True:
+        if cfg["concurrency_group"] == "portfolio-state-writer-v1":
+            if cfg.get("coalesce_pending") is not False or cfg.get("queue_mode") != "max":
+                raise WorkloadControlError(f"state writers require non-coalescing queue:max: {key}")
+        elif cfg.get("coalesce_pending") is not True:
             raise WorkloadControlError(f"pending coalescing must stay enabled: {key}")
     return policy
 

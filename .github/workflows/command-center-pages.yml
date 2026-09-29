@@ -43,8 +43,9 @@ permissions:
   id-token: write
 
 concurrency:
-  group: portfolio-reporting-pages
+  group: portfolio-state-writer-v1
   cancel-in-progress: false
+  queue: max
 
 jobs:
   publish:

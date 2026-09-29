@@ -28,7 +28,7 @@ def validate_notifications():
     wp=load("workload_control/WORKLOAD_POLICY.json")
     req("portfolio-notification-cycle::notify" in wp["services"],"notification workflow missing from workload controls")
     cfg=wp["services"]["portfolio-notification-cycle::notify"]
-    req(cfg["concurrency_group"]=="portfolio-notification","notification concurrency lane drifted")
+    req(cfg["concurrency_group"]=="portfolio-state-writer-v1","notification shared state-writer lane drifted")
     req(cfg["max_minutes_per_job"]==2,"notification workload timeout drifted")
     return {"current_signals":first["signal_count"],"current_emitted":1,"current_active":1,"dedup_suppressed_next_cycle":1,"delivery_channels":2,"authority":"NONE"}
 if __name__=="__main__":print("portfolio-brain Step 22 notifications: PASS",json.dumps(validate_notifications(),sort_keys=True))

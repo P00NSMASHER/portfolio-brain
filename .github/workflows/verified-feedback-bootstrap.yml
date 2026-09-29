@@ -14,8 +14,9 @@ permissions:
 jobs:
   feedback:
     concurrency:
-      group: portfolio-feedback-bootstrap
+      group: portfolio-state-writer-v1
       cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:

@@ -12,8 +12,9 @@ permissions:
   actions: read
 
 concurrency:
-  group: portfolio-notification
+  group: portfolio-state-writer-v1
   cancel-in-progress: false
+  queue: max
 
 jobs:
   notify:

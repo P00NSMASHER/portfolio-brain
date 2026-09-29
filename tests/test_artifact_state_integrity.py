@@ -1,5 +1,6 @@
 import io
 import json
+import re
 import tempfile
 import unittest
 import warnings
@@ -11,6 +12,7 @@ from urllib.error import HTTPError, URLError
 from runtime.artifact_state import ArtifactRestoreError, BudgetedHTTP, validate_runtime_artifact_bundle
 from runtime.artifact_restore import InvalidStateArtifact, restore_latest_valid_state
 from runtime.state import advance_cycle, bootstrap_state, canonical_hash, cycle_id_for
+from agents.heartbeat_state import heartbeat, seed_state as heartbeat_seed, validate_state as validate_heartbeat
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -295,6 +297,121 @@ class ArtifactStateIntegrityTests(unittest.TestCase):
             self.assertEqual(status,"RESTORED")
             self.assertEqual(json.loads(output.read_text())["sequence"],8)
             self.assertEqual(downloads,["main"])
+
+
+
+    def test_two_real_heartbeat_writers_from_same_parent_fail_without_overwriting(self):
+        # Hunter and Scheduler both restore N, then independently publish N+1.
+        parent = heartbeat_seed()
+        first = heartbeat(parent, agent_ids=["AGT-HUNTER"],
+                          activity_kind="HUNT", source_workflow="hunter-autonomous-cycle",
+                          source_run_id="10", at="2026-09-26T16:00:00Z")
+        second = heartbeat(parent, agent_ids=["AGT-PORTFOLIO-MANAGER"],
+                           activity_kind="SCHEDULER", source_workflow="portfolio-autonomous-scheduler",
+                           source_run_id="20", at="2026-09-26T17:00:00Z")
+        self.assertEqual(first["sequence"], second["sequence"])
+        self.assertNotEqual(canonical_hash(first), canonical_hash(second))
+        payloads = {"old": artifact("agent_heartbeat_state.json", json.dumps(first).encode()),
+                    "new": artifact("agent_heartbeat_state.json", json.dumps(second).encode())}
+        data = self.candidates()
+        for row in data["artifacts"]:
+            row["name"] = "portfolio-agent-heartbeat-state"
+        with tempfile.TemporaryDirectory() as td:
+            output = Path(td) / "state.json"
+            metadata = Path(td) / "restore.json"
+            before = json.dumps(parent).encode()
+            output.write_bytes(before)
+            metadata.write_bytes(b"previous restore evidence")
+            with self.assertRaisesRegex(InvalidStateArtifact, "conflicting state artifacts"):
+                restore_latest_valid_state(
+                    data, current_run="99", expected_head_branch="main",
+                    download=payloads.__getitem__, output=output,
+                    member_name="agent_heartbeat_state.json",
+                    expected_state_id="portfolio-agent-heartbeat-state",
+                    max_archive_bytes=100000, max_state_bytes=50000,
+                    validator=validate_heartbeat, metadata_output=metadata)
+            self.assertEqual(output.read_bytes(), before)
+            self.assertEqual(metadata.read_bytes(), b"previous restore evidence")
+
+    def test_serialized_restore_mutate_publish_preserves_both_real_writers(self):
+        first = heartbeat(heartbeat_seed(), agent_ids=["AGT-HUNTER"],
+                          activity_kind="HUNT", source_workflow="hunter-autonomous-cycle",
+                          source_run_id="10", at="2026-09-26T16:00:00Z")
+        with tempfile.TemporaryDirectory() as td:
+            output = Path(td) / "state.json"
+            candidates = self.candidates()["artifacts"]
+            for row in candidates:
+                row["name"] = "portfolio-agent-heartbeat-state"
+            data = {"artifacts": [candidates[1]]}
+            payloads = {"old": artifact("agent_heartbeat_state.json", json.dumps(first).encode())}
+            def restore():
+                return restore_latest_valid_state(
+                    data, current_run="99", expected_head_branch="main",
+                    download=payloads.__getitem__, output=output,
+                    member_name="agent_heartbeat_state.json",
+                    expected_state_id="portfolio-agent-heartbeat-state",
+                    max_archive_bytes=100000, max_state_bytes=50000,
+                    validator=validate_heartbeat)
+            restore()
+            # The next writer restores only AFTER its predecessor publishes.
+            second = heartbeat(json.loads(output.read_text()),
+                               agent_ids=["AGT-PORTFOLIO-MANAGER"], activity_kind="SCHEDULER",
+                               source_workflow="portfolio-autonomous-scheduler",
+                               source_run_id="20", at="2026-09-26T17:00:00Z")
+            self.assertEqual(second["sequence"], first["sequence"] + 1)
+            data["artifacts"].append(candidates[0])
+            payloads["new"] = artifact("agent_heartbeat_state.json", json.dumps(second).encode())
+            restore()
+            final = json.loads(output.read_text())
+            self.assertEqual(final["agents"]["AGT-HUNTER"]["source_run_id"], "10")
+            self.assertEqual(final["agents"]["AGT-PORTFOLIO-MANAGER"]["source_run_id"], "20")
+            self.assertEqual(len(final["recent_events"]), 2)
+            validate_heartbeat(final)
+
+    def test_every_canonical_state_writer_uses_global_non_cancelling_lane(self):
+        # Discover actual fixed-name state uploads, not just the four known producers.
+        # These workflows currently have exactly one job. Refuse a multi-job rewrite
+        # until this check explicitly accounts for each writer's effective lock.
+        expected = {
+            "agent-heartbeat-sweep.yml", "command-center-pages.yml",
+            "continuous-learning-bootstrap.yml", "hunter-autonomous-cycle.yml",
+            "model-value-proof.yml", "operator-console.yml",
+            "portfolio-autonomous-scheduler.yml", "portfolio-notification-cycle.yml",
+            "runtime-worker.yml", "software-factory-candidate.yml",
+            "verified-feedback-bootstrap.yml",
+        }
+        found = set()
+        for path in sorted((ROOT / ".github/workflows").glob("*.yml")):
+            body = path.read_text()
+            names = re.findall(r"(?m)^ +name: (portfolio-[a-z0-9-]+)\s*$", body)
+            if not any(name.endswith(("-state", "-history")) for name in names):
+                continue
+            found.add(path.name)
+            with self.subTest(workflow=path.name):
+                jobs = body.split("\njobs:\n", 1)[1]
+                self.assertEqual(len(re.findall(r"(?m)^  [a-zA-Z0-9_-]+:\s*$", jobs)), 1)
+                locks = re.findall(r"(?m)^( *)concurrency:\n((?: +[^\n]*\n)+)", body)
+                self.assertEqual(len(locks), 1, "writer must have exactly one concurrency lock")
+                indent, block = locks[0]
+                self.assertIn(indent, ("", "    "))
+                pad = indent + "  "
+                fields = dict(re.findall(r"(?m)^" + pad + r"(group|cancel-in-progress|queue): ([^\n]+)$", block))
+                self.assertEqual(fields, {"group": "portfolio-state-writer-v1",
+                                          "cancel-in-progress": "false", "queue": "max"})
+        self.assertEqual(found, expected)
+
+    def test_runtime_callers_never_hold_writer_lock_or_cancel_running_worker(self):
+        for path in (ROOT / ".github/workflows").glob("*.yml"):
+            body = path.read_text()
+            if "uses: ./.github/workflows/runtime-worker.yml" not in body:
+                continue
+            with self.subTest(workflow=path.name):
+                self.assertNotIn("group: portfolio-state-writer-v1", body,
+                                 "caller would wait for a child that needs its own held lock")
+                for value in re.findall(r"(?m)^ +cancel-in-progress: (.+)$", body):
+                    self.assertEqual(value, "false")
+                if "concurrency:" in body:
+                    self.assertIn("queue: max", body)
 
 
 if __name__=="__main__":unittest.main()

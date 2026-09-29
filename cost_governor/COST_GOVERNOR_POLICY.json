@@ -175,7 +175,7 @@
     "repository_variable": "PORTFOLIO_SPEND_DISABLED",
     "file": "cost_governor/COST_KILL_SWITCH.json"
   },
-  "global_concurrency_group": "portfolio-cost-governed-autonomy",
+  "global_concurrency_group": "portfolio-state-writer-v1",
   "managed_workflow_names": [
     "runtime-worker",
     "runtime-daily-learning",

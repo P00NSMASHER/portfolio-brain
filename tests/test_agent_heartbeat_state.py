@@ -135,7 +135,7 @@ class AgentHeartbeatStateTests(unittest.TestCase):
         self.assertIn("--all-registered",body)
         self.assertIn("--activity-kind HEALTH_CHECK",body)
         self.assertIn("workload_control.workload_gate preflight",body)
-        self.assertIn("group: portfolio-heartbeat",body)
+        self.assertIn("group: portfolio-state-writer-v1",body)
         self.assertNotIn("cost_governor.workflow_gate",body)
         self.assertIn("name: portfolio-agent-heartbeat-state",body)
         self.assertIn("path: agents/out/agent_heartbeat_state.json",body)

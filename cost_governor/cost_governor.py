@@ -109,7 +109,7 @@ def validate_policy(p: dict[str, Any] | None = None) -> None:
     req(all(type(v) is int and v >= 1 for v in p["retry_limits"].values()), "retry limits invalid")
     req(type(p["max_state_records"]) is int and p["max_state_records"] >= 100, "state record ceiling too small")
     req(type(p["recent_decision_limit"]) is int and p["recent_decision_limit"] >= 20, "decision retention too small")
-    req(p["global_concurrency_group"] == "portfolio-cost-governed-autonomy", "global cost concurrency group changed")
+    req(p["global_concurrency_group"] == "portfolio-state-writer-v1", "global cost concurrency group changed")
     # Paid/model/API execution may be enabled, but only under finite checked-in
     # ceilings. Provider/model routing and pre-execution reservations remain
     # independent gates, so budget capacity alone never creates an executable route.
