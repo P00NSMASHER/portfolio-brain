@@ -308,8 +308,9 @@ WRITER_WORKFLOWS = {
     "model-value-proof.yml", "operator-console.yml",
     "portfolio-autonomous-scheduler.yml", "portfolio-notification-cycle.yml",
     "runtime-worker.yml", "software-factory-candidate.yml",
-    "verified-feedback-bootstrap.yml", "portfolio-state-reducer.yml",
+    "verified-feedback-bootstrap.yml",
 }
+CANONICAL_REDUCER_WORKFLOW = "portfolio-state-reducer.yml"
 OPERATOR_WRITER_GROUP = "${{ inputs.operation == 'EMERGENCY_STOP' && format('portfolio-emergency-writer-bypass-{0}', github.run_id) || 'portfolio-state-writer-v1' }}"
 OPERATOR_ENTRY_GROUP = "${{ inputs.operation == 'EMERGENCY_STOP' && format('portfolio-emergency-entry-{0}', github.run_id) || 'portfolio-operator-console' }}"
 
@@ -376,13 +377,30 @@ class SharedStateWriterRegressionTests(unittest.TestCase):
     def workflows(self):
         return {p.name:p.read_text(encoding="utf-8") for p in (ROOT/".github/workflows").glob("*.yml")}
 
-    def test_every_durable_state_publisher_holds_the_same_job_mutex(self):
+    def test_every_legacy_mirror_publisher_holds_the_same_job_mutex(self):
         workflows = self.workflows()
         discovered = {name for name,text in workflows.items() if mutable_artifact_names(text)}
-        self.assertEqual(discovered, WRITER_WORKFLOWS, "review new or removed state publishers")
-        for name in sorted(discovered):
+        self.assertEqual(discovered, WRITER_WORKFLOWS | {CANONICAL_REDUCER_WORKFLOW}, "review new or removed state publishers")
+        for name in sorted(WRITER_WORKFLOWS):
             with self.subTest(workflow=name):
                 assert_writer_contract(name, workflows[name])
+
+    def test_sole_canonical_reducer_uses_independent_non_cancelling_lane(self):
+        workflows = self.workflows()
+        reducer = workflows[CANONICAL_REDUCER_WORKFLOW]
+        header, jobs = workflow_jobs(reducer)
+        self.assertEqual(concurrency_fields(header,0), {
+            "group":"portfolio-state-reducer",
+            "cancel-in-progress":"false",
+            "queue":"max",
+        })
+        self.assertNotIn(WRITER_GROUP, jobs["reduce"])
+        self.assertIn("portfolio-canonical-shadow-state", jobs["reduce"])
+        publishers = [
+            name for name,text in workflows.items()
+            if "name: portfolio-canonical-shadow-state" in text
+        ]
+        self.assertEqual(publishers, [CANONICAL_REDUCER_WORKFLOW])
 
     def test_separate_group_or_cancelling_writer_is_rejected(self):
         text = self.workflows()["hunter-autonomous-cycle.yml"]

@@ -9,7 +9,7 @@ from agents.heartbeat_state import seed_state
 from state_journal.contracts import JournalError, digest
 from state_journal.reducer import checkpoint, make_snapshot, set_authority
 from state_journal.transport import EVENT_PREFIX, SNAPSHOT_ARTIFACT
-from state_journal.production_reader import restore_domain
+from state_journal.production_reader import restore_domain, _wait_for_reduction
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -62,7 +62,7 @@ class CanonicalProductionReaderTests(unittest.TestCase):
         self.assertEqual(meta["source_run_id"], 101)
         self.assertEqual(meta["source_head_sha"], "a" * 40)
         self.assertEqual(meta["domain_state_hash"], digest(seed_state()))
-    def test_pending_event_blocks_stale_reader(self):
+    def test_pending_event_waits_for_successful_reducer_evidence(self):
         pending = {
             "id": 12,
             "name": EVENT_PREFIX + "123-runtime-worker-" + "b" * 40 + "-1",
@@ -70,8 +70,41 @@ class CanonicalProductionReaderTests(unittest.TestCase):
             "created_at": "2026-09-29T18:43:10Z",
             "workflow_run": {"id": 123, "head_branch": "main", "head_sha": "b" * 40},
         }
-        with self.assertRaisesRegex(JournalError, "STALE_CANONICAL_STATE_PENDING_REDUCTION"):
-            self.run_restore([snapshot_meta(), pending])
+        fresh = canonical_snapshot()
+        fresh["evidence"] = {"event": [{"kind": "GITHUB_ACTIONS", "artifact_id": 12}]}
+        class PollReader:
+            def get(self, _suffix):
+                return {"workflow_runs": [{
+                    "id": 900, "name": "portfolio-state-reducer", "head_branch": "main",
+                    "status": "completed", "conclusion": "success",
+                    "created_at": "2026-09-29T18:43:11Z",
+                }]}
+        class FreshReader:
+            def list_recent_artifacts(self, *args, **kwargs):
+                return [snapshot_meta(), pending]
+        policy = json.loads((ROOT / "state_journal/POLICY.json").read_text())
+        with patch("state_journal.production_reader.GitHubReader", side_effect=[PollReader(), FreshReader()]), \
+             patch("state_journal.production_reader.restore_snapshot", return_value=fresh):
+            reader, state, artifacts = _wait_for_reduction(
+                "token", policy, [pending], current_run="999",
+                timeout_seconds=1, poll_seconds=0, clock=lambda: 0, sleep=lambda _: None,
+            )
+        self.assertIsInstance(reader, FreshReader)
+        self.assertEqual(state, fresh)
+        self.assertEqual(artifacts[-1]["id"], 12)
+
+    def test_pending_event_timeout_fails_closed(self):
+        pending = {
+            "id": 12, "name": EVENT_PREFIX + "123-runtime-worker-" + "b" * 40 + "-1",
+            "expired": False, "created_at": "2026-09-29T18:43:10Z",
+            "workflow_run": {"id": 123, "head_branch": "main", "head_sha": "b" * 40},
+        }
+        policy = json.loads((ROOT / "state_journal/POLICY.json").read_text())
+        class PollReader:
+            def get(self, _suffix): return {"workflow_runs": []}
+        with patch("state_journal.production_reader.GitHubReader", return_value=PollReader()), \
+             self.assertRaisesRegex(JournalError, "STALE_CANONICAL_STATE_REDUCTION_TIMEOUT"):
+            _wait_for_reduction("token", policy, [pending], current_run="999", timeout_seconds=0)
 
     def test_all_state_mutators_use_canonical_reader(self):
         names = [
