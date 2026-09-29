@@ -26,6 +26,8 @@ from model_router.feedback_artifact_state import restore as restore_model_feedba
 from runtime.artifact_state import restore as restore_runtime
 from runtime.state import bootstrap_state, validate_state as validate_runtime_state
 from scheduler.artifact_state import restore as restore_scheduler
+from operations.liveness_artifact_state import restore as restore_liveness, load_verified
+from operations.workflow_liveness import _hash_value
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -124,6 +126,29 @@ def _classify(meta: dict[str, Any], *, now: datetime, stale_after_minutes: int) 
     return ("STALE" if age > stale_after_minutes else "LIVE"), round(age, 1)
 
 
+def apply_cost_verification(source:dict[str,Any], state:dict[str,Any], liveness:dict[str,Any]|None, *, now:datetime)->None:
+    """Freshness of an actual unchanged-ledger check, never a ledger mutation."""
+    if source.get("source_kind")!="GITHUB_ACTIONS_ARTIFACT" or source.get("status")=="FALLBACK" or not liveness:
+        return
+    proof=liveness.get("cost_state_proof")
+    if not isinstance(proof,dict):return
+    try:
+        age=(now-_time(proof["checked_at"])).total_seconds()/60
+        valid=(proof.get("status")=="VERIFIED_UNCHANGED_STATE"
+               and proof.get("state_mutated") is False
+               and proof["checked_at"]==liveness["checked_at"]
+               and 0<=age<=STALE_AFTER_MINUTES["cost"]
+               and type(proof.get("state_sequence")) is int
+               and proof["state_sequence"]==state["sequence"]
+               and proof.get("state_hash")==_hash_value(state)
+               and proof.get("state_updated_at")==state["updated_at"]
+               and proof.get("source_artifact_id")==source.get("artifact_id")
+               and proof.get("source_run_id")==source.get("source_run_id"))
+    except (ValueError,KeyError,TypeError):return
+    if valid:
+        source.update(status="LIVE", freshness_basis="VERIFIED_UNCHANGED_LEDGER",
+                      last_verified_at=proof["checked_at"],verification_age_minutes=round(age,1))
+
 def build_live_state(
     *,
     output_dir: Path,
@@ -135,6 +160,12 @@ def build_live_state(
     metadata_dir = output_dir / ".restore-metadata"
     metadata_dir.mkdir(parents=True, exist_ok=True)
 
+    # Reuse the existing watchdog's exact-run evidence; failed reads stay unverified.
+    try:
+        restore_liveness(output_dir/"workflow_liveness_receipt.json",output_dir/"workflow_liveness_restore.json",now=now)
+    except Exception:
+        pass
+    liveness=load_verified(output_dir,now=now)
     sources: dict[str, Any] = {}
     for name, restorer in RESTORERS.items():
         state_path = output_dir / _state_filename(name)
@@ -214,6 +245,9 @@ def build_live_state(
       "stale_after_minutes":STALE_AFTER_MINUTES["provider"],"state_sequence":provider_state.get("sequence"),
       "state_updated_at":provider_state.get("updated_at"),"error_class":None,
     }
+
+    cost_state=json.loads((output_dir/_state_filename("cost")).read_text())
+    apply_cost_verification(sources["cost"],cost_state,liveness,now=now)
 
     # System health is based on core operational state only. Optional
     # observability sources (provider readiness and agent heartbeats) may still

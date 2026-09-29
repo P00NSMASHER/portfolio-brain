@@ -9,6 +9,7 @@ from typing import Any
 
 from experiments.experiment_engine import build_experiment_portfolio
 from uncertainty.highest_value_uncertainty import build_snapshot as build_uncertainty_snapshot
+from operations.liveness_artifact_state import load_verified
 
 ROOT = Path(__file__).resolve().parents[1]
 LIVE = ROOT / "dashboard" / "live"
@@ -215,7 +216,7 @@ def _last_cycles(runtime: dict[str,Any],hunter: dict[str,Any],scheduler: dict[st
     return {"latest_overall":rows[0] if rows else None,"by_subsystem":latest,"recent":rows[:20]}
 
 
-def _runtime_sync_proof(runtime:dict[str,Any],cost:dict[str,Any],sources:dict[str,Any])->dict[str,Any]:
+def _runtime_sync_proof(runtime:dict[str,Any],cost:dict[str,Any],sources:dict[str,Any],liveness:dict[str,Any]|None=None)->dict[str,Any]:
     source_bundle=sources or {}
     source_rows=source_bundle.get("sources",{})
     runtime_source=source_rows.get("runtime",{})
@@ -232,9 +233,9 @@ def _runtime_sync_proof(runtime:dict[str,Any],cost:dict[str,Any],sources:dict[st
     cycles.sort(key=lambda row:row["finished_at"])
     latest=cycles[-1] if cycles else None
 
-    liveness=load_json("operations/WORKFLOW_LIVENESS_POLICY.json")
+    liveness_policy=load_json("operations/WORKFLOW_LIVENESS_POLICY.json")
     sync_target=next(
-        row for row in liveness["targets"]
+        row for row in liveness_policy["targets"]
         if row["workflow_name"]=="runtime-hourly-sync"
     )
     max_age=float(sync_target["max_start_age_minutes"])
@@ -244,6 +245,47 @@ def _runtime_sync_proof(runtime:dict[str,Any],cost:dict[str,Any],sources:dict[st
     if checked_at is not None and cycle_at is not None:
         age_minutes=round(max(0.0,(checked_at-cycle_at).total_seconds()/60),1)
 
+    # Non-paid sync has no cost reservation. Match the exact validated receipt
+    # to the retained cycle, even after a newer observe job publishes runtime.
+    if liveness is not None and sync_target["admission_domain"]=="WORKLOAD":
+        targets=[row for row in liveness.get("targets",[]) if isinstance(row,dict)
+                 and row.get("workflow_name")=="runtime-hourly-sync"
+                 and row.get("workflow_file")=="runtime-hourly-sync.yml"]
+        row=targets[0] if len(targets)==1 else {}
+        metrics=row.get("work_proof_metrics",{})
+        metrics=metrics if isinstance(metrics,dict) else {}
+        try:
+            proof_at=_time(liveness.get("checked_at"))
+            fresh=(checked_at is not None and cycle_at is not None and proof_at is not None
+                   and cycle_at<=proof_at<=checked_at
+                   and 0<=(checked_at-cycle_at).total_seconds()/60<=max_age)
+        except (ValueError,TypeError):fresh=False
+        verified=(runtime_source.get("status")=="LIVE" and latest is not None and fresh
+                  and liveness.get("authority_granted") is False
+                  and row.get("status")=="HEALTHY_VERIFIED_WORK"
+                  and row.get("latest_conclusion")=="success"
+                  and row.get("work_proof_status")=="VERIFIED_WORK"
+                  and row.get("work_proof_reason")=="RUNTIME_SYNC_RECEIPT"
+                  and type(row.get("latest_run_id")) is int and row["latest_run_id"]>0
+                  and type(metrics.get("observations")) is int and metrics["observations"]>0
+                  and type(metrics.get("api_requests")) is int and metrics["api_requests"]>0
+                  and all(metrics.get(k)==latest.get(k) for k in ("cycle_id","finished_at","receipt_hash")))
+        return {
+            "status":"VERIFIED_SYNC_WORK" if verified else "UNVERIFIED_SYNC_WORK",
+            "source_run_id":row.get("latest_run_id") if verified else None,
+            "runtime_artifact_source_run_id":runtime_source.get("source_run_id"),
+            "cost_artifact_source_run_id":cost_source.get("source_run_id"),
+            "runtime_source_status":runtime_source.get("status","FALLBACK"),
+            "cost_source_status":cost_source.get("status","FALLBACK"),
+            "cycle_id":latest.get("cycle_id") if verified else None,
+            "cycle_finished_at":latest.get("finished_at") if latest else None,
+            "sync_age_minutes":age_minutes,"max_sync_age_minutes":max_age,
+            "reservation_id":None,
+            "reason":"FRESH_SYNC_CYCLE_MATCHES_EXACT_RUN_RECEIPT" if verified else "EXACT_RUN_SYNC_PROOF_MISSING_STALE_OR_MISMATCHED",
+        }
+
+    # Retain validation of genuine historical paid-sync receipts; missing current
+    # workload evidence does not fabricate a reservation or a successful result.
     reservations=[]
     if cycle_at is not None:
         for row in cost.get("reservations",[]):
@@ -425,7 +467,7 @@ def build_operational_telemetry(*, at: str | None=None) -> dict[str,Any]:
         "actions":{"total_sent":len(action_ledger["executions"]),"recent":recent_actions},
         "failures":{"count":len(failures),"recent":failures[:20]},
         "cycles":_last_cycles(runtime,hunter,scheduler),
-        "runtime_sync_proof":_runtime_sync_proof(runtime,cost,sources),
+        "runtime_sync_proof":_runtime_sync_proof(runtime,cost,sources,load_verified(LIVE,now=_time(sources.get("generated_at")) or datetime.now(timezone.utc))),
         "hunter":{"totals":hunter_totals,"state_sequence":hunter["sequence"],"updated_at":hunter["updated_at"]},
         "notifications":{
             "state_sequence":notifications["sequence"],"updated_at":notifications["updated_at"],
