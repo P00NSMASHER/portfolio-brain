@@ -109,8 +109,11 @@ def validate_publication() -> dict[str, object]:
     workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text(encoding="utf-8")
     require("\n  push:\n" in workflow and "      - main" in workflow, "Pages is not auto-triggered by relevant main pushes")
     require("\n  workflow_run:\n" in workflow, "Pages durable-state event trigger missing")
-    for producer in ("portfolio-autonomous-scheduler","runtime-hourly-sync","agent-heartbeat-sweep","hunter-autonomous-cycle","portfolio-notification-cycle","portfolio-cost-watchdog"):
-        require(f'      - "{producer}"' in workflow, f"Pages is not coupled to durable producer {producer}")
+    event_block=re.search(r"(?m)^  workflow_run:\n((?:[ ]{4,}[^\n]*\n)+)", workflow)
+    require(event_block is not None, "Pages completion trigger is not inspectable")
+    producers=re.findall(r'^      - "([^"\n]+)"$', event_block.group(1), re.M)
+    require(producers == ["portfolio-cost-watchdog"], "Pages must publish once after the watchdog, not before and after core verification")
+    require('types: [completed]' in event_block.group(1) and 'branches: ["main"]' in event_block.group(1), "Pages must retain every main-watchdog completion")
     require("Stamp publication provenance" in workflow, "Pages publication provenance stamp missing")
     require('if [[ "$GITHUB_EVENT_NAME" == "push" ]]' in workflow, "source-change publication override missing")
     require("Verify deployed source commit" in workflow and "source-commit.txt" in workflow, "end-to-end Pages deployment proof missing")

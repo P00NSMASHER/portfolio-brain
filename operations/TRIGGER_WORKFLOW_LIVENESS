@@ -1,1 +1,1 @@
-Existing cost/sync reporting recovery; no schedule or budget changes. Source c4c60350; 2026-09-29.
+Existing automation routing verification, 2026-09-29. Keep all schedules, budgets, permissions and state-writer locks unchanged. No new work type or feature.

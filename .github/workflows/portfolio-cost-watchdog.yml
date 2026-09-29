@@ -29,7 +29,8 @@ permissions:
 
 concurrency:
   group: portfolio-cost-watchdog
-  cancel-in-progress: true
+  # Finish verification/receipt publication; newer pending reads may coalesce.
+  cancel-in-progress: false
 
 jobs:
   enforce:
