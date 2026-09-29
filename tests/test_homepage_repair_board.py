@@ -16,6 +16,15 @@ class RepairBoardTests(unittest.TestCase):
         self.assertIn(snapshot["agents"][0]["name"], role["detail"])
         self.assertIn("HEALTH_CHECK", role["prompt"])
 
+    def test_current_scoped_commercial_observation_is_not_mislabeled_as_broken(self):
+        snapshot = build_command_center_snapshot()
+        snapshot["commercial_validation"]["evidence_status"] = "CURRENT_SCOPE_OBSERVED"
+        issues = build_repair_issues(snapshot)
+        self.assertNotIn(
+            "Commercial evidence is current but scope-limited",
+            {issue["title"] for issue in issues},
+        )
+
     def test_public_page_has_visible_issue_board_and_local_freshness_check(self):
         page = render_html(build_command_center_snapshot())
         self.assertLess(page.index('id="repair-board"'), page.index('class="grid kpis"'))

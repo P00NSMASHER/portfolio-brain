@@ -124,7 +124,76 @@ def _queue(scheduler: dict[str,Any], *, at: datetime) -> dict[str,Any]:
     }
 
 
-def _agents(agent_state: dict[str,Any], scheduler: dict[str,Any], *, at: datetime) -> dict[str,Any]:
+def _heartbeat_sweep_proof(
+    liveness:dict[str,Any]|None,
+    *,
+    at:datetime,
+    expected_agents:int,
+)->dict[str,Any]:
+    result={
+        "verified":False,
+        "source_run_id":None,
+        "age_minutes":None,
+        "max_age_minutes":None,
+        "agents_heartbeated":None,
+    }
+    if not isinstance(liveness,dict):
+        return result
+    checked_at=_time(liveness.get("checked_at"))
+    if checked_at is None:
+        return result
+    target=next(
+        (
+            row for row in liveness.get("targets",[])
+            if isinstance(row,dict)
+            and row.get("workflow_name")=="agent-heartbeat-sweep"
+        ),
+        None,
+    )
+    if target is None:
+        return result
+    metrics=target.get("work_proof_metrics")
+    metrics=metrics if isinstance(metrics,dict) else {}
+    observed=metrics.get("agents_heartbeated")
+    run_age=target.get("age_minutes")
+    if not isinstance(run_age,(int,float)) or run_age<0:
+        return result
+    policy_doc=load_json("operations/WORKFLOW_LIVENESS_POLICY.json")
+    policy_target=next(
+        row for row in policy_doc["targets"]
+        if row["workflow_name"]=="agent-heartbeat-sweep"
+    )
+    max_age=float(policy_target["max_start_age_minutes"])
+    proof_age=round(
+        max(0.0,(at-checked_at).total_seconds()/60.0)+float(run_age),
+        1,
+    )
+    verified=(
+        target.get("status")=="HEALTHY_VERIFIED_WORK"
+        and target.get("reason")=="EXACT_RUN_SUBSTANTIVE_WORK_PROVEN"
+        and target.get("work_proof_status")=="VERIFIED_WORK"
+        and target.get("work_proof_reason")=="HEARTBEAT_SWEEP_EVENT_PROOF"
+        and type(target.get("latest_run_id")) is int
+        and type(observed) is int
+        and observed==expected_agents
+        and proof_age<=max_age
+    )
+    return {
+        "verified":verified,
+        "source_run_id":target.get("latest_run_id") if verified else None,
+        "age_minutes":proof_age,
+        "max_age_minutes":max_age,
+        "agents_heartbeated":observed,
+    }
+
+
+def _agents(
+    agent_state:dict[str,Any],
+    scheduler:dict[str,Any],
+    *,
+    at:datetime,
+    liveness:dict[str,Any]|None=None,
+)->dict[str,Any]:
     events_by_agent={}
     for event in agent_state["recent_events"]:
         events_by_agent.setdefault(event["agent_id"],[]).append(event)
@@ -133,6 +202,12 @@ def _agents(agent_state: dict[str,Any], scheduler: dict[str,Any], *, at: datetim
     for work in scheduler["work_items"]:
         if work["state"] not in {"QUEUED","ACTIVE"}:continue
         open_by_agent.setdefault(work["assigned_agent_id"],[]).append(work)
+
+    sweep=_heartbeat_sweep_proof(
+        liveness,
+        at=at,
+        expected_agents=len(agent_state["agents"]),
+    )
 
     rows=[]
     for agent_id,row in sorted(agent_state["agents"].items()):
@@ -149,18 +224,31 @@ def _agents(agent_state: dict[str,Any], scheduler: dict[str,Any], *, at: datetim
 
         if productive_age is not None and productive_age<=PRODUCTIVE_ACTIVITY_WINDOW_MINUTES:
             health="LIVE"
+            health_basis="RECENT_PRODUCTIVE_ACTIVITY"
         elif open_work and oldest_open_age is not None and oldest_open_age>STALL_AFTER_MINUTES:
             health="STALLED"
+            health_basis="STALE_ASSIGNED_WORK"
         elif open_work:
             health="WARMING_UP"
+            health_basis="OPEN_ASSIGNED_WORK"
+        elif sweep["verified"]:
+            # Exact-run sweep proof establishes liveness, not productivity.
+            # Keep substantive activity fields unchanged and classify only an
+            # unassigned role as healthy-idle.
+            health="IDLE_HEALTHY"
+            health_basis="EXACT_RUN_HEARTBEAT_SWEEP"
         elif heartbeat_age is None:
             health="NEVER"
+            health_basis="NO_HEARTBEAT_EVIDENCE"
         elif heartbeat_age<=PRODUCTIVE_ACTIVITY_WINDOW_MINUTES:
             health="IDLE_HEALTHY"
+            health_basis="RECENT_DURABLE_HEARTBEAT"
         elif heartbeat_age<=720:
             health="STALE"
+            health_basis="DURABLE_HEARTBEAT_STALE"
         else:
             health="OFFLINE"
+            health_basis="DURABLE_HEARTBEAT_OFFLINE"
 
         activity=productive or ({
             "activity_kind":row["last_activity_kind"],
@@ -173,6 +261,7 @@ def _agents(agent_state: dict[str,Any], scheduler: dict[str,Any], *, at: datetim
             "role_key":row["role_key"],
             "status":row["status"],
             "heartbeat_health":health,
+            "heartbeat_health_basis":health_basis,
             "last_heartbeat_at":row["last_heartbeat_at"],
             "heartbeat_age_minutes":heartbeat_age,
             "last_productive_at":None if productive is None else productive["at"],
@@ -187,6 +276,7 @@ def _agents(agent_state: dict[str,Any], scheduler: dict[str,Any], *, at: datetim
     return {
         "sequence":agent_state["sequence"],
         "updated_at":agent_state["updated_at"],
+        "heartbeat_sweep_proof":sweep,
         "live":sum(1 for x in rows if x["heartbeat_health"]=="LIVE"),
         "idle_healthy":sum(1 for x in rows if x["heartbeat_health"]=="IDLE_HEALTHY"),
         "warming_up":sum(1 for x in rows if x["heartbeat_health"]=="WARMING_UP"),
@@ -197,7 +287,6 @@ def _agents(agent_state: dict[str,Any], scheduler: dict[str,Any], *, at: datetim
         "agents":rows,
         "recent_events":agent_state["recent_events"][-25:],
     }
-
 
 def _last_cycles(runtime: dict[str,Any],hunter: dict[str,Any],scheduler: dict[str,Any]) -> dict[str,Any]:
     rows=[]
@@ -215,7 +304,12 @@ def _last_cycles(runtime: dict[str,Any],hunter: dict[str,Any],scheduler: dict[st
     return {"latest_overall":rows[0] if rows else None,"by_subsystem":latest,"recent":rows[:20]}
 
 
-def _runtime_sync_proof(runtime:dict[str,Any],cost:dict[str,Any],sources:dict[str,Any])->dict[str,Any]:
+def _runtime_sync_proof(
+    runtime:dict[str,Any],
+    cost:dict[str,Any],
+    sources:dict[str,Any],
+    liveness:dict[str,Any]|None=None,
+)->dict[str,Any]:
     source_bundle=sources or {}
     source_rows=source_bundle.get("sources",{})
     runtime_source=source_rows.get("runtime",{})
@@ -232,18 +326,89 @@ def _runtime_sync_proof(runtime:dict[str,Any],cost:dict[str,Any],sources:dict[st
     cycles.sort(key=lambda row:row["finished_at"])
     latest=cycles[-1] if cycles else None
 
-    liveness=load_json("operations/WORKFLOW_LIVENESS_POLICY.json")
-    sync_target=next(
-        row for row in liveness["targets"]
+    liveness_policy=load_json("operations/WORKFLOW_LIVENESS_POLICY.json")
+    sync_target_policy=next(
+        row for row in liveness_policy["targets"]
         if row["workflow_name"]=="runtime-hourly-sync"
     )
-    max_age=float(sync_target["max_start_age_minutes"])
+    max_age=float(sync_target_policy["max_start_age_minutes"])
 
     cycle_at=_time(None if latest is None else latest.get("finished_at"))
     age_minutes=None
     if checked_at is not None and cycle_at is not None:
         age_minutes=round(max(0.0,(checked_at-cycle_at).total_seconds()/60),1)
+    fresh=age_minutes is not None and age_minutes<=max_age
+    runtime_live=runtime_source.get("status")=="LIVE"
 
+    # Current non-paid runtime sync is governed by workload controls, not the
+    # paid cost wrapper. Prefer the watchdog's exact-run artifact proof when
+    # available. That proof independently opens the exact run artifact and
+    # validates cycle_receipt.json before declaring substantive work.
+    if isinstance(liveness,dict):
+        targets=liveness.get("targets",[])
+        target=next(
+            (
+                row for row in targets
+                if isinstance(row,dict)
+                and row.get("workflow_name")=="runtime-hourly-sync"
+            ),
+            None,
+        )
+        proof_metrics={} if target is None else target.get("work_proof_metrics",{})
+        proof_metrics=proof_metrics if isinstance(proof_metrics,dict) else {}
+        proof_run_id=None if target is None else target.get("latest_run_id")
+        exact_proof=(
+            target is not None
+            and target.get("status")=="HEALTHY_VERIFIED_WORK"
+            and target.get("reason")=="EXACT_RUN_SUBSTANTIVE_WORK_PROVEN"
+            and target.get("work_proof_status")=="VERIFIED_WORK"
+            and target.get("work_proof_reason")=="RUNTIME_SYNC_RECEIPT"
+            and isinstance(proof_run_id,int)
+        )
+        proof_cycle_bound=(
+            latest is not None
+            and proof_metrics.get("cycle_id")==latest.get("cycle_id")
+            and proof_metrics.get("finished_at")==latest.get("finished_at")
+        )
+        source_run_bound=(
+            proof_run_id is not None
+            and str(proof_run_id)==str(runtime_source.get("source_run_id"))
+        )
+        exact_bound=proof_cycle_bound or source_run_bound
+        verified=runtime_live and latest is not None and fresh and exact_proof and exact_bound
+
+        if verified:
+            reason="FRESH_SYNC_CYCLE_MATCHES_EXACT_RUN_WORK_PROOF"
+        elif not runtime_live:
+            reason="RUNTIME_SOURCE_NOT_LIVE"
+        elif latest is None:
+            reason="MISSING_SYNC_CYCLE"
+        elif age_minutes is None or not fresh:
+            reason="SYNC_CYCLE_TOO_OLD"
+        elif not exact_proof:
+            reason="MISSING_OR_INVALID_EXACT_RUN_WORK_PROOF"
+        else:
+            reason="WORK_PROOF_NOT_BOUND_TO_RESTORED_SYNC_CYCLE"
+
+        return {
+            "status":"VERIFIED_SYNC_WORK" if verified else "UNVERIFIED_SYNC_WORK",
+            "source_run_id":proof_run_id if verified else None,
+            "runtime_artifact_source_run_id":runtime_source.get("source_run_id"),
+            "cost_artifact_source_run_id":cost_source.get("source_run_id"),
+            "runtime_source_status":runtime_source.get("status","FALLBACK"),
+            "cost_source_status":cost_source.get("status","FALLBACK"),
+            "cycle_id":latest.get("cycle_id") if verified and latest else None,
+            "cycle_finished_at":latest.get("finished_at") if latest else None,
+            "sync_age_minutes":age_minutes,
+            "max_sync_age_minutes":max_age,
+            "reservation_id":None,
+            "reason":reason,
+            "proof_source":"WORKFLOW_LIVENESS_EXACT_RUN",
+        }
+
+    # Legacy fallback for old/static fixtures that predate non-paid workload
+    # proof restoration. Production Pages should normally take the exact-run
+    # path above.
     reservations=[]
     if cycle_at is not None:
         for row in cost.get("reservations",[]):
@@ -270,8 +435,7 @@ def _runtime_sync_proof(runtime:dict[str,Any],cost:dict[str,Any],sources:dict[st
                 sync_run_id=int(raw) if raw.isdigit() else raw
                 break
 
-    sources_live=runtime_source.get("status")=="LIVE" and cost_source.get("status")=="LIVE"
-    fresh=age_minutes is not None and age_minutes<=max_age
+    sources_live=runtime_live and cost_source.get("status")=="LIVE"
     verified=sources_live and latest is not None and fresh and match is not None and sync_run_id is not None
 
     if verified:
@@ -302,8 +466,8 @@ def _runtime_sync_proof(runtime:dict[str,Any],cost:dict[str,Any],sources:dict[st
         "max_sync_age_minutes":max_age,
         "reservation_id":match.get("reservation_id") if verified and match else None,
         "reason":reason,
+        "proof_source":"LEGACY_COST_RESERVATION",
     }
-
 
 def _verified_outcomes() -> tuple[int,dict[str,int]]:
     experiment=load_json("experiments/EXPERIMENT_OUTCOME_LEDGER.json")["outcomes"]
@@ -339,11 +503,12 @@ def build_operational_telemetry(*, at: str | None=None) -> dict[str,Any]:
     runtime_path=LIVE/"runtime_state.json"
     runtime=load_json(runtime_path) if runtime_path.exists() else {"recent_cycles":[],"sequence":0,"updated_at":None}
     sources=load_json(LIVE/"state_sources.json") if (LIVE/"state_sources.json").exists() else {"sources":{}}
+    liveness=load_json(LIVE/"workflow_liveness_receipt.json") if (LIVE/"workflow_liveness_receipt.json").exists() else None
     action_ledger=load_json("action_engine/GMAIL_GATEWAY_LEDGER.json")
     cost_policy=load_json("cost_governor/COST_GOVERNOR_POLICY.json")
 
     queue=_queue(scheduler,at=now)
-    agent_view=_agents(agents,scheduler,at=now)
+    agent_view=_agents(agents,scheduler,at=now,liveness=liveness)
     accounted=usage_today(cost,at=at)
     actual=actual_usage_today(cost,at=at)
     ceilings=cost_policy["portfolio_ceiling"]
@@ -425,7 +590,7 @@ def build_operational_telemetry(*, at: str | None=None) -> dict[str,Any]:
         "actions":{"total_sent":len(action_ledger["executions"]),"recent":recent_actions},
         "failures":{"count":len(failures),"recent":failures[:20]},
         "cycles":_last_cycles(runtime,hunter,scheduler),
-        "runtime_sync_proof":_runtime_sync_proof(runtime,cost,sources),
+        "runtime_sync_proof":_runtime_sync_proof(runtime,cost,sources,liveness),
         "hunter":{"totals":hunter_totals,"state_sequence":hunter["sequence"],"updated_at":hunter["updated_at"]},
         "notifications":{
             "state_sequence":notifications["sequence"],"updated_at":notifications["updated_at"],
