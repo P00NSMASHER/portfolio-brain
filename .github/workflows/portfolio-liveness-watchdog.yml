@@ -1,0 +1,51 @@
+name: portfolio-liveness-watchdog
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: portfolio-liveness-watchdog
+  cancel-in-progress: false
+
+jobs:
+  recover-core-autonomy:
+    if: ${{ vars.PORTFOLIO_LIVENESS_DISABLED != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore canonical cost context
+        run: >-
+          python -m state_journal.production_reader
+          --domain cost
+          --output cost_governor/live/cost_state.json
+          --metadata-output cost_governor/live/cost_state.meta.json
+
+      - name: Recover stale or failed core autonomy
+        run: >-
+          python -m operations.workflow_liveness
+          --state cost_governor/live/cost_state.json
+          --state-metadata cost_governor/live/cost_state.meta.json
+          --output operations/out/workflow_liveness_report.json
+
+      - name: Upload liveness recovery evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-liveness-watchdog-report-${{ github.run_id }}
+          path: operations/out/workflow_liveness_report.json
+          if-no-files-found: error
+          retention-days: 14
