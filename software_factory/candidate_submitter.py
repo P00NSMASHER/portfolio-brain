@@ -107,7 +107,10 @@ def _verify_remote(executor, export: dict, remote_sha: str) -> dict:
     base = "https://api.github.com/repos/" + replay["repository"]
     require(isinstance(remote_sha, str) and len(remote_sha) == 40, "remote commit SHA invalid")
     require(remote_sha != replay["base_sha"], "remote candidate did not advance base")
-    commit = executor.transport("GET", base + "/git/commits/" + remote_sha, None)
+    try:
+        commit = executor.transport("GET", base + "/git/commits/" + remote_sha, None)
+    except HTTPError as exc:
+        raise BuildError("remote candidate commit unavailable") from exc
     require(isinstance(commit, dict), "remote commit missing")
     parents = commit.get("parents")
     require(isinstance(parents, list) and [p.get("sha") for p in parents] == [replay["base_sha"]],
