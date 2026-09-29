@@ -159,13 +159,15 @@ class OperatingModeTests(unittest.TestCase):
         self.assertNotIn("contents: write",scheduler)
         self.assertNotIn("repair-candidate-cycle.yml",scheduler)
 
-    def test_high_risk_payment_trading_deploy_merge_boundaries_remain(self):
+    def test_high_risk_boundaries_and_machine_gated_merge_remain(self):
         p=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
         boundaries=set(p["permanent_authority_boundaries"])
         self.assertNotIn("CUSTOMER_COMMUNICATION_REQUIRES_HUMAN_APPROVAL",boundaries)
         self.assertIn("PAYMENT_CASH_MOVEMENT_REQUIRES_HUMAN_APPROVAL",boundaries)
         self.assertIn("LIVE_MARKET_TRADING_AND_BROKERAGE_EXECUTION_PROHIBITED",boundaries)
-        self.assertIn("DEPLOYMENT_AND_MERGE_NOT_GRANTED_TO_AUTONOMOUS_SCHEDULER",boundaries)
+        self.assertIn("DEPLOYMENT_NOT_GRANTED_TO_AUTONOMOUS_SCHEDULER",boundaries)
+        self.assertIn("MERGE_REQUIRES_PROTECTED_PR_AND_INDEPENDENT_VERIFIER",boundaries)
+        self.assertNotIn("DEPLOYMENT_AND_MERGE_NOT_GRANTED_TO_AUTONOMOUS_SCHEDULER",boundaries)
 
     def test_gmail_gateway_is_connector_bound_and_no_smtp_worker_exists(self):
         p=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
