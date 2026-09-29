@@ -1,66 +1,98 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "2.0.0",
   "scope": "PHASE_1_ONLY",
   "baseline_main_sha": "bb60815ba1ed25c6914752eee03882c6d183e607",
   "implementation_pr": 167,
-  "branch": "phase1/trust-boundary-20260928",
-  "phase1_accepted": false,
+  "implementation_branch": "phase1/trust-boundary-20260928",
+  "implementation_head_sha": "d234d568c071bd8934ba2e1a3004b3d3552712f6",
+  "implementation_merge_sha": "1dce0c1fd65c1727e47aff47803f36c0377a8521",
+  "phase1_accepted": true,
+  "accepted_at": "2026-09-29",
+  "independence_model": "SEPARATE_VERIFIER_APP",
+  "human_reviewer_required": false,
+  "verifier": {
+    "app_name": "portfolio-brain-522",
+    "app_id": 5121826,
+    "installation_id": 166155679,
+    "required_check": "portfolio-phase1-gate",
+    "final_gate_check_run_id": 109428933562
+  },
+  "protection": {
+    "ruleset_id": 24182301,
+    "ruleset_name": "portfolio-main-protection",
+    "enforcement": "active",
+    "target_branches": [
+      "refs/heads/main"
+    ],
+    "bypass_actors": [],
+    "current_user_can_bypass": "never",
+    "required_checks": [
+      {
+        "context": "validate",
+        "integration_id": 15368
+      },
+      {
+        "context": "portfolio-phase1-gate",
+        "integration_id": 5121826
+      }
+    ],
+    "direct_write_probe": {
+      "branch": "phase1-protection-probe",
+      "result": "REJECTED",
+      "http_status": 409,
+      "reason": "Changes must be made through a pull request; 2 of 2 required status checks were expected.",
+      "cleanup": "BRANCH_DELETED"
+    }
+  },
+  "candidate_verification": {
+    "foundation_run": 36575119927,
+    "foundation_job": 109428636271,
+    "phase1_verification_run": 36575113506,
+    "phase1_verification_job": 109428645639,
+    "full_regressions": 793,
+    "focused_phase1_tests": 93,
+    "proof_artifact_id": 11037345287,
+    "proof_artifact_digest": "sha256:566477060f851e1b85ef8b4136aa4ec69e2d3f5af8e08d6123ada838bbd24371"
+  },
+  "protected_integration": {
+    "pr": 167,
+    "merged": true,
+    "merge_sha": "1dce0c1fd65c1727e47aff47803f36c0377a8521",
+    "post_merge_foundation_run": 36575269847,
+    "post_merge_foundation_job": 109429149815,
+    "post_merge_foundation_conclusion": "success"
+  },
   "work": [
     {
       "id": "PB-01",
-      "owner": "phase1-execution",
-      "status": "BASELINE_RECONCILED",
-      "next_owner": "verifier-app",
-      "evidence": {
-        "foundation_run": 36450048810,
-        "pages_run": 36450048427,
-        "pages_artifact": 10983215515,
-        "runtime_observe_failed_run": 36450049847,
-        "bridge_status": "DEGRADED"
-      }
+      "status": "ACCEPTED",
+      "evidence": "baseline and ownership reconciled"
     },
     {
       "id": "PB-02",
-      "owner": "issue-65-admin",
-      "status": "BLOCKED_ADMIN_AND_VERIFIER_APP_REGISTRATION",
-      "next_owner": "authorized-repository-administrator",
-      "evidence": {
-        "branch_protected": false,
-        "protection_read_http_status": 403,
-        "browser_admin_session": "NOT_SIGNED_IN",
-        "trusted_gate_configured": false
-      }
+      "status": "ACCEPTED",
+      "evidence": "active main ruleset, independent verifier App, direct-write rejection, protected merge"
     },
     {
       "id": "PB-03",
-      "owner": "pr-167-implementation",
-      "status": "DRAFT_IMPLEMENTATION",
-      "next_owner": "verifier-app"
+      "status": "ACCEPTED",
+      "evidence": "replay integrity implemented; exact-head full/focused regressions passed"
     },
     {
       "id": "PB-04",
-      "owner": "pr-167-implementation",
-      "status": "DRAFT_IMPLEMENTATION",
-      "next_owner": "verifier-app"
+      "status": "ACCEPTED",
+      "evidence": "candidate/policy/source/evaluator bindings implemented; independent gate passed"
     }
   ],
-  "deferred_phase2_prs": [
-    161,
-    160,
-    155,
-    154
-  ],
-  "other_open_prs_not_modified": [
-    151,
-    150,
-    149,
-    140
-  ],
-  "merged": false,
+  "deferred_phase2": {
+    "runtime_observe_failed_run": 36575270286,
+    "state": "DEFERRED_NOT_PHASE1_BLOCKER",
+    "note": "runtime-event-observe failed on the post-merge main revision; runtime/shared-state repair remains Phase 2 work"
+  },
+  "merged": true,
+  "deployment_required": false,
   "deployed": false,
   "authority_widened": false,
   "business_rights_policy_changed": false,
-  "paid_model_calls": 0,
-  "independence_model": "SEPARATE_VERIFIER_APP",
-  "human_reviewer_required": false
+  "paid_model_calls": 0
 }
