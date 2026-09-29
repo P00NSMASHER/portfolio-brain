@@ -1,0 +1,90 @@
+{
+  "schema_version": "1.0.0",
+  "mode": "GITHUB_NATIVE_WORKLOAD_CONTROL",
+  "services": {
+    "command-center-pages::publish": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-state-writer-v1",
+      "scheduled_cadence": "hourly",
+      "coalesce_pending": false,
+      "queue_mode": "max"
+    },
+    "hunter-autonomous-cycle::hunt": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-state-writer-v1",
+      "scheduled_cadence": "every_6_hours",
+      "coalesce_pending": false,
+      "queue_mode": "max"
+    },
+    "portfolio-autonomous-scheduler::schedule": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-state-writer-v1",
+      "scheduled_cadence": "hourly",
+      "coalesce_pending": false,
+      "queue_mode": "max"
+    },
+    "agent-heartbeat-sweep::heartbeat": {
+      "max_minutes_per_job": 2,
+      "concurrency_group": "portfolio-state-writer-v1",
+      "scheduled_cadence": "event_driven",
+      "coalesce_pending": false,
+      "queue_mode": "max"
+    },
+    "portfolio-notification-cycle::notify": {
+      "max_minutes_per_job": 2,
+      "concurrency_group": "portfolio-state-writer-v1",
+      "scheduled_cadence": "service_defined",
+      "coalesce_pending": false,
+      "queue_mode": "max"
+    },
+    "software-factory-candidate::execute-candidate-action": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-state-writer-v1",
+      "scheduled_cadence": "event_driven",
+      "coalesce_pending": false,
+      "queue_mode": "max"
+    },
+    "verified-feedback-bootstrap::feedback": {
+      "max_minutes_per_job": 2,
+      "concurrency_group": "portfolio-state-writer-v1",
+      "scheduled_cadence": "event_driven",
+      "coalesce_pending": false,
+      "queue_mode": "max"
+    },
+    "continuous-learning-bootstrap::bootstrap": {
+      "max_minutes_per_job": 2,
+      "concurrency_group": "portfolio-state-writer-v1",
+      "scheduled_cadence": "event_driven",
+      "coalesce_pending": false,
+      "queue_mode": "max"
+    },
+    "step24-autonomous-learning-canary::canary": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-step24-canary",
+      "scheduled_cadence": "ci_validation",
+      "coalesce_pending": true
+    },
+    "runtime-worker::runtime-observe": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-state-writer-v1",
+      "scheduled_cadence": "event_driven",
+      "coalesce_pending": false,
+      "queue_mode": "max"
+    },
+    "runtime-worker::runtime-sync": {
+      "max_minutes_per_job": 5,
+      "concurrency_group": "portfolio-state-writer-v1",
+      "scheduled_cadence": "hourly_plus_event_driven",
+      "coalesce_pending": false,
+      "queue_mode": "max"
+    }
+  },
+  "invariants": [
+    "Workload admission is independent from paid model/API spend.",
+    "No service is limited by a daily GitHub job-start quota.",
+    "All canonical state writers share portfolio-state-writer-v1 from restore through publication.",
+    "GitHub timeout-minutes remains the hard wall-clock bound for each job.",
+    "State writers queue without cancelling active work; GitHub queue:max admits up to 100 pending entries and can reject overflow.",
+    "A workload admission decision never grants OBSERVE, EXPERIMENT, MODIFY, or ACT authority."
+  ]
+}
