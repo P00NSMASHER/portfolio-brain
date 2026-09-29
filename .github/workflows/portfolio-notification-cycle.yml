@@ -63,6 +63,7 @@ jobs:
         run: python -c "import json; from notifications.notification_engine import validate_state; validate_state(json.load(open('notifications/out/notification_state.json')))"
       - name: Upload sanitized notification continuation state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
+        id: journal_upload_notifications
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-notification-state
@@ -74,3 +75,19 @@ jobs:
         run: |
           echo "::error title=Portfolio notifications skipped::Workload status: ${{ steps.workload.outputs.decision_status }}"
           exit 1
+      - name: Capture immutable state transition event
+        id: journal_event
+        if: ${{ always() && vars.PORTFOLIO_STATE_JOURNAL_ENABLED == 'true' }}
+        env:
+          JOURNAL_PUBLISHED_DOMAINS: >-
+            {"notifications": ${{ steps.journal_upload_notifications.outcome == 'success' }}}
+        run: python -m state_journal.emitter --producer portfolio-notification-cycle
+      - name: Upload immutable state transition event
+        if: ${{ always() && steps.journal_event.outputs.emitted == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-state-event-v2-${{ github.run_id }}-portfolio-notification-cycle-${{ github.sha }}-${{ github.run_attempt }}
+          path: state_journal/out/event/event.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 30

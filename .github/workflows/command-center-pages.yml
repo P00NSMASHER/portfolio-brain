@@ -121,6 +121,7 @@ jobs:
           printf '%s\n' "${GITHUB_SHA}" > public/source-commit.txt
       - name: Upload sanitized command-center history
         if: ${{ steps.workload.outputs.allowed == 'true' }}
+        id: journal_upload_history
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-command-center-history
@@ -195,3 +196,19 @@ jobs:
         run: |
           echo "::error title=Command center publication skipped::Workload status: ${{ steps.workload.outputs.decision_status }}"
           exit 1
+      - name: Capture immutable state transition event
+        id: journal_event
+        if: ${{ always() && vars.PORTFOLIO_STATE_JOURNAL_ENABLED == 'true' }}
+        env:
+          JOURNAL_PUBLISHED_DOMAINS: >-
+            {"history": ${{ steps.journal_upload_history.outcome == 'success' }}}
+        run: python -m state_journal.emitter --producer command-center-pages
+      - name: Upload immutable state transition event
+        if: ${{ always() && steps.journal_event.outputs.emitted == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-state-event-v2-${{ github.run_id }}-command-center-pages-${{ github.sha }}-${{ github.run_attempt }}
+          path: state_journal/out/event/event.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 30

@@ -154,6 +154,7 @@ jobs:
 
       - name: Upload operator-updated scheduler state
         if: ${{ inputs.operation == 'CANCEL_QUEUE_ITEM' }}
+        id: journal_upload_scheduler
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-scheduler-state
@@ -248,3 +249,19 @@ jobs:
           path: operator/out/
           if-no-files-found: ignore
           retention-days: 7
+      - name: Capture immutable state transition event
+        id: journal_event
+        if: ${{ always() && vars.PORTFOLIO_STATE_JOURNAL_ENABLED == 'true' }}
+        env:
+          JOURNAL_PUBLISHED_DOMAINS: >-
+            {"scheduler": ${{ steps.journal_upload_scheduler.outcome == 'success' }}}
+        run: python -m state_journal.emitter --producer operator-console
+      - name: Upload immutable state transition event
+        if: ${{ always() && steps.journal_event.outputs.emitted == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-state-event-v2-${{ github.run_id }}-operator-console-${{ github.sha }}-${{ github.run_attempt }}
+          path: state_journal/out/event/event.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 30

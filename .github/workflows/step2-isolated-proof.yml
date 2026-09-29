@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: step2-isolated-proof
@@ -36,6 +37,14 @@ jobs:
             python -m unittest discover -s tests -p 'test_state_journal*.py' -v > /tmp/step2-proof/step2-tests.log 2>&1
             cat /tmp/step2-proof/step2-tests.log
           fi
+      - name: Replay pinned archived production states
+        if: ${{ hashFiles('state_journal/prove_archived.py') != '' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python -m state_journal.prove_archived --fetch
+          --archive-dir /tmp/step2-archives
+          --output /tmp/step2-proof/archived-replay.json
       - uses: actions/upload-artifact@v4
         if: ${{ always() }}
         with:
