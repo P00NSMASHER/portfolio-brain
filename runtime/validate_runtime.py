@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Static + machine-readable conformance validator for Step 8 runtime."""
 from __future__ import annotations
-import json
+import json,re
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -56,12 +56,17 @@ def validate_runtime()->dict:
     worker=texts[names[0]]
     for required in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_RUNTIME_DISABLED",
                      "PORTFOLIO_MODEL_API_KEY","runtime.model_analysis","actions/upload-artifact@v4","retention-days: 30",
-                     "cancel-in-progress: ${{ inputs.mode == 'observe' || inputs.mode == 'sync' }}",
+                     "cancel-in-progress: false",
                      "workload_control.workload_gate preflight","format('portfolio-runtime-{0}', inputs.mode)",
                      "--provider-health-output runtime/out/provider_health.json",
                      '--job-id "runtime-${RUNTIME_MODE}"',
                      "Report governed no-work outcome","steps.admission.outputs.decision_status","GITHUB_STEP_SUMMARY"]:
         req(required in worker,f"runtime worker missing {required}")
+    job_header=worker.split("  runtime:\n",1)[1].split("    steps:",1)[0]
+    req(re.search(r"(?m)^    concurrency:\n      group: portfolio-runtime-state-writer\n      cancel-in-progress: false\n      queue: max$",job_header) is not None,
+        "runtime modes must share an unconditional queued state-writer mutex")
+    req(not re.search(r"(?m)^  cancel-in-progress: (?!false$)",worker),
+        "runtime outer admission lane may not cancel an active writer")
     req("Fail closed when cost gate blocks" not in worker and "run: exit 3" not in worker,
         "expected cost denial still creates a false runtime failure")
     forbidden=["contents: write","pull-requests: write","issues: write","deployments: write",
@@ -78,7 +83,7 @@ def validate_runtime()->dict:
     req("paths-ignore:" in texts[names[1]] and "runtime/TRIGGER_DAILY_REASONING" in texts[names[1]],
         "daily reasoning trigger must not also launch event-observe")
     req("group: runtime-event-observe-${{ github.event_name }}-${{ github.ref }}" in texts[names[1]],"runtime event-observe push coalescing group missing")
-    req("cancel-in-progress: ${{ github.event_name == 'push' }}" in texts[names[1]],"runtime event-observe push coalescing policy missing")
+    req("cancel-in-progress: false\n      queue: max" in texts[names[1]],"runtime event caller may not cancel an active state writer")
     for isolated in [
       "value_proof/TRIGGER_END_TO_END_PROOF",
       "value_proof/TRIGGER_VERIFIED_FEEDBACK_BOOTSTRAP",
@@ -93,7 +98,7 @@ def validate_runtime()->dict:
     return {"workflows":5,"model_calls":0,"governed_daily_model_calls":1,"governed_weekly_model_calls":1,
             "downstream_writes":0,"external_actions":0,
             "runtime_receipt_integrity":True,"runtime_artifact_companion_binding":True,
-            "push_observation_coalescing":True,"mode_isolated_cost_budgets":True,
+            "push_observation_coalescing":False,"runtime_state_writers_serialized":True,"mode_isolated_cost_budgets":True,
             "max_api_requests":b["max_api_requests_per_cycle"],"max_runtime_seconds":b["max_runtime_seconds"]}
 
 if __name__=="__main__":
