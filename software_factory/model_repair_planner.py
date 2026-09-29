@@ -40,7 +40,7 @@ def _canon(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
 
 
-def _lineage(work: dict, repair_task: dict, repository: str, base_sha: str) -> str:
+def repair_lineage(work: dict, repair_task: dict, repository: str, base_sha: str) -> str:
     core = {
         "source_ref": work["source_ref"],
         "project_ids": sorted(work["project_ids"]),
@@ -229,7 +229,7 @@ def plan_repair(*, work: dict, repair_task: dict, base_sha: str, checkout: Path,
     repository = repository_row["repository_full_name"]
     source_identity = {"repository": repository, "base_sha": base_sha}
     snapshot = snapshot_override if snapshot_override is not None else load_snapshot(checkout, source_identity)
-    lineage = _lineage(work, repair_task, repository, base_sha)
+    lineage = repair_lineage(work, repair_task, repository, base_sha)
     if prior_plan is not None:
         prior = _validate_prior(prior_plan, lineage=lineage, snapshot=snapshot)
         return cost_state, {**prior, "reused": True, "model_call_performed": False}
