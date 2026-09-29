@@ -217,6 +217,10 @@ class StateJournalTransportTests(unittest.TestCase):
         self.assertIn('row.get("event") == "workflow_dispatch"',source)
         self.assertNotIn('repository_dispatch',source)
         self.assertIn('time.monotonic() + 300',source)
+        self.assertIn('def wait_for_reducer',source)
+        self.assertIn('portfolio-state-reducer',source)
+        self.assertIn('STEP_2_CANONICAL_PRODUCTION_SMOKE',source)
+        self.assertIn('canonical_reader_barrier_proven',source)
 
     def test_incomplete_artifact_pagination_cannot_be_treated_as_complete(self):
         reader=object.__new__(GitHubReader)

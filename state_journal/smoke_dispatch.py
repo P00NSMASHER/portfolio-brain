@@ -78,6 +78,43 @@ def dispatch_and_wait(token: str, workflow: str) -> dict:
     }
 
 
+def wait_for_reducer(token: str, *, source_run: dict) -> dict:
+    expected_sha = os.environ.get("GITHUB_SHA", "")
+    source_completed = parse_time(source_run["updated_at"])
+    deadline = time.monotonic() + 300
+    while time.monotonic() < deadline:
+        data = request(token, "GET", "/actions/runs?branch=main&event=workflow_run&per_page=50")
+        candidates = [
+            row for row in data.get("workflow_runs", [])
+            if row.get("name") == "portfolio-state-reducer"
+            and row.get("head_branch") == "main"
+            and row.get("head_sha") == expected_sha
+            and parse_time(row["created_at"]) >= source_completed - timedelta(seconds=5)
+        ]
+        successes = [
+            row for row in candidates
+            if row.get("status") == "completed" and row.get("conclusion") == "success"
+        ]
+        if successes:
+            row = max(successes, key=lambda item: item["id"])
+            return {
+                "run_id": row["id"],
+                "head_sha": row.get("head_sha"),
+                "conclusion": row.get("conclusion"),
+                "created_at": row.get("created_at"),
+                "updated_at": row.get("updated_at"),
+            }
+        failures = [
+            row for row in candidates
+            if row.get("status") == "completed" and row.get("conclusion") not in {None, "success"}
+        ]
+        if failures and all(row.get("status") == "completed" for row in candidates):
+            latest = max(failures, key=lambda item: item["id"])
+            raise SmokeError(f"Reducer run {latest['id']} concluded {latest.get('conclusion')}")
+        time.sleep(3)
+    raise SmokeError(f"Timed out waiting for reducer after source run {source_run['id']}")
+
+
 def main() -> None:
     if os.environ.get("GITHUB_REF") != "refs/heads/main":
         raise SmokeError("Smoke proof runs only on main")
@@ -86,11 +123,17 @@ def main() -> None:
         raise SmokeError("GITHUB_TOKEN required")
     rows = []
     for workflow in TARGETS:
-        rows.append(dispatch_and_wait(token, workflow))
+        source = dispatch_and_wait(token, workflow)
+        reducer = wait_for_reducer(token, source_run={
+            "id": source["run_id"],
+            "updated_at": source["updated_at"],
+        })
+        rows.append({**source, "reducer": reducer})
     receipt = {
         "status": "PASS",
-        "mode": "STEP_2_LIVE_SHADOW_SMOKE",
+        "mode": "STEP_2_CANONICAL_PRODUCTION_SMOKE",
         "runs": rows,
+        "canonical_reader_barrier_proven": True,
         "steps_3_to_8_started": False,
     }
     out = Path("state_journal/out/smoke")
