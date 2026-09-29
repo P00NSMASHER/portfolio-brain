@@ -1516,6 +1516,16 @@ def render_html(snapshot: dict[str, Any]) -> str:
         for m in momentum_sorted
     )
 
+    primary_last_signal = operator_primary["last_verified_customer_or_market_signal"]
+    primary_last_signal_text = (
+        "None verified yet"
+        if primary_last_signal is None
+        else f"{primary_last_signal.get('evidence_class') or 'VERIFIED'} · {primary_last_signal.get('source_kind') or primary_last_signal.get('source_ref') or 'external signal'}"
+    )
+    primary_experiment_text = operator_primary["active_external_experiment"] or "None active"
+    primary_blocker_text = operator_primary["current_blocker"] or "None"
+    primary_owner_action_text = operator_primary["action_required_from_owner"] or "None"
+
     last_cycle = telemetry["cycles"]["latest_overall"]
     if last_cycle is None:
         last_cycle_title = "No successful cycle yet"
