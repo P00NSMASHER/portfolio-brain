@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "mode": "SHADOW",
+  "production_readers_enabled": false,
+  "explicit_checkpoint_required": true,
+  "artifact_scan_start": "2026-09-29T14:35:23Z",
+  "scope": "STEP_2_MIGRATION_PILOT",
+  "limits": {
+    "max_archive_bytes": 16777216,
+    "max_events": 2000,
+    "max_artifact_pages": 20,
+    "max_read_requests": 100
+  },
+  "production_cutover_complete": false,
+  "steps_3_to_8_started": false
+}

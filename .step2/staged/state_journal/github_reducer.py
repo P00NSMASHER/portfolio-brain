@@ -1,0 +1,115 @@
+"""Single shadow reducer workflow entry point. Never changes production readers."""
+from __future__ import annotations
+import argparse
+import json
+import os
+from pathlib import Path
+
+from runtime.artifact_restore import _atomic_write
+from state_journal.contracts import REPOSITORY, JournalError, canonical, digest, require, strict_load
+from state_journal.reducer import make_snapshot, validate_snapshot, advance
+from state_journal.transport import EVENT_PREFIX, SNAPSHOT_ARTIFACT, GitHubReader, artifact_digest, extract_json
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def restore_snapshot(reader: GitHubReader, artifacts: list[dict], *, current_run: str) -> dict | None:
+    candidates = [a for a in artifacts if a.get("name") == SNAPSHOT_ARTIFACT
+                  and a.get("workflow_run", {}).get("head_branch") == "main"
+                  and str(a.get("workflow_run", {}).get("id")) != current_run]
+    if not candidates:
+        return None
+    require(any(not a.get("expired") for a in candidates), "Canonical journal expired; explicit recovery required")
+    require(len(candidates) <= 20, "Snapshot selection bound reached; no arbitrary truncation")
+    states = []
+    for a in candidates:
+        if a.get("expired"):
+            continue
+        source = a.get("workflow_run", {})
+        run = reader.get(f"/actions/runs/{source['id']}")
+        require(run.get("path") == ".github/workflows/portfolio-state-reducer.yml", "Snapshot did not come from sole reducer workflow")
+        require(run.get("head_branch") == "main" and run.get("head_sha") == source.get("head_sha"), "Snapshot source SHA/branch mismatch")
+        require(run.get("status") == "completed" and run.get("conclusion") == "success", "Snapshot producer did not succeed")
+        require(run.get("repository", {}).get("full_name") == REPOSITORY and run.get("head_repository", {}).get("full_name") == REPOSITORY,
+                "Snapshot source fork mismatch")
+        raw = reader.archive(a["id"]); artifact_digest(a, raw)
+        state = extract_json(raw, "snapshot.json"); validate_snapshot(state)
+        states.append(state)
+    highest = max(s["sequence"] for s in states)
+    latest = [s for s in states if s["sequence"] == highest]
+    require(len({digest(s) for s in latest}) == 1, "Conflicting canonical snapshots; never select an arbitrary winner")
+    return latest[0]
+
+
+def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
+                         upload_steps: dict, explicit_checkpoint: dict | None = None) -> tuple[dict, dict]:
+    artifacts = reader.list_recent_artifacts(since)
+    state = restore_snapshot(reader, artifacts, current_run=current_run)
+    if state is None:
+        require(explicit_checkpoint is not None, "CHECKPOINT_REQUIRED: no automatic empty-state reset")
+        state = make_snapshot(explicit_checkpoint, [], sequence=0, evidence={})
+    else:
+        require(explicit_checkpoint is None, "Refusing to replace an existing journal checkpoint")
+    known_artifacts = {r["artifact_id"]: r["archive_digest"] for refs in state["evidence"].values()
+                       for r in refs if r.get("kind") == "GITHUB_ACTIONS"}
+    incoming = []
+    excluded = 0
+    for a in artifacts:
+        if not a.get("name", "").startswith(EVENT_PREFIX):
+            continue
+        source = a.get("workflow_run", {})
+        if source.get("head_branch") != "main":
+            excluded += 1; continue
+        if a["id"] in known_artifacts:
+            require(a.get("digest") == known_artifacts[a["id"]], "Previously ingested provider digest changed")
+            continue
+        require(a.get("expired") is False, "Unconsumed event artifact expired; no silent evidence loss")
+        incoming.append(reader.event(a, upload_steps))
+    candidate = advance(state, incoming)
+    return candidate, {"status": "PASS", "mode": "SHADOW", "production_authority": False,
+                       "canonical_sequence": candidate["sequence"], "events_total": candidate["event_count"],
+                       "new_deliveries": len(incoming), "excluded_non_main_artifacts": excluded,
+                       "projection_hash": candidate["projection"]["projection_hash"]}
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-dir", type=Path, default=Path("state_journal/out/reducer"))
+    parser.add_argument("--checkpoint", type=Path)
+    parser.add_argument("--initialize", action="store_true")
+    args = parser.parse_args()
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        require(os.environ.get("GITHUB_REF") == "refs/heads/main", "Reducer publishes only from main")
+        require(os.environ.get("GITHUB_WORKFLOW") == "portfolio-state-reducer", "Only the reducer workflow owns canonical publication")
+        policy = strict_load((ROOT / "state_journal/POLICY.json").read_bytes())
+        require(policy["mode"] == "SHADOW" and policy["production_readers_enabled"] is False, "Production cutover is not authorized by this migration")
+        bootstrap = None
+        if args.initialize:
+            require(os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch" and os.environ.get("GITHUB_ACTOR") == "P00NSMASHER",
+                    "Checkpoint initialization requires explicit owner dispatch")
+            require(args.checkpoint is not None and args.checkpoint.is_file(), "Explicit reviewed checkpoint file is missing")
+            bootstrap = strict_load(args.checkpoint.read_bytes())
+        else:
+            require(args.checkpoint is None, "Checkpoint input without explicit initialization denied")
+        token = os.environ.get("GITHUB_TOKEN", "")
+        require(bool(token), "Read-only GitHub token is required")
+        reader = GitHubReader(token)
+        upload_steps = strict_load((ROOT / "state_journal/UPLOAD_STEPS.json").read_bytes())
+        state, receipt = reduce_from_provider(reader, since=policy["artifact_scan_start"],
+                                             current_run=os.environ.get("GITHUB_RUN_ID", ""), upload_steps=upload_steps,
+                                             explicit_checkpoint=bootstrap)
+        validate_snapshot(state)
+        _atomic_write(args.output_dir / "snapshot.json", canonical(state) + b"\n")
+        _atomic_write(args.output_dir / "receipt.json", canonical(receipt) + b"\n")
+        print(json.dumps(receipt))
+    except Exception as exc:
+        # No snapshot upload on failure. Existing state and source events survive.
+        receipt = {"status": "BLOCKED", "mode": "SHADOW", "production_authority": False,
+                   "reason_type": type(exc).__name__, "reason": str(exc)}
+        _atomic_write(args.output_dir / "receipt.json", canonical(receipt) + b"\n")
+        print(json.dumps(receipt))
+        raise SystemExit(1) from exc
+
+
+if __name__ == "__main__": main()

@@ -1,0 +1,78 @@
+name: portfolio-state-reducer
+
+on:
+  workflow_run:
+    workflows:
+      - agent-heartbeat-sweep
+      - command-center-pages
+      - continuous-learning-bootstrap
+      - hunter-autonomous-cycle
+      - model-value-proof
+      - operator-console
+      - portfolio-autonomous-scheduler
+      - portfolio-notification-cycle
+      - runtime-daily-learning
+      - runtime-event-observe
+      - runtime-hourly-sync
+      - runtime-weekly-synthesis
+      - verified-feedback-bootstrap
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      initialize:
+        description: "Initialize only from a reviewed, explicit checkpoint on main"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: portfolio-state-reducer
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  reduce:
+    if: ${{ vars.PORTFOLIO_STATE_JOURNAL_ENABLED == 'true' }}
+    concurrency:
+      group: portfolio-state-writer-v1
+      cancel-in-progress: false
+      queue: max
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      INITIALIZE_JOURNAL: ${{ inputs.initialize }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Replay verified immutable producer events
+        run: |
+          if [ "$INITIALIZE_JOURNAL" = "true" ]; then
+            python -m state_journal.github_reducer --initialize --checkpoint state_journal/CHECKPOINT.json
+          else
+            python -m state_journal.github_reducer
+          fi
+      - name: Publish single reduced shadow snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-canonical-shadow-state
+          path: state_journal/out/reducer/snapshot.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 30
+      - name: Preserve success or blocking evidence separately
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-state-reducer-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: state_journal/out/reducer/receipt.json
+          if-no-files-found: error
+          retention-days: 30

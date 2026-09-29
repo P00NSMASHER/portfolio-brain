@@ -1,0 +1,50 @@
+{
+  "agent-heartbeat-sweep": {
+    "heartbeat": "Upload sanitized agent heartbeat state"
+  },
+  "command-center-pages": {
+    "history": "Upload sanitized command-center history"
+  },
+  "continuous-learning-bootstrap": {
+    "hunter": "Upload reconciled Hunter continuation state",
+    "learning": "Upload durable continuous-learning state",
+    "model_feedback": "Upload reconciled model feedback state"
+  },
+  "hunter-autonomous-cycle": {
+    "heartbeat": "Upload sanitized agent heartbeat state",
+    "hunter": "Upload sanitized Hunter continuation state",
+    "proposals": "Upload quality-gated Hunter proposal inbox"
+  },
+  "model-value-proof": {
+    "cost": "Upload sanitized cost-governor continuation state",
+    "hunter": "Upload learned Hunter continuation state",
+    "learning": "Upload learned continuous-learning observations",
+    "model_feedback": "Upload learned model feedback state"
+  },
+  "operator-console": {
+    "scheduler": "Upload operator-updated scheduler state"
+  },
+  "portfolio-autonomous-scheduler": {
+    "heartbeat": "Upload sanitized agent heartbeat state",
+    "hunter": "Upload Hunter continuation state when work executed",
+    "proposals": "Upload Hunter proposal inbox when hunt work executed",
+    "reviews": "Upload Hunter proposal review continuation state",
+    "scheduler": "Upload sanitized scheduler continuation state"
+  },
+  "portfolio-notification-cycle": {
+    "notifications": "Upload sanitized notification continuation state"
+  },
+  "runtime-worker": {
+    "cost": "Upload sanitized cost-governor continuation state",
+    "heartbeat": "Upload sanitized agent heartbeat state",
+    "runtime": "Upload sanitized runtime continuation state"
+  },
+  "software-factory-candidate": {
+    "heartbeat": "Upload sanitized agent heartbeat state"
+  },
+  "verified-feedback-bootstrap": {
+    "hunter": "Upload learned Hunter continuation state",
+    "learning": "Upload learned continuous-learning observations",
+    "model_feedback": "Upload learned model feedback state"
+  }
+}
