@@ -1,1 +1,2 @@
-Step 2 live shadow parity smoke trigger. No business authority.\n
+Step 2 live shadow parity smoke trigger. No business authority.
+Retry after stable bounded artifact scan and queue-aware smoke hotfix.
