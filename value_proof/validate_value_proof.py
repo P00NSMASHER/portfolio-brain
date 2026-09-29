@@ -60,14 +60,14 @@ def validate_value_proof():
     workflow=(ROOT/".github/workflows/model-value-proof.yml").read_text()
     for token in [
       "python -m value_proof.feedback_loop",
-      "python -m hunting.artifact_state --output hunting/live/hunter_state.json",
-      "python -m model_router.feedback_artifact_state --output model_router/live/model_feedback_state.json",
+      "python -m state_journal.production_reader --domain hunter --output hunting/live/hunter_state.json",
+      "python -m state_journal.production_reader --domain model_feedback --output model_router/live/model_feedback_state.json",
       "name: portfolio-hunter-state",
       "name: portfolio-model-feedback-state",
     ]:
         req(token in workflow,f"Step 8 value-proof workflow missing {token}")
     runtime_workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text()
-    req("python -m model_router.feedback_artifact_state --output model_router/live/model_feedback_state.json" in runtime_workflow,"runtime does not restore verified model feedback")
+    req("python -m state_journal.production_reader --domain model_feedback --output model_router/live/model_feedback_state.json" in runtime_workflow,"runtime does not restore canonical model feedback")
     bootstrap=(ROOT/".github/workflows/verified-feedback-bootstrap.yml").read_text()
     for token in [
       "value_proof/TRIGGER_VERIFIED_FEEDBACK_BOOTSTRAP",
