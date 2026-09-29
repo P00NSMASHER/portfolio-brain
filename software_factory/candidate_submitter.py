@@ -168,6 +168,7 @@ def submit_candidate(*, replay_dir: Path, token: str | None = None, executor=Non
         "submission_key": export["submission_key"],
         "task_id": replay["task_id"],
         "task_hash": replay["task_hash"],
+        "source_ref": replay["source_ref"],
         "repository": replay["repository"],
         "base_sha": replay["base_sha"],
         "branch_name": branch_packet["branch_name"],
