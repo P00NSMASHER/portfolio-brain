@@ -123,8 +123,12 @@ def replay(base: dict, events: list[dict]) -> dict:
     return {"states": states, "event_ids": sorted(by_id), "projection_hash": digest(states)}
 
 
-def make_snapshot(base: dict, events: list[dict], *, sequence: int, evidence: dict) -> dict:
+def make_snapshot(base: dict, events: list[dict], *, sequence: int, evidence: dict,
+                  mode: str = "SHADOW", production_authority: bool = False) -> dict:
     require(type(sequence) is int and sequence >= 0, "Invalid canonical sequence")
+    require(mode in {"SHADOW", "CANONICAL"}, "Invalid canonical mode")
+    require(type(production_authority) is bool, "Invalid production authority flag")
+    require(not production_authority or mode == "CANONICAL", "Production authority requires CANONICAL mode")
     projected = replay(base, events)
     unique = {e["event_id"]: deepcopy(e) for e in events}
     require(isinstance(evidence, dict) and set(evidence) == set(unique), "Every event needs source evidence")
@@ -135,7 +139,7 @@ def make_snapshot(base: dict, events: list[dict], *, sequence: int, evidence: di
         for source in refs:
             validate_source_evidence(source, unique[key])
     state = {"schema_version": SCHEMA, "state_id": STATE_ID, "sequence": sequence,
-             "mode": "SHADOW", "production_authority": False,
+             "mode": mode, "production_authority": production_authority,
              "checkpoint": deepcopy(base), "events": [unique[k] for k in sorted(unique)],
              "evidence": deepcopy(evidence), "projection": projected,
              "event_count": len(unique)}
@@ -146,7 +150,10 @@ def make_snapshot(base: dict, events: list[dict], *, sequence: int, evidence: di
 
 def validate_snapshot(state: dict) -> None:
     fields(state, {"schema_version", "state_id", "sequence", "mode", "production_authority", "checkpoint", "events", "evidence", "projection", "event_count", "state_hash"}, "Snapshot")
-    require(canonical(state) == canonical(make_snapshot(state["checkpoint"], state["events"], sequence=state["sequence"], evidence=state["evidence"])), "Snapshot does not match immutable replay")
+    require(canonical(state) == canonical(make_snapshot(
+        state["checkpoint"], state["events"], sequence=state["sequence"], evidence=state["evidence"],
+        mode=state["mode"], production_authority=state["production_authority"],
+    )), "Snapshot does not match immutable replay")
 
 
 def advance(state: dict, incoming: list[tuple[dict, dict]]) -> dict:
@@ -166,7 +173,18 @@ def advance(state: dict, incoming: list[tuple[dict, dict]]) -> dict:
             evidence[key].sort(key=digest); changed = True
     if not changed:
         return deepcopy(state)
-    return make_snapshot(state["checkpoint"], list(events.values()), sequence=state["sequence"] + 1, evidence=evidence)
+    return make_snapshot(
+        state["checkpoint"], list(events.values()), sequence=state["sequence"] + 1, evidence=evidence,
+        mode=state["mode"], production_authority=state["production_authority"],
+    )
+
+
+def set_authority(state: dict, *, mode: str, production_authority: bool) -> dict:
+    validate_snapshot(state)
+    return make_snapshot(
+        state["checkpoint"], state["events"], sequence=state["sequence"], evidence=state["evidence"],
+        mode=mode, production_authority=production_authority,
+    )
 
 
 def commit_file(output: Path, state: dict, incoming: list[tuple[dict, dict]]) -> dict:
