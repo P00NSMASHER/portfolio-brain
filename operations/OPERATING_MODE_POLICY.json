@@ -93,7 +93,8 @@
   "permanent_authority_boundaries": [
     "PAYMENT_CASH_MOVEMENT_REQUIRES_HUMAN_APPROVAL",
     "LIVE_MARKET_TRADING_AND_BROKERAGE_EXECUTION_PROHIBITED",
-    "DEPLOYMENT_AND_MERGE_NOT_GRANTED_TO_AUTONOMOUS_SCHEDULER",
+    "DEPLOYMENT_NOT_GRANTED_TO_AUTONOMOUS_SCHEDULER",
+    "MERGE_REQUIRES_PROTECTED_PR_AND_INDEPENDENT_VERIFIER",
     "CHILD_FACING_CONSEQUENTIAL_CHANGES_REQUIRE_APPROVAL",
     "PRIVATE_PAYLOADS_PROHIBITED_WHILE_PUBLIC"
   ],
@@ -114,7 +115,8 @@
     "The recurring agent heartbeat sweep is telemetry-only and records HEALTH_CHECK connectivity evidence without implying substantive role work or widening authority.",
     "Non-paid scheduler, heartbeat, runtime sync/observe, reporting, notification and learning-continuation work use independent workload lanes rather than the paid cost-state lane.",
     "The command center refreshes hourly and from durable producer completion events without consuming paid model/API budget.",
-    "Runtime daily/weekly model-assisted analysis remains serialized through the finite paid cost governor, while sync/observe remain available during paid hard stops."
+    "Runtime daily/weekly model-assisted analysis remains serialized through the finite paid cost governor, while sync/observe remain available during paid hard stops.",
+    "Merge authority is not human-gated; protected integration may merge only when the current PR head contains current main, required GitHub Actions validation is successful, the separately credentialed verifier App reports success on the exact head, and repository rules allow no bypass."
   ],
   "external_connector_gateways": {
     "gmail": {
