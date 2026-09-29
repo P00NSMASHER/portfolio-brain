@@ -72,16 +72,20 @@ class ReplayProvenanceTests(unittest.TestCase):
             self.check()
 
     def test_replay_job_is_read_only_and_uses_exact_artifact_id(self):
-        workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/foundation-ci.yml").read_text()
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/candidate-worker-proof.yml").read_text()
         replay = workflow.split("  candidate-replay:", 1)[1]
-        self.assertIn("needs: validate", replay)
-        self.assertIn("artifact-ids: ${{ needs.validate.outputs.candidate_artifact_id }}", replay)
+        self.assertIn("needs: build-proof", replay)
+        self.assertIn("artifact-ids: ${{ needs.build-proof.outputs.candidate_artifact_id }}", replay)
         self.assertIn("persist-credentials: false", replay)
         self.assertIn("contents: read", replay)
         self.assertNotIn(": write", replay)
         self.assertIn("python -m software_factory.validate_candidate_replay", replay)
-        self.assertIn("needs.validate.outputs.candidate_image_ref", replay)
+        self.assertIn("needs.build-proof.outputs.candidate_image_ref", replay)
         self.assertIn("github.run_attempt", replay)
+        foundation = (root / ".github/workflows/foundation-ci.yml").read_text()
+        self.assertNotIn("candidate-replay:", foundation)
+        self.assertNotIn("validate_candidate_worker", foundation)
 
 
 if __name__ == "__main__":
