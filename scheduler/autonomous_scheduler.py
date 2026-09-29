@@ -11,6 +11,7 @@ from experiments.experiment_engine import build_experiment_portfolio
 from hunting.autonomous_hunter import load_seed_state as hunter_seed, select_objectives
 from hunting.proposal_state import load_seed_state as hunter_proposal_seed, normalize_state as normalize_hunter_proposal_state, validate_state as validate_hunter_proposal_state
 from learning.continuous_learning import rebuild_from_ledger
+from operations.external_value_loop import MILESTONES, VALUE_LANES, sku_blocker_candidates
 from repair.repair_engine import build_repair_state
 from transfer.cross_project_transfer import build_transfer_state
 from uncertainty.highest_value_uncertainty import build_snapshot as build_uncertainty_snapshot
@@ -81,9 +82,13 @@ def build_context(*,factory_work_items=None,learning_state=None,hunter_proposal_
     hunter_proposal_state=normalize_hunter_proposal_state(hunter_proposal_state)
     return {"uncertainty":uncertainty,"experiments":experiments,"allocation":allocation,"learning":learning,"repair":repair,"transfer":transfer,"factory_work_items":factory,"hunter_proposal_state":hunter_proposal_state}
 
-def _candidate(work_type,source_ref,project_ids,assigned_agent_id,goal_type,authority,consequence,*,pareto=None,rank=None,share=None,approvals=None,blockers=None,continuation_class="NEW_WORK",reason,evidence_refs):
+def _candidate(work_type,source_ref,project_ids,assigned_agent_id,goal_type,authority,consequence,*,pareto=None,rank=None,share=None,approvals=None,blockers=None,continuation_class="NEW_WORK",external_milestone=None,value_lane=None,blocks_external_milestone=False,reason,evidence_refs):
     req(continuation_class in {"CONTINUATION","NEW_WORK"},"invalid scheduler continuation class")
-    core={"work_type":work_type,"source_ref":source_ref,"project_ids":sorted(project_ids),"assigned_agent_id":assigned_agent_id,"agent_goal_type":goal_type}
+    req(external_milestone is None or external_milestone in MILESTONES,"invalid external milestone")
+    req(value_lane is None or value_lane in VALUE_LANES,"invalid value lane")
+    req(type(blocks_external_milestone) is bool,"invalid external blocker flag")
+    core={"work_type":work_type,"source_ref":source_ref,"project_ids":sorted(project_ids),"assigned_agent_id":assigned_agent_id,"agent_goal_type":goal_type,
+          "external_milestone":external_milestone,"value_lane":value_lane,"blocks_external_milestone":blocks_external_milestone}
     return {"fingerprint":hashv(core),**core,"required_authority":authority,"consequence":consequence,"continuation_class":continuation_class,"source_pareto_layer":pareto,"source_rank_order":rank,"allocation_share_basis_points":share,
             "approval_requirements":sorted(set(approvals or [])),"hard_blockers":sorted(set(blockers or [])),"selection_reason":reason,"evidence_refs":list(dict.fromkeys(evidence_refs))}
 
