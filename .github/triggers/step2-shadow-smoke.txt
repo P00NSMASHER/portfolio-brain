@@ -1,2 +1,3 @@
 Step 2 live shadow parity smoke trigger. No business authority.
 Retry after stable bounded artifact scan and queue-aware smoke hotfix.
+Provider-bound checkpoint repair root: sha256:f009eeeb2dea17e90c2b368b0a02f46672feb8aa9914cf1caff96c809c453466.
