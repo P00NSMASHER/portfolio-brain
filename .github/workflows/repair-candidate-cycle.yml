@@ -1,0 +1,354 @@
+name: repair-candidate-cycle
+
+on:
+  workflow_call:
+    inputs:
+      base_sha:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  plan-build:
+    concurrency:
+      group: portfolio-cost-governed-autonomy
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      build_artifact_id: ${{ steps.upload_build.outputs.artifact-id }}
+      image_id: ${{ steps.image.outputs.image_id }}
+      image_ref: ${{ steps.image.outputs.image_ref }}
+      lineage_id: ${{ steps.select.outputs.lineage_id }}
+      source_ref: ${{ steps.select.outputs.source_ref }}
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      PORTFOLIO_GITHUB_TOKEN: ${{ github.token }}
+      PORTFOLIO_MODEL_API_KEY: ${{ secrets.PORTFOLIO_MODEL_API_KEY }}
+      PORTFOLIO_SPEND_DISABLED: ${{ vars.PORTFOLIO_SPEND_DISABLED }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download exact scheduler continuation state
+        uses: actions/download-artifact@v4
+        with:
+          name: portfolio-scheduler-state
+          path: repair-cycle/trigger
+      - name: Select one queued repair
+        id: select
+        run: >-
+          python -m software_factory.repair_cycle_input
+          --scheduler-state repair-cycle/trigger/scheduler_state.json
+          --base-sha "${{ inputs.base_sha }}"
+          --output-dir repair-cycle/input
+      - name: Restore serialized paid cost state
+        run: |
+          mkdir -p cost_governor/live cost_governor/out
+          python -m software_factory.repair_cost_artifact_state --output cost_governor/live/cost_state.json
+          if [ ! -f cost_governor/live/cost_state.json ]; then
+            cp cost_governor/COST_STATE_SEED.json cost_governor/live/cost_state.json
+          fi
+      - name: Reserve bounded repair-cycle wrapper
+        id: cost
+        run: >-
+          python -m cost_governor.workflow_gate preflight
+          --state cost_governor/live/cost_state.json
+          --output-dir cost_governor/out
+          --workflow-id repair-candidate-cycle
+          --job-id plan-build
+          --project-id PRJ-000
+          --estimated-minutes 5
+          --authority MODIFY
+      - name: Restore exact prior repair plan if one exists
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: >-
+          python -m software_factory.repair_plan_artifact_state
+          --lineage-id "${{ steps.select.outputs.lineage_id }}"
+          --output repair-cycle/prior/repair_plan.json
+          --expected-branch main
+      - name: Generate or reuse bounded model repair plan
+        if: ${{ steps.cost.outputs.allowed == 'true' }}
+        run: |
+          args=(
+            --work repair-cycle/input/work.json
+            --repair-task repair-cycle/input/repair_task.json
+            --base-sha "${{ inputs.base_sha }}"
+            --checkout .
+            --cost-state cost_governor/out/cost_state.json
+            --output-dir repair-cycle/plan
+          )
+          if [ -f repair-cycle/prior/repair_plan.json ]; then
+            args+=(--prior-plan repair-cycle/prior/repair_plan.json)
+          fi
+          python -m software_factory.model_repair_planner "${args[@]}"
+      - name: Prepare immutable isolated candidate image
+        id: image
+        if: ${{ steps.cost.outputs.allowed == 'true' && hashFiles('repair-cycle/plan/repair_plan.json') != '' }}
+        timeout-minutes: 1
+        run: |
+          docker pull python:3.12-slim
+          image_id=$(docker image inspect python:3.12-slim --format '{{.Id}}')
+          image_ref=$(docker image inspect python:3.12-slim --format '{{index .RepoDigests 0}}')
+          echo "image_id=$image_id" >> "$GITHUB_OUTPUT"
+          echo "image_ref=$image_ref" >> "$GITHUB_OUTPUT"
+      - name: Build candidate from exact generated plan
+        if: ${{ steps.cost.outputs.allowed == 'true' && hashFiles('repair-cycle/plan/repair_plan.json') != '' }}
+        run: >-
+          python -m software_factory.build_from_repair_plan
+          --plan repair-cycle/plan/repair_plan.json
+          --checkout .
+          --image-id "${{ steps.image.outputs.image_id }}"
+          --output-dir repair-cycle/candidate
+      - name: Finalize paid wrapper accounting
+        if: ${{ always() && steps.cost.outputs.allowed == 'true' && hashFiles('cost_governor/out/cost_state.json') != '' }}
+        run: |
+          python -m cost_governor.workflow_gate finalize             --state cost_governor/out/cost_state.json             --decision cost_governor/out/cost_decision.json             --output cost_governor/out/final_cost_state.json
+          cp cost_governor/out/final_cost_state.json cost_governor/out/cost_state.json
+      - name: Persist repair-plan reuse state
+        if: ${{ always() && hashFiles('repair-cycle/plan/repair_plan.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-repair-plan-state
+          path: repair-cycle/plan/repair_plan.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Persist paid cost continuation state
+        if: ${{ always() && hashFiles('cost_governor/out/cost_state.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-cost-governor-state
+          path: cost_governor/out/cost_state.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload exact candidate build handoff
+        id: upload_build
+        if: ${{ hashFiles('repair-cycle/candidate/build_receipt.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: repair-candidate-build-${{ inputs.base_sha }}-${{ github.run_attempt }}
+          path: |
+            repair-cycle/input/
+            repair-cycle/plan/
+            repair-cycle/candidate/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Fail closed when paid admission blocks
+        if: ${{ always() && steps.cost.outputs.allowed != 'true' }}
+        run: exit 1
+
+  replay:
+    needs: plan-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    concurrency:
+      group: portfolio-repair-replay
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check replay workload admission
+        id: workload
+        run: >-
+          python -m workload_control.workload_gate preflight
+          --workflow-id repair-candidate-cycle
+          --job-id replay
+          --estimated-minutes 5
+      - name: Download exact build artifact
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.plan-build.outputs.build_artifact_id }}
+          path: ${{ runner.temp }}/repair-build
+          merge-multiple: true
+      - name: Restore exact producer image
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        env:
+          IMAGE_REF: ${{ needs.plan-build.outputs.image_ref }}
+          EXPECTED_IMAGE_ID: ${{ needs.plan-build.outputs.image_id }}
+        run: |
+          python -c 'import os,re; assert re.fullmatch(r"(?:docker\.io/library/)?python@sha256:[0-9a-f]{64}", os.environ["IMAGE_REF"])'
+          docker pull "$IMAGE_REF"
+          image_id=$(docker image inspect "$IMAGE_REF" --format '{{.Id}}')
+          test "$image_id" = "$EXPECTED_IMAGE_ID"
+      - name: Replay candidate in fresh isolated containers
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: >-
+          python -m software_factory.replay_from_repair_plan
+          --plan "${{ runner.temp }}/repair-build/plan/repair_plan.json"
+          --checkout .
+          --build-dir "${{ runner.temp }}/repair-build/candidate"
+          --image-id "${{ needs.plan-build.outputs.image_id }}"
+          --output-dir repair-cycle/replay
+      - name: Preserve scheduler work identity with replay
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: cp "${{ runner.temp }}/repair-build/input/work.json" repair-cycle/replay/work.json
+      - name: Upload replay/factory handoff
+        id: upload_replay
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: repair-candidate-replay-${{ inputs.base_sha }}-${{ github.run_attempt }}
+          path: repair-cycle/replay/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Fail closed when replay admission blocks
+        if: ${{ always() && steps.workload.outputs.allowed != 'true' }}
+        run: exit 1
+    outputs:
+      replay_artifact_id: ${{ steps.upload_replay.outputs.artifact-id }}
+
+  submit:
+    needs: replay
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: read
+    concurrency:
+      group: portfolio-software-factory
+      cancel-in-progress: false
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      PORTFOLIO_FACTORY_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check candidate submission workload admission
+        id: workload
+        run: >-
+          python -m workload_control.workload_gate preflight
+          --workflow-id repair-candidate-cycle
+          --job-id submit
+          --estimated-minutes 5
+      - name: Download exact replay artifact
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.replay.outputs.replay_artifact_id }}
+          path: ${{ runner.temp }}/repair-replay
+          merge-multiple: true
+      - name: Submit or reuse exact remote candidate
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: >-
+          python -m software_factory.candidate_submitter
+          --replay-dir "${{ runner.temp }}/repair-replay"
+          --output repair-cycle/submission/remote_submission_receipt.json
+      - name: Preserve scheduler work identity with submission
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: cp "${{ runner.temp }}/repair-replay/work.json" repair-cycle/submission/work.json
+      - name: Restore latest agent state
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: python -m agents.artifact_state --output agents/live/agent_heartbeat_state.json
+      - name: Heartbeat Engineer after actual remote candidate submission
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: >-
+          python -m agents.heartbeat_state
+          --state agents/live/agent_heartbeat_state.json
+          --output agents/out/agent_heartbeat_state.json
+          --agent-id AGT-ENGINEER
+          --activity-kind REMOTE_CANDIDATE_SUBMISSION
+          --source-workflow repair-candidate-cycle
+          --source-run-id "${GITHUB_RUN_ID}"
+      - name: Upload sanitized agent state
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-agent-heartbeat-state
+          path: agents/out/agent_heartbeat_state.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload remote submission proof
+        id: upload_submission
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: repair-candidate-submission-${{ inputs.base_sha }}-${{ github.run_attempt }}
+          path: repair-cycle/submission/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Fail closed when submission admission blocks
+        if: ${{ always() && steps.workload.outputs.allowed != 'true' }}
+        run: exit 1
+    outputs:
+      submission_artifact_id: ${{ steps.upload_submission.outputs.artifact-id }}
+
+  finalize-scheduler:
+    needs: submit
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: read
+    concurrency:
+      group: portfolio-scheduler
+      cancel-in-progress: false
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base_sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check scheduler-finalization workload admission
+        id: workload
+        run: >-
+          python -m workload_control.workload_gate preflight
+          --workflow-id repair-candidate-cycle
+          --job-id finalize
+          --estimated-minutes 3
+      - name: Restore latest scheduler state under scheduler concurrency
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: python -m scheduler.artifact_state --output scheduler/live/scheduler_state.json
+      - name: Download exact remote submission proof
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.submit.outputs.submission_artifact_id }}
+          path: ${{ runner.temp }}/repair-submission
+          merge-multiple: true
+      - name: Complete only the exact repair-building scheduler work
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: >-
+          python -m software_factory.complete_repair_work
+          --scheduler-state scheduler/live/scheduler_state.json
+          --work "${{ runner.temp }}/repair-submission/work.json"
+          --submission "${{ runner.temp }}/repair-submission/remote_submission_receipt.json"
+          --output scheduler/out/scheduler_state.json
+      - name: Upload scheduler continuation state
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-scheduler-state
+          path: scheduler/out/scheduler_state.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Fail closed when scheduler finalization admission blocks
+        if: ${{ always() && steps.workload.outputs.allowed != 'true' }}
+        run: exit 1
