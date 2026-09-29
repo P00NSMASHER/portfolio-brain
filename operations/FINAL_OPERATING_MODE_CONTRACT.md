@@ -18,7 +18,7 @@ Scheduler and heartbeat workflows remain scheduled and manually dispatchable, bu
 
 ## What does not become autonomous
 
-The release permits only policy-bounded customer email through the action-engine gateway. StarBlox/ABVM validation is adult-stakeholder-only and excludes direct minor contact, child-data collection, production changes, and consequential child-facing changes. Payment/cash movement, live market trading or brokerage execution, deployment, merge authority, secret changes, and unapproved child-facing consequential changes remain human-gated or prohibited.
+The release permits only policy-bounded customer email through the action-engine gateway. StarBlox/ABVM validation is adult-stakeholder-only and excludes direct minor contact, child-data collection, production changes, and consequential child-facing changes. Payment/cash movement, live market trading or brokerage execution, deployment, secret changes, and unapproved child-facing consequential changes remain human-gated or prohibited. Merge authority is machine-gated instead of human-gated: a merge is permitted only through repository protection after exact-head foundation validation and the separately credentialed verifier App both succeed, with no bypass.
 
 Paid/model/API execution remains deny-by-default at invocation time unless the enabled OpenAI route passes provider readiness, finite pre-execution cost reservation, retry, idempotency, and kill-switch gates. Model output is advisory and cannot grant authority or upgrade evidence.
 
