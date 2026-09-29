@@ -1,0 +1,149 @@
+name: continuous-learning-bootstrap
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "learning/TRIGGER_VERIFIED_OUTCOME_BOOTSTRAP"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  bootstrap:
+    concurrency:
+      group: portfolio-state-writer-v1
+      cancel-in-progress: false
+      queue: max
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      PORTFOLIO_GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check independent workload controls
+        id: workload
+        run: >-
+          python -m workload_control.workload_gate preflight
+          --workflow-id continuous-learning-bootstrap
+          --job-id bootstrap
+          --estimated-minutes 2
+      - name: Restore latest VERIFIED value proof
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: >-
+          python -m value_proof.proof_artifact_state
+          --output-dir value_proof/live/verified-proof
+
+      - name: Restore durable Hunter value state
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: |
+          mkdir -p hunting/live
+          python -m hunting.artifact_state --output hunting/live/hunter_state.json
+          if [ ! -f hunting/live/hunter_state.json ]; then
+            cp hunting/HUNTER_STATE_SEED.json hunting/live/hunter_state.json
+          fi
+
+      - name: Restore durable model feedback state
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: |
+          mkdir -p model_router/live
+          python -m model_router.feedback_artifact_state --output model_router/live/model_feedback_state.json
+          if [ ! -f model_router/live/model_feedback_state.json ]; then
+            cp model_router/MODEL_FEEDBACK_STATE_SEED.json model_router/live/model_feedback_state.json
+          fi
+
+      - name: Restore durable continuous-learning observations
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: |
+          mkdir -p learning/live
+          python -m learning.artifact_state --output learning/live/learning_observation_state.json
+          if [ ! -f learning/live/learning_observation_state.json ]; then
+            cp learning/LIVE_OBSERVATION_STATE_SEED.json learning/live/learning_observation_state.json
+          fi
+
+      - name: Reconcile VERIFIED feedback lineage
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: >-
+          python -m value_proof.feedback_loop
+          --task-contract value_proof/MODEL_TASK_CONTRACT.json
+          --verifier-contract value_proof/VERIFIER_CONTRACT.json
+          --value-outcome value_proof/live/verified-proof/value_outcome.json
+          --builder-provider-receipt value_proof/live/verified-proof/model_provider_receipt.json
+          --verifier-provider-receipt value_proof/live/verified-proof/independent_verifier_provider_receipt.json
+          --hunter-state hunting/live/hunter_state.json
+          --model-feedback-state model_router/live/model_feedback_state.json
+          --output-dir value_proof/out
+
+      - name: Ingest VERIFIED outcome into continuous learning
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: >-
+          python -m learning.live_observations
+          --state learning/live/learning_observation_state.json
+          --task-contract value_proof/MODEL_TASK_CONTRACT.json
+          --verifier-contract value_proof/VERIFIER_CONTRACT.json
+          --value-outcome value_proof/live/verified-proof/value_outcome.json
+          --feedback-receipt value_proof/out/feedback_loop_receipt.json
+          --builder-provider-receipt value_proof/live/verified-proof/model_provider_receipt.json
+          --verifier-provider-receipt value_proof/live/verified-proof/independent_verifier_provider_receipt.json
+          --output value_proof/out/learning_observation_state.json
+
+      - name: Prove cross-subsystem learning integrity
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: |
+          python -c "import json; from hunting.autonomous_hunter import validate_state; validate_state(json.load(open('value_proof/out/hunter_state.json')))"
+          python -c "import json; from model_router.feedback_state import validate_state; validate_state(json.load(open('value_proof/out/model_feedback_state.json')))"
+          python -c "import json; from learning.live_observations import validate_state; validate_state(json.load(open('value_proof/out/learning_observation_state.json')))"
+          python -m learning.integrity             --hunter-state value_proof/out/hunter_state.json             --model-feedback-state value_proof/out/model_feedback_state.json             --learning-state value_proof/out/learning_observation_state.json             > value_proof/out/learning_integrity.json
+          python -c "import json; x=json.load(open('value_proof/out/learning_integrity.json')); assert x['status']=='HEALTHY', x"
+
+      - name: Upload learning bootstrap proof
+        if: ${{ always() && steps.workload.outputs.allowed == 'true' && hashFiles('value_proof/out/learning_integrity.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-continuous-learning-bootstrap
+          path: |
+            value_proof/out/feedback_loop_receipt.json
+            value_proof/out/learning_integrity.json
+            value_proof/live/verified-proof/restore_receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload reconciled Hunter continuation state
+        if: ${{ always() && steps.workload.outputs.allowed == 'true' && hashFiles('value_proof/out/hunter_state.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-hunter-state
+          path: value_proof/out/hunter_state.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload reconciled model feedback state
+        if: ${{ always() && steps.workload.outputs.allowed == 'true' && hashFiles('value_proof/out/model_feedback_state.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-model-feedback-state
+          path: value_proof/out/model_feedback_state.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload durable continuous-learning state
+        if: ${{ always() && steps.workload.outputs.allowed == 'true' && hashFiles('value_proof/out/learning_observation_state.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-learning-observation-state
+          path: value_proof/out/learning_observation_state.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Report governed no-work outcome
+        if: ${{ always() && steps.workload.outputs.allowed != 'true' }}
+        run: |
+          echo "::error title=Continuous learning bootstrap skipped::Workload status: ${{ steps.workload.outputs.decision_status }}"
+          exit 1
