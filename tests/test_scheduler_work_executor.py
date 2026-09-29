@@ -2,7 +2,7 @@ import json
 import unittest
 
 from runtime.state import bootstrap_state
-from scheduler.autonomous_scheduler import _work_packet, build_context, generate_candidates, load_state, schedule_cycle
+from scheduler.autonomous_scheduler import _candidate, _work_packet, build_context, generate_candidates, load_state, schedule_cycle
 from scheduler.work_executor import execute_cycle
 
 
@@ -61,6 +61,9 @@ class SchedulerWorkExecutorTests(unittest.TestCase):
         ctx=build_context(hunter_proposal_state=pstate)
         candidates,_=generate_candidates(ctx)
         candidate=next(c for c in candidates if c["source_ref"]=="HEXP-TEST-INBOX")
+        candidate["external_milestone"]="VALIDATE_DEMAND"
+        candidate["value_lane"]="CUSTOMER_DEMAND_VALIDATION"
+        candidate["signal_basis"]="TEST_FIXTURE_EXPLICIT_EXTERNAL_MILESTONE"
         state=load_state()
         work=_work_packet(candidate,AT)
         state["work_items"]=[work]
@@ -105,10 +108,23 @@ class SchedulerWorkExecutorTests(unittest.TestCase):
         self.assertEqual(executed,[])
 
     def _single(self, work_type):
-        state, receipt = schedule_cycle(load_state(), build_context(), at=AT)
-        work = next(row for row in receipt["selected_work"] if row["work_type"] == work_type)
-        state["work_items"] = [json.loads(json.dumps(work))]
-        return state, work
+        roles={
+            "RESEARCH":("AGT-RESEARCHER","RESEARCH_EVIDENCE","OBSERVE"),
+            "INTEGRATION":("AGT-PRODUCT-ANALYST","PRODUCT_ANALYSIS","OBSERVE"),
+        }
+        agent,goal,authority=roles[work_type]
+        candidate=_candidate(
+            work_type,f"TEST-{work_type}",["PRJ-000"],agent,goal,authority,"LOW",
+            reason="Executor fixture with explicit external demand milestone.",
+            evidence_refs=["test:executor","external-milestone:VALIDATE_DEMAND"],
+            external_milestone="VALIDATE_DEMAND",
+            value_lane="CUSTOMER_DEMAND_VALIDATION",
+            signal_basis="TEST_FIXTURE_EXPLICIT_EXTERNAL_MILESTONE",
+        )
+        state=load_state()
+        work=_work_packet(candidate,AT)
+        state["work_items"]=[json.loads(json.dumps(work))]
+        return state,work
 
     def test_success_is_only_path_to_complete(self):
         state, work = self._single("RESEARCH")

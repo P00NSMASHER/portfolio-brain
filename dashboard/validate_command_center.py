@@ -26,6 +26,15 @@ def validate_command_center() -> dict[str, object]:
     require(snapshot["mutation_capability"] == "NONE", "command center gained mutation capability")
     require(snapshot["network_capability"] == "NONE", "command center gained outbound network capability")
     require(snapshot["data_boundary"] == "SANITIZED_CHECKED_IN_AND_DURABLE_ARTIFACT_STATE", "data boundary widened")
+    primary=snapshot["primary_operator_view"]
+    require(set(primary)=={
+        "money_earned","active_external_experiment","closest_external_milestone",
+        "current_blocker","action_required_from_owner","last_verified_customer_or_market_signal",
+    },"primary operator view must contain exactly six business answers")
+    require(primary["money_earned"].startswith("$"),"primary money answer invalid")
+    require(primary["closest_external_milestone"] in snapshot["value_loop"]["business_investment_evidence_classes"] or primary["closest_external_milestone"] in {
+        "PUBLISH_PRODUCT","GET_BUYER_RESPONSE","DELIVER_PAID_WORK","VERIFY_PAYMENT","TEST_PRICE","VALIDATE_DEMAND"
+    },"primary external milestone invalid")
 
     require(snapshot["system"]["project_count"] == len(snapshot["projects"]), "project coverage mismatch")
     require(snapshot["system"]["project_count"] == 12, "registered project coverage drifted")
@@ -134,9 +143,12 @@ def validate_command_center() -> dict[str, object]:
     )
     require(page.index("Verified cash, not activity.") < page.index("FIX FIRST · SYSTEM DIAGNOSTICS") < page.index("MICRO-PRODUCT FACTORY · BOUNDED BETS") < page.index("IMPROVE NEXT · EVIDENCE BACKED") < page.index('class="grid kpis"'), "revenue-first dashboard hierarchy drifted")
     require("Run upgrade" in page and "https://chatgpt.com/?prompt=" in page, "recommended upgrade action buttons missing")
-    require("Build SKU-001" in page and "Build next product" in page, "micro-product action links missing")
-    require("Refresh Brain" in page, "owner-authenticated refresh link missing")
-    require("Show operations & diagnostics" in page and 'id="advanced-content"' in page, "simple-mode progressive disclosure missing")
+    require("OWNER ACTION REQUIRED: Publish SKU-001" in page, "owner publish checkpoint missing from primary operator view")
+    require("What matters right now" in page and "Money earned" in page and "Active external experiment" in page, "six-answer primary surface missing")
+    require("Closest external milestone" in page and "Current blocker" in page and "Action required from you" in page and "Last verified customer / market signal" in page, "six-answer labels incomplete")
+    require('id="operator-primary"' in page and 'id="advanced-content" class="advanced-content" hidden' in page, "diagnostics are not hidden behind the primary view")
+    require(page.index('id="operator-primary"') < page.index('id="advanced-content"') < page.index('id="revenue-focus"'), "primary/diagnostic hierarchy drifted")
+    require("Show operations & diagnostics" in page, "diagnostic disclosure control missing")
     require('class="mobile-dock"' in page, "mobile quick-action dock missing")
     require("Operational Telemetry" in page, "operational telemetry panel missing")
     require("History & Trends" in page, "history/trends panel missing")
@@ -207,6 +219,7 @@ def validate_command_center() -> dict[str, object]:
         "action_receipts": action["execution_count"],
         "history_points": snapshot["history"]["point_count"],
         "queue_open": snapshot["telemetry"]["queue"]["open_total"],
+        "primary_external_milestone": primary["closest_external_milestone"],
         "snapshot_hash": snapshot["snapshot_hash"],
     }
 

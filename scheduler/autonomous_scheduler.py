@@ -11,6 +11,7 @@ from experiments.experiment_engine import build_experiment_portfolio
 from hunting.autonomous_hunter import load_seed_state as hunter_seed, select_objectives
 from hunting.proposal_state import load_seed_state as hunter_proposal_seed, normalize_state as normalize_hunter_proposal_state, validate_state as validate_hunter_proposal_state
 from learning.continuous_learning import rebuild_from_ledger
+from operations.value_loop import build_value_loop_snapshot
 from repair.repair_engine import build_repair_state
 from transfer.cross_project_transfer import build_transfer_state
 from uncertainty.highest_value_uncertainty import build_snapshot as build_uncertainty_snapshot
@@ -79,13 +80,58 @@ def build_context(*,factory_work_items=None,learning_state=None,hunter_proposal_
         hunter_proposal_state=json.loads(live.read_text()) if live.exists() else hunter_proposal_seed()
     validate_hunter_proposal_state(hunter_proposal_state)
     hunter_proposal_state=normalize_hunter_proposal_state(hunter_proposal_state)
-    return {"uncertainty":uncertainty,"experiments":experiments,"allocation":allocation,"learning":learning,"repair":repair,"transfer":transfer,"factory_work_items":factory,"hunter_proposal_state":hunter_proposal_state}
+    value_loop=build_value_loop_snapshot(hunter_proposal_state=hunter_proposal_state)
+    return {"uncertainty":uncertainty,"experiments":experiments,"allocation":allocation,"learning":learning,"repair":repair,"transfer":transfer,"factory_work_items":factory,"hunter_proposal_state":hunter_proposal_state,"value_loop":value_loop}
 
-def _candidate(work_type,source_ref,project_ids,assigned_agent_id,goal_type,authority,consequence,*,pareto=None,rank=None,share=None,approvals=None,blockers=None,continuation_class="NEW_WORK",reason,evidence_refs):
+def _candidate(work_type,source_ref,project_ids,assigned_agent_id,goal_type,authority,consequence,*,pareto=None,rank=None,share=None,approvals=None,blockers=None,continuation_class="NEW_WORK",reason,evidence_refs,external_milestone=None,value_lane=None,signal_basis=None):
     req(continuation_class in {"CONTINUATION","NEW_WORK"},"invalid scheduler continuation class")
-    core={"work_type":work_type,"source_ref":source_ref,"project_ids":sorted(project_ids),"assigned_agent_id":assigned_agent_id,"agent_goal_type":goal_type}
+    core={"work_type":work_type,"source_ref":source_ref,"project_ids":sorted(project_ids),"assigned_agent_id":assigned_agent_id,"agent_goal_type":goal_type,
+          "external_milestone":external_milestone,"value_lane":value_lane}
     return {"fingerprint":hashv(core),**core,"required_authority":authority,"consequence":consequence,"continuation_class":continuation_class,"source_pareto_layer":pareto,"source_rank_order":rank,"allocation_share_basis_points":share,
-            "approval_requirements":sorted(set(approvals or [])),"hard_blockers":sorted(set(blockers or [])),"selection_reason":reason,"evidence_refs":list(dict.fromkeys(evidence_refs))}
+            "approval_requirements":sorted(set(approvals or [])),"hard_blockers":sorted(set(blockers or [])),"selection_reason":reason,"evidence_refs":list(dict.fromkeys(evidence_refs)),"signal_basis":signal_basis}
+
+
+def _value_loop_candidates(value_loop):
+    candidates=[];blocked=[]
+    for row in value_loop["blocking_work"]:
+        candidates.append(_candidate(
+            row["work_type"],row["source_ref"],row["project_ids"],row["assigned_agent_id"],row["agent_goal_type"],
+            row["required_authority"],"HIGH",reason=row["reason"],evidence_refs=row["evidence_refs"],
+            external_milestone=row["external_milestone"],value_lane=row["value_lane"],signal_basis="EXTERNAL_MILESTONE_BLOCKER",
+        ))
+    for action in value_loop["owner_action_queue"]:
+        blocked.append(_candidate(
+            "EXPERIMENT",action["action_id"],["PRJ-000"],"AGT-PORTFOLIO-MANAGER","WORK_COORDINATION","NONE","CRITICAL",
+            approvals=["OWNER_EXTERNAL_ACTION"],blockers=["OWNER_ACTION_REQUIRED"],
+            reason=action["instruction"],evidence_refs=[
+                "operations/MICRO_PRODUCT_FACTORY.json",f"owner-action:{action['action_id']}",
+                f"external-milestone:{action['external_milestone']}",
+            ],external_milestone=action["external_milestone"],value_lane="EXTERNAL_VALUE_BLOCKER",signal_basis="MARKET_TEST",
+        ))
+    return candidates,blocked
+
+
+def _externalize_candidate(candidate,context):
+    p=policy();milestones=set(p["external_milestones"]);lanes=set(p["value_lane_precedence"])
+    out=json.loads(json.dumps(candidate))
+    if out.get("external_milestone") is not None:
+        req(out["external_milestone"] in milestones,"candidate external milestone invalid")
+        req(out.get("value_lane") in lanes,"candidate value lane invalid")
+        return out
+    refs=out.get("evidence_refs") or []
+    explicit=[ref.split(":",1)[1] for ref in refs if isinstance(ref,str) and ref.startswith("external-milestone:")]
+    if explicit:
+        req(len(set(explicit))==1 and explicit[0] in milestones,"ambiguous external milestone evidence")
+        out["external_milestone"]=explicit[0]
+        out["value_lane"]="INTERNAL_BLOCKER" if out["work_type"] in {"REPAIR","TEST","VERIFICATION"} else "PRODUCT_DELIVERABLE_COMPLETION"
+        out["signal_basis"]="EXPLICIT_EXTERNAL_MILESTONE"
+        return out
+    if out["work_type"]=="EXPERIMENT" and out["assigned_agent_id"]=="AGT-COMMERCIAL-ANALYST":
+        out["external_milestone"]="VALIDATE_DEMAND"
+        out["value_lane"]="CUSTOMER_DEMAND_VALIDATION"
+        out["signal_basis"]="EXTERNAL_VALIDATION"
+        return out
+    return None
 
 def _owner_approval(exp,u):
     ledger_path=ROOT/"operator_console"/"OWNER_APPROVALS.json"
@@ -222,7 +268,8 @@ def generate_candidates(context):
         candidates.append(_candidate("INTEGRATION",proposal["transfer_id"],[proposal["target_project_id"]],"AGT-PRODUCT-ANALYST","PRODUCT_ANALYSIS","OBSERVE","MEDIUM",
             pareto=None if u is None else u["ranking"]["pareto_layer"],rank=None if u is None else u["ranking"]["rank_order"],
             reason="Cross-project transfer hypothesis is assessment-ready; implementation remains prohibited.",evidence_refs=[*proposal["provenance_refs"],f"transfer:{proposal['transfer_id']}"]))
-    return candidates,blocked
+    direct,owner_blocked=_value_loop_candidates(context["value_loop"])
+    return [*direct,*candidates],[*owner_blocked,*blocked]
 
 def is_hunter_proposal_continuation(candidate):
     return (
@@ -239,7 +286,10 @@ def _sort_key(c):
     p=policy()
     continuation_order={"CONTINUATION":0,"NEW_WORK":1}
     req(c.get("continuation_class","NEW_WORK") in continuation_order,"invalid scheduler continuation class")
+    req(c.get("value_lane") in p["value_lane_precedence"],"scheduler candidate missing value lane")
+    req(c.get("external_milestone") in p["external_milestones"],"scheduler candidate missing external milestone")
     return (
+        p["value_lane_precedence"][c["value_lane"]],
         p["gate_precedence"][c["work_type"]],
         continuation_order[c.get("continuation_class","NEW_WORK")],
         99 if c["source_pareto_layer"] is None else c["source_pareto_layer"],
@@ -250,6 +300,9 @@ def _sort_key(c):
     )
 
 def _work_packet(c,created_at,state="QUEUED"):
+    p=policy()
+    req(c.get("external_milestone") in p["external_milestones"],"work packet requires external milestone")
+    req(c.get("value_lane") in p["value_lane_precedence"],"work packet requires value lane")
     core={"schema_version":"1.0.0","scheduler_work_id":"SWORK-"+hashlib.sha256(c["fingerprint"].encode()).hexdigest()[:20].upper(),
           **c,"state":state,"created_at":created_at,"lease_generation":0,"lease_owner":None,"lease_expires_at":None}
     return {**core,"work_hash":hashv(core)}
@@ -282,7 +335,20 @@ def schedule_cycle(state,context=None,*,at=None,candidate_filter:Callable[[dict[
     if disabled:
         receipt={"schema_version":"1.0.0","cycle_id":"disabled","status":"DISABLED","reason":reason,"finished_at":at,"selected_work":[],"blocked_work":[],"suppressed_duplicates":[],"stale_lease_holds":[]}
         return state,receipt
-    context=context or build_context();candidates,blocked=generate_candidates(context)
+    context=context or build_context();raw_candidates,raw_blocked=generate_candidates(context)
+    candidates=[];blocked=[];suppressed_no_external_milestone=[]
+    for candidate in raw_candidates:
+        externalized=_externalize_candidate(candidate,context)
+        if externalized is None:
+            suppressed_no_external_milestone.append(candidate["fingerprint"])
+        else:
+            candidates.append(externalized)
+    for candidate in raw_blocked:
+        externalized=_externalize_candidate(candidate,context)
+        if externalized is None:
+            suppressed_no_external_milestone.append(candidate["fingerprint"])
+        else:
+            blocked.append(externalized)
     if candidate_filter is not None:
         req(callable(candidate_filter),"scheduler candidate filter invalid")
         candidates=[candidate for candidate in candidates if candidate_filter(candidate)]
@@ -323,8 +389,9 @@ def schedule_cycle(state,context=None,*,at=None,candidate_filter:Callable[[dict[
     receipt={"schema_version":"1.0.0","cycle_id":cid,"status":"PASS","reason":None,"finished_at":at,
              "candidate_count":len(candidates),"selected_work":selected,
              "blocked_work":[_work_packet(b,at,"BLOCKED_APPROVAL" if b["approval_requirements"] else "BLOCKED_POLICY") for b in blocked],
-             "suppressed_duplicates":sorted(suppressed),"stale_lease_holds":sorted(stale),"compacted_terminal_work":compacted,
-             "selection_method":"EXPLICIT_GATE_PRECEDENCE_THEN_CONTINUATION_CLASS_SOURCE_PARETO_RANK_ALLOCATION_SHARE_NO_SCALAR_SCORE"}
+             "suppressed_duplicates":sorted(suppressed),"suppressed_no_external_milestone":sorted(set(suppressed_no_external_milestone)),
+             "stale_lease_holds":sorted(stale),"compacted_terminal_work":compacted,
+             "selection_method":"EXTERNAL_VALUE_LANE_THEN_WORK_GATE_THEN_CONTINUATION_CLASS_SOURCE_PARETO_RANK_ALLOCATION_SHARE_NO_SCALAR_SCORE"}
     receipt["receipt_hash"]=hashv(receipt)
     new_state["recent_cycles"]=([*new_state["recent_cycles"],{"cycle_id":cid,"finished_at":at,"receipt_hash":receipt["receipt_hash"],"selected_count":len(selected)}])[-20:]
     validate_state(new_state);return new_state,receipt

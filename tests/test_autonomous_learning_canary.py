@@ -20,10 +20,10 @@ class AutonomousLearningCanaryTests(unittest.TestCase):
         first=self.receipt["first_cycle"]
         self.assertEqual(first["runtime_status"],"PASS")
         self.assertLessEqual(first["runtime_api_reads"],8)
-        self.assertGreaterEqual(first["scheduler_selected_count"],3)
+        self.assertGreaterEqual(first["scheduler_selected_count"],1)
         self.assertLessEqual(first["scheduler_selected_count"],8)
-        self.assertTrue({"HUNT","INTEGRATION","RESEARCH"}<=set(first["scheduler_selected_work_types"]))
-        self.assertEqual(first["scheduler_blocked_approval_count"],0)
+        self.assertEqual(set(first["scheduler_selected_work_types"]),{"EXPERIMENT","TEST"})
+        self.assertEqual(first["scheduler_blocked_approval_count"],1)
 
     def test_canary_uses_zero_paid_model_api(self):
         first=self.receipt["first_cycle"]
