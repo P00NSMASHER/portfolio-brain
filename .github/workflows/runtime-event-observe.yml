@@ -4,6 +4,11 @@ on:
   push:
     branches: ["main"]
     paths-ignore:
+      # These paths already start the full governed sync, including REPO-008.
+      - "adapters/**"
+      - "runtime/**"
+      - ".github/workflows/runtime-hourly-sync.yml"
+      - ".github/workflows/runtime-worker.yml"
       - "runtime/TRIGGER_DAILY_REASONING"
       - ".github/triggers/hunter-autonomous-now.txt"
       - ".github/workflows/hunter-autonomous-cycle.yml"
