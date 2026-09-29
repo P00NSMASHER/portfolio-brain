@@ -81,6 +81,7 @@ jobs:
         run: python -c "import json; from hunting.autonomous_hunter import validate_state; validate_state(json.load(open('hunting/out/hunter_state.json')))"
       - name: Upload sanitized Hunter continuation state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
+        id: journal_upload_hunter
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-hunter-state
@@ -89,6 +90,7 @@ jobs:
           retention-days: 30
       - name: Upload quality-gated Hunter proposal inbox
         if: ${{ steps.workload.outputs.allowed == 'true' && hashFiles('hunting/out/hunter_proposal_state.json') != '' }}
+        id: journal_upload_proposals
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-hunter-proposal-state
@@ -97,6 +99,7 @@ jobs:
           retention-days: 30
       - name: Upload sanitized agent heartbeat state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
+        id: journal_upload_heartbeat
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-agent-heartbeat-state
@@ -108,3 +111,19 @@ jobs:
         run: |
           echo "::error title=Portfolio Hunter skipped::Workload status: ${{ steps.workload.outputs.decision_status }}"
           exit 1
+      - name: Capture immutable state transition event
+        id: journal_event
+        if: ${{ always() }}
+        env:
+          JOURNAL_PUBLISHED_DOMAINS: >-
+            {"heartbeat": ${{ steps.journal_upload_heartbeat.outcome == 'success' }}, "hunter": ${{ steps.journal_upload_hunter.outcome == 'success' }}, "proposals": ${{ steps.journal_upload_proposals.outcome == 'success' }}}
+        run: python -m state_journal.emitter --producer hunter-autonomous-cycle
+      - name: Upload immutable state transition event
+        if: ${{ always() && steps.journal_event.outputs.emitted == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-state-event-v2-${{ github.run_id }}-hunter-autonomous-cycle-${{ github.sha }}-${{ github.run_attempt }}
+          path: state_journal/out/event/event.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 30

@@ -120,6 +120,7 @@ jobs:
 
       - name: Upload learned Hunter continuation state
         if: ${{ always() && steps.workload.outputs.allowed == 'true' && hashFiles('value_proof/out/hunter_state.json') != '' }}
+        id: journal_upload_hunter
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-hunter-state
@@ -129,6 +130,7 @@ jobs:
 
       - name: Upload learned model feedback state
         if: ${{ always() && steps.workload.outputs.allowed == 'true' && hashFiles('value_proof/out/model_feedback_state.json') != '' }}
+        id: journal_upload_model_feedback
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-model-feedback-state
@@ -138,6 +140,7 @@ jobs:
 
       - name: Upload learned continuous-learning observations
         if: ${{ always() && steps.workload.outputs.allowed == 'true' && hashFiles('value_proof/out/learning_observation_state.json') != '' }}
+        id: journal_upload_learning
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-learning-observation-state
@@ -150,3 +153,19 @@ jobs:
         run: |
           echo "::error title=Verified feedback bootstrap skipped::Workload status: ${{ steps.workload.outputs.decision_status }}"
           exit 1
+      - name: Capture immutable state transition event
+        id: journal_event
+        if: ${{ always() }}
+        env:
+          JOURNAL_PUBLISHED_DOMAINS: >-
+            {"hunter": ${{ steps.journal_upload_hunter.outcome == 'success' }}, "learning": ${{ steps.journal_upload_learning.outcome == 'success' }}, "model_feedback": ${{ steps.journal_upload_model_feedback.outcome == 'success' }}}
+        run: python -m state_journal.emitter --producer verified-feedback-bootstrap
+      - name: Upload immutable state transition event
+        if: ${{ always() && steps.journal_event.outputs.emitted == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-state-event-v2-${{ github.run_id }}-verified-feedback-bootstrap-${{ github.sha }}-${{ github.run_attempt }}
+          path: state_journal/out/event/event.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 30

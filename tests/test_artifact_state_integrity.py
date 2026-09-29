@@ -308,7 +308,7 @@ WRITER_WORKFLOWS = {
     "model-value-proof.yml", "operator-console.yml",
     "portfolio-autonomous-scheduler.yml", "portfolio-notification-cycle.yml",
     "runtime-worker.yml", "software-factory-candidate.yml",
-    "verified-feedback-bootstrap.yml",
+    "verified-feedback-bootstrap.yml", "portfolio-state-reducer.yml",
 }
 OPERATOR_WRITER_GROUP = "${{ inputs.operation == 'EMERGENCY_STOP' && format('portfolio-emergency-writer-bypass-{0}', github.run_id) || 'portfolio-state-writer-v1' }}"
 OPERATOR_ENTRY_GROUP = "${{ inputs.operation == 'EMERGENCY_STOP' && format('portfolio-emergency-entry-{0}', github.run_id) || 'portfolio-operator-console' }}"

@@ -60,6 +60,7 @@ jobs:
           --source-run-id "${GITHUB_RUN_ID}"
       - name: Upload sanitized agent heartbeat state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
+        id: journal_upload_heartbeat
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-agent-heartbeat-state
@@ -69,3 +70,19 @@ jobs:
       - name: Fail closed when workload admission blocks
         if: ${{ always() && steps.workload.outputs.allowed != 'true' }}
         run: exit 3
+      - name: Capture immutable state transition event
+        id: journal_event
+        if: ${{ always() }}
+        env:
+          JOURNAL_PUBLISHED_DOMAINS: >-
+            {"heartbeat": ${{ steps.journal_upload_heartbeat.outcome == 'success' }}}
+        run: python -m state_journal.emitter --producer software-factory-candidate
+      - name: Upload immutable state transition event
+        if: ${{ always() && steps.journal_event.outputs.emitted == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-state-event-v2-${{ github.run_id }}-software-factory-candidate-${{ github.sha }}-${{ github.run_attempt }}
+          path: state_journal/out/event/event.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 30

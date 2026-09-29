@@ -164,6 +164,7 @@ jobs:
 
       - name: Upload sanitized runtime continuation state
         if: ${{ steps.admission.outputs.allowed == 'true' }}
+        id: journal_upload_runtime
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-runtime-state
@@ -173,6 +174,7 @@ jobs:
 
       - name: Upload sanitized agent heartbeat state
         if: ${{ steps.admission.outputs.allowed == 'true' }}
+        id: journal_upload_heartbeat
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-agent-heartbeat-state
@@ -182,6 +184,7 @@ jobs:
 
       - name: Upload sanitized cost-governor continuation state
         if: ${{ always() && (inputs.mode == 'daily' || inputs.mode == 'weekly') && hashFiles('cost_governor/out/cost_state.json') != '' }}
+        id: journal_upload_cost
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-cost-governor-state
@@ -195,3 +198,19 @@ jobs:
           echo "::error title=Portfolio runtime blocked::Admission domain: ${{ steps.admission.outputs.admission_domain }}; status: ${{ steps.admission.outputs.decision_status }}"
           echo "Runtime work did not execute because its mode-specific admission gate blocked." >> "$GITHUB_STEP_SUMMARY"
           exit 1
+      - name: Capture immutable state transition event
+        id: journal_event
+        if: ${{ always() }}
+        env:
+          JOURNAL_PUBLISHED_DOMAINS: >-
+            {"cost": ${{ steps.journal_upload_cost.outcome == 'success' }}, "heartbeat": ${{ steps.journal_upload_heartbeat.outcome == 'success' }}, "runtime": ${{ steps.journal_upload_runtime.outcome == 'success' }}}
+        run: python -m state_journal.emitter --producer runtime-worker
+      - name: Upload immutable state transition event
+        if: ${{ always() && steps.journal_event.outputs.emitted == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-state-event-v2-${{ github.run_id }}-runtime-worker-${{ github.sha }}-${{ github.run_attempt }}
+          path: state_journal/out/event/event.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 30
