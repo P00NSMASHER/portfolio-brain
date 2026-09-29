@@ -2337,8 +2337,8 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
 <aside>
   <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Simple operator mode</small></div></div>
   <nav>
-    <a href="#overview">Today</a><a href="#repair-board">Fix</a><a href="#micro-products">Build</a><a href="#revenue-focus">Money</a>
-    <a class="advanced-nav" href="#operations">Ops</a><a class="advanced-nav" href="#projects">Portfolio</a><a class="advanced-nav" href="#hunter">Hunter</a><a class="advanced-nav" href="#cost">Controls</a>
+    <a href="#overview">Today</a>
+    <button class="detail-toggle" type="button" onclick="toggleAdvanced()">Diagnostics</button>
   </nav>
   <div class="readonly"><strong>OBSERVE ONLY</strong><span>Public command center</span></div>
 </aside>
@@ -2347,15 +2347,38 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
     <div class="hero-copy">
       <div class="eyebrow"><span class="signal-dot"></span>Portfolio Intelligence System</div>
       <h1>Portfolio Brain Command Center</h1>
-      <p class="hero-lede">Revenue-first operator view: what is making money, what is broken, what to build next, and the evidence behind every status.</p>
+      <p class="hero-lede">Six answers only: money, experiment, milestone, blocker, owner action, and verified market signal.</p>
       <div class="hero-badges">{_badge(system["functional_status"], _status_tone(system["functional_status"]))} {_badge(revenue_focus["truth_state"], "good" if revenue_focus["truth_state"]=="EARNING" else "warn")} {_badge("READ ONLY", "neutral")}</div>
     </div>
     <div class="actions">
-      <a class="header-action primary-header-action" href="{_e(_chatgpt_action_link(next_sku['build_prompt']))}" target="_blank" rel="noopener noreferrer">Build next product</a>
-      <a class="header-action" href="{_e(_github_workflow_link('command-center-pages.yml'))}" target="_blank" rel="noopener noreferrer">Refresh Brain</a>
-      <button class="detail-toggle" type="button" onclick="toggleAdvanced()">More details</button>
+      <button class="detail-toggle" type="button" onclick="toggleAdvanced()">Show diagnostics</button>
     </div>
   </header>
+
+  <section class="card primary-six" id="operator-primary" aria-labelledby="operator-primary-title">
+    <div class="section-head">
+      <div>
+        <div class="focus-label">PRIMARY OPERATOR VIEW</div>
+        <h2 id="operator-primary-title">What matters right now</h2>
+        <p class="primary-sub">Everything else is diagnostics.</p>
+      </div>
+      {_badge("EXTERNAL VALUE", "good" if operator_primary["money_earned"] != "$0.00" else "warn")}
+    </div>
+    <div class="primary-six-grid">
+      <article class="primary-answer money"><span>Money earned</span><strong>{_e(operator_primary["money_earned"])}</strong></article>
+      <article class="primary-answer"><span>Active external experiment</span><strong>{_e(primary_experiment_text)}</strong></article>
+      <article class="primary-answer"><span>Closest external milestone</span><strong>{_e(operator_primary["closest_external_milestone"])}</strong></article>
+      <article class="primary-answer"><span>Current blocker</span><strong>{_e(primary_blocker_text)}</strong></article>
+      <article class="primary-answer owner"><span>Action required from you</span><strong>{_e(primary_owner_action_text)}</strong></article>
+      <article class="primary-answer"><span>Last verified customer / market signal</span><strong>{_e(primary_last_signal_text)}</strong></article>
+    </div>
+  </section>
+
+  <section class="advanced-gate primary-diagnostics">
+    <button class="detail-toggle detail-toggle-wide" type="button" onclick="toggleAdvanced()">Show operations & diagnostics</button>
+    <p>Internal health, heartbeats, receipts, queues, Hunter, cost, products and repair detail are hidden by default.</p>
+  </section>
+  <div id="advanced-content" class="advanced-content" hidden>
 
   <section class="operator-focus" id="revenue-focus" aria-labelledby="revenue-title">
     <div class="truth-strip {'truth-good' if revenue_focus['truth_state']=='EARNING' else 'truth-warn'}">
@@ -2418,11 +2441,6 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
     <p class="repair-foot">Internal upgrades stay behind revenue work and critical repairs.</p>
   </section>
 
-  <section class="advanced-gate">
-    <button class="detail-toggle detail-toggle-wide" type="button" onclick="toggleAdvanced()">Show operations & diagnostics</button>
-    <p>Hidden by default to keep the operator view fast and focused.</p>
-  </section>
-  <div id="advanced-content" class="advanced-content" hidden>
   <section class="grid kpis">
     <div class="card kpi"><div class="label">Projects</div><div class="value">{system["project_count"]}</div><div class="hint">{len([p for p in snapshot["projects"] if p["lifecycle_status"] == "ACTIVE"])} active</div></div>
     <div class="card kpi"><div class="label">Agents healthy</div><div class="value">{system["healthy_agent_count"]}/{system["agent_count"]}</div><div class="hint">{system["stalled_agent_count"]} stalled · {system["warming_agent_count"]} warming</div></div>
