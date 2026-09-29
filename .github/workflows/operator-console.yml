@@ -251,7 +251,7 @@ jobs:
           retention-days: 7
       - name: Capture immutable state transition event
         id: journal_event
-        if: ${{ always() && vars.PORTFOLIO_STATE_JOURNAL_ENABLED == 'true' }}
+        if: ${{ always() }}
         env:
           JOURNAL_PUBLISHED_DOMAINS: >-
             {"scheduler": ${{ steps.journal_upload_scheduler.outcome == 'success' }}}

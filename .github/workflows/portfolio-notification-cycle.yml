@@ -77,7 +77,7 @@ jobs:
           exit 1
       - name: Capture immutable state transition event
         id: journal_event
-        if: ${{ always() && vars.PORTFOLIO_STATE_JOURNAL_ENABLED == 'true' }}
+        if: ${{ always() }}
         env:
           JOURNAL_PUBLISHED_DOMAINS: >-
             {"notifications": ${{ steps.journal_upload_notifications.outcome == 'success' }}}

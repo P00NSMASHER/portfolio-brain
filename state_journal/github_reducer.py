@@ -1,13 +1,15 @@
 """Single shadow reducer workflow entry point. Never changes production readers."""
 from __future__ import annotations
 import argparse
+import gzip
 import json
 import os
 from pathlib import Path
 
 from runtime.artifact_restore import _atomic_write
 from state_journal.contracts import REPOSITORY, JournalError, canonical, digest, require, strict_load
-from state_journal.reducer import make_snapshot, validate_snapshot, advance
+from state_journal.reducer import make_snapshot, validate_snapshot, validate_checkpoint, advance
+from state_journal.legacy_parity import verify as verify_legacy_parity
 from state_journal.transport import EVENT_PREFIX, SNAPSHOT_ARTIFACT, GitHubReader, artifact_digest, extract_json
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,8 +50,9 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
     if state is None:
         require(explicit_checkpoint is not None, "CHECKPOINT_REQUIRED: no automatic empty-state reset")
         state = make_snapshot(explicit_checkpoint, [], sequence=0, evidence={})
-    else:
-        require(explicit_checkpoint is None, "Refusing to replace an existing journal checkpoint")
+    elif explicit_checkpoint is not None:
+        require(state["checkpoint"]["checkpoint_hash"] == explicit_checkpoint["checkpoint_hash"],
+                "Canonical checkpoint root changed")
     known_artifacts = {r["artifact_id"]: r["archive_digest"] for refs in state["evidence"].values()
                        for r in refs if r.get("kind") == "GITHUB_ACTIONS"}
     incoming = []
@@ -84,14 +87,16 @@ def main() -> None:
         require(os.environ.get("GITHUB_WORKFLOW") == "portfolio-state-reducer", "Only the reducer workflow owns canonical publication")
         policy = strict_load((ROOT / "state_journal/POLICY.json").read_bytes())
         require(policy["mode"] == "SHADOW" and policy["production_readers_enabled"] is False, "Production cutover is not authorized by this migration")
-        bootstrap = None
-        if args.initialize:
-            require(os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch" and os.environ.get("GITHUB_ACTOR") == "P00NSMASHER",
-                    "Checkpoint initialization requires explicit owner dispatch")
-            require(args.checkpoint is not None and args.checkpoint.is_file(), "Explicit reviewed checkpoint file is missing")
-            bootstrap = strict_load(args.checkpoint.read_bytes())
-        else:
-            require(args.checkpoint is None, "Checkpoint input without explicit initialization denied")
+        checkpoint_path = args.checkpoint or (ROOT / "state_journal/CHECKPOINT.json.gz")
+        require(checkpoint_path.is_file(), "Reviewed source-bound checkpoint is missing")
+        raw_checkpoint = checkpoint_path.read_bytes()
+        if checkpoint_path.suffix == ".gz":
+            try:
+                raw_checkpoint = gzip.decompress(raw_checkpoint)
+            except (OSError, EOFError) as exc:
+                raise JournalError("Reviewed checkpoint gzip is invalid") from exc
+        bootstrap = strict_load(raw_checkpoint)
+        validate_checkpoint(bootstrap)
         token = os.environ.get("GITHUB_TOKEN", "")
         require(bool(token), "Read-only GitHub token is required")
         reader = GitHubReader(token)
@@ -100,6 +105,10 @@ def main() -> None:
                                              current_run=os.environ.get("GITHUB_RUN_ID", ""), upload_steps=upload_steps,
                                              explicit_checkpoint=bootstrap)
         validate_snapshot(state)
+        parity = verify_legacy_parity(state["projection"]["states"], args.output_dir / "legacy-parity-work")
+        receipt["legacy_parity"] = parity["status"]
+        receipt["legacy_domain_count"] = len(parity["domains"])
+        _atomic_write(args.output_dir / "legacy_parity.json", canonical(parity) + b"\n")
         _atomic_write(args.output_dir / "snapshot.json", canonical(state) + b"\n")
         _atomic_write(args.output_dir / "receipt.json", canonical(receipt) + b"\n")
         print(json.dumps(receipt))

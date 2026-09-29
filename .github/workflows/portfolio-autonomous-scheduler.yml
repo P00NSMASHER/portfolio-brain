@@ -200,7 +200,7 @@ jobs:
           exit 1
       - name: Capture immutable state transition event
         id: journal_event
-        if: ${{ always() && vars.PORTFOLIO_STATE_JOURNAL_ENABLED == 'true' }}
+        if: ${{ always() }}
         env:
           JOURNAL_PUBLISHED_DOMAINS: >-
             {"heartbeat": ${{ steps.journal_upload_heartbeat.outcome == 'success' }}, "hunter": ${{ steps.journal_upload_hunter.outcome == 'success' }}, "proposals": ${{ steps.journal_upload_proposals.outcome == 'success' }}, "reviews": ${{ steps.journal_upload_reviews.outcome == 'success' }}, "scheduler": ${{ steps.journal_upload_scheduler.outcome == 'success' }}}

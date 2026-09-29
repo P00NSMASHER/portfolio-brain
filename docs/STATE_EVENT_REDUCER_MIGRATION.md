@@ -2,15 +2,19 @@
 
 ## Actual status
 
-This candidate implements the event/reducer **shadow pilot**, not the completed
-production migration. Step 1 remains the active serialization design. No existing
-state publisher or reader is removed; no production authority, budget, scheduling
-cadence, customer action, rights setting, or repository variable is changed.
+This candidate advances the event/reducer work to a **live shadow parity**
+stage, not the production cutover. Step 1 remains the active production
+serialization design. Legacy publishers/readers still carry production authority;
+budgets, schedules, permissions, kill switches and external-action boundaries are
+unchanged.
 
-The new path is gated by `PORTFOLIO_STATE_JOURNAL_ENABLED`. This PR does not enable
-that variable. It does not include an invented `CHECKPOINT.json`. Initialization
-requires a separately reviewed explicit checkpoint and an owner workflow dispatch.
-The reducer refuses to initialize automatically when canonical state is absent.
+Shadow event capture is now always instrumented on admitted state-producing runs.
+A reviewed `CHECKPOINT.json.gz` is generated from all eleven legacy domains by
+their existing production restore/validation modules. The checkpoint is source
+bound and its artifact scan boundary is explicit. The sole reducer must replay all
+new events and then prove all eleven projected domain hashes equal the still-live
+legacy state while holding `portfolio-state-writer-v1`; otherwise it publishes no
+shadow snapshot.
 
 ## Implemented path
 
@@ -74,22 +78,30 @@ if the pinned source archives expire. It does not substitute different data.
 
 ## Required before Step 2 can be called complete
 
-- Capture a consistent, source-bound checkpoint for all eleven state domains.
-  Bind initialization and the artifact scan boundary to that checkpoint.
-- Run the new emitters and reducer on real production deliveries; verify full
-  projection parity, retries, interrupted/partial publication, and restoration.
-- Enroll the actual caller of the reusable software-factory workflow. Unknown
-  caller paths are intentionally denied, not inferred from an artifact name.
-- Implement lossless journal archival/checkpoint rotation and a proved bounded
-  snapshot-selection window. The pilot currently blocks at 16 MiB, 2,000 retained
-  events, 20 artifact pages, 20 candidate snapshots, or its 100-request read budget.
-  It never prunes unseen events or makes up a fresh seed to stay green.
-- Switch readers and publishers together. Preserve durable paid reservations and
-  prevent a producer from acting on stale state while a previous event awaits
-  reduction. Do not remove the global mutex or legacy path before that barrier is
-  proven. Recovery after a paid worker interruption must remain conservative.
-- Verify the integrated exact revision and a live Hunter→Scheduler→Runtime cycle
-  after the cutover, then retire legacy writers without deleting their evidence.
+Completed in this candidate:
+- A source-bound checkpoint for all eleven state domains is generated through the
+  existing production restore/validation code. The scan boundary is bound to that
+  checkpoint, and checkpoint integrity is covered by regression tests.
+- A mandatory legacy-parity gate blocks shadow publication when even one domain
+  differs. The shadow reducer remains the only shadow snapshot publisher.
+
+Still required:
+- Merge this exact candidate through protected CI/verifier gates and exercise real
+  producer → immutable-event → reducer → restore parity on main. The one-shot
+  smoke workflow dispatches the existing Hunter, Scheduler, Runtime and heartbeat
+  workflow_dispatch entrypoints sequentially; it does not add forbidden push
+  fan-out to Scheduler or heartbeat.
+- Exercise retries, partial/interrupted publication and restoration in the live
+  stream. A failed producer may preserve a domain it really published, but cannot
+  claim successful business work.
+- The reusable software-factory workflow has no observed recent live runs; its
+  unknown caller therefore remains fail-closed rather than receiving invented
+  authority. Enroll a real caller only when one exists and can be provider-bound.
+- Finish lossless archival/checkpoint rotation before the finite event/byte/API
+  bounds can be reached; evidence must never be silently pruned.
+- Switch readers and publishers together with a stale-state barrier, preserve paid
+  reservation semantics, prove the replacement Hunter→Scheduler→Runtime loop, and
+  only then retire legacy state publication without deleting its evidence.
 
 Steps 3–8 have not been started. Technical replay provides no market or revenue
 credit. This checkpoint does not claim the complete Portfolio Brain is functional.

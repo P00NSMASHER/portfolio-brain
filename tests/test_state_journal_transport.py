@@ -1,5 +1,6 @@
 """Provider-bound source admission and real emitter integration tests."""
 import copy
+import gzip
 import hashlib
 import io
 import json
@@ -10,10 +11,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agents.heartbeat_state import seed_state
-from state_journal.contracts import JournalError, PRODUCERS, digest, validate_source_evidence
+from state_journal.contracts import DOMAINS, JournalError, PRODUCERS, digest, strict_load, validate_source_evidence
+from state_journal import legacy_parity, smoke_dispatch
 from state_journal.emitter import capture
 from state_journal.events import make_change, make_event
-from state_journal.reducer import checkpoint, make_snapshot
+from state_journal.reducer import checkpoint, make_snapshot, validate_checkpoint
 from state_journal.transport import (EVENT_PREFIX, EMIT_STEP, UPLOAD_STEP, REPO_ID, REPOSITORY,
                                      GitHubReader, extract_json, validate_provider_event)
 from state_journal.github_reducer import reduce_from_provider
@@ -145,10 +147,31 @@ class StateJournalTransportTests(unittest.TestCase):
         self.assertEqual(state['sequence'],0)
         self.assertFalse(receipt['production_authority'])
 
-    def test_producer_schedules_budgets_and_legacy_persistence_are_not_removed(self):
+    def test_checked_in_checkpoint_is_source_bound_and_complete(self):
+        doc=strict_load(gzip.decompress((ROOT/'state_journal/CHECKPOINT.json.gz').read_bytes()))
+        validate_checkpoint(doc)
+        self.assertEqual(set(doc['states']),set(DOMAINS))
+        self.assertEqual(set(doc['source_refs']),set(DOMAINS))
+        self.assertTrue(all('github-actions:' in ref or 'repo-seed:' in ref for ref in doc['source_refs'].values()))
+
+    def test_legacy_parity_rejects_one_domain_drift(self):
+        doc=strict_load(gzip.decompress((ROOT/'state_journal/CHECKPOINT.json.gz').read_bytes()))
+        same=copy.deepcopy(doc['states'])
+        refs={k:'fixture:'+k for k in same}
+        with patch.object(legacy_parity,'restore_all',return_value=(same,refs)):
+            self.assertEqual(legacy_parity.verify(doc['states'],Path('unused'))['status'],'PASS')
+        drift=copy.deepcopy(same)
+        domain=next(iter(sorted(drift)))
+        drift[domain]['sequence']+=1
+        with patch.object(legacy_parity,'restore_all',return_value=(drift,refs)):
+            with self.assertRaisesRegex(JournalError,'LEGACY_PARITY_MISMATCH'):
+                legacy_parity.verify(doc['states'],Path('unused'))
+
+    def test_live_shadow_instrumentation_keeps_legacy_authoritative(self):
         for producer in PRODUCERS:
             text=(ROOT/'.github/workflows'/f'{producer}.yml').read_text()
-            self.assertIn('PORTFOLIO_STATE_JOURNAL_ENABLED',text)
+            self.assertNotIn('PORTFOLIO_STATE_JOURNAL_ENABLED',text)
+            self.assertIn('if: ${{ always() }}',text)
             self.assertIn('overwrite: false',text)
             self.assertIn('python -m state_journal.emitter --producer '+producer,text)
             for domain,name in UPLOADS[producer].items():
@@ -164,7 +187,28 @@ class StateJournalTransportTests(unittest.TestCase):
         self.assertIn('group: portfolio-state-writer-v1',text)
         self.assertNotIn('contents: write',text)
         self.assertIn('persist-credentials: false',text)
-        self.assertIn('PORTFOLIO_STATE_JOURNAL_ENABLED',text)
+        self.assertNotIn('PORTFOLIO_STATE_JOURNAL_ENABLED',text)
+        self.assertIn('legacy_parity.json',text)
+
+    def test_shadow_smoke_uses_existing_dispatch_entrypoints_only(self):
+        self.assertEqual(smoke_dispatch.TARGETS,(
+            'hunter-autonomous-cycle.yml','portfolio-autonomous-scheduler.yml',
+            'runtime-hourly-sync.yml','agent-heartbeat-sweep.yml'))
+        workflow=(ROOT/'.github/workflows/step2-shadow-smoke.yml').read_text()
+        self.assertIn('actions: write',workflow)
+        self.assertIn('contents: read',workflow)
+        self.assertNotIn('contents: write',workflow)
+        self.assertIn('persist-credentials: false',workflow)
+        self.assertIn('python -m state_journal.smoke_dispatch',workflow)
+        for name in ('portfolio-autonomous-scheduler.yml','agent-heartbeat-sweep.yml'):
+            text=(ROOT/'.github/workflows'/name).read_text()
+            self.assertNotIn('\n  push:',text)
+
+    def test_smoke_dispatch_requires_exact_merged_sha(self):
+        source=(ROOT/'state_journal/smoke_dispatch.py').read_text()
+        self.assertIn('row.get("head_sha") == expected_sha',source)
+        self.assertIn('row.get("event") == "workflow_dispatch"',source)
+        self.assertNotIn('repository_dispatch',source)
 
     def test_incomplete_artifact_pagination_cannot_be_treated_as_complete(self):
         reader=object.__new__(GitHubReader)
