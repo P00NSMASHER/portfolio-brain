@@ -14,7 +14,7 @@ class OwnerLicensePolicyTests(unittest.TestCase):
         self.assertEqual(len(validate()["controls"]),9)
         self.assertFalse(license_review_required())
 
-    def test_challenger_no_license_reaches_review_but_not_promotion(self):
+    def test_license_admission_does_not_replace_independent_technical_evidence(self):
         d,adapter,replay,canary=fixtures.ChampionChallengerTests().happy_inputs()
         rights=fixtures.no_license_rights(d)
         before=copy.deepcopy(rights)
@@ -23,7 +23,7 @@ class OwnerLicensePolicyTests(unittest.TestCase):
         stage=assessment["stages"][1]
         self.assertEqual(stage["stage"],"RIGHTS_POLICY_ADMISSION")
         self.assertEqual(stage["license_admission"]["status"],"OPERATOR_ASSUMED")
-        self.assertTrue(assessment["eligible_for_human_promotion_review"])
+        self.assertFalse(assessment["eligible_for_human_promotion_review"])
         self.assertFalse(assessment["automatic_promotion_allowed"])
         self.assertFalse(assessment["authority_granted"])
         self.assertFalse(assessment["active_policy_changed"])

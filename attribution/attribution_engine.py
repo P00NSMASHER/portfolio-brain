@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
+from copy import deepcopy
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 from statistics import median
 from typing import Any, Iterable
+from verification.evidence import canonical, resolve_claim, exact_sha, EvidenceResolver
 
 ROOT = Path(__file__).resolve().parents[1]
 STAGES = (
@@ -31,7 +34,7 @@ def _req(ok: bool, msg: str) -> None:
         raise AttributionError(msg)
 
 def _canon(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return canonical(value)
 
 def _hash(value: Any) -> str:
     return "sha256:" + hashlib.sha256(_canon(value).encode("utf-8")).hexdigest()
@@ -61,7 +64,7 @@ def _validate_record(record: dict[str, Any]) -> None:
     _time(record["event_time"], "event_time")
     _req(record["evidence_state"] in EVIDENCE_STATES, "evidence_state invalid")
     _req(record["result"] in RESULTS, "result invalid")
-    _req(isinstance(record["cost_usd"], (int, float)) and record["cost_usd"] >= 0, "cost_usd invalid")
+    _req(type(record["cost_usd"]) in (int, float) and math.isfinite(record["cost_usd"]) and record["cost_usd"] >= 0, "cost_usd invalid")
     _req(type(record["model_calls"]) is int and record["model_calls"] >= 0, "model_calls invalid")
     _req(record["failure_cause"] is None or (isinstance(record["failure_cause"], str) and record["failure_cause"]), "failure_cause invalid")
     refs = record["provenance_refs"]
@@ -92,7 +95,7 @@ def _validated(records: Iterable[dict[str, Any]]) -> tuple[list[dict[str, Any]],
         _req(p["project_id"] == row["project_id"], "project identity changed across attribution chain")
         _req(_time(p["event_time"], "parent event_time") <= _time(row["event_time"], "event_time"), "child predates parent")
         children[parent].append(row["record_id"])
-    return sorted(rows, key=lambda r: (r["event_time"], r["record_id"])), by_id, children
+    return sorted(rows, key=lambda r: (_time(r["event_time"], "event_time"), r["record_id"])), by_id, children
 
 def _descendants(record_id: str, children: dict[str, list[str]]) -> set[str]:
     seen: set[str] = set()
@@ -178,8 +181,14 @@ def _profile(rows: list[dict[str, Any]], all_by_id: dict[str, dict[str, Any]], c
         "evidence_record_ids": sorted(ids),
     }
 
-def build_attribution_snapshot(records: Iterable[dict[str, Any]], generated_at: str | None = None) -> dict[str, Any]:
-    rows, by_id, children = _validated(records)
+def build_attribution_snapshot(records: Iterable[dict[str, Any]], generated_at: str | None = None, *, provenance: dict[str, Any] | None = None) -> dict[str, Any]:
+    rows, by_id, children = _validated(deepcopy(list(records)))
+    if generated_at is not None:
+        _req(all(_time(r["event_time"], "event_time") <= _time(generated_at, "generated_at") for r in rows), "snapshot predates input record")
+    provenance = deepcopy(provenance) if provenance is not None else {"input_ref": None, "source_revision_sha": None, "evaluator_revision_sha": None}
+    _req(isinstance(provenance, dict) and set(provenance) == {"input_ref", "source_revision_sha", "evaluator_revision_sha"}, "snapshot provenance schema mismatch")
+    if any(v is not None for v in provenance.values()):
+        _req(isinstance(provenance["input_ref"], str) and bool(provenance["input_ref"]) and exact_sha(provenance["source_revision_sha"]) and exact_sha(provenance["evaluator_revision_sha"]), "complete exact-revision snapshot provenance required")
     group_fields = ("agent_id","project_id","source_id")
     groups: dict[str, dict[str, Any]] = {}
     for field in group_fields:
@@ -189,7 +198,11 @@ def build_attribution_snapshot(records: Iterable[dict[str, Any]], generated_at: 
         groups[field] = {key: _profile(bucket[key], by_id, children) for key in sorted(bucket)}
 
     body = {
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
+        "input_records": rows,
+        "input_manifest_hash": _hash(rows),
+        "provenance": provenance,
+        "input_evidence_state": "UNVERIFIED_UNTIL_RESOLVED",
         "generated_at": generated_at,
         "mode": "ADVISORY_EVIDENCE_ONLY",
         "opaque_score_used": False,
@@ -204,7 +217,7 @@ def build_attribution_snapshot(records: Iterable[dict[str, Any]], generated_at: 
     }
     return {**body, "attribution_hash": _hash(body)}
 
-def allocator_dimensions(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _dimensions(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     _req(snapshot.get("mode") == "ADVISORY_EVIDENCE_ONLY", "invalid attribution snapshot")
     _req(snapshot.get("opaque_score_used") is False, "opaque attribution score forbidden")
     projects = snapshot["groups"]["project_id"]
@@ -217,9 +230,25 @@ def allocator_dimensions(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {project_id: {key: profile[key] for key in allowed} for project_id, profile in projects.items()}
 
 def validate_snapshot(snapshot: dict[str, Any]) -> None:
-    _req(snapshot.get("mode") == "ADVISORY_EVIDENCE_ONLY", "attribution mode changed")
-    _req(snapshot.get("opaque_score_used") is False, "opaque score introduced")
-    _req(set(snapshot.get("groups", {})) == {"agent_id","project_id","source_id"}, "attribution group dimensions changed")
-    body = dict(snapshot)
-    given = body.pop("attribution_hash", None)
-    _req(given == _hash(body), "attribution_hash mismatch")
+    _req(isinstance(snapshot, dict) and snapshot.get("schema_version") == "2.0.0", "legacy/incomplete attribution snapshot")
+    _req(all(k in snapshot for k in ("input_records", "generated_at", "provenance")), "snapshot source records required")
+    expected = build_attribution_snapshot(snapshot["input_records"], snapshot["generated_at"], provenance=snapshot["provenance"])
+    _req(_canon(snapshot) == _canon(expected), "attribution source/summary/hash contradiction")
+
+
+def preview_dimensions(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Unverified descriptive preview; never an allocator admission path."""
+    validate_snapshot(snapshot)
+    return {"mode": "UNVERIFIED_PREVIEW", "projects": _dimensions(snapshot)}
+
+
+def allocator_dimensions(snapshot: dict[str, Any], *, resolver: EvidenceResolver | None = None) -> dict[str, dict[str, Any]]:
+    validate_snapshot(snapshot)
+    _req(resolver is not None, "trusted resolver required before allocator exposure")
+    p = snapshot["provenance"]
+    subject = {"input_manifest_hash": snapshot["input_manifest_hash"], "source_revision_sha": p["source_revision_sha"], "evaluator_revision_sha": p["evaluator_revision_sha"]}
+    _req(exact_sha(subject["source_revision_sha"]) and exact_sha(subject["evaluator_revision_sha"]), "allocator source/evaluator revision required")
+    result = resolve_claim(resolver, p["input_ref"], kind="ATTRIBUTION_INPUTS", subject=subject)
+    _req(result.scope == "PROVIDER_VERIFIED", "synthetic evidence cannot feed allocation")
+    _req(_canon(result.record["measurements"]) == _canon({"records": snapshot["input_records"]}), "attribution source records mismatch")
+    return _dimensions(snapshot)

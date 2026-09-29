@@ -55,31 +55,30 @@ def rights(d):
 def main():
     d=discovery()
     rr=rights(d)
-    adapter=build_adapter_receipt(
-      adapter_id="isolated-adapter-demo",
-      discovery=d,
-      evidence_refs=["test-receipt:adapter-pass"],
-    )
+    candidate_id="CHL-"+__import__("hashlib").sha256((d["candidate_fingerprint"]+"\0"+d["revision"]).encode()).hexdigest()[:20].upper()
     cycles=[
       cycle(1,cost=2.0,calls=2,api=3,jobs=2),
       cycle(2,cost=3.0,calls=3,api=4,jobs=3,duplicate=True,inconclusive=True),
       cycle(3,cost=2.0,calls=2,api=3,jobs=2),
     ]
     replay_receipt=replay(cycles,{
-      "candidate_id":"shadow-candidate-demo",
+      "candidate_id":candidate_id,
       "max_estimated_cost_usd":2.0,
       "max_planned_model_calls":2,
       "max_planned_api_calls":3,
       "max_planned_github_jobs":2,
       "suppress_duplicate_candidates":True,
-    })
+    }, provenance={"input_ref":"fixture:replay", "source_revision_sha":d["revision"], "evaluator_revision_sha":"e"*40})
+    adapter=build_adapter_receipt(adapter_id="isolated-adapter-demo", discovery=d, evidence_refs=["test-receipt:adapter-pass"], candidate_policy_hash=replay_receipt["candidate_policy_hash"], evaluator_revision_sha="e"*40)
     metrics=derive_replay_metrics(replay_receipt)
     assert metrics["beats_champion"] is True
-    candidate_id="CHL-"+__import__("hashlib").sha256((d["candidate_fingerprint"]+"\0"+d["revision"]).encode()).hexdigest()[:20].upper()
     canary=build_forward_canary_receipt(
       candidate_id=candidate_id,
-      evidence_refs=["canary:forward-shadow-pass"],
+      evidence_refs=["fixture:canary-1", "fixture:canary-2", "fixture:canary-3"],
       observed_cycles=3,
+      candidate_policy_hash=replay_receipt["candidate_policy_hash"],
+      source_revision_sha=d["revision"],
+      evaluator_revision_sha="e"*40,
     )
     assessment=assess_candidate(
       discovery=d,
@@ -89,11 +88,12 @@ def main():
       forward_canary_receipt=canary,
     )
     validate_assessment(assessment)
-    assert assessment["decision"]=="ELIGIBLE_FOR_HUMAN_PROMOTION_REVIEW"
+    assert assessment["decision"]=="REMAIN_SHADOW_BLOCKED"
+    assert assessment["evidence_scope"]=="UNRESOLVED"
     assert assessment["automatic_promotion_allowed"] is False
     assert assessment["active_policy_changed"] is False
     assert assessment["authority_granted"] is False
-    print("champion/challenger validation: PASS")
+    print("champion/challenger structural validation: PASS; production evidence remains UNRESOLVED")
 
 if __name__=="__main__":
     main()
