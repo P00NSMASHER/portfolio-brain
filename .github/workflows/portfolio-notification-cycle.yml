@@ -48,6 +48,9 @@ jobs:
       - name: Restore canonical scheduler state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m state_journal.production_reader --domain scheduler --output scheduler/live/scheduler_state.json
+      - name: Restore canonical cost-governor state
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: python -m state_journal.production_reader --domain cost --output cost_governor/live/cost_state.json
       - name: Build evidence-gated alerts
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-

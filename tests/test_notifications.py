@@ -1,4 +1,5 @@
 import copy,os,unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from cost_governor.cost_governor import load_state as load_cost_state
@@ -75,6 +76,14 @@ class NotificationTests(unittest.TestCase):
             _,receipt=notification_cycle(load_state(),at=AT,sources=base_sources())
         alert=next(x for x in receipt["emitted_alerts"] if x["kind"]=="COST_HARD_STOP")
         self.assertEqual(alert["severity"],"CRITICAL")
+
+    def test_workflow_restores_canonical_cost_state_before_building_alerts(self):
+        workflow=(Path(__file__).resolve().parents[1]/".github/workflows/portfolio-notification-cycle.yml").read_text()
+        restore="python -m state_journal.production_reader --domain cost --output cost_governor/live/cost_state.json"
+        build="python -m notifications.notification_engine"
+        self.assertIn(restore,workflow)
+        self.assertIn("--cost-state cost_governor/live/cost_state.json",workflow)
+        self.assertLess(workflow.index(restore),workflow.index(build))
 
     def test_unverified_outcome_does_not_alert(self):
         src=base_sources()
