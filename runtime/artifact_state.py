@@ -75,23 +75,36 @@ def _runtime_state_subsumes(
     winner_receipt: dict,
     other_state: dict,
 ) -> bool:
-    if winner_state["sequence"] != other_state["sequence"]:
+    # Observation recovery is not permission to discard learned/synthesized
+    # results or any other semantic state outside the observation projection.
+    observation_fields = {"updated_at", "last_cycle_id", "repositories", "recent_cycles"}
+    if ({key: value for key, value in winner_state.items() if key not in observation_fields}
+            != {key: value for key, value in other_state.items() if key not in observation_fields}):
         return False
     if winner_state["recent_cycles"][:-1] != other_state["recent_cycles"][:-1]:
         return False
     if _utc(winner_receipt["finished_at"]) <= _utc(other_state["updated_at"]):
         return False
-    observations = {
-        row.get("repository_id"): row
-        for row in winner_receipt.get("observations", [])
-        if isinstance(row, dict)
-    }
+    rows = winner_receipt.get("observations", [])
+    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+        return False
+    observations = {row.get("repository_id"): row for row in rows}
+    if len(observations) != len(rows):
+        return False
     if set(winner_state["repositories"]) != set(other_state["repositories"]):
         return False
     for rid, other in other_state["repositories"].items():
         current = winner_state["repositories"][rid]
         if current["source_ref"] != other["source_ref"] or current["status"] != other["status"]:
             return False
+        if current != other:
+            observation = observations.get(rid)
+            if (not observation or observation.get("status") not in {"CHANGED", "UNCHANGED"}
+                    or observation.get("source_ref") != current["source_ref"]
+                    or observation.get("current_sha") != current["cursor_sha"]
+                    or observation.get("observed_at") != current["observed_at"]
+                    or current["observed_at"] != winner_receipt["finished_at"]):
+                return False
         if current["cursor_sha"] != other["cursor_sha"]:
             observation = observations.get(rid)
             if not observation:
