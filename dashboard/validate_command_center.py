@@ -143,7 +143,7 @@ def validate_command_center() -> dict[str, object]:
     )
     require(page.index("Verified cash, not activity.") < page.index("FIX FIRST · SYSTEM DIAGNOSTICS") < page.index("MICRO-PRODUCT FACTORY · BOUNDED BETS") < page.index("IMPROVE NEXT · EVIDENCE BACKED") < page.index('class="grid kpis"'), "revenue-first dashboard hierarchy drifted")
     require("Run upgrade" in page and "https://chatgpt.com/?prompt=" in page, "recommended upgrade action buttons missing")
-    require("Build SKU-001" in page, "diagnostic micro-product action link missing")
+    require("OWNER ACTION REQUIRED: Publish SKU-001" in page, "owner publish checkpoint missing from primary operator view")
     require("What matters right now" in page and "Money earned" in page and "Active external experiment" in page, "six-answer primary surface missing")
     require("Closest external milestone" in page and "Current blocker" in page and "Action required from you" in page and "Last verified customer / market signal" in page, "six-answer labels incomplete")
     require('id="operator-primary"' in page and 'id="advanced-content" class="advanced-content" hidden' in page, "diagnostics are not hidden behind the primary view")
