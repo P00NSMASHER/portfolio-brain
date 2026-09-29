@@ -136,24 +136,28 @@ class OperatingModeTests(unittest.TestCase):
         self.assertIn("run: exit 3",factory)
 
 
-    def test_repair_candidate_cycle_is_nonrecurring_and_cannot_merge_or_deploy(self):
+    def test_repair_candidate_cycle_is_event_driven_and_cannot_merge_or_deploy(self):
         policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
-        repair=policy["reusable_nonrecurring_workflows"]["repair-candidate-cycle"]
-        self.assertEqual(repair["trigger"],"workflow_call")
+        repair=policy["event_driven_workflows"]["repair-candidate-cycle"]
+        self.assertEqual(repair["trigger"],"workflow_run:portfolio-autonomous-scheduler:completed:main")
         workflow=(ROOT/".github/workflows/repair-candidate-cycle.yml").read_text()
-        self.assertIn("workflow_call:",workflow)
+        self.assertIn("workflow_run:",workflow)
+        self.assertIn('workflows: ["portfolio-autonomous-scheduler"]',workflow)
+        self.assertIn("types: [completed]",workflow)
+        self.assertIn('branches: ["main"]',workflow)
         self.assertNotIn("\n  schedule:",workflow)
+        self.assertNotIn("\n  workflow_call:",workflow)
         self.assertIn("group: portfolio-cost-governed-autonomy",workflow)
         self.assertIn("software_factory.model_repair_planner",workflow)
         self.assertIn("software_factory.candidate_submitter",workflow)
         self.assertIn("software_factory.complete_repair_work",workflow)
+        self.assertEqual(workflow.count("contents: write"),1)
         self.assertNotIn("pull-requests: write",workflow)
         self.assertNotIn("CREATE_PR",workflow)
         self.assertNotIn("MERGE_PR",workflow)
         scheduler=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text()
-        self.assertIn("has_repair_work",scheduler)
-        self.assertIn("uses: ./.github/workflows/repair-candidate-cycle.yml",scheduler)
-        self.assertIn("needs.schedule.outputs.has_repair_work == 'true'",scheduler)
+        self.assertNotIn("contents: write",scheduler)
+        self.assertNotIn("repair-candidate-cycle.yml",scheduler)
 
     def test_high_risk_payment_trading_deploy_merge_boundaries_remain(self):
         p=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
