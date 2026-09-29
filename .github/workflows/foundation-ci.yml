@@ -17,6 +17,11 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      candidate_artifact_id: ${{ steps.candidate_proof.outputs.artifact-id }}
+      candidate_artifact_digest: ${{ steps.candidate_proof.outputs.artifact-digest }}
+      candidate_image_ref: ${{ steps.candidate_image.outputs.image_ref }}
+      candidate_image_id: ${{ steps.candidate_image.outputs.image_id }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -100,14 +105,17 @@ jobs:
         run: |
           docker pull python:3.12-slim
           image_id=$(docker image inspect python:3.12-slim --format '{{.Id}}')
+          image_ref=$(docker image inspect python:3.12-slim --format '{{index .RepoDigests 0}}')
           echo "image_id=$image_id" >> "$GITHUB_OUTPUT"
+          echo "image_ref=$image_ref" >> "$GITHUB_OUTPUT"
       - name: Prove scheduler to candidate build on pinned real source
         run: python -m software_factory.validate_candidate_worker --image-id "${{ steps.candidate_image.outputs.image_id }}"
       - name: Upload candidate worker proof
+        id: candidate_proof
         if: ${{ always() && hashFiles('candidate-worker-proof/pilot_receipt.json') != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: candidate-worker-proof-${{ github.sha }}
+          name: candidate-worker-proof-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
           path: candidate-worker-proof/
           if-no-files-found: error
           retention-days: 30
@@ -123,5 +131,58 @@ jobs:
         with:
           name: license-admission-${{ github.sha }}
           path: hunting/out/license_admission_receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
+  candidate-replay:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download this run's exact candidate artifact
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.validate.outputs.candidate_artifact_id }}
+          path: ${{ runner.temp }}/candidate-build-input
+          merge-multiple: true
+      - name: Restore the exact producer test image
+        env:
+          IMAGE_REF: ${{ needs.validate.outputs.candidate_image_ref }}
+          EXPECTED_IMAGE_ID: ${{ needs.validate.outputs.candidate_image_id }}
+        run: |
+          python -c 'import os,re; assert re.fullmatch(r"(?:docker\.io/library/)?python@sha256:[0-9a-f]{64}", os.environ["IMAGE_REF"])'
+          docker pull "$IMAGE_REF"
+          image_id=$(docker image inspect "$IMAGE_REF" --format '{{.Id}}')
+          test "$image_id" = "$EXPECTED_IMAGE_ID"
+      - name: Replay the actual patch and prepare the factory review handoff
+        env:
+          IMAGE_ID: ${{ needs.validate.outputs.candidate_image_id }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          PRODUCER_ARTIFACT_ID: ${{ needs.validate.outputs.candidate_artifact_id }}
+          PRODUCER_ARTIFACT_DIGEST: ${{ needs.validate.outputs.candidate_artifact_digest }}
+          PROOF_INPUT: ${{ runner.temp }}/candidate-build-input
+        run: >-
+          python -m software_factory.validate_candidate_replay
+          --proof-dir "$PROOF_INPUT"
+          --image-id "$IMAGE_ID"
+          --expected-worker-head "$EXPECTED_HEAD"
+          --producer-artifact-id "$PRODUCER_ARTIFACT_ID"
+          --producer-artifact-digest "$PRODUCER_ARTIFACT_DIGEST"
+      - name: Upload replay and factory handoff proof
+        if: ${{ always() && hashFiles('candidate-replay-proof/replay_job_receipt.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidate-replay-proof-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: candidate-replay-proof/
           if-no-files-found: error
           retention-days: 30

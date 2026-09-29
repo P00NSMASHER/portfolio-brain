@@ -27,9 +27,10 @@ downstream onboarding or new spending is authorized by adding these files.
 
 A `CANDIDATE_BUILD_TESTED` result completes the candidate-building stage only.
 Every result explicitly records zero delivered improvements, no independent
-verification and no production change. The artifacts still need an independent
-verifier and the existing factory submission/PR path. Those transitions are not
-implemented by this slice. Merge, deployment, business actions, payments and
+verification and no production change. The artifacts still need independently authorized review and remote submission.
+A separate read-only CI job now replays the exported patch and prepares a local
+factory record in VERIFYING, but does not perform remote submission or approve
+its own work. Merge, deployment, business actions, payments and
 trading remain outside its authority.
 
 Production activation also requires a reviewed exact task, a pinned checked-out
@@ -60,3 +61,41 @@ permissions, schedules and kill switches are not raised or removed. Foundation
 CI retains all existing validations and gains the candidate proof under its
 existing five-minute job bound. Do not merge/deploy this branch or close issue
 #65 based on green tests alone.
+
+## Separate-job replay and factory handoff
+
+The `candidate-replay` job consumes the exact artifact ID returned by the build
+job, not the newest artifact with a matching name. It checks the current source
+revision, run, attempt, frozen task and immutable test image. Artifact-name hashes
+are not treated as source identity. The producer also retains a Git source bundle
+and task input so the proof is reproducible without a developer's working tree.
+
+`software_factory.candidate_replay` verifies receipt and log contents, applies the
+actual exported patch to a fresh Git index, compares every file and mode against
+the approved task and pinned source, and reruns baseline, candidate regression
+and the entire existing unittest suite in new isolated containers. Existing tests
+cannot be removed, altered or skipped to pass. Rehashed but contradictory output
+is rejected. The baseline still must reproduce an assertion failure, not an
+import/runtime error.
+
+After the fresh tests pass, it creates a real local Git commit and importable
+`candidate.bundle`, preserving the exact tested tree and source parent. It calls
+the existing factory enqueue/claim/commit-record APIs in an isolated temporary
+database, emits the corresponding branch/commit packets and a `factory_work.json`
+snapshot in VERIFYING, and proves the factory refuses PR creation without review.
+No production ledger is updated and no remote Git executor is invoked.
+
+The separate job is a technical cross-check, not an independently authorized
+reviewer: the implementation and workflow are still controlled by this PR. It
+must not produce a PASS approval, train a verified outcome, open a production PR,
+or enable merge/deployment. Its handoff explicitly records no remote submission,
+no independent verification and zero delivered improvements. The prepared v1
+GitHub commit packet may create a different provider commit identity; a future
+submitter must reread provider parent/tree/head and verify the actual commit before
+recording remote success. Local commit evidence must not be relabeled as that
+remote receipt.
+
+Both jobs keep read-only permissions and five-minute limits. Production task
+registry, repository onboarding, budgets, kill switches and schedules are
+unchanged. General model-generated repair and production activation remain
+unfinished.
