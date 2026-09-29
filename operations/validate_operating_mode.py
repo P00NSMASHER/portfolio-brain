@@ -201,6 +201,7 @@ def validate_operating_mode():
       "portfolio-notification-cycle":"7 */6 * * *",
       "command-center-pages":"37 * * * *",
       "agent-heartbeat-sweep":"29 */2 * * *",
+      "portfolio-liveness-watchdog":"7,37 * * * *",
     }
     req(expected["runtime-daily-learning"].split()[0] != expected["command-center-pages"].split()[0],
         "daily learning must not collide with hourly command-center publication")
@@ -231,6 +232,21 @@ def validate_operating_mode():
         scope=f"{name}::{job_id}"
         req(scope in workload["services"],f"{name} workload policy entry missing")
         req(workload["services"][scope]["concurrency_group"]==group,f"{name} workload policy lane drifted")
+    watchdog=(ROOT/".github/workflows/portfolio-liveness-watchdog.yml").read_text().lower()
+    req("actions: write" in watchdog and "contents: read" in watchdog,
+        "liveness watchdog lost minimum redispatch permission")
+    req("contents: write" not in watchdog and "pull-requests: write" not in watchdog and "issues: write" not in watchdog,
+        "liveness watchdog gained repository mutation authority")
+    req("python -m operations.workflow_liveness" in watchdog,
+        "liveness watchdog no longer invokes bounded recovery engine")
+    req("portfolio_liveness_disabled" in watchdog,
+        "liveness watchdog kill switch missing")
+    liveness=load("operations/WORKFLOW_LIVENESS_POLICY.json")
+    req(liveness["authority_class"]=="NONE" and liveness["dispatch_authority_effect"]=="NONE",
+        "liveness recovery authority widened")
+    req(liveness["max_dispatches_per_cycle"]<=2,
+        "liveness recovery dispatch bound widened")
+
     for name in ["portfolio-autonomous-scheduler","agent-heartbeat-sweep"]:
         triggers=workflow_top_level_triggers(ROOT/".github/workflows"/f"{name}.yml")
         req("push" not in triggers,f"{name} must not fan out on push")
