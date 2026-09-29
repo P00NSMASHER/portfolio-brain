@@ -299,15 +299,27 @@ class CommandCenterV4Tests(unittest.TestCase):
 
     def test_scheduler_executes_work_before_heartbeating_workers(self):
         workflow=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text()
-        self.assertIn("python -m scheduler.work_executor",workflow)
+        entrypoint="python -m scheduler.engineering_executor"
+        self.assertIn(entrypoint,workflow)
         self.assertIn("--selected-work scheduler/out/executed_work.json",workflow)
         self.assertNotIn("--selected-work scheduler/out/scheduled_work.json",workflow)
         self.assertIn("--activity-kind WORK_EXECUTION",workflow)
         self.assertIn("portfolio-hunter-state",workflow)
         self.assertLess(
-            workflow.index("python -m scheduler.work_executor"),
+            workflow.index(entrypoint),
             workflow.index("--activity-kind WORK_EXECUTION"),
         )
+        # Exercise the entrypoint instead of trusting its module name alone.
+        from scheduler import engineering_executor, work_executor
+        original_handlers=dict(work_executor.DEFAULT_HANDLERS)
+        with patch.dict(work_executor.DEFAULT_HANDLERS, original_handlers, clear=True):
+            def assert_handlers_registered():
+                self.assertIs(work_executor.DEFAULT_HANDLERS["REPAIR"],engineering_executor.repair_handler)
+                for work_type,handler in original_handlers.items():
+                    self.assertIs(work_executor.DEFAULT_HANDLERS[work_type],handler)
+            with patch.object(work_executor,"main",side_effect=assert_handlers_registered) as delegated:
+                engineering_executor.main()
+                delegated.assert_called_once_with()
 
     def test_blanket_heartbeat_is_backed_by_real_subsystem_probes(self):
         workflow=(ROOT/".github/workflows/agent-heartbeat-sweep.yml").read_text()
