@@ -116,6 +116,7 @@ class CostGovernorTests(unittest.TestCase):
         workflow=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
         self.assertIn("group: runtime-event-observe-${{ github.event_name }}-${{ github.ref }}",workflow)
         self.assertIn("cancel-in-progress: false",workflow)
+        self.assertIn("queue: max",workflow)
         for path in [
             '"dashboard/**"','"tests/**"','"operator_console/**"','"cost_governor/**"',
             '".github/workflows/command-center-pages.yml"',

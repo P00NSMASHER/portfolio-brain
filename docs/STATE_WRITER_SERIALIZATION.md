@@ -26,3 +26,6 @@ conflicting artifacts. Do not choose by upload time, delete a fork, reset a seed
 or relabel a conflicting state as valid. Drain legacy writer runs before protected
 activation, then separately verify the exact deployed revision and durable state.
 Step 2's event/reducer migration and Steps 3-8 are not implemented here.
+
+## Current-main reconciliation
+Preserve the separately integrated runtime/heartbeat recovery and its safety regressions from c4c60350. Extend its runtime-only lock to the global writer lock; do not modify recovery or conflict-resolution code. Steps 2-8 remain unstarted.
