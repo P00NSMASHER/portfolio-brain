@@ -118,7 +118,7 @@ def validate_publication() -> dict[str, object]:
     require('if [[ "$GITHUB_EVENT_NAME" == "push" ]]' in workflow, "source-change publication override missing")
     require("Verify deployed source commit" in workflow and "source-commit.txt" in workflow, "end-to-end Pages deployment proof missing")
     require("Brain improvements worth considering" in html_text and "IMPROVE NEXT · EVIDENCE BACKED" in html_text, "public recommended upgrades board missing")
-    require("Run upgrade" in html_text and "Build SKU-001" in html_text and "https://chatgpt.com/?prompt=" in html_text, "public action-button UX missing")
+    require("OWNER ACTION REQUIRED: Publish SKU-001" in html_text and "Show operations & diagnostics" in html_text, "public owner-action checkpoint or diagnostics disclosure missing")
     primary=snapshot["primary_operator_view"]
     require(set(primary)=={
         "money_earned","active_external_experiment","closest_external_milestone",
