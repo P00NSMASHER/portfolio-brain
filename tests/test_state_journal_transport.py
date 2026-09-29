@@ -200,6 +200,7 @@ class StateJournalTransportTests(unittest.TestCase):
         self.assertNotIn('contents: write',workflow)
         self.assertIn('persist-credentials: false',workflow)
         self.assertIn('python -m state_journal.smoke_dispatch',workflow)
+        self.assertIn('timeout-minutes: 12',workflow)
         for name in ('portfolio-autonomous-scheduler.yml','agent-heartbeat-sweep.yml'):
             text=(ROOT/'.github/workflows'/name).read_text()
             self.assertNotIn('\n  push:',text)
@@ -209,17 +210,33 @@ class StateJournalTransportTests(unittest.TestCase):
         self.assertIn('row.get("head_sha") == expected_sha',source)
         self.assertIn('row.get("event") == "workflow_dispatch"',source)
         self.assertNotIn('repository_dispatch',source)
+        self.assertIn('time.monotonic() + 300',source)
 
     def test_incomplete_artifact_pagination_cannot_be_treated_as_complete(self):
         reader=object.__new__(GitHubReader)
-        reader.get=lambda _: {'artifacts':[{'created_at':'2026-09-29T14:00:00Z'}]*100}
+        reader.get=lambda _: {'artifacts':[{'id':i+1,'created_at':'2026-09-29T14:00:00Z'} for i in range(100)]}
         with self.assertRaisesRegex(JournalError,'scan incomplete'):
             reader.list_recent_artifacts('2026-09-29T00:00:00Z',max_pages=1)
 
-    def test_artifact_boundary_is_explicit_and_chronological(self):
+    def test_artifact_boundary_filters_after_full_bounded_scan_even_when_order_is_scrambled(self):
         reader=object.__new__(GitHubReader)
-        reader.get=lambda _: {'artifacts':[{'created_at':'2026-09-29T14:00:00Z'},{'created_at':'2026-09-28T14:00:00Z'}]}
-        self.assertEqual(len(reader.list_recent_artifacts('2026-09-29T00:00:00Z')),1)
+        reader.get=lambda _: {'artifacts':[
+            {'id':1,'created_at':'2026-09-28T14:00:00Z'},
+            {'id':3,'created_at':'2026-09-29T15:00:00Z'},
+            {'id':2,'created_at':'2026-09-29T14:00:00Z'}]}
+        rows=reader.list_recent_artifacts('2026-09-29T00:00:00Z')
+        self.assertEqual([row['id'] for row in rows],[3,2])
+
+    def test_exact_duplicate_artifact_rows_across_pages_are_deduplicated(self):
+        reader=object.__new__(GitHubReader)
+        row={'id':7,'created_at':'2026-09-29T14:00:00Z'}
+        calls=[]
+        def get(_):
+            calls.append(1)
+            return {'artifacts':([row]*100 if len(calls)==1 else [row])}
+        reader.get=get
+        rows=reader.list_recent_artifacts('2026-09-29T00:00:00Z')
+        self.assertEqual(rows,[row])
 
     def test_policy_cannot_claim_this_partial_migration_is_production_cutover(self):
         policy=json.loads((ROOT/'state_journal/POLICY.json').read_text())
