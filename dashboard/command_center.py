@@ -634,6 +634,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
         "network_capability": "NONE",
         "data_boundary": "SANITIZED_CHECKED_IN_AND_DURABLE_ARTIFACT_STATE",
         "source_dashboard_hash": executive["snapshot_hash"],
+        "value_loop": value_loop,
+        "primary_operator_view": operator_primary,
         "publication": publication,
         "system": {
             "status": operating["status"],
