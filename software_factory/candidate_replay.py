@@ -157,7 +157,7 @@ class GitSandbox:
         result = subprocess.run(["git", "init", "--bare", str(root)], env=self.env,
                                 capture_output=True, timeout=15)
         require(result.returncode == 0, "isolated Git initialization failed")
-        self.run("fetch", "--no-tags", "--no-write-fetch-head", "--depth=1", str(checkout.resolve()), base)
+        self.run("fetch", "--no-tags", "--no-write-fetch-head", str(checkout.resolve()), base)
         require(self.run("rev-parse", base + "^{commit}").decode().strip() == base, "base revision mismatch")
         self.run("read-tree", base)
 
@@ -274,9 +274,19 @@ def replay_candidate(task: dict, *, approved_hash: str, checkout: Path,
                 raise BuildError("factory unexpectedly allowed PR without independent approval")
             git.run("update-ref", "refs/heads/" + work["branch_name"], commit)
             git.run("symbolic-ref", "HEAD", "refs/heads/" + work["branch_name"])
-            # Source is shallow but includes the exact parent and candidate.
+            # Retain source ancestry; an incomplete shallow bundle is not deliverable.
             bundle = temp / "candidate.bundle"
             git.run("bundle", "create", str(bundle), "HEAD", "refs/heads/" + work["branch_name"])
+            require(bundle.stat().st_size <= 20 * 1024 * 1024, "candidate bundle too large")
+            restored = temp / "bundle-restored.git"
+            imported = subprocess.run(["git", "clone", "--bare", str(bundle), str(restored)],
+                                      env=git.env, capture_output=True, timeout=20)
+            require(imported.returncode == 0, "candidate bundle failed clean import")
+            identity_check = subprocess.run(
+                ["git", "--git-dir=" + str(restored), "rev-parse", "HEAD", "HEAD^{tree}", "HEAD^"],
+                env=git.env, capture_output=True, timeout=10)
+            require(identity_check.returncode == 0 and identity_check.stdout.decode().splitlines()
+                    == [commit, tree, task["base_sha"]], "imported candidate identity mismatch")
             receipt = {"schema_version": 1, "status": "REPLAY_PASSED_AWAITING_INDEPENDENT_REVIEW",
                        "task_id": task["task_id"], "task_hash": approved_hash,
                        "repository": task["repository"], "base_sha": task["base_sha"],
@@ -286,7 +296,7 @@ def replay_candidate(task: dict, *, approved_hash: str, checkout: Path,
                        "replay_tests": rows, "factory_work_hash": object_hash(work),
                        "branch_packet_hash": branch_action["action_hash"],
                        "commit_packet_hash": commit_action["action_hash"],
-                       "candidate_bundle_sha256": digest(bundle.read_bytes()),
+                       "candidate_bundle_sha256": digest(bundle.read_bytes()), "bundle_import_verified": True,
                        "independent_verification": False, "remote_submission_performed": False,
                        "production_changed": False, "delivered_improvements": 0,
                        "model_calls": 0, "model_cost_usd": 0,

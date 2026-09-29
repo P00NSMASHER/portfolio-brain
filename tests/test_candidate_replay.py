@@ -36,6 +36,8 @@ class CandidateReplayTests(unittest.TestCase):
             dest = cls.repo / path
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(raw)
+        git("commit", "--allow-empty", "-m", "trusted source ancestor")
+        cls.source_parent = git("rev-parse", "HEAD").decode().strip()
         git("add", "."); git("commit", "-m", "trusted fixture")
         cls.task["base_sha"] = git("rev-parse", "HEAD").decode().strip()
         cls.approved_hash = object_hash(cls.task)
@@ -74,6 +76,7 @@ class CandidateReplayTests(unittest.TestCase):
         self.assertEqual(result["status"], "REPLAY_PASSED_AWAITING_INDEPENDENT_REVIEW")
         self.assertEqual([r["exit_code"] for r in result["replay_tests"]], [1, 0, 0])
         self.assertEqual([r["test_count"] for r in result["replay_tests"]], [2, 2, 3])
+        self.assertTrue(result["bundle_import_verified"])
         self.assertFalse(result["independent_verification"])
         self.assertFalse(result["remote_submission_performed"])
         self.assertEqual(result["delivered_improvements"], 0)
@@ -95,6 +98,8 @@ class CandidateReplayTests(unittest.TestCase):
                          result["candidate_commit_sha"])
         self.assertEqual(subprocess.check_output(["git", "-C", str(clone), "rev-parse", "HEAD^"], text=True).strip(),
                          self.task["base_sha"])
+        self.assertEqual(subprocess.check_output(["git", "-C", str(clone), "rev-parse", "HEAD^^"], text=True).strip(),
+                         self.source_parent)
         for name in ("factory_branch_action.json", "factory_commit_action.json"):
             packet = read_json(self.output, name)
             self.assertEqual(packet["action_hash"], object_hash({k: v for k, v in packet.items() if k != "action_hash"}))
