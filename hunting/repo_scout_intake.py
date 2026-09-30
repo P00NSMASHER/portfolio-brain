@@ -21,7 +21,6 @@ MAX_INTAKE=2
 MIN_TRIAGE_SCORE=35
 WORKER_PROJECTS={"HUNTER-01":["PRJ-005"]}
 SHA40=re.compile(r"^[0-9a-f]{40}$")
-ALLOWED_LICENSES={"MIT","Zlib","MPL-2.0","Apache-2.0","BSD-2-Clause","BSD-3-Clause","ISC"}
 
 class ScoutIntakeError(ValueError): pass
 def req(ok,msg):
@@ -67,7 +66,7 @@ def build_intake(queue,*,source_revision,source_path=SOURCE_PATH,prior_state=Non
         roots=row.get("root_code_signals")
         if not (isinstance(repo_name,str) and "/" in repo_name and isinstance(revision,str) and SHA40.fullmatch(revision)): continue
         if type(score) is not int or score<MIN_TRIAGE_SCORE: continue
-        if license_spdx not in ALLOWED_LICENSES: continue
+        if license_spdx is not None and not isinstance(license_spdx,str): continue
         if not isinstance(roots,list) or not roots: continue
         candidate_key=_candidate_identity(row)
         source_key=hashv({"source_repository":SOURCE_REPOSITORY,"source_revision":source_revision,"source_path":source_path,
@@ -83,9 +82,10 @@ def build_intake(queue,*,source_revision,source_path=SOURCE_PATH,prior_state=Non
           "source_key":source_key,"finding_identity":candidate_key,
           "worker_id":worker,"project_ids":WORKER_PROJECTS[worker],
           "repository_full_name":repo_name,"exact_revision":revision,
-          "published_license_spdx":row["published_license_spdx"],"triage_score":score,
+          "published_license_spdx":license_spdx,"triage_score":score,
           "status":"ELIGIBLE_FOR_EXISTING_HUNTER_INSPECTION",
-          "authority_class":"OBSERVE","rights_granted":False,"value_verified":False
+          "authority_class":"OBSERVE","rights_granted":False,"value_verified":False,
+          "reuse_authority_granted":False
         })
     if hints:
         state["sequence"]+=1;state["updated_at"]=at
@@ -95,6 +95,7 @@ def build_intake(queue,*,source_revision,source_path=SOURCE_PATH,prior_state=Non
     receipt={"schema_version":"1.0.0","status":"PASS","source_repository":SOURCE_REPOSITORY,"source_revision":source_revision,
              "source_path":source_path,"worker_id":worker,"input_candidates":len(candidates),"eligible_candidates":len(eligible),
              "selected_candidates":len(hints),"max_intake":MAX_INTAKE,"hints":hints,
+             "license_policy_ref":"hunting/LICENSE_ADMISSION_POLICY.json","license_based_blocking":False,
              "authority_granted":False,"rights_granted":False,"value_verified":False}
     receipt["receipt_hash"]=hashv(receipt)
     return state,receipt
