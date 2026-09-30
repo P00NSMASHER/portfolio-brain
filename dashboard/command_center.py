@@ -15,6 +15,7 @@ import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from governance.evidence_semantics import semantics, source_projection
 from typing import Any
 from urllib.parse import quote
 
@@ -618,6 +619,9 @@ def build_command_center_snapshot() -> dict[str, Any]:
 
     publication = {
         "mode": "AUTO_ON_RELEVANT_MAIN_PUSH_PLUS_DURABLE_STATE_EVENTS_AND_HOURLY_REFRESH",
+        "semantic_class": "SANITIZED_PUBLICATION_ONLY",
+        "production_deployment_authority": False,
+        "verification_credit": [],
         "generated_at": os.getenv("PORTFOLIO_PUBLICATION_GENERATED_AT"),
         "source_commit": os.getenv("PORTFOLIO_PUBLICATION_SOURCE_COMMIT"),
         "source_ref": os.getenv("PORTFOLIO_PUBLICATION_SOURCE_REF"),
@@ -753,6 +757,12 @@ def build_command_center_snapshot() -> dict[str, Any]:
         "agents": agents,
         "workflows": workflows,
         "state_sources": state_sources,
+        "source_evidence": [source_projection(name,row) for name,row in sorted(state_sources["sources"].items())],
+        "evidence_semantics": {
+            "heartbeat": semantics("HEARTBEAT"),
+            "notification": semantics("NOTIFICATION"),
+            "pages_publication": semantics("PAGES_PUBLICATION"),
+        },
         "telemetry": telemetry,
         "history": history,
         "runtime": {
@@ -813,6 +823,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
         "execution_truth": execution_truth,
         "notifications": {
             "mode": notification_policy["mode"],
+            "semantic_class": notification_policy.get("evidence_semantics","ALERT_ONLY_NO_VERIFICATION_CREDIT"),
+            "verification_credit": notification_policy.get("verification_credit",[]),
             "channels": notification_policy["delivery_channels"],
             "alert_record_count": len(notification_state["alert_records"]),
             "recent_delivery_count": len(notification_state["recent_deliveries"]),
@@ -833,6 +845,9 @@ def build_command_center_snapshot() -> dict[str, Any]:
         },
         "action_engine": {
             "enabled": action_policy["enabled"],
+            "human_approval_required": action_policy.get("human_approval_required",True),
+            "autonomous_execution_allowed": action_policy.get("autonomous_execution_allowed",False),
+            "core_autonomy_dependency": False,
             "authority_class": action_policy["authority_class"],
             "mode": action_policy["mode"],
             "allowed_project_ids": action_policy["allowed_project_ids"],
@@ -1249,6 +1264,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
           <td><strong>{_e(source_labels[name])}</strong><span class="sub">{_e(src.get("source_kind"))}</span></td>
           <td>{source_badge(name)}</td>
           <td class="num">{_e(src.get("state_sequence") if src.get("state_sequence") is not None else "—")}</td>
+          <td><code>{_e((src.get("state_hash") or "—")[:20])}</code></td>
           <td>{_e(src.get("artifact_created_at") or "—")}</td>
           <td>{_e(src.get("source_run_id") or "—")}</td>
           <td class="num">{_e(src.get("age_minutes") if src.get("age_minutes") is not None else "—")}</td>
@@ -1270,6 +1286,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
             <div><span>Sequence</span><strong>{_e(src.get("state_sequence") if src.get("state_sequence") is not None else "—")}</strong></div>
             <div><span>Age</span><strong>{_e(str(src.get("age_minutes")) + " min" if src.get("age_minutes") is not None else "—")}</strong></div>
             <div><span>Source run</span><strong>{_e(src.get("source_run_id") or "—")}</strong></div>
+            <div><span>State hash</span><code>{_e((src.get("state_hash") or "—")[:20])}</code></div>
           </div>
           <div class="source-mobile-time">{_e(compact_timestamp(src.get("artifact_created_at")))}</div>
         </div>
@@ -2417,7 +2434,7 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
     <article class="repair-item publication-stale" id="publication-stale" hidden><div class="repair-item-head"><span class="repair-index">!</span><div><h3>Published view is out of date</h3><p id="publication-age-detail">The latest run may differ from this snapshot.</p></div>{_badge('CHECK NOW', 'warn')}</div><a class="action-link" href="{_e(_chatgpt_action_link('Audit the latest P00NSMASHER/portfolio-brain Pages workflow and its durable state bridge against current main. The public dashboard snapshot is older than the expected hourly refresh window or has no timestamp. Check the newest run, artifact continuity, publication gate and deployment status. Repair the root cause on a branch and verify a fresh published snapshot with valid source receipts. Do not change the cost ceiling, authority gates or tests to force green.'))}" target="_blank" rel="noopener noreferrer">Fix now</a></article>
     <div class="repair-list">{repair_cards}</div>
     {('<details class="overflow-details"><summary>Show '+str(len(repair_more))+' more issue(s)</summary><div class="repair-list overflow-list">'+repair_more_cards+'</div></details>') if repair_more else ''}
-    <p class="repair-foot">A healthy badge reflects only checks supported by this snapshot. A heartbeat check alone does not prove useful work. No action runs from this public page.</p>
+    <p class="repair-foot">A healthy badge reflects only checks supported by this snapshot. Heartbeats are liveness only; notifications are alerts only; Pages is sanitized publication only. None creates technical, market, or revenue verification. No action runs from this public page.</p>
   </section>
 
   <section class="card product-factory" id="micro-products" aria-labelledby="products-title">
@@ -2452,12 +2469,12 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
 
   <section class="card" id="live-state" style="margin-bottom:14px">
     <div class="section-head">
-      <div><h2>Live State Bridge</h2><p>Newest validated durable state is restored before publication; seeds are explicit fallback only.</p></div>
+      <div><h2>Live State Bridge</h2><p>Newest validated durable state is restored before publication; seeds are explicit fallback only. Sequence, hash, age, stale and blocked state are evidence, not decoration.</p></div>
       {_badge(source_bundle["bridge_status"], _status_tone(source_bundle["bridge_status"]))}
     </div>
     <p>Bridge generated: {_e(source_bundle.get("generated_at") or "local fallback mode")}</p>
     <div class="table-wrap source-desktop"><table>
-      <thead><tr><th>Subsystem</th><th>Status</th><th class="num">Seq</th><th>Artifact time</th><th>Source run</th><th class="num">Age min</th><th>Source</th></tr></thead>
+      <thead><tr><th>Subsystem</th><th>Status</th><th class="num">Seq</th><th>State hash</th><th>Artifact time</th><th>Source run</th><th class="num">Age min</th><th>Source</th></tr></thead>
       <tbody>{source_rows}</tbody>
     </table></div>
     <div class="source-mobile">{source_cards}</div>
@@ -2465,7 +2482,7 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
 
   <section class="card" id="operations" style="margin-bottom:14px">
     <div class="section-head">
-      <div><h2>Operational Telemetry</h2><p>Durable queue, governed usage, actions, failures, agent heartbeats, and successful-cycle evidence.</p><p>Scheduled sync: {_badge(telemetry['runtime_sync_proof']['status'], _status_tone(telemetry['runtime_sync_proof']['status']))} · source run {_e(telemetry['runtime_sync_proof']['source_run_id'] or 'unknown')} · {_e(telemetry['runtime_sync_proof']['reason'].replace('_',' ').lower())}</p></div>
+      <div><h2>Operational Telemetry</h2><p>Durable queue, governed usage, actions, failures, agent heartbeats, and successful-cycle evidence. Heartbeats prove liveness/connectivity only; they never count as substantive work or verified value.</p><p>Scheduled sync: {_badge(telemetry['runtime_sync_proof']['status'], _status_tone(telemetry['runtime_sync_proof']['status']))} · source run {_e(telemetry['runtime_sync_proof']['source_run_id'] or 'unknown')} · {_e(telemetry['runtime_sync_proof']['reason'].replace('_',' ').lower())}</p></div>
       {_badge("LIVE DATA" if source_bundle["bridge_status"]=="LIVE" else source_bundle["bridge_status"], _status_tone(source_bundle["bridge_status"]))}
     </div>
     <div class="section-head" style="margin-top:16px"><div><h2>Execution Truth</h2><p>Attempted, blocked, executed, and verified are intentionally separate. {_e(execution_truth["scope_note"])}</p></div>{_badge("TRUTHFUL STATUS","neutral")}</div>

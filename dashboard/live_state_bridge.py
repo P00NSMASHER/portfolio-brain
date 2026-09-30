@@ -201,7 +201,7 @@ def build_live_state(
         else:
             source_ref = _fallback(name, state_path, now=now)
             source_kind = "CHECKED_IN_SEED"
-            freshness = "FALLBACK"
+            freshness = "BLOCKED" if restore_status.startswith("BLOCKED") else "FALLBACK"
             age = None
 
         state = json.loads(state_path.read_text(encoding="utf-8"))
@@ -218,7 +218,9 @@ def build_live_state(
             "age_minutes": age,
             "stale_after_minutes": STALE_AFTER_MINUTES[name],
             "state_sequence": state.get("sequence"),
+            "state_hash": _hash_value(state),
             "state_updated_at": state.get("updated_at"),
+            "blocked_reason": restore_status if freshness=="BLOCKED" else None,
             "error_class": error_class,
         }
 
@@ -233,7 +235,7 @@ def build_live_state(
     else:
         provider_ref=_fallback("provider",provider_path,now=now)
         provider_kind="CHECKED_IN_SEED"
-        provider_freshness="FALLBACK"
+        provider_freshness="BLOCKED" if provider_restore_status.startswith("BLOCKED") else "FALLBACK"
         provider_age=None
     provider_state=json.loads(provider_path.read_text(encoding="utf-8"))
     sources["provider"]={
@@ -243,7 +245,8 @@ def build_live_state(
       "artifact_created_at":provider_metadata.get("artifact_created_at"),
       "artifact_expires_at":provider_metadata.get("artifact_expires_at"),"age_minutes":provider_age,
       "stale_after_minutes":STALE_AFTER_MINUTES["provider"],"state_sequence":provider_state.get("sequence"),
-      "state_updated_at":provider_state.get("updated_at"),"error_class":None,
+      "state_hash":_hash_value(provider_state),"state_updated_at":provider_state.get("updated_at"),
+      "blocked_reason":provider_restore_status if provider_freshness=="BLOCKED" else None,"error_class":None,
     }
 
     cost_state=json.loads((output_dir/_state_filename("cost")).read_text())
@@ -253,7 +256,9 @@ def build_live_state(
     # observability sources (provider readiness and agent heartbeats) may still
     # be warming up without degrading an otherwise healthy control plane.
     core_statuses = {sources[name]["status"] for name in CORE_HEALTH_SOURCES}
-    if core_statuses == {"LIVE"}:
+    if "BLOCKED" in core_statuses:
+        bridge_status = "DEGRADED"
+    elif core_statuses == {"LIVE"}:
         bridge_status = "LIVE"
     elif core_statuses == {"FALLBACK"}:
         bridge_status = "FALLBACK"

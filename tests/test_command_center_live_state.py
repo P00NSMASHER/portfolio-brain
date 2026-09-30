@@ -75,6 +75,7 @@ class LiveStateBridgeTests(unittest.TestCase):
             receipt=bridge.build_live_state(output_dir=root/"live",receipt_path=root/"receipt.json",now=now)
         self.assertEqual(receipt["bridge_status"],"DEGRADED")
         self.assertEqual(receipt["sources"]["runtime"]["status"],"LIVE")
+        self.assertTrue(receipt["sources"]["runtime"]["state_hash"].startswith("sha256:"))
         self.assertEqual(receipt["sources"]["scheduler"]["status"],"LIVE")
         self.assertEqual(receipt["sources"]["hunter"]["status"],"STALE")
         self.assertEqual(receipt["sources"]["cost"]["status"],"LIVE")
@@ -141,6 +142,7 @@ class LiveStateBridgeTests(unittest.TestCase):
             self.assertTrue((root/"live"/"scheduler_state.json").exists())
         self.assertEqual(receipt["bridge_status"],"FALLBACK")
         self.assertTrue(all(x["status"]=="FALLBACK" for x in receipt["sources"].values()))
+        self.assertTrue(all(x["state_hash"].startswith("sha256:") for x in receipt["sources"].values()))
         self.assertTrue(all(x["source_run_id"] is None for x in receipt["sources"].values()))
 
 

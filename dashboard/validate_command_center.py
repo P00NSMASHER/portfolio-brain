@@ -62,7 +62,7 @@ def validate_command_center() -> dict[str, object]:
     require(snapshot["history"]["history_id"] == "portfolio-command-center-public-history-v1", "history payload missing")
     require("momentum_definition" in snapshot["history"], "project momentum definition missing")
     require(snapshot["state_sources"]["bridge_status"] in {"LIVE","STALE","DEGRADED","FALLBACK"}, "invalid live-state bridge status")
-    require(all(src["status"] in {"LIVE","STALE","FALLBACK"} for src in snapshot["state_sources"]["sources"].values()), "invalid subsystem freshness status")
+    require(all(src["status"] in {"LIVE","STALE","FALLBACK","BLOCKED"} for src in snapshot["state_sources"]["sources"].values()), "invalid subsystem freshness status")
     require(all(a["human_act_allowed"] is False for a in snapshot["agents"]), "agent human-ACT boundary drifted")
 
     require(snapshot["optimization"]["validation_architecture_freeze"] is False, "unrestricted optimization state unexpectedly refrozen")
@@ -119,6 +119,7 @@ def validate_command_center() -> dict[str, object]:
 
     action = snapshot["action_engine"]
     require(action["enabled"] is True, "bounded action engine not represented as enabled")
+    require(action["human_approval_required"] is True and action["autonomous_execution_allowed"] is False and action["core_autonomy_dependency"] is False, "external action authority is not human-gated/optional")
     require(action["authority_class"] == "ACT", "action engine authority source drifted")
     require("CUSTOMER_EMAIL" in action["allowed_action_types"], "allowed action type missing")
     require(action["sent_count"] <= action["execution_count"], "action receipt counts inconsistent")
@@ -129,9 +130,15 @@ def validate_command_center() -> dict[str, object]:
     require("gmail_message_id" not in action_serialized, "raw Gmail message id leaked")
     require("gmail_thread_id" not in action_serialized, "raw Gmail thread id leaked")
 
+    require(snapshot["publication"]["production_deployment_authority"] is False and snapshot["publication"]["verification_credit"]==[], "Pages publication semantics widened")
+    for kind in ("heartbeat","notification","pages_publication"):
+        sem=snapshot["evidence_semantics"][kind]
+        require(sem["verification_credit"]==[] and sem["technical_verification"] is False and sem["market_verification"] is False and sem["revenue_verification"] is False, f"{kind} created false verification credit")
+    require(all("state_sequence" in row and "state_hash" in row and "status" in row for row in snapshot["source_evidence"]), "source evidence truth fields missing")
     require(snapshot["snapshot_hash"].startswith("sha256:"), "snapshot hash missing")
     require("Portfolio Brain Command Center" in page, "command-center title missing")
     require("Live State Bridge" in page, "live-state bridge panel missing")
+    require("Heartbeats are liveness only" in page and "Pages is sanitized publication only" in page, "non-proof semantics not exposed on dashboard")
     require("Brain improvements worth considering" in page and "IMPROVE NEXT · EVIDENCE BACKED" in page, "recommended upgrades board missing")
     require("Verified cash, not activity." in page and "REVENUE NOT PROVEN" in page or "VERIFIED CASH EXISTS" in page, "revenue-first operator focus missing")
     require("Micro-Product Factory" in page or "MICRO-PRODUCT FACTORY" in page, "micro-product factory board missing")
