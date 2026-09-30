@@ -59,11 +59,17 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
       COPILOT_AUTO_UPDATE: "false"
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
+
+      - name: Isolate repair workflow scratch from candidate diff
+        run: |
+          set -euo pipefail
+          printf '%s\n' '/repair/out/' >> .git/info/exclude
 
       - uses: actions/setup-python@v5
         with:
