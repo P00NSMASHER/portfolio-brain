@@ -1,2 +1,3 @@
 Trigger protected canonical reducer recovery proof after sequential rerun-attempt repair. 2026-09-30.
 recovery-wake: 2026-09-30T09:02Z stale-main-observation-fork
+recovery-wake: 2026-09-30T09:25Z runtime-observe-fork-recovery
