@@ -11,7 +11,7 @@ import io
 import json
 import re
 import zipfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote
 
@@ -25,6 +25,7 @@ EVENT_PREFIX = "portfolio-state-event-v2-"
 SNAPSHOT_ARTIFACT = "portfolio-canonical-shadow-state"
 EMIT_STEP = "Capture immutable state transition event"
 UPLOAD_STEP = "Upload immutable state transition event"
+PRODUCER_RUN_OVERLAP_SECONDS = 6 * 60 * 60
 
 
 def extract_json(raw: bytes, member: str) -> dict:
@@ -320,11 +321,20 @@ class GitHubReader:
                 return sorted(selected, key=lambda row: (row["created_at"], row["id"]), reverse=True)
         raise JournalError("Artifact scan incomplete at page bound; checkpoint/archive required")
 
-    def _workflow_runs_since(self, workflow_file: str, since: str, *, max_pages: int) -> list[dict]:
+    def _workflow_runs_since(self, workflow_file: str, since: str, *, max_pages: int,
+                             until: str | None = None) -> list[dict]:
         require(re.fullmatch(r"[a-z0-9-]+\.yml", workflow_file) is not None, "Unsafe workflow file")
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Workflow boundary requires timezone")
-        encoded = quote(f">={since}", safe="")
+        upper_bound = None
+        if until is None:
+            created_filter = f">={since}"
+        else:
+            upper_bound = datetime.fromisoformat(until.replace("Z", "+00:00"))
+            require(upper_bound.tzinfo is not None and upper_bound > boundary,
+                    "Workflow upper boundary must follow lower boundary")
+            created_filter = f">={since} <{until}"
+        encoded = quote(created_filter, safe="")
         result = {}
         for page in range(1, max_pages + 1):
             response = self.get(
@@ -339,7 +349,7 @@ class GitHubReader:
                 require(isinstance(created, str), "Workflow run created_at missing")
                 at = datetime.fromisoformat(created.replace("Z", "+00:00"))
                 require(at.tzinfo is not None, "Workflow run created_at requires timezone")
-                if at < boundary:
+                if at < boundary or (upper_bound is not None and at >= upper_bound):
                     continue
                 previous = result.get(run_id)
                 if previous is not None:
@@ -431,7 +441,20 @@ class GitHubReader:
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
         for workflow in sorted(WORKFLOW_PRODUCERS):
-            for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
+            workflow_file = f"{workflow}.yml"
+            producer_runs = self._workflow_runs_since(workflow_file, event_since, max_pages=max_pages)
+            if overlap_at is not None:
+                # Include executions started before the checkpoint scan
+                # boundary if they were still running when the older snapshot
+                # began; completed runs are already covered by that snapshot.
+                overlap_start = (
+                    datetime.fromisoformat(event_since.replace("Z", "+00:00"))
+                    - timedelta(seconds=PRODUCER_RUN_OVERLAP_SECONDS)
+                ).isoformat().replace("+00:00", "Z")
+                producer_runs.extend(self._workflow_runs_since(
+                    workflow_file, overlap_start, until=event_since, max_pages=max_pages
+                ))
+            for run in producer_runs:
                 if not (
                     run.get("head_branch") == "main"
                     and run.get("status") == "completed"
