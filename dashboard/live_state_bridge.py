@@ -126,6 +126,27 @@ def _classify(meta: dict[str, Any], *, now: datetime, stale_after_minutes: int) 
     return ("STALE" if age > stale_after_minutes else "LIVE"), round(age, 1)
 
 
+def _source_state_hash(state: dict[str,Any])->str:
+    declared=state.get("state_hash")
+    if isinstance(declared,str) and declared.startswith("sha256:"):
+        return declared
+    return _hash_value(state)
+
+
+def _freshness_detail(status: str, restore_status: str, error_class: str|None)->tuple[bool,bool,str|None]:
+    stale=status=="STALE"
+    blocked=restore_status=="RESTORE_ERROR"
+    if blocked:
+        reason=error_class or "RESTORE_ERROR"
+    elif status=="FALLBACK":
+        reason="NO_VALID_DURABLE_SOURCE"
+    elif stale:
+        reason="STALE_SOURCE"
+    else:
+        reason=None
+    return stale,blocked,reason
+
+
 def apply_cost_verification(source:dict[str,Any], state:dict[str,Any], liveness:dict[str,Any]|None, *, now:datetime)->None:
     """Freshness of an actual unchanged-ledger check, never a ledger mutation."""
     if source.get("source_kind")!="GITHUB_ACTIONS_ARTIFACT" or source.get("status")=="FALLBACK" or not liveness:
@@ -146,7 +167,8 @@ def apply_cost_verification(source:dict[str,Any], state:dict[str,Any], liveness:
                and proof.get("source_run_id")==source.get("source_run_id"))
     except (ValueError,KeyError,TypeError):return
     if valid:
-        source.update(status="LIVE", freshness_basis="VERIFIED_UNCHANGED_LEDGER",
+        source.update(status="LIVE", freshness_status="LIVE", is_stale=False, blocked_reason=None,
+                      freshness_basis="VERIFIED_UNCHANGED_LEDGER",
                       last_verified_at=proof["checked_at"],verification_age_minutes=round(age,1))
 
 def build_live_state(
@@ -205,8 +227,13 @@ def build_live_state(
             age = None
 
         state = json.loads(state_path.read_text(encoding="utf-8"))
+        is_stale,is_blocked,blocked_reason=_freshness_detail(freshness,restore_status,error_class)
         sources[name] = {
             "status": freshness,
+            "freshness_status": freshness,
+            "is_stale": is_stale,
+            "is_blocked": is_blocked,
+            "blocked_reason": blocked_reason,
             "source_kind": source_kind,
             "source_ref": source_ref,
             "restore_status": restore_status,
@@ -217,6 +244,8 @@ def build_live_state(
             "artifact_expires_at": metadata.get("artifact_expires_at"),
             "age_minutes": age,
             "stale_after_minutes": STALE_AFTER_MINUTES[name],
+            "source_sequence": state.get("sequence"),
+            "source_state_hash": _source_state_hash(state),
             "state_sequence": state.get("sequence"),
             "state_updated_at": state.get("updated_at"),
             "error_class": error_class,
@@ -236,13 +265,18 @@ def build_live_state(
         provider_freshness="FALLBACK"
         provider_age=None
     provider_state=json.loads(provider_path.read_text(encoding="utf-8"))
+    provider_stale,provider_blocked,provider_blocked_reason=_freshness_detail(
+        provider_freshness,provider_restore_status,None)
     sources["provider"]={
-      "status":provider_freshness,"source_kind":provider_kind,"source_ref":provider_ref,
+      "status":provider_freshness,"freshness_status":provider_freshness,
+      "is_stale":provider_stale,"is_blocked":provider_blocked,"blocked_reason":provider_blocked_reason,
+      "source_kind":provider_kind,"source_ref":provider_ref,
       "restore_status":provider_restore_status,"source_run_id":provider_metadata.get("source_run_id"),
       "source_head_sha":provider_metadata.get("source_head_sha"),"artifact_id":provider_metadata.get("artifact_id"),
       "artifact_created_at":provider_metadata.get("artifact_created_at"),
       "artifact_expires_at":provider_metadata.get("artifact_expires_at"),"age_minutes":provider_age,
-      "stale_after_minutes":STALE_AFTER_MINUTES["provider"],"state_sequence":provider_state.get("sequence"),
+      "stale_after_minutes":STALE_AFTER_MINUTES["provider"],"source_sequence":provider_state.get("sequence"),
+      "source_state_hash":_source_state_hash(provider_state),"state_sequence":provider_state.get("sequence"),
       "state_updated_at":provider_state.get("updated_at"),"error_class":None,
     }
 
