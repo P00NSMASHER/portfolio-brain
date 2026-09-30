@@ -183,7 +183,8 @@ class ProviderArtifactFallbackTests(unittest.TestCase):
                 raise AssertionError(suffix)
 
             def archive(self, artifact_id):
-                self.assertEqual(artifact_id, 12)
+                if artifact_id != 12:
+                    raise AssertionError(artifact_id)
                 return event_raw
 
             def _run_artifacts(self, _run_id):
