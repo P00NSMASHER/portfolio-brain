@@ -228,7 +228,7 @@ class StateJournalTransportTests(unittest.TestCase):
     def test_incomplete_artifact_pagination_cannot_be_treated_as_complete(self):
         reader=object.__new__(GitHubReader)
         def get(suffix):
-            if suffix.startswith('/actions/runs?'):
+            if suffix.startswith('/actions/workflows/portfolio-state-reducer.yml/runs?'):
                 return {'workflow_runs':[]}
             return {'artifacts':[{'id':i+1,'created_at':'2026-09-29T14:00:00Z'} for i in range(100)]}
         reader.get=get
@@ -238,7 +238,7 @@ class StateJournalTransportTests(unittest.TestCase):
     def test_artifact_listing_order_violation_fails_closed(self):
         reader=object.__new__(GitHubReader)
         def get(suffix):
-            if suffix.startswith('/actions/runs?'):
+            if suffix.startswith('/actions/workflows/portfolio-state-reducer.yml/runs?'):
                 return {'workflow_runs':[]}
             return {'artifacts':[
                 {'id':1,'created_at':'2026-09-28T14:00:00Z'},
@@ -264,12 +264,16 @@ class StateJournalTransportTests(unittest.TestCase):
                  'created_at':'2026-09-29T14:01:00Z',
                  'workflow_run':{'id':101,'head_branch':'main','head_sha':'a'*40}},
         }
-        recent=[{'id':i+1,'created_at':'2026-09-29T14:30:00Z'} for i in range(99)]
-        recent.append({'id':1000,'created_at':'2026-09-29T14:00:00Z'})
+        # The older reducer starts at 14:00 and uploads at 14:01. An event
+        # arriving at 14:00:30 can have missed that reducer's input scan, so the
+        # safe overlap must begin at reducer start, not snapshot upload.
+        recent=[{'id':i+1,'created_at':'2026-09-29T14:30:00Z'} for i in range(98)]
+        recent.append({'id':999,'created_at':'2026-09-29T14:00:30Z'})
+        recent.append({'id':1000,'created_at':'2026-09-29T13:59:00Z'})
         calls=[]
         def get(suffix):
             calls.append(suffix)
-            if suffix.startswith('/actions/runs?'):
+            if suffix.startswith('/actions/workflows/portfolio-state-reducer.yml/runs?'):
                 return {'workflow_runs':reducer_runs}
             if suffix.startswith('/actions/runs/102/artifacts?'):
                 return {'artifacts':[snapshots[102]]}
@@ -283,6 +287,7 @@ class StateJournalTransportTests(unittest.TestCase):
         ids=[row['id'] for row in rows]
         self.assertIn(902,ids)
         self.assertIn(901,ids)
+        self.assertIn(999,ids)
         self.assertNotIn(1000,ids)
         self.assertEqual(sum(1 for suffix in calls if suffix.startswith('/actions/artifacts?')),1)
 
@@ -291,7 +296,7 @@ class StateJournalTransportTests(unittest.TestCase):
         row={'id':7,'created_at':'2026-09-29T14:00:00Z'}
         artifact_calls=[]
         def get(suffix):
-            if suffix.startswith('/actions/runs?'):
+            if suffix.startswith('/actions/workflows/portfolio-state-reducer.yml/runs?'):
                 return {'workflow_runs':[]}
             artifact_calls.append(suffix)
             return {'artifacts':([row]*100 if len(artifact_calls)==1 else [row])}
