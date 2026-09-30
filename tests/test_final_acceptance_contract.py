@@ -422,14 +422,14 @@ class FinalAcceptanceContractTests(unittest.TestCase):
         receipt = step21()
         receipt["candidate_head_sha"] = "c" * 40
         receipt = bind_receipt(receipt)
-        with self.assertRaisesRegex(FinalAcceptanceError, "not bound to candidate head"):
+        with self.assertRaisesRegex(FinalAcceptanceError, "not bound to exact candidate head"):
             validate_step21(receipt)
 
     def test_step22_rejects_check_not_bound_to_repair_head(self):
         receipt = step22()
         receipt["repair_head_sha"] = "c" * 40
         receipt = bind_receipt(receipt)
-        with self.assertRaisesRegex(FinalAcceptanceError, "Foundation check is not bound"):
+        with self.assertRaisesRegex(FinalAcceptanceError, "Foundation is not bound to exact candidate head"):
             validate_step22(receipt)
 
     def test_step23_rejects_duplicate_canonical_cycle_sample(self):
