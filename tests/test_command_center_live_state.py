@@ -41,9 +41,11 @@ class LiveStateBridgeTests(unittest.TestCase):
             provider_metadata=kwargs.get("provider_health_metadata_output")
             if name=="runtime" and include_provider and provider_output is not None and provider_metadata is not None:
                 Path(provider_output).write_text(json.dumps({
-                  "schema_version":"1.0.0","state_id":"portfolio-provider-readiness-state",
+                  "schema_version":"1.1.0","state_id":"portfolio-provider-readiness-state",
                   "sequence":sequence,"updated_at":created_at,"mode":"daily","status":"READY",
                   "source_analysis_status":"SUCCESS","provider_id":"openai","model_id":"gpt-5.6-terra",
+                  "configured":True,"enabled":True,"credential_ready":True,"call_verified":True,
+                  "last_successful_at":created_at,
                   "cost_gate_status":"COMMITTED","retryable":False,"provider_attempt":1,
                   "authority_granted":False,"evidence_upgraded":False,
                 })+"\n")
