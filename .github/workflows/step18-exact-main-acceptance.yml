@@ -1,0 +1,83 @@
+name: step18-exact-main-acceptance
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/step18-exact-main-acceptance.yml"
+      - "operations/render_current_system_status.py"
+      - "docs/CURRENT_SYSTEM_STATUS.md"
+      - "docs/ARCHITECTURE_CONTRACT.md"
+      - "README.md"
+      - "tests/test_current_system_status.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portfolio-step18-exact-main
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Require exact protected main
+        shell: bash
+        run: |
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git ls-remote https://github.com/P00NSMASHER/portfolio-brain.git refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+      - name: Validate generated current-system status
+        run: |
+          python -m operations.render_current_system_status --check
+          python -m unittest -v tests.test_current_system_status
+      - name: Render command center against checked-in fallback state
+        run: |
+          python -m dashboard.command_center --write-html verification/out/command-center.html --write-json verification/out/command-center.json
+      - name: Recheck protected main did not move
+        shell: bash
+        run: test "$(git ls-remote https://github.com/P00NSMASHER/portfolio-brain.git refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+      - name: Write Step 18 acceptance receipt
+        run: |
+          python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          def digest(path):
+              return "sha256:"+hashlib.sha256(Path(path).read_bytes()).hexdigest()
+          receipt={
+            "schema_version":"1.0.0",
+            "status":"PASS",
+            "acceptance":"STEP18_EXACT_MAIN",
+            "main_sha":os.environ["GITHUB_SHA"],
+            "workflow_run_id":int(os.environ["GITHUB_RUN_ID"]),
+            "generated_status_sha256":digest("docs/CURRENT_SYSTEM_STATUS.md"),
+            "architecture_contract_sha256":digest("docs/ARCHITECTURE_CONTRACT.md"),
+            "readme_sha256":digest("README.md"),
+            "generated_status_matches_authoritative_config":True,
+            "command_center_render":"PASS",
+            "authority_granted":False,
+            "mutation_performed":False,
+          }
+          Path("verification/out/step18_exact_main_acceptance.json").write_text(json.dumps(receipt,indent=2,sort_keys=True)+"\n",encoding="utf-8")
+          print(json.dumps(receipt,sort_keys=True))
+          PY
+      - name: Upload Step 18 acceptance
+        uses: actions/upload-artifact@v4
+        with:
+          name: step18-exact-main-${{ github.run_id }}-${{ github.sha }}
+          path: |
+            verification/out/step18_exact_main_acceptance.json
+            docs/CURRENT_SYSTEM_STATUS.md
+            verification/out/command-center.html
+            verification/out/command-center.json
+          if-no-files-found: error
+          retention-days: 30

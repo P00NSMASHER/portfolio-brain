@@ -2,7 +2,7 @@
 
 Autonomous portfolio intelligence control plane for PRJ-000.
 
-**Status: OPERATIONAL.** Steps 0–25 are complete. Ordinary operation runs through GitHub automation and durable machine-readable state; interactive ChatGPT is not a runtime dependency.
+**Historical baseline: OPERATIONAL.** The original Steps 0–25 build reached its operating baseline. The September 30 automation-audit remediation tracked in issue #210 is a separate acceptance track and is not implied complete by that historical status. Ordinary core operation runs through GitHub automation and durable machine-readable state; interactive ChatGPT and external connectors are not required runtime dependencies. Current configuration-derived architecture is recorded in `docs/CURRENT_SYSTEM_STATUS.md`.
 
 ## Operating mode
 
