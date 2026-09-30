@@ -13,6 +13,7 @@ from unittest.mock import patch
 from agents.heartbeat_state import seed_state
 from state_journal.contracts import DOMAINS, JournalError, PRODUCERS, digest, strict_load, validate_source_evidence
 from state_journal import legacy_parity, smoke_dispatch
+from state_journal.archive import load_active_manifest
 from state_journal.emitter import capture
 from state_journal.events import make_change, make_event
 from state_journal.reducer import checkpoint, make_snapshot, validate_checkpoint
@@ -201,13 +202,29 @@ class StateJournalTransportTests(unittest.TestCase):
         validate_checkpoint(doc)
         self.assertEqual(set(doc['states']),set(DOMAINS))
         self.assertEqual(set(doc['source_refs']),set(DOMAINS))
-        self.assertTrue(all('github-actions:' in ref or 'repo-seed:' in ref for ref in doc['source_refs'].values()))
-        self.assertEqual(doc['states']['heartbeat']['sequence'],142)
-        self.assertEqual(doc['states']['history']['sequence'],144)
-        self.assertIn('artifact=11048615497',doc['source_refs']['heartbeat'])
-        self.assertIn('artifact=11048660700',doc['source_refs']['history'])
         policy=json.loads((ROOT/'state_journal/POLICY.json').read_text())
-        self.assertEqual(policy['artifact_scan_start'],'2026-09-29T16:35:30Z')
+        active=load_active_manifest(ROOT)
+        if active is None:
+            # Pre-rollover bootstrap remains pinned to its original reviewed
+            # GitHub/seed evidence until the first protected archive candidate lands.
+            self.assertTrue(all('github-actions:' in ref or 'repo-seed:' in ref for ref in doc['source_refs'].values()))
+            self.assertEqual(doc['states']['heartbeat']['sequence'],142)
+            self.assertEqual(doc['states']['history']['sequence'],144)
+            self.assertIn('artifact=11048615497',doc['source_refs']['heartbeat'])
+            self.assertIn('artifact=11048660700',doc['source_refs']['history'])
+            self.assertEqual(policy['artifact_scan_start'],'2026-09-29T16:35:30Z')
+        else:
+            # Once rollover is active, archive validation already proves the
+            # immutable snapshot, manifest digest, compacted projection and
+            # source-ref binding. The checkpoint must match that exact manifest,
+            # never stale hard-coded pre-rollover artifact ids.
+            self.assertEqual(doc['checkpoint_hash'],active['new_checkpoint_hash'])
+            self.assertEqual(policy['artifact_scan_start'],active['artifact_scan_start'])
+            expected=(
+                f"repo-archive:{active['archive_path']}:"
+                f"{active['archive_file_sha256']}:state={active['archived_state_hash']}"
+            )
+            self.assertEqual(set(doc['source_refs'].values()),{expected})
 
     def test_legacy_parity_rejects_one_domain_drift(self):
         doc=strict_load(gzip.decompress((ROOT/'state_journal/CHECKPOINT.json.gz').read_bytes()))
