@@ -3,7 +3,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from runtime.state import bootstrap_state
+from runtime.state import advance_cycle, bootstrap_state, canonical_hash, cycle_id_for
 from state_journal.contracts import Conflict, REPOSITORY, digest
 from state_journal.events import make_change, make_event
 from state_journal.github_reducer import reduce_from_provider
@@ -101,31 +101,55 @@ class StaleMainObservationForkTests(unittest.TestCase):
         self.assertEqual(superseded["source_sha"], STALE)
         self.assertEqual(superseded["superseded_by_source_sha"], CURRENT)
 
+    def _changed_self_observation(self, *, at, current_sha):
+        prior = self.runtime["repositories"]["REPO-008"]["cursor_sha"]
+        observations = [{
+            "repository_id": "REPO-008",
+            "status": "CHANGED",
+            "source_ref": self.runtime["repositories"]["REPO-008"]["source_ref"],
+            "prior_sha": prior,
+            "current_sha": current_sha,
+            "observed_at": at,
+        }]
+        receipt = {
+            "schema_version": "1.0.0",
+            "cycle_id": cycle_id_for(
+                self.runtime, mode="observe", target_repository_id="REPO-008",
+                observations=observations,
+            ),
+            "mode": "observe",
+            "started_at": at,
+            "finished_at": at,
+            "status": "PASS",
+            "reason": None,
+            "observations": observations,
+            "api_requests": 1,
+        }
+        receipt["receipt_hash"] = canonical_hash(receipt)
+        after = advance_cycle(self.runtime, receipt)
+        return after, {"cycle_receipt": receipt}
+
+    def _self_observation_event(self, run_id, source_sha, *, at, current_sha):
+        after, proofs = self._changed_self_observation(at=at, current_sha=current_sha)
+        return make_event(
+            "runtime-worker", run_id, source_sha,
+            [make_change("runtime", self.runtime, after, proofs=proofs)],
+            run_attempt=1,
+        )
+
     def test_observed_main_head_breaks_historical_duplicate_deadlock(self):
-        # Two queued runs can start from different source commits yet observe
-        # the same later main head from the same canonical predecessor. The
-        # source-exact observation is authoritative only after proving both
-        # older source and observed head are ancestors of current main.
         observed = CURRENT
         newest_main = "d" * 40
-        stale_after = runtime_tick(self.runtime, rid="REPO-002", at="2026-09-30T08:01:00Z")
-        exact_after = runtime_tick(self.runtime, rid="REPO-002", at="2026-09-30T08:02:00Z")
-        stale = event("101", STALE, self.runtime, stale_after)
-        exact = event("102", observed, self.runtime, exact_after)
-
-        for item in (stale, exact):
-            change = next(change for change in item["changes"] if change["domain"] == "runtime")
-            receipt = change["proofs"]["cycle_receipt"]
-            receipt["cycle_id"] = "cycle-shared-observation"
-            observation = receipt["observations"][0]
-            observation["repository_id"] = "REPO-008"
-            observation["prior_sha"] = "0" * 40
-            observation["current_sha"] = observed
-            observation["source_ref"] = "main"
-            observation["status"] = "CHANGED"
-            observation.pop("observed_at", None)
-            observation.pop("receipt_hash", None)
-
+        stale = self._self_observation_event(
+            "101", STALE, at="2026-09-30T08:01:00Z", current_sha=observed
+        )
+        exact = self._self_observation_event(
+            "102", observed, at="2026-09-30T08:02:00Z", current_sha=observed
+        )
+        self.assertEqual(
+            stale["changes"][0]["proofs"]["cycle_receipt"]["cycle_id"],
+            exact["changes"][0]["proofs"]["cycle_receipt"]["cycle_id"],
+        )
         rows = [
             (self.artifact(11, stale), stale, provider(stale, 11)),
             (self.artifact(12, exact), exact, provider(exact, 12)),
@@ -145,6 +169,7 @@ class StaleMainObservationForkTests(unittest.TestCase):
                 reader, since="2026-09-30T00:00:00Z",
                 current_run="999", upload_steps={}
             )
+        self.assertEqual(candidate["projection"]["states"]["runtime"], exact["changes"][0]["after"])
         self.assertEqual(receipt["new_deliveries"], 1)
         self.assertEqual(receipt["superseded_stale_main_observation_count"], 1)
         self.assertEqual(
@@ -159,22 +184,12 @@ class StaleMainObservationForkTests(unittest.TestCase):
     def test_historical_duplicate_resolution_requires_observed_head_on_current_main(self):
         observed = CURRENT
         newest_main = "d" * 40
-        stale_after = runtime_tick(self.runtime, rid="REPO-002", at="2026-09-30T08:01:00Z")
-        exact_after = runtime_tick(self.runtime, rid="REPO-002", at="2026-09-30T08:02:00Z")
-        stale = event("101", STALE, self.runtime, stale_after)
-        exact = event("102", observed, self.runtime, exact_after)
-        for item in (stale, exact):
-            change = next(change for change in item["changes"] if change["domain"] == "runtime")
-            receipt = change["proofs"]["cycle_receipt"]
-            receipt["cycle_id"] = "cycle-shared-observation"
-            observation = receipt["observations"][0]
-            observation["repository_id"] = "REPO-008"
-            observation["prior_sha"] = "0" * 40
-            observation["current_sha"] = observed
-            observation["source_ref"] = "main"
-            observation["status"] = "CHANGED"
-            observation.pop("observed_at", None)
-            observation.pop("receipt_hash", None)
+        stale = self._self_observation_event(
+            "101", STALE, at="2026-09-30T08:01:00Z", current_sha=observed
+        )
+        exact = self._self_observation_event(
+            "102", observed, at="2026-09-30T08:02:00Z", current_sha=observed
+        )
         rows = [
             (self.artifact(11, stale), stale, provider(stale, 11)),
             (self.artifact(12, exact), exact, provider(exact, 12)),
