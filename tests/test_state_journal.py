@@ -61,6 +61,32 @@ class StateJournalTests(unittest.TestCase):
             self.assertEqual(out["states"]["heartbeat"], expected)
             self.assertEqual({e["source_run_id"] for e in out["states"]["heartbeat"]["recent_events"]}, {"101", "102"})
 
+    def test_heartbeat_continuation_accepts_lossless_merged_predecessor(self):
+        one = self.event()
+        two = self.event(
+            after=tick(
+                self.hb,
+                agent="AGT-HUNTER",
+                run="102",
+                producer="hunter-autonomous-cycle",
+                at="2026-09-29T14:00:01Z",
+            ),
+            run="102",
+            producer="hunter-autonomous-cycle",
+        )
+        merged_snapshot = advance(
+            self.empty,
+            [(one, fixture_evidence(one)), (two, fixture_evidence(two))],
+        )
+        merged = merged_snapshot["projection"]["states"]["heartbeat"]
+        continued = tick(merged, run="103", at="2026-09-29T14:00:02Z")
+        three = self.event(merged, continued, run="103")
+
+        out = advance(merged_snapshot, [(three, fixture_evidence(three))])
+
+        self.assertEqual(out["projection"]["states"]["heartbeat"], continued)
+        self.assertEqual(out["event_count"], 3)
+
     def test_runtime_fork_is_not_arbitrarily_resolved_by_event_sort_order(self):
         a = self.event(self.rt, runtime_tick(self.rt), domain="runtime")
         b = self.event(self.rt, runtime_tick(self.rt, rid="REPO-002"), run="102", domain="runtime")
