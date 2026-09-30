@@ -1,5 +1,6 @@
 import copy, json, unittest
-from learning.continuous_learning import LearningError, effective_reward, memory_key, rebuild_state, validate_observation
+from unittest.mock import patch
+from learning.continuous_learning import LearningError, effective_reward, memory_key, rebuild_from_sources, rebuild_state, validate_observation
 
 DOMAINS=["SEARCH","ENGINEERING","TEST","REGRESSION","PRODUCT","CUSTOMER","EXPERIMENT","MODEL","RESOURCE"]
 
@@ -92,5 +93,26 @@ class ContinuousLearningTests(unittest.TestCase):
     def test_invalid_ratio_rejected(self):
         o=obs(1);o["measured_numerator"]=5;o["measured_denominator"]=4
         with self.assertRaises(LearningError):validate_observation(o)
+
+    def test_checked_in_seed_cannot_masquerade_as_fresh_learning(self):
+        static=obs(99,reward=1.0)
+        static["provenance_refs"]=["seed:checked-in-learning-ledger"]
+        with patch("learning.continuous_learning._checked_in_observations",return_value=[static]):
+            state=rebuild_from_sources(None)
+        self.assertEqual(state["source_observation_count"],0)
+        self.assertEqual(state["fresh_learning_observation_count"],0)
+        self.assertEqual(state["baseline_context_observation_count"],1)
+        self.assertEqual(state["all_source_observation_count"],1)
+        self.assertEqual(state["records"],[])
+        self.assertEqual(state["provenance_class_counts"]["BASELINE_OR_SEED"],1)
+        self.assertEqual(
+            {row["provenance_class"] for row in state["source_provenance"]},
+            {"LIVE_OBSERVATION","VERIFIED_OUTCOME","PINNED_UPSTREAM","BASELINE_OR_SEED"},
+        )
+        self.assertTrue(all(
+            not row["learning_credit_eligible"]
+            for row in state["source_provenance"]
+            if row["provenance_class"] in {"PINNED_UPSTREAM","BASELINE_OR_SEED"}
+        ))
 
 if __name__=="__main__":unittest.main()
