@@ -211,7 +211,14 @@ def apply_verified_value_outcome(
     at:str|None=None,
 )->dict[str,Any]:
     validate_state(state)
+    # Validate the immutable source before checking idempotency. A malformed
+    # replay must never be accepted merely because its claimed source key was
+    # already processed.
+    validate_value_outcome(outcome)
     source_key="value-outcome:"+outcome["outcome_id"]+":"+outcome["outcome_hash"]
+    prior_prefix="value-outcome:"+outcome["outcome_id"]+":"
+    prior_keys=[key for key in state["applied_source_keys"] if key.startswith(prior_prefix)]
+    req(not prior_keys or prior_keys==[source_key],"conflicting live learning outcome identity")
     if source_key in state["applied_source_keys"]:
         return {"status":"ALREADY_APPLIED","source_key":source_key,"added_observations":0}
     rows=make_verified_learning_observations(
