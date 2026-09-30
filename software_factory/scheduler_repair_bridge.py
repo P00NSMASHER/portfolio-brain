@@ -26,7 +26,7 @@ REPOSITORY_ID = "REPO-008"
 PROJECT_ID = "PRJ-000"
 VERIFIER_AGENT_ID = "AGT-TESTER"
 TEST_COMMANDS = [
-    "python -m compileall -q portfolio-brain modules",
+    "python -m compileall -q registry events adapters truth memory graph runtime hunting learning uncertainty experiments model_router agents allocator policy_replay attribution challenger software_factory repair transfer scheduler cost_governor workload_control commercial_evidence dashboard notifications hostile canary operations action_engine operator_console value_proof verification state_journal tests",
     "python -m operations.validate_operating_mode",
     'python -m unittest discover -s tests -p "test_*.py" -v',
 ]
