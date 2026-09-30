@@ -32,6 +32,8 @@ jobs:
         run: python -m adapters.validate_adapters
       - name: Validate remediation authority boundaries
         run: python -m governance.validate_boundaries
+      - name: Validate generated current system status
+        run: python -m operations.render_current_system_status --check
       - name: Validate Step 5 truth integration
         run: python -m truth.validate_truth_integration
       - name: Validate Step 6 shared memory
