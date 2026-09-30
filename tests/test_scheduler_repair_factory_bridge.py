@@ -189,6 +189,27 @@ class SchedulerRepairFactoryBridgeTests(unittest.TestCase):
         self.assertLess(workflow.index(scratch), workflow.index("mkdir -p repair/out"))
         self.assertLess(workflow.index(scratch), workflow.index("validate-diff"))
 
+    def test_workflow_bounds_failed_builder_correction_to_exactly_one_retry(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/portfolio-autonomous-repair.yml").read_text()
+        initial = workflow.index("id: prepush")
+        prompt = workflow.index("Prepare one bounded correction prompt")
+        correction = workflow.index("Apply one bounded correction")
+        revalidate = workflow.index("Revalidate corrected repair")
+        corrected_tests = workflow.index("Run corrected deterministic pre-push verification")
+        submit = workflow.index("Submit scheduler candidate through software factory")
+        self.assertIn("_sanitize_failure_log", workflow)
+        self.assertIn("steps.prepush.outputs.passed != 'true'", workflow)
+        self.assertIn("exactly one correction pass", workflow)
+        self.assertIn("Do not modify any test file that existed at the admitted base SHA.", workflow)
+        self.assertIn("There is no further repair retry.", workflow)
+        self.assertEqual(workflow.count("--no-ask-user"), 2)
+        self.assertEqual(workflow.count("- name: Apply one bounded correction"), 1)
+        self.assertLess(initial, prompt)
+        self.assertLess(prompt, correction)
+        self.assertLess(correction, revalidate)
+        self.assertLess(revalidate, corrected_tests)
+        self.assertLess(corrected_tests, submit)
     def test_workflow_separates_builder_from_network_disabled_factory_review(self):
         root = Path(__file__).resolve().parents[1]
         workflow = (root / ".github/workflows/portfolio-autonomous-repair.yml").read_text()
