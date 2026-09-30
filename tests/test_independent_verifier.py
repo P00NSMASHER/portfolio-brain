@@ -145,6 +145,15 @@ class IndependentVerifierTests(unittest.TestCase):
         self.assertEqual(text.count("--cap-drop=ALL"),3)
         self.assertEqual(text.count("--security-opt=no-new-privileges"),3)
 
+    def test_hosted_verifier_discovers_non_package_tests_under_isolated_python(self):
+        text=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text()
+        self.assertNotIn("-t /work",text)
+        self.assertEqual(text.count('defaultTestLoader.discover("/work/tests"'),2)
+        self.assertIn('pattern="test_*.py"',text)
+        self.assertIn('pattern="test_phase1_*.py"',text)
+        self.assertGreaterEqual(text.count('sys.path.insert(0,"/work")'),3)
+        self.assertEqual(text.count("python -I -c"),3)
+
     def test_publish_check_rejects_wrong_app_attribution(self):
         response={
             "id":123,"name":"portfolio-phase1-gate","head_sha":"c"*40,
