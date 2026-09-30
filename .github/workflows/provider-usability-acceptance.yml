@@ -10,6 +10,7 @@ permissions:
 concurrency:
   group: portfolio-provider-usability-acceptance
   cancel-in-progress: false
+  queue: max
 
 jobs:
   exact_main_preflight:
@@ -89,7 +90,7 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: portfolio-runtime-state
+          pattern: portfolio-runtime-state
           path: step19/runtime
 
       - name: Locate provider-health evidence
