@@ -459,7 +459,7 @@ def find_repair_evidence(source_ref: str, token: str | None = None) -> dict[str,
     req(isinstance(token, str) and token, "GitHub token required for repair evidence")
     pulls = _http_json(f"https://api.github.com/repos/{REPOSITORY}/pulls?state=all&per_page=100", token)
     marker = re.compile(
-        rf"^(?:Source:\\s*)?REPAIR_SOURCE_REF:{re.escape(source_ref)}\\s*$",
+        rf"^(?:Source:\s*)?REPAIR_SOURCE_REF:{re.escape(source_ref)}\s*$",
         re.MULTILINE,
     )
     matches = [row for row in pulls if marker.search(row.get("body") or "")]
@@ -495,19 +495,19 @@ def find_repair_evidence(source_ref: str, token: str | None = None) -> dict[str,
         for row in checks
     ]
     body = pr.get("body") or ""
-    work_match = re.search(r"^Factory work:\\s*(\\S+)\\s*$", body, re.MULTILINE)
+    work_match = re.search(r"^Factory work:\s*(\S+)\s*$", body, re.MULTILINE)
     fingerprint_match = re.search(
-        r"^AUTO_REPAIR_FINGERPRINT:(sha256:[0-9a-f]{64})\\s*$",
+        r"^AUTO_REPAIR_FINGERPRINT:(sha256:[0-9a-f]{64})\s*$",
         body,
         re.MULTILINE,
     )
     base_match = re.search(
-        r"^(?:Base|Base SHA):\\s*([0-9a-f]{40})\\s*$",
+        r"^(?:Base|Base SHA):\s*([0-9a-f]{40})\s*$",
         body,
         re.MULTILINE,
     )
     candidate_match = re.search(
-        r"^Candidate:\\s*([0-9a-f]{40})\\s*$",
+        r"^Candidate:\s*([0-9a-f]{40})\s*$",
         body,
         re.MULTILINE,
     )
