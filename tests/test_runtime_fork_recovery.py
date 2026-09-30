@@ -4,7 +4,7 @@ import unittest
 import zipfile
 
 from runtime.artifact_restore import InvalidStateArtifact
-from runtime.artifact_state import _resolve_dominant_runtime_fork
+from runtime.artifact_state import _resolve_dominant_runtime_fork, _resolve_exact_main_observation_fork
 from runtime.state import advance_cycle, bootstrap_state, canonical_hash, cycle_id_for
 
 
@@ -45,7 +45,7 @@ def bundle(state, receipt):
     return out.getvalue()
 
 
-def candidate(artifact_id, created_at, url):
+def candidate(artifact_id, created_at, url, *, head_sha=None):
     return {
         'id': artifact_id,
         'name': 'portfolio-runtime-state',
@@ -53,7 +53,11 @@ def candidate(artifact_id, created_at, url):
         'expires_at': '2026-10-28T00:00:00Z',
         'archive_download_url': url,
         'expired': False,
-        'workflow_run': {'id': artifact_id + 100, 'head_branch': 'main', 'head_sha': str(artifact_id).zfill(40)},
+        'workflow_run': {
+            'id': artifact_id + 100,
+            'head_branch': 'main',
+            'head_sha': head_sha or str(artifact_id).zfill(40),
+        },
     }
 
 
@@ -95,6 +99,65 @@ class RuntimeForkRecoveryTests(unittest.TestCase):
             _resolve_dominant_runtime_fork(
                 data, current_run='999', expected_head_branch='main', download=payloads.__getitem__,
                 max_archive_bytes=100000, max_member_bytes=50000,
+            )
+
+    def test_exact_current_main_observe_supersedes_ancestor_observe_fork(self):
+        base = bootstrap_state(now='2026-09-28T08:00:00Z')
+        parent_receipt = make_receipt(base, mode='sync', finished_at='2026-09-28T09:00:00Z', observations=[])
+        parent = advance_cycle(base, parent_receipt)
+        stale_rows = [observation(parent, 'REPO-008', '2026-09-28T10:00:00Z')]
+        exact_rows = [observation(parent, 'REPO-008', '2026-09-28T10:01:00Z')]
+        stale_receipt = make_receipt(parent, mode='observe', finished_at='2026-09-28T10:00:00Z', observations=stale_rows)
+        exact_receipt = make_receipt(parent, mode='observe', finished_at='2026-09-28T10:01:00Z', observations=exact_rows)
+        stale_state = advance_cycle(parent, stale_receipt)
+        exact_state = advance_cycle(parent, exact_receipt)
+        stale_sha = 'a' * 40
+        exact_sha = 'b' * 40
+        data = {'artifacts': [
+            candidate(2, '2026-09-28T10:02:00Z', 'exact', head_sha=exact_sha),
+            candidate(1, '2026-09-28T10:01:00Z', 'stale', head_sha=stale_sha),
+        ]}
+        payloads = {'exact': bundle(exact_state, exact_receipt), 'stale': bundle(stale_state, stale_receipt)}
+        selected, fork_ids = _resolve_exact_main_observation_fork(
+            data,
+            current_run='999',
+            expected_head_branch='main',
+            current_sha=exact_sha,
+            download=payloads.__getitem__,
+            compare=lambda base_sha, head_sha: {'merge_base_commit': {'sha': base_sha}},
+            max_archive_bytes=100000,
+            max_member_bytes=50000,
+        )
+        self.assertEqual(selected['artifacts'][0]['id'], 2)
+        self.assertEqual(fork_ids, [2, 1])
+
+    def test_exact_main_observe_cannot_supersede_unrelated_source(self):
+        base = bootstrap_state(now='2026-09-28T08:00:00Z')
+        parent_receipt = make_receipt(base, mode='sync', finished_at='2026-09-28T09:00:00Z', observations=[])
+        parent = advance_cycle(base, parent_receipt)
+        rows1 = [observation(parent, 'REPO-008', '2026-09-28T10:00:00Z')]
+        rows2 = [observation(parent, 'REPO-008', '2026-09-28T10:01:00Z')]
+        receipt1 = make_receipt(parent, mode='observe', finished_at='2026-09-28T10:00:00Z', observations=rows1)
+        receipt2 = make_receipt(parent, mode='observe', finished_at='2026-09-28T10:01:00Z', observations=rows2)
+        state1 = advance_cycle(parent, receipt1)
+        state2 = advance_cycle(parent, receipt2)
+        stale_sha = 'a' * 40
+        exact_sha = 'b' * 40
+        data = {'artifacts': [
+            candidate(2, '2026-09-28T10:02:00Z', 'exact', head_sha=exact_sha),
+            candidate(1, '2026-09-28T10:01:00Z', 'stale', head_sha=stale_sha),
+        ]}
+        payloads = {'exact': bundle(state2, receipt2), 'stale': bundle(state1, receipt1)}
+        with self.assertRaisesRegex(InvalidStateArtifact, 'not ancestor'):
+            _resolve_exact_main_observation_fork(
+                data,
+                current_run='999',
+                expected_head_branch='main',
+                current_sha=exact_sha,
+                download=payloads.__getitem__,
+                compare=lambda _base_sha, _head_sha: {'merge_base_commit': {'sha': 'c' * 40}},
+                max_archive_bytes=100000,
+                max_member_bytes=50000,
             )
 
 
