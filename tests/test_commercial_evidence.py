@@ -37,7 +37,10 @@ class CommercialEvidenceTests(unittest.TestCase):
         self.assertFalse(observation["recipient_identifiers_persisted"])
 
     def test_fresh_scoped_zero_reply_is_observed_not_global_zero_or_definitive_outcome(self):
-        observation=load_current()\n        captured=datetime.fromisoformat(observation["captured_at"].replace("Z","+00:00"))\n        at=(captured+timedelta(minutes=5)).isoformat().replace("+00:00","Z")\n        projection=project_current(observation,at=at)
+        observation=load_current()
+        captured=datetime.fromisoformat(observation["captured_at"].replace("Z","+00:00"))
+        at=(captured+timedelta(minutes=5)).isoformat().replace("+00:00","Z")
+        projection=project_current(observation,at=at)
         self.assertEqual(projection["evidence_status"],"CURRENT_SCOPE_OBSERVED")
         self.assertEqual(projection["current_reply_state"],"OBSERVED_NO_HUMAN_REPLY_IN_SCOPE")
         self.assertEqual(projection["current_payment_state"],"UNKNOWN")
@@ -47,7 +50,10 @@ class CommercialEvidenceTests(unittest.TestCase):
         self.assertIn("explicit Gmail query contract",projection["scope_note"])
 
     def test_stale_observation_fails_closed_to_unknown(self):
-        observation=load_current()\n        captured=datetime.fromisoformat(observation["captured_at"].replace("Z","+00:00"))\n        at=(captured+timedelta(minutes=float(policy()["max_observation_age_minutes"])+1)).isoformat().replace("+00:00","Z")\n        projection=project_current(observation,at=at)
+        observation=load_current()
+        captured=datetime.fromisoformat(observation["captured_at"].replace("Z","+00:00"))
+        at=(captured+timedelta(minutes=float(policy()["max_observation_age_minutes"])+1)).isoformat().replace("+00:00","Z")
+        projection=project_current(observation,at=at)
         self.assertEqual(projection["evidence_status"],"STALE_OR_UNAVAILABLE")
         self.assertFalse(projection["fresh"])
         self.assertEqual(projection["current_reply_state"],"UNKNOWN")
