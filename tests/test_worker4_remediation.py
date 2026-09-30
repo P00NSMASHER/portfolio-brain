@@ -66,7 +66,7 @@ class Worker4RemediationTests(unittest.TestCase):
         c=cycle([observation("REPO-008")])
         with self.assertRaisesRegex(ProjectForwardingError,"wrong-project"):
             forward_cycle(c,requested_project_id="PRJ-006")
-        for capability in ("DEPLOY","EXTERNAL_ACTION"):
+        for capability in ("CANDIDATE_PR","DEPLOY","EXTERNAL_ACTION"):
             with self.subTest(capability=capability), self.assertRaises(ProjectForwardingError):
                 forward_cycle(c,requested_capability=capability)
 
