@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from agents.heartbeat_state import seed_state
 from state_journal.contracts import DOMAINS, JournalError, PRODUCERS, digest, strict_load, validate_source_evidence
-from state_journal import legacy_parity, smoke_dispatch
+from state_journal import legacy, legacy_parity, smoke_dispatch
 from state_journal.emitter import capture
 from state_journal.events import make_change, make_event
 from state_journal.reducer import checkpoint, make_snapshot, validate_checkpoint
@@ -226,6 +226,19 @@ class StateJournalTransportTests(unittest.TestCase):
             self.assertIn('artifact=11048615497',doc['source_refs']['heartbeat'])
             self.assertIn('artifact=11048660700',doc['source_refs']['history'])
             self.assertEqual(policy['artifact_scan_start'],'2026-09-29T16:35:30Z')
+
+    def test_legacy_restore_failure_identifies_domain_without_choosing_winner(self):
+        domain = sorted(DOMAINS)[0]
+        with patch.object(
+            legacy,
+            "restore_domain",
+            side_effect=RuntimeError("conflicting state artifacts at highest sequence"),
+        ):
+            with self.assertRaisesRegex(
+                JournalError,
+                rf"LEGACY_RESTORE_FAILED:{domain}:RuntimeError:conflicting state artifacts at highest sequence",
+            ):
+                legacy.restore_all(ROOT, Path("unused"))
 
     def test_legacy_parity_rejects_one_domain_drift(self):
         doc=strict_load(gzip.decompress((ROOT/'state_journal/CHECKPOINT.json.gz').read_bytes()))
