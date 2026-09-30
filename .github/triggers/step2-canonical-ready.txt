@@ -1,1 +1,2 @@
 Trigger one protected canonical-ready reducer publication after Step-2 live parity.
+recovery-wake: 2026-09-30T08:56Z attempt-aware-rerun
