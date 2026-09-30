@@ -1,4 +1,5 @@
 name: steps10-12-live-acceptance
+# Final post-fix wake: stale pre-fix Hunter candidate closed; require fresh implementation and technical verification.
 # Acceptance wake: re-run after Step 11 checked-in seed freshness hardening.
 
 on:
