@@ -114,7 +114,7 @@ def replay(base: dict, events: list[dict]) -> dict:
                 if change["domain"] == "heartbeat" and merge_heartbeat:
                     known_heartbeat.add(change["after_hash"])
                     for batch in change["batches"]:
-                        batches[digest(batch)] = batch
+                        batches[canonical(batch)] = batch
                 elif change["domain"] == "history" and merge_history:
                     known_history.add(change["after_hash"])
                     key = change["before_hash"], change["after_hash"]
