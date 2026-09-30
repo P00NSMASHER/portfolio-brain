@@ -7,7 +7,7 @@ from runtime.artifact_http import open_url
 from runtime.artifact_restore import restore_latest_valid_state
 from runtime.project_forwarding import validate_state
 
-ARTIFACT_NAME="portfolio-runtime-state"
+ARTIFACT_NAME="portfolio-project-forwarding-state"
 class RestoreError(RuntimeError): pass
 
 def restore(output:Path,metadata_output:Path|None=None)->str:
