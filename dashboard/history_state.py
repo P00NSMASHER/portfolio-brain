@@ -96,16 +96,51 @@ def _point(telemetry:dict[str,Any],source_commit:str)->dict[str,Any]:
     return {"point_id":"HPT-"+hashlib.sha256(canon(core).encode()).hexdigest()[:20].upper(),**core}
 
 
-def append_point(state:dict[str,Any],telemetry:dict[str,Any],*,source_commit:str)->dict[str,Any]:
-    validate_state(state)
-    point=_point(telemetry,source_commit)
+def _validate_observation(point:dict[str,Any])->None:
+    fields={"point_id","bucket_at","observed_at","source_commit","metrics","project_activity"}
+    req(isinstance(point,dict) and set(point)==fields,"history observation fields changed")
+    req(point["bucket_at"]==_bucket(point["observed_at"]),"history observation bucket mismatch")
+    core={key:point[key] for key in ("bucket_at","observed_at","source_commit","metrics","project_activity")}
+    expected="HPT-"+hashlib.sha256(canon(core).encode()).hexdigest()[:20].upper()
+    req(point["point_id"]==expected,"history observation identity mismatch")
+
+
+def replay_history_observation(state:dict[str,Any],point:dict[str,Any])->dict[str,Any]:
+    """Replay one exact sanitized observation without trusting upload order."""
+    validate_state(state);_validate_observation(point)
+    if state["updated_at"] is not None:
+        req(_time(point["observed_at"])>_time(state["updated_at"]),"history observation time did not advance")
     out=json.loads(json.dumps(state))
+    point=json.loads(json.dumps(point))
     out["points"]=[p for p in out["points"] if p["bucket_at"]!=point["bucket_at"]]
     out["points"].append(point)
     out["points"].sort(key=lambda p:p["bucket_at"])
     out["points"]=out["points"][-MAX_POINTS:]
-    out["sequence"]+=1;out["updated_at"]=telemetry["generated_at"]
+    out["sequence"]+=1;out["updated_at"]=point["observed_at"]
     validate_state(out);return out
+
+
+def history_observation(before:dict[str,Any],after:dict[str,Any])->dict[str,Any]|None:
+    """Infer a transition only when one native observation reproduces it exactly."""
+    validate_state(before);validate_state(after)
+    if after["sequence"]!=before["sequence"]+1 or after["updated_at"] is None:
+        return None
+    candidates=[
+      p for p in after["points"]
+      if p["observed_at"]==after["updated_at"] and p["bucket_at"]==_bucket(after["updated_at"])
+    ]
+    if len(candidates)!=1:
+        return None
+    point=json.loads(json.dumps(candidates[0]))
+    try:
+        rebuilt=replay_history_observation(before,point)
+    except HistoryError:
+        return None
+    return point if rebuilt==after else None
+
+
+def append_point(state:dict[str,Any],telemetry:dict[str,Any],*,source_commit:str)->dict[str,Any]:
+    return replay_history_observation(state,_point(telemetry,source_commit))
 
 
 def daily_trends(state:dict[str,Any],days:int=14)->list[dict[str,Any]]:
