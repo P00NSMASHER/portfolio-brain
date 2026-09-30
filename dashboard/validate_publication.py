@@ -45,7 +45,20 @@ def validate_publication() -> dict[str, object]:
     require(snapshot["mutation_capability"] == "NONE", "public command center gained mutation capability")
     require(snapshot["network_capability"] == "NONE", "public command center gained browser network capability")
     require(set(snapshot["state_sources"]["sources"]) >= {"runtime","scheduler","hunter","cost","notifications","agents","provider","model_feedback","hunter_proposals","hunter_proposal_reviews"}, "public live-state provenance incomplete")
+    for source_name, source in snapshot["state_sources"]["sources"].items():
+        require(source.get("freshness_status")==source.get("status"), f"{source_name} freshness/status mismatch")
+        require("source_sequence" in source, f"{source_name} source sequence omitted")
+        require(isinstance(source.get("source_state_hash"),str) and source["source_state_hash"].startswith("sha256:"), f"{source_name} source state hash omitted")
+        require(type(source.get("is_stale")) is bool and type(source.get("is_blocked")) is bool, f"{source_name} stale/blocked flags omitted")
+        if source.get("status")=="STALE":
+            require(source["is_stale"] is True, f"{source_name} stale source rendered non-stale")
+        if source.get("is_blocked"):
+            require(bool(source.get("blocked_reason")), f"{source_name} blocked source lacks reason")
     require(snapshot["data_boundary"] == "SANITIZED_CHECKED_IN_AND_DURABLE_ARTIFACT_STATE", "public data boundary widened")
+    boundaries=json.loads((ROOT/"governance/boundaries.json").read_text(encoding="utf-8"))
+    require(boundaries["semantics"]["pages_publication"]=="SANITIZED_PUBLICATION_ONLY","Pages publication semantics widened")
+    require(boundaries["authority_matrix"]["PAGES_PUBLIC_PUBLICATION"]["production_deploy_authority"] is False,"Pages publication gained deployment authority")
+    require(boundaries["authority_matrix"]["PAGES_PUBLIC_PUBLICATION"]["verification_credit"]=="NONE_BY_ITSELF","Pages publication gained verification credit")
     require(snapshot["telemetry"]["authority_class"] == "OBSERVE", "public telemetry widened authority")
     require(snapshot["workload_control"]["mode"] == "GITHUB_NATIVE_WORKLOAD_CONTROL", "public workload controls missing")
     require(set(snapshot["execution_truth"]) == {"attempted","blocked","executed","verified","scope_note"}, "public execution truth missing")
