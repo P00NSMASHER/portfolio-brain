@@ -168,13 +168,20 @@ def _roll_checkpoint_forward(state: dict, checkpoint_doc: dict, manifest: dict) 
 def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
                          upload_steps: dict, explicit_checkpoint: dict | None = None,
                          explicit_run_ids: list[int] | tuple[int, ...] = (),
-                         archive_manifest: dict | None = None) -> tuple[dict, dict]:
+                         archive_manifest: dict | None = None,
+                         _include_pre_snapshot_runs: bool = False) -> tuple[dict, dict]:
     journal_reader = getattr(reader, "list_recent_journal_artifacts", None)
-    artifacts = (
-        journal_reader(since, explicit_run_ids=explicit_run_ids)
-        if journal_reader is not None
-        else reader.list_recent_artifacts(since)
-    )
+    if journal_reader is not None:
+        if _include_pre_snapshot_runs:
+            artifacts = journal_reader(
+                since,
+                explicit_run_ids=explicit_run_ids,
+                include_pre_snapshot_runs=True,
+            )
+        else:
+            artifacts = journal_reader(since, explicit_run_ids=explicit_run_ids)
+    else:
+        artifacts = reader.list_recent_artifacts(since)
     state = restore_snapshot(reader, artifacts, current_run=current_run)
     archived_events = manifest_event_hashes(archive_manifest)
     archived_artifacts = manifest_provider_artifacts(archive_manifest)
@@ -300,6 +307,17 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
     try:
         candidate = advance(state, incoming)
     except MissingPredecessor as exc:
+        if journal_reader is not None and not _include_pre_snapshot_runs:
+            return reduce_from_provider(
+                reader,
+                since=since,
+                current_run=current_run,
+                upload_steps=upload_steps,
+                explicit_checkpoint=explicit_checkpoint,
+                explicit_run_ids=explicit_run_ids,
+                archive_manifest=archive_manifest,
+                _include_pre_snapshot_runs=True,
+            )
         if archive_manifest is not None:
             raise JournalError("MISSING_REPLAY: " + str(exc)) from exc
         raise

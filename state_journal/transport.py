@@ -365,18 +365,21 @@ class GitHubReader:
         return rows
 
     def list_recent_journal_artifacts(self, since: str, *, max_pages: int = 20,
-                                      explicit_run_ids: list[int] | tuple[int, ...] = ()) -> list[dict]:
+                                      explicit_run_ids: list[int] | tuple[int, ...] = (),
+                                      include_pre_snapshot_runs: bool = False) -> list[dict]:
         """Discover only reducer snapshots and enrolled producer events.
 
         Repository-wide artifact pagination eventually becomes unbounded because
         receipts, previews, and other unrelated artifacts accumulate. Journal
         restore instead enumerates the closed workflow allowlist, validates each
-        run later through the existing provider checks, and scans events only
-        from the older of the two newest successful reducer publications.
+        run later through the existing provider checks, and normally scans only
+        the snapshot overlap. A missing predecessor can request the wider
+        history scan without weakening event validation.
         """
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
         require(type(max_pages) is int and max_pages > 0, "Artifact page bound invalid")
+        require(type(include_pre_snapshot_runs) is bool, "Historical producer scan flag invalid")
         result: dict[int, dict] = {}
 
         def retain(row: dict) -> None:
@@ -447,7 +450,7 @@ class GitHubReader:
                     finished = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
                     require(started.tzinfo is not None and finished.tzinfo is not None,
                             "Workflow run timestamps require timezone")
-                    if started < overlap_at and finished < overlap_at:
+                    if not include_pre_snapshot_runs and started < overlap_at and finished < overlap_at:
                         continue
                 for row in self._run_artifacts(run["id"]):
                     if row.get("name", "").startswith(EVENT_PREFIX):
