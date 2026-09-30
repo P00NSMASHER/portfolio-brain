@@ -60,8 +60,11 @@ def validate_scheduler():
     for token in ["contents: read","actions: write","pull-requests: read","23 * * * *","portfolio_scheduler_disabled","actions/upload-artifact@v4","cancel-in-progress: false"]:
         req(token in wf,f"scheduler workflow missing {token}")
     req("contents: write" not in wf,"scheduler gained repository write authority")
-    req("repair.autonomous_repair dispatch" in wf and "portfolio-autonomous-repair.yml" in wf,
+    executor=(ROOT/"scheduler/work_executor.py").read_text()
+    req("dispatch_requests(" in executor and "portfolio-autonomous-repair.yml" in executor,
         "scheduler autonomous repair dispatch missing")
+    req("repair.autonomous_repair dispatch" not in wf,
+        "scheduler must not dispatch the same accepted REPAIR twice")
     req("push:" not in wf,"scheduler must not fan out on push inside the singleton cost-state concurrency lane")
     req(wf.index("concurrency:",wf.index("  schedule:"))>wf.index("  schedule:"),"scheduler shared-state mutex must cover the writer job")
     runtime_event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
@@ -86,7 +89,6 @@ def validate_scheduler():
         wf.index("scheduler.same_cycle_continuation")<wf.index("hunting.proposal_review_state"),
         "same-cycle continuation must finish before proposal review persistence",
     )
-    executor=(ROOT/"scheduler/work_executor.py").read_text()
     for token in [
         "HUNTER_PROPOSAL_PUBLIC_EVIDENCE_REVIEW",
         '"rights_state":"OPERATOR_ASSUMED"',
