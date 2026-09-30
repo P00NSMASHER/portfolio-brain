@@ -270,7 +270,16 @@ def build_sentinel_snapshot(
     timeout_minutes = int(timeout_match.group(1)) if timeout_match else None
     nominal_runs = _nominal_daily_runs(cron)
 
-    readiness = provider_health.get("status", "UNKNOWN")
+    raw_readiness = provider_health.get("status", "UNKNOWN")
+    usability_verified = bool(
+        provider_health.get("configured") is True
+        and provider_health.get("enabled") is True
+        and provider_health.get("credential_ready") is True
+        and provider_health.get("call_verified") is True
+        and provider_health.get("last_successful_at")
+    )
+    # Legacy/config-only READY is not usable readiness under the v1.1 contract.
+    readiness = raw_readiness if raw_readiness != "READY" or usability_verified else "UNKNOWN"
     if readiness == "READY":
         next_paid_action = "ONE_BOUNDED_TERRA_DAILY_ANALYSIS"
     elif readiness == "BUDGET_BLOCKED":
@@ -293,6 +302,11 @@ def build_sentinel_snapshot(
         },
         "provider_readiness": {
             "status": readiness,
+            "configured": provider_health.get("configured"),
+            "enabled": provider_health.get("enabled"),
+            "credential_ready": provider_health.get("credential_ready"),
+            "call_verified": provider_health.get("call_verified"),
+            "last_successful_at": provider_health.get("last_successful_at"),
             "cost_gate_status": provider_health.get("cost_gate_status"),
             "provider_id": provider_health.get("provider_id"),
             "model_id": provider_health.get("model_id"),
