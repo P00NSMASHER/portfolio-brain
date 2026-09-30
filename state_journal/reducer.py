@@ -145,7 +145,7 @@ def replay(base: dict, events: list[dict]) -> dict:
                 if slot in latest and latest[slot] != core_hash:
                     raise Conflict("Ambiguous equal-time heartbeat updates for one agent")
                 latest[slot] = core_hash
-        for key in sorted(batches, key=lambda k: (_timestamp(batches[k]["at"]), k)):
+        for key in sorted(batches, key=lambda k: (_timestamp(batches[k]["at"]), canonical(batches[k]))):
             states["heartbeat"] = replay_heartbeat_batch(states["heartbeat"], batches[key])
 
     if accepted_history:
