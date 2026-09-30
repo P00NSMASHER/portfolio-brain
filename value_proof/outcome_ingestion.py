@@ -157,12 +157,14 @@ def ingest_verified_outcome(
     integrity=build_learning_integrity(hunter,model,learning)
     req(integrity["status"]=="HEALTHY","verified outcome projections failed integrity")
 
-    changed=(
-      hunter["sequence"]!=before["hunter_sequence"] or
-      model["sequence"]!=before["model_feedback_sequence"] or
-      learning["sequence"]!=before["learning_sequence"]
-    )
+    projection_changes={
+      "hunter":hunter["sequence"]!=before["hunter_sequence"],
+      "model_feedback":model["sequence"]!=before["model_feedback_sequence"],
+      "learning":learning["sequence"]!=before["learning_sequence"],
+    }
+    changed=any(projection_changes.values())
     fully_new=(
+      all(projection_changes.values()) and
       feedback["status"]=="FEEDBACK_APPLIED" and
       learning_result["status"]=="APPLIED"
     )
