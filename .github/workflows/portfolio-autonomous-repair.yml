@@ -66,6 +66,11 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      - name: Isolate repair workflow scratch from candidate diff
+        run: |
+          set -euo pipefail
+          printf '%s\n' '/repair/out/' >> .git/info/exclude
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
