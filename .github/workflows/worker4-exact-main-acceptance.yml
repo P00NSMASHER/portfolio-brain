@@ -1,0 +1,132 @@
+name: worker4-exact-main-acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  accept:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Require protected main exact ref
+        run: |
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Run focused Steps 13-18 regressions
+        run: >-
+          python -m unittest -v
+          tests.test_project_forwarding
+          tests.test_repo_scout_intake
+          tests.test_abvm_health
+          tests.test_evidence_semantics
+          tests.test_command_center_live_state
+          tests.test_governance_boundaries
+      - name: Validate governance and generated status
+        run: |
+          python -m governance.validate_boundaries
+          python -m operations.render_current_system_status --check
+          python -m verification.worker4_dependency_proof --output verification/out/worker4_dependency_proof.json
+      - name: Restore truthful live dashboard state
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python -m dashboard.live_state_bridge --output-dir dashboard/live --receipt dashboard/live/state_sources.json
+          python -m dashboard.command_center --write-html verification/out/command-center.html --write-json verification/out/command-center.json
+      - name: Validate live dashboard evidence semantics
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.load(open("dashboard/live/state_sources.json"))
+          sem=r["evidence_semantics"]
+          assert sem["heartbeat"]=="LIVENESS_CONNECTIVITY_ONLY"
+          assert sem["notification"]=="ALERT_ONLY"
+          assert sem["pages"]=="PUBLICATION_ONLY"
+          assert sem["technical_verification_credit"] is False
+          assert sem["market_verification_credit"] is False
+          assert sem["revenue_verification_credit"] is False
+          for name,row in r["sources"].items():
+              assert row["status"] in {"LIVE","STALE","FALLBACK","BLOCKED"}
+              assert "source_sequence" in row and "source_state_hash" in row
+              assert "restore_status" in row and "error_class" in row
+          html=Path("verification/out/command-center.html").read_text()
+          assert "Restore/error" in html
+          assert "State hash" in html
+          PY
+      - name: Run live exact-once project forwarding proof
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python -m verification.project_forwarding_live_proof --output verification/out/project_forwarding_live_proof.json
+      - name: Run live bounded REPO-001 intake proof
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python -m hunting.repo_scout_intake
+          --state hunting/REPO_SCOUT_INTAKE_STATE_SEED.json
+          --output-dir verification/out/repo-scout
+      - name: Run live constrained ABVM health proof
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python -m adapters.abvm_health --output verification/out/abvm_health_progress_evidence.json
+      - name: Write exact-main acceptance receipt
+        env:
+          ACCEPTANCE_SHA: ${{ github.sha }}
+          ACCEPTANCE_RUN_ID: ${{ github.run_id }}
+        run: |
+          python - <<'PY'
+          import json,os,re
+          from pathlib import Path
+          forwarding=json.load(open("verification/out/project_forwarding_live_proof.json"))
+          intake=json.load(open("verification/out/repo-scout/repo_scout_intake.json"))
+          abvm=json.load(open("verification/out/abvm_health_progress_evidence.json"))
+          sources=json.load(open("dashboard/live/state_sources.json"))
+          sha=os.environ["ACCEPTANCE_SHA"]
+          assert re.fullmatch(r"[0-9a-f]{40}",sha)
+          assert forwarding["status"]=="PASS" and forwarding["first_cycle_delivery_count"]==1 and forwarding["replay_delivery_count"]==0
+          assert intake["status"]=="PASS" and 0 <= intake["selected_candidates"] <= intake["max_intake"] == 2
+          assert intake["authority_granted"] is False
+          assert abvm["status"]=="PASS" and abvm["source_run_head_sha"]==abvm["source_revision"]
+          assert abvm["authority_granted"] is False and abvm["child_facing_mutation_authority"] is False and abvm["deploy_authority"] is False
+          receipt={
+            "schema_version":"1.0.0","status":"PASS","acceptance":"WORKER4_STEPS_13_18_EXACT_MAIN",
+            "main_sha":sha,"workflow_run_id":int(os.environ["ACCEPTANCE_RUN_ID"]),
+            "steps":{
+              "13":{"live_forwarding":"PASS","source_revision":forwarding["source_revision"],"delivery_count":1,"replay_delivery_count":0},
+              "14":{"live_intake":"PASS","source_revision":intake["source_revision"],"selected_candidates":intake["selected_candidates"]},
+              "15":{"live_abvm":"PASS","source_revision":abvm["source_revision"],"source_run_id":abvm["source_run_id"]},
+              "16":{"dashboard_semantics":"PASS","bridge_status":sources["bridge_status"]},
+              "17":{"governance_validation":"PASS"},
+              "18":{"generated_status_validation":"PASS","command_center_render":"PASS"},
+            },
+            "authority_granted":False,
+          }
+          Path("verification/out/worker4_exact_main_acceptance.json").write_text(json.dumps(receipt,indent=2,sort_keys=True)+"\n")
+          print(json.dumps(receipt,sort_keys=True))
+          PY
+      - name: Upload exact-main acceptance bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker4-exact-main-acceptance-${{ github.run_id }}-${{ github.sha }}
+          path: |
+            verification/out/worker4_exact_main_acceptance.json
+            verification/out/worker4_dependency_proof.json
+            verification/out/project_forwarding_live_proof.json
+            verification/out/repo-scout/repo_scout_intake.json
+            verification/out/repo-scout/repo_scout_intake_state.json
+            verification/out/abvm_health_progress_evidence.json
+            dashboard/live/state_sources.json
+            verification/out/command-center.json
+            verification/out/command-center.html
+            docs/CURRENT_SYSTEM_STATUS.md
+          if-no-files-found: error
+          retention-days: 30
