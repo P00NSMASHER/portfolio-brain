@@ -92,6 +92,35 @@ jobs:
             echo "admission_domain=NONE" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Reject stale queued main observation
+        if: ${{ steps.admission.outputs.allowed == 'true' && inputs.mode == 'observe' && inputs.target_repository_id == 'REPO-008' }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          request = urllib.request.Request(
+              "https://api.github.com/repos/P00NSMASHER/portfolio-brain/branches/main",
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": "Bearer " + os.environ["GITHUB_TOKEN"],
+                  "X-GitHub-Api-Version": "2022-11-28",
+                  "User-Agent": "portfolio-runtime-stale-main-guard/1.0",
+              },
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              current = json.load(response)["commit"]["sha"]
+          if current != os.environ["GITHUB_SHA"]:
+              raise SystemExit(
+                  "STALE_MAIN_OBSERVATION: queued source "
+                  + os.environ["GITHUB_SHA"]
+                  + " is no longer current main "
+                  + current
+              )
+          PY
+
       - name: Restore canonical runtime state
         if: ${{ steps.admission.outputs.allowed == 'true' }}
         run: python -m state_journal.production_reader --domain runtime --output runtime/live/runtime_state.json

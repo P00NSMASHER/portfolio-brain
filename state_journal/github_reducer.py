@@ -63,6 +63,18 @@ def restore_snapshot(reader: GitHubReader, artifacts: list[dict], *, current_run
     return latest
 
 
+def _runtime_observation_change(event: dict) -> dict | None:
+    if event.get("producer") != "runtime-worker":
+        return None
+    for change in event.get("changes", []):
+        if change.get("domain") != "runtime":
+            continue
+        receipt = (change.get("proofs") or {}).get("cycle_receipt")
+        if isinstance(receipt, dict) and receipt.get("mode") == "observe":
+            return change
+    return None
+
+
 def _authority_payload(state: dict) -> dict:
     return {
         key: state[key]
@@ -141,12 +153,60 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
                 continue
             raise Conflict("Conflicting event identity is not a later rerun of an already committed source")
         incoming.append((event, provider))
+
+    # A queued push run can become stale while waiting for the global writer
+    # lock. If both that stale main observation and the exact-current-main
+    # observation were published from the same canonical predecessor, prefer
+    # the exact-current-main observation only after proving the stale source SHA
+    # is its ancestor. This is source-authority resolution, never upload-time
+    # winner selection, and every skipped artifact remains explicit evidence.
+    stale_main_observations = []
+    current_sha = os.environ.get("GITHUB_SHA", "")
+    if current_sha and incoming:
+        groups = {}
+        for event, provider in incoming:
+            change = _runtime_observation_change(event)
+            if change is not None:
+                groups.setdefault(change["before_hash"], []).append((event, provider, change))
+        drop_ids = set()
+        for before_hash, rows in groups.items():
+            if len({change["after_hash"] for _, _, change in rows}) <= 1:
+                continue
+            exact = [row for row in rows if row[0].get("source_sha") == current_sha]
+            if len(exact) != 1:
+                continue
+            exact_event = exact[0][0]
+            for event, provider, change in rows:
+                if event["event_id"] == exact_event["event_id"]:
+                    continue
+                comparison = reader.get(f"/compare/{event['source_sha']}...{current_sha}")
+                require(
+                    comparison.get("merge_base_commit", {}).get("sha") == event["source_sha"],
+                    "Stale main observation source is not an ancestor of exact current main",
+                )
+                drop_ids.add(event["event_id"])
+                stale_main_observations.append({
+                    "artifact_id": provider.get("artifact_id"),
+                    "event_id": event["event_id"],
+                    "event_hash": event["event_hash"],
+                    "source_run_id": provider.get("source_run_id"),
+                    "source_sha": event["source_sha"],
+                    "superseded_by_event_id": exact_event["event_id"],
+                    "superseded_by_source_sha": current_sha,
+                    "before_hash": before_hash,
+                    "reason": "STALE_MAIN_OBSERVATION_SUPERSEDED_BY_EXACT_MAIN",
+                })
+        if drop_ids:
+            incoming = [(event, provider) for event, provider in incoming if event["event_id"] not in drop_ids]
+
     candidate = advance(state, incoming)
     return candidate, {"status": "PASS", "mode": "SHADOW", "production_authority": False,
                        "canonical_sequence": candidate["sequence"], "events_total": candidate["event_count"],
                        "new_deliveries": len(incoming), "excluded_non_main_artifacts": excluded,
                        "quarantined_rerun_conflict_count": len(rerun_conflicts),
                        "quarantined_rerun_conflicts": rerun_conflicts,
+                       "superseded_stale_main_observation_count": len(stale_main_observations),
+                       "superseded_stale_main_observations": stale_main_observations,
                        "projection_hash": candidate["projection"]["projection_hash"]}
 
 
