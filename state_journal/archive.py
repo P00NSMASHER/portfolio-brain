@@ -5,7 +5,7 @@ import gzip
 import hashlib
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +14,10 @@ from state_journal.reducer import checkpoint, validate_checkpoint, validate_snap
 
 ROOT = Path(__file__).resolve().parents[1]
 ACTIVE_MANIFEST = ROOT / "state_journal" / "ARCHIVE_MANIFEST.json"
-ARCHIVE_SCHEMA = "1.0.0"
+LEGACY_ARCHIVE_SCHEMA = "1.0.0"
+ARCHIVE_SCHEMA = "1.1.0"
+REPLAY_OVERLAP_MINUTES = 30
+MAX_SOURCE_AGE_HOURS = 36
 CHECKPOINT_PATH = "state_journal/CHECKPOINT.json.gz"
 SECRET_RE = re.compile(
     rb"(?:github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|"
@@ -40,6 +43,19 @@ def _utc(value: str) -> datetime:
 
 def _sha256_bytes(raw: bytes) -> str:
     return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+def _format_utc(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _archived_source_run_ids(state: dict) -> list[int]:
+    return sorted({
+        ref["source_run_id"]
+        for refs in state["evidence"].values()
+        for ref in refs
+        if ref.get("kind") == "GITHUB_ACTIONS" and type(ref.get("source_run_id")) is int
+    })
 
 
 def _gzip_json(document: dict) -> bytes:
@@ -78,7 +94,8 @@ def build_rollover(
     source_head_sha: str,
     source_artifact_digest: str,
     source_artifact_created_at: str,
-    previous_manifest_hash: str | None = None,
+    previous_manifest: dict | None = None,
+    archived_at: str | None = None,
 ) -> tuple[dict, bytes, dict, bytes, str]:
     """Return manifest, archived snapshot gzip, checkpoint, checkpoint gzip, archive path."""
     validate_snapshot(state)
@@ -89,10 +106,17 @@ def build_rollover(
     require(isinstance(source_head_sha, str) and len(source_head_sha) == 40, "Snapshot source SHA invalid")
     require(isinstance(source_artifact_digest, str) and source_artifact_digest.startswith("sha256:"),
             "Snapshot artifact digest invalid")
-    _utc(source_artifact_created_at)
-    require(previous_manifest_hash is None or (
-        isinstance(previous_manifest_hash, str) and previous_manifest_hash.startswith("sha256:")
-    ), "Previous archive manifest hash invalid")
+    source_created = _utc(source_artifact_created_at)
+    archived_time = _utc(archived_at or source_artifact_created_at)
+    require(archived_time >= source_created, "Archive timestamp predates source canonical snapshot")
+    if previous_manifest is not None:
+        require(isinstance(previous_manifest, dict), "Previous archive manifest malformed")
+        require(previous_manifest.get("manifest_hash") and previous_manifest.get("manifest_path"),
+                "Previous archive manifest identity missing")
+        require(state["sequence"] >= previous_manifest["checkpoint_sequence"],
+                "Checkpoint sequence regression")
+        require(state["checkpoint"]["checkpoint_hash"] == previous_manifest["new_checkpoint_hash"],
+                "Mismatched predecessor checkpoint hash")
 
     sequence = state["sequence"]
     archive_path = (
@@ -114,12 +138,20 @@ def build_rollover(
 
     core = {
         "schema_version": ARCHIVE_SCHEMA,
-        "archive_id": f"canonical-archive-seq-{sequence:08d}",
+        "archive_id": (
+            f"canonical-archive-seq-{sequence:08d}-"
+            f"{state['state_hash'].removeprefix('sha256:')[:16]}"
+        ),
         "manifest_path": manifest_path,
         "archive_path": archive_path,
         "archive_file_sha256": archive_file_sha256,
         "checkpoint_path": CHECKPOINT_PATH,
-        "previous_manifest_hash": previous_manifest_hash,
+        "previous_manifest_hash": None if previous_manifest is None else previous_manifest["manifest_hash"],
+        "previous_manifest_path": None if previous_manifest is None else previous_manifest["manifest_path"],
+        "previous_archive_id": None if previous_manifest is None else previous_manifest["archive_id"],
+        "previous_archived_sequence": None if previous_manifest is None else previous_manifest["archived_sequence"],
+        "previous_archived_state_hash": None if previous_manifest is None else previous_manifest["archived_state_hash"],
+        "previous_new_checkpoint_hash": None if previous_manifest is None else previous_manifest["new_checkpoint_hash"],
         "archived_sequence": sequence,
         "archived_state_hash": state["state_hash"],
         "archived_projection_hash": state["projection"]["projection_hash"],
@@ -127,6 +159,7 @@ def build_rollover(
         "archived_event_count": state["event_count"],
         "archived_event_hashes": _archived_event_hashes(state),
         "archived_provider_artifacts": _archived_provider_artifacts(state),
+        "archived_source_run_ids": _archived_source_run_ids(state),
         "new_checkpoint_hash": compacted["checkpoint_hash"],
         "checkpoint_sequence": sequence + 1,
         "source_reducer_run_id": source_reducer_run_id,
@@ -134,7 +167,11 @@ def build_rollover(
         "source_head_sha": source_head_sha,
         "source_artifact_digest": source_artifact_digest,
         "source_artifact_created_at": source_artifact_created_at,
-        "artifact_scan_start": source_artifact_created_at,
+        "archived_at": _format_utc(archived_time),
+        "replay_overlap_minutes": REPLAY_OVERLAP_MINUTES,
+        "artifact_scan_start": _format_utc(
+            source_created - timedelta(minutes=REPLAY_OVERLAP_MINUTES)
+        ),
     }
     manifest = {**core, "manifest_hash": digest(core)}
     validate_manifest(manifest, root=None, archived_state=state, checkpoint_doc=compacted)
