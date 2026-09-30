@@ -22,6 +22,7 @@ jobs:
         run: |
           test "$GITHUB_REF" = "refs/heads/main"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git ls-remote https://github.com/P00NSMASHER/portfolio-brain.git refs/heads/main | cut -f1)" = "$GITHUB_SHA"
       - name: Run focused Steps 13-18 regressions
         run: >-
           python -m unittest -v
@@ -78,6 +79,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python -m adapters.abvm_health --output verification/out/abvm_health_progress_evidence.json
+      - name: Recheck protected main did not move
+        run: test "$(git ls-remote https://github.com/P00NSMASHER/portfolio-brain.git refs/heads/main | cut -f1)" = "$GITHUB_SHA"
       - name: Write exact-main acceptance receipt
         env:
           ACCEPTANCE_SHA: ${{ github.sha }}
