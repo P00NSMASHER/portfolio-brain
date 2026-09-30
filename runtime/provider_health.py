@@ -108,6 +108,8 @@ def validate_provider_health(state: dict[str, Any]) -> None:
             raise ProviderHealthError("verified call requires ready credential and success timestamp")
         if not state["configured"] or not state["enabled"]:
             raise ProviderHealthError("verified call requires configured enabled provider")
+        if state["status"] != "READY":
+            raise ProviderHealthError("verified call cannot coexist with a non-READY status")
     if state["status"] == "READY":
         if not (
             state["configured"] is True
