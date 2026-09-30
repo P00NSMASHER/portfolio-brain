@@ -68,7 +68,7 @@ class ScopedJournalDiscoveryTests(unittest.TestCase):
         self.assertEqual([row["id"] for row in rows], [10, 20, 9])
         self.assertTrue(any(
             "runtime-hourly-sync.yml/runs?" in call
-            and "created=%3E%3D2026-09-29T16%3A35%3A30Z" in call
+            and "created=%3E%3D2026-09-29T21%3A00%3A00Z" in call
             for call in calls
         ))
         self.assertFalse(any("/actions/artifacts?" in call for call in calls))
@@ -98,19 +98,26 @@ class ScopedJournalDiscoveryTests(unittest.TestCase):
             if suffix == "/actions/runs/201/artifacts?per_page=100":
                 return {"total_count": 1, "artifacts": [snapshot_old]}
             if suffix.startswith("/actions/workflows/runtime-hourly-sync.yml/runs?"):
-                return {"workflow_runs": [run(301, "2026-09-29T20:59:30Z")]}
+                return {"workflow_runs": []}
+            if suffix == "/actions/runs/301":
+                row = run(301, "2026-09-29T20:59:30Z")
+                row["path"] = ".github/workflows/runtime-hourly-sync.yml"
+                return row
             if suffix == "/actions/runs/301/artifacts?per_page=100":
                 return {"total_count": 1, "artifacts": [event]}
             raise AssertionError("unexpected GitHub request: " + suffix)
 
         reader.get = get
         with patch("state_journal.transport.WORKFLOW_PRODUCERS", {"runtime-hourly-sync": "runtime-worker"}):
-            rows = reader.list_recent_journal_artifacts("2026-09-29T16:35:30Z")
+            rows = reader.list_recent_journal_artifacts(
+                "2026-09-29T16:35:30Z", explicit_run_ids=[301]
+            )
 
         self.assertIn(20, [row["id"] for row in rows])
+        self.assertTrue(any(call == "/actions/runs/301" for call in calls))
         self.assertTrue(any(
             "runtime-hourly-sync.yml/runs?" in call
-            and "created=%3E%3D2026-09-29T16%3A35%3A30Z" in call
+            and "created=%3E%3D2026-09-29T21%3A00%3A00Z" in call
             for call in calls
         ))
 
