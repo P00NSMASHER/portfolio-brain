@@ -11,11 +11,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from state_journal.contracts import canonical, digest, require, strict_load
+from state_journal.contracts import JournalError, canonical, digest, require, strict_load
 from state_journal.reducer import validate_snapshot
 
 ARCHIVE_BRANCH = "archive/state-journal"
 ARCHIVE_SCHEMA = "1.0.0"
+ARCHIVE_MANIFEST_PATH = "archive/manifest.json"
+ARCHIVE_SNAPSHOT_PATH = "archive/snapshot.json.gz"
 OVERLAP_MINUTES = 30
 SECRET_RE = re.compile(
     rb"(?:github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|"
@@ -67,9 +69,14 @@ def validate_manifest(manifest: dict[str, Any], *, previous: dict[str, Any] | No
     for key in ("canonical_state_hash", "checkpoint_hash", "source_artifact_digest",
                 "snapshot_gzip_sha256", "snapshot_json_sha256", "manifest_hash"):
         require(re.fullmatch(r"sha256:[0-9a-f]{64}", str(manifest[key])) is not None, f"archive {key} invalid")
-    _utc(manifest["archived_at"]); _utc(manifest["source_artifact_created_at"]); _utc(manifest["replay_scan_start"])
+    archived_at = _utc(manifest["archived_at"])
+    source_created = _utc(manifest["source_artifact_created_at"])
+    replay_start = _utc(manifest["replay_scan_start"])
+    require(archived_at >= source_created, "archive timestamp predates source reducer artifact")
+    require(replay_start <= source_created, "archive replay overlap starts after checkpoint publication")
     if manifest["source_artifact_expires_at"] is not None:
-        _utc(manifest["source_artifact_expires_at"])
+        source_expires = _utc(manifest["source_artifact_expires_at"])
+        require(source_expires > source_created, "archive source evidence expiry is not after publication")
     require(manifest["sanitized"] is True, "archive must be explicitly sanitized")
     expected = digest(_manifest_body(manifest))
     require(manifest["manifest_hash"] == expected, "archive manifest hash mismatch")
@@ -87,6 +94,11 @@ def validate_manifest(manifest: dict[str, Any], *, previous: dict[str, Any] | No
         require(manifest["previous_canonical_state_hash"] == previous["canonical_state_hash"], "archive state lineage mismatch")
         require(manifest["previous_sequence"] == previous["canonical_sequence"], "archive sequence lineage mismatch")
         require(manifest["canonical_sequence"] >= previous["canonical_sequence"], "archive sequence regressed")
+        require(manifest["checkpoint_hash"] == previous["checkpoint_hash"],
+                "archive canonical checkpoint root changed")
+        if manifest["canonical_sequence"] == previous["canonical_sequence"]:
+            require(manifest["canonical_state_hash"] == previous["canonical_state_hash"],
+                    "same-sequence archive changed canonical state")
 
 
 def build_archive(
@@ -155,6 +167,42 @@ def verify_archive(snapshot_gz: bytes, manifest: dict[str, Any], *, previous: di
     require(snapshot["sequence"] == manifest["canonical_sequence"], "archive sequence mismatch")
     require(snapshot["checkpoint"]["checkpoint_hash"] == manifest["checkpoint_hash"], "archive checkpoint mismatch")
     return snapshot
+
+
+def load_durable_archive(reader, *, now: datetime | None = None, allow_missing: bool = True) -> tuple[dict[str, Any] | None, dict[str, Any] | None, dict[str, Any]]:
+    """Load the latest durable checkpoint without enumerating Actions history.
+
+    Missing bootstrap archive is distinguishable from corruption. Once present,
+    corruption or stale replay evidence always fails closed.
+    """
+    try:
+        files, branch_meta = reader.read_archive_branch_files(
+            [ARCHIVE_MANIFEST_PATH, ARCHIVE_SNAPSHOT_PATH]
+        )
+    except Exception as exc:
+        message = str(exc)
+        if allow_missing and ("404" in message or "Required durable archive member missing" in message):
+            return None, None, {"status": "MISSING_CHECKPOINT", "reason": message}
+        raise
+    try:
+        manifest = strict_load(files[ARCHIVE_MANIFEST_PATH])
+        snapshot = verify_archive(files[ARCHIVE_SNAPSHOT_PATH], manifest)
+    except Exception as exc:
+        raise JournalError("CORRUPTED_CHECKPOINT: " + str(exc)) from exc
+    current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    expires = manifest.get("source_artifact_expires_at")
+    if expires is not None and current >= _utc(expires):
+        raise JournalError(
+            "EXPIRED_EVIDENCE: durable checkpoint replay window outlived source artifact retention"
+        )
+    return snapshot, manifest, {
+        "status": "VALID_CHECKPOINT",
+        "archive_id": manifest["archive_id"],
+        "canonical_sequence": manifest["canonical_sequence"],
+        "canonical_state_hash": manifest["canonical_state_hash"],
+        "replay_scan_start": manifest["replay_scan_start"],
+        **branch_meta,
+    }
 
 
 def main() -> None:
