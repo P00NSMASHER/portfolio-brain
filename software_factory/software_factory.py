@@ -128,7 +128,14 @@ class SoftwareFactory:
     def pr_action(self,work_id):
         r=self._work(work_id);req(r["state"]=="READY_FOR_PR","work not PR-ready");rp=_repo_policy(r["repository_id"]);req(rp["pr_create_enabled"],"PR creation disabled")
         title=f"[factory] {r['title']}"
-        body=f"Factory work: {r['work_id']}\nBase: {r['base_sha']}\nCandidate: {r['commit_sha']}\nVerification: {r['verification_id']}\n"
+        body=(f"Factory work: {r['work_id']}\n"
+              f"Source: {r['issue_ref']}\n"
+              f"Base: {r['base_sha']}\n"
+              f"Candidate: {r['commit_sha']}\n"
+              f"Factory regression verification: {r['verification_id']}\n"
+              "Factory merge authority: NONE\n"
+              "Factory deployment authority: NONE\n"
+              "Protected integration still requires exact-head Foundation and the independent portfolio-phase1-gate.\n")
         return action_packet("CREATE_PR",r,expected_head_sha=r["commit_sha"],files=[],commit_message=None,pr_title=title,pr_body=body)
     def record_pr(self,work_id,*,pr_number,pr_url,head_sha,now=None):
         ts=time.time() if now is None else float(now);r=self._work(work_id);req(r["state"]=="READY_FOR_PR","work not PR-ready")

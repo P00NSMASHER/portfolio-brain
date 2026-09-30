@@ -322,9 +322,12 @@ def validate_operating_mode():
     req("actions: write" in scheduler_repair and "contents: read" in scheduler_repair
         and "contents: write" not in scheduler_repair and "pull-requests: read" in scheduler_repair,
         "scheduler repair dispatch permissions invalid")
-    req("repair.autonomous_repair dispatch" in scheduler_repair
-        and "portfolio-autonomous-repair.yml" in scheduler_repair,
+    scheduler_executor=(ROOT/"scheduler/work_executor.py").read_text().lower()
+    req("dispatch_requests(" in scheduler_executor
+        and 'workflow_file="portfolio-autonomous-repair.yml"' in scheduler_executor,
         "scheduler repair dispatch path missing")
+    req("repair.autonomous_repair dispatch" not in scheduler_repair,
+        "scheduler repair dispatch duplicated outside the leased handler")
     verifier=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text().lower()
     verifier_triggers=workflow_top_level_triggers(ROOT/".github/workflows/portfolio-independent-verifier.yml")
     req(verifier_triggers=={"workflow_run"},"independent verifier must be workflow_run-only")

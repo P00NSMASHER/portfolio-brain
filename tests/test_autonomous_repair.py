@@ -8,6 +8,7 @@ from unittest.mock import patch
 from repair.autonomous_repair import (
     AutonomousRepairError,
     branch_name,
+    dispatch_requests,
     find_repair_evidence,
     load_policy,
     render_prompt,
@@ -121,6 +122,19 @@ class AutonomousRepairTests(unittest.TestCase):
         finally:
             td.cleanup()
 
+    def test_scheduler_dispatch_uses_only_declared_workflow_input(self):
+        request = self.request()
+        with patch("repair.autonomous_repair._http_json", return_value={}) as http:
+            receipts = dispatch_requests(
+                [request],
+                token="token",
+                repository="P00NSMASHER/portfolio-brain",
+            )
+        self.assertEqual(receipts[0]["dispatch_status"], "ACCEPTED")
+        payload = http.call_args.kwargs["payload"]
+        self.assertEqual(payload["ref"], "main")
+        self.assertEqual(set(payload["inputs"]), {"request_b64"})
+
     def test_repair_evidence_binds_checks_to_exact_integrations(self):
         pulls = [{
             "number": 7,
@@ -137,6 +151,7 @@ class AutonomousRepairTests(unittest.TestCase):
         self.assertTrue(result["foundation_success"])
         self.assertTrue(result["independent_success"])
         self.assertEqual(result["head_sha"], "c" * 40)
+
 
     def test_policy_never_grants_merge_deploy_or_default_branch_write(self):
         policy = load_policy()
@@ -155,6 +170,14 @@ class AutonomousRepairTests(unittest.TestCase):
         self.assertIn("python -m repair.autonomous_repair validate-diff", text)
         self.assertIn('python -m unittest discover -s tests -p "test_*.py" -v', text)
         self.assertIn("gh workflow run foundation-ci.yml", text)
+        self.assertIn("software_factory.scheduler_repair_bridge start", text)
+        self.assertIn("software_factory.scheduler_repair_bridge submit", text)
+        self.assertIn("software_factory.scheduler_repair_bridge verify", text)
+        self.assertIn("  factory-review:", text)
+        self.assertIn("--network none", text)
+        self.assertNotIn("software_factory.scheduler_repair_bridge finalize", text)
+        self.assertIn("SCHEDULER_REPAIR_TASK", text)
+        self.assertIn("Create isolated workflow-failure repair branch", text)
         self.assertIn("--no-ask-user", text)
         self.assertIn("--available-tools='view,grep,glob,edit,create,apply_patch'", text)
         self.assertNotIn("--allow-tool='shell", text)

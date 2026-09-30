@@ -9,7 +9,7 @@ from agents.heartbeat_state import heartbeat, seed_state
 from state_journal.contracts import REPOSITORY, validate_source_evidence
 from state_journal.events import make_change, make_event
 from state_journal.transport import (
-    EVENT_PREFIX, EMIT_STEP, REPO_ID, JournalError, validate_provider_event,
+    EVENT_PREFIX, EMIT_STEP, REPO_ID, GitHubReader, JournalError, validate_provider_event,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -99,10 +99,112 @@ class ProviderArtifactFallbackTests(unittest.TestCase):
         with self.assertRaisesRegex(JournalError, "successful source run"):
             self.admit(lambda _m, r, _j, _e, _sm, _sr: r.update(conclusion="failure"))
 
-    def test_partial_step_metadata_cannot_use_artifact_fallback(self):
+    def test_unrelated_partial_step_metadata_without_emitter_still_fails_closed(self):
         def mutate(_m, _r, jobs, _e, _sm, _sr):
             jobs["jobs"][0]["steps"] = [{"name": "Setup", "status": "completed", "conclusion": "success"}]
         with self.assertRaisesRegex(JournalError, "Source emitter job missing"):
+            self.admit(mutate)
+
+    def test_stale_in_progress_emitter_metadata_uses_exact_artifact_proof(self):
+        def mutate(_m, _r, jobs, _e, _sm, _sr):
+            jobs["jobs"][0]["steps"] = [
+                {"name": "Setup", "status": "completed", "conclusion": "success"},
+                {
+                    "name": UPLOAD_STEPS["runtime-worker"]["heartbeat"],
+                    "status": "completed",
+                    "conclusion": "success",
+                },
+                {"name": EMIT_STEP, "status": "in_progress", "conclusion": None},
+            ]
+        actual, evidence, event = self.admit(mutate)
+        self.assertEqual(actual, event)
+        self.assertEqual(evidence["job_id"], 20)
+        validate_source_evidence(evidence, event)
+
+    def test_reader_collects_exact_artifacts_for_stale_partial_step_metadata(self):
+        meta, run, jobs, event_raw, event, state_meta, state_raw = fixture()
+        jobs["jobs"][0]["steps"] = [
+            {"name": "Setup", "status": "completed", "conclusion": "success"},
+            {
+                "name": UPLOAD_STEPS["runtime-worker"]["heartbeat"],
+                "status": "completed",
+                "conclusion": "success",
+            },
+            {"name": EMIT_STEP, "status": "in_progress", "conclusion": None},
+        ]
+
+        class Reader(GitHubReader):
+            def __init__(self):
+                self.artifact_listing_calls = 0
+
+            def get(self, suffix):
+                if suffix == "/actions/runs/101/attempts/1":
+                    return run
+                if suffix == "/actions/runs/101/attempts/1/jobs?per_page=100":
+                    return jobs
+                raise AssertionError(suffix)
+
+            def archive(self, artifact_id):
+                return {12: event_raw, 13: state_raw}[artifact_id]
+
+            def _run_artifacts(self, run_id):
+                self.assert_run_id = run_id
+                self.artifact_listing_calls += 1
+                return [state_meta]
+
+        reader = Reader()
+        actual, evidence = reader.event(meta, UPLOAD_STEPS)
+        self.assertEqual(actual, event)
+        self.assertEqual(evidence["job_id"], 20)
+        self.assertEqual(reader.artifact_listing_calls, 1)
+        self.assertEqual(reader.assert_run_id, 101)
+        validate_source_evidence(evidence, event)
+
+    def test_reader_keeps_normal_completed_step_path_bounded(self):
+        meta, run, jobs, event_raw, event, _state_meta, _state_raw = fixture()
+        jobs["jobs"][0]["steps"] = [
+            {"name": name, "status": "completed", "conclusion": "success"}
+            for name in [
+                EMIT_STEP,
+                "Upload immutable state transition event",
+                UPLOAD_STEPS["runtime-worker"]["heartbeat"],
+            ]
+        ]
+
+        class Reader(GitHubReader):
+            def __init__(self):
+                pass
+
+            def get(self, suffix):
+                if suffix == "/actions/runs/101/attempts/1":
+                    return run
+                if suffix == "/actions/runs/101/attempts/1/jobs?per_page=100":
+                    return jobs
+                raise AssertionError(suffix)
+
+            def archive(self, artifact_id):
+                if artifact_id != 12:
+                    raise AssertionError(artifact_id)
+                return event_raw
+
+            def _run_artifacts(self, _run_id):
+                raise AssertionError("normal complete-step path must not list durable artifacts")
+
+        actual, evidence = Reader().event(meta, UPLOAD_STEPS)
+        self.assertEqual(actual, event)
+        self.assertEqual(evidence["job_id"], 20)
+
+    def test_explicit_failed_emitter_step_cannot_use_artifact_fallback(self):
+        def mutate(_m, _r, jobs, _e, _sm, _sr):
+            jobs["jobs"][0]["steps"] = [
+                {
+                    "name": UPLOAD_STEPS["runtime-worker"]["heartbeat"],
+                    "status": "completed",
+                    "conclusion": "success",
+                },
+                {"name": EMIT_STEP, "status": "completed", "conclusion": "failure"},
+            ]
+        with self.assertRaisesRegex(JournalError, "Explicit publication step failed"):
             self.admit(mutate)
 
     def test_missing_state_artifact_fails_closed(self):

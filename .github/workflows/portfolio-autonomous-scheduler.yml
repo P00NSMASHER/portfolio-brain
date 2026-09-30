@@ -81,16 +81,6 @@ jobs:
           --output-dir scheduler/out
           --hunter-output-dir hunting/out
           --max-items 8
-      - name: Dispatch verified repair work to isolated autonomous repair
-        id: repair_dispatch
-        if: ${{ steps.workload.outputs.allowed == 'true' && hashFiles('scheduler/out/repair_dispatch_requests.json') != '' }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: >-
-          python -m repair.autonomous_repair dispatch
-          --requests scheduler/out/repair_dispatch_requests.json
-          --workflow-file portfolio-autonomous-repair.yml
-          --output scheduler/out/repair_dispatch_receipt.json
       - name: Reuse spare capacity for Hunter proposal continuation
         id: hunter_continuation
         if: ${{ steps.workload.outputs.allowed == 'true' && steps.execute.outputs.attempted_count != '8' }}

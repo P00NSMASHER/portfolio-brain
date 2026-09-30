@@ -91,12 +91,14 @@ def validate_artifact_publication_fallback(
     run_artifacts: list[dict],
     artifact_bytes: dict[int, bytes],
     artifact_names: dict[str, dict[str, str]],
+    required_steps: list[str] | tuple[str, ...] = (),
 ) -> int:
-    """Prove a successful run's publication when GitHub omits every job step.
+    """Prove publication from exact artifacts when GitHub step metadata is absent or stale.
 
-    This fallback never admits failed/cancelled runs and never accepts partial
-    step metadata. Each changed domain must have exactly one exact-run durable
-    state artifact whose validated bytes equal the immutable event after-state.
+    This fallback never admits failed/cancelled runs or an explicit non-success
+    publication step. It is only a provider-metadata recovery path: every
+    changed domain must have exactly one exact-run durable state artifact whose
+    validated bytes equal the immutable event after-state.
     """
     require(run.get("conclusion") == "success",
             "Step-metadata fallback requires successful source run")
@@ -109,7 +111,23 @@ def validate_artifact_publication_fallback(
             "Fallback job belongs to another run attempt")
     require(job.get("status") == "completed" and job.get("conclusion") == "success",
             "Fallback source job did not succeed")
-    require(job.get("steps") == [], "Partial source step metadata cannot use fallback")
+    steps = job.get("steps", [])
+    require(isinstance(steps, list), "Fallback source job steps malformed")
+    for name in required_steps:
+        matches = [step for step in steps if step.get("name") == name]
+        require(len(matches) <= 1, f"Ambiguous publication step metadata: {name}")
+        if not matches:
+            continue
+        step = matches[0]
+        status = step.get("status")
+        conclusion = step.get("conclusion")
+        if conclusion is not None:
+            require(conclusion == "success", f"Explicit publication step failed: {name}")
+        if status == "completed":
+            require(conclusion == "success", f"Explicit publication step failed: {name}")
+        else:
+            require(status in {"in_progress", "pending", "queued"},
+                    f"Publication step metadata is not a recognized stale state: {name}")
     producer_artifacts = artifact_names.get(event["producer"])
     require(isinstance(producer_artifacts, dict), "Producer artifact map missing")
 
@@ -211,11 +229,25 @@ def validate_provider_event(meta: dict, run: dict, jobs: dict, raw: bytes, uploa
         require(job.get("run_id") == run["id"] and job.get("run_attempt") == attempt,
                 "Emitter job belongs to another attempt")
         required = [EMIT_STEP, UPLOAD_STEP] + [upload_steps[event["producer"]][c["domain"]] for c in event["changes"]]
+        step_proof_complete = True
         for name in required:
             matches = [s for s in job.get("steps", []) if s.get("name") == name]
-            require(len(matches) == 1 and matches[0].get("status") == "completed" and matches[0].get("conclusion") == "success",
-                    f"Actual state/event publication step did not succeed: {name}")
-        job_id = job["id"]
+            if not (
+                len(matches) == 1
+                and matches[0].get("status") == "completed"
+                and matches[0].get("conclusion") == "success"
+            ):
+                step_proof_complete = False
+                break
+        if step_proof_complete:
+            job_id = job["id"]
+        else:
+            require(run_artifacts is not None and artifact_bytes is not None and artifact_names is not None,
+                    "Source step metadata inconclusive and durable artifact proof missing")
+            job_id = validate_artifact_publication_fallback(
+                event, meta, run, jobs, run_artifacts, artifact_bytes, artifact_names,
+                required_steps=required,
+            )
     else:
         require(not any_steps and len(candidates) == 0,
                 "Source emitter job missing or ambiguous")
@@ -428,21 +460,39 @@ class GitHubReader:
         run = self.get(f"/actions/runs/{run_id}/attempts/{attempt}")
         jobs = self.get(f"/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100")
         raw = self.archive(meta["id"])
+        event = extract_json(raw, "event.json")
+        validate_event(event)
+
+        # Most events use exact completed-step metadata and need no extra
+        # artifact downloads. Gather the bounded same-run artifact proof only
+        # when provider step metadata is absent or stale/inconclusive.
         job_rows = jobs.get("jobs", [])
-        all_steps_missing = (
-            isinstance(job_rows, list)
-            and bool(job_rows)
-            and all(job.get("steps") == [] for job in job_rows)
-        )
-        if not all_steps_missing:
+        require(isinstance(job_rows, list), "Source job listing malformed")
+        all_steps_missing = bool(job_rows) and all(job.get("steps") == [] for job in job_rows)
+        candidates = [
+            job for job in job_rows
+            if any(step.get("name") == EMIT_STEP for step in job.get("steps", []))
+        ]
+        fallback_needed = all_steps_missing
+        if len(candidates) == 1:
+            required = [
+                EMIT_STEP,
+                UPLOAD_STEP,
+                *[upload_steps[event["producer"]][change["domain"]] for change in event["changes"]],
+            ]
+            fallback_needed = any(
+                len(matches := [step for step in candidates[0].get("steps", []) if step.get("name") == name]) != 1
+                or matches[0].get("status") != "completed"
+                or matches[0].get("conclusion") != "success"
+                for name in required
+            )
+        if not fallback_needed:
             return validate_provider_event(meta, run, jobs, raw, upload_steps)
 
         run_artifacts = self._run_artifacts(int(run_id))
         artifact_names = strict_load(
             (Path(__file__).resolve().parent / "UPLOAD_ARTIFACTS.json").read_bytes()
         )
-        event = extract_json(raw, "event.json")
-        validate_event(event)
         needed_names = {
             artifact_names.get(event["producer"], {}).get(change["domain"])
             for change in event["changes"]

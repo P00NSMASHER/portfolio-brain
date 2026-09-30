@@ -3,7 +3,7 @@ import json
 import unittest
 import zipfile
 
-from agents.artifact_state import _resolve_equivalent_heartbeat_fork
+from agents.artifact_state import _merge_commuting_heartbeat_fork, _resolve_equivalent_heartbeat_fork
 from agents.heartbeat_state import heartbeat, seed_state
 from runtime.artifact_restore import InvalidStateArtifact
 
@@ -92,6 +92,61 @@ class AgentHeartbeatForkRecoveryTests(unittest.TestCase):
         with self.assertRaisesRegex(InvalidStateArtifact,"no unique later equivalent update"):
             _resolve_equivalent_heartbeat_fork(
                 data,current_run="999",expected_head_branch="main",download=payloads.__getitem__,
+            )
+
+    def test_different_agent_updates_merge_losslessly_with_exact_common_predecessor(self):
+        base=seed_state()
+        hunt=heartbeat(
+            base,agent_ids=['AGT-HUNTER'],activity_kind='HUNTER_CYCLE',
+            source_workflow='hunter-autonomous-cycle',source_run_id='hunt-run',at='2026-09-28T13:50:55Z',
+        )
+        runtime=heartbeat(
+            base,agent_ids=['AGT-DATA-STEWARD'],activity_kind='RUNTIME_OBSERVATION',
+            source_workflow='runtime-worker',source_run_id='sync-run',at='2026-09-28T13:51:03Z',
+        )
+        expected=heartbeat(
+            hunt,agent_ids=['AGT-DATA-STEWARD'],activity_kind='RUNTIME_OBSERVATION',
+            source_workflow='runtime-worker',source_run_id='sync-run',at='2026-09-28T13:51:03Z',
+        )
+        data={'artifacts':[
+            candidate(2,'2026-09-28T13:51:05Z','runtime'),
+            candidate(1,'2026-09-28T13:50:57Z','hunt'),
+            candidate(3,'2026-09-28T13:50:50Z','base'),
+        ]}
+        payloads={'runtime':bundle(runtime),'hunt':bundle(hunt),'base':bundle(base)}
+        merged,sources,fork_ids=_merge_commuting_heartbeat_fork(
+            data,current_run='999',expected_head_branch='main',download=payloads.__getitem__,
+        )
+        self.assertEqual(merged,expected)
+        self.assertEqual({item['id'] for item in sources},{1,2,3})
+        self.assertEqual(fork_ids,[2,1])
+        self.assertEqual(merged['sequence'],2)
+        self.assertEqual(
+            {event['source_run_id'] for event in merged['recent_events'][-2:]},
+            {'hunt-run','sync-run'},
+        )
+
+    def test_same_agent_equal_time_conflict_still_fails_closed(self):
+        base=seed_state()
+        first=heartbeat(
+            base,agent_ids=['AGT-HUNTER'],activity_kind='HUNTER_CYCLE',
+            source_workflow='hunter-autonomous-cycle',source_run_id='run-one',
+            work_ids_by_agent={'AGT-HUNTER':['WORK-A']},at='2026-09-28T13:50:55Z',
+        )
+        second=heartbeat(
+            base,agent_ids=['AGT-HUNTER'],activity_kind='HUNTER_CYCLE',
+            source_workflow='hunter-autonomous-cycle',source_run_id='run-two',
+            work_ids_by_agent={'AGT-HUNTER':['WORK-B']},at='2026-09-28T13:50:55Z',
+        )
+        data={'artifacts':[
+            candidate(2,'2026-09-28T13:51:05Z','second'),
+            candidate(1,'2026-09-28T13:50:57Z','first'),
+            candidate(0,'2026-09-28T13:50:50Z','base'),
+        ]}
+        payloads={'second':bundle(second),'first':bundle(first),'base':bundle(base)}
+        with self.assertRaisesRegex(InvalidStateArtifact,'ambiguous equal-time agent updates'):
+            _merge_commuting_heartbeat_fork(
+                data,current_run='999',expected_head_branch='main',download=payloads.__getitem__,
             )
 
     def test_different_agent_concurrent_updates_still_fail_closed(self):
