@@ -6,7 +6,7 @@
   "bounded_by": "portfolio cost governor",
   "authority_granted": false,
   "evidence_upgraded": false,
-  "source_base_sha": "bb86d529ca2f8a6f230b54e1acfc0e725fa376c3",
-  "attempt": 2,
-  "retrigger_reason": "DEDICATED_PROJECT_FORWARDING_ARTIFACT_BOOTSTRAP_REPAIR"
+  "source_base_sha": "bc28d195d8622ae8af451bdc20fa175bbe9a4875",
+  "attempt": 3,
+  "retrigger_reason": "ENROLL_PROVIDER_USABILITY_RUNTIME_CALLER_FOR_COST_PARITY"
 }
