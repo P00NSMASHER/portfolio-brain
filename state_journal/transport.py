@@ -210,7 +210,8 @@ class GitHubReader:
         return rows
 
     def list_recent_journal_artifacts(self, since: str, *, max_pages: int = 20,
-                                      explicit_run_ids: list[int] | tuple[int, ...] = ()) -> list[dict]:
+                                      explicit_run_ids: list[int] | tuple[int, ...] = (),
+                                      covered_run_ids: set[int] | tuple[int, ...] | list[int] = ()) -> list[dict]:
         """Discover only reducer snapshots and enrolled producer events.
 
         Repository-wide artifact pagination eventually becomes unbounded because
@@ -222,6 +223,10 @@ class GitHubReader:
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
         require(type(max_pages) is int and max_pages > 0, "Artifact page bound invalid")
+        require(isinstance(covered_run_ids, (set, tuple, list)), "Covered replay run IDs malformed")
+        covered = set(covered_run_ids)
+        require(all(type(run_id) is int and run_id > 0 for run_id in covered),
+                "Covered replay run ID invalid")
         result: dict[int, dict] = {}
 
         def retain(row: dict) -> None:
@@ -268,6 +273,32 @@ class GitHubReader:
             event_since = min(snapshot_runs[0][0]["created_at"], snapshot_runs[1][0]["created_at"])
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
+
+        def retain_run_events(run: dict) -> None:
+            rows = self._run_artifacts(run["id"])
+            events = [row for row in rows if row.get("name", "").startswith(EVENT_PREFIX)]
+            for row in events:
+                retain(row)
+            if events or run["id"] in covered:
+                return
+            jobs = self.get(f"/actions/runs/{run['id']}/jobs?per_page=100")
+            job_rows = jobs.get("jobs")
+            total = jobs.get("total_count")
+            require(isinstance(job_rows, list) and type(total) is int
+                    and total == len(job_rows) and total <= 100,
+                    "Replay source job listing incomplete")
+            uploaded = [
+                step
+                for job in job_rows
+                for step in job.get("steps", [])
+                if step.get("name") == UPLOAD_STEP
+                and step.get("status") == "completed"
+                and step.get("conclusion") == "success"
+            ]
+            require(not uploaded,
+                    f"MISSING_REPLAY: run {run['id']} published an immutable event "
+                    "but its artifact is unavailable")
+
         for workflow in sorted(WORKFLOW_PRODUCERS):
             for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
                 if not (
@@ -276,9 +307,7 @@ class GitHubReader:
                     and run.get("conclusion") in terminal
                 ):
                     continue
-                for row in self._run_artifacts(run["id"]):
-                    if row.get("name", "").startswith(EVENT_PREFIX):
-                        retain(row)
+                retain_run_events(run)
 
         for run_id in explicit_run_ids:
             require(type(run_id) is int and run_id > 0, "Explicit recovery run ID invalid")
@@ -288,9 +317,7 @@ class GitHubReader:
             require(run.get("status") == "completed" and run.get("conclusion") in terminal,
                     "Explicit recovery run is not terminal")
             source_producer(run)
-            for row in self._run_artifacts(run_id):
-                if row.get("name", "").startswith(EVENT_PREFIX):
-                    retain(row)
+            retain_run_events(run)
 
         return sorted(
             result.values(),
