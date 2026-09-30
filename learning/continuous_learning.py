@@ -13,6 +13,7 @@ from typing import Any
 
 ROOT=Path(__file__).resolve().parents[1]
 POLICY_PATH=ROOT/"learning"/"LEARNING_POLICY.json"
+LIVE_OBSERVATION_SEED_PATH=ROOT/"learning"/"LIVE_OBSERVATION_STATE_SEED.json"
 
 class LearningError(ValueError): pass
 
@@ -211,11 +212,18 @@ def rebuild_from_sources(live_state_path:Path|None=None)->dict[str,Any]:
     live_sequence=None
     if live_state_path is not None and Path(live_state_path).exists():
         from learning.live_observations import validate_state as validate_live_state
-        live=json.loads(Path(live_state_path).read_text(encoding="utf-8"))
+        live_path=Path(live_state_path)
+        live=json.loads(live_path.read_text(encoding="utf-8"))
         validate_live_state(live)
-        rows=list(live["observations"])
-        source_mode="CHECKED_IN_PLUS_DURABLE_VERIFIED"
-        live_sequence=live["sequence"]
+        if live_path.resolve()==LIVE_OBSERVATION_SEED_PATH.resolve():
+            # A checked-in seed is static context even if it is accidentally
+            # populated later. Never let repository seed bytes earn freshness.
+            baseline.extend(live["observations"])
+            source_mode="BASELINE_OR_SEED_ONLY"
+        else:
+            rows=list(live["observations"])
+            source_mode="CHECKED_IN_PLUS_DURABLE_VERIFIED"
+            live_sequence=live["sequence"]
     rebuilt=rebuild_state(rows)
     baseline_hash=canonical_hash(baseline)
     verified_outcome_count=sum(
