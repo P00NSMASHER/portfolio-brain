@@ -74,6 +74,8 @@ def validate_boundaries()->dict[str,object]:
 
     abvm=policy["constrained_integrations"]["PRJ-006"]
     req(abvm["repository_id"]=="REPO-003","ABVM repository binding changed")
+    abvm_cap=next(row for row in caps if row["project_id"]=="PRJ-006")
+    req(abvm_cap["READ_OBSERVE"]["scope"]==["REPOSITORY_OBSERVATION"],"ABVM repository observation scope mislabeled")
     req(set(abvm["allowed_evidence"])=={"AUTOMATION_HEALTH","PROGRESS_EVIDENCE"},"ABVM evidence scope widened")
     req(abvm["persisted_payload"]=="SANITIZED_METADATA_ONLY","ABVM payload boundary widened")
     req(abvm["child_facing_mutation"] is False,"ABVM gained child-facing mutation")
