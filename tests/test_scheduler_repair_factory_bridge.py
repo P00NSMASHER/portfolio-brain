@@ -228,6 +228,13 @@ class SchedulerRepairFactoryBridgeTests(unittest.TestCase):
             workflow.index("Record independent factory PASS and open protected PR"),
         )
 
+    def test_foundation_dispatch_is_repo_explicit_outside_checkout(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/portfolio-autonomous-repair.yml").read_text()
+        command = 'gh workflow run foundation-ci.yml --repo "$GITHUB_REPOSITORY" --ref "$REPAIR_BRANCH"'
+        self.assertEqual(workflow.count(command), 2)
+        self.assertNotIn('gh workflow run foundation-ci.yml --ref "$REPAIR_BRANCH"', workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
