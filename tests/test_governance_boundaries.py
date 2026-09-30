@@ -29,6 +29,7 @@ class GovernanceBoundaryTests(unittest.TestCase):
         self.assertFalse(abvm["DEPLOY"]["allowed"])
         self.assertFalse(abvm["EXTERNAL_ACTION"]["allowed"])
         self.assertEqual(policy["actions"]["CHILD_FACING_ACTION"]["decision"],"HUMAN_APPROVAL_REQUIRED")
+        self.assertEqual(policy["actions"]["CUSTOMER_EMAIL_GMAIL"]["decision"],"EXPLICIT_MACHINE_POLICY_GATE")
 
     def test_pages_is_publication_not_production_deploy(self):
         pages=json.loads((ROOT/"governance/boundaries.json").read_text())["actions"]["PAGES_PUBLICATION"]
