@@ -1,0 +1,43 @@
+name: step8-executor-acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Open repair-evidence PR source ref"
+        required: true
+        type: string
+
+permissions:
+  actions: write
+  checks: read
+  contents: read
+  pull-requests: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      PORTFOLIO_GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Execute real default REPAIR TEST VERIFICATION handlers
+        run: >-
+          python -m scheduler.step8_acceptance
+          --source-ref "${{ inputs.source_ref }}"
+          --output scheduler/out/step8_acceptance.json
+      - name: Preserve Step 8 acceptance receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-step8-executor-acceptance-${{ github.run_id }}
+          path: scheduler/out/step8_acceptance.json
+          if-no-files-found: error
+          retention-days: 30

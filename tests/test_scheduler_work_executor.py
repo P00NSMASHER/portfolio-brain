@@ -197,7 +197,7 @@ class SchedulerWorkExecutorTests(unittest.TestCase):
     def test_default_handlers_cover_every_declared_scheduler_work_type(self):
         self.assertEqual(set(DEFAULT_HANDLERS), set(scheduler_policy()["work_types"]))
 
-    def test_repair_handler_emits_real_autonomous_dispatch_request(self):
+    def _repair_fixture(self):
         failure={
           "schema_version":"1.0.0","failure_id":"RFAIL-EXECUTOR-0001","source_type":"FAILURE_PACKET",
           "project_ids":["PRJ-000"],"target_repository_id":"REPO-008",
@@ -215,17 +215,47 @@ class SchedulerWorkExecutorTests(unittest.TestCase):
             signal_basis="TEST_FIXTURE_EXPLICIT_EXTERNAL_MILESTONE",
         )
         state=load_state();state["work_items"]=[_work_packet(candidate,AT)]
+        return state,task
+
+    def test_repair_handler_completes_only_after_accepted_dispatch(self):
+        state,task=self._repair_fixture()
+        seen=[]
+        def dispatcher(request):
+            seen.append(request)
+            return {
+              "request_id":request["request_id"],"fingerprint":request["fingerprint"],
+              "workflow_file":"portfolio-autonomous-repair.yml","dispatch_status":"ACCEPTED",
+              "authority_granted":False,
+            }
         updated,receipts,executed,meta=execute_cycle(
             state,runtime_state=bootstrap_state(now=AT),max_items=1,at=AT,
-            context_overrides={"repair_state":{"tasks":[task]},"main_sha":"a"*40},
+            context_overrides={"repair_state":{"tasks":[task]},"main_sha":"a"*40,"repair_dispatcher":dispatcher},
         )
         self.assertEqual(updated["work_items"][0]["state"],"COMPLETE")
-        self.assertEqual(receipts[0]["result_kind"],"AUTONOMOUS_REPAIR_DISPATCH_READY")
+        self.assertEqual(receipts[0]["result_kind"],"AUTONOMOUS_REPAIR_DISPATCHED")
+        self.assertEqual(receipts[0]["result"]["dispatch_status"],"ACCEPTED")
+        self.assertFalse(receipts[0]["result"]["technical_verified"])
         self.assertEqual(len(meta["context"]["repair_dispatch_requests"]),1)
+        self.assertEqual(len(meta["context"]["repair_dispatch_receipts"]),1)
         request=meta["context"]["repair_dispatch_requests"][0]
         self.assertEqual(request["source_ref"],task["repair_task_id"])
         self.assertEqual(request["target_paths"],["learning/continuous_learning.py"])
+        self.assertEqual(len(seen),1)
         self.assertEqual(len(executed),1)
+
+    def test_repair_dispatch_failure_requeues_and_never_completes(self):
+        state,task=self._repair_fixture()
+        def dispatcher(_request):
+            raise RuntimeError("synthetic dispatch failure")
+        updated,receipts,executed,meta=execute_cycle(
+            state,runtime_state=bootstrap_state(now=AT),max_items=1,at=AT,
+            context_overrides={"repair_state":{"tasks":[task]},"main_sha":"a"*40,"repair_dispatcher":dispatcher},
+        )
+        self.assertEqual(updated["work_items"][0]["state"],"QUEUED")
+        self.assertEqual(receipts[0]["status"],"DEFERRED")
+        self.assertEqual(receipts[0]["result_kind"],"EXECUTION_ERROR")
+        self.assertEqual(executed,[])
+        self.assertEqual(meta["summary"]["completed_count"],0)
 
     def test_test_and_verification_handlers_bind_to_exact_pr_check_evidence(self):
         state,work=self._single("TEST")
