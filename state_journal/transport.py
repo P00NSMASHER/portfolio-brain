@@ -6,6 +6,7 @@ Artifacts from pull requests and unregistered callers cannot enter the journal.
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import io
 import json
@@ -25,6 +26,9 @@ EVENT_PREFIX = "portfolio-state-event-v2-"
 SNAPSHOT_ARTIFACT = "portfolio-canonical-shadow-state"
 EMIT_STEP = "Capture immutable state transition event"
 UPLOAD_STEP = "Upload immutable state transition event"
+MAX_FALLBACK_JOBS = 8
+MAX_JOB_LOG_BYTES = 5_242_880
+MAX_WORKFLOW_SOURCE_BYTES = 1_048_576
 
 
 def extract_json(raw: bytes, member: str) -> dict:
@@ -56,7 +60,109 @@ def source_producer(run: dict) -> str:
     return WORKFLOW_PRODUCERS[stem]
 
 
-def validate_provider_event(meta: dict, run: dict, jobs: dict, raw: bytes, upload_steps: dict) -> tuple[dict, dict]:
+def _validate_workflow_publication_contract(event: dict, upload_steps: dict, workflow_source: str) -> None:
+    producer = event["producer"]
+    require(producer in upload_steps, "Producer upload contract missing")
+    require(isinstance(workflow_source, str) and workflow_source, "Source workflow text missing")
+    require(f"- name: {EMIT_STEP}" in workflow_source, "Source workflow emitter step missing")
+    require(
+        f"run: python -m state_journal.emitter --producer {producer}" in workflow_source,
+        "Source workflow emitter command changed",
+    )
+    require(f"- name: {UPLOAD_STEP}" in workflow_source, "Source workflow event upload step missing")
+    event_artifact = (
+        f"name: portfolio-state-event-v2-${{{{ github.run_id }}}}-{producer}-"
+        f"${{{{ github.sha }}}}-${{{{ github.run_attempt }}}}"
+    )
+    require(event_artifact in workflow_source, "Source workflow event artifact binding changed")
+    for domain, step_name in upload_steps[producer].items():
+        require(f"- name: {step_name}" in workflow_source,
+                f"Source workflow domain upload step missing: {domain}")
+        require(
+            f"steps.journal_upload_{domain}.outcome == 'success'" in workflow_source,
+            f"Source workflow domain publication binding changed: {domain}",
+        )
+
+
+def _job_log_proves_publication(
+    log_raw: bytes,
+    *,
+    event: dict,
+    meta: dict,
+    upload_steps: dict,
+    workflow_source: str,
+) -> bool:
+    require(isinstance(log_raw, (bytes, bytearray)), "Source job log is not bytes")
+    require(len(log_raw) <= MAX_JOB_LOG_BYTES, "Source job log exceeds byte limit")
+    try:
+        text = bytes(log_raw).decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise JournalError("Source job log is not UTF-8") from exc
+
+    emitter_command = f"python -m state_journal.emitter --producer {event['producer']}"
+    if emitter_command not in text:
+        return False
+
+    _validate_workflow_publication_contract(event, upload_steps, workflow_source)
+
+    published_rows = []
+    emitted_rows = []
+    for line in text.splitlines():
+        if "JOURNAL_PUBLISHED_DOMAINS:" in line:
+            payload = line.split("JOURNAL_PUBLISHED_DOMAINS:", 1)[1].strip()
+            try:
+                published_rows.append(json.loads(payload))
+            except json.JSONDecodeError as exc:
+                raise JournalError("Source job publication outcomes are malformed") from exc
+        marker = line.find('{"emitted"')
+        if marker >= 0:
+            try:
+                emitted_rows.append(json.loads(line[marker:]))
+            except json.JSONDecodeError as exc:
+                raise JournalError("Source job emitter receipt is malformed") from exc
+
+    require(len(published_rows) == 1, "Source job publication outcomes missing or ambiguous")
+    published = published_rows[0]
+    expected_domains = set(upload_steps[event["producer"]])
+    require(isinstance(published, dict) and set(published) == expected_domains,
+            "Source job publication domain set changed")
+    require(all(type(value) is bool for value in published.values()),
+            "Source job publication outcomes must be booleans")
+    changed_domains = {change["domain"] for change in event["changes"]}
+    require(changed_domains <= expected_domains, "Event contains unregistered publication domain")
+    require(all(published[domain] is True for domain in changed_domains),
+            "Event domain was not backed by a successful publication outcome")
+
+    matching_receipts = [
+        row for row in emitted_rows
+        if row.get("emitted") is True and row.get("event_id") == event["event_id"]
+    ]
+    require(len(matching_receipts) == 1, "Source emitter receipt missing or ambiguous")
+
+    artifact_name = meta["name"]
+    digest_hex = meta["digest"].removeprefix("sha256:")
+    require(f"name: {artifact_name}" in text, "Source event upload name missing from job log")
+    require(
+        f"SHA256 digest of uploaded artifact zip is {digest_hex}" in text,
+        "Source event upload digest missing from job log",
+    )
+    require(
+        f"Artifact {artifact_name}.zip successfully finalized. Artifact ID {meta['id']}" in text,
+        "Source event upload finalization missing from job log",
+    )
+    return True
+
+
+def validate_provider_event(
+    meta: dict,
+    run: dict,
+    jobs: dict,
+    raw: bytes,
+    upload_steps: dict,
+    *,
+    job_logs: dict[int, bytes] | None = None,
+    workflow_source: str | None = None,
+) -> tuple[dict, dict]:
     artifact_digest(meta, raw)
     event = extract_json(raw, "event.json")
     validate_event(event)
@@ -87,20 +193,51 @@ def validate_provider_event(meta: dict, run: dict, jobs: dict, raw: bytes, uploa
             "Artifact is not bound to the source run")
     require(source.get("repository_id") == REPO_ID and source.get("head_repository_id") == REPO_ID, "Artifact repository identity mismatch")
     require(type(run.get("workflow_id")) is int and run["workflow_id"] > 0, "Workflow identity absent")
-    require(jobs.get("total_count") == len(jobs.get("jobs", [])), "Incomplete source job listing")
+    job_rows = jobs.get("jobs")
+    require(isinstance(job_rows, list) and jobs.get("total_count") == len(job_rows),
+            "Incomplete source job listing")
+    require(job_rows, "Source job listing is empty")
+    for candidate_job in job_rows:
+        require(isinstance(candidate_job.get("steps"), list), "Source job steps field malformed")
+
     candidates = []
-    for job in jobs["jobs"]:
-        steps = job.get("steps", [])
+    for candidate_job in job_rows:
+        steps = candidate_job["steps"]
         if any(s.get("name") == EMIT_STEP for s in steps):
-            candidates.append(job)
+            candidates.append(candidate_job)
+
+    fallback_used = False
+    if not candidates and all(candidate_job["steps"] == [] for candidate_job in job_rows):
+        require(len(job_rows) <= MAX_FALLBACK_JOBS, "Empty-step fallback job bound exceeded")
+        require(isinstance(job_logs, dict), "Source job steps unavailable and job logs were not supplied")
+        require(isinstance(workflow_source, str) and workflow_source,
+                "Source job steps unavailable and workflow source was not supplied")
+        for candidate_job in job_rows:
+            job_id = candidate_job.get("id")
+            require(type(job_id) is int and job_id > 0, "Source job identity missing")
+            log_raw = job_logs.get(job_id)
+            require(log_raw is not None, "Source job log missing from bounded fallback")
+            if _job_log_proves_publication(
+                log_raw,
+                event=event,
+                meta=meta,
+                upload_steps=upload_steps,
+                workflow_source=workflow_source,
+            ):
+                candidates.append(candidate_job)
+        fallback_used = True
+
     require(len(candidates) == 1, "Source emitter job missing or ambiguous")
     job = candidates[0]
     require(job.get("run_id") == run["id"] and job.get("run_attempt") == attempt, "Emitter job belongs to another attempt")
     required = [EMIT_STEP, UPLOAD_STEP] + [upload_steps[event["producer"]][c["domain"]] for c in event["changes"]]
-    for name in required:
-        matches = [s for s in job.get("steps", []) if s.get("name") == name]
-        require(len(matches) == 1 and matches[0].get("status") == "completed" and matches[0].get("conclusion") == "success",
-                f"Actual state/event publication step did not succeed: {name}")
+    if job["steps"]:
+        for name in required:
+            matches = [s for s in job["steps"] if s.get("name") == name]
+            require(len(matches) == 1 and matches[0].get("status") == "completed" and matches[0].get("conclusion") == "success",
+                    f"Actual state/event publication step did not succeed: {name}")
+    else:
+        require(fallback_used, "Empty source steps were not independently proven")
     # A failed overall run may have durably finalized cost or other state. That
     # transition is retained, but failure can NEVER be relabeled as useful work.
     evidence = {"kind": "GITHUB_ACTIONS", "repository": REPOSITORY, "artifact_id": meta["id"],
@@ -114,6 +251,8 @@ class GitHubReader:
     def __init__(self, token: str, *, max_requests: int = 100):
         self.http = BudgetedHTTP(token, max_requests=max_requests, retries=1, backoff=1)
         self.base = f"https://api.github.com/repos/{REPOSITORY}"
+        self._workflow_source_cache: dict[tuple[str, str], str] = {}
+        self._job_log_cache: dict[int, bytes] = {}
 
     def get(self, suffix: str) -> dict:
         require(suffix.startswith("/") and ".." not in suffix and "://" not in suffix, "Unsafe API suffix")
@@ -123,6 +262,40 @@ class GitHubReader:
         require(type(artifact_id) is int and artifact_id > 0, "Invalid artifact ID")
         # Existing transport strips authorization on cross-host artifact redirects.
         return self.http.bytes(f"{self.base}/actions/artifacts/{artifact_id}/zip")
+
+    def job_log(self, job_id: int) -> bytes:
+        require(type(job_id) is int and job_id > 0, "Invalid workflow job ID")
+        if job_id not in self._job_log_cache:
+            raw = self.http.bytes(f"{self.base}/actions/jobs/{job_id}/logs")
+            require(len(raw) <= MAX_JOB_LOG_BYTES, "Source job log exceeds byte limit")
+            self._job_log_cache[job_id] = raw
+        return self._job_log_cache[job_id]
+
+    def workflow_source(self, workflow_path: str, source_sha: str) -> str:
+        require(
+            isinstance(workflow_path, str)
+            and re.fullmatch(r"\.github/workflows/[a-z0-9-]+\.yml", workflow_path) is not None,
+            "Unsafe source workflow path",
+        )
+        require(isinstance(source_sha, str) and re.fullmatch(r"[a-f0-9]{40}", source_sha) is not None,
+                "Unsafe source workflow SHA")
+        key = (workflow_path, source_sha)
+        if key not in self._workflow_source_cache:
+            encoded_path = quote(workflow_path, safe="/")
+            encoded_sha = quote(source_sha, safe="")
+            doc = self.get(f"/contents/{encoded_path}?ref={encoded_sha}")
+            require(doc.get("type") == "file" and doc.get("encoding") == "base64",
+                    "Source workflow contents response malformed")
+            payload = doc.get("content")
+            require(isinstance(payload, str), "Source workflow contents missing")
+            try:
+                raw = base64.b64decode("".join(payload.split()), validate=True)
+                source = raw.decode("utf-8")
+            except (ValueError, UnicodeDecodeError) as exc:
+                raise JournalError("Source workflow contents are unreadable") from exc
+            require(len(raw) <= MAX_WORKFLOW_SOURCE_BYTES, "Source workflow exceeds byte limit")
+            self._workflow_source_cache[key] = source
+        return self._workflow_source_cache[key]
 
     def list_recent_artifacts(self, since: str, *, max_pages: int = 20) -> list[dict]:
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
@@ -305,4 +478,30 @@ class GitHubReader:
         run = self.get(f"/actions/runs/{run_id}/attempts/{attempt}")
         jobs = self.get(f"/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100")
         raw = self.archive(meta["id"])
-        return validate_provider_event(meta, run, jobs, raw, upload_steps)
+
+        job_rows = jobs.get("jobs")
+        fallback = (
+            isinstance(job_rows, list)
+            and bool(job_rows)
+            and all(isinstance(job.get("steps"), list) and job["steps"] == [] for job in job_rows)
+        )
+        job_logs = None
+        workflow_source = None
+        if fallback:
+            require(len(job_rows) <= MAX_FALLBACK_JOBS, "Empty-step fallback job bound exceeded")
+            job_logs = {}
+            for job in job_rows:
+                job_id = job.get("id")
+                require(type(job_id) is int and job_id > 0, "Source job identity missing")
+                job_logs[job_id] = self.job_log(job_id)
+            workflow_source = self.workflow_source(run.get("path", ""), run.get("head_sha", ""))
+
+        return validate_provider_event(
+            meta,
+            run,
+            jobs,
+            raw,
+            upload_steps,
+            job_logs=job_logs,
+            workflow_source=workflow_source,
+        )
