@@ -351,7 +351,7 @@ def evaluate_target(
     }
 
 def recover_overdue(
-    state:dict[str,Any],
+    state:dict[str,Any]|None,
     runs:list[dict[str,Any]],
     *,
     dispatch:Callable[[str,str],None],
@@ -361,7 +361,7 @@ def recover_overdue(
 )->dict[str,Any]:
     p=policy_data or load_policy();validate_policy(p)
     at=at or now_iso()
-    paid_stop=hard_stop_reason(state,at=at)
+    paid_stop="COST_STATE_UNAVAILABLE" if state is None else hard_stop_reason(state,at=at)
 
     evaluations=[
       evaluate_target(
@@ -394,20 +394,25 @@ def recover_overdue(
             row["admission_reason_codes"]=[preview["reason"]]
             allowed=preview["allowed"]
         else:
-            preview_request=make_github_job_request(
-              workflow_id=target["admission_workflow_id"],
-              job_id=target["admission_job_id"],
-              run_id=f'liveness-preview-{row["workflow_name"]}-{at}',
-              attempt=1,
-              project_ids=target["project_ids"],
-              estimated_minutes=target["estimated_minutes"],
-              authority_class=target["authority_class"],
-              at=at,
-            )
-            simulated_state,preview=preflight(simulated_state,preview_request,at=at)
-            row["admission_status"]=preview["status"]
-            row["admission_reason_codes"]=preview["reason_codes"]
-            allowed=preview["status"]=="RESERVED"
+            if simulated_state is None:
+                row["admission_status"]="COST_STATE_UNAVAILABLE"
+                row["admission_reason_codes"]=["TRUSTED_COST_STATE_REQUIRED"]
+                allowed=False
+            else:
+                preview_request=make_github_job_request(
+                  workflow_id=target["admission_workflow_id"],
+                  job_id=target["admission_job_id"],
+                  run_id=f'liveness-preview-{row["workflow_name"]}-{at}',
+                  attempt=1,
+                  project_ids=target["project_ids"],
+                  estimated_minutes=target["estimated_minutes"],
+                  authority_class=target["authority_class"],
+                  at=at,
+                )
+                simulated_state,preview=preflight(simulated_state,preview_request,at=at)
+                row["admission_status"]=preview["status"]
+                row["admission_reason_codes"]=preview["reason_codes"]
+                allowed=preview["status"]=="RESERVED"
 
         if not allowed:
             row["status"]="BLOCKED_ADMISSION_PREFLIGHT"
@@ -560,6 +565,7 @@ def main()->int:
     ap.add_argument("--state",default="cost_governor/live/cost_state.json")
     ap.add_argument("--output",default=None)
     ap.add_argument("--state-metadata",default=None)
+    ap.add_argument("--without-cost-state",action="store_true")
     args=ap.parse_args()
     p=load_policy();validate_policy(p)
     token=os.environ.get("GITHUB_TOKEN")
@@ -635,11 +641,11 @@ def main()->int:
           method="POST",
           payload={"ref":branch},
         )
-    state=load_state(args.state)
+    state=None if args.without_cost_state else load_state(args.state)
     result=recover_overdue(state,runs,dispatch=dispatch,at=checked_at,run_proofs=run_proofs)
     meta_path=None if args.state_metadata is None else Path(args.state_metadata)
     metadata=json.loads(meta_path.read_text()) if meta_path is not None and meta_path.exists() else {}
-    result["cost_state_proof"]=cost_state_observation(state,metadata,at=checked_at)
+    result["cost_state_proof"]=None if state is None else cost_state_observation(state,metadata,at=checked_at)
     result["api_requests"]=requests
     result["verified_work_target_count"]=sum(1 for row in result["targets"] if row["status"]=="HEALTHY_VERIFIED_WORK")
     if args.output:
