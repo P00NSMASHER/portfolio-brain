@@ -1,0 +1,49 @@
+name: upstream-live-integration-proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - "verification/UPSTREAM_LIVE_TARGETS.json"
+      - "verification/upstream_live_integration.py"
+      - "truth/AI_BUSINESS_OS_TRUTH_ENGINE_PIN.json"
+      - "memory/AI_BUSINESS_OS_VALUE_MEMORY_PIN.json"
+      - "hunting/AI_BUSINESS_OS_HUNTER_PIN.json"
+      - "learning/AI_BUSINESS_OS_LEARNING_ENGINE_PIN.json"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: portfolio-upstream-live-integration
+  cancel-in-progress: false
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate checked-in adapter contracts
+        run: |
+          python -m truth.validate_truth_integration
+          python -m memory.validate_value_memory
+          python -m hunting.validate_hunter
+          python -m learning.validate_learning
+      - name: Run Step 20 regressions
+        run: python -m unittest tests.test_upstream_live_integration
+      - name: Run live read-only upstream proof
+        run: python -m verification.upstream_live_integration --output verification/out/upstream_live_integration_receipt.json
+      - name: Upload Step 20 receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-upstream-live-integration-proof
+          path: verification/out/upstream_live_integration_receipt.json
+          if-no-files-found: warn
+          retention-days: 30

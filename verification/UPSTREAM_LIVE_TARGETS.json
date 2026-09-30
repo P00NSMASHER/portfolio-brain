@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0.0",
+  "proof_id": "portfolio-upstream-live-integration-v1",
+  "authority_class": "OBSERVE",
+  "upstream_branch": "main",
+  "targets": [
+    {
+      "target_id": "truth-engine",
+      "pin_path": "truth/AI_BUSINESS_OS_TRUTH_ENGINE_PIN.json",
+      "primary": {"kind": "source"},
+      "interface": {
+        "classes": ["TruthEngine", "TruthEngineError"],
+        "functions": [],
+        "names": ["VALID_VERDICTS", "VALID_FINDING_STATUSES"],
+        "methods": {"TruthEngine": ["register_claim"]}
+      }
+    },
+    {
+      "target_id": "value-memory",
+      "pin_path": "memory/AI_BUSINESS_OS_VALUE_MEMORY_PIN.json",
+      "primary": {"kind": "source"},
+      "interface": {
+        "classes": ["ValueMemory", "ValueMemoryError"],
+        "functions": [],
+        "names": [],
+        "methods": {
+          "ValueMemory": ["register_memory", "observe_outcome", "verify_observation"]
+        }
+      }
+    },
+    {
+      "target_id": "hunter-bridge",
+      "pin_path": "hunting/AI_BUSINESS_OS_HUNTER_PIN.json",
+      "primary": {"kind": "component", "key": "business_os_bridge"},
+      "interface": {
+        "classes": ["HunterBridgeError"],
+        "functions": ["compile_hunter_seeds"],
+        "names": ["PUBLIC_TECHNICAL_SOURCE_TYPES"],
+        "methods": {}
+      }
+    },
+    {
+      "target_id": "production-learning-engine",
+      "pin_path": "learning/AI_BUSINESS_OS_LEARNING_ENGINE_PIN.json",
+      "primary": {"kind": "component", "key": "learning_engine"},
+      "interface": {
+        "classes": ["ValueMemory", "ValueConfig", "MemoryCandidate", "ExperienceKind"],
+        "functions": ["contextual_memory_key"],
+        "names": [],
+        "methods": {
+          "ValueMemory": ["observe", "update", "rank", "to_state"]
+        }
+      }
+    }
+  ]
+}
