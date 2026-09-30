@@ -218,6 +218,8 @@ def build_live_state(
             "age_minutes": age,
             "stale_after_minutes": STALE_AFTER_MINUTES[name],
             "state_sequence": state.get("sequence"),
+            "source_sequence": state.get("sequence"),
+            "source_state_hash": _hash_value(state),
             "state_updated_at": state.get("updated_at"),
             "error_class": error_class,
         }
@@ -243,6 +245,7 @@ def build_live_state(
       "artifact_created_at":provider_metadata.get("artifact_created_at"),
       "artifact_expires_at":provider_metadata.get("artifact_expires_at"),"age_minutes":provider_age,
       "stale_after_minutes":STALE_AFTER_MINUTES["provider"],"state_sequence":provider_state.get("sequence"),
+      "source_sequence":provider_state.get("sequence"),"source_state_hash":_hash_value(provider_state),
       "state_updated_at":provider_state.get("updated_at"),"error_class":None,
     }
 
@@ -271,6 +274,14 @@ def build_live_state(
         "health_sources": sorted(CORE_HEALTH_SOURCES),
         "optional_observability_sources": sorted(OPTIONAL_OBSERVABILITY_SOURCES),
         "sources": sources,
+        "evidence_semantics": {
+            "heartbeat": "LIVENESS_CONNECTIVITY_ONLY",
+            "notification": "ALERT_ONLY",
+            "pages": "PUBLICATION_ONLY",
+            "technical_verification_credit": False,
+            "market_verification_credit": False,
+            "revenue_verification_credit": False,
+        },
     }
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
