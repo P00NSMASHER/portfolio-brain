@@ -5,7 +5,11 @@ from pathlib import Path
 from repair.autonomous_repair import request_from_scheduler_work
 from repair.repair_engine import failure_to_task
 from software_factory.github_executor import GitHubExecutor
-from software_factory.scheduler_repair_bridge import finalize_factory_repair, start_factory_repair
+from software_factory.scheduler_repair_bridge import (
+    start_factory_repair,
+    submit_factory_candidate,
+    verify_factory_candidate,
+)
 from software_factory.software_factory import hashv
 
 
@@ -119,18 +123,39 @@ class SchedulerRepairFactoryBridgeTests(unittest.TestCase):
                 "merge_authority_granted": False,
                 "deployment_authority_granted": False,
             }
-            final = finalize_factory_repair(
+            submitted = submit_factory_candidate(
                 request,
                 validation,
-                test_log=b"compile PASS\noperating mode PASS\nregressions PASS\n",
+                test_log=b"builder compile PASS\nbuilder operating mode PASS\nbuilder regressions PASS\n",
                 candidate_root=candidate,
                 db_path=db,
                 attempt_id="36700000123",
                 executor=executor,
                 now=101,
             )
+            self.assertEqual(
+                submitted["status"],
+                "CANDIDATE_SUBMITTED_AWAITING_INDEPENDENT_FACTORY_REVIEW",
+            )
+            self.assertFalse(submitted["independent_factory_verified"])
+            self.assertFalse(submitted["pr_created"])
+            self.assertFalse(any(
+                method == "POST" and url.endswith("/pulls")
+                for method, url, _payload in transport.calls
+            ))
+
+            final = verify_factory_candidate(
+                request,
+                independent_test_log=b"fresh isolated regressions PASS\noperating mode PASS\n",
+                expected_commit_sha=submitted["candidate_commit_sha"],
+                db_path=db,
+                attempt_id="36700000123",
+                executor=executor,
+                now=102,
+            )
 
         self.assertEqual(final["status"], "PR_OPEN")
+        self.assertTrue(final["independent_factory_verified"])
         self.assertEqual(final["pr_number"], 77)
         self.assertTrue(final["technical_candidate_tested"])
         self.assertFalse(final["foundation_success"])
@@ -148,6 +173,24 @@ class SchedulerRepairFactoryBridgeTests(unittest.TestCase):
         self.assertIn("Factory merge authority: NONE", body)
         self.assertIn("portfolio-phase1-gate", body)
         self.assertFalse(any("/merge" in url for _, url, _ in transport.calls))
+
+    def test_workflow_separates_builder_from_network_disabled_factory_review(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/portfolio-autonomous-repair.yml").read_text()
+        self.assertIn("software_factory.scheduler_repair_bridge submit", workflow)
+        self.assertIn("  factory-review:", workflow)
+        self.assertIn("software_factory.scheduler_repair_bridge verify", workflow)
+        self.assertIn("--network none", workflow)
+        self.assertIn("persist-credentials: false", workflow)
+        self.assertNotIn("scheduler_repair_bridge finalize", workflow)
+        self.assertLess(
+            workflow.index("scheduler_repair_bridge submit"),
+            workflow.index("  factory-review:"),
+        )
+        self.assertLess(
+            workflow.index("Run fresh independent factory regressions without network or credentials"),
+            workflow.index("Record independent factory PASS and open protected PR"),
+        )
 
 
 if __name__ == "__main__":
