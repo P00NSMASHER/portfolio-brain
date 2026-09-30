@@ -1,10 +1,18 @@
 import os
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from hunting.steps10_12_live_acceptance import LiveAcceptanceError, build_receipt
 
 class Steps1012LiveAcceptanceTests(unittest.TestCase):
+    def test_workflow_rechecks_main_after_controlled_proof(self):
+        workflow=(ROOT/".github/workflows/steps10-12-live-acceptance.yml").read_text(encoding="utf-8")
+        self.assertIn("Fail closed unless checkout is exact current main", workflow)
+        self.assertIn("Fail closed if protected main moved during acceptance", workflow)
+        self.assertIn("STALE_MAIN_ACCEPTANCE_AFTER_PROOF", workflow)
+        self.assertIn("ACCEPTANCE_RECEIPT_SHA_OR_STATUS_MISMATCH", workflow)
+
     def test_controlled_acceptance_receipt_is_fail_closed_and_non_value_claiming(self):
         receipt=build_receipt(
           source_sha="d"*40,
