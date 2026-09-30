@@ -39,14 +39,41 @@ def _provider_identity(request:dict[str,Any])->tuple[str|None,str|None]:
     route=route_request(request,provider_registry())
     return route.get("provider_id"),route.get("model_id")
 
+def _provider_config_flags(provider_id:str|None,model_id:str|None)->tuple[bool,bool]:
+    registry=provider_registry()
+    provider=next((p for p in registry["providers"] if p["provider_id"]==provider_id),None)
+    if provider is None:
+        return False,False
+    if model_id is None:
+        return True,bool(provider.get("enabled"))
+    model=next((m for m in provider.get("models",[]) if m["model_id"]==model_id),None)
+    configured=model is not None
+    enabled=bool(configured and provider.get("enabled") and model.get("enabled"))
+    return configured,enabled
+
+def _previous_success(output_dir:Path)->str|None:
+    path=output_dir/"provider_health.json"
+    if not path.exists():
+        return None
+    try:
+        value=json.loads(path.read_text()).get("last_successful_at")
+    except (OSError,json.JSONDecodeError,AttributeError):
+        return None
+    return value if isinstance(value,str) and value else None
+
 def _write_health(output_dir:Path,*,mode:str,status:str,source_status:str,sequence:int,
                   at:str|None,provider_id:str|None,model_id:str|None,
                   cost_gate_status:str|None=None,retryable:bool=False,
-                  provider_attempt:int|None=None)->dict[str,Any]:
+                  provider_attempt:int|None=None,credential_ready:bool|None=None,
+                  call_verified:bool|None=None)->dict[str,Any]:
+    configured,enabled=_provider_config_flags(provider_id,model_id)
+    last_successful_at=_timestamp(at) if call_verified is True else _previous_success(output_dir)
     return write_provider_health(output_dir/"provider_health.json",{
-      "schema_version":"1.0.0","state_id":"portfolio-provider-readiness-state",
+      "schema_version":"1.1.0","state_id":"portfolio-provider-readiness-state",
       "sequence":sequence,"updated_at":_timestamp(at),"mode":mode,"status":status,
       "source_analysis_status":source_status,"provider_id":provider_id,"model_id":model_id,
+      "configured":configured,"enabled":enabled,"credential_ready":credential_ready,
+      "call_verified":call_verified,"last_successful_at":last_successful_at,
       "cost_gate_status":cost_gate_status,"retryable":retryable,
       "provider_attempt":provider_attempt,"authority_granted":False,"evidence_upgraded":False
     })
@@ -206,7 +233,8 @@ def run_model_analysis(mode:str,*,runtime_out:Path,cost_state_path:Path,output_d
                 "packet_hash":packet_hash,"authority_granted":False,"evidence_upgraded":False}
         (output_dir/f"{mode}_model_analysis_status.json").write_text(json.dumps(status,indent=2)+"\n")
         _write_health(output_dir,mode=mode,status="MISSING_CREDENTIAL",source_status=status["status"],
-                      sequence=0,at=at,provider_id=provider_id,model_id=model_id)
+                      sequence=0,at=at,provider_id=provider_id,model_id=model_id,
+                      credential_ready=False,call_verified=False)
         return status
     state=load_cost_state(cost_state_path)
     attempt=_governed_attempt(request,state)
@@ -265,11 +293,24 @@ def run_model_analysis(mode:str,*,runtime_out:Path,cost_state_path:Path,output_d
         else:
             health_status="PROVIDER_ERROR"
         health_state=exc.cost_state if exc.cost_state is not None else state
+        provider_call_attempted=status_name not in {"BLOCKED_COST_RETRY_LIMIT","BLOCKED_COST_BUDGET"}
+        if not provider_call_attempted:
+            credential_ready=None
+            call_verified=None
+        else:
+            call_verified=False
+            if exc.status_code in {401,403}:
+                credential_ready=False
+            elif exc.status_code is not None:
+                credential_ready=True
+            else:
+                credential_ready=None
         _write_health(output_dir,mode=mode,status=health_status,source_status=status_name,
                       sequence=int(health_state.get("sequence",0)),at=at,
                       provider_id=provider_id,model_id=model_id,
                       cost_gate_status=exc.gate_status,retryable=exc.retryable,
-                      provider_attempt=attempt)
+                      provider_attempt=attempt,credential_ready=credential_ready,
+                      call_verified=call_verified)
         return status
     cost_state_path.write_text(json.dumps(next_state,indent=2)+"\n")
     receipt=result["receipt"]
@@ -284,7 +325,8 @@ def run_model_analysis(mode:str,*,runtime_out:Path,cost_state_path:Path,output_d
     _write_health(output_dir,mode=mode,status="READY",source_status="SUCCESS",
                   sequence=int(next_state.get("sequence",0)),at=at,
                   provider_id=receipt["provider_id"],model_id=receipt["model_id"],
-                  cost_gate_status="COMMITTED",provider_attempt=attempt)
+                  cost_gate_status="COMMITTED",provider_attempt=attempt,
+                  credential_ready=True,call_verified=True)
     return advisory
 
 def main():
