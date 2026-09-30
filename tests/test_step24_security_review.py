@@ -10,12 +10,12 @@ from verification.step24_security_review import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-MAIN = "139e0adfb02646d79a8bd894a397f93e5341fb4d"
+TEST_SHA = "a" * 40
 
 
 def good_live_evidence():
     return {
-        "observed_main_sha": MAIN,
+        "observed_main_sha": TEST_SHA,
         "ruleset": {
             "id": 24182301,
             "name": "portfolio-main-protection",
@@ -48,7 +48,7 @@ def good_live_evidence():
         "artifact_probe": {
             "run_id": 36728065423,
             "artifact_id": 11103642737,
-            "head_sha": MAIN,
+            "head_sha": TEST_SHA,
             "digest": "sha256:" + "a" * 64,
         },
     }
@@ -68,7 +68,7 @@ class Step24SecurityReviewTests(unittest.TestCase):
         self.assertEqual(result["observed"]["repo006_binding"]["integration_status"], "BLOCKED")
 
     def test_live_evidence_accepts_exact_rules_app_scope_and_artifact_identity(self):
-        result = live_review(good_live_evidence(), MAIN)
+        result = live_review(good_live_evidence(), TEST_SHA)
         self.assertEqual(result["status"], "READY_FOR_INDEPENDENT_SIGNOFF")
         self.assertEqual(result["finding_counts"]["CRITICAL"], 0)
         self.assertEqual(result["finding_counts"]["UNKNOWN"], 0)
@@ -77,14 +77,14 @@ class Step24SecurityReviewTests(unittest.TestCase):
     def test_matching_ruleset_is_not_enough_when_verifier_scope_widens(self):
         evidence = good_live_evidence()
         evidence["verifier_app"]["permissions"]["contents"] = "write"
-        result = live_review(evidence, MAIN)
+        result = live_review(evidence, TEST_SHA)
         self.assertEqual(result["status"], "BLOCKED")
         self.assertIn("VERIFIER_APP_SCOPE_WIDENED", {x["code"] for x in result["findings"]})
 
     def test_matching_app_and_rules_are_not_enough_when_artifact_head_drifts(self):
         evidence = good_live_evidence()
         evidence["artifact_probe"]["head_sha"] = "0" * 40
-        result = live_review(evidence, MAIN)
+        result = live_review(evidence, TEST_SHA)
         self.assertEqual(result["status"], "BLOCKED")
         self.assertIn("ARTIFACT_IDENTITY_UNTRACEABLE", {x["code"] for x in result["findings"]})
 
@@ -98,7 +98,7 @@ class Step24SecurityReviewTests(unittest.TestCase):
     def test_ruleset_without_no_bypass_proof_is_blocked(self):
         evidence = good_live_evidence()
         del evidence["ruleset"]["bypass_actors"]
-        result = live_review(evidence, MAIN)
+        result = live_review(evidence, TEST_SHA)
         self.assertEqual(result["status"], "BLOCKED")
         self.assertIn("MAIN_RULESET_INSUFFICIENT", {x["code"] for x in result["findings"]})
 
