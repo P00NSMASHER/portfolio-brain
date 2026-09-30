@@ -57,8 +57,11 @@ def validate_scheduler():
     req(lane==sorted(lane),"value lane precedence did not dominate selection")
     req(len(state["work_items"])==len(selected),"scheduler state did not persist queue")
     wf=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text().lower()
-    for token in ["contents: read","actions: read","23 * * * *","portfolio_scheduler_disabled","actions/upload-artifact@v4","cancel-in-progress: false"]:
+    for token in ["contents: read","actions: write","pull-requests: read","23 * * * *","portfolio_scheduler_disabled","actions/upload-artifact@v4","cancel-in-progress: false"]:
         req(token in wf,f"scheduler workflow missing {token}")
+    req("contents: write" not in wf,"scheduler gained repository write authority")
+    req("repair.autonomous_repair dispatch" in wf and "portfolio-autonomous-repair.yml" in wf,
+        "scheduler autonomous repair dispatch missing")
     req("push:" not in wf,"scheduler must not fan out on push inside the singleton cost-state concurrency lane")
     req(wf.index("concurrency:",wf.index("  schedule:"))>wf.index("  schedule:"),"scheduler shared-state mutex must cover the writer job")
     runtime_event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()

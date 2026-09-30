@@ -49,6 +49,14 @@
     "runtime-event-observe": {
       "trigger": "push:main",
       "purpose": "bounded source observation after main changes"
+    },
+    "portfolio-autonomous-repair": {
+      "trigger": "workflow_run:failed-main + workflow_dispatch",
+      "purpose": "bounded GitHub-hosted Copilot repair generation on isolated branches with regression tests and protected PR integration"
+    },
+    "portfolio-independent-verifier": {
+      "trigger": "workflow_run:foundation-ci-success",
+      "purpose": "separately credentialed exact-head regression verifier publishing portfolio-phase1-gate from trusted main controls"
     }
   },
   "reusable_nonrecurring_workflows": {
@@ -112,7 +120,15 @@
     "Non-paid scheduler, heartbeat, runtime sync/observe, reporting, notification and learning-continuation work use independent workload lanes rather than the paid cost-state lane.",
     "The command center refreshes hourly and from durable producer completion events without consuming paid model/API budget.",
     "Runtime daily/weekly model-assisted analysis remains serialized through the finite paid cost governor, while sync/observe remain available during paid hard stops.",
-    "Merge authority is not human-gated; protected integration may merge only when the current PR head contains current main, required GitHub Actions validation is successful, the separately credentialed verifier App reports success on the exact head, and repository rules allow no bypass."
+    "Merge authority is not human-gated; protected integration may merge only when the current PR head contains current main, required GitHub Actions validation is successful, the separately credentialed verifier App reports success on the exact head, and repository rules allow no bypass.",
+    "Autonomous repair is GitHub-hosted and event-driven: it may generate and push only isolated factory/auto-repair-* candidate branches, must add or strengthen regression coverage, must pass deterministic guards and full local regressions before opening a PR, and has no merge or deployment authority.",
+    "Autonomous repair does not replace protected integration: foundation validation and the separately credentialed portfolio-phase1-gate remain required on the exact repair PR head.",
+    "The independent verifier runs from default-branch control code, executes candidate regressions inside network-disabled credential-free containers, and only mints the short-lived verifier App token after candidate code has stopped executing.",
+    "The portfolio-phase1-gate private key is supplied only through the PORTFOLIO_VERIFIER_PRIVATE_KEY Actions secret; candidate branches never receive the verifier credential.",
+    "After hosted-verifier activation, `.github/workflows/portfolio-independent-verifier.yml` and `verification/independent_verifier.py` are immutable trust anchors: a candidate touching either receives a red independent gate and cannot integrate through ordinary protected PR flow.",
+    "Autonomous repair generation itself has no merge authority; only the trusted default-branch verifier/integrator may request merge of bot-created factory/auto-repair-* PRs after exact-head Foundation and portfolio-phase1-gate success.",
+    "If an autonomous repair PR falls behind main, the trusted verifier/integrator may request GitHub's protected update-branch operation and must re-run verification on the new head before merge.",
+    "The verifier/integrator has no branch-protection bypass; GitHub repository rules remain the final merge authority."
   ],
   "external_connector_gateways": {
     "gmail": {
