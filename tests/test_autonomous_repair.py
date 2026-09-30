@@ -12,6 +12,7 @@ from repair.autonomous_repair import (
     find_repair_evidence,
     load_policy,
     render_prompt,
+    request_from_hunter_acceptance,
     request_from_run,
     validate_diff,
 )
@@ -78,6 +79,38 @@ class AutonomousRepairTests(unittest.TestCase):
         self.assertIn("Do NOT commit, push, merge, deploy", prompt)
         self.assertIn("regression test", prompt)
 
+    def test_hunter_acceptance_translates_to_clean_room_bounded_factory_request(self):
+        from hunting.lifecycle import apply_acceptance, build_acceptance_receipt, lifecycle_from_review
+        from hunting.steps10_12_live_acceptance import controlled_review
+        lifecycle=lifecycle_from_review(controlled_review())
+        acceptance=build_acceptance_receipt(
+          lifecycle,acceptance_id="HACC-AUTOREPAIR-TEST",
+          target_repository_id="REPO-008",project_id="PRJ-000",
+          verifier_agent_id="AGT-TESTER",accepted_at="2026-09-30T20:00:00Z",
+          external_milestone="PUBLISH_PRODUCT",
+          implementation_target_paths=["hunting/","learning/"],
+          regression_requirement="Add a clean-room regression test.",
+          evidence_refs=["test:hunter-factory"],controlled_proof=True,
+        )
+        accepted=apply_acceptance(lifecycle,acceptance)
+        lifecycle_state={
+          "schema_version":"1.0.0","state_id":"portfolio-hunter-lifecycle-state",
+          "sequence":1,"updated_at":"2026-09-30T20:00:00Z",
+          "records":[{
+            "proposal_id":accepted["proposal_id"],"review_hash":accepted["review_hash"],
+            "lifecycle":accepted,"acceptance_receipt":acceptance,"implementation_evidence":None,
+          }],
+        }
+        work={"work_type":"IMPLEMENTATION","source_ref":acceptance["acceptance_id"]}
+        request=request_from_hunter_acceptance(work,lifecycle_state,base_sha="b"*40)
+        self.assertEqual(request["source_kind"],"HUNTER_ACCEPTED_WORK")
+        self.assertEqual(request["target_paths"],["hunting/","learning/"])
+        self.assertIn("clean-room",request["failure_summary"].lower())
+        prompt=render_prompt(request)
+        self.assertIn("clean-room",prompt.lower())
+        self.assertIn("Do not copy source code",prompt)
+        self.assertIn("Inspect only the local repository",prompt)
+
     def test_diff_guard_accepts_bounded_implementation_plus_regression_test(self):
         td, root, sha = self.git_repo()
         try:
@@ -136,11 +169,21 @@ class AutonomousRepairTests(unittest.TestCase):
         self.assertEqual(set(payload["inputs"]), {"request_b64"})
 
     def test_repair_evidence_binds_checks_to_exact_integrations(self):
+        fingerprint="sha256:"+"f"*64
         pulls = [{
             "number": 7,
-            "body": "REPAIR_SOURCE_REF:RTASK-X\n",
+            "body": (
+                "Factory work: AUTO-REPAIR-"+"F"*16+"-36758526194\n"
+                "Source: REPAIR_SOURCE_REF:RTASK-X\n"
+                f"AUTO_REPAIR_FINGERPRINT:{fingerprint}\n"
+                "Base: "+"b"*40+"\n"
+                "Candidate: "+"c"*40+"\n"
+            ),
             "updated_at": "2026-09-29T20:00:00Z",
-            "head": {"sha": "c" * 40},
+            "head": {
+                "sha": "c" * 40,
+                "ref": "factory/auto-repair-controlled/attempt-1",
+            },
         }]
         checks = {"check_runs": [
             {"name": "validate", "conclusion": "success", "app": {"id": 15368}},
@@ -151,6 +194,22 @@ class AutonomousRepairTests(unittest.TestCase):
         self.assertTrue(result["foundation_success"])
         self.assertTrue(result["independent_success"])
         self.assertEqual(result["head_sha"], "c" * 40)
+        self.assertEqual(result["candidate_sha"], "c" * 40)
+        self.assertEqual(result["base_sha"], "b" * 40)
+        self.assertEqual(result["request_fingerprint"], fingerprint)
+        self.assertEqual(result["factory_work_id"], "AUTO-REPAIR-"+"F"*16+"-36758526194")
+        self.assertEqual(result["head_ref"], "factory/auto-repair-controlled/attempt-1")
+
+    def test_repair_evidence_source_marker_is_exact_not_substring(self):
+        pulls = [{
+            "number": 8,
+            "body": "REPAIR_SOURCE_REF:RTASK-X-SPOOF\n",
+            "updated_at": "2026-09-29T20:00:00Z",
+            "head": {"sha": "c" * 40, "ref": "factory/auto-repair-spoof/attempt-1"},
+        }]
+        with patch("repair.autonomous_repair._http_json", side_effect=[pulls]):
+            result = find_repair_evidence("RTASK-X", token="token")
+        self.assertEqual(result["status"], "NO_REPAIR_PR")
 
 
     def test_policy_never_grants_merge_deploy_or_default_branch_write(self):
@@ -176,7 +235,7 @@ class AutonomousRepairTests(unittest.TestCase):
         self.assertIn("  factory-review:", text)
         self.assertIn("--network none", text)
         self.assertNotIn("software_factory.scheduler_repair_bridge finalize", text)
-        self.assertIn("SCHEDULER_REPAIR_TASK", text)
+        self.assertIn("steps.prepare.outputs.source_kind != 'WORKFLOW_FAILURE'", text)
         self.assertIn("Create isolated workflow-failure repair branch", text)
         self.assertIn("--no-ask-user", text)
         self.assertIn("--available-tools='view,grep,glob,edit,create,apply_patch'", text)

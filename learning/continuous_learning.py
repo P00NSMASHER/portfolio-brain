@@ -201,26 +201,70 @@ def _checked_in_observations()->list[dict[str,Any]]:
     return list(ledger["observations"])
 
 def rebuild_from_sources(live_state_path:Path|None=None)->dict[str,Any]:
-    rows=_checked_in_observations()
+    # Checked-in observations are historical context only. They are validated and
+    # fingerprinted, but never enter the reward/Q-value rebuild or fresh counts.
+    baseline=_checked_in_observations()
+    for row in baseline:
+        validate_observation(row)
+    rows=[]
     source_mode="CHECKED_IN_ONLY"
     live_sequence=None
     if live_state_path is not None and Path(live_state_path).exists():
         from learning.live_observations import validate_state as validate_live_state
         live=json.loads(Path(live_state_path).read_text(encoding="utf-8"))
         validate_live_state(live)
-        rows.extend(live["observations"])
+        rows=list(live["observations"])
         source_mode="CHECKED_IN_PLUS_DURABLE_VERIFIED"
         live_sequence=live["sequence"]
     rebuilt=rebuild_state(rows)
+    baseline_hash=canonical_hash(baseline)
+    verified_outcome_count=sum(
+      1 for row in rows
+      if any(
+        isinstance(ref,str) and ref.startswith("value-outcome:")
+        for ref in row["provenance_refs"]
+      )
+    )
+    live_observation_count=len(rows)-verified_outcome_count
+    provenance_freshness={
+      "LIVE_OBSERVATION":{
+        "fresh_learning_credit":True,
+        "observation_count":live_observation_count,
+        "source_refs":["runtime:live-observation-stream","learning/live/learning_observation_state.json"],
+      },
+      "VERIFIED_OUTCOME":{
+        "fresh_learning_credit":True,
+        "observation_count":verified_outcome_count,
+        "source_refs":["learning/live/learning_observation_state.json"],
+      },
+      "PINNED_UPSTREAM":{
+        "fresh_learning_credit":False,
+        "observation_count":0,
+        "context_source_count":1,
+        "source_refs":["learning/AI_BUSINESS_OS_LEARNING_ENGINE_PIN.json"],
+      },
+      "BASELINE_OR_SEED":{
+        "fresh_learning_credit":False,
+        "observation_count":len(baseline),
+        "source_refs":["learning/LEARNING_OBSERVATION_LEDGER.json"],
+        "snapshot_hash":baseline_hash,
+      },
+    }
     rebuilt["source_mode"]=source_mode
     rebuilt["live_observation_state_sequence"]=live_sequence
-    rebuilt["live_observation_count"]=len(rows)-len(_checked_in_observations())
+    rebuilt["live_observation_count"]=len(rows)
+    rebuilt["fresh_learning_observation_count"]=len(rows)
+    rebuilt["baseline_or_seed_observation_count"]=len(baseline)
+    rebuilt["baseline_snapshot_hash"]=baseline_hash
+    rebuilt["provenance_freshness"]=provenance_freshness
     rebuilt["state_hash"]=canonical_hash({
       "source_snapshot_hash":rebuilt["source_snapshot_hash"],
+      "baseline_snapshot_hash":baseline_hash,
       "records":rebuilt["records"],
       "learning_alerts":rebuilt["learning_alerts"],
       "source_mode":source_mode,
       "live_observation_state_sequence":live_sequence,
+      "provenance_freshness":provenance_freshness,
     })
     return rebuilt
 

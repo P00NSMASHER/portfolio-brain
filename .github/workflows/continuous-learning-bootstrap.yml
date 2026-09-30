@@ -59,31 +59,20 @@ jobs:
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m state_journal.production_reader --domain learning --output learning/live/learning_observation_state.json
 
-      - name: Reconcile VERIFIED feedback lineage
+      - name: Atomically route VERIFIED outcome
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
-          python -m value_proof.feedback_loop
+          python -m value_proof.outcome_ingestion
           --task-contract value_proof/MODEL_TASK_CONTRACT.json
           --verifier-contract value_proof/VERIFIER_CONTRACT.json
+          --controlled-cases hunting/CONTROLLED_PROOF_CASES.json
           --value-outcome value_proof/live/verified-proof/value_outcome.json
           --builder-provider-receipt value_proof/live/verified-proof/model_provider_receipt.json
           --verifier-provider-receipt value_proof/live/verified-proof/independent_verifier_provider_receipt.json
           --hunter-state hunting/live/hunter_state.json
           --model-feedback-state model_router/live/model_feedback_state.json
+          --learning-state learning/live/learning_observation_state.json
           --output-dir value_proof/out
-
-      - name: Ingest VERIFIED outcome into continuous learning
-        if: ${{ steps.workload.outputs.allowed == 'true' }}
-        run: >-
-          python -m learning.live_observations
-          --state learning/live/learning_observation_state.json
-          --task-contract value_proof/MODEL_TASK_CONTRACT.json
-          --verifier-contract value_proof/VERIFIER_CONTRACT.json
-          --value-outcome value_proof/live/verified-proof/value_outcome.json
-          --feedback-receipt value_proof/out/feedback_loop_receipt.json
-          --builder-provider-receipt value_proof/live/verified-proof/model_provider_receipt.json
-          --verifier-provider-receipt value_proof/live/verified-proof/independent_verifier_provider_receipt.json
-          --output value_proof/out/learning_observation_state.json
 
       - name: Prove cross-subsystem learning integrity
         if: ${{ steps.workload.outputs.allowed == 'true' }}
@@ -100,7 +89,7 @@ jobs:
         with:
           name: portfolio-continuous-learning-bootstrap
           path: |
-            value_proof/out/feedback_loop_receipt.json
+            value_proof/out/outcome_ingestion_receipt.json
             value_proof/out/learning_integrity.json
             value_proof/live/verified-proof/restore_receipt.json
           if-no-files-found: error

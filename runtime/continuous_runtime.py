@@ -210,7 +210,10 @@ def run(mode: str, *, state_path: Path, output_dir: Path, target_repository_id: 
         learning_live=ROOT/"learning"/"live"/"learning_observation_state.json"
         learning_state=rebuild_from_sources(learning_live if learning_live.exists() else None)
         (output_dir/"portfolio_learning_state.json").write_text(json.dumps(learning_state,indent=2)+"\n")
-        uncertainty_state=build_uncertainty_snapshot(generated_at=at)
+        uncertainty_state=build_uncertainty_snapshot(
+            generated_at=at,
+            learning_observation_count=learning_state["fresh_learning_observation_count"],
+        )
         (output_dir/"highest_value_uncertainty.json").write_text(json.dumps(uncertainty_state,indent=2)+"\n")
         experiment_state=build_experiment_portfolio(uncertainty_state)
         (output_dir/"experiment_plan.json").write_text(json.dumps(experiment_state,indent=2)+"\n")

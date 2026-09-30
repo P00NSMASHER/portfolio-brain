@@ -51,6 +51,10 @@
     "portfolio-state-checkpoint-candidate": {
       "cron": "19 4 * * 0",
       "purpose": "weekly protected candidate for durable canonical checkpoint/archive compaction"
+    },
+    "verified-feedback-bootstrap": {
+      "cron": "17 * * * *",
+      "purpose": "idempotent routing of verified completed outcomes into existing learning/feedback projections"
     }
   },
   "event_driven_workflows": {

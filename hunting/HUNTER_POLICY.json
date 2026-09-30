@@ -138,5 +138,47 @@
       "REVENUE_VERIFIED"
     ],
     "signal_router": "hunting/signal_router.py"
+  },
+  "downstream_lifecycle": {
+    "mode": "EVIDENCE_GATED_PROJECTION_OVER_EXISTING_REVIEW_AND_FACTORY_EVIDENCE",
+    "module": "hunting/lifecycle.py",
+    "stages": [
+      "DISCOVERED",
+      "REVIEWED",
+      "ACCEPTED_FOR_WORK",
+      "IMPLEMENTED",
+      "TECHNICALLY_VERIFIED",
+      "MARKET_VERIFIED",
+      "REVENUE_VERIFIED"
+    ],
+    "review_can_self_authorize_work": false,
+    "explicit_acceptance_receipt_required": true,
+    "implementation_mode": "ISOLATED_REIMPLEMENTATION_NO_SOURCE_COPY",
+    "governed_factory": "software_factory/software_factory.py",
+    "automatic_merge_authority_granted": false,
+    "automatic_deployment_authority_granted": false,
+    "technical_evidence_can_claim_market_value": false,
+    "technical_evidence_can_claim_revenue_value": false,
+    "market_evidence_kind": "MARKET_OUTCOME",
+    "revenue_evidence_kind": "REVENUE_OUTCOME",
+    "new_state_journal_domain_required": false,
+    "bridge_module": "hunting/downstream_lifecycle.py",
+    "persistence_artifact_name": "portfolio-hunter-lifecycle-state",
+    "seed_file": "hunting/HUNTER_LIFECYCLE_STATE_SEED.json",
+    "acceptance_approval_code": "HUNTER_ACCEPT_FOR_WORK",
+    "acceptance_source_binding": "EXACT_REVIEW_ID_AND_REVIEW_HASH",
+    "production_target_scope": "CURRENT_WRITE_ENABLED_REPOSITORY_ONLY",
+    "recurring_bridge_workflow": ".github/workflows/portfolio-autonomous-scheduler.yml",
+    "scheduler_work_type": "IMPLEMENTATION",
+    "implementation_target_prefixes_by_repository": {
+      "REPO-008": [
+        "hunting/",
+        "learning/",
+        "uncertainty/",
+        "experiments/"
+      ]
+    },
+    "implementation_regression_requirement": "Add a new focused regression test proving the accepted local capability while preserving clean-room reimplementation and all existing governance boundaries.",
+    "acceptance_milestone_binding": "CURRENT_VALUE_LOOP_CLOSEST_EXTERNAL_MILESTONE_AS_ROUTING_CONTEXT_NOT_VALUE_PROOF"
   }
 }

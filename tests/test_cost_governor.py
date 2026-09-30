@@ -246,11 +246,12 @@ class CostGovernorTests(unittest.TestCase):
         self.assertIn("workload_control.workload_gate preflight",workflow)
         self.assertNotIn("cost_governor.workflow_gate",workflow)
         self.assertIn("value_proof.proof_artifact_state",workflow)
-        self.assertIn("value_proof.feedback_loop",workflow)
+        self.assertIn("value_proof.outcome_ingestion",workflow)
         self.assertNotIn("PORTFOLIO_MODEL_API_KEY",workflow)
         self.assertNotIn("value_proof.model_task",workflow)
         self.assertNotIn("value_proof.verifier",workflow)
-        self.assertNotIn("\n  schedule:",workflow)
+        self.assertIn("\n  schedule:",workflow)
+        self.assertIn('cron: "17 * * * *"',workflow)
 
 
     def test_continuous_learning_bootstrap_is_workload_controlled_and_model_free(self):

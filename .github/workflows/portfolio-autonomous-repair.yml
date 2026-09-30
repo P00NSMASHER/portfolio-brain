@@ -134,7 +134,7 @@ jobs:
           PY
 
       - name: Restore exact admitted scheduler base
-        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind == 'SCHEDULER_REPAIR_TASK' }}
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind != 'WORKFLOW_FAILURE' }}
         env:
           REPAIR_BASE_SHA: ${{ steps.prepare.outputs.base_sha }}
         run: |
@@ -144,7 +144,7 @@ jobs:
 
       - name: Start governed software-factory repair
         id: factory_start
-        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind == 'SCHEDULER_REPAIR_TASK' }}
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind != 'WORKFLOW_FAILURE' }}
         env:
           PORTFOLIO_FACTORY_TOKEN: ${{ github.token }}
         run: |
@@ -162,7 +162,7 @@ jobs:
           PY
 
       - name: Create local scheduler factory worktree branch
-        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind == 'SCHEDULER_REPAIR_TASK' }}
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind != 'WORKFLOW_FAILURE' }}
         env:
           REPAIR_BRANCH: ${{ steps.factory_start.outputs.branch }}
         run: |
@@ -170,7 +170,7 @@ jobs:
           git switch -c "$REPAIR_BRANCH"
 
       - name: Create isolated workflow-failure repair branch
-        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind != 'SCHEDULER_REPAIR_TASK' }}
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind == 'WORKFLOW_FAILURE' }}
         env:
           REPAIR_BRANCH: ${{ steps.prepare.outputs.branch }}
         run: |
@@ -282,7 +282,7 @@ jobs:
             python -m unittest discover -s tests -p "test_*.py" -v
           } 2>&1 | tee repair/out/test.log
       - name: Create isolated workflow-failure candidate commit
-        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind != 'SCHEDULER_REPAIR_TASK' }}
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind == 'WORKFLOW_FAILURE' }}
         env:
           REPAIR_BRANCH: ${{ steps.prepare.outputs.branch }}
         run: |
@@ -295,7 +295,7 @@ jobs:
           git push origin "HEAD:refs/heads/$REPAIR_BRANCH"
 
       - name: Open protected workflow-failure repair pull request
-        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind != 'SCHEDULER_REPAIR_TASK' }}
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind == 'WORKFLOW_FAILURE' }}
         id: pr
         env:
           REPAIR_BRANCH: ${{ steps.prepare.outputs.branch }}
@@ -309,7 +309,7 @@ jobs:
 
       - name: Submit scheduler candidate through software factory
         id: factory_submit
-        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind == 'SCHEDULER_REPAIR_TASK' }}
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind != 'WORKFLOW_FAILURE' }}
         env:
           PORTFOLIO_FACTORY_TOKEN: ${{ github.token }}
         run: |
@@ -349,7 +349,7 @@ jobs:
           retention-days: 30
 
       - name: Dispatch exact-head foundation validation for workflow-failure repair
-        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind != 'SCHEDULER_REPAIR_TASK' }}
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind == 'WORKFLOW_FAILURE' }}
         env:
           REPAIR_BRANCH: ${{ steps.prepare.outputs.branch }}
         run: gh workflow run foundation-ci.yml --ref "$REPAIR_BRANCH"

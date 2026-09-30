@@ -1,6 +1,8 @@
 import json
 import unittest
 
+from hunting.lifecycle import apply_acceptance, build_acceptance_receipt, lifecycle_from_review
+from hunting.steps10_12_live_acceptance import controlled_review
 from repair.repair_engine import failure_to_task
 from runtime.state import bootstrap_state
 from scheduler.autonomous_scheduler import _candidate, _work_packet, build_context, generate_candidates, load_state, policy as scheduler_policy
@@ -112,12 +114,13 @@ class SchedulerWorkExecutorTests(unittest.TestCase):
         roles={
             "RESEARCH":("AGT-RESEARCHER","RESEARCH_EVIDENCE","OBSERVE"),
             "INTEGRATION":("AGT-PRODUCT-ANALYST","PRODUCT_ANALYSIS","OBSERVE"),
+            "IMPLEMENTATION":("AGT-ENGINEER","ISOLATED_IMPLEMENTATION","MODIFY"),
             "REPAIR":("AGT-ENGINEER","ISOLATED_IMPLEMENTATION","MODIFY"),
             "TEST":("AGT-TESTER","REGRESSION_VALIDATION","EXPERIMENT"),
             "VERIFICATION":("AGT-AUDITOR","INDEPENDENT_AUDIT","EXPERIMENT"),
         }
         agent,goal,authority=roles[work_type]
-        internal=work_type in {"REPAIR","TEST","VERIFICATION"}
+        internal=work_type in {"IMPLEMENTATION","REPAIR","TEST","VERIFICATION"}
         source_ref="RTASK-EXECUTOR" if internal else f"TEST-{work_type}"
         candidate=_candidate(
             work_type,source_ref,["PRJ-000"],agent,goal,authority,"LOW",
@@ -216,6 +219,75 @@ class SchedulerWorkExecutorTests(unittest.TestCase):
         )
         state=load_state();state["work_items"]=[_work_packet(candidate,AT)]
         return state,task
+
+    def _hunter_implementation_fixture(self):
+        review=controlled_review()
+        lifecycle=lifecycle_from_review(review)
+        acceptance=build_acceptance_receipt(
+          lifecycle,acceptance_id="HACC-EXECUTOR-CONTROLLED",
+          target_repository_id="REPO-008",project_id="PRJ-000",
+          verifier_agent_id="AGT-TESTER",accepted_at="2026-09-30T20:00:00Z",
+          external_milestone="PUBLISH_PRODUCT",
+          implementation_target_paths=["hunting/","learning/"],
+          regression_requirement="Add a clean-room regression test.",
+          evidence_refs=["issue:210","test:durable-hunter-implementation"],
+          controlled_proof=True,
+        )
+        accepted=apply_acceptance(lifecycle,acceptance)
+        lifecycle_state={
+          "schema_version":"1.0.0","state_id":"portfolio-hunter-lifecycle-state",
+          "sequence":1,"updated_at":"2026-09-30T20:00:00Z",
+          "records":[{
+            "proposal_id":accepted["proposal_id"],
+            "review_hash":accepted["review_hash"],
+            "lifecycle":accepted,
+            "acceptance_receipt":acceptance,
+            "implementation_evidence":None,
+          }],
+        }
+        context=build_context(hunter_lifecycle_state=lifecycle_state)
+        candidates,_=generate_candidates(context)
+        candidate=next(c for c in candidates if c["source_ref"]==acceptance["acceptance_id"])
+        self.assertEqual(candidate["work_type"],"IMPLEMENTATION")
+        self.assertEqual(candidate["external_milestone"],"PUBLISH_PRODUCT")
+        state=load_state()
+        work=_work_packet(candidate,AT)
+        state["work_items"]=[work]
+        return state,lifecycle_state,acceptance
+
+    def test_accepted_hunter_work_survives_into_scheduler_and_dispatches_factory_lane(self):
+        state,lifecycle_state,acceptance=self._hunter_implementation_fixture()
+        seen=[]
+        def dispatcher(request):
+            seen.append(request)
+            return {
+              "request_id":request["request_id"],"fingerprint":request["fingerprint"],
+              "workflow_file":"portfolio-autonomous-repair.yml","dispatch_status":"ACCEPTED",
+              "authority_granted":False,
+            }
+        updated,receipts,executed,meta=execute_cycle(
+            state,runtime_state=bootstrap_state(now=AT),max_items=1,at=AT,
+            context_overrides={
+              "hunter_lifecycle_state":lifecycle_state,
+              "main_sha":"a"*40,
+              "repair_dispatcher":dispatcher,
+            },
+        )
+        self.assertEqual(updated["work_items"][0]["state"],"COMPLETE")
+        self.assertEqual(receipts[0]["result_kind"],"HUNTER_IMPLEMENTATION_DISPATCHED")
+        self.assertFalse(receipts[0]["result"]["implementation_complete"])
+        self.assertFalse(receipts[0]["result"]["technical_verified"])
+        self.assertFalse(receipts[0]["result"]["market_verified"])
+        self.assertFalse(receipts[0]["result"]["revenue_verified"])
+        self.assertEqual(len(executed),1)
+        self.assertEqual(len(seen),1)
+        request=seen[0]
+        self.assertEqual(request["source_kind"],"HUNTER_ACCEPTED_WORK")
+        self.assertEqual(request["source_ref"],acceptance["acceptance_id"])
+        self.assertEqual(request["target_paths"],["hunting/","learning/"])
+        self.assertIn("clean-room",request["failure_summary"].lower())
+        self.assertEqual(len(meta["context"]["hunter_implementation_dispatch_requests"]),1)
+        self.assertEqual(len(meta["context"]["hunter_implementation_dispatch_receipts"]),1)
 
     def test_repair_handler_completes_only_after_accepted_dispatch(self):
         state,task=self._repair_fixture()

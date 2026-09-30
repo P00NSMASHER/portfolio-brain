@@ -59,7 +59,7 @@ def validate_value_proof():
     req(feedback_cfg["preserve_independence_gate"] is True and feedback_cfg["no_cross_tier_promotion"] is True,"feedback routing may weaken tier/independence")
     workflow=(ROOT/".github/workflows/model-value-proof.yml").read_text()
     for token in [
-      "python -m value_proof.feedback_loop",
+      "python -m value_proof.outcome_ingestion",
       "python -m state_journal.production_reader --domain hunter --output hunting/live/hunter_state.json",
       "python -m state_journal.production_reader --domain model_feedback --output model_router/live/model_feedback_state.json",
       "name: portfolio-hunter-state",
@@ -72,7 +72,7 @@ def validate_value_proof():
     for token in [
       "value_proof/TRIGGER_VERIFIED_FEEDBACK_BOOTSTRAP",
       "python -m value_proof.proof_artifact_state",
-      "python -m value_proof.feedback_loop",
+      "python -m value_proof.outcome_ingestion",
       "name: portfolio-hunter-state",
       "name: portfolio-model-feedback-state",
     ]:
