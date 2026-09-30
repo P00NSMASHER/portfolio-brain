@@ -41,7 +41,7 @@ def restore(output:Path,metadata_output:Path|None=None)->str:
     ).decode())
     return restore_latest_valid_state(
       data,current_run=run,expected_head_branch=os.environ.get("GITHUB_REF_NAME"),
-      download=get,output=output,member_name="hunter_lifecycle_state.json",
+      download=get,output=output,member_name="out/hunter_lifecycle_state.json",
       expected_state_id=STATE_ID,max_archive_bytes=2_000_000,max_state_bytes=2_000_000,
       validator=validate_state,metadata_output=metadata_output,max_candidates=5,
     )
