@@ -11,6 +11,8 @@ def load(p):return json.loads((ROOT/p).read_text())
 def validate_notifications():
     p=policy();validate_policy(p)
     req(p["authority_class"]=="NONE","notification authority widened")
+    req(p.get("evidence_semantics")=="ALERT_ONLY_NO_VERIFICATION_CREDIT","notification evidence semantics drifted")
+    req(p.get("verification_credit")==[] and p.get("technical_verification") is False and p.get("market_verification") is False and p.get("revenue_verification") is False,"notification created verification credit")
     req(p["delivery_channels"]==["GITHUB_ACTIONS_ANNOTATION","GITHUB_STEP_SUMMARY"],"delivery channels widened")
     state,first=notification_cycle(load_state(),at="2026-09-25T22:40:00Z")
     kinds={x["kind"] for x in first["emitted_alerts"]}

@@ -416,20 +416,25 @@ def validate_operating_mode():
 
     gmail=p.get("external_connector_gateways",{}).get("gmail",{})
     req(gmail.get("provider")=="CHATGPT_GMAIL_CONNECTOR" and gmail.get("account_ref")=="PRIMARY_GMAIL_CONNECTOR","Gmail connector gateway binding missing")
-    req(gmail.get("execution_task_id")=="6ab377c25df08191a6e2aa1537d9d2ef","Gmail gateway executor task mismatch")
-    req(gmail.get("planner_task_id")=="6ab377be3184819186a3075f37a530b8","Gmail gateway planner task mismatch")
+    req(gmail.get("core_autonomy_dependency") is False and gmail.get("human_approval_required") is True,"Gmail gateway is not optional/human-gated")
+    req(gmail.get("execution_task_id") is None and gmail.get("planner_task_id") is None,"scheduled ChatGPT/Gmail tasks remain a core runtime dependency")
     req(load("action_engine/KILL_SWITCH.json").get("disabled") is False,"checked-in Gmail action kill switch unexpectedly active")
     req(not (ROOT/".github/workflows/portfolio-action-worker.yml").exists(),"obsolete SMTP action worker still present")
     gateway_status=s.get("connector_gateways",{}).get("gmail",{})
     ledger=load("action_engine/GMAIL_GATEWAY_LEDGER.json")
-    validate_gmail_gateway_status(gmail,gateway_status,ledger)
+    req(gateway_status.get("provider")=="CHATGPT_GMAIL_CONNECTOR" and gateway_status.get("account")=="PRIMARY_GMAIL_CONNECTOR","historical Gmail proof binding invalid")
+    req(gateway_status.get("proof_ledger")=="action_engine/GMAIL_GATEWAY_LEDGER.json","historical Gmail proof ledger missing")
+    req(gateway_status.get("current_policy")=="HUMAN_APPROVAL_REQUIRED" and gateway_status.get("core_autonomy_dependency") is False,"current Gmail authority status missing")
+    req(p.get("core_autonomy_dependencies")=={"interactive_chatgpt":False,"gmail":False,"customer_communications":False},"core autonomy dependency policy drifted")
     boundaries=set(p["permanent_authority_boundaries"])
     for b in [
       "PAYMENT_CASH_MOVEMENT_REQUIRES_HUMAN_APPROVAL",
       "LIVE_MARKET_TRADING_AND_BROKERAGE_EXECUTION_PROHIBITED",
       "DEPLOYMENT_NOT_GRANTED_TO_AUTONOMOUS_SCHEDULER",
       "MERGE_REQUIRES_PROTECTED_PR_AND_INDEPENDENT_VERIFIER",
-      "CHILD_FACING_CONSEQUENTIAL_CHANGES_REQUIRE_APPROVAL"
+      "CHILD_FACING_CONSEQUENTIAL_CHANGES_REQUIRE_APPROVAL",
+      "CUSTOMER_COMMUNICATION_REQUIRES_HUMAN_APPROVAL",
+      "GMAIL_NOT_REQUIRED_FOR_CORE_AUTONOMY"
     ]:req(b in boundaries,f"authority boundary missing: {b}")
 
     fallback=validate_reasoning_fallback()
@@ -442,6 +447,8 @@ def validate_operating_mode():
       "durable_state_artifacts":len(p["durable_state_artifacts"]),
       "gmail_gateway_account_ref":gmail["account_ref"],
       "gmail_gateway_status":gateway_status["status"],
+      "gmail_core_autonomy_dependency":False,
+      "customer_communication_human_gated":True,
       "enabled_nonzero_models":len(enabled_nonzero),
       "step23_unresolved":step23["unresolved_findings"],
       "step24_authority_violations":step24["authority_violations"],

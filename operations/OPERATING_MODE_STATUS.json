@@ -29,7 +29,7 @@
   "operational_without_interactive_chatgpt": true,
   "release_candidate_head": "bf9fa7375c78609c81df3274d57b9e5e88ca44bd",
   "release_candidate_ci_run_id": 36202388569,
-  "external_chatgpt_tasks_role": "BOUNDED_GMAIL_GATEWAY_PLUS_ADVISORY_MONITORING",
+  "external_chatgpt_tasks_role": "OPTIONAL_HUMAN_GATED_GMAIL_TRANSPORT_PLUS_ADVISORY_MONITORING",
   "operational_hotfixes": [
     {
       "hotfix_id": "OHF-001",
@@ -70,7 +70,10 @@
       "proof_ledger": "action_engine/GMAIL_GATEWAY_LEDGER.json",
       "proof_sequence": 3,
       "proof_at": "2026-09-27T06:20:47Z",
-      "raw_connector_identifiers_persisted": false
+      "raw_connector_identifiers_persisted": false,
+      "current_policy": "HUMAN_APPROVAL_REQUIRED",
+      "core_autonomy_dependency": false,
+      "historical_proof_status": "LIVE_GATEWAY_PROVEN"
     }
   }
 }

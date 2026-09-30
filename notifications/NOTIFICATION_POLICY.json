@@ -3,8 +3,16 @@
   "notification_id": "portfolio-notification-layer-v1",
   "mode": "EVIDENCE_GATED_DEDUP_RATE_LIMITED",
   "authority_class": "NONE",
-  "delivery_channels": ["GITHUB_ACTIONS_ANNOTATION", "GITHUB_STEP_SUMMARY"],
-  "severity_order": ["CRITICAL", "HIGH", "MEDIUM", "INFO"],
+  "delivery_channels": [
+    "GITHUB_ACTIONS_ANNOTATION",
+    "GITHUB_STEP_SUMMARY"
+  ],
+  "severity_order": [
+    "CRITICAL",
+    "HIGH",
+    "MEDIUM",
+    "INFO"
+  ],
   "cooldown_minutes": {
     "CRITICAL": 60,
     "HIGH": 1440,
@@ -44,6 +52,13 @@
     "No notification channel may contact customers, move money, trade, deploy, merge, modify downstream state or invoke arbitrary outbound webhooks.",
     "Cost hard stops and verified negative outcomes outrank informational state changes.",
     "Missing evidence produces no outcome alert.",
-    "While BLK-005 is open, persistent notification state contains only sanitized IDs, hashes, counts, severity, timestamps and evidence references."
-  ]
+    "While BLK-005 is open, persistent notification state contains only sanitized IDs, hashes, counts, severity, timestamps and evidence references.",
+    "A heartbeat is liveness/connectivity telemetry only and cannot be converted into work or value by a notification.",
+    "Notification emission is alert delivery only and creates no technical, market, or revenue verification."
+  ],
+  "evidence_semantics": "ALERT_ONLY_NO_VERIFICATION_CREDIT",
+  "verification_credit": [],
+  "technical_verification": false,
+  "market_verification": false,
+  "revenue_verification": false
 }
