@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from state_journal.contracts import DOMAINS, digest, require
 from state_journal.legacy import restore_all
+from hunting.proposal_state import normalize_state as normalize_proposal_state
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -13,8 +14,14 @@ def verify(projected: dict, work: Path) -> dict:
     legacy, refs = restore_all(ROOT, work)
     rows = {}
     for domain in sorted(DOMAINS):
-        projected_hash = digest(projected[domain])
-        legacy_hash = digest(legacy[domain])
+        projected_state = projected[domain]
+        legacy_state = legacy[domain]
+        if domain == "proposals":
+            # Match the production validator's migration of pre-origins artifacts.
+            projected_state = normalize_proposal_state(projected_state)
+            legacy_state = normalize_proposal_state(legacy_state)
+        projected_hash = digest(projected_state)
+        legacy_hash = digest(legacy_state)
         require(projected_hash == legacy_hash, f"LEGACY_PARITY_MISMATCH:{domain}")
         rows[domain] = {
             "projection_hash": projected_hash,
