@@ -1,0 +1,384 @@
+{
+  "schema_version": "1.0.0",
+  "authority_model": "DENY_BY_DEFAULT_PROJECT_SCOPED_NO_INHERITANCE",
+  "default_effect": "DENY",
+  "core_autonomy_dependencies": {
+    "interactive_chatgpt_required": false,
+    "gmail_required": false
+  },
+  "invariants": [
+    "Registration or observation never grants write, deploy, external-action, or child-facing authority.",
+    "Project capabilities are evaluated per project; Portfolio Brain privileges never inherit downstream.",
+    "Heartbeats, notifications, and Pages publication are telemetry or publication evidence only and never verification.",
+    "Public persistence is sanitized-only."
+  ],
+  "actions": {
+    "OBSERVATION": {
+      "decision": "PROJECT_CAPABILITY",
+      "capability": "READ_OBSERVE"
+    },
+    "REPOSITORY_CANDIDATE_WRITE": {
+      "decision": "PROJECT_CAPABILITY",
+      "capability": "CANDIDATE_PR",
+      "merge_authority": false
+    },
+    "PR_CREATION": {
+      "decision": "PROJECT_CAPABILITY",
+      "capability": "CANDIDATE_PR",
+      "merge_authority": false
+    },
+    "PROTECTED_BOT_REPAIR_INTEGRATION": {
+      "decision": "BOUNDED",
+      "project_ids": [
+        "PRJ-000"
+      ],
+      "repository_ids": [
+        "REPO-008"
+      ],
+      "requires": [
+        "FOUNDATION_EXACT_HEAD_SUCCESS",
+        "APP_5121826_EXACT_HEAD_SUCCESS",
+        "PROTECTED_BRANCH_RULES"
+      ],
+      "bypass_authority": false
+    },
+    "PRODUCTION_DEPLOYMENT": {
+      "decision": "HUMAN_APPROVAL_REQUIRED",
+      "autonomous_allowed": false
+    },
+    "CUSTOMER_EMAIL_GMAIL": {
+      "decision": "HUMAN_APPROVAL_REQUIRED",
+      "autonomous_allowed": false,
+      "core_runtime_dependency": false
+    },
+    "FINANCIAL_ACTION": {
+      "decision": "HUMAN_APPROVAL_REQUIRED",
+      "autonomous_allowed": false
+    },
+    "DESTRUCTIVE_ACTION": {
+      "decision": "HUMAN_APPROVAL_REQUIRED",
+      "autonomous_allowed": false
+    },
+    "CHILD_FACING_ACTION": {
+      "decision": "HUMAN_APPROVAL_REQUIRED",
+      "autonomous_allowed": false,
+      "project_ids": [
+        "PRJ-005",
+        "PRJ-006"
+      ]
+    },
+    "LIVE_TRADING": {
+      "decision": "PROHIBITED",
+      "autonomous_allowed": false,
+      "project_ids": [
+        "PRJ-007"
+      ]
+    },
+    "PAGES_PUBLICATION": {
+      "decision": "BOUNDED",
+      "project_ids": [
+        "PRJ-000"
+      ],
+      "publication_only": true,
+      "production_deploy_authority": false
+    }
+  },
+  "project_capabilities": [
+    {
+      "project_id": "PRJ-000",
+      "READ_OBSERVE": {
+        "allowed": true,
+        "repository_ids": [
+          "REPO-008"
+        ],
+        "scope": [
+          "SANITIZED_REPOSITORY_OBSERVATION"
+        ]
+      },
+      "CANDIDATE_PR": {
+        "allowed": true,
+        "repository_ids": [
+          "REPO-008"
+        ],
+        "branch_prefixes": [
+          "factory/",
+          "auto-repair/"
+        ]
+      },
+      "DEPLOY": {
+        "allowed": false
+      },
+      "EXTERNAL_ACTION": {
+        "allowed": false
+      }
+    },
+    {
+      "project_id": "PRJ-001",
+      "READ_OBSERVE": {
+        "allowed": true,
+        "repository_ids": [
+          "REPO-001"
+        ],
+        "scope": [
+          "SANITIZED_REPOSITORY_OBSERVATION"
+        ]
+      },
+      "CANDIDATE_PR": {
+        "allowed": false,
+        "repository_ids": [],
+        "branch_prefixes": []
+      },
+      "DEPLOY": {
+        "allowed": false
+      },
+      "EXTERNAL_ACTION": {
+        "allowed": false
+      }
+    },
+    {
+      "project_id": "PRJ-002",
+      "READ_OBSERVE": {
+        "allowed": true,
+        "repository_ids": [
+          "REPO-001"
+        ],
+        "scope": [
+          "SANITIZED_REPOSITORY_OBSERVATION"
+        ]
+      },
+      "CANDIDATE_PR": {
+        "allowed": false,
+        "repository_ids": [],
+        "branch_prefixes": []
+      },
+      "DEPLOY": {
+        "allowed": false
+      },
+      "EXTERNAL_ACTION": {
+        "allowed": false
+      }
+    },
+    {
+      "project_id": "PRJ-003",
+      "READ_OBSERVE": {
+        "allowed": true,
+        "repository_ids": [
+          "REPO-005"
+        ],
+        "scope": [
+          "SANITIZED_REPOSITORY_OBSERVATION"
+        ]
+      },
+      "CANDIDATE_PR": {
+        "allowed": false,
+        "repository_ids": [],
+        "branch_prefixes": []
+      },
+      "DEPLOY": {
+        "allowed": false
+      },
+      "EXTERNAL_ACTION": {
+        "allowed": false
+      }
+    },
+    {
+      "project_id": "PRJ-004",
+      "READ_OBSERVE": {
+        "allowed": true,
+        "repository_ids": [
+          "REPO-007"
+        ],
+        "scope": [
+          "SANITIZED_REPOSITORY_OBSERVATION"
+        ]
+      },
+      "CANDIDATE_PR": {
+        "allowed": false,
+        "repository_ids": [],
+        "branch_prefixes": []
+      },
+      "DEPLOY": {
+        "allowed": false
+      },
+      "EXTERNAL_ACTION": {
+        "allowed": false
+      }
+    },
+    {
+      "project_id": "PRJ-005",
+      "READ_OBSERVE": {
+        "allowed": true,
+        "repository_ids": [
+          "REPO-002"
+        ],
+        "scope": [
+          "SANITIZED_REPOSITORY_OBSERVATION"
+        ]
+      },
+      "CANDIDATE_PR": {
+        "allowed": false,
+        "repository_ids": [],
+        "branch_prefixes": []
+      },
+      "DEPLOY": {
+        "allowed": false
+      },
+      "EXTERNAL_ACTION": {
+        "allowed": false
+      }
+    },
+    {
+      "project_id": "PRJ-006",
+      "READ_OBSERVE": {
+        "allowed": true,
+        "repository_ids": [
+          "REPO-003"
+        ],
+        "scope": [
+          "AUTOMATION_HEALTH",
+          "PROGRESS_EVIDENCE"
+        ]
+      },
+      "CANDIDATE_PR": {
+        "allowed": false,
+        "repository_ids": [],
+        "branch_prefixes": []
+      },
+      "DEPLOY": {
+        "allowed": false
+      },
+      "EXTERNAL_ACTION": {
+        "allowed": false
+      }
+    },
+    {
+      "project_id": "PRJ-007",
+      "READ_OBSERVE": {
+        "allowed": true,
+        "repository_ids": [
+          "REPO-004"
+        ],
+        "scope": [
+          "SANITIZED_REPOSITORY_OBSERVATION"
+        ]
+      },
+      "CANDIDATE_PR": {
+        "allowed": false,
+        "repository_ids": [],
+        "branch_prefixes": []
+      },
+      "DEPLOY": {
+        "allowed": false
+      },
+      "EXTERNAL_ACTION": {
+        "allowed": false
+      }
+    },
+    {
+      "project_id": "PRJ-008",
+      "READ_OBSERVE": {
+        "allowed": true,
+        "repository_ids": [
+          "REPO-001"
+        ],
+        "scope": [
+          "SANITIZED_REPOSITORY_OBSERVATION"
+        ]
+      },
+      "CANDIDATE_PR": {
+        "allowed": false,
+        "repository_ids": [],
+        "branch_prefixes": []
+      },
+      "DEPLOY": {
+        "allowed": false
+      },
+      "EXTERNAL_ACTION": {
+        "allowed": false
+      }
+    },
+    {
+      "project_id": "PRJ-009",
+      "READ_OBSERVE": {
+        "allowed": true,
+        "repository_ids": [
+          "REPO-001"
+        ],
+        "scope": [
+          "SANITIZED_REPOSITORY_OBSERVATION"
+        ]
+      },
+      "CANDIDATE_PR": {
+        "allowed": false,
+        "repository_ids": [],
+        "branch_prefixes": []
+      },
+      "DEPLOY": {
+        "allowed": false
+      },
+      "EXTERNAL_ACTION": {
+        "allowed": false
+      }
+    },
+    {
+      "project_id": "PRJ-010",
+      "READ_OBSERVE": {
+        "allowed": true,
+        "repository_ids": [
+          "REPO-001"
+        ],
+        "scope": [
+          "SANITIZED_REPOSITORY_OBSERVATION"
+        ]
+      },
+      "CANDIDATE_PR": {
+        "allowed": false,
+        "repository_ids": [],
+        "branch_prefixes": []
+      },
+      "DEPLOY": {
+        "allowed": false
+      },
+      "EXTERNAL_ACTION": {
+        "allowed": false
+      }
+    },
+    {
+      "project_id": "PRJ-011",
+      "READ_OBSERVE": {
+        "allowed": true,
+        "repository_ids": [
+          "REPO-001"
+        ],
+        "scope": [
+          "SANITIZED_REPOSITORY_OBSERVATION"
+        ]
+      },
+      "CANDIDATE_PR": {
+        "allowed": false,
+        "repository_ids": [],
+        "branch_prefixes": []
+      },
+      "DEPLOY": {
+        "allowed": false
+      },
+      "EXTERNAL_ACTION": {
+        "allowed": false
+      }
+    }
+  ],
+  "constrained_integrations": {
+    "PRJ-006": {
+      "repository_id": "REPO-003",
+      "name": "ABVM Grade 2 Parent Companion",
+      "allowed_evidence": [
+        "AUTOMATION_HEALTH",
+        "PROGRESS_EVIDENCE"
+      ],
+      "persisted_payload": "SANITIZED_METADATA_ONLY",
+      "child_facing_mutation": false,
+      "deployment_authority": false,
+      "school_content_publication_authority": false
+    }
+  }
+}
