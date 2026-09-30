@@ -49,6 +49,42 @@ class OperatingModeTests(unittest.TestCase):
           "agent-heartbeat-sweep"
         })
 
+    def test_event_driven_inventory_includes_autonomous_repair_without_schedule(self):
+        policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
+        self.assertEqual(set(policy["event_driven_workflows"]),{
+          "runtime-event-observe","portfolio-autonomous-repair","portfolio-independent-verifier"
+        })
+        repair=ROOT/".github/workflows/portfolio-autonomous-repair.yml"
+        triggers=workflow_top_level_triggers(repair)
+        self.assertIn("workflow_run",triggers)
+        self.assertIn("workflow_dispatch",triggers)
+        self.assertNotIn("schedule",triggers)
+
+    def test_autonomous_repair_remains_pr_only_and_independently_gated(self):
+        policy=json.loads((ROOT/"repair/AUTONOMOUS_REPAIR_POLICY.json").read_text())
+        self.assertTrue(policy["enabled"])
+        self.assertFalse(policy["interactive_chatgpt_dependency"])
+        self.assertFalse(policy["merge_authority"])
+        self.assertFalse(policy["deployment_authority"])
+        self.assertFalse(policy["default_branch_write_authority"])
+        self.assertEqual(policy["foundation_check"],{"name":"validate","integration_id":15368})
+        self.assertEqual(policy["independent_check"],{"name":"portfolio-phase1-gate","integration_id":5121826})
+
+    def test_independent_verifier_is_workflow_run_only_and_credential_isolated(self):
+        verifier=ROOT/".github/workflows/portfolio-independent-verifier.yml"
+        triggers=workflow_top_level_triggers(verifier)
+        self.assertEqual(triggers,{"workflow_run"})
+        text=verifier.read_text().lower()
+        self.assertIn("actions/create-github-app-token@v2",text)
+        self.assertIn("secrets.portfolio_verifier_private_key",text)
+        self.assertIn("docker run --rm --network none --cap-drop=all --security-opt=no-new-privileges",text)
+        self.assertIn("path: verifier-control",text)
+        self.assertIn("verification/independent_verifier.py",text)
+        self.assertLess(
+            text.index("run candidate regressions in network-disabled containers"),
+            text.index("mint short-lived independent verifier app token"),
+        )
+
     def test_active_schedule_inventory_matches_operating_policy(self):
         policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
         actual=scheduled_workflow_inventory(ROOT/".github/workflows")

@@ -1,0 +1,186 @@
+name: portfolio-independent-verifier
+
+on:
+  workflow_run:
+    workflows: ["foundation-ci"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: portfolio-independent-verifier-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: >-
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch != 'main' &&
+        (github.event.workflow_run.event == 'pull_request' || github.event.workflow_run.event == 'workflow_dispatch')
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CANDIDATE_SHA: ${{ github.event.workflow_run.head_sha }}
+      CANDIDATE_BRANCH: ${{ github.event.workflow_run.head_branch }}
+    steps:
+      - name: Resolve exact same-repository pull request
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os, subprocess, sys
+          sha=os.environ["CANDIDATE_SHA"]
+          branch=os.environ["CANDIDATE_BRANCH"]
+          raw=subprocess.check_output([
+              "gh","api",f"repos/{os.environ['GITHUB_REPOSITORY']}/pulls",
+              "-f","state=open","-f",f"head=P00NSMASHER:{branch}","--method","GET"
+          ],text=True)
+          pulls=json.loads(raw)
+          matches=[
+              pr for pr in pulls
+              if pr.get("head",{}).get("sha")==sha
+              and pr.get("head",{}).get("repo",{}).get("full_name")==os.environ["GITHUB_REPOSITORY"]
+              and pr.get("base",{}).get("ref")=="main"
+              and pr.get("base",{}).get("repo",{}).get("full_name")==os.environ["GITHUB_REPOSITORY"]
+          ]
+          if len(matches)!=1:
+              raise SystemExit("exact same-repository PR missing or ambiguous")
+          pr=matches[0]
+          print("number="+str(pr["number"]))
+          body=pr.get("body") or ""
+          autonomous=(
+              branch.startswith("factory/auto-repair-")
+              and "AUTO_REPAIR_FINGERPRINT:" in body
+              and pr.get("user",{}).get("login")=="github-actions[bot]"
+          )
+          print("autonomous="+("true" if autonomous else "false"))
+          PY
+
+      - name: Refresh autonomous repair branch onto current main when stale
+        id: refresh
+        if: ${{ steps.pr.outputs.autonomous == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)"
+          MERGE_BASE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${MAIN_SHA}...${CANDIDATE_SHA}" --jq .merge_base_commit.sha)"
+          if [ "$MERGE_BASE" != "$MAIN_SHA" ]; then
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/update-branch" -f expected_head_sha="$CANDIDATE_SHA"
+            echo "updated=true" >> "$GITHUB_OUTPUT"
+            echo "Autonomous repair branch refreshed onto current main; verification restarts on the new head." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "updated=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout exact candidate without credentials
+        if: ${{ steps.refresh.outputs.updated != 'true' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Pull isolated Python verifier image
+        if: ${{ steps.refresh.outputs.updated != 'true' }}
+        run: docker pull python:3.12-slim
+
+      - name: Run candidate regressions in network-disabled containers
+        if: ${{ steps.refresh.outputs.updated != 'true' }}
+        run: |
+          set -euo pipefail
+          mkdir -p verifier-results
+          set +e
+          docker run --rm --network none --cap-drop=ALL --security-opt=no-new-privileges             -v "$PWD/candidate:/src:ro" python:3.12-slim             sh -lc 'cp -a /src /work && cd /work && python -I -m unittest discover -s /work/tests -t /work -p "test_*.py" -v'             > verifier-results/full.txt 2>&1
+          FULL=$?
+          echo "$FULL" > verifier-results/full.exit
+          docker run --rm --network none --cap-drop=ALL --security-opt=no-new-privileges             -v "$PWD/candidate:/src:ro" python:3.12-slim             sh -lc 'cp -a /src /work && cd /work && python -I -m unittest discover -s /work/tests -t /work -p "test_phase1_*.py" -v'             > verifier-results/phase1.txt 2>&1
+          PHASE1=$?
+          echo "$PHASE1" > verifier-results/phase1.exit
+          docker run --rm --network none --cap-drop=ALL --security-opt=no-new-privileges             -v "$PWD/candidate:/src:ro" python:3.12-slim             sh -lc 'cp -a /src /work && cd /work && python -I -c '"'"'import sys;sys.path.insert(0,"/work");from operations.validate_operating_mode import validate_operating_mode;print(validate_operating_mode())'"'"''             > verifier-results/operating.txt 2>&1
+          OPERATING=$?
+          echo "$OPERATING" > verifier-results/operating.exit
+          set -e
+
+      - name: Checkout trusted verifier controls from main
+        if: ${{ steps.refresh.outputs.updated != 'true' }}
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: verifier-control
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        if: ${{ steps.refresh.outputs.updated != 'true' }}
+        with:
+          python-version: "3.12"
+
+      - name: Mint short-lived independent verifier App token
+        if: ${{ steps.refresh.outputs.updated != 'true' }}
+        id: verifier-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: "5121826"
+          private-key: ${{ secrets.PORTFOLIO_VERIFIER_PRIVATE_KEY }}
+          owner: P00NSMASHER
+          repositories: portfolio-brain
+
+      - name: Publish exact-head independent gate
+        if: ${{ steps.refresh.outputs.updated != 'true' }}
+        env:
+          PORTFOLIO_VERIFIER_TOKEN: ${{ steps.verifier-token.outputs.token }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: >-
+          python verifier-control/verification/independent_verifier.py
+          --pr-number "$PR_NUMBER"
+          --head-sha "$CANDIDATE_SHA"
+          --full-exit-file verifier-results/full.exit
+          --phase1-exit-file verifier-results/phase1.exit
+          --operating-exit-file verifier-results/operating.exit
+
+      - name: Merge verified autonomous repair through branch protection
+        if: ${{ steps.refresh.outputs.updated != 'true' && steps.pr.outputs.autonomous == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" \
+                -f merge_method=merge \
+                -f sha="$CANDIDATE_SHA" > verifier-results/merge.json 2> verifier-results/merge.err; then
+              python - <<'PY'
+          import json
+          doc=json.load(open("verifier-results/merge.json"))
+          if doc.get("merged") is not True:
+              raise SystemExit("GitHub merge API returned without merged=true")
+          PY
+              echo "Protected autonomous repair merged after exact-head Foundation + portfolio-phase1-gate." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 5
+          done
+          cat verifier-results/merge.err >&2
+          exit 1
+
+      - name: Preserve non-secret verifier evidence
+        if: ${{ always() && steps.refresh.outputs.updated != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-independent-verifier-${{ github.event.workflow_run.head_sha }}
+          path: |
+            verifier-results/full.txt
+            verifier-results/phase1.txt
+            verifier-results/operating.txt
+          if-no-files-found: error
+          retention-days: 30
