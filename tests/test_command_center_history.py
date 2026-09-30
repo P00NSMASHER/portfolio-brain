@@ -107,6 +107,24 @@ class CommandCenterHistoryTests(unittest.TestCase):
             self.assertEqual(out["states"]["history"]["sequence"],before["sequence"]+2)
             self.assertEqual(set(out["event_ids"]),{event["event_id"] for event in events})
 
+    def test_reducer_continues_from_losslessly_merged_history_predecessor(self):
+        before=append_point(seed(),telemetry("2026-09-26T12:05:00Z"),source_commit="a"*40)
+        first=append_point(before,telemetry("2026-09-26T12:15:00Z",open_work=4),source_commit="b"*40)
+        second=append_point(before,telemetry("2026-09-26T13:05:00Z",open_work=5),source_commit="c"*40)
+        base=checkpoint({"history":before},{"history":"fixture:history"})
+        branches=[
+          make_event("command-center-pages","101","d"*40,[make_change("history",before,first)]),
+          make_event("command-center-pages","102","e"*40,[make_change("history",before,second)]),
+        ]
+        merged=replay(base,branches)["states"]["history"]
+        continued=append_point(merged,telemetry("2026-09-26T14:05:00Z",open_work=6),source_commit="f"*40)
+        followup=make_event("command-center-pages","103","f"*40,[make_change("history",merged,continued)])
+
+        out=replay(base,[followup,*branches])
+
+        self.assertEqual(out["states"]["history"],continued)
+        self.assertEqual(set(out["event_ids"]),{followup["event_id"],*(event["event_id"] for event in branches)})
+
     def test_reducer_rejects_equal_time_history_disagreement(self):
         before=append_point(seed(),telemetry("2026-09-26T12:05:00Z"),source_commit="a"*40)
         first=append_point(before,telemetry("2026-09-26T12:15:00Z",open_work=4),source_commit="b"*40)
