@@ -82,7 +82,7 @@ def build_intake(queue,*,source_revision,source_path=SOURCE_PATH,prior_state=Non
           "source_key":source_key,"finding_identity":candidate_key,
           "worker_id":worker,"project_ids":WORKER_PROJECTS[worker],
           "repository_full_name":repo_name,"exact_revision":revision,
-          "published_license_spdx":license_spdx,"triage_score":score,
+          "published_license_spdx":row.get("published_license_spdx"),"triage_score":score,
           "status":"ELIGIBLE_FOR_EXISTING_HUNTER_INSPECTION",
           "authority_class":"OBSERVE","rights_granted":False,"value_verified":False,
           "reuse_authority_granted":False
