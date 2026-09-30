@@ -1,0 +1,7 @@
+Portfolio Brain upstream live-integration proof trigger.
+
+Updating this file on main intentionally runs the read-only upstream proof.
+The proof performs no upstream writes and grants no authority.
+
+trigger_revision: step20-live-proof-1
+reason: verify pin identity separately from current upstream adapter usability
