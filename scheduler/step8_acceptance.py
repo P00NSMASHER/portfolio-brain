@@ -15,17 +15,6 @@ from scheduler.work_executor import execute_cycle
 AT = "2026-09-30T13:30:00Z"
 
 
-def _accept_dispatch(request: dict) -> dict:
-    """Read-only acceptance stub for handler semantics; Step 9 proves live GitHub dispatch."""
-    return {
-      "request_id":request["request_id"],
-      "fingerprint":request["fingerprint"],
-      "workflow_file":"portfolio-autonomous-repair.yml",
-      "dispatch_status":"ACCEPTED",
-      "authority_granted":False,
-    }
-
-
 def _repair_task() -> dict:
     failure={
       "schema_version":"1.0.0",
@@ -87,7 +76,6 @@ def prove(source_ref: str) -> dict:
       context_overrides={
         "repair_state":{"tasks":[task]},
         "main_sha":main_sha,
-        "repair_dispatcher":_accept_dispatch,
       },
     )
     kinds={row["work_type"]:row["result_kind"] for row in receipts}

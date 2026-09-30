@@ -133,7 +133,9 @@ class AutonomousRepairTests(unittest.TestCase):
         self.assertEqual(receipts[0]["dispatch_status"], "ACCEPTED")
         payload = http.call_args.kwargs["payload"]
         self.assertEqual(payload["ref"], "main")
-        self.assertEqual(set(payload["inputs"]), {"request_b64"})
+        self.assertEqual(set(payload["inputs"]), {"request_b64", "request_id", "request_fingerprint"})
+        self.assertEqual(payload["inputs"]["request_id"], request["request_id"])
+        self.assertEqual(payload["inputs"]["request_fingerprint"], request["fingerprint"])
 
     def test_repair_evidence_binds_checks_to_exact_integrations(self):
         pulls = [{
