@@ -430,7 +430,7 @@ def dispatch_requests(requests: list[dict[str, Any]], *, token: str, repository:
             f"https://api.github.com/repos/{repository}/actions/workflows/{encoded_workflow}/dispatches",
             token,
             method="POST",
-            payload={"ref": "main", "inputs": {"request_b64": request_b64, "request_id": request["request_id"], "request_fingerprint": request["fingerprint"]}},
+            payload={"ref": "main", "inputs": {"request_b64": request_b64}},
         )
         receipts.append({
             "request_id": request["request_id"],
