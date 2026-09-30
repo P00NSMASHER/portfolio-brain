@@ -25,6 +25,7 @@ class GovernanceBoundaryTests(unittest.TestCase):
         policy=json.loads((ROOT/"governance/boundaries.json").read_text())
         abvm=next(row for row in policy["project_capabilities"] if row["project_id"]=="PRJ-006")
         self.assertEqual(abvm["READ_OBSERVE"]["repository_ids"],["REPO-003"])
+        self.assertEqual(abvm["READ_OBSERVE"]["scope"],["REPOSITORY_OBSERVATION"])
         self.assertFalse(abvm["CANDIDATE_PR"]["allowed"])
         self.assertFalse(abvm["DEPLOY"]["allowed"])
         self.assertFalse(abvm["EXTERNAL_ACTION"]["allowed"])
