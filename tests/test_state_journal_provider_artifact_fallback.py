@@ -99,10 +99,39 @@ class ProviderArtifactFallbackTests(unittest.TestCase):
         with self.assertRaisesRegex(JournalError, "successful source run"):
             self.admit(lambda _m, r, _j, _e, _sm, _sr: r.update(conclusion="failure"))
 
-    def test_partial_step_metadata_cannot_use_artifact_fallback(self):
+    def test_unrelated_partial_step_metadata_without_emitter_still_fails_closed(self):
         def mutate(_m, _r, jobs, _e, _sm, _sr):
             jobs["jobs"][0]["steps"] = [{"name": "Setup", "status": "completed", "conclusion": "success"}]
         with self.assertRaisesRegex(JournalError, "Source emitter job missing"):
+            self.admit(mutate)
+
+    def test_stale_in_progress_emitter_metadata_uses_exact_artifact_proof(self):
+        def mutate(_m, _r, jobs, _e, _sm, _sr):
+            jobs["jobs"][0]["steps"] = [
+                {"name": "Setup", "status": "completed", "conclusion": "success"},
+                {
+                    "name": UPLOAD_STEPS["runtime-worker"]["heartbeat"],
+                    "status": "completed",
+                    "conclusion": "success",
+                },
+                {"name": EMIT_STEP, "status": "in_progress", "conclusion": None},
+            ]
+        actual, evidence, event = self.admit(mutate)
+        self.assertEqual(actual, event)
+        self.assertEqual(evidence["job_id"], 20)
+        validate_source_evidence(evidence, event)
+
+    def test_explicit_failed_emitter_step_cannot_use_artifact_fallback(self):
+        def mutate(_m, _r, jobs, _e, _sm, _sr):
+            jobs["jobs"][0]["steps"] = [
+                {
+                    "name": UPLOAD_STEPS["runtime-worker"]["heartbeat"],
+                    "status": "completed",
+                    "conclusion": "success",
+                },
+                {"name": EMIT_STEP, "status": "completed", "conclusion": "failure"},
+            ]
+        with self.assertRaisesRegex(JournalError, "Explicit publication step failed"):
             self.admit(mutate)
 
     def test_missing_state_artifact_fails_closed(self):
