@@ -55,17 +55,49 @@ jobs:
           pr=matches[0]
           print("number="+str(pr["number"]))
           body=pr.get("body") or ""
+          actor=pr.get("user",{}).get("login")
           autonomous=(
               branch.startswith("factory/auto-repair-")
               and "AUTO_REPAIR_FINGERPRINT:" in body
-              and pr.get("user",{}).get("login")=="github-actions[bot]"
+              and actor=="github-actions[bot]"
           )
+          checkpoint_intent=(
+              branch.startswith("checkpoint/archive-")
+              and "CHECKPOINT_ARCHIVE_CANDIDATE:true" in body
+              and actor=="github-actions[bot]"
+          )
+          checkpoint_archive=False
+          if checkpoint_intent:
+              raw_files=subprocess.check_output([
+                  "gh","api",f"repos/{os.environ['GITHUB_REPOSITORY']}/pulls/{pr['number']}/files?per_page=100"
+              ],text=True)
+              files=json.loads(raw_files)
+              if not files or len(files)>=100:
+                  raise SystemExit("checkpoint archive file listing missing or exceeded bound")
+              exact={
+                  "state_journal/ARCHIVE_MANIFEST.json",
+                  "state_journal/CHECKPOINT.json.gz",
+                  "state_journal/POLICY.json",
+              }
+              def allowed(row):
+                  path=row.get("filename","")
+                  status=row.get("status")
+                  archive=path.startswith("state_journal/archive/") and (
+                      path.endswith(".json.gz") or path.endswith(".manifest.json")
+                  )
+                  return status in {"added","modified"} and (path in exact or archive)
+              if not all(allowed(row) for row in files):
+                  raise SystemExit("checkpoint archive candidate escaped protected path allowlist")
+              checkpoint_archive=True
+          protected_integration=autonomous or checkpoint_archive
           print("autonomous="+("true" if autonomous else "false"))
+          print("checkpoint_archive="+("true" if checkpoint_archive else "false"))
+          print("protected_integration="+("true" if protected_integration else "false"))
           PY
 
-      - name: Refresh autonomous repair branch onto current main when stale
+      - name: Refresh protected integration branch onto current main when stale
         id: refresh
-        if: ${{ steps.pr.outputs.autonomous == 'true' }}
+        if: ${{ steps.pr.outputs.protected_integration == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
@@ -76,7 +108,7 @@ jobs:
           if [ "$MERGE_BASE" != "$MAIN_SHA" ]; then
             gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/update-branch" -f expected_head_sha="$CANDIDATE_SHA"
             echo "updated=true" >> "$GITHUB_OUTPUT"
-            echo "Autonomous repair branch refreshed onto current main; verification restarts on the new head." >> "$GITHUB_STEP_SUMMARY"
+            echo "Protected integration branch refreshed onto current main; verification restarts on the new head." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "updated=false" >> "$GITHUB_OUTPUT"
           fi
@@ -148,8 +180,8 @@ jobs:
           --phase1-exit-file verifier-results/phase1.exit
           --operating-exit-file verifier-results/operating.exit
 
-      - name: Merge verified autonomous repair through branch protection
-        if: ${{ steps.refresh.outputs.updated != 'true' && steps.pr.outputs.autonomous == 'true' }}
+      - name: Merge verified protected candidate through branch protection
+        if: ${{ steps.refresh.outputs.updated != 'true' && steps.pr.outputs.protected_integration == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
@@ -165,7 +197,7 @@ jobs:
           if doc.get("merged") is not True:
               raise SystemExit("GitHub merge API returned without merged=true")
           PY
-              echo "Protected autonomous repair merged after exact-head Foundation + portfolio-phase1-gate." >> "$GITHUB_STEP_SUMMARY"
+              echo "Protected candidate merged after exact-head Foundation + portfolio-phase1-gate." >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
             sleep 5
