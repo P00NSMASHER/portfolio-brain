@@ -5,6 +5,8 @@ from unittest.mock import patch
 
 from hunting.steps10_12_live_acceptance import LiveAcceptanceError, build_receipt
 
+ROOT=Path(__file__).resolve().parents[1]
+
 class Steps1012LiveAcceptanceTests(unittest.TestCase):
     def test_workflow_rechecks_main_after_controlled_proof(self):
         workflow=(ROOT/".github/workflows/steps10-12-live-acceptance.yml").read_text(encoding="utf-8")
