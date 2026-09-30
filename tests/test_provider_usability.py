@@ -32,6 +32,20 @@ class ProviderUsabilityTests(unittest.TestCase):
         with self.assertRaisesRegex(ProviderHealthError,"READY requires verified provider usability"):
             validate_provider_health(state)
 
+    def test_failed_status_cannot_claim_verified_call(self):
+        state=json.loads((ROOT/"runtime"/"PROVIDER_HEALTH_SEED.json").read_text())
+        state.update({
+            "mode":"daily","provider_id":"openai","model_id":"gpt-5.6-luna",
+            "status":"RATE_LIMITED","source_analysis_status":"DEFERRED_PROVIDER_RETRY",
+            "credential_ready":True,"call_verified":True,
+            "last_successful_at":"2026-09-30T13:00:00Z","retryable":True,
+            "provider_attempt":2,
+        })
+        with self.assertRaisesRegex(
+            ProviderHealthError,"verified call cannot coexist with a non-READY status"
+        ):
+            validate_provider_health(state)
+
     def test_success_timestamp_survives_later_failed_canary(self):
         with tempfile.TemporaryDirectory() as td:
             out=Path(td)
