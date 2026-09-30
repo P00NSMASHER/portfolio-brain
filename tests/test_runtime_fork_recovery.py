@@ -87,11 +87,39 @@ class RuntimeForkRecoveryTests(unittest.TestCase):
         self.assertEqual(selected['artifacts'][0]['id'], 2)
         self.assertEqual(fork_ids, [2, 1])
 
+    def test_unique_later_equivalent_observe_state_is_selected(self):
+        base = bootstrap_state(now='2026-09-28T08:00:00Z')
+        parent_receipt = make_receipt(base, mode='sync', finished_at='2026-09-28T09:00:00Z', observations=[])
+        parent = advance_cycle(base, parent_receipt)
+
+        first_rows = [observation(parent, 'REPO-008', '2026-09-28T10:00:00Z', 'f' * 40)]
+        first_receipt = make_receipt(parent, mode='observe', finished_at='2026-09-28T10:00:00Z', observations=first_rows)
+        first_state = advance_cycle(parent, first_receipt)
+
+        later_rows = [observation(parent, 'REPO-008', '2026-09-28T10:01:00Z', 'f' * 40)]
+        later_receipt = make_receipt(parent, mode='observe', finished_at='2026-09-28T10:01:00Z', observations=later_rows)
+        later_state = advance_cycle(parent, later_receipt)
+
+        self.assertEqual(first_state['sequence'], later_state['sequence'])
+        self.assertEqual(first_receipt['cycle_id'], later_receipt['cycle_id'])
+
+        data = {'artifacts': [
+            candidate(2, '2026-09-28T10:02:00Z', 'later'),
+            candidate(1, '2026-09-28T10:01:00Z', 'first'),
+        ]}
+        payloads = {'later': bundle(later_state, later_receipt), 'first': bundle(first_state, first_receipt)}
+        selected, fork_ids = _resolve_dominant_runtime_fork(
+            data, current_run='999', expected_head_branch='main', download=payloads.__getitem__,
+            max_archive_bytes=100000, max_member_bytes=50000,
+        )
+        self.assertEqual(selected['artifacts'][0]['id'], 2)
+        self.assertEqual(fork_ids, [2, 1])
+
     def test_divergent_observe_cursor_still_fails_closed(self):
         observe_state, observe_receipt, sync_state, sync_receipt = self.fork(conflicting_observe=True)
         data = {'artifacts': [candidate(2, '2026-09-28T10:02:00Z', 'sync'), candidate(1, '2026-09-28T10:01:00Z', 'observe')]}
         payloads = {'sync': bundle(sync_state, sync_receipt), 'observe': bundle(observe_state, observe_receipt)}
-        with self.assertRaisesRegex(InvalidStateArtifact, 'no unique dominant sync state'):
+        with self.assertRaisesRegex(InvalidStateArtifact, 'no unique dominant state'):
             _resolve_dominant_runtime_fork(
                 data, current_run='999', expected_head_branch='main', download=payloads.__getitem__,
                 max_archive_bytes=100000, max_member_bytes=50000,
