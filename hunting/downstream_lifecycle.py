@@ -27,7 +27,7 @@ from hunting.lifecycle import (
 )
 from hunting.proposal_review_state import validate_state as validate_review_state
 from operations.value_loop import build_value_loop_snapshot
-from repair.autonomous_repair import find_repair_evidence
+from repair.autonomous_repair import find_repair_evidence, request_from_hunter_acceptance
 from software_factory.software_factory import policy as factory_policy
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -185,6 +185,55 @@ def _implementation_refs(evidence:dict[str,Any])->list[str]:
             out.append(f"check:{row.get('name')}:{row.get('app_id')}:{row.get('id','unknown')}")
     return list(dict.fromkeys(out))
 
+def _verify_hunter_factory_evidence(record:dict[str,Any], evidence:dict[str,Any])->None:
+    """Fail closed unless a repair PR is the exact factory continuation of this acceptance."""
+    lifecycle=record["lifecycle"]
+    acceptance=record["acceptance_receipt"]
+    req(isinstance(acceptance,dict),"Hunter implementation evidence missing acceptance")
+    req(evidence.get("source_ref")==acceptance["acceptance_id"],
+        "Hunter implementation evidence source ref mismatch")
+    head=evidence.get("head_sha")
+    candidate=evidence.get("candidate_sha")
+    base=evidence.get("base_sha")
+    fingerprint=evidence.get("request_fingerprint")
+    work_id=evidence.get("factory_work_id")
+    head_ref=evidence.get("head_ref")
+    req(isinstance(head,str) and len(head)==40 and all(c in "0123456789abcdef" for c in head),
+        "Hunter implementation PR head invalid")
+    req(candidate==head,"Hunter implementation candidate/head identity mismatch")
+    req(isinstance(base,str) and len(base)==40 and all(c in "0123456789abcdef" for c in base),
+        "Hunter implementation base SHA missing")
+    req(isinstance(fingerprint,str) and fingerprint.startswith("sha256:") and len(fingerprint)==71,
+        "Hunter implementation request fingerprint missing")
+    req(isinstance(work_id,str) and work_id.startswith("AUTO-REPAIR-"),
+        "Hunter implementation factory work identity missing")
+    req(isinstance(head_ref,str) and head_ref.startswith("factory/auto-repair-"),
+        "Hunter implementation PR did not originate from an isolated factory branch")
+
+    if lifecycle["current_stage"]=="ACCEPTED_FOR_WORK":
+        expected=request_from_hunter_acceptance(
+          {"work_type":"IMPLEMENTATION","source_ref":acceptance["acceptance_id"]},
+          {"records":[record]},
+          base_sha=base,
+        )
+        req(fingerprint==expected["fingerprint"],
+            "Hunter implementation request fingerprint mismatch")
+        prefix="AUTO-REPAIR-"+fingerprint.split(":",1)[1][:16].upper()+"-"
+        req(work_id.startswith(prefix),
+            "Hunter implementation factory work/fingerprint mismatch")
+        return
+
+    req(lifecycle["current_stage"]=="IMPLEMENTED",
+        "Hunter implementation evidence is not valid for current stage")
+    prior=record.get("implementation_evidence")
+    req(isinstance(prior,dict),"implemented Hunter lifecycle lost prior evidence")
+    for key in (
+        "pr_number","head_sha","head_ref","factory_work_id",
+        "request_fingerprint","base_sha","candidate_sha",
+    ):
+        req(evidence.get(key)==prior.get(key),
+            f"conflicting Hunter implementation evidence: {key}")
+
 def _reconcile_record(
     record:dict[str,Any],
     provider:Callable[[str],dict[str,Any]],
@@ -199,6 +248,7 @@ def _reconcile_record(
     evidence=provider(acceptance["acceptance_id"])
     if not isinstance(evidence,dict) or evidence.get("status")!="REPAIR_PR_FOUND":
         return []
+    _verify_hunter_factory_evidence(record,evidence)
     enriched={
       **evidence,
       "proposal_id":lifecycle["proposal_id"],
