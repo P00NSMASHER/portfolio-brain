@@ -5,10 +5,12 @@ import argparse
 import gzip
 import json
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from runtime.artifact_restore import _atomic_write
-from state_journal.archive import ACTIVE_MANIFEST, build_rollover, load_active_manifest
+from state_journal.archive import (MAX_SOURCE_AGE_HOURS, build_rollover, load_active_manifest,
+                                   _format_utc, _utc)
 from state_journal.contracts import canonical, require, strict_load
 from state_journal.reducer import validate_snapshot
 from state_journal.transport import SNAPSHOT_ARTIFACT, GitHubReader, artifact_digest, extract_json
@@ -55,11 +57,6 @@ def latest_canonical(reader: GitHubReader) -> tuple[dict, dict, dict]:
     raise ValueError("No live canonical reducer snapshot available for checkpoint rollover")
 
 
-def _safe_previous_manifest_hash(root: Path) -> str | None:
-    manifest = load_active_manifest(root)
-    return None if manifest is None else manifest["manifest_hash"]
-
-
 def _recovery_runs_are_archived(policy: dict, state: dict) -> bool:
     recovery = policy.get("recovery_run_ids", [])
     if not recovery:
@@ -88,6 +85,12 @@ def generate(root: Path, *, reader: GitHubReader) -> dict:
 
     require(_recovery_runs_are_archived(policy, state),
             "Recovery run ids are not all represented in canonical evidence")
+    now = datetime.now(timezone.utc)
+    source_created = _utc(artifact["created_at"])
+    age = now - source_created
+    require(age >= timedelta(minutes=-1), "Canonical checkpoint source timestamp is in the future")
+    require(age <= timedelta(hours=MAX_SOURCE_AGE_HOURS),
+            "Canonical checkpoint source is stale; fresh reducer publication required")
     manifest, archive_raw, checkpoint_doc, checkpoint_raw, archive_path = build_rollover(
         state,
         source_reducer_run_id=run["id"],
@@ -95,7 +98,8 @@ def generate(root: Path, *, reader: GitHubReader) -> dict:
         source_head_sha=run["head_sha"],
         source_artifact_digest=artifact["digest"],
         source_artifact_created_at=artifact["created_at"],
-        previous_manifest_hash=_safe_previous_manifest_hash(root),
+        previous_manifest=active,
+        archived_at=_format_utc(now),
     )
     archive_file = root / archive_path
     immutable_manifest = root / manifest["manifest_path"]
@@ -121,6 +125,8 @@ def generate(root: Path, *, reader: GitHubReader) -> dict:
         "source_artifact_id": artifact["id"],
         "source_artifact_digest": artifact["digest"],
         "artifact_scan_start": manifest["artifact_scan_start"],
+        "replay_overlap_minutes": manifest.get("replay_overlap_minutes", 0),
+        "previous_manifest_hash": manifest["previous_manifest_hash"],
     }
 
 
