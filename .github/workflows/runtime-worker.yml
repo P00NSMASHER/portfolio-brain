@@ -153,6 +153,28 @@ jobs:
           --output-dir runtime/out
           ${TARGET_REPOSITORY_ID:+--target-repository-id "$TARGET_REPOSITORY_ID"}
 
+      - name: Forward observations to explicit project adapters
+        if: ${{ steps.admission.outputs.allowed == 'true' }}
+        run: >-
+          python -m adapters.project_forwarding
+          --cycle runtime/out/cycle_receipt.json
+          --output runtime/out/project_forwarding_receipt.json
+
+      - name: Bridge REPO-001 scouts into existing Hunter research intake
+        if: ${{ steps.admission.outputs.allowed == 'true' && (inputs.mode == 'sync' || (inputs.mode == 'observe' && inputs.target_repository_id == 'REPO-001')) }}
+        run: >-
+          python -m hunting.repo001_intake
+          --cycle runtime/out/cycle_receipt.json
+          --output runtime/out/repo001_intake_receipt.json
+
+      - name: Project constrained ABVM health and progress evidence
+        if: ${{ steps.admission.outputs.allowed == 'true' && (inputs.mode == 'sync' || (inputs.mode == 'observe' && inputs.target_repository_id == 'REPO-003')) }}
+        run: >-
+          python -m adapters.abvm_constrained
+          --cycle runtime/out/cycle_receipt.json
+          --forwarding runtime/out/project_forwarding_receipt.json
+          --output runtime/out/abvm_health_progress_evidence.json
+
       - name: Heartbeat Data Steward
         if: ${{ steps.admission.outputs.allowed == 'true' }}
         run: >-
