@@ -1,0 +1,142 @@
+name: portfolio-state-archive
+
+on:
+  workflow_run:
+    workflows: ["portfolio-state-reducer"]
+    types: [completed]
+    branches: ["main"]
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: portfolio-state-archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+      SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch exact reducer snapshot with digest validation
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/archive-build"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100" > "$RUNNER_TEMP/archive-build/artifacts.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          from state_journal.transport import GitHubReader, artifact_digest
+          rows=json.load(open(Path(os.environ["RUNNER_TEMP"])/"archive-build/artifacts.json"))["artifacts"]
+          matches=[x for x in rows if x.get("name")=="portfolio-canonical-shadow-state" and x.get("expired") is False]
+          if len(matches)!=1:
+              raise SystemExit("expected exactly one live canonical snapshot artifact")
+          meta=matches[0]
+          reader=GitHubReader(os.environ["GITHUB_TOKEN"],max_requests=4)
+          raw=reader.archive(meta["id"])
+          artifact_digest(meta,raw)
+          root=Path(os.environ["RUNNER_TEMP"])/"archive-build"
+          (root/"snapshot.zip").write_bytes(raw)
+          (root/"source_meta.json").write_text(json.dumps(meta,sort_keys=True,indent=2)+"\n")
+          PY
+          python - <<'PY'
+          import os, zipfile
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])/"archive-build"
+          with zipfile.ZipFile(root/"snapshot.zip") as zf:
+              names=[x for x in zf.namelist() if x=="snapshot.json"]
+              if len(names)!=1:
+                  raise SystemExit("canonical snapshot archive member missing or duplicate")
+              (root/"snapshot.json").write_bytes(zf.read("snapshot.json"))
+          PY
+
+      - name: Fetch previous durable archive lineage
+        run: |
+          set -euo pipefail
+          if git fetch origin refs/heads/archive/state-journal:refs/remotes/origin/archive/state-journal 2>/dev/null; then
+            git show refs/remotes/origin/archive/state-journal:archive/manifest.json > "$RUNNER_TEMP/archive-build/previous_manifest.json"
+          fi
+
+      - name: Build and validate durable sanitized archive
+        run: |
+          set -euo pipefail
+          python - <<'PY' > "$RUNNER_TEMP/archive-build/build.env"
+          import json, os
+          from pathlib import Path
+          meta=json.load(open(Path(os.environ["RUNNER_TEMP"])/"archive-build/source_meta.json"))
+          def out(k,v):
+              print(f"{k}={'' if v is None else v}")
+          out("ARTIFACT_ID",meta["id"])
+          out("ARTIFACT_DIGEST",meta["digest"])
+          out("ARTIFACT_CREATED_AT",meta["created_at"])
+          out("ARTIFACT_EXPIRES_AT",meta.get("expires_at"))
+          PY
+          source "$RUNNER_TEMP/archive-build/build.env"
+          ARGS=()
+          if [ -f "$RUNNER_TEMP/archive-build/previous_manifest.json" ]; then
+            ARGS+=(--previous-manifest "$RUNNER_TEMP/archive-build/previous_manifest.json")
+          fi
+          python -m state_journal.archive_checkpoint build \
+            --snapshot "$RUNNER_TEMP/archive-build/snapshot.json" \
+            --output "$RUNNER_TEMP/archive-build/snapshot.json.gz" \
+            --manifest "$RUNNER_TEMP/archive-build/manifest.json" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-head-sha "$SOURCE_HEAD_SHA" \
+            --source-artifact-id "$ARTIFACT_ID" \
+            --source-artifact-digest "$ARTIFACT_DIGEST" \
+            --source-artifact-created-at "$ARTIFACT_CREATED_AT" \
+            --source-artifact-expires-at "$ARTIFACT_EXPIRES_AT" \
+            --archived-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            "${ARGS[@]}"
+          python -m state_journal.archive_checkpoint verify \
+            --snapshot "$RUNNER_TEMP/archive-build/snapshot.json.gz" \
+            --manifest "$RUNNER_TEMP/archive-build/manifest.json" \
+            "${ARGS[@]}"
+
+      - name: Commit archive on isolated durable branch
+        run: |
+          set -euo pipefail
+          if git show-ref --verify --quiet refs/remotes/origin/archive/state-journal; then
+            git switch -C archive/state-journal refs/remotes/origin/archive/state-journal
+          else
+            git switch --orphan archive/state-journal
+            git rm -rf .
+          fi
+          mkdir -p archive
+          cp "$RUNNER_TEMP/archive-build/snapshot.json.gz" archive/snapshot.json.gz
+          cp "$RUNNER_TEMP/archive-build/manifest.json" archive/manifest.json
+          git config user.name "portfolio-state-archive"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add archive/snapshot.json.gz archive/manifest.json
+          if git diff --cached --quiet; then
+            echo "Archive already current." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          SEQ="$(python -c "import json;print(json.load(open('archive/manifest.json'))['canonical_sequence'])")"
+          git commit -m "Archive canonical sequence ${SEQ}"
+          git push origin HEAD:refs/heads/archive/state-journal
+          echo "Archived canonical sequence ${SEQ} on archive/state-journal." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve archive receipt
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-state-archive-${{ github.event.workflow_run.id }}
+          path: ${{ runner.temp }}/archive-build/manifest.json
+          if-no-files-found: error
+          retention-days: 30
