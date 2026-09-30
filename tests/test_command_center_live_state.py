@@ -41,9 +41,11 @@ class LiveStateBridgeTests(unittest.TestCase):
             provider_metadata=kwargs.get("provider_health_metadata_output")
             if name=="runtime" and include_provider and provider_output is not None and provider_metadata is not None:
                 Path(provider_output).write_text(json.dumps({
-                  "schema_version":"1.0.0","state_id":"portfolio-provider-readiness-state",
+                  "schema_version":"1.1.0","state_id":"portfolio-provider-readiness-state",
                   "sequence":sequence,"updated_at":created_at,"mode":"daily","status":"READY",
                   "source_analysis_status":"SUCCESS","provider_id":"openai","model_id":"gpt-5.6-terra",
+                  "configured":True,"enabled":True,"credential_ready":True,"call_verified":True,
+                  "last_successful_at":created_at,
                   "cost_gate_status":"COMMITTED","retryable":False,"provider_attempt":1,
                   "authority_granted":False,"evidence_upgraded":False,
                 })+"\n")
@@ -120,6 +122,32 @@ class LiveStateBridgeTests(unittest.TestCase):
         self.assertEqual(receipt["sources"]["hunter_proposal_reviews"]["status"],"FALLBACK")
         self.assertEqual(set(receipt["health_sources"]),{"runtime","scheduler","hunter","cost","notifications"})
         self.assertEqual(set(receipt["optional_observability_sources"]),{"agents","provider","model_feedback","learning","hunter_proposals","hunter_proposal_reviews"})
+
+    def test_core_restore_exception_is_blocked_and_reason_is_preserved(self):
+        now=datetime(2026,9,26,18,0,tzinfo=timezone.utc)
+        def boom(*args, **kwargs):
+            raise RuntimeError("artifact rejected")
+        restorers={
+            "runtime":boom,
+            "scheduler":self.fake_restorer("scheduler","2026-09-26T17:20:00Z",102),
+            "hunter":self.fake_restorer("hunter","2026-09-26T17:10:00Z",103),
+            "cost":self.fake_restorer("cost-governor","2026-09-26T17:45:00Z",104),
+            "notifications":self.fake_restorer("notification","2026-09-26T17:00:00Z",105),
+            "agents":self.fake_restorer("agent-heartbeat","2026-09-26T17:50:00Z",106),
+            "model_feedback":self.fake_restorer("model-feedback","2026-09-26T17:40:00Z",107),
+            "learning":self.fake_restorer("learning-observation","2026-09-26T17:35:00Z",108),
+            "hunter_proposals":self.fake_restorer("hunter-proposal","2026-09-26T17:42:00Z",109),
+            "hunter_proposal_reviews":self.fake_restorer("hunter-proposal-review","2026-09-26T17:44:00Z",110),
+        }
+        with tempfile.TemporaryDirectory() as td, patch.dict(bridge.RESTORERS,restorers,clear=True):
+            root=Path(td)
+            receipt=bridge.build_live_state(output_dir=root/"live",receipt_path=root/"receipt.json",now=now)
+        runtime=receipt["sources"]["runtime"]
+        self.assertEqual(runtime["status"],"BLOCKED")
+        self.assertEqual(runtime["restore_status"],"RESTORE_ERROR")
+        self.assertEqual(runtime["error_class"],"RuntimeError")
+        self.assertEqual(runtime["source_kind"],"CHECKED_IN_SEED")
+        self.assertEqual(receipt["bridge_status"],"BLOCKED")
 
     def test_pages_workflow_restores_live_state_hourly_before_publish(self):
         workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text()

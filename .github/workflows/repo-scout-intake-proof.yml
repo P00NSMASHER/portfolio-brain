@@ -1,0 +1,51 @@
+name: repo-scout-intake-proof
+
+on:
+  pull_request:
+    paths:
+      - "hunting/repo_scout_intake.py"
+      - "hunting/repo_scout_artifact_state.py"
+      - ".github/workflows/repo-scout-intake-proof.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Fetch and gate one live REPO-001 scout queue
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python -m hunting.repo_scout_intake
+          --state hunting/REPO_SCOUT_INTAKE_STATE_SEED.json
+          --output-dir hunting/out
+      - name: Validate sanitized live intake proof
+        run: |
+          python - <<'PY'
+          import json,re
+          data=json.load(open("hunting/out/repo_scout_intake.json"))
+          assert data["status"]=="PASS"
+          assert data["source_repository"]=="P00NSMASHER/github-value-hunt-ledger"
+          assert re.fullmatch(r"[0-9a-f]{40}",data["source_revision"])
+          assert 0 <= data["selected_candidates"] <= data["max_intake"] == 2
+          assert all(x["status"]=="ELIGIBLE_FOR_EXISTING_HUNTER_INSPECTION" for x in data["hints"])
+          assert data["authority_granted"] is False
+          assert all(x["authority_class"]=="OBSERVE" and x["rights_granted"] is False and x["value_verified"] is False and x["reuse_authority_granted"] is False for x in data["hints"])
+          PY
+      - name: Upload sanitized live intake receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: repo-scout-intake-proof-${{ github.run_id }}-${{ github.sha }}
+          path: |
+            hunting/out/repo_scout_intake.json
+            hunting/out/repo_scout_intake_state.json
+          if-no-files-found: error
+          retention-days: 30

@@ -85,6 +85,8 @@ def load_state_sources() -> dict[str, Any]:
             "age_minutes":None,
             "stale_after_minutes":None,
             "state_sequence":None,
+            "source_sequence":None,
+            "source_state_hash":None,
             "state_updated_at":None,
             "error_class":None,
         })
@@ -133,7 +135,10 @@ def build_repair_issues(snapshot: dict[str, Any]) -> list[dict[str, str]]:
             "dashboard/live/state_sources.json", "Verify the Pages bridge restored the newest valid artifact for each required source.")
     stale = [(name, row) for name, row in sources["sources"].items() if row["status"] != "LIVE"]
     if stale:
-        detail = ", ".join(f"{name}={row['status']}" for name, row in stale)
+        detail = ", ".join(
+            f"{name}={row['status']}[{row.get('restore_status') or 'unknown'}/{row.get('error_class') or '-'}]"
+            for name, row in stale
+        )
         add("HIGH", "Subsystem evidence needs refresh", detail, "dashboard/live/state_sources.json",
             "Inspect artifact age, producing workflow and source run for each listed subsystem; keep fallback explicitly labeled.")
     proof = telemetry["runtime_sync_proof"]
@@ -990,7 +995,10 @@ def render_html(snapshot: dict[str, Any]) -> str:
         src = sources[name]
         age = src.get("age_minutes")
         age_text = "—" if age is None else f"{age} min"
-        return f"{source_status_label(name).lower()} · {compact_timestamp(src.get('artifact_created_at'))} · age {age_text}"
+        detail=f"{source_status_label(name).lower()} · {compact_timestamp(src.get('artifact_created_at'))} · age {age_text}"
+        if src.get("status")=="BLOCKED":
+            detail += f" · restore {src.get('restore_status') or 'unknown'} · error {src.get('error_class') or 'unknown'}"
+        return detail
 
 
     alert_rows = "".join(
@@ -1248,10 +1256,12 @@ def render_html(snapshot: dict[str, Any]) -> str:
         <tr>
           <td><strong>{_e(source_labels[name])}</strong><span class="sub">{_e(src.get("source_kind"))}</span></td>
           <td>{source_badge(name)}</td>
-          <td class="num">{_e(src.get("state_sequence") if src.get("state_sequence") is not None else "—")}</td>
+          <td class="num">{_e(src.get("source_sequence") if src.get("source_sequence") is not None else src.get("state_sequence") if src.get("state_sequence") is not None else "—")}</td>
+          <td class="wrap"><code>{_e((src.get("source_state_hash") or "—")[:24])}</code></td>
           <td>{_e(src.get("artifact_created_at") or "—")}</td>
           <td>{_e(src.get("source_run_id") or "—")}</td>
           <td class="num">{_e(src.get("age_minutes") if src.get("age_minutes") is not None else "—")}</td>
+          <td class="wrap">{_e(src.get("restore_status") or "—")}<span class="sub">{_e(src.get("error_class") or "")}</span></td>
           <td class="wrap"><code>{_e(src.get("source_ref") or "—")}</code></td>
         </tr>
         """
@@ -1267,9 +1277,12 @@ def render_html(snapshot: dict[str, Any]) -> str:
             {source_badge(name)}
           </div>
           <div class="source-mobile-specs">
-            <div><span>Sequence</span><strong>{_e(src.get("state_sequence") if src.get("state_sequence") is not None else "—")}</strong></div>
+            <div><span>Sequence</span><strong>{_e(src.get("source_sequence") if src.get("source_sequence") is not None else src.get("state_sequence") if src.get("state_sequence") is not None else "—")}</strong></div>
+            <div><span>State hash</span><strong><code>{_e((src.get("source_state_hash") or "—")[:18])}</code></strong></div>
             <div><span>Age</span><strong>{_e(str(src.get("age_minutes")) + " min" if src.get("age_minutes") is not None else "—")}</strong></div>
             <div><span>Source run</span><strong>{_e(src.get("source_run_id") or "—")}</strong></div>
+            <div><span>Restore</span><strong>{_e(src.get("restore_status") or "—")}</strong></div>
+            <div><span>Error</span><strong>{_e(src.get("error_class") or "—")}</strong></div>
           </div>
           <div class="source-mobile-time">{_e(compact_timestamp(src.get("artifact_created_at")))}</div>
         </div>
@@ -2456,8 +2469,9 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
       {_badge(source_bundle["bridge_status"], _status_tone(source_bundle["bridge_status"]))}
     </div>
     <p>Bridge generated: {_e(source_bundle.get("generated_at") or "local fallback mode")}</p>
+    <p><strong>Evidence semantics:</strong> heartbeats prove liveness/connectivity only; notifications are alerts only; Pages is publication only. None grants technical, market, or revenue verification credit.</p>
     <div class="table-wrap source-desktop"><table>
-      <thead><tr><th>Subsystem</th><th>Status</th><th class="num">Seq</th><th>Artifact time</th><th>Source run</th><th class="num">Age min</th><th>Source</th></tr></thead>
+      <thead><tr><th>Subsystem</th><th>Status</th><th class="num">Seq</th><th>State hash</th><th>Artifact time</th><th>Source run</th><th class="num">Age min</th><th>Restore/error</th><th>Source</th></tr></thead>
       <tbody>{source_rows}</tbody>
     </table></div>
     <div class="source-mobile">{source_cards}</div>
@@ -2639,6 +2653,11 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
       <div class="section-head" style="margin-top:16px"><h2>Provider Readiness</h2>{_badge(provider_readiness["status"],_status_tone(provider_readiness["status"]))}</div>
       <table><tbody>
         <tr><td>Provider/model</td><td class="num">{_e((provider_readiness.get("provider_id") or "—") + "::" + (provider_readiness.get("model_id") or "—"))}</td></tr>
+        <tr><td>Configured</td><td class="num">{_e("unknown" if provider_readiness.get("configured") is None else provider_readiness.get("configured"))}</td></tr>
+        <tr><td>Enabled</td><td class="num">{_e("unknown" if provider_readiness.get("enabled") is None else provider_readiness.get("enabled"))}</td></tr>
+        <tr><td>Credential ready</td><td class="num">{_e("unknown" if provider_readiness.get("credential_ready") is None else provider_readiness.get("credential_ready"))}</td></tr>
+        <tr><td>Call verified</td><td class="num">{_e("unknown" if provider_readiness.get("call_verified") is None else provider_readiness.get("call_verified"))}</td></tr>
+        <tr><td>Last successful call</td><td class="num">{_e(compact_timestamp(provider_readiness.get("last_successful_at")))}</td></tr>
         <tr><td>Latest governed analysis</td><td class="num">{_e(provider_readiness["source_analysis_status"])}</td></tr>
         <tr><td>Internal cost gate</td><td class="num">{_e(provider_readiness.get("cost_gate_status") or "not blocked")}</td></tr>
         <tr><td>Retryable</td><td class="num">{_e(provider_readiness["retryable"])}</td></tr>

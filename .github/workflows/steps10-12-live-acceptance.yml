@@ -1,4 +1,5 @@
 name: steps10-12-live-acceptance
+# Step 12 post-restore wake: dispatch one fresh exact-main Hunter implementation request.
 # Open-only dedupe fix acceptance wake: require fresh Hunter implementation evidence.\n# Acceptance wake: re-run after Step 11 checked-in seed freshness hardening.
 
 on:
