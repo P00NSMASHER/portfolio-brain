@@ -1,0 +1,72 @@
+name: step9-actions-permission-bootstrap
+
+on:
+  push:
+    branches: ["ops/step9-bootstrap-20260930"]
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Enable only Actions PR creation permission
+        id: permission
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/permissions/workflow" > /tmp/before.json
+          DEFAULT="$(python -c 'import json; print(json.load(open("/tmp/before.json"))["default_workflow_permissions"])')"
+          BEFORE="$(python -c 'import json; print(str(json.load(open("/tmp/before.json"))["can_approve_pull_request_reviews"]).lower())')"
+          echo "before=$BEFORE" >> "$GITHUB_OUTPUT"
+          if [ "$BEFORE" != "true" ]; then
+            printf '{"default_workflow_permissions":"%s","can_approve_pull_request_reviews":true}\n' "$DEFAULT" > /tmp/update.json
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/actions/permissions/workflow" --input /tmp/update.json
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/actions/permissions/workflow" > /tmp/after.json
+          AFTER="$(python -c 'import json; print(str(json.load(open("/tmp/after.json"))["can_approve_pull_request_reviews"]).lower())')"
+          test "$AFTER" = "true"
+          echo "after=$AFTER" >> "$GITHUB_OUTPUT"
+
+      - name: Build exact scheduler-origin Step 9 canary request
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import base64, json, subprocess
+          from scheduler.step8_acceptance import _repair_task, _packet
+          from repair.autonomous_repair import request_from_scheduler_work
+
+          task = _repair_task()
+          work = _packet("REPAIR", task["repair_task_id"])
+          sha = subprocess.check_output(["git","rev-parse","HEAD"], text=True).strip()
+          req = request_from_scheduler_work(work, {"tasks":[task]}, base_sha=sha)
+          raw = json.dumps(req, sort_keys=True, separators=(",",":")).encode()
+          print("request_id="+req["request_id"])
+          print("fingerprint="+req["fingerprint"])
+          print("base_sha="+req["base_sha"])
+          print("request_b64="+base64.b64encode(raw).decode())
+          PY
+
+      - name: Dispatch governed autonomous repair canary
+        shell: bash
+        env:
+          REQUEST_B64: ${{ steps.request.outputs.request_b64 }}
+        run: |
+          set -euo pipefail
+          gh workflow run portfolio-autonomous-repair.yml --ref main -f request_b64="$REQUEST_B64"
+          echo "Dispatched Step 9 canary request ${{ steps.request.outputs.request_id }}" >> "$GITHUB_STEP_SUMMARY"
