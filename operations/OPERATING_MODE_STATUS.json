@@ -72,5 +72,13 @@
       "proof_at": "2026-09-27T06:20:47Z",
       "raw_connector_identifiers_persisted": false
     }
-  }
+  },
+  "status_evidence_role": "HISTORICAL_STEP25_PROMOTION_AND_POST_PROMOTION_PROOF",
+  "current_architecture_status_file": "operations/ARCHITECTURE_STATUS.json",
+  "current_live_state_source": "dashboard/live/state_sources.json",
+  "core_autonomy_dependencies": {
+    "interactive_chatgpt_required": false,
+    "gmail_required": false
+  },
+  "connector_gateway_scope_note": "Connector gateways are separately governed optional external-action channels; they are not required for core repository observation, scheduling, repair, learning, state persistence, or dashboard autonomy."
 }
