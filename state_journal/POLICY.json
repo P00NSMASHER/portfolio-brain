@@ -1,20 +1,18 @@
 {
-  "schema_version": "1.0.0",
-  "mode": "CANONICAL",
+  "artifact_scan_start": "2026-09-30T13:17:34Z",
   "canonical_snapshot_authorized": true,
-  "production_readers_enabled": true,
   "explicit_checkpoint_required": true,
-  "artifact_scan_start": "2026-09-29T16:35:30Z",
-  "scope": "STEP_2_CANONICAL_PRODUCTION",
   "limits": {
     "max_archive_bytes": 16777216,
-    "max_events": 2000,
     "max_artifact_pages": 20,
+    "max_events": 2000,
     "max_read_requests": 100
   },
+  "mode": "CANONICAL",
   "production_cutover_complete": true,
-  "steps_3_to_8_started": false,
-  "recovery_run_ids": [
-    36692783788
-  ]
+  "production_readers_enabled": true,
+  "recovery_run_ids": [],
+  "schema_version": "1.0.0",
+  "scope": "STEP_2_CANONICAL_PRODUCTION",
+  "steps_3_to_8_started": false
 }
