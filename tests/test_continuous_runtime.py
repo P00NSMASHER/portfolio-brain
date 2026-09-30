@@ -277,6 +277,35 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(snap["verified_memory_outcomes"],0)
         self.assertEqual(snap["runtime_sequence_before_rebuild"],1)
 
+    def test_daily_uncertainty_uses_fresh_learning_count_not_static_source_context(self):
+        fake=FakeGitHub(current_heads())
+        learning_state={
+            "source_observation_count":3,
+            "fresh_learning_observation_count":0,
+            "baseline_or_seed_observation_count":3,
+            "state_hash":"sha256:"+"1"*64,
+        }
+        observed={}
+        from uncertainty.highest_value_uncertainty import build_snapshot as actual_build_uncertainty
+        def capture_uncertainty(*, generated_at=None, learning_observation_count=None):
+            observed["learning_observation_count"]=learning_observation_count
+            return actual_build_uncertainty(
+                generated_at=generated_at,
+                learning_observation_count=learning_observation_count,
+            )
+        with tempfile.TemporaryDirectory() as td, \
+             patch("runtime.continuous_runtime.rebuild_from_sources",return_value=learning_state), \
+             patch("runtime.continuous_runtime.build_repair_state",return_value={"task_count":0}), \
+             patch("runtime.continuous_runtime.build_uncertainty_snapshot",side_effect=capture_uncertainty):
+            run("daily",state_path=Path(td)/"none.json",output_dir=Path(td)/"out",
+                fetch_json=fake,forced_now="2026-09-25T17:00:00Z")
+            uncertainty=json.loads((Path(td)/"out"/"highest_value_uncertainty.json").read_text())
+        self.assertEqual(observed["learning_observation_count"],0)
+        self.assertIn(
+            "UNC-LEARNING-PRJ-000",
+            {c["uncertainty_id"] for c in uncertainty["candidates"]},
+        )
+
     def test_weekly_synthesis_contains_portfolio_counts(self):
         fake=FakeGitHub(current_heads())
         with tempfile.TemporaryDirectory() as td:
