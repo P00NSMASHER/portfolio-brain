@@ -458,8 +458,11 @@ def find_repair_evidence(source_ref: str, token: str | None = None) -> dict[str,
     token = token or os.environ.get("GITHUB_TOKEN") or os.environ.get("PORTFOLIO_GITHUB_TOKEN")
     req(isinstance(token, str) and token, "GitHub token required for repair evidence")
     pulls = _http_json(f"https://api.github.com/repos/{REPOSITORY}/pulls?state=all&per_page=100", token)
-    marker = f"REPAIR_SOURCE_REF:{source_ref}"
-    matches = [row for row in pulls if marker in (row.get("body") or "")]
+    marker = re.compile(
+        rf"^(?:Source:\\s*)?REPAIR_SOURCE_REF:{re.escape(source_ref)}\\s*$",
+        re.MULTILINE,
+    )
+    matches = [row for row in pulls if marker.search(row.get("body") or "")]
     if not matches:
         return {"status": "NO_REPAIR_PR", "source_ref": source_ref, "foundation_success": False,
                 "independent_success": False, "pr_number": None, "head_sha": None, "checks": []}
@@ -492,7 +495,23 @@ def find_repair_evidence(source_ref: str, token: str | None = None) -> dict[str,
         for row in checks
     ]
     body = pr.get("body") or ""
-    work_match = re.search(r"^Factory work:\\s*(\\S+)", body, re.MULTILINE)
+    work_match = re.search(r"^Factory work:\\s*(\\S+)\\s*$", body, re.MULTILINE)
+    fingerprint_match = re.search(
+        r"^AUTO_REPAIR_FINGERPRINT:(sha256:[0-9a-f]{64})\\s*$",
+        body,
+        re.MULTILINE,
+    )
+    base_match = re.search(
+        r"^(?:Base|Base SHA):\\s*([0-9a-f]{40})\\s*$",
+        body,
+        re.MULTILINE,
+    )
+    candidate_match = re.search(
+        r"^Candidate:\\s*([0-9a-f]{40})\\s*$",
+        body,
+        re.MULTILINE,
+    )
+    head_ref = pr.get("head", {}).get("ref")
     observed_candidates = [
         value for value in [pr.get("updated_at"), *[row.get("completed_at") for row in checks]]
         if isinstance(value, str) and value
@@ -510,7 +529,11 @@ def find_repair_evidence(source_ref: str, token: str | None = None) -> dict[str,
         "source_ref": source_ref,
         "pr_number": pr.get("number"),
         "head_sha": head_sha,
+        "head_ref": head_ref,
         "factory_work_id": work_match.group(1) if work_match else None,
+        "request_fingerprint": fingerprint_match.group(1) if fingerprint_match else None,
+        "base_sha": base_match.group(1) if base_match else None,
+        "candidate_sha": candidate_match.group(1) if candidate_match else head_sha,
         "foundation_success": passed(foundation),
         "independent_success": passed(independent),
         "checks": compact,
