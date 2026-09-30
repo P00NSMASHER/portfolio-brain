@@ -334,13 +334,20 @@ def validate_operating_mode():
     for marker in (
         'branch.startswith("factory/auto-repair-")',
         '"auto_repair_fingerprint:" in body',
-        'pr.get("user",{}).get("login")=="github-actions[bot]"',
+        'branch.startswith("checkpoint/archive-")',
+        '"checkpoint_archive_candidate:true" in body',
+        '"state_journal/archive_manifest.json"',
+        '"state_journal/checkpoint.json.gz"',
+        '"state_journal/policy.json"',
+        'path.startswith("state_journal/archive/")',
+        'status in {"added","modified"}',
+        'actor=="github-actions[bot]"',
         "/update-branch",
         "merge_method=merge",
         '-f sha="$candidate_sha"',
-        "steps.pr.outputs.autonomous == 'true'",
+        "steps.pr.outputs.protected_integration == 'true'",
     ):
-        req(marker in verifier,f"protected autonomous integration control missing: {marker}")
+        req(marker in verifier,f"protected integration control missing: {marker}")
     verifier_source=(ROOT/"verification/independent_verifier.py").read_text()
     for anchor in (
         '".github/workflows/portfolio-independent-verifier.yml"',
