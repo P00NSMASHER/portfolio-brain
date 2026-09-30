@@ -114,6 +114,56 @@ class CanonicalCutoverPolicyTests(unittest.TestCase):
              self.assertRaisesRegex(JournalError, "sequence regressed"):
             restore_snapshot(Reader(), artifacts, current_run="999")
 
+    def test_legacy_parity_skips_nonterminal_provider_artifact(self):
+        import json
+        import os
+        import tempfile
+        from unittest.mock import patch
+
+        from state_journal.contracts import digest
+        from state_journal.legacy import restore_domain
+
+        history = json.loads((ROOT / "dashboard/HISTORY_STATE_SEED.json").read_text())
+        calls = []
+
+        def restore(output, metadata):
+            calls.append(os.environ.get("GITHUB_RUN_ID"))
+            source_run = 200 if os.environ.get("GITHUB_RUN_ID") != "200" else 100
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(json.dumps(history))
+            metadata.write_text(json.dumps({
+                "artifact_id": source_run + 1000,
+                "source_run_id": source_run,
+                "source_head_sha": "a" * 40,
+                "source_sequence": history["sequence"],
+                "source_state_hash": digest(history),
+                "artifact_created_at": "2026-09-30T09:00:00Z",
+            }))
+            return "RESTORED"
+
+        class Reader:
+            def __init__(self, *_args, **_kwargs):
+                pass
+            def get(self, suffix):
+                run_id = int(suffix.rsplit("/", 1)[1])
+                if run_id == 200:
+                    return {"status": "in_progress", "conclusion": None}
+                return {"status": "completed", "conclusion": "success"}
+
+        with tempfile.TemporaryDirectory() as td, \
+             patch.dict(os.environ, {
+                 "GITHUB_TOKEN": "token",
+                 "GITHUB_RUN_ID": "999",
+                 "GITHUB_REF_NAME": "main",
+             }, clear=False), \
+             patch("state_journal.legacy.GitHubReader", Reader), \
+             patch.dict("state_journal.legacy.RESTORERS", {"history": restore}, clear=False):
+            state, ref = restore_domain(ROOT, "history", Path(td))
+            self.assertEqual(state, history)
+            self.assertIn("run=100", ref)
+            self.assertEqual(calls, ["999", "200"])
+            self.assertEqual(os.environ["GITHUB_RUN_ID"], "999")
+
     def test_shadow_snapshot_cannot_claim_production_authority(self):
         base = checkpoint({"heartbeat": seed_state()}, {"heartbeat": "fixture:heartbeat"})
         with self.assertRaises(JournalError):

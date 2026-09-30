@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 from state_journal.contracts import DOMAINS, digest, validate_domain, require
+from state_journal.transport import GitHubReader
 from runtime import artifact_state as runtime_artifact
 from agents import artifact_state as heartbeat_artifact
 from hunting import artifact_state as hunter_artifact
@@ -43,13 +44,43 @@ def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
     work.mkdir(parents=True, exist_ok=True)
     output = work / f"{domain}.json"
     metadata = work / f"{domain}.metadata.json"
-    output.unlink(missing_ok=True)
-    metadata.unlink(missing_ok=True)
-    if domain == "runtime":
-        status = _restore_runtime(output, metadata)
-    else:
-        status = RESTORERS[domain](output, metadata)
     seed = DOMAINS[domain][3]
+    original_run = os.environ.get("GITHUB_RUN_ID")
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("PORTFOLIO_GITHUB_TOKEN")
+    reader = GitHubReader(token, max_requests=5) if token else None
+    status = "NO_PRIOR_ARTIFACT"
+    try:
+        for _attempt in range(5):
+            output.unlink(missing_ok=True)
+            metadata.unlink(missing_ok=True)
+            if domain == "runtime":
+                status = _restore_runtime(output, metadata)
+            else:
+                status = RESTORERS[domain](output, metadata)
+            if not output.exists() or not metadata.exists() or reader is None:
+                break
+            meta = json.loads(metadata.read_text())
+            source_run_id = meta.get("source_run_id")
+            if type(source_run_id) is not int or source_run_id <= 0:
+                break
+            source_run = reader.get(f"/actions/runs/{source_run_id}")
+            if (
+                source_run.get("status") == "completed"
+                and source_run.get("conclusion") in {"success", "failure", "cancelled", "timed_out"}
+            ):
+                break
+            # Legacy artifacts can become downloadable before their producer is
+            # terminal. Such bytes are not yet eligible journal evidence, so
+            # parity must compare against the newest terminal predecessor rather
+            # than racing the in-progress producer.
+            os.environ["GITHUB_RUN_ID"] = str(source_run_id)
+        else:
+            require(False, f"{domain} legacy restore remained bound to non-terminal producers")
+    finally:
+        if original_run is None:
+            os.environ.pop("GITHUB_RUN_ID", None)
+        else:
+            os.environ["GITHUB_RUN_ID"] = original_run
     if not output.exists():
         require(status == "NO_PRIOR_ARTIFACT" and seed is not None, f"{domain} missing durable state")
         output.write_bytes((root / seed).read_bytes())
