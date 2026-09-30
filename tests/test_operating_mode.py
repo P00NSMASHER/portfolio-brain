@@ -6,7 +6,7 @@ ROOT=Path(__file__).resolve().parents[1]
 class OperatingModeTests(unittest.TestCase):
     def test_operational_contract_passes(self):
         result=validate_operating_mode()
-        self.assertEqual(result["approved_recurring_workflows"],9)
+        self.assertEqual(result["approved_recurring_workflows"],11)
         self.assertEqual(result["truthful_blocked_workflows"],7)
         self.assertGreaterEqual(result["workload_controlled_services"],9)
         self.assertEqual(result["durable_state_artifacts"],6)
@@ -46,7 +46,7 @@ class OperatingModeTests(unittest.TestCase):
           "runtime-hourly-sync","runtime-daily-learning","runtime-weekly-synthesis",
           "hunter-autonomous-cycle","portfolio-autonomous-scheduler",
           "portfolio-cost-watchdog","portfolio-notification-cycle","command-center-pages",
-          "agent-heartbeat-sweep"
+          "agent-heartbeat-sweep","portfolio-state-reducer","portfolio-state-checkpoint-candidate"
         })
 
     def test_event_driven_inventory_includes_autonomous_repair_without_schedule(self):
