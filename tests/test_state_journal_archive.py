@@ -5,6 +5,7 @@ from pathlib import Path
 
 from agents.heartbeat_state import seed_state
 from state_journal.archive import (
+    _require_sanitized_archive,
     archived_artifact_ids,
     build_rollover,
     load_active_manifest,
@@ -60,6 +61,16 @@ class ArchiveLifecycleTests(unittest.TestCase):
             (root / "state_journal/CHECKPOINT.json.gz").write_bytes(checkpoint_raw)
             loaded = load_active_manifest(root)
             self.assertEqual(loaded["manifest_hash"], manifest["manifest_hash"])
+
+    def test_public_archive_rejects_credential_like_material(self):
+        for raw in (
+            b"github_pat_" + b"A" * 32,
+            b"ghp_" + b"B" * 32,
+            b"sk-" + b"C" * 32,
+            b"-----BEGIN PRIVATE KEY-----",
+        ):
+            with self.subTest(raw=raw[:16]), self.assertRaisesRegex(Exception, "Credential-like material"):
+                _require_sanitized_archive(raw)
 
     def test_repository_archive_tamper_fails_closed(self):
         manifest, archive_raw, _compacted, checkpoint_raw, archive_path = self.build()
