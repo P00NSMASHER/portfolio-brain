@@ -144,5 +144,13 @@ class OutcomeIngestionTests(unittest.TestCase):
             self.apply(hunter,model,learning,conflict)
         self.assertEqual((hunter,model,learning),before)
 
+    def test_hunter_only_partial_identity_without_hash_fails_closed(self):
+        hunter,_,_,_=self.apply()
+        model=model_seed(); learning=learning_seed()
+        before=copy.deepcopy((hunter,model,learning))
+        with self.assertRaisesRegex(OutcomeIngestionError,"ambiguous prior Hunter"):
+            self.apply(hunter,model,learning)
+        self.assertEqual((hunter,model,learning),before)
+
 if __name__=="__main__":
     unittest.main()
