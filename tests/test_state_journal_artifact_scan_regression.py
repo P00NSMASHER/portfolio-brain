@@ -38,7 +38,7 @@ class ArtifactScanAccumulationRegressionTests(unittest.TestCase):
                 "created_at": "2026-09-29T19:58:00Z",
                 "workflow_run": {"id": 5000 + i, "head_branch": "main", "head_sha": "d" * 40},
             }
-            for i in range(99)
+            for i in range(98)
         ]
         pages = {1: newer + [snapshot], 2: [predecessor] + older}
         calls = []
