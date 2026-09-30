@@ -6,6 +6,7 @@ from pathlib import Path
 
 from dashboard.live_state_bridge import EVIDENCE_SEMANTICS
 from hunting.repo_scout_intake import MAX_INTAKE,SOURCE_PATH,SOURCE_REPOSITORY
+from adapters.abvm_health import HEALTH_WORKFLOW_PATH
 
 ROOT=Path(__file__).resolve().parents[1]
 OUTPUT=ROOT/"docs/CURRENT_SYSTEM_STATUS.md"
@@ -52,7 +53,9 @@ def render()->str:
       "- Runtime emits and persists project_forwarding_state.json plus a sanitized forwarding receipt inside portfolio-runtime-state; exact revision/project delivery keys suppress duplicates.",
       f"- REPO-001 scout intake source: {SOURCE_REPOSITORY}/{SOURCE_PATH} at an exact source revision; maximum candidates per cycle: **{MAX_INTAKE}**.",
       "- REPO-001 output is candidate input only; the existing Hunter still performs exact-revision inspection, rights handling, ranking, proposal gating, and verification. No second Hunter exists.",
-      f"- ABVM (PRJ-006 / {abvm['repository_id']}) evidence scope: {', '.join(abvm['allowed_evidence'])}; persisted payload: {abvm['persisted_payload']}.",
+      "- REPO-001 license metadata is carried as provenance into pre-verification intake; intake does not create a separate SPDX allowlist or grant rights/reuse/value authority.",
+      f"- ABVM (PRJ-006 / {abvm['repository_id']}) repository forwarding scope: {', '.join(caps['PRJ-006']['READ_OBSERVE']['scope'])}.",
+      f"- ABVM automation evidence scope: {', '.join(abvm['allowed_evidence'])}; source: exact-head GitHub Actions run from {HEALTH_WORKFLOW_PATH}; persisted payload: {abvm['persisted_payload']}.",
       f"- ABVM child-facing mutation={str(abvm['child_facing_mutation']).lower()}, deployment authority={str(abvm['deployment_authority']).lower()}, school-content publication authority={str(abvm['school_content_publication_authority']).lower()}.",
       "",
       "## Evidence semantics",
@@ -63,7 +66,7 @@ def render()->str:
       f"- Technical verification credit from heartbeat/notification/Pages: **{str(EVIDENCE_SEMANTICS['technical_verification_credit']).lower()}**.",
       f"- Market verification credit from heartbeat/notification/Pages: **{str(EVIDENCE_SEMANTICS['market_verification_credit']).lower()}**.",
       f"- Revenue verification credit from heartbeat/notification/Pages: **{str(EVIDENCE_SEMANTICS['revenue_verification_credit']).lower()}**.",
-      "- The command center exposes per-source status, age/freshness threshold, source run/head, state sequence, and canonical state hash; stale or fallback sources stay visibly non-live.",
+      "- The command center exposes per-source status, age/freshness threshold, source run/head, state sequence, canonical state hash, restore status, and error class; stale, fallback, or blocked sources stay visibly non-live.",
       "",
       "## Acceptance gates",
       "",
