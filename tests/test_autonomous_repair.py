@@ -200,6 +200,18 @@ class AutonomousRepairTests(unittest.TestCase):
         self.assertEqual(result["factory_work_id"], "AUTO-REPAIR-"+"F"*16+"-36758526194")
         self.assertEqual(result["head_ref"], "factory/auto-repair-controlled/attempt-1")
 
+    def test_dedupe_evidence_queries_only_open_pull_requests(self):
+        with patch("repair.autonomous_repair._http_json", return_value=[]) as http:
+            result = find_repair_evidence("RTASK-CLOSED", token="token", pull_state="open")
+        self.assertEqual(result["status"], "NO_REPAIR_PR")
+        self.assertIn("pulls?state=open&per_page=100", http.call_args.args[0])
+
+    def test_historical_repair_evidence_defaults_to_all_pull_requests(self):
+        with patch("repair.autonomous_repair._http_json", return_value=[]) as http:
+            result = find_repair_evidence("RTASK-HISTORY", token="token")
+        self.assertEqual(result["status"], "NO_REPAIR_PR")
+        self.assertIn("pulls?state=all&per_page=100", http.call_args.args[0])
+
     def test_repair_evidence_source_marker_is_exact_not_substring(self):
         pulls = [{
             "number": 8,
