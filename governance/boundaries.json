@@ -238,8 +238,7 @@
           "REPO-003"
         ],
         "scope": [
-          "AUTOMATION_HEALTH",
-          "PROGRESS_EVIDENCE"
+          "REPOSITORY_OBSERVATION"
         ]
       },
       "CANDIDATE_PR": {
