@@ -1,0 +1,113 @@
+name: abvm-constrained-observation-proof
+
+on:
+  pull_request:
+    paths:
+      - "adapters/abvm_health.py"
+      - "runtime/project_forwarding.py"
+      - "governance/boundaries.json"
+      - "governance/validate_boundaries.py"
+      - "tests/test_abvm_health.py"
+      - ".github/workflows/abvm-constrained-observation-proof.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "adapters/abvm_health.py"
+      - "runtime/project_forwarding.py"
+      - "governance/boundaries.json"
+      - "tests/test_abvm_health.py"
+      - ".github/workflows/abvm-constrained-observation-proof.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Fail closed unless push proof is exact current main
+        if: ${{ github.event_name == 'push' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          request=urllib.request.Request(
+              "https://api.github.com/repos/"+os.environ["GITHUB_REPOSITORY"]+"/branches/main",
+              headers={
+                  "Accept":"application/vnd.github+json",
+                  "Authorization":"Bearer "+os.environ["GITHUB_TOKEN"],
+                  "X-GitHub-Api-Version":"2022-11-28",
+                  "User-Agent":"portfolio-step15-abvm-acceptance/1.0",
+              },
+          )
+          with urllib.request.urlopen(request,timeout=30) as response:
+              current=json.load(response)["commit"]["sha"]
+          if current != os.environ["GITHUB_SHA"]:
+              raise SystemExit("STEP15_STALE_MAIN: "+os.environ["GITHUB_SHA"]+" current "+current)
+          print("exact current main:",current)
+          PY
+      - name: Read live ABVM operational health at exact main revision
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python -m adapters.abvm_health --output verification/out/abvm_health_progress_evidence.json
+      - name: Validate constrained live evidence
+        run: |
+          python - <<'PY'
+          import json,re
+          e=json.load(open("verification/out/abvm_health_progress_evidence.json"))
+          assert e["status"]=="PASS"
+          assert e["project_id"]=="PRJ-006" and e["repository_id"]=="REPO-003"
+          assert re.fullmatch(r"[0-9a-f]{40}",e["source_revision"])
+          assert e["source_workflow_path"]==".github/workflows/health-dashboard.yml"
+          assert isinstance(e["source_run_id"],int)
+          assert isinstance(e["source_sequence"],int)
+          assert e["source_run_head_sha"]==e["source_revision"]
+          assert set(e["evidence_scope"])=={"AUTOMATION_HEALTH","PROGRESS_EVIDENCE"}
+          assert e["payload_scope"]=="SANITIZED_OPERATIONAL_METADATA_ONLY"
+          assert all(e[k] is False for k in (
+            "authority_granted","mutation_performed","deploy_authority","external_action_authority",
+            "child_facing_mutation_authority","school_content_publication_authority","child_data_included",
+            "technical_verification_credit","market_verification_credit","revenue_verification_credit"))
+          PY
+      - name: Fail closed if protected main moved during push proof
+        if: ${{ github.event_name == 'push' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          request=urllib.request.Request(
+              "https://api.github.com/repos/"+os.environ["GITHUB_REPOSITORY"]+"/branches/main",
+              headers={
+                  "Accept":"application/vnd.github+json",
+                  "Authorization":"Bearer "+os.environ["GITHUB_TOKEN"],
+                  "X-GitHub-Api-Version":"2022-11-28",
+                  "User-Agent":"portfolio-step15-abvm-acceptance/1.0",
+              },
+          )
+          with urllib.request.urlopen(request,timeout=30) as response:
+              current=json.load(response)["commit"]["sha"]
+          if current != os.environ["GITHUB_SHA"]:
+              raise SystemExit("STEP15_MAIN_MOVED_DURING_PROOF: "+os.environ["GITHUB_SHA"]+" current "+current)
+          e=json.load(open("verification/out/abvm_health_progress_evidence.json",encoding="utf-8"))
+          if e.get("status")!="PASS":
+              raise SystemExit("STEP15_EVIDENCE_NOT_PASS")
+          print("exact current main at proof completion:",current)
+          PY
+      - name: Upload sanitized ABVM observation receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: abvm-constrained-observation-${{ github.run_id }}-${{ github.sha }}
+          path: verification/out/abvm_health_progress_evidence.json
+          if-no-files-found: error
+          retention-days: 30
