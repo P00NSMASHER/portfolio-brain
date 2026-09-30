@@ -9,6 +9,7 @@ from urllib.error import HTTPError, URLError
 
 from adapters.github_readonly import AdapterError, GitHubReadOnlyClient, observe_repository
 from runtime.state import advance_cycle, bootstrap_state, canonical_hash, cycle_id_for, load_json, validate_state
+from runtime.project_forwarding import forward_observations, load_state as load_forwarding_state
 from learning.continuous_learning import rebuild_from_sources
 from uncertainty.highest_value_uncertainty import build_snapshot as build_uncertainty_snapshot
 from experiments.experiment_engine import build_experiment_portfolio
@@ -185,7 +186,9 @@ def run(mode: str, *, state_path: Path, output_dir: Path, target_repository_id: 
         receipt={"schema_version":"1.0.0","cycle_id":"disabled","mode":mode,"started_at":at,"finished_at":at,
                  "status":"DISABLED","reason":reason,"observations":[],"api_requests":0}
         receipt["receipt_hash"]=canonical_hash(receipt)
+        forwarding_state=load_forwarding_state(ROOT/"runtime"/"live"/"project_forwarding_state.json")
         (output_dir/"runtime_state.json").write_text(json.dumps(state,indent=2)+"\n")
+        (output_dir/"project_forwarding_state.json").write_text(json.dumps(forwarding_state,indent=2)+"\n")
         (output_dir/"cycle_receipt.json").write_text(json.dumps(receipt,indent=2)+"\n")
         return receipt
     started=time.monotonic()
@@ -204,6 +207,10 @@ def run(mode: str, *, state_path: Path, output_dir: Path, target_repository_id: 
     receipt={"schema_version":"1.0.0","cycle_id":cycle_id,"mode":mode,"started_at":at,"finished_at":at,
              "status":"PASS","reason":None,"observations":observations,"api_requests":api_requests}
     receipt["receipt_hash"]=canonical_hash(receipt)
+    forwarding_prior=load_forwarding_state(ROOT/"runtime"/"live"/"project_forwarding_state.json")
+    forwarding_state,forwarding_receipt=forward_observations(
+        forwarding_prior,observations,at=at,cycle_id=cycle_id,cycle_receipt_hash=receipt["receipt_hash"]
+    )
     updated=advance_cycle(state,receipt)
 
     if mode=="daily":
@@ -238,6 +245,8 @@ def run(mode: str, *, state_path: Path, output_dir: Path, target_repository_id: 
 
     validate_state(updated)
     (output_dir/"runtime_state.json").write_text(json.dumps(updated,indent=2)+"\n")
+    (output_dir/"project_forwarding_state.json").write_text(json.dumps(forwarding_state,indent=2)+"\n")
+    (output_dir/"project_forwarding_receipt.json").write_text(json.dumps(forwarding_receipt,indent=2)+"\n")
     (output_dir/"cycle_receipt.json").write_text(json.dumps(receipt,indent=2)+"\n")
     total=sum(p.stat().st_size for p in output_dir.iterdir() if p.is_file())
     if total>policy["budgets"]["max_output_bytes"]:
