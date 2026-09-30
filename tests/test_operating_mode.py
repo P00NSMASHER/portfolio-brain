@@ -193,6 +193,8 @@ class OperatingModeTests(unittest.TestCase):
         self.assertEqual(gmail["provider"],"CHATGPT_GMAIL_CONNECTOR")
         self.assertEqual(gmail["account_ref"],"PRIMARY_GMAIL_CONNECTOR")
         self.assertEqual(gmail["execution_task_id"],"6ab377c25df08191a6e2aa1537d9d2ef")
+        self.assertFalse(gmail["required_for_core_autonomy"])
+        self.assertEqual(gmail["execution_mode"],"OPTIONAL_EXPLICIT_MACHINE_POLICY_GATE")
         self.assertFalse((ROOT/".github/workflows/portfolio-action-worker.yml").exists())
 
     def test_live_gmail_gateway_proof_tracks_sanitized_ledger(self):
@@ -220,7 +222,10 @@ class OperatingModeTests(unittest.TestCase):
         s=json.loads((ROOT/"operations/OPERATING_MODE_STATUS.json").read_text())
         self.assertFalse(p["interactive_chatgpt_runtime_dependency"])
         self.assertTrue(s["operational_without_interactive_chatgpt"])
-        self.assertEqual(s["external_chatgpt_tasks_role"],"BOUNDED_GMAIL_GATEWAY_PLUS_ADVISORY_MONITORING")
+        self.assertEqual(s["external_chatgpt_tasks_role"],"OPTIONAL_BOUNDED_GMAIL_GATEWAY_PLUS_ADVISORY_MONITORING")
+        self.assertFalse(s["core_autonomy_external_connector_dependency"])
+        self.assertFalse(p["external_connector_gateways"]["gmail"]["required_for_core_autonomy"])
+        self.assertEqual(p["external_connector_gateways"]["gmail"]["execution_mode"],"OPTIONAL_EXPLICIT_MACHINE_POLICY_GATE")
 
     def test_post_promotion_evidence_is_recorded(self):
         s=json.loads((ROOT/"operations/OPERATING_MODE_STATUS.json").read_text())
