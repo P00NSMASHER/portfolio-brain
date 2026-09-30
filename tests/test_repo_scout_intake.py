@@ -16,16 +16,18 @@ class RepoScoutIntakeTests(unittest.TestCase):
         self.assertLessEqual(receipt["selected_candidates"],receipt["max_intake"])
         self.assertTrue(all(x["project_ids"]==["PRJ-005"] for x in receipt["hints"]))
         self.assertTrue(all(x["status"]=="ELIGIBLE_FOR_EXISTING_HUNTER_INSPECTION" for x in receipt["hints"]))
-        self.assertTrue(all(x["rights_granted"] is False and x["value_verified"] is False for x in receipt["hints"]))
+        self.assertTrue(all(x["rights_granted"] is False and x["value_verified"] is False and x["reuse_authority_granted"] is False for x in receipt["hints"]))
+        self.assertFalse(receipt["license_based_blocking"])
+        self.assertTrue(any(x["published_license_spdx"]=="UNKNOWN" for x in receipt["hints"]))
         self.assertEqual(state["sequence"],1)
 
     def test_source_repo_revision_and_candidate_identity_are_deduplicated(self):
         state,first=build_intake(queue(),source_revision="1"*40,prior_state=seed_state(),at="2026-09-30T14:00:00Z")
         state2,second=build_intake(queue(),source_revision="1"*40,prior_state=state,at="2026-09-30T14:01:00Z")
-        self.assertEqual(second["selected_candidates"],1) # third eligible was bounded out of the first cycle
+        self.assertEqual(second["selected_candidates"],2) # remaining bounded candidates continue next cycle
         state3,third=build_intake(queue(),source_revision="2"*40,prior_state=state2,at="2026-09-30T14:02:00Z")
         self.assertEqual(third["selected_candidates"],0) # same exact candidates stay deduped across source refreshes
-        self.assertGreaterEqual(len(state3["source_keys"]),3)
+        self.assertGreaterEqual(len(state3["source_keys"]),4)
 
     def test_unallowlisted_worker_fails_closed(self):
         q=queue();q["worker_id"]="HUNTER-99"
