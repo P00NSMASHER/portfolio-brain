@@ -7,6 +7,10 @@ on:
     paths:
       - ".github/workflows/steps10-12-live-acceptance.yml"
       - "hunting/steps10_12_live_acceptance.py"
+      - "learning/**"
+      - "runtime/continuous_runtime.py"
+      - "uncertainty/highest_value_uncertainty.py"
+      - "tests/test_learning_provenance.py"
   workflow_dispatch:
 
 permissions:
