@@ -227,26 +227,74 @@ class StateJournalTransportTests(unittest.TestCase):
 
     def test_incomplete_artifact_pagination_cannot_be_treated_as_complete(self):
         reader=object.__new__(GitHubReader)
-        reader.get=lambda _: {'artifacts':[{'id':i+1,'created_at':'2026-09-29T14:00:00Z'} for i in range(100)]}
+        def get(suffix):
+            if suffix.startswith('/actions/runs?'):
+                return {'workflow_runs':[]}
+            return {'artifacts':[{'id':i+1,'created_at':'2026-09-29T14:00:00Z'} for i in range(100)]}
+        reader.get=get
         with self.assertRaisesRegex(JournalError,'scan incomplete'):
             reader.list_recent_artifacts('2026-09-29T00:00:00Z',max_pages=1)
 
-    def test_artifact_boundary_filters_after_full_bounded_scan_even_when_order_is_scrambled(self):
+    def test_artifact_listing_order_violation_fails_closed(self):
         reader=object.__new__(GitHubReader)
-        reader.get=lambda _: {'artifacts':[
-            {'id':1,'created_at':'2026-09-28T14:00:00Z'},
-            {'id':3,'created_at':'2026-09-29T15:00:00Z'},
-            {'id':2,'created_at':'2026-09-29T14:00:00Z'}]}
-        rows=reader.list_recent_artifacts('2026-09-29T00:00:00Z')
-        self.assertEqual([row['id'] for row in rows],[3,2])
+        def get(suffix):
+            if suffix.startswith('/actions/runs?'):
+                return {'workflow_runs':[]}
+            return {'artifacts':[
+                {'id':1,'created_at':'2026-09-28T14:00:00Z'},
+                {'id':3,'created_at':'2026-09-29T15:00:00Z'},
+                {'id':2,'created_at':'2026-09-29T14:00:00Z'}]}
+        reader.get=get
+        with self.assertRaisesRegex(JournalError,'newest-first'):
+            reader.list_recent_artifacts('2026-09-29T00:00:00Z')
+
+    def test_two_latest_successful_reducer_snapshots_bound_repository_scan(self):
+        reader=object.__new__(GitHubReader)
+        reducer_runs=[
+            {'id':102,'path':'.github/workflows/portfolio-state-reducer.yml','head_branch':'main',
+             'head_sha':'b'*40,'status':'completed','conclusion':'success','created_at':'2026-09-29T15:00:00Z'},
+            {'id':101,'path':'.github/workflows/portfolio-state-reducer.yml','head_branch':'main',
+             'head_sha':'a'*40,'status':'completed','conclusion':'success','created_at':'2026-09-29T14:00:00Z'},
+        ]
+        snapshots={
+            102:{'id':902,'name':'portfolio-canonical-shadow-state','expired':False,
+                 'created_at':'2026-09-29T15:01:00Z',
+                 'workflow_run':{'id':102,'head_branch':'main','head_sha':'b'*40}},
+            101:{'id':901,'name':'portfolio-canonical-shadow-state','expired':False,
+                 'created_at':'2026-09-29T14:01:00Z',
+                 'workflow_run':{'id':101,'head_branch':'main','head_sha':'a'*40}},
+        }
+        recent=[{'id':i+1,'created_at':'2026-09-29T14:30:00Z'} for i in range(99)]
+        recent.append({'id':1000,'created_at':'2026-09-29T14:00:00Z'})
+        calls=[]
+        def get(suffix):
+            calls.append(suffix)
+            if suffix.startswith('/actions/runs?'):
+                return {'workflow_runs':reducer_runs}
+            if suffix.startswith('/actions/runs/102/artifacts?'):
+                return {'artifacts':[snapshots[102]]}
+            if suffix.startswith('/actions/runs/101/artifacts?'):
+                return {'artifacts':[snapshots[101]]}
+            if suffix=='/actions/artifacts?per_page=100&page=1':
+                return {'artifacts':recent}
+            raise AssertionError(suffix)
+        reader.get=get
+        rows=reader.list_recent_artifacts('2026-09-29T00:00:00Z',max_pages=2)
+        ids=[row['id'] for row in rows]
+        self.assertIn(902,ids)
+        self.assertIn(901,ids)
+        self.assertNotIn(1000,ids)
+        self.assertEqual(sum(1 for suffix in calls if suffix.startswith('/actions/artifacts?')),1)
 
     def test_exact_duplicate_artifact_rows_across_pages_are_deduplicated(self):
         reader=object.__new__(GitHubReader)
         row={'id':7,'created_at':'2026-09-29T14:00:00Z'}
-        calls=[]
-        def get(_):
-            calls.append(1)
-            return {'artifacts':([row]*100 if len(calls)==1 else [row])}
+        artifact_calls=[]
+        def get(suffix):
+            if suffix.startswith('/actions/runs?'):
+                return {'workflow_runs':[]}
+            artifact_calls.append(suffix)
+            return {'artifacts':([row]*100 if len(artifact_calls)==1 else [row])}
         reader.get=get
         rows=reader.list_recent_artifacts('2026-09-29T00:00:00Z')
         self.assertEqual(rows,[row])
