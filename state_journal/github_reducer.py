@@ -141,8 +141,17 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
                          archived_state: dict | None = None,
                          archive_manifest: dict | None = None) -> tuple[dict, dict]:
     journal_reader = getattr(reader, "list_recent_journal_artifacts", None)
+    covered_run_ids = {
+        ref["source_run_id"]
+        for refs in (archived_state or {}).get("evidence", {}).values()
+        for ref in refs
+        if ref.get("kind") == "GITHUB_ACTIONS" and type(ref.get("source_run_id")) is int
+    }
     artifacts = (
-        journal_reader(since, explicit_run_ids=explicit_run_ids)
+        journal_reader(
+            since, explicit_run_ids=explicit_run_ids,
+            covered_run_ids=covered_run_ids,
+        )
         if journal_reader is not None
         else reader.list_recent_artifacts(since)
     )
