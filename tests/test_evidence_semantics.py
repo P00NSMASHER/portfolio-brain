@@ -33,6 +33,8 @@ class EvidenceSemanticsTests(unittest.TestCase):
     def test_dashboard_renders_lineage_and_explicit_nonverification_semantics(self):
         source=(ROOT/"dashboard/command_center.py").read_text(encoding="utf-8")
         self.assertIn('src.get("source_state_hash")',source)
+        self.assertIn('src.get("restore_status")',source)
+        self.assertIn('src.get("error_class")',source)
         self.assertIn("heartbeats prove liveness/connectivity only",source)
         self.assertIn("None grants technical, market, or revenue verification credit",source)
 
