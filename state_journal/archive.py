@@ -34,7 +34,8 @@ LEGACY_FIELDS = {
 CURRENT_FIELDS = LEGACY_FIELDS | {
     "archive_created_at", "replay_overlap_seconds", "previous_manifest_path",
     "previous_archive_id", "previous_archived_sequence", "previous_archived_state_hash",
-    "previous_checkpoint_hash", "archived_source_run_ids", "checkpoint_state_hash",
+    "previous_checkpoint_hash", "archived_source_run_ids", "archived_source_attempts",
+    "checkpoint_state_hash",
 }
 
 
@@ -94,6 +95,20 @@ def _archived_source_run_ids(state: dict) -> list[int]:
     }
     require(all(type(value) is int and value > 0 for value in runs), "Archived source run identity invalid")
     return sorted(runs)
+
+
+def _archived_source_attempts(state: dict) -> list[str]:
+    attempts = {
+        f"{ref['source_run_id']}:{ref['source_run_attempt']}"
+        for refs in state["evidence"].values()
+        for ref in refs
+        if ref.get("kind") == "GITHUB_ACTIONS"
+    }
+    require(
+        all(re.fullmatch(r"[1-9][0-9]*:[1-9][0-9]*", value) is not None for value in attempts),
+        "Archived source run/attempt identity invalid",
+    )
+    return sorted(attempts, key=lambda value: tuple(int(part) for part in value.split(":")))
 
 
 def _checkpoint_ref(*, archive_path: str, archive_file_sha256: str, state_hash: str) -> str:
@@ -185,6 +200,17 @@ def _validate_manifest_core(manifest: dict) -> None:
         and runs == sorted(set(runs))
         and all(type(value) is int and value > 0 for value in runs),
         "Archived source run coverage invalid",
+    )
+    attempts = manifest["archived_source_attempts"]
+    require(
+        isinstance(attempts, list)
+        and len(attempts) == len(set(attempts))
+        and all(re.fullmatch(r"[1-9][0-9]*:[1-9][0-9]*", value) is not None for value in attempts),
+        "Archived source run/attempt coverage invalid",
+    )
+    require(
+        {int(value.split(":", 1)[0]) for value in attempts} <= set(runs),
+        "Archived attempt coverage names an unarchived source run",
     )
     previous_values = (
         manifest["previous_manifest_path"], manifest["previous_archive_id"],
@@ -317,6 +343,7 @@ def build_rollover(
         "archived_event_hashes": _archived_event_hashes(state),
         "archived_provider_artifacts": _archived_provider_artifacts(state),
         "archived_source_run_ids": _archived_source_run_ids(state),
+        "archived_source_attempts": _archived_source_attempts(state),
         "new_checkpoint_hash": compacted["checkpoint_hash"],
         "checkpoint_state_hash": checkpoint_state["state_hash"],
         "checkpoint_sequence": checkpoint_sequence,
@@ -419,6 +446,8 @@ def validate_manifest(
     if manifest["schema_version"] == ARCHIVE_SCHEMA:
         require(_archived_source_run_ids(archived_state) == manifest["archived_source_run_ids"],
                 "Archived source run coverage mismatch")
+        require(_archived_source_attempts(archived_state) == manifest["archived_source_attempts"],
+                "Archived source run/attempt coverage mismatch")
         checkpoint_state = make_snapshot(
             checkpoint_doc, [], sequence=manifest["checkpoint_sequence"], evidence={},
             mode="CANONICAL", production_authority=True,
@@ -470,3 +499,19 @@ def archived_source_run_ids(manifest: dict | None, root: Path = ROOT) -> set[int
     # rather than enumerating Actions history or guessing from disappeared artifacts.
     state = _read_archived_state(root, manifest)
     return set(_archived_source_run_ids(state))
+
+
+def archived_source_attempts(manifest: dict | None, root: Path = ROOT) -> set[tuple[int, int]]:
+    if manifest is None:
+        return set()
+    if "archived_source_attempts" in manifest:
+        return {
+            tuple(int(part) for part in value.split(":"))
+            for value in manifest["archived_source_attempts"]
+        }
+    # v1.0 compatibility: targeted immutable archive lookup, never Actions enumeration.
+    state = _read_archived_state(root, manifest)
+    return {
+        tuple(int(part) for part in value.split(":"))
+        for value in _archived_source_attempts(state)
+    }
