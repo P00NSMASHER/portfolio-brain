@@ -180,7 +180,7 @@ class OperatingModeTests(unittest.TestCase):
     def test_high_risk_boundaries_and_machine_gated_merge_remain(self):
         p=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
         boundaries=set(p["permanent_authority_boundaries"])
-        self.assertNotIn("CUSTOMER_COMMUNICATION_REQUIRES_HUMAN_APPROVAL",boundaries)
+        self.assertIn("CUSTOMER_COMMUNICATION_REQUIRES_HUMAN_APPROVAL",boundaries)
         self.assertIn("PAYMENT_CASH_MOVEMENT_REQUIRES_HUMAN_APPROVAL",boundaries)
         self.assertIn("LIVE_MARKET_TRADING_AND_BROKERAGE_EXECUTION_PROHIBITED",boundaries)
         self.assertIn("DEPLOYMENT_NOT_GRANTED_TO_AUTONOMOUS_SCHEDULER",boundaries)
@@ -192,7 +192,10 @@ class OperatingModeTests(unittest.TestCase):
         gmail=p["external_connector_gateways"]["gmail"]
         self.assertEqual(gmail["provider"],"CHATGPT_GMAIL_CONNECTOR")
         self.assertEqual(gmail["account_ref"],"PRIMARY_GMAIL_CONNECTOR")
-        self.assertEqual(gmail["execution_task_id"],"6ab377c25df08191a6e2aa1537d9d2ef")
+        self.assertIsNone(gmail["execution_task_id"])
+        self.assertIsNone(gmail["planner_task_id"])
+        self.assertFalse(gmail["core_autonomy_dependency"])
+        self.assertTrue(gmail["human_approval_required"])
         self.assertFalse((ROOT/".github/workflows/portfolio-action-worker.yml").exists())
 
     def test_live_gmail_gateway_proof_tracks_sanitized_ledger(self):
@@ -220,7 +223,7 @@ class OperatingModeTests(unittest.TestCase):
         s=json.loads((ROOT/"operations/OPERATING_MODE_STATUS.json").read_text())
         self.assertFalse(p["interactive_chatgpt_runtime_dependency"])
         self.assertTrue(s["operational_without_interactive_chatgpt"])
-        self.assertEqual(s["external_chatgpt_tasks_role"],"BOUNDED_GMAIL_GATEWAY_PLUS_ADVISORY_MONITORING")
+        self.assertEqual(s["external_chatgpt_tasks_role"],"OPTIONAL_HUMAN_GATED_GMAIL_TRANSPORT_PLUS_ADVISORY_MONITORING")
 
     def test_post_promotion_evidence_is_recorded(self):
         s=json.loads((ROOT/"operations/OPERATING_MODE_STATUS.json").read_text())
