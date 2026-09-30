@@ -60,20 +60,33 @@ def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
             if not output.exists() or not metadata.exists() or reader is None:
                 break
             meta = json.loads(metadata.read_text())
-            source_run_id = meta.get("source_run_id")
-            if type(source_run_id) is not int or source_run_id <= 0:
-                break
-            source_run = reader.get(f"/actions/runs/{source_run_id}")
-            if (
-                source_run.get("status") == "completed"
-                and source_run.get("conclusion") in {"success", "failure", "cancelled", "timed_out"}
-            ):
+            source_run_ids = meta.get("source_run_ids")
+            if isinstance(source_run_ids, list) and source_run_ids:
+                require(
+                    all(type(run_id) is int and run_id > 0 for run_id in source_run_ids),
+                    f"{domain} merged metadata run ids invalid",
+                )
+            else:
+                source_run_id = meta.get("source_run_id")
+                if type(source_run_id) is not int or source_run_id <= 0:
+                    break
+                source_run_ids = [source_run_id]
+            nonterminal = None
+            for source_run_id in source_run_ids:
+                source_run = reader.get(f"/actions/runs/{source_run_id}")
+                if not (
+                    source_run.get("status") == "completed"
+                    and source_run.get("conclusion") in {"success", "failure", "cancelled", "timed_out"}
+                ):
+                    nonterminal = source_run_id
+                    break
+            if nonterminal is None:
                 break
             # Legacy artifacts can become downloadable before their producer is
             # terminal. Such bytes are not yet eligible journal evidence, so
-            # parity must compare against the newest terminal predecessor rather
-            # than racing the in-progress producer.
-            os.environ["GITHUB_RUN_ID"] = str(source_run_id)
+            # parity must compare against terminal evidence rather than racing
+            # any in-progress member of a losslessly merged fork.
+            os.environ["GITHUB_RUN_ID"] = str(nonterminal)
         else:
             require(False, f"{domain} legacy restore remained bound to non-terminal producers")
     finally:
@@ -91,8 +104,44 @@ def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
     state = json.loads(output.read_text())
     validate_domain(domain, state)
     meta = json.loads(metadata.read_text())
-    require(meta.get("artifact_id") is not None, f"{domain} metadata missing artifact")
     require(meta.get("source_state_hash") == digest(state), f"{domain} metadata hash mismatch")
+    if meta.get("restore_status", "").startswith("RESTORED_MERGED_COMMUTING_HEARTBEAT_FORK_"):
+        require(domain == "heartbeat", "Only heartbeat restore may carry merged fork metadata")
+        artifact_ids = meta.get("source_artifact_ids")
+        run_ids = meta.get("source_run_ids")
+        head_shas = meta.get("source_head_shas")
+        artifact_digests = meta.get("source_artifact_digests")
+        require(
+            isinstance(artifact_ids, list) and artifact_ids
+            and all(type(value) is int and value > 0 for value in artifact_ids),
+            "heartbeat merged metadata artifact ids invalid",
+        )
+        require(
+            isinstance(run_ids, list) and len(run_ids) == len(artifact_ids)
+            and all(type(value) is int and value > 0 for value in run_ids),
+            "heartbeat merged metadata run ids invalid",
+        )
+        require(
+            isinstance(head_shas, list) and len(head_shas) == len(artifact_ids)
+            and all(isinstance(value, str) and len(value) == 40 for value in head_shas),
+            "heartbeat merged metadata source SHAs invalid",
+        )
+        require(
+            isinstance(artifact_digests, list) and len(artifact_digests) == len(artifact_ids)
+            and all(isinstance(value, str) and value.startswith("sha256:") for value in artifact_digests),
+            "heartbeat merged metadata digests invalid",
+        )
+        ref = (
+            "github-actions:merged-heartbeat-artifacts=" + ",".join(map(str, artifact_ids))
+            + ";runs=" + ",".join(map(str, run_ids))
+            + ";shas=" + ",".join(head_shas)
+            + ";digests=" + ",".join(str(value) for value in artifact_digests)
+            + f";sequence={meta['source_sequence']};hash={meta['source_state_hash']};"
+            + f"created={meta['artifact_created_at']}"
+        )
+        return state, ref
+
+    require(meta.get("artifact_id") is not None, f"{domain} metadata missing artifact")
     ref = (
         f"github-actions:artifact={meta['artifact_id']};run={meta['source_run_id']};"
         f"sha={meta['source_head_sha']};sequence={meta['source_sequence']};"
