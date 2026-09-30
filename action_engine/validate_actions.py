@@ -6,7 +6,7 @@ class ActionValidationError(ValueError):pass
 def req(ok,msg):
     if not ok:raise ActionValidationError(msg)
 def validate_actions():
-    p=policy();req(p["mode"]=="HUMAN_APPROVAL_GATED_GMAIL_CONNECTOR" and p["execution_provider"]=="CHATGPT_GMAIL_CONNECTOR","Gmail mode mismatch");req(p["human_approval_required"] is True and p["autonomous_execution_allowed"] is False,"Gmail is not human gated")
+    p=policy();req(p["mode"]=="CHATGPT_GMAIL_CONNECTOR_GATEWAY" and p["execution_provider"]=="CHATGPT_GMAIL_CONNECTOR","Gmail mode mismatch");req(p["human_approval_required"] is True and p["autonomous_execution_allowed"] is False,"Gmail is not human gated")
     ledger=load_ledger()
     blocked=make_email_request(project_id="PRJ-001",target="validator@example.com",subject="Validation",body="Synthetic Gmail gateway validation.",campaign_id="validator",evidence_refs=["validator:gmail"],requested_at="2026-09-26T12:00:00Z")
     d0=preflight(ledger,blocked,at="2026-09-26T12:00:00Z");req(d0["status"]=="HUMAN_APPROVAL_REQUIRED" and not d0["can_execute"],"unapproved Gmail request did not fail closed")
