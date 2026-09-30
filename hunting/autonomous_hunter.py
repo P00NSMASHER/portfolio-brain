@@ -500,8 +500,10 @@ def _finalize_rejection_funnel(funnel):
     req(funnel["disposition_accounting_reconciled"],"Hunter disposition funnel accounting drift")
     return funnel
 
-def run_cycle(state,provider,*,at=None):
+def run_cycle(state,provider,*,at=None,intake_candidates=None):
     validate_state(state); policy=load_policy(); at=at or now_iso()
+    intake_candidates=list(intake_candidates or [])
+    intake_used=set()
     disabled,reason=killed()
     if disabled:
         funnel=_finalize_rejection_funnel(_new_rejection_funnel())
@@ -531,10 +533,22 @@ def run_cycle(state,provider,*,at=None):
                 query_outcomes.append(qout)
                 continue
             stat["queries"]+=1; funnel["queries_executed"]+=1
-            candidates=provider.search(query)
+            search_candidates=provider.search(query)
+            intake_for_query=[]
+            for hint_index,hint in enumerate(intake_candidates):
+                if hint_index in intake_used:
+                    continue
+                project_ids=hint.get("_portfolio_scout_project_ids") or []
+                if not set(project_ids).intersection(obj["project_ids"]):
+                    continue
+                intake_for_query.append(hint)
+                intake_used.add(hint_index)
+                break
+            hinted_repositories={x.get("full_name") for x in intake_for_query}
+            candidates=[*intake_for_query,*[x for x in search_candidates if x.get("full_name") not in hinted_repositories]]
             qout["status"]="EXECUTED"
-            qout["raw_results"]=len(candidates); qout["normalized_candidates"]=len(candidates)
-            funnel["raw_search_results"]+=len(candidates); funnel["normalized_candidates"]+=len(candidates)
+            qout["raw_results"]=len(search_candidates); qout["normalized_candidates"]=len(candidates)
+            funnel["raw_search_results"]+=len(search_candidates); funnel["normalized_candidates"]+=len(candidates)
             stat["candidates"]+=len(candidates)
             if not candidates: funnel["queries_zero_results"]+=1
             retained_this_query=0
@@ -551,7 +565,14 @@ def run_cycle(state,provider,*,at=None):
                 qout["inspection_attempted"]+=1
                 funnel["inspection_attempted"]+=1
                 try:
-                    inspection=provider.inspect(cand)
+                    pinned_revision=cand.get("_portfolio_exact_revision_hint")
+                    if pinned_revision is not None:
+                        req(isinstance(pinned_revision,str) and len(pinned_revision)==40 and all(c in "0123456789abcdef" for c in pinned_revision),
+                            "scout intake exact revision invalid")
+                        req(callable(getattr(provider,"inspect_revision",None)),"scout intake requires exact-revision inspection support")
+                        inspection=provider.inspect_revision(cand,pinned_revision)
+                    else:
+                        inspection=provider.inspect(cand)
                 except CandidateInspectionError:
                     cfg=policy["inspection_failure_handling"]
                     req(cfg["candidate_disposition"]=="UNAVAILABLE_NOT_REJECTED","Hunter inspection failure disposition widened")
@@ -590,7 +611,11 @@ def run_cycle(state,provider,*,at=None):
                   "capability_hypothesis":f"{cand['full_name']}@{inspection['revision']} may contain a reusable implementation pattern for {obj['capability_key']}; this remains OBSERVED until independent verification.",
                   "evidence_state":"OBSERVED" if disposition=="RETAIN" else "UNKNOWN",
                   "disposition":disposition,
-                  "provenance_refs":[f"github:{cand['full_name']}@{inspection['revision']}",f"hunter-objective:{obj['objective_id']}"],
+                  "provenance_refs":[
+                    f"github:{cand['full_name']}@{inspection['revision']}",
+                    f"hunter-objective:{obj['objective_id']}",
+                    *([cand["_portfolio_scout_provenance"]] if isinstance(cand.get("_portfolio_scout_provenance"),str) else []),
+                  ],
                   "negative_reason":negative,
                   "ranking":ranking,
                   "proposal_eligibility":"ELIGIBLE" if disposition=="RETAIN" and proposal_eligible(ranking,policy) else ("DEFER_LOW_RANK" if disposition=="RETAIN" else "NOT_APPLICABLE"),
@@ -727,12 +752,36 @@ def apply_verified_feedback(state,feedback,*,task_contract,outcome):
     state["feedback_ids"].append(feedback["feedback_id"])
     state["strategy_stats"][feedback["strategy_id"]]["verified_value_outcomes"]+=1
 
+def _materialize_repo_scout_hints(provider,receipt):
+    if receipt is None:
+        return []
+    req(isinstance(receipt,dict) and receipt.get("status")=="PASS","repo scout intake receipt invalid")
+    req(receipt.get("authority_granted") is False and receipt.get("rights_granted") is False and receipt.get("value_verified") is False,
+        "repo scout intake widened authority or evidence")
+    hints=[]
+    for row in receipt.get("hints") or []:
+        req(row.get("status")=="ELIGIBLE_FOR_EXISTING_HUNTER_INSPECTION","repo scout hint bypassed intake gate")
+        req(row.get("authority_class")=="OBSERVE" and row.get("rights_granted") is False and row.get("value_verified") is False,
+            "repo scout hint widened authority")
+        metadata=provider.repository_metadata(row["repository_full_name"])
+        req(metadata.get("private") is False,"repo scout hint must resolve to a public repository")
+        candidate=dict(metadata)
+        candidate["_portfolio_exact_revision_hint"]=row["exact_revision"]
+        candidate["_portfolio_scout_project_ids"]=list(row["project_ids"])
+        candidate["_portfolio_scout_provenance"]=(
+          f"repo-scout:{row['source_repository']}@{row['source_revision']}:{row['finding_identity']}"
+        )
+        hints.append(candidate)
+    return hints
+
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument("--state",default="hunting/live/hunter_state.json"); ap.add_argument("--output-dir",default="hunting/out")
+    ap=argparse.ArgumentParser(); ap.add_argument("--state",default="hunting/live/hunter_state.json"); ap.add_argument("--output-dir",default="hunting/out"); ap.add_argument("--repo-scout-intake",default=None)
     args=ap.parse_args(); state_path=Path(args.state); out=Path(args.output_dir); out.mkdir(parents=True,exist_ok=True)
     state=json.loads(state_path.read_text()) if state_path.exists() else load_seed_state()
     provider=GitHubPublicProvider(os.environ.get("PORTFOLIO_GITHUB_TOKEN"))
-    state,receipt=run_cycle(state,provider)
+    intake_receipt=json.loads(Path(args.repo_scout_intake).read_text()) if args.repo_scout_intake and Path(args.repo_scout_intake).exists() else None
+    intake_candidates=_materialize_repo_scout_hints(provider,intake_receipt)
+    state,receipt=run_cycle(state,provider,intake_candidates=intake_candidates)
     (out/"hunter_state.json").write_text(json.dumps(state,indent=2)+"\n")
     (out/"hunt_cycle_receipt.json").write_text(json.dumps(receipt,indent=2)+"\n")
     (out/"hunt_objectives.json").write_text(json.dumps(receipt["objectives"],indent=2)+"\n")
