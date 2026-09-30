@@ -258,12 +258,15 @@ class GitHubReader:
                 if len(snapshot_runs) == 2:
                     break
 
+        # Producer discovery stays anchored to the reviewed journal/checkpoint
+        # boundary. A producer may start before either recent reducer snapshot
+        # and publish its immutable event only after those snapshots complete
+        # (for example while queued on a writer lock). Advancing this boundary
+        # from reducer start/upload time can therefore silently lose a valid
+        # event. The per-workflow scan remains bounded by max_pages and fails
+        # closed; the explicit checkpoint/archive lifecycle is responsible for
+        # advancing this boundary safely.
         event_since = since
-        if len(snapshot_runs) == 2:
-            # Re-scan from the predecessor reducer start, not the latest snapshot
-            # upload time. That keeps a complete overlap window for producer
-            # events racing the latest reducer publication.
-            event_since = min(snapshot_runs[0][0]["created_at"], snapshot_runs[1][0]["created_at"])
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
         for workflow in sorted(WORKFLOW_PRODUCERS):
