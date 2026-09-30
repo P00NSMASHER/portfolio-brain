@@ -52,9 +52,7 @@ class CanonicalProductionReaderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td, \
              patch.dict(os.environ, {"GITHUB_TOKEN": "token", "GITHUB_RUN_ID": "999"}, clear=False), \
              patch("state_journal.production_reader.GitHubReader", return_value=fake), \
-             patch("state_journal.production_reader.restore_snapshot", return_value=state), \
-             patch("state_journal.production_reader.artifact_digest"), \
-             patch("state_journal.production_reader.extract_json", return_value=state):
+             patch("state_journal.production_reader.restore_snapshot", return_value=state):
             output = Path(td) / "heartbeat.json"
             metadata = Path(td) / "meta.json"
             status = restore_domain("heartbeat", output, metadata)
@@ -85,9 +83,7 @@ class CanonicalProductionReaderTests(unittest.TestCase):
             }
             with patch.dict(os.environ, env, clear=False), \
                  patch("state_journal.production_reader.GitHubReader", return_value=fake) as reader_cls, \
-                 patch("state_journal.production_reader.restore_snapshot", return_value=state), \
-                 patch("state_journal.production_reader.artifact_digest"), \
-                 patch("state_journal.production_reader.extract_json", return_value=state):
+                 patch("state_journal.production_reader.restore_snapshot", return_value=state):
                 self.assertEqual(restore_domain("heartbeat", first, first_meta), "RESTORED_CANONICAL")
                 self.assertTrue(cache.exists())
                 calls_after_first = reader_cls.call_count
@@ -107,9 +103,7 @@ class CanonicalProductionReaderTests(unittest.TestCase):
                 "PORTFOLIO_CANONICAL_CACHE": str(cache),
             }, clear=False), \
                  patch("state_journal.production_reader.GitHubReader", return_value=fake), \
-                 patch("state_journal.production_reader.restore_snapshot", return_value=state), \
-                 patch("state_journal.production_reader.artifact_digest"), \
-                 patch("state_journal.production_reader.extract_json", return_value=state):
+                 patch("state_journal.production_reader.restore_snapshot", return_value=state):
                 restore_domain("heartbeat", root / "first.json")
             with patch.dict(os.environ, {
                 "GITHUB_TOKEN": "token", "GITHUB_RUN_ID": "1000",
