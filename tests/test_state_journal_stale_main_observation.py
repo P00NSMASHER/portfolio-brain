@@ -101,6 +101,99 @@ class StaleMainObservationForkTests(unittest.TestCase):
         self.assertEqual(superseded["source_sha"], STALE)
         self.assertEqual(superseded["superseded_by_source_sha"], CURRENT)
 
+    def test_observed_main_head_breaks_historical_duplicate_deadlock(self):
+        # Two queued runs can start from different source commits yet observe
+        # the same later main head from the same canonical predecessor. The
+        # source-exact observation is authoritative only after proving both
+        # older source and observed head are ancestors of current main.
+        observed = CURRENT
+        newest_main = "d" * 40
+        stale_after = runtime_tick(self.runtime, rid="REPO-002", at="2026-09-30T08:01:00Z")
+        exact_after = runtime_tick(self.runtime, rid="REPO-002", at="2026-09-30T08:02:00Z")
+        stale = event("101", STALE, self.runtime, stale_after)
+        exact = event("102", observed, self.runtime, exact_after)
+
+        for item in (stale, exact):
+            change = next(change for change in item["changes"] if change["domain"] == "runtime")
+            receipt = change["proofs"]["cycle_receipt"]
+            receipt["cycle_id"] = "cycle-shared-observation"
+            observation = receipt["observations"][0]
+            observation["repository_id"] = "REPO-008"
+            observation["prior_sha"] = "0" * 40
+            observation["current_sha"] = observed
+            observation["source_ref"] = "main"
+            observation["status"] = "CHANGED"
+            observation.pop("observed_at", None)
+            observation.pop("receipt_hash", None)
+
+        rows = [
+            (self.artifact(11, stale), stale, provider(stale, 11)),
+            (self.artifact(12, exact), exact, provider(exact, 12)),
+        ]
+
+        reader = self.reader(rows)
+        original_get = reader.get
+        def get(suffix):
+            if suffix == f"/compare/{observed}...{newest_main}":
+                return {"merge_base_commit": {"sha": observed}, "status": "ahead"}
+            return original_get(suffix)
+        reader.get = get
+
+        with patch("state_journal.github_reducer.restore_snapshot", return_value=self.snapshot), \
+             patch.dict(os.environ, {"GITHUB_SHA": newest_main}, clear=False):
+            candidate, receipt = reduce_from_provider(
+                reader, since="2026-09-30T00:00:00Z",
+                current_run="999", upload_steps={}
+            )
+        self.assertEqual(receipt["new_deliveries"], 1)
+        self.assertEqual(receipt["superseded_stale_main_observation_count"], 1)
+        self.assertEqual(
+            receipt["superseded_stale_main_observations"][0]["reason"],
+            "STALE_MAIN_OBSERVATION_SUPERSEDED_BY_OBSERVED_MAIN_HEAD",
+        )
+        self.assertEqual(
+            receipt["superseded_stale_main_observations"][0]["superseded_by_source_sha"],
+            observed,
+        )
+
+    def test_historical_duplicate_resolution_requires_observed_head_on_current_main(self):
+        observed = CURRENT
+        newest_main = "d" * 40
+        stale_after = runtime_tick(self.runtime, rid="REPO-002", at="2026-09-30T08:01:00Z")
+        exact_after = runtime_tick(self.runtime, rid="REPO-002", at="2026-09-30T08:02:00Z")
+        stale = event("101", STALE, self.runtime, stale_after)
+        exact = event("102", observed, self.runtime, exact_after)
+        for item in (stale, exact):
+            change = next(change for change in item["changes"] if change["domain"] == "runtime")
+            receipt = change["proofs"]["cycle_receipt"]
+            receipt["cycle_id"] = "cycle-shared-observation"
+            observation = receipt["observations"][0]
+            observation["repository_id"] = "REPO-008"
+            observation["prior_sha"] = "0" * 40
+            observation["current_sha"] = observed
+            observation["source_ref"] = "main"
+            observation["status"] = "CHANGED"
+            observation.pop("observed_at", None)
+            observation.pop("receipt_hash", None)
+        rows = [
+            (self.artifact(11, stale), stale, provider(stale, 11)),
+            (self.artifact(12, exact), exact, provider(exact, 12)),
+        ]
+        reader = self.reader(rows)
+        original_get = reader.get
+        def get(suffix):
+            if suffix == f"/compare/{observed}...{newest_main}":
+                return {"merge_base_commit": {"sha": "f" * 40}, "status": "diverged"}
+            return original_get(suffix)
+        reader.get = get
+        with patch("state_journal.github_reducer.restore_snapshot", return_value=self.snapshot), \
+             patch.dict(os.environ, {"GITHUB_SHA": newest_main}, clear=False), \
+             self.assertRaisesRegex(Exception, "Observed main head is not an ancestor"):
+            reduce_from_provider(
+                reader, since="2026-09-30T00:00:00Z",
+                current_run="999", upload_steps={}
+            )
+
     def test_no_exact_current_main_candidate_still_fails_closed(self):
         other = event("103", OTHER, self.runtime, self.current_after)
         rows = [
