@@ -15,7 +15,7 @@ def verify(projected: dict, work: Path) -> dict:
     for domain in sorted(DOMAINS):
         projected_hash = digest(projected[domain])
         legacy_hash = digest(legacy[domain])
-        require(projected_hash == legacy_hash, f"LEGACY_PARITY_MISMATCH:{domain}")
+        require(\n            projected_hash == legacy_hash,\n            f"LEGACY_PARITY_MISMATCH:{domain}:projected={projected_hash}:legacy={legacy_hash}",\n        )
         rows[domain] = {
             "projection_hash": projected_hash,
             "legacy_hash": legacy_hash,
