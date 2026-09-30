@@ -719,7 +719,12 @@ def apply_verified_feedback(state,feedback,*,task_contract,outcome):
     req(source["capability_key"]==matching[0]["capability_key"],"feedback capability lineage mismatch")
     req(isinstance(outcome["outcome_id"],str) and bool(outcome["outcome_id"].strip()),"feedback outcome identity invalid")
     req(feedback["outcome_event_id"]==outcome["outcome_id"],"feedback outcome lineage mismatch")
-    req(feedback["feedback_id"]=="HFB-"+hashlib.sha256(outcome["outcome_id"].encode()).hexdigest()[:24].upper(),"feedback id must be derived from outcome identity")
+    outcome_key=hashlib.sha256(outcome["outcome_id"].encode()).hexdigest()[:24].upper()
+    outcome_hash=outcome["outcome_hash"].removeprefix("sha256:")
+    expected_v2="HFB-V2-"+outcome_key+"-"+outcome_hash[:24].upper()
+    expected_previous="HFB-"+outcome_key
+    req(feedback["feedback_id"] in {expected_v2,expected_previous},
+        "feedback id must be derived from exact outcome identity and hash")
     req(feedback["evidence_state"]=="VERIFIED","only VERIFIED feedback may train Hunter value")
     req(feedback["strategy_id"] in state["strategy_stats"],"unknown feedback strategy")
     req(feedback["feedback_id"] not in state["feedback_ids"],"duplicate feedback")
