@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0.0",
+  "status_id": "portfolio-architecture-derived-status-v1",
+  "operating_mode": "OPERATIONAL",
+  "historical_build_ledger": "PORTFOLIO_BUILD_STATE.json",
+  "historical_build_step_range": "0-25",
+  "historical_build_step_count": 26,
+  "audit_remediation_tracker": "issue:#210",
+  "audit_remediation_labels_are_separate_from_historical_build_steps": true,
+  "authoritative_config": {
+    "project_registry": "registry/projects.json",
+    "adapter_registry": "adapters/ADAPTER_REGISTRY.json",
+    "authority_matrix": "governance/boundaries.json",
+    "runtime_policy": "runtime/RUNTIME_POLICY.json",
+    "notification_policy": "notifications/NOTIFICATION_POLICY.json"
+  },
+  "derived": {
+    "project_count": 12,
+    "adapter_count": 8,
+    "enabled_adapter_count": 7,
+    "boundary_id": "portfolio-brain-authority-matrix-v1",
+    "runtime_authority_class": "OBSERVE",
+    "runtime_downstream_writes_allowed": 0,
+    "runtime_external_actions_allowed": 0,
+    "notification_authority_class": "NONE",
+    "interactive_chatgpt_core_dependency": false,
+    "gmail_core_dependency": false
+  },
+  "current_systems": {
+    "project_forwarding": {
+      "path": "adapters/project_forwarding.py",
+      "authority_class": "OBSERVE",
+      "capability_source": "governance/boundaries.json",
+      "exact_identity_idempotent": true
+    },
+    "repo001_scout_intake": {
+      "path": "hunting/repo001_intake.py",
+      "destination": "EXISTING_PORTFOLIO_HUNTER_RESEARCH_INTAKE",
+      "creates_hunter_engine": false,
+      "promotes_to_hunter_proposal": false
+    },
+    "abvm_projection": {
+      "path": "adapters/abvm_constrained.py",
+      "scope": [
+        "AUTOMATION_HEALTH",
+        "AUTOMATION_PROGRESS"
+      ],
+      "child_facing_mutation": false,
+      "deployment_authority": false
+    },
+    "evidence_semantics": {
+      "path": "governance/evidence_semantics.py",
+      "heartbeat": "CONNECTIVITY_LIVENESS_ONLY",
+      "notification": "ALERT_ONLY",
+      "pages": "PUBLICATION_ONLY"
+    },
+    "live_dashboard_source": "dashboard/live/state_sources.json"
+  },
+  "live_acceptance_status": "SEPARATE_EVIDENCE_REQUIRED",
+  "live_acceptance_note": "This config-derived status describes code and machine policy. Hosted CI, independent verifier, and controlled/live receipts remain separate acceptance evidence and must not be inferred from this file."
+}
