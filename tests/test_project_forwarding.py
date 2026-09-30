@@ -20,12 +20,13 @@ class ProjectForwardingTests(unittest.TestCase):
         self.assertEqual(len(receipt["deliveries"]),1)
         delivery=receipt["deliveries"][0]
         self.assertEqual(delivery["project_id"],"PRJ-006")
-        self.assertEqual(set(delivery["evidence_scope"]),{"AUTOMATION_HEALTH","PROGRESS_EVIDENCE"})
+        self.assertEqual(delivery["evidence_scope"],["REPOSITORY_OBSERVATION"])
         self.assertEqual(delivery["payload_scope"],"SANITIZED_METADATA_ONLY")
         self.assertFalse(delivery["authority_granted"])
         self.assertFalse(delivery["mutation_performed"])
         self.assertFalse(delivery["deploy_authority"])
         self.assertFalse(delivery["child_facing_mutation_authority"])
+        self.assertFalse(delivery["school_content_publication_authority"])
         self.assertEqual(state["sequence"],1)
         self.assertEqual(len(state["delivered_keys"]),1)
 
