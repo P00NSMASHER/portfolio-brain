@@ -201,7 +201,7 @@ class ScopedJournalDiscoveryTests(unittest.TestCase):
         self.assertTrue(any(call == "/actions/runs/301" for call in calls))
         self.assertTrue(any(
             "runtime-hourly-sync.yml/runs?" in call
-            and "created=%3E%3D2026-09-29T21%3A00%3A00Z" in call
+            and "created=%3E%3D2026-09-29T16%3A35%3A30Z" in call
             for call in calls
         ))
 
