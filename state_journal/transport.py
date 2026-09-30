@@ -6,6 +6,8 @@ Artifacts from pull requests and unregistered callers cannot enter the journal.
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import io
 import json
@@ -123,6 +125,57 @@ class GitHubReader:
         require(type(artifact_id) is int and artifact_id > 0, "Invalid artifact ID")
         # Existing transport strips authorization on cross-host artifact redirects.
         return self.http.bytes(f"{self.base}/actions/artifacts/{artifact_id}/zip")
+
+    def read_archive_branch_files(self, paths: list[str] | tuple[str, ...]) -> tuple[dict[str, bytes], dict]:
+        """Read a small, exact file set from the durable archive branch.
+
+        Recovery never enumerates repository artifacts or archive history. It resolves
+        one branch ref, one commit/tree, then only the requested immutable blobs.
+        """
+        branch = "archive/state-journal"
+        require(isinstance(paths, (list, tuple)) and 0 < len(paths) <= 8, "Archive file request bound invalid")
+        require(len(set(paths)) == len(paths), "Archive file request contains duplicates")
+        for path in paths:
+            require(isinstance(path, str) and 0 < len(path) <= 300, "Archive path invalid")
+            require(".." not in path and path.startswith("archive/"), "Archive path escapes namespace")
+            require(re.fullmatch(r"[A-Za-z0-9._/-]+", path) is not None, "Archive path malformed")
+        ref = self.get("/git/ref/heads/" + quote(branch, safe="/"))
+        ref_sha = ((ref.get("object") or {}).get("sha"))
+        require(isinstance(ref_sha, str) and re.fullmatch(r"[0-9a-f]{40}", ref_sha) is not None,
+                "Archive branch ref identity missing")
+        commit = self.get(f"/git/commits/{ref_sha}")
+        tree_sha = ((commit.get("tree") or {}).get("sha"))
+        require(isinstance(tree_sha, str) and re.fullmatch(r"[0-9a-f]{40}", tree_sha) is not None,
+                "Archive branch tree identity missing")
+        tree = self.get(f"/git/trees/{tree_sha}?recursive=1")
+        require(tree.get("truncated") is False, "Archive branch tree listing truncated")
+        rows = tree.get("tree")
+        require(isinstance(rows, list), "Archive branch tree malformed")
+        blobs = {}
+        for row in rows:
+            path = row.get("path")
+            if path in paths:
+                require(row.get("type") == "blob", "Archive member is not a blob")
+                require(path not in blobs, "Duplicate archive path in Git tree")
+                blobs[path] = row.get("sha")
+        require(set(blobs) == set(paths), "Required durable archive member missing")
+        result = {}
+        for path in paths:
+            sha = blobs[path]
+            require(isinstance(sha, str) and re.fullmatch(r"[0-9a-f]{40}", sha) is not None,
+                    "Archive blob identity missing")
+            blob = self.get(f"/git/blobs/{sha}")
+            require(blob.get("encoding") == "base64" and isinstance(blob.get("content"), str),
+                    "Archive blob encoding unsupported")
+            try:
+                raw = base64.b64decode(blob["content"].replace("\n", ""), validate=True)
+            except (binascii.Error, ValueError) as exc:
+                raise JournalError("Archive blob base64 invalid") from exc
+            size = blob.get("size")
+            require(type(size) is int and size == len(raw), "Archive blob size mismatch")
+            require(len(raw) <= MAX_BYTES, "Archive blob exceeds journal byte bound")
+            result[path] = raw
+        return result, {"branch": branch, "ref_sha": ref_sha, "tree_sha": tree_sha}
 
     def list_recent_artifacts(self, since: str, *, max_pages: int = 20) -> list[dict]:
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
