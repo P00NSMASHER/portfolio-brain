@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from hunting.steps10_12_live_acceptance import build_receipt
+from hunting.steps10_12_live_acceptance import LiveAcceptanceError, build_receipt
 
 class Steps1012LiveAcceptanceTests(unittest.TestCase):
     def test_controlled_acceptance_receipt_is_fail_closed_and_non_value_claiming(self):
@@ -61,10 +61,16 @@ class Steps1012LiveAcceptanceTests(unittest.TestCase):
               "dispatch_status":"ACCEPTED",
               "authority_granted":False,
             }]
-        with patch.dict(os.environ,{"GITHUB_TOKEN":"fixture-token"}), \
+        live_sha="e"*40
+        with patch.dict(os.environ,{
+               "GITHUB_TOKEN":"fixture-token",
+               "GITHUB_ACTIONS":"true",
+               "GITHUB_REF_NAME":"main",
+               "GITHUB_SHA":live_sha,
+             }), \
              patch("scheduler.work_executor.dispatch_requests",side_effect=fake_dispatch):
             receipt=build_receipt(
-              source_sha="e"*40,
+              source_sha=live_sha,
               run_id="controlled-live-dispatch-proof",
               source_branch="main",
               dispatch_live=True,
@@ -81,6 +87,16 @@ class Steps1012LiveAcceptanceTests(unittest.TestCase):
         self.assertFalse(receipt["step12"]["implementation_complete"])
         self.assertFalse(receipt["step12"]["market_verified"])
         self.assertFalse(receipt["step12"]["revenue_verified"])
+
+    def test_live_dispatch_fails_closed_outside_exact_github_actions_context(self):
+        with patch.dict(os.environ,{},clear=True):
+            with self.assertRaisesRegex(LiveAcceptanceError,"GitHub Actions"):
+                build_receipt(
+                  source_sha="f"*40,
+                  run_id="not-a-live-actions-run",
+                  source_branch="main",
+                  dispatch_live=True,
+                )
 
 if __name__=="__main__":
     unittest.main()
