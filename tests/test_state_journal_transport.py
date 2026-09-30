@@ -324,13 +324,31 @@ class StateJournalTransportTests(unittest.TestCase):
         validate_checkpoint(doc)
         self.assertEqual(set(doc['states']),set(DOMAINS))
         self.assertEqual(set(doc['source_refs']),set(DOMAINS))
-        self.assertTrue(all('github-actions:' in ref or 'repo-seed:' in ref for ref in doc['source_refs'].values()))
-        self.assertEqual(doc['states']['heartbeat']['sequence'],142)
-        self.assertEqual(doc['states']['history']['sequence'],144)
-        self.assertIn('artifact=11048615497',doc['source_refs']['heartbeat'])
-        self.assertIn('artifact=11048660700',doc['source_refs']['history'])
         policy=json.loads((ROOT/'state_journal/POLICY.json').read_text())
-        self.assertEqual(policy['artifact_scan_start'],'2026-09-29T16:35:30Z')
+        manifest_path=ROOT/'state_journal/ARCHIVE_MANIFEST.json'
+        if manifest_path.exists():
+            manifest=strict_load(manifest_path.read_bytes())
+            from state_journal.archive import load_active_manifest
+            validated=load_active_manifest(ROOT)
+            self.assertEqual(validated,manifest)
+            self.assertEqual(doc['checkpoint_hash'],manifest['new_checkpoint_hash'])
+            self.assertEqual(manifest['checkpoint_sequence'],manifest['archived_sequence']+1)
+            self.assertEqual(policy['artifact_scan_start'],manifest['artifact_scan_start'])
+            expected=(
+                'repo-archive:'+manifest['archive_path']+':'+
+                manifest['archive_file_sha256']+':state='+manifest['archived_state_hash']
+            )
+            self.assertEqual(set(doc['source_refs'].values()),{expected})
+        else:
+            self.assertTrue(all(
+                'github-actions:' in ref or 'repo-seed:' in ref
+                for ref in doc['source_refs'].values()
+            ))
+            self.assertEqual(doc['states']['heartbeat']['sequence'],142)
+            self.assertEqual(doc['states']['history']['sequence'],144)
+            self.assertIn('artifact=11048615497',doc['source_refs']['heartbeat'])
+            self.assertIn('artifact=11048660700',doc['source_refs']['history'])
+            self.assertEqual(policy['artifact_scan_start'],'2026-09-29T16:35:30Z')
 
     def test_legacy_parity_rejects_one_domain_drift(self):
         doc=strict_load(gzip.decompress((ROOT/'state_journal/CHECKPOINT.json.gz').read_bytes()))
