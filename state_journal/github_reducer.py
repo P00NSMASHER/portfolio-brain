@@ -104,8 +104,14 @@ def select_latest_snapshot(states: list[dict]) -> dict:
 
 
 def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
-                         upload_steps: dict, explicit_checkpoint: dict | None = None) -> tuple[dict, dict]:
-    artifacts = getattr(reader, "list_recent_journal_artifacts", reader.list_recent_artifacts)(since)
+                         upload_steps: dict, explicit_checkpoint: dict | None = None,
+                         explicit_run_ids: list[int] | tuple[int, ...] = ()) -> tuple[dict, dict]:
+    journal_reader = getattr(reader, "list_recent_journal_artifacts", None)
+    artifacts = (
+        journal_reader(since, explicit_run_ids=explicit_run_ids)
+        if journal_reader is not None
+        else reader.list_recent_artifacts(since)
+    )
     state = restore_snapshot(reader, artifacts, current_run=current_run)
     if state is None:
         require(explicit_checkpoint is not None, "CHECKPOINT_REQUIRED: no automatic empty-state reset")
@@ -245,9 +251,19 @@ def main() -> None:
         require(bool(token), "Read-only GitHub token is required")
         reader = GitHubReader(token)
         upload_steps = strict_load((ROOT / "state_journal/UPLOAD_STEPS.json").read_bytes())
+        recovery_run_ids = policy.get("recovery_run_ids", [])
+        require(isinstance(recovery_run_ids, list), "Recovery run IDs must be a list")
+        require(all(type(run_id) is int and run_id > 0 for run_id in recovery_run_ids),
+                "Recovery run IDs must be positive integers")
+        trigger_run = os.environ.get("TRIGGER_WORKFLOW_RUN_ID", "").strip()
+        if trigger_run:
+            require(trigger_run.isdigit() and int(trigger_run) > 0, "Trigger workflow run ID invalid")
+            recovery_run_ids = [*recovery_run_ids, int(trigger_run)]
+        recovery_run_ids = sorted(set(recovery_run_ids))
         state, receipt = reduce_from_provider(reader, since=policy["artifact_scan_start"],
                                              current_run=os.environ.get("GITHUB_RUN_ID", ""), upload_steps=upload_steps,
-                                             explicit_checkpoint=bootstrap)
+                                             explicit_checkpoint=bootstrap, explicit_run_ids=recovery_run_ids)
+        receipt["explicit_recovery_run_ids"] = recovery_run_ids
         validate_snapshot(state)
         parity = verify_legacy_parity(state["projection"]["states"], args.output_dir / "legacy-parity-work")
         receipt["legacy_parity"] = parity["status"]
