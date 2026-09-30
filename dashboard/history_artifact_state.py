@@ -21,7 +21,8 @@ from dashboard.history_state import (
     validate_state,
 )
 from runtime.artifact_http import open_url
-from runtime.artifact_restore import InvalidStateArtifact, _atomic_write, restore_latest_valid_state
+from runtime.artifact_restore import restore_latest_valid_state
+from runtime.artifact_restore import InvalidStateArtifact, _atomic_write
 
 MAX_BYTES=5_242_880
 
