@@ -4,5 +4,5 @@ Updating this file on main intentionally triggers runtime-daily-learning.
 The triggered workflow remains bounded by the runtime policy, model router,
 Step-20 cost governor, provider secret, and kill switches.
 
-trigger_revision: billing-activated-provider-proof-1
-reason: verify OpenAI provider readiness after API billing was funded by the owner
+trigger_revision: step19-provider-usability-acceptance-20260930-2
+reason: run bounded exact-main provider usability canary after Step 19 protected promotion
