@@ -1,4 +1,5 @@
 name: steps10-12-live-acceptance
+# Exact-main retrigger after repository-explicit factory Foundation dispatch repair.
 
 on:
   push:
