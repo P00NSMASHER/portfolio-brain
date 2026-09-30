@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from state_journal.contracts import DOMAINS, digest, validate_domain, require
+from state_journal.contracts import DOMAINS, JournalError, digest, validate_domain, require
 from state_journal.transport import GitHubReader
 from runtime import artifact_state as runtime_artifact
 from agents import artifact_state as heartbeat_artifact
@@ -153,7 +153,12 @@ def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
 def restore_all(root: Path, work: Path) -> tuple[dict, dict]:
     states, refs = {}, {}
     for domain in sorted(DOMAINS):
-        state, ref = restore_domain(root, domain, work / domain)
+        try:
+            state, ref = restore_domain(root, domain, work / domain)
+        except Exception as exc:
+            raise JournalError(
+                f"LEGACY_RESTORE_FAILED:{domain}:{type(exc).__name__}:{exc}"
+            ) from exc
         states[domain] = state
         refs[domain] = ref
     return states, refs
