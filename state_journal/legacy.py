@@ -2,9 +2,11 @@
 from __future__ import annotations
 import json
 import os
+import time
 from pathlib import Path
 from state_journal.contracts import DOMAINS, digest, validate_domain, require
 from state_journal.transport import GitHubReader
+from runtime.artifact_restore import InvalidStateArtifact
 from runtime import artifact_state as runtime_artifact
 from agents import artifact_state as heartbeat_artifact
 from hunting import artifact_state as hunter_artifact
@@ -39,6 +41,30 @@ def _restore_runtime(output: Path, metadata: Path) -> str:
     )
 
 
+def _wait_for_conflicting_producers(reader: GitHubReader, run_ids: tuple[int, ...]) -> set[int] | None:
+    deadline = time.monotonic() + 60
+    for poll in range(5):
+        response = reader.get("/actions/runs?branch=main&per_page=100")
+        runs = response.get("workflow_runs")
+        require(isinstance(runs, list), "Conflicting producer run listing malformed")
+        terminal = {
+            run["id"]
+            for run in runs
+            if type(run.get("id")) is int
+            and run["id"] > 0
+            and run.get("status") == "completed"
+            and run.get("conclusion") in {"success", "failure", "cancelled", "timed_out"}
+        }
+        active = set(run_ids) - terminal
+        if not active:
+            return terminal
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or poll == 4:
+            return None
+        time.sleep(min(5, remaining))
+    return None
+
+
 def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
     require(domain in DOMAINS, "Unknown checkpoint domain")
     work.mkdir(parents=True, exist_ok=True)
@@ -49,14 +75,29 @@ def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("PORTFOLIO_GITHUB_TOKEN")
     reader = GitHubReader(token, max_requests=5) if token else None
     status = "NO_PRIOR_ARTIFACT"
+    terminal_run_ids: set[int] = set()
     try:
         for _attempt in range(5):
             output.unlink(missing_ok=True)
             metadata.unlink(missing_ok=True)
-            if domain == "runtime":
-                status = _restore_runtime(output, metadata)
-            else:
-                status = RESTORERS[domain](output, metadata)
+            try:
+                if domain == "runtime":
+                    status = _restore_runtime(output, metadata)
+                else:
+                    status = RESTORERS[domain](output, metadata)
+            except InvalidStateArtifact as exc:
+                if (
+                    str(exc) != "conflicting state artifacts at highest sequence"
+                    or reader is None
+                    or not exc.source_run_ids
+                    or set(exc.source_run_ids) <= terminal_run_ids
+                ):
+                    raise
+                terminal = _wait_for_conflicting_producers(reader, exc.source_run_ids)
+                if terminal is None:
+                    raise
+                terminal_run_ids.update(terminal)
+                continue
             if not output.exists() or not metadata.exists() or reader is None:
                 break
             meta = json.loads(metadata.read_text())
@@ -73,6 +114,8 @@ def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
                 source_run_ids = [source_run_id]
             nonterminal = None
             for source_run_id in source_run_ids:
+                if source_run_id in terminal_run_ids:
+                    continue
                 source_run = reader.get(f"/actions/runs/{source_run_id}")
                 if not (
                     source_run.get("status") == "completed"
