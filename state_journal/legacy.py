@@ -2,9 +2,11 @@
 from __future__ import annotations
 import json
 import os
+import time
 from pathlib import Path
 from state_journal.contracts import DOMAINS, digest, validate_domain, require
 from state_journal.transport import GitHubReader
+from runtime.artifact_restore import InvalidStateArtifact
 from runtime import artifact_state as runtime_artifact
 from agents import artifact_state as heartbeat_artifact
 from hunting import artifact_state as hunter_artifact
@@ -53,10 +55,17 @@ def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
         for _attempt in range(5):
             output.unlink(missing_ok=True)
             metadata.unlink(missing_ok=True)
-            if domain == "runtime":
-                status = _restore_runtime(output, metadata)
-            else:
-                status = RESTORERS[domain](output, metadata)
+            try:
+                if domain == "runtime":
+                    status = _restore_runtime(output, metadata)
+                else:
+                    status = RESTORERS[domain](output, metadata)
+            except InvalidStateArtifact as exc:
+                if str(exc) != "conflicting state artifacts at highest sequence" or _attempt == 4:
+                    raise
+                # A reducer can overlap a writer between state upload and run completion.
+                time.sleep(1)
+                continue
             if not output.exists() or not metadata.exists() or reader is None:
                 break
             meta = json.loads(metadata.read_text())
