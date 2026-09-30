@@ -2,6 +2,10 @@ name: provider-usability-acceptance
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - "acceptance/STEP19_LIVE_CANARY_TRIGGER.json"
 
 permissions:
   contents: read
@@ -19,11 +23,11 @@ jobs:
     outputs:
       protected_main_sha: ${{ steps.main.outputs.sha }}
     steps:
-      - name: Require dispatch from protected main
+      - name: Require canary from protected main
         shell: bash
         run: |
           if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
-            echo "::error::Step 19 acceptance must be dispatched from refs/heads/main"
+            echo "::error::Step 19 acceptance must run from refs/heads/main"
             exit 1
           fi
 
