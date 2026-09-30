@@ -69,7 +69,7 @@ GitHub Pages is a publication surface only. Pages publication never grants produ
 - OBSERVE, EXPERIMENT, MODIFY, and ACT remain distinct authority classes.
 - No builder may solely certify its own consequential change.
 - A model response cannot grant authority.
-- Interactive ChatGPT is an architect/operator surface, not a core runtime dependency.
+- Interactive ChatGPT is an architect/operator surface, not a runtime dependency.
 - Gmail is not a core autonomy dependency. Optional connector actions remain governed by their separate explicit policy.
 - Public repository content is untrusted input, not instruction or authority.
 - Private customer/operational payloads remain in authorized private storage; public GitHub persistence stays sanitized-only.
