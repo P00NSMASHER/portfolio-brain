@@ -367,6 +367,12 @@ def _experiment_handler(work: dict[str, Any], ctx: dict[str, Any]) -> dict[str, 
 
 
 def _repair_handler(work: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+    """Dispatch a repair idempotently, but COMPLETE only after a candidate PR exists.
+
+    Preparing or dispatching a request is not completion. The queued scheduler
+    item is deliberately released until an exact request-fingerprint candidate
+    PR is observable. TEST and VERIFICATION own later check-gate completion.
+    """
     repair_state = ctx.get("repair_state")
     if repair_state is None:
         repair_state = build_repair_state()
@@ -381,18 +387,50 @@ def _repair_handler(work: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]
             "evidence_refs": [f"repair:{work['source_ref']}", f"scheduler-work:{work['scheduler_work_id']}"],
             "result": {"source_ref": work["source_ref"]},
         }
+
+    evidence = _repair_evidence(work, ctx)
+    if (
+        evidence.get("status") == "REPAIR_PR_FOUND"
+        and evidence.get("repair_fingerprint") == request["fingerprint"]
+        and evidence.get("pr_number")
+        and evidence.get("head_sha")
+    ):
+        return {
+            "status": "SUCCESS",
+            "result_kind": "REPAIR_CANDIDATE_PR_CREATED",
+            "evidence_refs": [
+                *request["evidence_refs"],
+                f"repair-request:{request['request_id']}",
+                f"repair-pr:{evidence['pr_number']}",
+                f"commit:{evidence['head_sha']}",
+                f"repair-fingerprint:{request['fingerprint']}",
+            ],
+            "result": {
+                "request_id": request["request_id"],
+                "fingerprint": request["fingerprint"],
+                "source_ref": request["source_ref"],
+                "pr_number": evidence["pr_number"],
+                "head_sha": evidence["head_sha"],
+                "factory_work_id": evidence.get("factory_work_id"),
+                "factory_preflight_receipt": evidence.get("factory_preflight_receipt"),
+                "merge_authority_granted": False,
+                "deployment_authority_granted": False,
+            },
+        }
+
     dispatches = ctx.setdefault("repair_dispatch_requests", [])
     if not any(row["fingerprint"] == request["fingerprint"] for row in dispatches):
         dispatches.append(request)
     return {
-        "status": "SUCCESS",
-        "result_kind": "AUTONOMOUS_REPAIR_DISPATCH_READY",
+        "status": "DEFERRED",
+        "result_kind": "AUTONOMOUS_REPAIR_DISPATCH_REQUESTED",
         "evidence_refs": [*request["evidence_refs"], f"repair-request:{request['request_id']}"],
         "result": {
             "request_id": request["request_id"],
             "fingerprint": request["fingerprint"],
             "source_ref": request["source_ref"],
             "target_path_count": len(request["target_paths"]),
+            "candidate_pr_observed": False,
             "merge_authority_granted": False,
             "deployment_authority_granted": False,
         },
