@@ -65,73 +65,85 @@
   "project_capabilities": [
     {
       "project_id": "PRJ-000",
-      "repository_id": "REPO-008",
       "capabilities": {
         "READ_OBSERVE": true,
         "CANDIDATE_PR": true,
         "DEPLOY": false,
         "EXTERNAL_ACTION": false
       },
-      "scope_note": "PORTFOLIO_CONTROL_PLANE"
+      "scope_note": "PORTFOLIO_CONTROL_PLANE",
+      "repository_ids": [
+        "REPO-008"
+      ]
     },
     {
       "project_id": "PRJ-001",
-      "repository_id": "REPO-001",
       "capabilities": {
         "READ_OBSERVE": true,
         "CANDIDATE_PR": false,
         "DEPLOY": false,
         "EXTERNAL_ACTION": false
       },
-      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY"
+      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY",
+      "repository_ids": [
+        "REPO-001"
+      ]
     },
     {
       "project_id": "PRJ-002",
-      "repository_id": "REPO-001",
       "capabilities": {
         "READ_OBSERVE": true,
         "CANDIDATE_PR": false,
         "DEPLOY": false,
         "EXTERNAL_ACTION": false
       },
-      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY"
+      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY",
+      "repository_ids": [
+        "REPO-001"
+      ]
     },
     {
       "project_id": "PRJ-003",
-      "repository_id": "REPO-005",
       "capabilities": {
         "READ_OBSERVE": true,
         "CANDIDATE_PR": false,
         "DEPLOY": false,
         "EXTERNAL_ACTION": false
       },
-      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY"
+      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY",
+      "repository_ids": [
+        "REPO-005",
+        "REPO-006"
+      ]
     },
     {
       "project_id": "PRJ-004",
-      "repository_id": "REPO-007",
       "capabilities": {
         "READ_OBSERVE": true,
         "CANDIDATE_PR": false,
         "DEPLOY": false,
         "EXTERNAL_ACTION": false
       },
-      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY"
+      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY",
+      "repository_ids": [
+        "REPO-007"
+      ]
     },
     {
       "project_id": "PRJ-005",
-      "repository_id": "REPO-002",
       "capabilities": {
         "READ_OBSERVE": true,
         "CANDIDATE_PR": false,
         "DEPLOY": false,
         "EXTERNAL_ACTION": false
       },
-      "scope_note": "CHILD_FACING_MUTATION_HUMAN_GATED"
+      "scope_note": "CHILD_FACING_MUTATION_HUMAN_GATED",
+      "repository_ids": [
+        "REPO-002"
+      ]
     },
     {
       "project_id": "PRJ-006",
-      "repository_id": "REPO-003",
       "capabilities": {
         "READ_OBSERVE": true,
         "CANDIDATE_PR": false,
@@ -144,62 +156,75 @@
         "AUTOMATION_PROGRESS"
       ],
       "child_facing_mutation": false,
-      "school_content_publication": false
+      "school_content_publication": false,
+      "repository_ids": [
+        "REPO-003"
+      ]
     },
     {
       "project_id": "PRJ-007",
-      "repository_id": "REPO-004",
       "capabilities": {
         "READ_OBSERVE": true,
         "CANDIDATE_PR": false,
         "DEPLOY": false,
         "EXTERNAL_ACTION": false
       },
-      "scope_note": "RESEARCH_ONLY_LIVE_TRADING_PROHIBITED"
+      "scope_note": "RESEARCH_ONLY_LIVE_TRADING_PROHIBITED",
+      "repository_ids": [
+        "REPO-004"
+      ]
     },
     {
       "project_id": "PRJ-008",
-      "repository_id": "REPO-001",
       "capabilities": {
         "READ_OBSERVE": true,
         "CANDIDATE_PR": false,
         "DEPLOY": false,
         "EXTERNAL_ACTION": false
       },
-      "scope_note": "EXISTING_HUNTER_INTAKE_ONLY"
+      "scope_note": "EXISTING_HUNTER_INTAKE_ONLY",
+      "repository_ids": [
+        "REPO-001"
+      ]
     },
     {
       "project_id": "PRJ-009",
-      "repository_id": "REPO-001",
       "capabilities": {
         "READ_OBSERVE": true,
         "CANDIDATE_PR": false,
         "DEPLOY": false,
         "EXTERNAL_ACTION": false
       },
-      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY"
+      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY",
+      "repository_ids": [
+        "REPO-001"
+      ]
     },
     {
       "project_id": "PRJ-010",
-      "repository_id": "REPO-001",
       "capabilities": {
         "READ_OBSERVE": true,
         "CANDIDATE_PR": false,
         "DEPLOY": false,
         "EXTERNAL_ACTION": false
       },
-      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY"
+      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY",
+      "repository_ids": [
+        "REPO-001"
+      ]
     },
     {
       "project_id": "PRJ-011",
-      "repository_id": "REPO-001",
       "capabilities": {
         "READ_OBSERVE": true,
         "CANDIDATE_PR": false,
         "DEPLOY": false,
         "EXTERNAL_ACTION": false
       },
-      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY"
+      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY",
+      "repository_ids": [
+        "REPO-001"
+      ]
     }
   ]
 }
