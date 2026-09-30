@@ -73,6 +73,14 @@ RESTORERS: dict[str, Callable[..., str]] = {
 
 CORE_HEALTH_SOURCES = {"runtime","scheduler","hunter","cost","notifications"}
 OPTIONAL_OBSERVABILITY_SOURCES = {"agents","provider","model_feedback","learning","hunter_proposals","hunter_proposal_reviews"}
+EVIDENCE_SEMANTICS = {
+    "heartbeat": "LIVENESS_CONNECTIVITY_ONLY",
+    "notification": "ALERT_ONLY",
+    "pages": "PUBLICATION_ONLY",
+    "technical_verification_credit": False,
+    "market_verification_credit": False,
+    "revenue_verification_credit": False,
+}
 
 
 class LiveStateBridgeError(ValueError):
@@ -118,6 +126,15 @@ def _fallback(name: str, output: Path, *, now: datetime) -> str:
     return SEEDS[name]
 
 
+def _fallback_status(restore_status: str | None, error_class: str | None) -> str:
+    if error_class:
+        return "BLOCKED"
+    value=(restore_status or "").upper()
+    if any(token in value for token in ("ERROR","FAILED","INVALID","BLOCKED","REJECTED","CORRUPT")):
+        return "BLOCKED"
+    return "FALLBACK"
+
+
 def _classify(meta: dict[str, Any], *, now: datetime, stale_after_minutes: int) -> tuple[str, float | None]:
     created = meta.get("artifact_created_at")
     if not isinstance(created, str) or not created:
@@ -128,7 +145,7 @@ def _classify(meta: dict[str, Any], *, now: datetime, stale_after_minutes: int) 
 
 def apply_cost_verification(source:dict[str,Any], state:dict[str,Any], liveness:dict[str,Any]|None, *, now:datetime)->None:
     """Freshness of an actual unchanged-ledger check, never a ledger mutation."""
-    if source.get("source_kind")!="GITHUB_ACTIONS_ARTIFACT" or source.get("status")=="FALLBACK" or not liveness:
+    if source.get("source_kind")!="GITHUB_ACTIONS_ARTIFACT" or source.get("status") in {"FALLBACK","BLOCKED"} or not liveness:
         return
     proof=liveness.get("cost_state_proof")
     if not isinstance(proof,dict):return
@@ -201,7 +218,7 @@ def build_live_state(
         else:
             source_ref = _fallback(name, state_path, now=now)
             source_kind = "CHECKED_IN_SEED"
-            freshness = "FALLBACK"
+            freshness = _fallback_status(restore_status,error_class)
             age = None
 
         state = json.loads(state_path.read_text(encoding="utf-8"))
@@ -218,6 +235,8 @@ def build_live_state(
             "age_minutes": age,
             "stale_after_minutes": STALE_AFTER_MINUTES[name],
             "state_sequence": state.get("sequence"),
+            "source_sequence": state.get("sequence"),
+            "source_state_hash": _hash_value(state),
             "state_updated_at": state.get("updated_at"),
             "error_class": error_class,
         }
@@ -233,7 +252,7 @@ def build_live_state(
     else:
         provider_ref=_fallback("provider",provider_path,now=now)
         provider_kind="CHECKED_IN_SEED"
-        provider_freshness="FALLBACK"
+        provider_freshness=_fallback_status(provider_restore_status,provider_metadata.get("error_class"))
         provider_age=None
     provider_state=json.loads(provider_path.read_text(encoding="utf-8"))
     sources["provider"]={
@@ -243,7 +262,8 @@ def build_live_state(
       "artifact_created_at":provider_metadata.get("artifact_created_at"),
       "artifact_expires_at":provider_metadata.get("artifact_expires_at"),"age_minutes":provider_age,
       "stale_after_minutes":STALE_AFTER_MINUTES["provider"],"state_sequence":provider_state.get("sequence"),
-      "state_updated_at":provider_state.get("updated_at"),"error_class":None,
+      "source_sequence":provider_state.get("sequence"),"source_state_hash":_hash_value(provider_state),
+      "state_updated_at":provider_state.get("updated_at"),"error_class":provider_metadata.get("error_class"),
     }
 
     cost_state=json.loads((output_dir/_state_filename("cost")).read_text())
@@ -253,7 +273,9 @@ def build_live_state(
     # observability sources (provider readiness and agent heartbeats) may still
     # be warming up without degrading an otherwise healthy control plane.
     core_statuses = {sources[name]["status"] for name in CORE_HEALTH_SOURCES}
-    if core_statuses == {"LIVE"}:
+    if "BLOCKED" in core_statuses:
+        bridge_status = "BLOCKED"
+    elif core_statuses == {"LIVE"}:
         bridge_status = "LIVE"
     elif core_statuses == {"FALLBACK"}:
         bridge_status = "FALLBACK"
@@ -271,6 +293,7 @@ def build_live_state(
         "health_sources": sorted(CORE_HEALTH_SOURCES),
         "optional_observability_sources": sorted(OPTIONAL_OBSERVABILITY_SOURCES),
         "sources": sources,
+        "evidence_semantics": dict(EVIDENCE_SEMANTICS),
     }
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
