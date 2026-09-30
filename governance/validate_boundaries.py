@@ -29,9 +29,14 @@ def validate_boundaries()->dict[str,object]:
     req(set(policy["actions"])==EXPECTED_ACTIONS,"authority action coverage changed")
 
     actions=policy["actions"]
-    for action in ("PRODUCTION_DEPLOYMENT","CUSTOMER_EMAIL_GMAIL","FINANCIAL_ACTION","DESTRUCTIVE_ACTION","CHILD_FACING_ACTION"):
+    for action in ("PRODUCTION_DEPLOYMENT","FINANCIAL_ACTION","DESTRUCTIVE_ACTION","CHILD_FACING_ACTION"):
         req(actions[action]["decision"]=="HUMAN_APPROVAL_REQUIRED","high-risk action lost human gate: "+action)
         req(actions[action]["autonomous_allowed"] is False,"high-risk action became autonomous: "+action)
+    gmail=actions["CUSTOMER_EMAIL_GMAIL"]
+    req(gmail["decision"]=="EXPLICIT_MACHINE_POLICY_GATE" and gmail["autonomous_allowed"] is True,"explicit Gmail exception not represented")
+    req(gmail["core_runtime_dependency"] is False and gmail["policy_ref"]=="action_engine/ACTION_POLICY.json","Gmail became a core dependency or lost policy binding")
+    action_policy=load("action_engine/ACTION_POLICY.json")
+    req(action_policy["enabled"] is True and "CUSTOMER_EMAIL" in action_policy["allowed_actions"],"governance Gmail exception lacks machine-policy authorization")
     req(actions["LIVE_TRADING"]["decision"]=="PROHIBITED" and actions["LIVE_TRADING"]["autonomous_allowed"] is False,"live trading must remain prohibited")
     req(actions["PAGES_PUBLICATION"]["publication_only"] is True,"Pages must remain publication-only")
     req(actions["PAGES_PUBLICATION"]["production_deploy_authority"] is False,"Pages publication gained deployment authority")
