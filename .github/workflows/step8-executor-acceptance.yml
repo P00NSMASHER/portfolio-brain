@@ -1,6 +1,10 @@
 name: step8-executor-acceptance
 
 on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/step8-executor-acceptance.yml"
   workflow_dispatch:
     inputs:
       source_ref:
@@ -30,9 +34,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Execute real default REPAIR TEST VERIFICATION handlers
+        env:
+          SOURCE_REF: ${{ inputs.source_ref || 'STEP8-ACCEPTANCE-W2-20260930' }}
         run: >-
           python -m scheduler.step8_acceptance
-          --source-ref "${{ inputs.source_ref }}"
+          --source-ref "$SOURCE_REF"
           --output scheduler/out/step8_acceptance.json
       - name: Preserve Step 8 acceptance receipt
         uses: actions/upload-artifact@v4
