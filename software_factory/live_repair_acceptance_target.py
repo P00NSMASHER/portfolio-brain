@@ -7,4 +7,4 @@ regression test. No production runtime imports this module.
 
 
 def acceptance_value() -> str:
-    return "BASELINE"
+    return "CANDIDATE"
