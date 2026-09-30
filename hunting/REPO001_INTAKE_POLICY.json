@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0.0",
+  "intake_id": "repo001-scout-bridge-v1",
+  "source_repository_id": "REPO-001",
+  "source_repository_full_name": "P00NSMASHER/github-value-hunt-ledger",
+  "source_paths": [
+    "intelligence/scout_queue/HUNTER-01.json",
+    "intelligence/scout_queue/HUNTER-02.json",
+    "intelligence/scout_queue/HUNTER-03.json",
+    "intelligence/scout_queue/HUNTER-04.json",
+    "intelligence/scout_queue/HUNTER-05.json",
+    "intelligence/scout_queue/HUNTER-06.json",
+    "intelligence/scout_queue/HUNTER-07.json",
+    "intelligence/scout_queue/HUNTER-08.json",
+    "intelligence/scout_queue/HUNTER-09.json",
+    "intelligence/scout_queue/HUNTER-10.json",
+    "intelligence/scout_queue/HUNTER-11.json",
+    "intelligence/scout_queue/HUNTER-12.json",
+    "intelligence/scout_queue/HUNTER-13.json",
+    "intelligence/scout_queue/HUNTER-14.json"
+  ],
+  "required_source_authority": "PRE_VERIFICATION_DISCOVERY_ONLY",
+  "destination": "EXISTING_PORTFOLIO_HUNTER_RESEARCH_INTAKE",
+  "creates_hunter_engine": false,
+  "promotes_to_hunter_proposal": false,
+  "authority_class": "OBSERVE",
+  "evidence_state": "OBSERVED",
+  "eligibility": {
+    "required_candidate_status": "PRE_VERIFICATION_CANDIDATE",
+    "minimum_triage_score": 30,
+    "require_exact_candidate_revision": true,
+    "require_root_code_signal": true,
+    "archived_allowed": false
+  },
+  "bounds": {
+    "max_source_snapshots": 14,
+    "max_candidates_examined": 224,
+    "max_eligible_intake_records": 12,
+    "max_api_requests": 14,
+    "max_output_bytes": 1048576
+  },
+  "value_credit": {
+    "technical_verified": false,
+    "market_verified": false,
+    "revenue_verified": false,
+    "discovery_activity_is_value": false
+  },
+  "persistence": {
+    "sanitized_only": true
+  }
+}
