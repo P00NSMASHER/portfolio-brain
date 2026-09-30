@@ -18,20 +18,20 @@ AT = "2026-09-30T13:30:00Z"
 def _repair_task() -> dict:
     failure={
       "schema_version":"1.0.0",
-      "failure_id":"RFAIL-STEP8-ACCEPTANCE",
+      "failure_id":"RFAIL-STEP9-PR-OPEN-CANARY",
       "source_type":"FAILURE_PACKET",
       "project_ids":["PRJ-000"],
       "target_repository_id":"REPO-008",
-      "target_paths":["software_factory/scheduler_repair_bridge.py"],
-      "failure_class":"EVIDENCE_IDENTITY",
-      "observation":"submit_factory_candidate validates request_id and fingerprint but does not explicitly reject a diff-validation receipt whose base_sha differs from the admitted scheduler repair request.",
+      "target_paths":["software_factory/live_repair_acceptance_target.py"],
+      "failure_class":"CONTROLLED_ACCEPTANCE",
+      "observation":"Controlled non-production live acceptance target remains in BASELINE state; the isolated Step 9 factory proof must transition only this canary to CANDIDATE.",
       "reproduction_steps":[
-        "Construct a valid scheduler repair request and factory work item.",
-        "Pass submit_factory_candidate a validation receipt with matching request_id/fingerprint but a different base_sha.",
-        "Observe that the bridge does not explicitly reject the base identity mismatch before candidate commit."
+        "Import acceptance_value from software_factory.live_repair_acceptance_target.",
+        "Call acceptance_value() and observe BASELINE.",
+        "Require the isolated repair candidate to return CANDIDATE without modifying any production runtime path."
       ],
-      "evidence_refs":["acceptance:step8-default-handlers","acceptance:step9-factory-base-binding"],
-      "regression_test_requirement":"Add a new regression-test file proving submit_factory_candidate rejects mismatched validation base_sha before candidate commit or PR creation while preserving the valid matching-base path.",
+      "evidence_refs":["acceptance:step8-default-handlers","acceptance:step9-autonomous-pr-open-canary"],
+      "regression_test_requirement":"Change acceptance_value() to return CANDIDATE only in the isolated repair candidate and add a NEW tests/ regression file asserting exactly CANDIDATE. Do not change any other implementation path.",
       "evidence_state":"VERIFIED",
       "sensitive_material_involved":False,
       "benchmark_contaminated":False,
