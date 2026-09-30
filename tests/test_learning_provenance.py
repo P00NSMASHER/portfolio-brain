@@ -55,6 +55,25 @@ class LearningProvenanceTests(unittest.TestCase):
         self.assertEqual(len(rebuilt["records"]),1)
         self.assertEqual(rebuilt["provenance_freshness"]["VERIFIED_OUTCOME"]["observation_count"],1)
 
+    def test_fresh_live_observation_is_not_mislabeled_verified_outcome(self):
+        row=observation()
+        row["observation_id"]="LRN-PROVENANCE-LIVE-0001"
+        row["provenance_refs"]=["runtime:live-observation:fixture"]
+        state=load_seed_state()
+        state["sequence"]=1
+        state["updated_at"]="2026-09-27T03:44:03Z"
+        state["applied_source_keys"]=["runtime-live:fixture"]
+        state["observations"]=[row]
+        with tempfile.TemporaryDirectory() as td:
+            path=Path(td)/"learning.json"
+            path.write_text(json.dumps(state))
+            rebuilt=rebuild_from_sources(path)
+        classes=rebuilt["provenance_freshness"]
+        self.assertEqual(rebuilt["fresh_learning_observation_count"],1)
+        self.assertEqual(classes["LIVE_OBSERVATION"]["observation_count"],1)
+        self.assertEqual(classes["VERIFIED_OUTCOME"]["observation_count"],0)
+        self.assertTrue(classes["LIVE_OBSERVATION"]["fresh_learning_credit"])
+
     def test_static_baseline_cannot_hide_missing_live_learning_gap(self):
         empty=build_snapshot(learning_observation_count=0)
         live=build_snapshot(learning_observation_count=1)
