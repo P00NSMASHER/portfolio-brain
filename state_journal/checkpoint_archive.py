@@ -5,6 +5,7 @@ import argparse
 import gzip
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from runtime.artifact_restore import _atomic_write
@@ -55,10 +56,6 @@ def latest_canonical(reader: GitHubReader) -> tuple[dict, dict, dict]:
     raise ValueError("No live canonical reducer snapshot available for checkpoint rollover")
 
 
-def _safe_previous_manifest_hash(root: Path) -> str | None:
-    manifest = load_active_manifest(root)
-    return None if manifest is None else manifest["manifest_hash"]
-
 
 def _recovery_runs_are_archived(policy: dict, state: dict) -> bool:
     recovery = policy.get("recovery_run_ids", [])
@@ -95,7 +92,8 @@ def generate(root: Path, *, reader: GitHubReader) -> dict:
         source_head_sha=run["head_sha"],
         source_artifact_digest=artifact["digest"],
         source_artifact_created_at=artifact["created_at"],
-        previous_manifest_hash=_safe_previous_manifest_hash(root),
+        previous_manifest=active,
+        archive_created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     )
     archive_file = root / archive_path
     immutable_manifest = root / manifest["manifest_path"]
@@ -116,7 +114,10 @@ def generate(root: Path, *, reader: GitHubReader) -> dict:
         "checkpoint_sequence": manifest["checkpoint_sequence"],
         "archived_state_hash": manifest["archived_state_hash"],
         "new_checkpoint_hash": checkpoint_doc["checkpoint_hash"],
+        "checkpoint_state_hash": manifest["checkpoint_state_hash"],
         "archive_path": archive_path,
+        "archive_created_at": manifest["archive_created_at"],
+        "replay_overlap_seconds": manifest["replay_overlap_seconds"],
         "source_reducer_run_id": run["id"],
         "source_artifact_id": artifact["id"],
         "source_artifact_digest": artifact["digest"],
