@@ -187,7 +187,7 @@ class LiveLearningObservationTests(unittest.TestCase):
             path=Path(td)/"learning.json"
             path.write_text(json.dumps(state))
             rebuilt=rebuild_from_sources(path)
-        self.assertEqual(rebuilt["source_mode"],"CHECKED_IN_PLUS_DURABLE_VERIFIED")
+        self.assertEqual(rebuilt["source_mode"],"LIVE_WITH_BASELINE_CONTEXT")
         self.assertEqual(rebuilt["live_observation_count"],3)
         self.assertEqual(rebuilt["source_observation_count"],3)
         self.assertEqual(rebuilt["eligible_record_count"],0)
