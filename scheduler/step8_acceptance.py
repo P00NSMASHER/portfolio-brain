@@ -15,6 +15,17 @@ from scheduler.work_executor import execute_cycle
 AT = "2026-09-30T13:30:00Z"
 
 
+def _accept_dispatch(request: dict) -> dict:
+    """Read-only acceptance stub for handler semantics; Step 9 proves live GitHub dispatch."""
+    return {
+      "request_id":request["request_id"],
+      "fingerprint":request["fingerprint"],
+      "workflow_file":"portfolio-autonomous-repair.yml",
+      "dispatch_status":"ACCEPTED",
+      "authority_granted":False,
+    }
+
+
 def _repair_task() -> dict:
     failure={
       "schema_version":"1.0.0",
@@ -76,11 +87,12 @@ def prove(source_ref: str) -> dict:
       context_overrides={
         "repair_state":{"tasks":[task]},
         "main_sha":main_sha,
+        "repair_dispatcher":_accept_dispatch,
       },
     )
     kinds={row["work_type"]:row["result_kind"] for row in receipts}
     expected={
-      "REPAIR":"AUTONOMOUS_REPAIR_DISPATCH_READY",
+      "REPAIR":"AUTONOMOUS_REPAIR_DISPATCHED",
       "TEST":"REPAIR_FOUNDATION_TEST_VERIFIED",
       "VERIFICATION":"REPAIR_INDEPENDENTLY_VERIFIED",
     }
@@ -95,8 +107,9 @@ def prove(source_ref: str) -> dict:
     if meta["summary"]["authority_granted"] is not False:
         raise RuntimeError("Step 8 acceptance unexpectedly granted authority")
     repair_requests=meta["context"].get("repair_dispatch_requests",[])
-    if len(repair_requests)!=1:
-        raise RuntimeError("Step 8 REPAIR handler did not produce exactly one bounded request")
+    repair_receipts=meta["context"].get("repair_dispatch_receipts",[])
+    if len(repair_requests)!=1 or len(repair_receipts)!=1:
+        raise RuntimeError("Step 8 REPAIR handler did not produce one request and one accepted dispatch receipt")
     return {
       "schema_version":"1.0.0",
       "status":"PASS",
@@ -107,6 +120,7 @@ def prove(source_ref: str) -> dict:
       "result_kinds":kinds,
       "repair_request_id":repair_requests[0]["request_id"],
       "repair_fingerprint":repair_requests[0]["fingerprint"],
+      "repair_dispatch_status":repair_receipts[0]["dispatch_status"],
       "test_pr_number":next(row["result"]["pr_number"] for row in receipts if row["work_type"]=="TEST"),
       "verification_pr_number":next(row["result"]["pr_number"] for row in receipts if row["work_type"]=="VERIFICATION"),
       "cycle_receipt":meta["summary"],
