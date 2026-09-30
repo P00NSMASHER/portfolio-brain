@@ -1,6 +1,11 @@
 name: repo-scout-intake-proof
 
 on:
+  pull_request:
+    paths:
+      - "hunting/repo_scout_intake.py"
+      - "hunting/repo_scout_artifact_state.py"
+      - ".github/workflows/repo-scout-intake-proof.yml"
   workflow_dispatch:
 
 permissions:
