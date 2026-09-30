@@ -174,7 +174,7 @@ def _resolve_dominant_runtime_fork(
     winners = []
     for entry in highest:
         item, state, receipt = entry
-        if receipt.get("status") != "PASS" or receipt.get("mode") != "sync":
+        if receipt.get("status") != "PASS" or receipt.get("mode") not in {"sync", "observe"}:
             continue
         if all(
             other is entry or _runtime_state_subsumes(state, receipt, other[1])
@@ -182,7 +182,7 @@ def _resolve_dominant_runtime_fork(
         ):
             winners.append(entry)
     if len(winners) != 1:
-        raise InvalidStateArtifact("runtime concurrent fork has no unique dominant sync state")
+        raise InvalidStateArtifact("runtime concurrent fork has no unique dominant state")
     winner = winners[0][0]
     return {"artifacts": [winner]}, [int(entry[0].get("id")) for entry in highest]
 
@@ -296,7 +296,7 @@ def restore(*, output: Path, metadata_output: Path | None = None,
             max_archive_bytes=budgets["max_output_bytes"],max_state_bytes=budgets["max_output_bytes"],
             validator=validate_state,metadata_output=metadata_output,
         )
-        status="RESTORED_DOMINANT_SYNC_AFTER_CONCURRENT_FORK_" + "_".join(map(str, fork_ids))
+        status="RESTORED_DOMINANT_RUNTIME_AFTER_CONCURRENT_FORK_" + "_".join(map(str, fork_ids))
     if provider_health_output is not None:
         try:
             restore_latest_valid_state(
