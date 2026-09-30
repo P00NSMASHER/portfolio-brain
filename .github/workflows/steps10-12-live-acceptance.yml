@@ -1,5 +1,5 @@
 name: steps10-12-live-acceptance
-# Acceptance wake: re-run after Step 11 checked-in seed freshness hardening.
+# Open-only dedupe fix acceptance wake: require fresh Hunter implementation evidence.\n# Acceptance wake: re-run after Step 11 checked-in seed freshness hardening.
 
 on:
   push:
