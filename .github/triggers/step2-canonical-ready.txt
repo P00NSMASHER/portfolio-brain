@@ -4,3 +4,4 @@ recovery-wake: 2026-09-30T09:25Z runtime-observe-fork-recovery
 recovery-wake: 2026-09-30T09:36Z terminal-legacy-parity
 recovery-wake: 2026-09-30T09:52Z in-flight-producer-overlap
 recovery-wake: 2026-09-30T10:00Z explicit-audited-recovery-run
+recovery-wake: 2026-09-30T15:26Z step7-checkpoint-archive-live-acceptance
