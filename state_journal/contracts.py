@@ -116,10 +116,14 @@ def validate_domain(domain: str, state: dict) -> None:
     canonical(state)
 
 
-def event_identity(run_id: str, event_type: str, source_sha: str) -> str:
+def event_identity(run_id: str, event_type: str, source_sha: str, run_attempt: int = 1) -> str:
     positive_id(run_id); sha(source_sha)
     require(event_type in {value[0] for value in PRODUCERS.values()}, "Unknown event type")
-    return "PSE-" + digest([REPOSITORY, run_id, event_type, source_sha]).split(":", 1)[1]
+    require(type(run_attempt) is int and run_attempt > 0, "Provider run attempt required")
+    identity = [REPOSITORY, run_id, event_type, source_sha]
+    if run_attempt > 1:
+        identity.append(run_attempt)
+    return "PSE-" + digest(identity).split(":", 1)[1]
 
 
 def event_hash(event: dict) -> str:
@@ -134,14 +138,23 @@ def validate_source_evidence(source: dict, event: dict) -> None:
         require(isinstance(source["fixture_id"], str) and re.fullmatch(r"fixture:[a-z0-9-]{1,80}", source["fixture_id"]) is not None,
                 "Fixture evidence is explicitly isolated, never production authorization")
         return
-    fields(source, {"kind", "repository", "artifact_id", "archive_digest", "source_run_id", "source_run_attempt",
-                    "source_sha", "workflow_id", "workflow_path", "source_conclusion", "event_hash", "job_id"}, "Provider evidence")
+    provider_fields = {"kind", "repository", "artifact_id", "archive_digest", "source_run_id", "source_run_attempt",
+                       "source_sha", "workflow_id", "workflow_path", "source_conclusion", "event_hash", "job_id"}
+    require(set(source) in {frozenset(provider_fields), frozenset(provider_fields | {"source_event_hash"})},
+            "Provider evidence has unexpected fields")
     require(source["kind"] == "GITHUB_ACTIONS" and source["repository"] == REPOSITORY, "Untrusted evidence namespace")
     for key in ("artifact_id", "source_run_id", "source_run_attempt", "workflow_id", "job_id"):
         require(type(source[key]) is int and source[key] > 0, "Invalid provider evidence identity")
     require(str(source["source_run_id"]) == event["run_id"] and source["source_sha"] == event["source_sha"], "Provider evidence run/SHA mismatch")
+    require(source["source_run_attempt"] == event.get("run_attempt", 1), "Provider evidence attempt mismatch")
     require(isinstance(source["archive_digest"], str) and re.fullmatch(r"sha256:[0-9a-f]{64}", source["archive_digest"]) is not None,
             "Archive digest required")
+    if "source_event_hash" in source:
+        require(source["source_run_attempt"] > 1 and "run_attempt" in event,
+                "Legacy retry source hash is only valid for upgraded retry events")
+        require(isinstance(source["source_event_hash"], str)
+                and re.fullmatch(r"sha256:[0-9a-f]{64}", source["source_event_hash"]) is not None,
+                "Legacy retry source event hash invalid")
     name = source["workflow_path"]
     require(isinstance(name, str) and re.fullmatch(r"\.github/workflows/[a-z0-9-]+\.yml", name) is not None, "Unsafe workflow reference")
     require(WORKFLOW_PRODUCERS.get(Path(name).stem) == event["producer"], "Evidence producer authorization mismatch")
