@@ -178,14 +178,8 @@ def build_rollover(
     return manifest, archive_raw, compacted, checkpoint_raw, archive_path
 
 
-def validate_manifest(
-    manifest: dict,
-    *,
-    root: Path | None = ROOT,
-    archived_state: dict | None = None,
-    checkpoint_doc: dict | None = None,
-) -> tuple[dict, dict]:
-    required = {
+def _required_fields(schema: str) -> set[str]:
+    base = {
         "schema_version", "archive_id", "manifest_path", "archive_path", "archive_file_sha256",
         "checkpoint_path", "previous_manifest_hash", "archived_sequence", "archived_state_hash",
         "archived_projection_hash", "archived_checkpoint_hash", "archived_event_count",
@@ -193,8 +187,32 @@ def validate_manifest(
         "checkpoint_sequence", "source_reducer_run_id", "source_artifact_id", "source_head_sha",
         "source_artifact_digest", "source_artifact_created_at", "artifact_scan_start", "manifest_hash",
     }
+    if schema == LEGACY_ARCHIVE_SCHEMA:
+        return base
+    require(schema == ARCHIVE_SCHEMA, "Archive manifest schema mismatch")
+    return base | {
+        "previous_manifest_path", "previous_archive_id", "previous_archived_sequence",
+        "previous_archived_state_hash", "previous_new_checkpoint_hash",
+        "archived_source_run_ids", "archived_at", "replay_overlap_minutes",
+    }
+
+
+def _validate_manifest_hash(manifest: dict) -> None:
+    required = _required_fields(manifest.get("schema_version"))
     fields(manifest, required, "Archive manifest")
-    require(manifest["schema_version"] == ARCHIVE_SCHEMA, "Archive manifest schema mismatch")
+    core = {key: manifest[key] for key in required if key != "manifest_hash"}
+    require(manifest["manifest_hash"] == digest(core), "Archive manifest hash mismatch")
+
+
+def validate_manifest(
+    manifest: dict,
+    *,
+    root: Path | None = ROOT,
+    archived_state: dict | None = None,
+    checkpoint_doc: dict | None = None,
+) -> tuple[dict, dict]:
+    _validate_manifest_hash(manifest)
+    schema = manifest["schema_version"]
     require(manifest["checkpoint_path"] == CHECKPOINT_PATH, "Archive checkpoint path changed")
     require(
         isinstance(manifest["archive_path"], str)
@@ -238,10 +256,78 @@ def validate_manifest(
         isinstance(manifest["previous_manifest_hash"], str)
         and manifest["previous_manifest_hash"].startswith("sha256:")
     ), "Previous archive manifest hash invalid")
-    _utc(manifest["source_artifact_created_at"])
-    _utc(manifest["artifact_scan_start"])
-    core = {key: manifest[key] for key in required if key != "manifest_hash"}
-    require(manifest["manifest_hash"] == digest(core), "Archive manifest hash mismatch")
+
+    source_time = _utc(manifest["source_artifact_created_at"])
+    scan_time = _utc(manifest["artifact_scan_start"])
+    require(scan_time <= source_time, "Replay scan starts after checkpoint source")
+
+    predecessor = None
+    if schema == ARCHIVE_SCHEMA:
+        require(
+            manifest["archive_id"] == (
+                f"canonical-archive-seq-{manifest['archived_sequence']:08d}-"
+                f"{manifest['archived_state_hash'].removeprefix('sha256:')[:16]}"
+            ),
+            "Immutable archive identity mismatch",
+        )
+        archived_time = _utc(manifest["archived_at"])
+        require(archived_time >= source_time, "Archive timestamp predates source snapshot")
+        require(manifest["replay_overlap_minutes"] == REPLAY_OVERLAP_MINUTES,
+                "Replay overlap policy changed")
+        require(
+            scan_time == source_time - timedelta(minutes=manifest["replay_overlap_minutes"]),
+            "Replay overlap boundary mismatch",
+        )
+        source_runs = manifest["archived_source_run_ids"]
+        require(
+            isinstance(source_runs, list)
+            and source_runs == sorted(set(source_runs))
+            and all(type(run_id) is int and run_id > 0 for run_id in source_runs),
+            "Archived source run identity set invalid",
+        )
+        lineage_keys = (
+            "previous_manifest_path", "previous_archive_id", "previous_archived_sequence",
+            "previous_archived_state_hash", "previous_new_checkpoint_hash",
+        )
+        if manifest["previous_manifest_hash"] is None:
+            require(all(manifest[key] is None for key in lineage_keys),
+                    "Genesis archive has conflicting predecessor lineage")
+        else:
+            require(all(manifest[key] is not None for key in lineage_keys),
+                    "Archive predecessor lineage incomplete")
+            require(
+                isinstance(manifest["previous_manifest_path"], str)
+                and manifest["previous_manifest_path"].startswith("state_journal/archive/")
+                and manifest["previous_manifest_path"].endswith(".manifest.json")
+                and ".." not in manifest["previous_manifest_path"],
+                "Previous archive manifest path invalid",
+            )
+            require(type(manifest["previous_archived_sequence"]) is int
+                    and manifest["previous_archived_sequence"] >= 0,
+                    "Previous archived sequence invalid")
+            require(manifest["archived_sequence"] >= manifest["previous_archived_sequence"] + 1,
+                    "Checkpoint sequence regression")
+            require(manifest["archived_sequence"] >= manifest["previous_archived_sequence"] + 1,
+                    "Archive sequence regression")
+            require(manifest["archived_checkpoint_hash"] == manifest["previous_new_checkpoint_hash"],
+                    "Mismatched predecessor checkpoint hash")
+            if root is not None:
+                previous_file = root / manifest["previous_manifest_path"]
+                require(previous_file.is_file(), "Previous immutable archive manifest missing")
+                predecessor = strict_load(previous_file.read_bytes())
+                _validate_manifest_hash(predecessor)
+                require(predecessor["manifest_hash"] == manifest["previous_manifest_hash"],
+                        "Mismatched predecessor manifest hash")
+                require(predecessor["archive_id"] == manifest["previous_archive_id"],
+                        "Conflicting checkpoint lineage archive identity")
+                require(predecessor["archived_sequence"] == manifest["previous_archived_sequence"],
+                        "Conflicting checkpoint lineage sequence")
+                require(predecessor["archived_state_hash"] == manifest["previous_archived_state_hash"],
+                        "Conflicting checkpoint lineage state hash")
+                require(predecessor["new_checkpoint_hash"] == manifest["previous_new_checkpoint_hash"],
+                        "Conflicting checkpoint lineage checkpoint hash")
+                require(manifest["archived_sequence"] >= predecessor["checkpoint_sequence"],
+                        "Checkpoint sequence regression")
 
     if root is not None:
         archive_file = root / manifest["archive_path"]
@@ -279,6 +365,12 @@ def validate_manifest(
             "Archived event identity set mismatch")
     require(_archived_provider_artifacts(archived_state) == manifest["archived_provider_artifacts"],
             "Archived provider evidence set mismatch")
+    if schema == ARCHIVE_SCHEMA:
+        require(_archived_source_run_ids(archived_state) == manifest["archived_source_run_ids"],
+                "Archived source run identity set mismatch")
+        if manifest["previous_manifest_hash"] is not None:
+            require(archived_state["checkpoint"]["checkpoint_hash"] == manifest["previous_new_checkpoint_hash"],
+                    "Archived canonical state has conflicting predecessor checkpoint")
     require(checkpoint_doc["checkpoint_hash"] == manifest["new_checkpoint_hash"],
             "Compacted checkpoint hash mismatch")
     require(checkpoint_doc["states"] == archived_state["projection"]["states"],
@@ -293,13 +385,19 @@ def validate_manifest(
     return archived_state, checkpoint_doc
 
 
-def load_active_manifest(root: Path = ROOT) -> dict | None:
+
+def load_active_archive(root: Path = ROOT) -> tuple[dict, dict, dict] | None:
     path = root / "state_journal" / "ARCHIVE_MANIFEST.json"
     if not path.exists():
         return None
     manifest = strict_load(path.read_bytes())
-    validate_manifest(manifest, root=root)
-    return manifest
+    archived_state, checkpoint_doc = validate_manifest(manifest, root=root)
+    return manifest, archived_state, checkpoint_doc
+
+
+def load_active_manifest(root: Path = ROOT) -> dict | None:
+    active = load_active_archive(root)
+    return None if active is None else active[0]
 
 
 def archived_artifact_ids(manifest: dict | None) -> set[int]:
