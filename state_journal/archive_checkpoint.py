@@ -42,7 +42,7 @@ def _sha256(raw: bytes) -> str:
 
 
 def _manifest_body(manifest: dict[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in manifest.items() if k != "manifest_hash"}
+    return {k: v for k, v in manifest.items() if k not in {"manifest_hash", "archive_id"}}
 
 
 def validate_manifest(manifest: dict[str, Any], *, previous: dict[str, Any] | None = None) -> None:
@@ -133,17 +133,9 @@ def build_archive(
         "previous_sequence": None if previous is None else previous["canonical_sequence"],
         "sanitized": True,
     }
-    manifest_hash = digest(body)
+    manifest_hash = digest(_manifest_body(body))
     body["archive_id"] = "PARCH-" + manifest_hash.split(":", 1)[1][:24].upper()
-    body["manifest_hash"] = digest({k: v for k, v in body.items() if k != "manifest_hash"})
-    # archive_id participates in the final manifest hash, so bind it to that hash.
-    body["archive_id"] = "PARCH-" + body["manifest_hash"].split(":", 1)[1][:24].upper()
-    body["manifest_hash"] = digest({k: v for k, v in body.items() if k != "manifest_hash"})
-    body["archive_id"] = "PARCH-" + body["manifest_hash"].split(":", 1)[1][:24].upper()
-    # One final pass reaches a stable ID/hash pair because ID is derived only from hash.
-    body["manifest_hash"] = digest({k: v for k, v in body.items() if k != "manifest_hash"})
-    body["archive_id"] = "PARCH-" + body["manifest_hash"].split(":", 1)[1][:24].upper()
-    body["manifest_hash"] = digest({k: v for k, v in body.items() if k != "manifest_hash"})
+    body["manifest_hash"] = manifest_hash
     validate_manifest(body, previous=previous)
     return gz, body
 
