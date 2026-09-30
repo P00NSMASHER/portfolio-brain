@@ -127,7 +127,8 @@ def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
             "heartbeat merged metadata source SHAs invalid",
         )
         require(
-            isinstance(artifact_digests, list) and len(artifact_digests) == len(artifact_ids),
+            isinstance(artifact_digests, list) and len(artifact_digests) == len(artifact_ids)
+            and all(isinstance(value, str) and value.startswith("sha256:") for value in artifact_digests),
             "heartbeat merged metadata digests invalid",
         )
         ref = (
