@@ -10,6 +10,7 @@ from runtime.artifact_restore import _atomic_write
 from state_journal.archive import (
     archived_event_hashes as manifest_event_hashes,
     archived_provider_artifacts as manifest_provider_artifacts,
+    archived_source_attempts as manifest_source_attempts,
     load_active_manifest,
 )
 from state_journal.contracts import REPOSITORY, Conflict, JournalError, canonical, digest, require, strict_load
@@ -112,9 +113,14 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
                          upload_steps: dict, explicit_checkpoint: dict | None = None,
                          explicit_run_ids: list[int] | tuple[int, ...] = (),
                          archive_manifest: dict | None = None) -> tuple[dict, dict]:
+    archived_attempts = manifest_source_attempts(archive_manifest)
     journal_reader = getattr(reader, "list_recent_journal_artifacts", None)
     artifacts = (
-        journal_reader(since, explicit_run_ids=explicit_run_ids)
+        journal_reader(
+            since,
+            explicit_run_ids=explicit_run_ids,
+            covered_run_attempts=archived_attempts,
+        )
         if journal_reader is not None
         else reader.list_recent_artifacts(since)
     )
@@ -127,6 +133,18 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
         require(explicit_checkpoint is not None, "Active archive requires compacted checkpoint")
         require(explicit_checkpoint["checkpoint_hash"] == archive_manifest["new_checkpoint_hash"],
                 "Active archive/checkpoint binding mismatch")
+        if "checkpoint_state_hash" in archive_manifest:
+            checkpoint_root = make_snapshot(
+                explicit_checkpoint, [],
+                sequence=archive_manifest["checkpoint_sequence"],
+                evidence={},
+                mode="CANONICAL",
+                production_authority=True,
+            )
+            require(
+                checkpoint_root["state_hash"] == archive_manifest["checkpoint_state_hash"],
+                "CORRUPTED_CHECKPOINT: compacted replay root hash mismatch",
+            )
         if state is None:
             state = make_snapshot(
                 explicit_checkpoint, [], sequence=archive_manifest["checkpoint_sequence"], evidence={}
@@ -173,7 +191,10 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
         if a["id"] in known_artifacts:
             require(a.get("digest") == known_artifacts[a["id"]], "Previously ingested/archived provider digest changed")
             continue
-        require(a.get("expired") is False, "Unconsumed event artifact expired; no silent evidence loss")
+        require(
+            a.get("expired") is False,
+            "EXPIRED_EVIDENCE: unconsumed event artifact expired; no silent evidence loss",
+        )
         event, provider = reader.event(a, upload_steps)
         archived_hash = archived_events.get(event["event_id"])
         if archived_hash is not None:
@@ -258,6 +279,9 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
                        "superseded_stale_main_observations": stale_main_observations,
                        "checkpoint_rollover": checkpoint_rollover,
                        "recovered_from_archive_checkpoint": recovered_from_archive_checkpoint,
+                       "archive_checkpoint_status": (
+                           "VALID_CHECKPOINT" if archive_manifest is not None else "NO_ACTIVE_CHECKPOINT"
+                       ),
                        "active_archive_id": None if archive_manifest is None else archive_manifest["archive_id"],
                        "projection_hash": candidate["projection"]["projection_hash"]}
 
