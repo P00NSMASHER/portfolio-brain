@@ -105,8 +105,14 @@ def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
     validate_domain(domain, state)
     meta = json.loads(metadata.read_text())
     require(meta.get("source_state_hash") == digest(state), f"{domain} metadata hash mismatch")
-    if meta.get("restore_status", "").startswith("RESTORED_MERGED_COMMUTING_HEARTBEAT_FORK_"):
-        require(domain == "heartbeat", "Only heartbeat restore may carry merged fork metadata")
+    restore_status = meta.get("restore_status", "")
+    merged_kind = None
+    if restore_status.startswith("RESTORED_MERGED_COMMUTING_HEARTBEAT_FORK_"):
+        merged_kind = "heartbeat"
+    elif restore_status.startswith("RESTORED_MERGED_HISTORY_FORK_"):
+        merged_kind = "history"
+    if merged_kind is not None:
+        require(domain == merged_kind, f"Only {merged_kind} restore may carry this merged fork metadata")
         artifact_ids = meta.get("source_artifact_ids")
         run_ids = meta.get("source_run_ids")
         head_shas = meta.get("source_head_shas")
@@ -114,25 +120,25 @@ def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
         require(
             isinstance(artifact_ids, list) and artifact_ids
             and all(type(value) is int and value > 0 for value in artifact_ids),
-            "heartbeat merged metadata artifact ids invalid",
+            f"{merged_kind} merged metadata artifact ids invalid",
         )
         require(
             isinstance(run_ids, list) and len(run_ids) == len(artifact_ids)
             and all(type(value) is int and value > 0 for value in run_ids),
-            "heartbeat merged metadata run ids invalid",
+            f"{merged_kind} merged metadata run ids invalid",
         )
         require(
             isinstance(head_shas, list) and len(head_shas) == len(artifact_ids)
             and all(isinstance(value, str) and len(value) == 40 for value in head_shas),
-            "heartbeat merged metadata source SHAs invalid",
+            f"{merged_kind} merged metadata source SHAs invalid",
         )
         require(
             isinstance(artifact_digests, list) and len(artifact_digests) == len(artifact_ids)
             and all(isinstance(value, str) and value.startswith("sha256:") for value in artifact_digests),
-            "heartbeat merged metadata digests invalid",
+            f"{merged_kind} merged metadata digests invalid",
         )
         ref = (
-            "github-actions:merged-heartbeat-artifacts=" + ",".join(map(str, artifact_ids))
+            f"github-actions:merged-{merged_kind}-artifacts=" + ",".join(map(str, artifact_ids))
             + ";runs=" + ",".join(map(str, run_ids))
             + ";shas=" + ",".join(head_shas)
             + ";digests=" + ",".join(str(value) for value in artifact_digests)
