@@ -110,6 +110,14 @@ class IndependentVerifierTests(unittest.TestCase):
         self.assertNotIn("git push origin main",text.lower())
         self.assertNotIn("--admin",text.lower())
 
+    def test_hosted_verifier_copy_preserves_isolation_without_privileged_ownership_copy(self):
+        text=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text()
+        self.assertNotIn("cp -a /src /work",text)
+        self.assertEqual(text.count("cp -R --no-preserve=ownership /src/. /work/"),3)
+        self.assertEqual(text.count("--network none"),3)
+        self.assertEqual(text.count("--cap-drop=ALL"),3)
+        self.assertEqual(text.count("--security-opt=no-new-privileges"),3)
+
     def test_publish_check_rejects_wrong_app_attribution(self):
         response={
             "id":123,"name":"portfolio-phase1-gate","head_sha":"c"*40,
