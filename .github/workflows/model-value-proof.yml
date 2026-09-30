@@ -108,31 +108,20 @@ jobs:
           --verifier-provider-receipt value_proof/out/independent_verifier_provider_receipt.json
           --output value_proof/out/value_outcome.json
 
-      - name: Apply VERIFIED outcome feedback
+      - name: Atomically route VERIFIED outcome
         if: ${{ steps.cost.outputs.allowed == 'true' }}
         run: >-
-          python -m value_proof.feedback_loop
+          python -m value_proof.outcome_ingestion
           --task-contract value_proof/MODEL_TASK_CONTRACT.json
           --verifier-contract value_proof/VERIFIER_CONTRACT.json
+          --controlled-cases hunting/CONTROLLED_PROOF_CASES.json
           --value-outcome value_proof/out/value_outcome.json
           --builder-provider-receipt value_proof/out/model_provider_receipt.json
           --verifier-provider-receipt value_proof/out/independent_verifier_provider_receipt.json
           --hunter-state hunting/live/hunter_state.json
           --model-feedback-state model_router/live/model_feedback_state.json
+          --learning-state learning/live/learning_observation_state.json
           --output-dir value_proof/out
-
-      - name: Ingest VERIFIED outcome into continuous learning
-        if: ${{ steps.cost.outputs.allowed == 'true' }}
-        run: >-
-          python -m learning.live_observations
-          --state learning/live/learning_observation_state.json
-          --task-contract value_proof/MODEL_TASK_CONTRACT.json
-          --verifier-contract value_proof/VERIFIER_CONTRACT.json
-          --value-outcome value_proof/out/value_outcome.json
-          --feedback-receipt value_proof/out/feedback_loop_receipt.json
-          --builder-provider-receipt value_proof/out/model_provider_receipt.json
-          --verifier-provider-receipt value_proof/out/independent_verifier_provider_receipt.json
-          --output value_proof/out/learning_observation_state.json
 
       - name: Validate learned feedback state
         if: ${{ steps.cost.outputs.allowed == 'true' }}

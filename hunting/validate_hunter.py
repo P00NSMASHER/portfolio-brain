@@ -9,6 +9,13 @@ from hunting.controlled_proof import load_cases as load_controlled_cases
 from hunting.rights_gate import build_rights_record, validate_rights_record
 from hunting.proposal_state import load_seed_state as load_proposal_seed, validate_state as validate_proposal_state
 from hunting.proposal_review_state import load_seed_state as load_proposal_review_seed, validate_state as validate_proposal_review_state
+from hunting.lifecycle import STAGES as HUNTER_LIFECYCLE_STAGES
+from hunting.downstream_lifecycle import (
+    APPROVAL_CODE as HUNTER_ACCEPTANCE_APPROVAL_CODE,
+    ARTIFACT_NAME as HUNTER_LIFECYCLE_ARTIFACT,
+    load_seed_state as load_lifecycle_seed,
+    validate_state as validate_lifecycle_state,
+)
 ROOT=Path(__file__).resolve().parents[1]
 class HunterValidationError(ValueError): pass
 def req(ok,msg):
@@ -38,6 +45,28 @@ def validate_hunter():
     req(separation["github_supply_is_demand"] is False,"GitHub supply was allowed to masquerade as demand")
     req(separation["supply_only_can_authorize_commercial_build"] is False,"supply-only discovery can authorize commercial build")
     req(separation["demand_evidence_classes"]==["MARKET_VERIFIED","REVENUE_VERIFIED"],"Hunter demand evidence classes drifted")
+    lifecycle=policy["downstream_lifecycle"]
+    req(tuple(lifecycle["stages"])==HUNTER_LIFECYCLE_STAGES,"Hunter downstream lifecycle stages drifted")
+    req(lifecycle["review_can_self_authorize_work"] is False and lifecycle["explicit_acceptance_receipt_required"] is True,"Hunter review can self-authorize downstream work")
+    req(lifecycle["implementation_mode"]=="ISOLATED_REIMPLEMENTATION_NO_SOURCE_COPY","Hunter downstream implementation mode widened")
+    req(lifecycle["automatic_merge_authority_granted"] is False and lifecycle["automatic_deployment_authority_granted"] is False,"Hunter lifecycle granted merge/deploy authority")
+    req(lifecycle["technical_evidence_can_claim_market_value"] is False and lifecycle["technical_evidence_can_claim_revenue_value"] is False,"technical evidence can masquerade as market/revenue value")
+    req(lifecycle["market_evidence_kind"]=="MARKET_OUTCOME" and lifecycle["revenue_evidence_kind"]=="REVENUE_OUTCOME","external value evidence classes drifted")
+    req(lifecycle["new_state_journal_domain_required"] is False,"Hunter lifecycle created an unnecessary duplicate state-journal domain")
+    req(lifecycle["bridge_module"]=="hunting/downstream_lifecycle.py","Hunter downstream bridge module drifted")
+    req(lifecycle["persistence_artifact_name"]==HUNTER_LIFECYCLE_ARTIFACT,"Hunter lifecycle artifact identity drifted")
+    req(lifecycle["seed_file"]=="hunting/HUNTER_LIFECYCLE_STATE_SEED.json","Hunter lifecycle seed path drifted")
+    req(lifecycle["acceptance_approval_code"]==HUNTER_ACCEPTANCE_APPROVAL_CODE,
+        "Hunter work acceptance approval code drifted")
+    req(lifecycle["acceptance_source_binding"]=="EXACT_REVIEW_ID_AND_REVIEW_HASH",
+        "Hunter work acceptance lost exact review binding")
+    req(lifecycle["production_target_scope"]=="CURRENT_WRITE_ENABLED_REPOSITORY_ONLY",
+        "Hunter downstream factory target scope widened")
+    req(lifecycle["recurring_bridge_workflow"]==".github/workflows/portfolio-autonomous-scheduler.yml",
+        "Hunter downstream recurring bridge workflow drifted")
+    lifecycle_seed=load_lifecycle_seed();validate_lifecycle_state(lifecycle_seed)
+    req(lifecycle_seed["records"]==[] and lifecycle_seed["sequence"]==0,
+        "Hunter lifecycle seed invented accepted downstream work")
     rights_policy=load("hunting/RIGHTS_GATE_POLICY.json")
     req(rights_policy["mode"]=="FAIL_CLOSED_NO_REUSE_AUTHORITY_FROM_DISCOVERY","Hunter rights gate mode weakened")
     req(rights_policy["automatic_reuse_authority_granted"] is False,"Hunter discovery may not grant reuse authority")

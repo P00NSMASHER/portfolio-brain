@@ -1,0 +1,76 @@
+name: steps10-12-live-acceptance
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/steps10-12-live-acceptance.yml"
+      - "hunting/steps10_12_live_acceptance.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portfolio-steps10-12-live-acceptance
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fail closed unless checkout is exact current main
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          if os.environ.get("GITHUB_REF_NAME") != "main":
+              raise SystemExit("LIVE_ACCEPTANCE_REQUIRES_MAIN")
+          req = urllib.request.Request(
+              "https://api.github.com/repos/" + os.environ["GITHUB_REPOSITORY"] + "/branches/main",
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": "Bearer " + os.environ["GITHUB_TOKEN"],
+                  "X-GitHub-Api-Version": "2022-11-28",
+                  "User-Agent": "portfolio-steps10-12-live-acceptance/1.0",
+              },
+          )
+          with urllib.request.urlopen(req, timeout=30) as response:
+              current = json.load(response)["commit"]["sha"]
+          if current != os.environ["GITHUB_SHA"]:
+              raise SystemExit(
+                  "STALE_MAIN_ACCEPTANCE: checked out "
+                  + os.environ["GITHUB_SHA"]
+                  + " current main "
+                  + current
+              )
+          print("exact current main:", current)
+          PY
+
+      - name: Execute controlled Steps 10-12 acceptance
+        run: >-
+          python -m hunting.steps10_12_live_acceptance
+          --source-sha "$GITHUB_SHA"
+          --run-id "$GITHUB_RUN_ID"
+          --source-branch "$GITHUB_REF_NAME"
+          --output value_proof/out/steps10_12_live_acceptance.json
+
+      - name: Upload tamper-evident acceptance receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-steps10-12-live-acceptance-${{ github.run_id }}
+          path: value_proof/out/steps10_12_live_acceptance.json
+          if-no-files-found: error
+          retention-days: 30

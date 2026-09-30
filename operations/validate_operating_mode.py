@@ -203,6 +203,7 @@ def validate_operating_mode():
       "agent-heartbeat-sweep":"29 */2 * * *",
       "portfolio-state-reducer":"11 4 * * *",
       "portfolio-state-checkpoint-candidate":"19 4 * * 0",
+      "verified-feedback-bootstrap":"17 * * * *",
     }
     req(expected["runtime-daily-learning"].split()[0] != expected["command-center-pages"].split()[0],
         "daily learning must not collide with hourly command-center publication")

@@ -68,10 +68,12 @@ def _allocation_maps(allocation):
     return plans,rec
 
 def build_context(*,factory_work_items=None,learning_state=None,hunter_proposal_state=None):
-    uncertainty=build_uncertainty_snapshot()
+    learning=learning_state or rebuild_from_ledger()
+    fresh_learning_count=learning.get("fresh_learning_observation_count",learning.get("source_observation_count",0))
+    req(type(fresh_learning_count) is int and fresh_learning_count>=0,"scheduler fresh learning count invalid")
+    uncertainty=build_uncertainty_snapshot(learning_observation_count=fresh_learning_count)
     experiments=build_experiment_portfolio(uncertainty)
     allocation=build_allocation_snapshot(uncertainty,experiments)
-    learning=learning_state or rebuild_from_ledger()
     repair=build_repair_state(learning)
     transfer=build_transfer_state(uncertainty)
     factory=list(factory_work_items if factory_work_items is not None else load("software_factory/SOFTWARE_FACTORY_LEDGER.json")["work_items"])
@@ -386,11 +388,15 @@ def schedule_cycle(state,context=None,*,at=None,candidate_filter:Callable[[dict[
     new_state["work_items"]=[*retained,*selected]
     cycle_seed={"prior_sequence":state["sequence"],"selected":[w["fingerprint"] for w in selected],"blocked":[b["fingerprint"] for b in blocked],"suppressed":sorted(suppressed),"compacted":compacted}
     cid="sched-"+hashlib.sha256(canon(cycle_seed).encode()).hexdigest()[:24]
+    fresh_learning_count=context["learning"].get("fresh_learning_observation_count",context["learning"].get("source_observation_count",0))
+    req(type(fresh_learning_count) is int and fresh_learning_count>=0,"scheduler fresh learning receipt count invalid")
     receipt={"schema_version":"1.0.0","cycle_id":cid,"status":"PASS","reason":None,"finished_at":at,
              "candidate_count":len(candidates),"selected_work":selected,
              "blocked_work":[_work_packet(b,at,"BLOCKED_APPROVAL" if b["approval_requirements"] else "BLOCKED_POLICY") for b in blocked],
              "suppressed_duplicates":sorted(suppressed),"suppressed_no_external_milestone":sorted(set(suppressed_no_external_milestone)),
              "stale_lease_holds":sorted(stale),"compacted_terminal_work":compacted,
+             "fresh_learning_observation_count":fresh_learning_count,
+             "uncertainty_snapshot_hash":context["uncertainty"]["snapshot_hash"],
              "selection_method":"EXTERNAL_VALUE_LANE_THEN_WORK_GATE_THEN_CONTINUATION_CLASS_SOURCE_PARETO_RANK_ALLOCATION_SHARE_NO_SCALAR_SCORE"}
     receipt["receipt_hash"]=hashv(receipt)
     new_state["recent_cycles"]=([*new_state["recent_cycles"],{"cycle_id":cid,"finished_at":at,"receipt_hash":receipt["receipt_hash"],"selected_count":len(selected)}])[-20:]

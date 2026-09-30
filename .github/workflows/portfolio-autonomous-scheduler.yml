@@ -55,6 +55,12 @@ jobs:
       - name: Restore canonical Hunter proposal review state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m state_journal.production_reader --domain reviews --output hunting/live/hunter_proposal_review_state.json
+      - name: Restore durable Hunter downstream lifecycle
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: >-
+          python -m hunting.lifecycle_artifact_state
+          --output hunting/live/hunter_lifecycle_state.json
+          --metadata-output hunting/live/hunter_lifecycle_restore_receipt.json
       - name: Restore canonical runtime state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m state_journal.production_reader --domain runtime --output runtime/live/runtime_state.json
@@ -108,6 +114,21 @@ jobs:
       - name: Validate Hunter proposal review state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -c "import json; from hunting.proposal_review_state import validate_state; validate_state(json.load(open('hunting/out/hunter_proposal_review_state.json')))"
+      - name: Reconcile explicitly accepted Hunter work
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: >-
+          python -m hunting.downstream_lifecycle
+          --state hunting/live/hunter_lifecycle_state.json
+          --reviews hunting/out/hunter_proposal_review_state.json
+          --approvals operator_console/OWNER_APPROVALS.json
+          --base-sha "$GITHUB_SHA"
+          --current-repository "$GITHUB_REPOSITORY"
+          --source-branch "$GITHUB_REF_NAME"
+          --output-state hunting/out/hunter_lifecycle_state.json
+          --report hunting/out/hunter_lifecycle_report.json
+      - name: Validate Hunter downstream lifecycle state
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: python -c "import json; from hunting.downstream_lifecycle import validate_state; validate_state(json.load(open('hunting/out/hunter_lifecycle_state.json')))"
       - name: Heartbeat Portfolio Manager
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
@@ -170,6 +191,17 @@ jobs:
           path: |
             hunting/out/hunter_proposal_review_state.json
             hunting/out/hunter_proposal_review_report.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload durable Hunter downstream lifecycle
+        if: ${{ steps.workload.outputs.allowed == 'true' && hashFiles('hunting/out/hunter_lifecycle_state.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-hunter-lifecycle-state
+          path: |
+            hunting/out/hunter_lifecycle_state.json
+            hunting/out/hunter_lifecycle_report.json
+            hunting/live/hunter_lifecycle_restore_receipt.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload sanitized agent heartbeat state
