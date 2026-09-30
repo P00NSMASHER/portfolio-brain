@@ -17,6 +17,7 @@ from state_journal.contracts import (
     fields, require, validate_domain, validate_source_evidence,
 )
 from state_journal.events import validate_event, replay_heartbeat_batch
+from dashboard.history_state import history_observation, replay_history_observation
 
 STATE_ID = "portfolio-state-journal-shadow-v1"
 
@@ -57,30 +58,53 @@ def replay(base: dict, events: list[dict]) -> dict:
     states = deepcopy(base["states"])
     all_changes = [c for e in ordered for c in e["changes"]]
     require(all(c["domain"] in states for c in all_changes), "Event domain missing from explicit checkpoint")
+
     merge_heartbeat = all(c["operation"] == "HEARTBEAT_BATCHES" for c in all_changes if c["domain"] == "heartbeat")
+    history_changes = [c for c in all_changes if c["domain"] == "history"]
+    history_ops = {}
+    merge_history = bool(history_changes)
+    for change in history_changes:
+        point = history_observation(change["before"], change["after"]) if change["operation"] == "COMPARE_AND_SWAP" else None
+        if point is None:
+            merge_history = False
+            history_ops = {}
+            break
+        history_ops[(change["before_hash"], change["after_hash"])] = point
+
     # Detect branches BEFORE order selection. Sorting event IDs is not authority
     # to choose between two different noncommuting updates to the same state.
+    # Heartbeat batches and exact history observations are the only enrolled
+    # domain-native operations that can be replayed losslessly across a fork.
     successors = {}
     for c in all_changes:
-        if (c["domain"] == "heartbeat" and merge_heartbeat) or c["before_hash"] == c["after_hash"]:
+        if (
+            (c["domain"] == "heartbeat" and merge_heartbeat)
+            or (c["domain"] == "history" and merge_history)
+            or c["before_hash"] == c["after_hash"]
+        ):
             continue
         key = c["domain"], c["before_hash"]
         old = successors.get(key)
         if old is not None and old != c["after_hash"]:
             raise Conflict(f"Conflicting {c['domain']} transitions from the same predecessor")
         successors[key] = c["after_hash"]
+
     known_heartbeat = {digest(states["heartbeat"])} if "heartbeat" in states else set()
+    known_history = {digest(states["history"])} if "history" in states else set()
     remaining = ordered[:]
     applied = []
     consumed = set()
     known = {name: {digest(value)} for name, value in states.items()}
     batches = {}
+    accepted_history = {}
     while remaining:
         advanced = False
         for event in remaining[:]:
             def ready(c):
                 if c["domain"] == "heartbeat" and merge_heartbeat:
                     return c["before_hash"] in known_heartbeat
+                if c["domain"] == "history" and merge_history:
+                    return c["before_hash"] in known_history
                 key = c["domain"], c["before_hash"], c["after_hash"]
                 return key in consumed or digest(states[c["domain"]]) in {c["before_hash"], c["after_hash"]} or (
                     c["before_hash"] == c["after_hash"] and c["before_hash"] in known[c["domain"]])
@@ -91,6 +115,10 @@ def replay(base: dict, events: list[dict]) -> dict:
                     known_heartbeat.add(change["after_hash"])
                     for batch in change["batches"]:
                         batches[digest(batch)] = batch
+                elif change["domain"] == "history" and merge_history:
+                    known_history.add(change["after_hash"])
+                    key = change["before_hash"], change["after_hash"]
+                    accepted_history[key] = history_ops[key]
                 else:
                     key = change["domain"], change["before_hash"], change["after_hash"]
                     if key not in consumed and change["before_hash"] != change["after_hash"]:
@@ -101,6 +129,7 @@ def replay(base: dict, events: list[dict]) -> dict:
             remaining.remove(event); advanced = True
         if not advanced:
             raise MissingPredecessor("Unresolved predecessors: " + ",".join(e["event_id"] for e in remaining))
+
     if batches:
         # Equal-time different writes to the SAME agent are ambiguous. Different
         # agents commute and their original event payloads are all preserved.
@@ -118,6 +147,27 @@ def replay(base: dict, events: list[dict]) -> dict:
                 latest[slot] = core_hash
         for key in sorted(batches, key=lambda k: (_timestamp(batches[k]["at"]), k)):
             states["heartbeat"] = replay_heartbeat_batch(states["heartbeat"], batches[key])
+
+    if accepted_history:
+        # Every accepted branch was proved to be exactly one native history
+        # observation from a known predecessor. Replay the union by observation
+        # time; a same-time disagreement has no safe ordering and fails closed.
+        observations = {}
+        slots = {}
+        for point in accepted_history.values():
+            point_hash = digest(point)
+            slot = _timestamp(point["observed_at"])
+            prior = slots.get(slot)
+            if prior is not None and prior != point_hash:
+                raise Conflict("Ambiguous equal-time history observations")
+            slots[slot] = point_hash
+            observations[point_hash] = point
+        for key in sorted(observations, key=lambda k: (_timestamp(observations[k]["observed_at"]), k)):
+            try:
+                states["history"] = replay_history_observation(states["history"], observations[key])
+            except ValueError as exc:
+                raise Conflict("History observations do not form a monotonic exact replay") from exc
+
     for domain, state in states.items():
         validate_domain(domain, state)
     return {"states": states, "event_ids": sorted(by_id), "projection_hash": digest(states)}
