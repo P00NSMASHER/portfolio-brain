@@ -186,6 +186,83 @@ def _resolve_dominant_runtime_fork(
     winner = winners[0][0]
     return {"artifacts": [winner]}, [int(entry[0].get("id")) for entry in highest]
 
+def _resolve_exact_main_observation_fork(
+    data: dict,
+    *,
+    current_run: str | None,
+    expected_head_branch: str | None,
+    current_sha: str,
+    download,
+    compare,
+    max_archive_bytes: int,
+    max_member_bytes: int,
+    max_candidates: int = 5,
+) -> tuple[dict, list[int]]:
+    if not isinstance(current_sha, str) or len(current_sha) != 40:
+        raise InvalidStateArtifact("runtime exact-main fork recovery requires current SHA")
+    candidates = [
+        item
+        for item in data.get("artifacts", [])
+        if not item.get("expired")
+        and str((item.get("workflow_run") or {}).get("id")) != str(current_run)
+        and (
+            expected_head_branch is None
+            or (item.get("workflow_run") or {}).get("head_branch") == expected_head_branch
+        )
+    ]
+    candidates.sort(key=lambda item: (item.get("created_at", ""), item.get("id", 0)), reverse=True)
+    valid = []
+    for item in candidates[:max_candidates]:
+        url = item.get("archive_download_url")
+        if not isinstance(url, str) or not url:
+            continue
+        try:
+            raw = download(url)
+            validate_runtime_artifact_bundle(
+                raw,
+                max_archive_bytes=max_archive_bytes,
+                max_member_bytes=max_member_bytes,
+            )
+            with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+                state = _single_json_member(
+                    archive, "runtime_state.json", max_bytes=max_member_bytes
+                )
+                receipt = _single_json_member(
+                    archive, "cycle_receipt.json", max_bytes=max_member_bytes
+                )
+        except Exception:
+            continue
+        valid.append((item, state, receipt))
+    if len(valid) < 2:
+        raise InvalidStateArtifact("runtime exact-main fork recovery requires two valid candidates")
+    highest_sequence = max(state["sequence"] for _, state, _ in valid)
+    highest = [entry for entry in valid if entry[1]["sequence"] == highest_sequence]
+    if len(highest) < 2:
+        raise InvalidStateArtifact("runtime exact-main fork recovery found no highest-sequence fork")
+    exact = [
+        entry for entry in highest
+        if (entry[0].get("workflow_run") or {}).get("head_sha") == current_sha
+        and entry[2].get("status") == "PASS"
+        and entry[2].get("mode") == "observe"
+    ]
+    if len(exact) != 1:
+        raise InvalidStateArtifact("runtime concurrent fork has no unique exact-main observation")
+    winner = exact[0]
+    for entry in highest:
+        if entry is winner:
+            continue
+        item, _state, receipt = entry
+        source_sha = (item.get("workflow_run") or {}).get("head_sha")
+        if receipt.get("status") != "PASS" or receipt.get("mode") != "observe":
+            raise InvalidStateArtifact("runtime exact-main observation cannot supersede non-observe fork")
+        if not isinstance(source_sha, str) or len(source_sha) != 40:
+            raise InvalidStateArtifact("runtime fork source SHA missing")
+        relation = compare(source_sha, current_sha)
+        if (relation.get("merge_base_commit") or {}).get("sha") != source_sha:
+            raise InvalidStateArtifact("runtime stale observation source is not ancestor of exact main")
+    return {"artifacts": [winner[0]]}, [int(entry[0].get("id")) for entry in highest]
+
+
 def policy():
     return json.loads((ROOT/"runtime"/"RUNTIME_POLICY.json").read_text())
 
@@ -281,22 +358,47 @@ def restore(*, output: Path, metadata_output: Path | None = None,
     except InvalidStateArtifact as exc:
         if str(exc) != "conflicting state artifacts at highest sequence":
             raise
-        recovered, fork_ids = _resolve_dominant_runtime_fork(
-            data,
-            current_run=current_run,
-            expected_head_branch=os.environ.get("GITHUB_REF_NAME"),
-            download=download,
-            max_archive_bytes=budgets["max_output_bytes"],
-            max_member_bytes=budgets["max_output_bytes"],
-        )
-        restore_latest_valid_state(
-            recovered,current_run=current_run,expected_head_branch=os.environ.get("GITHUB_REF_NAME"),
-            download=download,output=output,
-            member_name="runtime_state.json",expected_state_id="portfolio-runtime-state",
-            max_archive_bytes=budgets["max_output_bytes"],max_state_bytes=budgets["max_output_bytes"],
-            validator=validate_state,metadata_output=metadata_output,
-        )
-        status="RESTORED_DOMINANT_SYNC_AFTER_CONCURRENT_FORK_" + "_".join(map(str, fork_ids))
+        try:
+            current_sha = os.environ.get("GITHUB_SHA", "")
+            def compare(base_sha: str, head_sha: str) -> dict:
+                return http.json(
+                    f"https://api.github.com/repos/{repository}/compare/{base_sha}...{head_sha}"
+                )
+            recovered, fork_ids = _resolve_exact_main_observation_fork(
+                data,
+                current_run=current_run,
+                expected_head_branch=os.environ.get("GITHUB_REF_NAME"),
+                current_sha=current_sha,
+                download=download,
+                compare=compare,
+                max_archive_bytes=budgets["max_output_bytes"],
+                max_member_bytes=budgets["max_output_bytes"],
+            )
+            restore_latest_valid_state(
+                recovered,current_run=current_run,expected_head_branch=os.environ.get("GITHUB_REF_NAME"),
+                download=download,output=output,
+                member_name="runtime_state.json",expected_state_id="portfolio-runtime-state",
+                max_archive_bytes=budgets["max_output_bytes"],max_state_bytes=budgets["max_output_bytes"],
+                validator=validate_state,metadata_output=metadata_output,
+            )
+            status="RESTORED_EXACT_MAIN_OBSERVATION_AFTER_CONCURRENT_FORK_" + "_".join(map(str, fork_ids))
+        except InvalidStateArtifact:
+            recovered, fork_ids = _resolve_dominant_runtime_fork(
+                data,
+                current_run=current_run,
+                expected_head_branch=os.environ.get("GITHUB_REF_NAME"),
+                download=download,
+                max_archive_bytes=budgets["max_output_bytes"],
+                max_member_bytes=budgets["max_output_bytes"],
+            )
+            restore_latest_valid_state(
+                recovered,current_run=current_run,expected_head_branch=os.environ.get("GITHUB_REF_NAME"),
+                download=download,output=output,
+                member_name="runtime_state.json",expected_state_id="portfolio-runtime-state",
+                max_archive_bytes=budgets["max_output_bytes"],max_state_bytes=budgets["max_output_bytes"],
+                validator=validate_state,metadata_output=metadata_output,
+            )
+            status="RESTORED_DOMINANT_SYNC_AFTER_CONCURRENT_FORK_" + "_".join(map(str, fork_ids))
     if provider_health_output is not None:
         try:
             restore_latest_valid_state(
