@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -180,6 +181,13 @@ def build_receipt(*,source_sha:str,run_id:str,source_branch:str,dispatch_live:bo
     req(len(source_sha)==40 and all(c in "0123456789abcdef" for c in source_sha),
         "source_sha must be exact lowercase git SHA")
     req(source_branch=="main","live acceptance must execute from main")
+    if dispatch_live:
+        req(os.environ.get("GITHUB_ACTIONS")=="true",
+            "live Hunter dispatch is allowed only inside GitHub Actions")
+        req(os.environ.get("GITHUB_REF_NAME")=="main",
+            "live Hunter dispatch requires the main branch environment")
+        req(os.environ.get("GITHUB_SHA")==source_sha,
+            "live Hunter dispatch source SHA does not match the checked-out GitHub SHA")
 
     scheduled=verify_scheduled_paths()
     task=load_contract()
