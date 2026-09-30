@@ -1,6 +1,19 @@
+import hashlib
+import io
+import json
 import unittest
+import zipfile
+from itertools import permutations
 
-from dashboard.history_state import append_point,daily_trends,project_momentum,public_history,validate_state
+from dashboard.history_artifact_state import _merge_history_fork
+from dashboard.history_state import (
+    append_point,daily_trends,history_observation,project_momentum,public_history,
+    replay_history_observation,validate_state,
+)
+from runtime.artifact_restore import InvalidStateArtifact
+from state_journal.contracts import Conflict
+from state_journal.events import make_change,make_event
+from state_journal.reducer import checkpoint,replay
 
 
 def seed():
@@ -64,6 +77,102 @@ class CommandCenterHistoryTests(unittest.TestCase):
                 for child in value:assert_no_score_fields(child)
         assert_no_score_fields(pub)
         self.assertIn("not a score",pub["momentum_definition"].lower())
+
+
+    def test_native_observation_round_trip_is_exact_and_tamper_rejected(self):
+        before=append_point(seed(),telemetry("2026-09-26T12:05:00Z"),source_commit="a"*40)
+        after=append_point(before,telemetry("2026-09-26T12:15:00Z",open_work=4),source_commit="b"*40)
+        point=history_observation(before,after)
+        self.assertIsNotNone(point)
+        self.assertEqual(replay_history_observation(before,point),after)
+        tampered=json.loads(json.dumps(after));tampered["points"][0]["metrics"]["open_work"]=99
+        self.assertIsNone(history_observation(before,tampered))
+
+    def test_reducer_losslessly_replays_same_predecessor_history_branches(self):
+        before=append_point(seed(),telemetry("2026-09-26T12:05:00Z"),source_commit="a"*40)
+        first=append_point(before,telemetry("2026-09-26T12:15:00Z",open_work=4),source_commit="b"*40)
+        second=append_point(before,telemetry("2026-09-26T12:25:00Z",open_work=5),source_commit="c"*40)
+        base=checkpoint({"history":before},{"history":"fixture:history"})
+        events=[
+          make_event("command-center-pages","101","d"*40,[make_change("history",before,first)]),
+          make_event("command-center-pages","102","e"*40,[make_change("history",before,second)]),
+        ]
+        expected=replay_history_observation(
+          replay_history_observation(before,history_observation(before,first)),
+          history_observation(before,second),
+        )
+        for order in permutations(events):
+            out=replay(base,list(order))
+            self.assertEqual(out["states"]["history"],expected)
+            self.assertEqual(out["states"]["history"]["sequence"],before["sequence"]+2)
+            self.assertEqual(set(out["event_ids"]),{event["event_id"] for event in events})
+
+    def test_reducer_rejects_equal_time_history_disagreement(self):
+        before=append_point(seed(),telemetry("2026-09-26T12:05:00Z"),source_commit="a"*40)
+        first=append_point(before,telemetry("2026-09-26T12:15:00Z",open_work=4),source_commit="b"*40)
+        second=append_point(before,telemetry("2026-09-26T12:15:00Z",open_work=5),source_commit="c"*40)
+        base=checkpoint({"history":before},{"history":"fixture:history"})
+        events=[
+          make_event("command-center-pages","101","d"*40,[make_change("history",before,first)]),
+          make_event("command-center-pages","102","e"*40,[make_change("history",before,second)]),
+        ]
+        with self.assertRaisesRegex(Conflict,"equal-time history"):
+            replay(base,events)
+
+    def test_legacy_history_fork_merge_requires_exact_predecessor_and_preserves_observations(self):
+        before=append_point(seed(),telemetry("2026-09-26T12:05:00Z"),source_commit="a"*40)
+        first=append_point(before,telemetry("2026-09-26T12:15:00Z",open_work=4),source_commit="b"*40)
+        second=append_point(before,telemetry("2026-09-26T13:05:00Z",open_work=5),source_commit="c"*40)
+
+        def archive(state):
+            out=io.BytesIO()
+            with zipfile.ZipFile(out,"w") as z:z.writestr("history_state.json",json.dumps(state).encode())
+            return out.getvalue()
+        payloads={"first":archive(first),"second":archive(second),"before":archive(before)}
+        def meta(artifact_id,key,at,run):
+            raw=payloads[key]
+            return {
+              "id":artifact_id,"created_at":at,"expires_at":"2026-10-30T00:00:00Z",
+              "archive_download_url":key,"digest":"sha256:"+hashlib.sha256(raw).hexdigest(),
+              "workflow_run":{"id":run,"head_branch":"main","head_sha":str(run%10)*40},
+            }
+        data={"artifacts":[
+          meta(3,"second","2026-09-26T13:06:00Z",13),
+          meta(2,"first","2026-09-26T12:16:00Z",12),
+          meta(1,"before","2026-09-26T12:06:00Z",11),
+        ]}
+        merged,sources,fork_ids,inspected=_merge_history_fork(
+          data,current_run="99",expected_head_branch="main",download=payloads.__getitem__,
+        )
+        self.assertEqual(merged["sequence"],before["sequence"]+2)
+        self.assertEqual([p["bucket_at"] for p in merged["points"][-2:]],["2026-09-26T12:00:00Z","2026-09-26T13:00:00Z"])
+        self.assertEqual(fork_ids,[3,2]);self.assertEqual(inspected,3)
+        self.assertEqual({item["id"] for item in sources},{1,2,3})
+
+        with self.assertRaisesRegex(InvalidStateArtifact,"predecessor"):
+            _merge_history_fork(
+              {"artifacts":data["artifacts"][:2]},current_run="99",
+              expected_head_branch="main",download=payloads.__getitem__,
+            )
+
+    def test_legacy_history_fork_merge_rejects_equal_time_disagreement(self):
+        before=append_point(seed(),telemetry("2026-09-26T12:05:00Z"),source_commit="a"*40)
+        first=append_point(before,telemetry("2026-09-26T12:15:00Z",open_work=4),source_commit="b"*40)
+        second=append_point(before,telemetry("2026-09-26T12:15:00Z",open_work=5),source_commit="c"*40)
+        states=[first,second,before];payloads={};artifacts=[]
+        for index,state in enumerate(states,1):
+            out=io.BytesIO()
+            with zipfile.ZipFile(out,"w") as z:z.writestr("history_state.json",json.dumps(state).encode())
+            raw=out.getvalue();key=f"a{index}";payloads[key]=raw
+            artifacts.append({
+              "id":index,"created_at":f"2026-09-26T12:{20-index:02d}:00Z","expires_at":"2026-10-30T00:00:00Z",
+              "archive_download_url":key,"digest":"sha256:"+hashlib.sha256(raw).hexdigest(),
+              "workflow_run":{"id":10+index,"head_branch":"main","head_sha":str(index)*40},
+            })
+        with self.assertRaisesRegex(InvalidStateArtifact,"equal-time"):
+            _merge_history_fork(
+              {"artifacts":artifacts},current_run="99",expected_head_branch="main",download=payloads.__getitem__,
+            )
 
 
 if __name__=="__main__":
