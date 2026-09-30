@@ -1,6 +1,8 @@
 name: portfolio-state-reducer
 
 on:
+  schedule:
+    - cron: "11 4 * * *"
   push:
     branches: ["main"]
     paths:
