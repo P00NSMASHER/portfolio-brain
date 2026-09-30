@@ -17,7 +17,10 @@ def validate_scheduler():
     for k,v in expected.items():req(pin["components"][k]["blob_sha"]==v,f"{k} blob mismatch")
     req(pin["copied_source_code"] is False,"canonical scheduler source copied")
     req(p["authority_class"]=="MODIFY" and p["mode"]=="EVIDENCE_GATED_PERSISTENT_QUEUE","scheduler authority/mode changed")
-    req(p["work_types"]==["HUNT","EXPERIMENT","REPAIR","TEST","RESEARCH","INTEGRATION","VERIFICATION"],"scheduler work type set changed")
+    req(p["work_types"]==["HUNT","EXPERIMENT","IMPLEMENTATION","REPAIR","TEST","RESEARCH","INTEGRATION","VERIFICATION"],"scheduler work type set changed")
+    req(p["role_map"]["IMPLEMENTATION"]=={
+        "agent_id":"AGT-ENGINEER","goal_type":"ISOLATED_IMPLEMENTATION","required_authority":"MODIFY"
+    },"Hunter implementation scheduler role drifted")
     req(p["max_new_work_per_cycle"]<=8 and p["max_open_work_per_agent"]==2,"scheduler concurrency ceiling invalid")
     handoff=p["hunter_proposal_handoff"]
     req(handoff["enabled"] is True,"Hunter proposal handoff disabled")
@@ -115,5 +118,5 @@ def validate_scheduler():
     for forbidden in ["contents: write","pull-requests: write","deployments: write","id-token: write","git push","gh pr","openai","anthropic"]:
         req(forbidden not in wf,f"forbidden scheduler workflow capability: {forbidden}")
     req("git push origin head:main" not in (ROOT/"scheduler/SCHEDULER_CONTRACT.md").read_text().lower(),"upstream direct-main behavior adopted")
-    return {"work_types":7,"selected_current":len(selected),"blocked_approval":len(receipt["blocked_work"]),"queued_agents":len({w["assigned_agent_id"] for w in selected}),"act_work":0,"max_new_per_cycle":p["max_new_work_per_cycle"],"hunter_proposal_handoff":"OBSERVE_RESEARCH","hunter_proposal_backlog_priority":handoff["backlog_priority_mode"],"hunter_proposal_continuation_priority":handoff["continuation_priority_policy"],"same_cycle_hunter_continuation":continuation["enabled"],"hunter_proposal_seed_sequence":proposal_seed["sequence"],"hunter_proposal_review_seed_sequence":proposal_review_seed["sequence"]}
+    return {"work_types":8,"selected_current":len(selected),"blocked_approval":len(receipt["blocked_work"]),"queued_agents":len({w["assigned_agent_id"] for w in selected}),"act_work":0,"max_new_per_cycle":p["max_new_work_per_cycle"],"hunter_proposal_handoff":"OBSERVE_RESEARCH","hunter_proposal_backlog_priority":handoff["backlog_priority_mode"],"hunter_proposal_continuation_priority":handoff["continuation_priority_policy"],"same_cycle_hunter_continuation":continuation["enabled"],"hunter_proposal_seed_sequence":proposal_seed["sequence"],"hunter_proposal_review_seed_sequence":proposal_review_seed["sequence"]}
 if __name__=="__main__":print("portfolio-brain Step 19 scheduler: PASS",json.dumps(validate_scheduler(),sort_keys=True))

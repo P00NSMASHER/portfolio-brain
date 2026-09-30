@@ -7,6 +7,7 @@ from hunting.lifecycle import (
     apply_acceptance,
     apply_external_evidence,
     apply_factory_evidence,
+    apply_governed_implementation_evidence,
     build_acceptance_receipt,
     enqueue_factory_work,
     lifecycle_from_review,
@@ -53,6 +54,9 @@ class HunterLifecycleTests(unittest.TestCase):
           self.lifecycle,acceptance_id="HACC-CONTROLLED-0001",
           target_repository_id="REPO-008",project_id="PRJ-000",
           verifier_agent_id="AGT-TESTER",accepted_at="2026-09-30T13:01:00Z",
+          external_milestone="PUBLISH_PRODUCT",
+          implementation_target_paths=["hunting/","learning/"],
+          regression_requirement="Add a clean-room regression test.",
           evidence_refs=["issue:210","controlled-proof:step12"],controlled_proof=True,
         )
 
@@ -132,6 +136,41 @@ class HunterLifecycleTests(unittest.TestCase):
                 ])
             finally:
                 sf.close()
+
+    def test_governed_pr_and_exact_checks_advance_only_technical_stages(self):
+        accepted=apply_acceptance(self.lifecycle,self.acceptance)
+        evidence={
+          "proposal_id":accepted["proposal_id"],
+          "acceptance_id":self.acceptance["acceptance_id"],
+          "source_ref":self.acceptance["acceptance_id"],
+          "status":"REPAIR_PR_FOUND",
+          "pr_number":77,
+          "head_sha":"e"*40,
+          "factory_work_id":"AUTO-REPAIR-CONTROLLED77",
+          "foundation_success":False,
+          "independent_success":False,
+          "checks":[{"id":1,"name":"validate","conclusion":"queued","app_id":15368}],
+          "observed_at":"2026-09-30T13:02:00Z",
+          "evidence_refs":["repair-pr:77","commit:"+"e"*40],
+        }
+        implemented=apply_governed_implementation_evidence(accepted,evidence)
+        self.assertEqual(implemented["current_stage"],"IMPLEMENTED")
+        self.assertFalse(implemented["market_verified"])
+        self.assertFalse(implemented["revenue_verified"])
+        with self.assertRaises(HunterLifecycleError):
+            apply_governed_implementation_evidence(implemented,evidence)
+        verified=dict(evidence)
+        verified["foundation_success"]=True
+        verified["independent_success"]=True
+        verified["checks"]=[
+          {"id":1,"name":"validate","conclusion":"success","app_id":15368},
+          {"id":2,"name":"portfolio-phase1-gate","conclusion":"success","app_id":5121826},
+        ]
+        verified["observed_at"]="2026-09-30T13:03:00Z"
+        technical=apply_governed_implementation_evidence(implemented,verified)
+        self.assertEqual(technical["current_stage"],"TECHNICALLY_VERIFIED")
+        self.assertFalse(technical["market_verified"])
+        self.assertFalse(technical["revenue_verified"])
 
     def test_stage_skipping_and_lineage_conflicts_fail_closed(self):
         with self.assertRaises(HunterLifecycleError):

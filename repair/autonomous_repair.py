@@ -457,7 +457,7 @@ def find_repair_evidence(source_ref: str, token: str | None = None) -> dict[str,
     req(isinstance(source_ref, str) and source_ref, "repair evidence source ref missing")
     token = token or os.environ.get("GITHUB_TOKEN") or os.environ.get("PORTFOLIO_GITHUB_TOKEN")
     req(isinstance(token, str) and token, "GitHub token required for repair evidence")
-    pulls = _http_json(f"https://api.github.com/repos/{REPOSITORY}/pulls?state=open&per_page=100", token)
+    pulls = _http_json(f"https://api.github.com/repos/{REPOSITORY}/pulls?state=all&per_page=100", token)
     marker = f"REPAIR_SOURCE_REF:{source_ref}"
     matches = [row for row in pulls if marker in (row.get("body") or "")]
     if not matches:

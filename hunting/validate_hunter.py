@@ -64,6 +64,18 @@ def validate_hunter():
         "Hunter downstream factory target scope widened")
     req(lifecycle["recurring_bridge_workflow"]==".github/workflows/portfolio-autonomous-scheduler.yml",
         "Hunter downstream recurring bridge workflow drifted")
+    req(lifecycle["scheduler_work_type"]=="IMPLEMENTATION",
+        "Hunter accepted work no longer enters the implementation scheduler lane")
+    scopes=lifecycle["implementation_target_prefixes_by_repository"]
+    req(scopes.get("REPO-008") and len(scopes["REPO-008"])==len(set(scopes["REPO-008"])),
+        "Hunter implementation target scope missing or duplicated")
+    req(isinstance(lifecycle["implementation_regression_requirement"],str)
+        and "regression" in lifecycle["implementation_regression_requirement"].lower(),
+        "Hunter implementation regression requirement missing")
+    req(lifecycle["acceptance_milestone_binding"]==
+        "CURRENT_VALUE_LOOP_CLOSEST_EXTERNAL_MILESTONE_AS_ROUTING_CONTEXT_NOT_VALUE_PROOF",
+        "Hunter milestone routing/value-proof separation drifted")
+
     lifecycle_seed=load_lifecycle_seed();validate_lifecycle_state(lifecycle_seed)
     req(lifecycle_seed["records"]==[] and lifecycle_seed["sequence"]==0,
         "Hunter lifecycle seed invented accepted downstream work")
