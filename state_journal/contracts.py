@@ -46,6 +46,8 @@ RUNTIME_CALLERS = {"runtime-hourly-sync", "runtime-event-observe", "runtime-dail
 # Factory is reusable; external callers must be enrolled explicitly before ingestion.
 WORKFLOW_PRODUCERS = {name: name for name in PRODUCERS if name not in {"runtime-worker", "software-factory-candidate"}}
 WORKFLOW_PRODUCERS.update({name: "runtime-worker" for name in RUNTIME_CALLERS})
+# Historical evidence keeps the workflow filename used when the event was produced.
+WORKFLOW_PRODUCERS["command-center"] = "command-center-pages"
 
 
 class JournalError(ValueError):
