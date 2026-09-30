@@ -3,9 +3,11 @@
 
 This harness exercises the production ingestion, learning/work-selection, Hunter
 lifecycle, and SoftwareFactory code against isolated controlled state. It never
-writes canonical state, opens a PR, merges code, deploys, or claims market/revenue
-value. The GitHub workflow that invokes it separately fails closed unless the
-checked-out SHA is the current protected main head.
+writes canonical state, merges code, deploys, or claims market/revenue value.
+When explicitly run with --dispatch-live from exact protected main, it dispatches
+one isolated Hunter acceptance into the governed repair/factory workflow; that
+downstream lane still has no merge or deployment authority. The invoking workflow
+fails closed unless the checked-out SHA is the current protected main head.
 """
 from __future__ import annotations
 
@@ -174,7 +176,7 @@ def verify_scheduled_paths()->dict[str,Any]:
       ],
     }
 
-def build_receipt(*,source_sha:str,run_id:str,source_branch:str)->dict[str,Any]:
+def build_receipt(*,source_sha:str,run_id:str,source_branch:str,dispatch_live:bool=False)->dict[str,Any]:
     req(len(source_sha)==40 and all(c in "0123456789abcdef" for c in source_sha),
         "source_sha must be exact lowercase git SHA")
     req(source_branch=="main","live acceptance must execute from main")
@@ -276,9 +278,7 @@ def build_receipt(*,source_sha:str,run_id:str,source_branch:str)->dict[str,Any]:
       "Hunter implementation work lost acceptance authority/provenance",
     )
 
-    dispatched_requests=[]
     def controlled_dispatch(request:dict[str,Any])->dict[str,Any]:
-        dispatched_requests.append(request)
         return {
           "request_id":request["request_id"],
           "fingerprint":request["fingerprint"],
@@ -286,17 +286,22 @@ def build_receipt(*,source_sha:str,run_id:str,source_branch:str)->dict[str,Any]:
           "authority_granted":False,
         }
 
+    execution_context={
+      "hunter_lifecycle_state":lifecycle_state,
+      "main_sha":source_sha,
+    }
+    if not dispatch_live:
+        execution_context["repair_dispatcher"]=controlled_dispatch
+
     executed_state,execution_receipts,executed_work,execution_meta=execute_cycle(
       scheduled_hunter_state,
       runtime_state={},
       max_items=1,
       at="2026-09-30T14:05:45Z",
-      context_overrides={
-        "hunter_lifecycle_state":lifecycle_state,
-        "main_sha":source_sha,
-        "repair_dispatcher":controlled_dispatch,
-      },
+      context_overrides=execution_context,
     )
+    dispatched_requests=execution_meta["context"].get("hunter_implementation_dispatch_requests") or []
+    accepted_dispatches=execution_meta["context"].get("hunter_implementation_dispatch_receipts") or []
     req(len(execution_receipts)==1 and execution_receipts[0]["status"]=="SUCCESS",
         "Hunter implementation scheduler work did not dispatch successfully")
     dispatch_receipt=execution_receipts[0]
@@ -304,6 +309,16 @@ def build_receipt(*,source_sha:str,run_id:str,source_branch:str)->dict[str,Any]:
         "Hunter work did not traverse the governed implementation handler")
     req(len(dispatched_requests)==1 and dispatched_requests[0]["source_kind"]=="HUNTER_ACCEPTED_WORK",
         "Hunter acceptance did not become governed factory-bound work")
+    req(len(accepted_dispatches)==1 and accepted_dispatches[0]["dispatch_status"]=="ACCEPTED",
+        "Hunter implementation did not retain one accepted downstream dispatch receipt")
+    req(accepted_dispatches[0]["request_id"]==dispatched_requests[0]["request_id"]
+        and accepted_dispatches[0]["fingerprint"]==dispatched_requests[0]["fingerprint"],
+        "Hunter downstream dispatch receipt lost exact request identity")
+    req(accepted_dispatches[0]["authority_granted"] is False,
+        "Hunter downstream dispatch widened authority")
+    if dispatch_live:
+        req(accepted_dispatches[0].get("workflow_file")=="portfolio-autonomous-repair.yml",
+            "live Hunter work did not dispatch the governed repair workflow")
     req(dispatched_requests[0]["base_sha"]==source_sha,
         "Hunter factory-bound work lost exact-main identity")
     req(dispatch_receipt["result"]["implementation_complete"] is False,
@@ -365,6 +380,11 @@ def build_receipt(*,source_sha:str,run_id:str,source_branch:str)->dict[str,Any]:
         "dispatch_result_kind":dispatch_receipt["result_kind"],
         "factory_bound_source_kind":dispatched_requests[0]["source_kind"],
         "factory_bound_request_id":dispatched_requests[0]["request_id"],
+        "factory_bound_request_fingerprint":dispatched_requests[0]["fingerprint"],
+        "factory_bound_request":dispatched_requests[0],
+        "dispatch_mode":"LIVE_GITHUB_WORKFLOW" if dispatch_live else "CONTROLLED_IN_PROCESS",
+        "dispatch_workflow_file":accepted_dispatches[0].get("workflow_file"),
+        "dispatch_authority_granted":accepted_dispatches[0]["authority_granted"],
         "implementation_complete":dispatch_receipt["result"]["implementation_complete"],
         "technical_verified":dispatch_receipt["result"]["technical_verified"],
         "market_verified":bound["market_verified"],"revenue_verified":bound["revenue_verified"],
@@ -383,10 +403,12 @@ def main()->None:
     ap.add_argument("--source-sha",required=True)
     ap.add_argument("--run-id",required=True)
     ap.add_argument("--source-branch",required=True)
+    ap.add_argument("--dispatch-live",action="store_true")
     ap.add_argument("--output",type=Path,required=True)
     args=ap.parse_args()
     receipt=build_receipt(
-      source_sha=args.source_sha,run_id=args.run_id,source_branch=args.source_branch
+      source_sha=args.source_sha,run_id=args.run_id,source_branch=args.source_branch,
+      dispatch_live=args.dispatch_live,
     )
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(receipt,indent=2,sort_keys=True)+"\n")
@@ -396,6 +418,7 @@ def main()->None:
       "second_ingestion_status":receipt["step10"]["second_ingestion_status"],
       "hunter_stage":receipt["step12"]["current_stage"],
       "dispatch_status":receipt["step12"]["scheduler_dispatch_status"],
+      "dispatch_mode":receipt["step12"]["dispatch_mode"],
       "market_verified":receipt["step12"]["market_verified"],
       "revenue_verified":receipt["step12"]["revenue_verified"],
       "receipt_hash":receipt["receipt_hash"],
