@@ -1,0 +1,50 @@
+{
+  "agent-heartbeat-sweep": {
+    "heartbeat": "portfolio-agent-heartbeat-state"
+  },
+  "command-center-pages": {
+    "history": "portfolio-command-center-history"
+  },
+  "continuous-learning-bootstrap": {
+    "hunter": "portfolio-hunter-state",
+    "learning": "portfolio-learning-observation-state",
+    "model_feedback": "portfolio-model-feedback-state"
+  },
+  "hunter-autonomous-cycle": {
+    "heartbeat": "portfolio-agent-heartbeat-state",
+    "hunter": "portfolio-hunter-state",
+    "proposals": "portfolio-hunter-proposal-state"
+  },
+  "model-value-proof": {
+    "cost": "portfolio-cost-governor-state",
+    "hunter": "portfolio-hunter-state",
+    "learning": "portfolio-learning-observation-state",
+    "model_feedback": "portfolio-model-feedback-state"
+  },
+  "operator-console": {
+    "scheduler": "portfolio-scheduler-state"
+  },
+  "portfolio-autonomous-scheduler": {
+    "heartbeat": "portfolio-agent-heartbeat-state",
+    "hunter": "portfolio-hunter-state",
+    "proposals": "portfolio-hunter-proposal-state",
+    "reviews": "portfolio-hunter-proposal-review-state",
+    "scheduler": "portfolio-scheduler-state"
+  },
+  "portfolio-notification-cycle": {
+    "notifications": "portfolio-notification-state"
+  },
+  "runtime-worker": {
+    "cost": "portfolio-cost-governor-state",
+    "heartbeat": "portfolio-agent-heartbeat-state",
+    "runtime": "portfolio-runtime-state"
+  },
+  "software-factory-candidate": {
+    "heartbeat": "portfolio-agent-heartbeat-state"
+  },
+  "verified-feedback-bootstrap": {
+    "hunter": "portfolio-hunter-state",
+    "learning": "portfolio-learning-observation-state",
+    "model_feedback": "portfolio-model-feedback-state"
+  }
+}
