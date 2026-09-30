@@ -181,6 +181,14 @@ class SchedulerRepairFactoryBridgeTests(unittest.TestCase):
         self.assertIn("python -m repair.autonomous_repair validate-diff", workflow)
         self.assertIn("software_factory.scheduler_repair_bridge submit", workflow)
 
+    def test_workflow_excludes_scratch_before_candidate_accounting(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/portfolio-autonomous-repair.yml").read_text()
+        scratch = "printf '%s\\n' '/repair/out/' >> .git/info/exclude"
+        self.assertIn(scratch, workflow)
+        self.assertLess(workflow.index(scratch), workflow.index("mkdir -p repair/out"))
+        self.assertLess(workflow.index(scratch), workflow.index("validate-diff"))
+
     def test_workflow_separates_builder_from_network_disabled_factory_review(self):
         root = Path(__file__).resolve().parents[1]
         workflow = (root / ".github/workflows/portfolio-autonomous-repair.yml").read_text()
