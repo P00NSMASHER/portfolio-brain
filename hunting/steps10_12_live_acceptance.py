@@ -17,21 +17,25 @@ from pathlib import Path
 from typing import Any
 
 from hunting.autonomous_hunter import load_seed_state as hunter_seed
-from hunting.lifecycle import (
-    HunterLifecycleError,
-    apply_acceptance,
-    apply_external_evidence,
-    build_acceptance_receipt,
-    enqueue_factory_work,
-    lifecycle_from_review,
+from hunting.downstream_lifecycle import (
+    APPROVAL_CODE,
+    acceptance_source_ref,
+    apply_reviews_and_acceptances,
+    load_seed_state as hunter_lifecycle_seed,
 )
+from hunting.lifecycle import HunterLifecycleError, apply_external_evidence
 from hunting.proposal_review_state import digest as review_digest
 from learning.continuous_learning import rebuild_from_sources
 from learning.live_observations import load_seed_state as learning_seed
 from model_router.feedback_state import load_seed_state as model_seed
 from model_router.model_router import hashv
-from scheduler.autonomous_scheduler import build_context, load_state, schedule_cycle
-from software_factory.software_factory import SoftwareFactory
+from scheduler.autonomous_scheduler import (
+    build_context,
+    load_state,
+    policy as scheduler_policy,
+    schedule_cycle,
+)
+from scheduler.work_executor import execute_cycle
 from value_proof.model_task import digest as outcome_digest, load_contract
 from value_proof.outcome_ingestion import ingest_verified_outcome
 from value_proof.verifier import load_verifier_contract
@@ -117,6 +121,32 @@ def controlled_review()->dict[str,Any]:
       ],
     }
     return {**core,"review_hash":review_digest(core)}
+
+def controlled_review_state(review:dict[str,Any])->dict[str,Any]:
+    return {
+      "schema_version":"1.0.0",
+      "state_id":"portfolio-hunter-proposal-review-state",
+      "sequence":1,
+      "updated_at":review["reviewed_at"],
+      "applied_execution_ids":[review["source_execution_id"]],
+      "reviews":[review],
+    }
+
+def controlled_approval_ledger(review:dict[str,Any])->dict[str,Any]:
+    return {
+      "schema_version":"1.0.0",
+      "ledger_id":"portfolio-owner-approvals",
+      "approvals":[{
+        "approval_id":"OAPR-LIVE-ACCEPT-STEP12",
+        "source_ref":acceptance_source_ref(review),
+        "project_ids":["PRJ-000"],
+        "approval_requirements":[APPROVAL_CODE],
+        "approved_by":"P00NSMASHER",
+        "approved_at":"2026-09-30T14:05:00Z",
+        "status":"ACTIVE",
+        "reason_hash":H("d"),
+      }],
+    }
 
 def verify_scheduled_paths()->dict[str,Any]:
     feedback=(ROOT/".github/workflows/verified-feedback-bootstrap.yml").read_text()
@@ -208,30 +238,84 @@ def build_receipt(*,source_sha:str,run_id:str,source_branch:str)->dict[str,Any]:
         "verified outcome did not affect downstream cycle receipt")
 
     review=controlled_review()
-    lifecycle=lifecycle_from_review(review)
-    acceptance=build_acceptance_receipt(
-      lifecycle,acceptance_id="HACC-LIVE-ACCEPT-STEP12",
-      target_repository_id="REPO-008",project_id="PRJ-000",
-      verifier_agent_id="AGT-TESTER",accepted_at="2026-09-30T14:05:00Z",
-      evidence_refs=["issue:210","controlled-live-acceptance:step12"],controlled_proof=True,
+    lifecycle_state,lifecycle_report=apply_reviews_and_acceptances(
+      hunter_lifecycle_seed(),
+      controlled_review_state(review),
+      controlled_approval_ledger(review),
+      base_sha=source_sha,
+      current_repository="P00NSMASHER/portfolio-brain",
+      source_branch="main",
+      current_external_milestone=scheduler_policy()["external_milestones"][0],
     )
-    accepted=apply_acceptance(lifecycle,acceptance)
-    with tempfile.TemporaryDirectory() as td:
-        factory=SoftwareFactory(Path(td)/"factory.sqlite3")
-        try:
-            bound,work=enqueue_factory_work(
-              factory,accepted,acceptance,base_sha=source_sha,now=1.0
-            )
-            event_chain_valid=factory.event_chain_valid()
-        finally:
-            factory.close()
-    req(work["state"]=="QUEUED" and work["work_id"].startswith("SFW-HUNTER-"),
-        "accepted Hunter finding did not create governed factory work")
-    req(event_chain_valid,"factory work event chain invalid")
+    req(len(lifecycle_report["accepted_work"])==1,
+        "controlled Hunter finding was not explicitly accepted for downstream work")
+    record=lifecycle_state["records"][0]
+    bound=record["lifecycle"]
+    acceptance=record["acceptance_receipt"]
+    req(bound["current_stage"]=="ACCEPTED_FOR_WORK" and isinstance(acceptance,dict),
+        "Hunter lifecycle did not stop at ACCEPTED_FOR_WORK before implementation")
+
+    hunter_context=build_context(
+      learning_state=fresh_learning,
+      hunter_lifecycle_state=lifecycle_state,
+    )
+    scheduled_hunter_state,hunter_schedule=schedule_cycle(
+      load_state(),hunter_context,at="2026-09-30T14:05:30Z",
+      candidate_filter=lambda row: (
+        row["work_type"]=="IMPLEMENTATION"
+        and row["source_ref"]==acceptance["acceptance_id"]
+      ),
+      max_new_items=1,
+    )
+    req(len(hunter_schedule["selected_work"])==1,
+        "accepted Hunter finding did not create one scheduler IMPLEMENTATION item")
+    implementation_work=hunter_schedule["selected_work"][0]
+    req(
+      implementation_work["required_authority"]=="MODIFY"
+      and implementation_work["source_ref"]==acceptance["acceptance_id"],
+      "Hunter implementation work lost acceptance authority/provenance",
+    )
+
+    dispatched_requests=[]
+    def controlled_dispatch(request:dict[str,Any])->dict[str,Any]:
+        dispatched_requests.append(request)
+        return {
+          "request_id":request["request_id"],
+          "fingerprint":request["fingerprint"],
+          "dispatch_status":"ACCEPTED",
+          "authority_granted":False,
+        }
+
+    executed_state,execution_receipts,executed_work,execution_meta=execute_cycle(
+      scheduled_hunter_state,
+      runtime_state={},
+      max_items=1,
+      at="2026-09-30T14:05:45Z",
+      context_overrides={
+        "hunter_lifecycle_state":lifecycle_state,
+        "main_sha":source_sha,
+        "repair_dispatcher":controlled_dispatch,
+      },
+    )
+    req(len(execution_receipts)==1 and execution_receipts[0]["status"]=="SUCCESS",
+        "Hunter implementation scheduler work did not dispatch successfully")
+    dispatch_receipt=execution_receipts[0]
+    req(dispatch_receipt["result_kind"]=="HUNTER_IMPLEMENTATION_DISPATCHED",
+        "Hunter work did not traverse the governed implementation handler")
+    req(len(dispatched_requests)==1 and dispatched_requests[0]["source_kind"]=="HUNTER_ACCEPTED_WORK",
+        "Hunter acceptance did not become governed factory-bound work")
+    req(dispatched_requests[0]["base_sha"]==source_sha,
+        "Hunter factory-bound work lost exact-main identity")
+    req(dispatch_receipt["result"]["implementation_complete"] is False,
+        "dispatch alone falsely claimed implementation completion")
+    completed=[row for row in executed_state["work_items"] if row["scheduler_work_id"]==implementation_work["scheduler_work_id"]]
+    req(len(completed)==1 and completed[0]["state"]=="COMPLETE",
+        "scheduler did not durably complete only the dispatch work item")
     req(bound["market_verified"] is False and bound["revenue_verified"] is False,
-        "factory enqueue falsely claimed market/revenue verification")
+        "Hunter implementation dispatch falsely claimed market/revenue verification")
     req(bound["merge_authority_granted"] is False and bound["deployment_authority_granted"] is False,
         "Hunter lifecycle widened merge/deploy authority")
+
     ci_market_rejected=False
     try:
         apply_external_evidence(bound,{
@@ -274,14 +358,21 @@ def build_receipt(*,source_sha:str,run_id:str,source_branch:str)->dict[str,Any]:
       },
       "step12":{
         "proposal_id":bound["proposal_id"],"acceptance_id":acceptance["acceptance_id"],
-        "current_stage":bound["current_stage"],"factory_work_id":work["work_id"],
-        "factory_state":work["state"],"factory_repository_id":work["repository_id"],
-        "factory_event_chain_valid":event_chain_valid,
+        "current_stage":bound["current_stage"],
+        "scheduler_work_id":implementation_work["scheduler_work_id"],
+        "scheduler_work_type":implementation_work["work_type"],
+        "scheduler_dispatch_status":dispatch_receipt["result"]["dispatch_status"],
+        "dispatch_result_kind":dispatch_receipt["result_kind"],
+        "factory_bound_source_kind":dispatched_requests[0]["source_kind"],
+        "factory_bound_request_id":dispatched_requests[0]["request_id"],
+        "implementation_complete":dispatch_receipt["result"]["implementation_complete"],
+        "technical_verified":dispatch_receipt["result"]["technical_verified"],
         "market_verified":bound["market_verified"],"revenue_verified":bound["revenue_verified"],
         "merge_authority_granted":bound["merge_authority_granted"],
         "deployment_authority_granted":bound["deployment_authority_granted"],
         "ci_market_promotion_rejected":ci_market_rejected,
-        "factory_provenance_refs":work["provenance_refs"],
+        "implementation_provenance_refs":dispatched_requests[0]["evidence_refs"],
+        "executor_summary_hash":execution_meta["summary"]["receipt_hash"],
       },
       "authority_granted":False,"evidence_upgraded":False,
     }
@@ -304,7 +395,7 @@ def main()->None:
       "first_ingestion_status":receipt["step10"]["first_ingestion_status"],
       "second_ingestion_status":receipt["step10"]["second_ingestion_status"],
       "hunter_stage":receipt["step12"]["current_stage"],
-      "factory_state":receipt["step12"]["factory_state"],
+      "dispatch_status":receipt["step12"]["scheduler_dispatch_status"],
       "market_verified":receipt["step12"]["market_verified"],
       "revenue_verified":receipt["step12"]["revenue_verified"],
       "receipt_hash":receipt["receipt_hash"],
