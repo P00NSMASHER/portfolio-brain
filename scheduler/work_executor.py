@@ -24,6 +24,10 @@ from hunting.autonomous_hunter import (
     run_cycle as run_hunter_cycle,
     validate_state as validate_hunter_state,
 )
+from hunting.downstream_lifecycle import (
+    load_seed_state as hunter_lifecycle_seed_state,
+    validate_state as validate_hunter_lifecycle_state,
+)
 from hunting.proposal_state import (
     build_proposal_state,
     load_seed_state as hunter_proposal_seed_state,
@@ -34,6 +38,7 @@ from repair.autonomous_repair import (
     REPOSITORY as REPAIR_REPOSITORY,
     dispatch_requests,
     find_repair_evidence,
+    request_from_hunter_acceptance,
     request_from_scheduler_work,
 )
 from repair.repair_engine import build_repair_state
@@ -442,6 +447,82 @@ def _repair_handler(work: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]
     }
 
 
+def _hunter_implementation_handler(work: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+    lifecycle_state = ctx["hunter_lifecycle_state"]
+    validate_hunter_lifecycle_state(lifecycle_state)
+    base_sha = ctx.get("main_sha") or os.environ.get("GITHUB_SHA", "")
+    try:
+        request = request_from_hunter_acceptance(work, lifecycle_state, base_sha=base_sha)
+    except AutonomousRepairError:
+        return {
+            "status": "DEFERRED",
+            "result_kind": "HUNTER_IMPLEMENTATION_NOT_DISPATCHABLE",
+            "evidence_refs": [
+                f"hunter-acceptance:{work['source_ref']}",
+                f"scheduler-work:{work['scheduler_work_id']}",
+            ],
+            "result": {"source_ref": work["source_ref"]},
+        }
+
+    requests = ctx.setdefault("hunter_implementation_dispatch_requests", [])
+    if not any(row["fingerprint"] == request["fingerprint"] for row in requests):
+        requests.append(request)
+
+    dispatcher = ctx.get("repair_dispatcher")
+    if dispatcher is None:
+        token = os.environ.get("PORTFOLIO_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
+        if not token:
+            raise WorkExecutionError("GitHub token required before Hunter IMPLEMENTATION can complete dispatch")
+        receipts = dispatch_requests(
+            [request],
+            token=token,
+            repository=REPAIR_REPOSITORY,
+            workflow_file="portfolio-autonomous-repair.yml",
+        )
+        if len(receipts) != 1:
+            raise WorkExecutionError("Hunter implementation dispatch did not return exactly one receipt")
+        dispatch_receipt = receipts[0]
+    else:
+        dispatch_receipt = dispatcher(request)
+
+    if not isinstance(dispatch_receipt, dict):
+        raise WorkExecutionError("Hunter implementation dispatcher receipt must be an object")
+    if dispatch_receipt.get("request_id") != request["request_id"]:
+        raise WorkExecutionError("Hunter implementation dispatch request identity mismatch")
+    if dispatch_receipt.get("fingerprint") != request["fingerprint"]:
+        raise WorkExecutionError("Hunter implementation dispatch fingerprint mismatch")
+    if dispatch_receipt.get("dispatch_status") != "ACCEPTED":
+        raise WorkExecutionError("Hunter implementation dispatch was not accepted")
+    if dispatch_receipt.get("authority_granted") is not False:
+        raise WorkExecutionError("Hunter implementation dispatcher widened authority")
+
+    accepted = ctx.setdefault("hunter_implementation_dispatch_receipts", [])
+    if not any(row["fingerprint"] == request["fingerprint"] for row in accepted):
+        accepted.append(dispatch_receipt)
+    return {
+        "status": "SUCCESS",
+        "result_kind": "HUNTER_IMPLEMENTATION_DISPATCHED",
+        "evidence_refs": [
+            *request["evidence_refs"],
+            f"hunter-implementation-request:{request['request_id']}",
+            f"hunter-implementation-dispatch:{request['fingerprint']}",
+        ],
+        "result": {
+            "request_id": request["request_id"],
+            "fingerprint": request["fingerprint"],
+            "source_ref": request["source_ref"],
+            "target_path_count": len(request["target_paths"]),
+            "dispatch_status": "ACCEPTED",
+            "implementation_complete": False,
+            "technical_verified": False,
+            "market_verified": False,
+            "revenue_verified": False,
+            "merge_authority_granted": False,
+            "deployment_authority_granted": False,
+        },
+    }
+
+
 def _repair_evidence(work: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
     provider = ctx.get("repair_evidence_provider")
     if provider is not None:
@@ -515,6 +596,7 @@ def _verification_handler(work: dict[str, Any], ctx: dict[str, Any]) -> dict[str
 DEFAULT_HANDLERS: dict[str, Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]] = {
     "HUNT": _hunt_handler,
     "EXPERIMENT": _experiment_handler,
+    "IMPLEMENTATION": _hunter_implementation_handler,
     "REPAIR": _repair_handler,
     "TEST": _test_handler,
     "RESEARCH": _research_handler,
@@ -564,11 +646,15 @@ def execute_cycle(
     proposal_path=ROOT/"hunting"/"live"/"hunter_proposal_state.json"
     proposal_state=load_json(proposal_path) if proposal_path.exists() else hunter_proposal_seed_state()
     validate_hunter_proposal_state(proposal_state)
+    lifecycle_path=ROOT/"hunting"/"live"/"hunter_lifecycle_state.json"
+    lifecycle_state=load_json(lifecycle_path) if lifecycle_path.exists() else hunter_lifecycle_seed_state()
+    validate_hunter_lifecycle_state(lifecycle_state)
     ctx: dict[str, Any] = {
         "at": at,
         "runtime_state": runtime_state,
         "hunter_state": hunter_state if hunter_state is not None else hunter_seed_state(),
         "hunter_proposal_state": proposal_state,
+        "hunter_lifecycle_state": lifecycle_state,
     }
     if context_overrides:
         ctx.update(context_overrides)
@@ -696,6 +782,18 @@ def write_outputs(
     if repair_dispatch_receipts:
         (output_dir / "repair_dispatch_receipts.json").write_text(
             json.dumps(repair_dispatch_receipts, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    hunter_implementation_requests = ctx.get("hunter_implementation_dispatch_requests") or []
+    if hunter_implementation_requests:
+        (output_dir / "hunter_implementation_dispatch_requests.json").write_text(
+            json.dumps(hunter_implementation_requests, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    hunter_implementation_receipts = ctx.get("hunter_implementation_dispatch_receipts") or []
+    if hunter_implementation_receipts:
+        (output_dir / "hunter_implementation_dispatch_receipts.json").write_text(
+            json.dumps(hunter_implementation_receipts, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
     if ctx.get("hunter_receipt") is not None:

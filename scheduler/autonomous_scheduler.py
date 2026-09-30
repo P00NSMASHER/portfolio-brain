@@ -9,6 +9,7 @@ from typing import Any, Callable
 from allocator.portfolio_allocator import build_allocation_snapshot
 from experiments.experiment_engine import build_experiment_portfolio
 from hunting.autonomous_hunter import load_seed_state as hunter_seed, select_objectives
+from hunting.downstream_lifecycle import load_seed_state as hunter_lifecycle_seed, validate_state as validate_hunter_lifecycle_state
 from hunting.proposal_state import load_seed_state as hunter_proposal_seed, normalize_state as normalize_hunter_proposal_state, validate_state as validate_hunter_proposal_state
 from learning.continuous_learning import rebuild_from_ledger
 from operations.value_loop import build_value_loop_snapshot
@@ -67,7 +68,7 @@ def _allocation_maps(allocation):
         rec[resource]={r["source_uncertainty_id"]:r for r in plan["recommendations"]}
     return plans,rec
 
-def build_context(*,factory_work_items=None,learning_state=None,hunter_proposal_state=None):
+def build_context(*,factory_work_items=None,learning_state=None,hunter_proposal_state=None,hunter_lifecycle_state=None):
     learning=learning_state or rebuild_from_ledger()
     fresh_learning_count=learning.get("fresh_learning_observation_count",learning.get("source_observation_count",0))
     req(type(fresh_learning_count) is int and fresh_learning_count>=0,"scheduler fresh learning count invalid")
@@ -82,8 +83,12 @@ def build_context(*,factory_work_items=None,learning_state=None,hunter_proposal_
         hunter_proposal_state=json.loads(live.read_text()) if live.exists() else hunter_proposal_seed()
     validate_hunter_proposal_state(hunter_proposal_state)
     hunter_proposal_state=normalize_hunter_proposal_state(hunter_proposal_state)
+    if hunter_lifecycle_state is None:
+        lifecycle_live=ROOT/"hunting"/"live"/"hunter_lifecycle_state.json"
+        hunter_lifecycle_state=json.loads(lifecycle_live.read_text()) if lifecycle_live.exists() else hunter_lifecycle_seed()
+    validate_hunter_lifecycle_state(hunter_lifecycle_state)
     value_loop=build_value_loop_snapshot(hunter_proposal_state=hunter_proposal_state)
-    return {"uncertainty":uncertainty,"experiments":experiments,"allocation":allocation,"learning":learning,"repair":repair,"transfer":transfer,"factory_work_items":factory,"hunter_proposal_state":hunter_proposal_state,"value_loop":value_loop}
+    return {"uncertainty":uncertainty,"experiments":experiments,"allocation":allocation,"learning":learning,"repair":repair,"transfer":transfer,"factory_work_items":factory,"hunter_proposal_state":hunter_proposal_state,"hunter_lifecycle_state":hunter_lifecycle_state,"value_loop":value_loop}
 
 def _candidate(work_type,source_ref,project_ids,assigned_agent_id,goal_type,authority,consequence,*,pareto=None,rank=None,share=None,approvals=None,blockers=None,continuation_class="NEW_WORK",reason,evidence_refs,external_milestone=None,value_lane=None,signal_basis=None):
     req(continuation_class in {"CONTINUATION","NEW_WORK"},"invalid scheduler continuation class")
@@ -208,6 +213,36 @@ def generate_candidates(context):
                     f"rights-state:{handoff['rights_state']}",
                 ],
             ))
+    # Explicitly owner-accepted Hunter findings become durable implementation work.
+    # Acceptance is only a routing gate: candidate/technical/market/revenue stages
+    # remain separate and require their own evidence.
+    for record in context["hunter_lifecycle_state"]["records"]:
+        lifecycle=record["lifecycle"]
+        acceptance=record["acceptance_receipt"]
+        if lifecycle["current_stage"]!="ACCEPTED_FOR_WORK" or not isinstance(acceptance,dict):
+            continue
+        candidates.append(_candidate(
+            "IMPLEMENTATION",
+            acceptance["acceptance_id"],
+            [acceptance["project_id"]],
+            "AGT-ENGINEER",
+            "ISOLATED_IMPLEMENTATION",
+            "MODIFY",
+            "HIGH",
+            continuation_class="CONTINUATION",
+            reason="Owner-accepted Hunter capability is ready for bounded clean-room implementation through the existing isolated factory lane.",
+            evidence_refs=[
+                f"hunter-lifecycle:{lifecycle['lifecycle_id']}",
+                f"hunter-proposal:{lifecycle['proposal_id']}",
+                f"hunter-review-hash:{lifecycle['review_hash']}",
+                f"hunter-acceptance:{acceptance['acceptance_id']}",
+                f"hunter-acceptance-hash:{acceptance['acceptance_hash']}",
+                f"external-milestone:{acceptance['external_milestone']}",
+            ],
+            external_milestone=acceptance["external_milestone"],
+            value_lane="INTERNAL_BLOCKER",
+            signal_basis="EXPLICIT_OWNER_ACCEPTED_HUNTER_WORK",
+        ))
     # HUNT: capability-evidence gaps with explicit Hunter allocation.
     for rec in plans["HUNTER_RUNS"]["recommendations"]:
         candidates.append(_source_candidate(unc_by,rec,"HUNT","AGT-HUNTER","PUBLIC_HUNT","OBSERVE","MEDIUM","Step 15 allocated Hunter capacity to this capability-evidence gap."))

@@ -168,6 +168,17 @@
     "acceptance_approval_code": "HUNTER_ACCEPT_FOR_WORK",
     "acceptance_source_binding": "EXACT_REVIEW_ID_AND_REVIEW_HASH",
     "production_target_scope": "CURRENT_WRITE_ENABLED_REPOSITORY_ONLY",
-    "recurring_bridge_workflow": ".github/workflows/portfolio-autonomous-scheduler.yml"
+    "recurring_bridge_workflow": ".github/workflows/portfolio-autonomous-scheduler.yml",
+    "scheduler_work_type": "IMPLEMENTATION",
+    "implementation_target_prefixes_by_repository": {
+      "REPO-008": [
+        "hunting/",
+        "learning/",
+        "uncertainty/",
+        "experiments/"
+      ]
+    },
+    "implementation_regression_requirement": "Add a new focused regression test proving the accepted local capability while preserving clean-room reimplementation and all existing governance boundaries.",
+    "acceptance_milestone_binding": "CURRENT_VALUE_LOOP_CLOSEST_EXTERNAL_MILESTONE_AS_ROUTING_CONTEXT_NOT_VALUE_PROOF"
   }
 }

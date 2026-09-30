@@ -7,6 +7,7 @@
   "work_types": [
     "HUNT",
     "EXPERIMENT",
+    "IMPLEMENTATION",
     "REPAIR",
     "TEST",
     "RESEARCH",
@@ -16,11 +17,12 @@
   "gate_precedence": {
     "VERIFICATION": 0,
     "TEST": 1,
-    "REPAIR": 2,
-    "RESEARCH": 3,
-    "EXPERIMENT": 4,
-    "HUNT": 5,
-    "INTEGRATION": 6
+    "IMPLEMENTATION": 2,
+    "REPAIR": 3,
+    "RESEARCH": 4,
+    "EXPERIMENT": 5,
+    "HUNT": 6,
+    "INTEGRATION": 7
   },
   "max_new_work_per_cycle": 8,
   "max_open_work_per_agent": 2,
@@ -61,6 +63,11 @@
       "agent_id": "AGT-AUDITOR",
       "goal_type": "INDEPENDENT_AUDIT",
       "required_authority": "EXPERIMENT"
+    },
+    "IMPLEMENTATION": {
+      "agent_id": "AGT-ENGINEER",
+      "goal_type": "ISOLATED_IMPLEMENTATION",
+      "required_authority": "MODIFY"
     }
   },
   "state_persistence": {
@@ -106,7 +113,8 @@
     "Within Hunter proposal research work, higher structural rank is preferred and equal-rank backlog items are ordered by first-seen Hunter sequence to prevent starvation.",
     "Continuation priority is an explicit scheduler class, not an opaque scalar score, and cannot change work authority or bypass per-agent/open-queue ceilings.",
     "Quality-gated Hunter proposal review is CONTINUATION work within the RESEARCH gate so already-discovered evidence chains are reviewed before unrelated new Researcher work.",
-    "Unused scheduler attempt capacity may be reused once in the same workflow run for Hunter proposal CONTINUATION review only, after the primary queue is fully drained; total attempts may never exceed max_new_work_per_cycle."
+    "Unused scheduler attempt capacity may be reused once in the same workflow run for Hunter proposal CONTINUATION review only, after the primary queue is fully drained; total attempts may never exceed max_new_work_per_cycle.",
+    "Owner-accepted Hunter findings may enter IMPLEMENTATION only through the durable Hunter lifecycle, with exact acceptance provenance, a current external-milestone routing context, bounded target prefixes, and no market or revenue credit."
   ],
   "hunter_proposal_handoff": {
     "enabled": true,

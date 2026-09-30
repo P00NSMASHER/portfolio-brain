@@ -25,6 +25,7 @@ from software_factory.software_factory import SoftwareFactory, hashv, make_commi
 REPOSITORY_ID = "REPO-008"
 PROJECT_ID = "PRJ-000"
 VERIFIER_AGENT_ID = "AGT-TESTER"
+FACTORY_SOURCE_KINDS = {"SCHEDULER_REPAIR_TASK", "HUNTER_ACCEPTED_WORK"}
 TEST_COMMANDS = [
     "python -m compileall -q registry events adapters truth memory graph runtime hunting learning uncertainty experiments model_router agents allocator policy_replay attribution challenger software_factory repair transfer scheduler cost_governor workload_control commercial_evidence dashboard notifications hostile canary operations action_engine operator_console value_proof verification state_journal tests",
     "python -m operations.validate_operating_mode",
@@ -40,7 +41,7 @@ def _attempt_key(value: str) -> str:
 
 def factory_work_id(request: dict[str, Any], attempt_id: str) -> str:
     validate_request(request)
-    req(request["source_kind"] == "SCHEDULER_REPAIR_TASK", "factory bridge accepts scheduler repair tasks only")
+    req(request["source_kind"] in FACTORY_SOURCE_KINDS, "factory bridge accepts only governed scheduler implementation work")
     fingerprint = request["fingerprint"].split(":", 1)[1][:16].upper()
     return f"AUTO-REPAIR-{fingerprint}-{_attempt_key(attempt_id)}"
 
@@ -70,7 +71,7 @@ def start_factory_repair(
 ) -> dict[str, Any]:
     """Create and claim one isolated factory attempt, then create its branch."""
     validate_request(request)
-    req(request["source_kind"] == "SCHEDULER_REPAIR_TASK", "factory bridge accepts scheduler repair tasks only")
+    req(request["source_kind"] in FACTORY_SOURCE_KINDS, "factory bridge accepts only governed scheduler implementation work")
     work_id = factory_work_id(request, attempt_id)
     ex = _executor(token, executor)
     sf = SoftwareFactory(db_path)
@@ -143,7 +144,7 @@ def submit_factory_candidate(
 ) -> dict[str, Any]:
     """Commit builder-tested bytes through the factory; stop at VERIFYING."""
     validate_request(request)
-    req(request["source_kind"] == "SCHEDULER_REPAIR_TASK", "factory bridge accepts scheduler repair tasks only")
+    req(request["source_kind"] in FACTORY_SOURCE_KINDS, "factory bridge accepts only governed scheduler implementation work")
     req(validation.get("request_id") == request["request_id"], "factory diff validation request mismatch")
     req(validation.get("fingerprint") == request["fingerprint"], "factory diff validation fingerprint mismatch")
     changed_paths = validation.get("changed_paths")
@@ -224,7 +225,7 @@ def verify_factory_candidate(
 ) -> dict[str, Any]:
     """Record fresh independent regression evidence, then open the factory PR."""
     validate_request(request)
-    req(request["source_kind"] == "SCHEDULER_REPAIR_TASK", "factory bridge accepts scheduler repair tasks only")
+    req(request["source_kind"] in FACTORY_SOURCE_KINDS, "factory bridge accepts only governed scheduler implementation work")
     req(isinstance(independent_test_log, bytes) and bool(independent_test_log.strip()),
         "independent factory test log missing")
     req(isinstance(expected_commit_sha, str) and re.fullmatch(r"[0-9a-f]{40}", expected_commit_sha) is not None,

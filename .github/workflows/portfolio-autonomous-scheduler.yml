@@ -124,6 +124,7 @@ jobs:
           --base-sha "$GITHUB_SHA"
           --current-repository "$GITHUB_REPOSITORY"
           --source-branch "$GITHUB_REF_NAME"
+          --reconcile-implementation
           --output-state hunting/out/hunter_lifecycle_state.json
           --report hunting/out/hunter_lifecycle_report.json
       - name: Validate Hunter downstream lifecycle state

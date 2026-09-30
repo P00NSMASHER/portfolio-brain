@@ -1,32 +1,35 @@
 #!/usr/bin/env python3
-"""Durable bridge from reviewed Hunter findings to explicitly accepted factory work.
+"""Durable bridge from reviewed Hunter findings to governed implementation work.
 
-Review remains OBSERVE-only. Only an exact active owner approval bound to the review
-hash may advance a finding to ACCEPTED_FOR_WORK, and only the existing SoftwareFactory
-may create the downstream work item. This artifact is lifecycle continuity, not a new
-state-journal domain.
+Review remains OBSERVE-only. An exact active owner approval bound to the review
+may advance a finding to ACCEPTED_FOR_WORK, but acceptance itself is not
+implementation or value proof. The accepted lifecycle is persisted as a native
+Hunter artifact and becomes IMPLEMENTATION work through the existing scheduler
+on a later cycle. Candidate and exact-head check evidence may then advance only
+the technical stages they actually prove.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
-import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from hunting.lifecycle import (
     _hash as lifecycle_hash,
     apply_acceptance,
+    apply_governed_implementation_evidence,
     build_acceptance_receipt,
-    enqueue_factory_work,
     lifecycle_from_review,
     validate_lifecycle,
 )
 from hunting.proposal_review_state import validate_state as validate_review_state
 from operator_console.operator_console import validate_approval_ledger
-from software_factory.software_factory import SoftwareFactory, policy as factory_policy
+from operations.value_loop import build_value_loop_snapshot
+from repair.autonomous_repair import find_repair_evidence
+from software_factory.software_factory import policy as factory_policy
 
 ROOT=Path(__file__).resolve().parents[1]
 SEED=ROOT/"hunting"/"HUNTER_LIFECYCLE_STATE_SEED.json"
@@ -54,20 +57,6 @@ def _approval_hash_ok(receipt:dict[str,Any])->bool:
     body=dict(receipt);body.pop("acceptance_hash",None)
     return given==lifecycle_hash(body)
 
-def _validate_factory_snapshot(work:dict[str,Any],lifecycle:dict[str,Any],acceptance:dict[str,Any])->None:
-    req(isinstance(work,dict),"factory work snapshot missing")
-    req(work.get("work_id")==lifecycle.get("factory_work_id"),"factory work identity mismatch")
-    req(work.get("project_id")==acceptance["project_id"],"factory project mismatch")
-    req(work.get("repository_id")==acceptance["target_repository_id"],"factory repository mismatch")
-    req(work.get("builder_agent_id")=="AGT-ENGINEER","factory builder identity drifted")
-    req(work.get("verifier_agent_id")==acceptance["verifier_agent_id"],"factory verifier mismatch")
-    req(work.get("state")=="QUEUED","accepted Hunter factory work must remain QUEUED")
-    refs=work.get("provenance_refs")
-    req(isinstance(refs,list) and f"hunter-acceptance:{acceptance['acceptance_id']}" in refs,
-        "factory work lost acceptance provenance")
-    req(f"hunter-acceptance-hash:{acceptance['acceptance_hash']}" in refs,
-        "factory work lost acceptance hash provenance")
-
 def validate_state(state:dict[str,Any])->None:
     req(isinstance(state,dict),"Hunter lifecycle state must be object")
     req(set(state)=={"schema_version","state_id","sequence","updated_at","records"},
@@ -82,8 +71,7 @@ def validate_state(state:dict[str,Any])->None:
     seen=set()
     for record in state["records"]:
         req(isinstance(record,dict) and set(record)=={
-            "proposal_id","review_hash","lifecycle","acceptance_receipt",
-            "factory_work","factory_event_chain_valid"
+            "proposal_id","review_hash","lifecycle","acceptance_receipt","implementation_evidence"
         },"Hunter lifecycle record fields changed")
         lifecycle=record["lifecycle"]
         validate_lifecycle(lifecycle)
@@ -92,20 +80,30 @@ def validate_state(state:dict[str,Any])->None:
         seen.add(record["proposal_id"])
         req(record["review_hash"]==lifecycle["review_hash"],"Hunter lifecycle review hash projection mismatch")
         acceptance=record["acceptance_receipt"]
-        work=record["factory_work"]
-        if lifecycle["current_stage"]=="REVIEWED":
-            req(acceptance is None and work is None and record["factory_event_chain_valid"] is False,
+        implementation=record["implementation_evidence"]
+        stage=lifecycle["current_stage"]
+        if stage=="REVIEWED":
+            req(acceptance is None and implementation is None,
                 "review-only Hunter lifecycle created downstream work")
+            continue
+        req(isinstance(acceptance,dict) and _approval_hash_ok(acceptance),
+            "Hunter acceptance receipt invalid")
+        req(acceptance["proposal_id"]==lifecycle["proposal_id"] and
+            acceptance["review_hash"]==lifecycle["review_hash"],
+            "Hunter acceptance lineage mismatch")
+        req(isinstance(acceptance.get("external_milestone"),str) and acceptance["external_milestone"],
+            "Hunter acceptance external milestone missing")
+        req(isinstance(acceptance.get("implementation_target_paths"),list)
+            and acceptance["implementation_target_paths"],
+            "Hunter acceptance implementation targets missing")
+        if stage=="ACCEPTED_FOR_WORK":
+            req(implementation is None,"accepted Hunter work cannot claim implementation evidence")
         else:
-            req(isinstance(acceptance,dict) and _approval_hash_ok(acceptance),
-                "Hunter acceptance receipt invalid")
-            req(acceptance["proposal_id"]==lifecycle["proposal_id"] and
-                acceptance["review_hash"]==lifecycle["review_hash"],
-                "Hunter acceptance lineage mismatch")
-            req(lifecycle["current_stage"]=="ACCEPTED_FOR_WORK",
-                "durable acceptance bridge may persist only ACCEPTED_FOR_WORK")
-            _validate_factory_snapshot(work,lifecycle,acceptance)
-            req(record["factory_event_chain_valid"] is True,"factory event chain proof missing")
+            req(isinstance(implementation,dict),"implemented Hunter lifecycle evidence missing")
+            req(implementation.get("proposal_id")==lifecycle["proposal_id"],
+                "implementation evidence proposal projection mismatch")
+            req(implementation.get("acceptance_id")==acceptance["acceptance_id"],
+                "implementation evidence acceptance projection mismatch")
 
 def _load(path:Path)->dict[str,Any]:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -143,9 +141,96 @@ def _eligible_approvals(review:dict[str,Any],ledger:dict[str,Any])->list[dict[st
       and row["approved_by"] in allowed
     ]
 
+def _downstream_policy()->dict[str,Any]:
+    doc=_load(ROOT/"hunting"/"HUNTER_POLICY.json")
+    section=doc.get("downstream_lifecycle")
+    req(isinstance(section,dict),"Hunter downstream lifecycle policy missing")
+    return section
+
+def _implementation_targets(repository_id:str)->list[str]:
+    mapping=_downstream_policy().get("implementation_target_prefixes_by_repository")
+    req(isinstance(mapping,dict),"Hunter implementation target policy missing")
+    targets=mapping.get(repository_id)
+    req(isinstance(targets,list) and targets,"Hunter implementation target scope missing")
+    req(len(targets)==len(set(targets)) and all(
+        isinstance(path,str) and path and not path.startswith("/") and ".." not in path.split("/")
+        for path in targets
+    ),"Hunter implementation target scope invalid")
+    return list(targets)
+
+def _regression_requirement()->str:
+    value=_downstream_policy().get("implementation_regression_requirement")
+    req(isinstance(value,str) and value.strip(),"Hunter implementation regression policy missing")
+    return value
+
+def _external_milestone(override:str|None=None)->str:
+    allowed=set(_load(ROOT/"scheduler"/"SCHEDULER_POLICY.json")["external_milestones"])
+    value=override
+    if value is None:
+        value=build_value_loop_snapshot()["closest_external_milestone"]
+    req(isinstance(value,str) and value in allowed,
+        "Hunter acceptance has no defensible scheduler external milestone")
+    return value
+
+def _implementation_refs(evidence:dict[str,Any])->list[str]:
+    refs=evidence.get("evidence_refs")
+    if isinstance(refs,list) and refs:
+        return list(dict.fromkeys(refs))
+    out=[]
+    if type(evidence.get("pr_number")) is int:
+        out.append(f"repair-pr:{evidence['pr_number']}")
+    if isinstance(evidence.get("head_sha"),str):
+        out.append(f"commit:{evidence['head_sha']}")
+    for row in evidence.get("checks") or []:
+        if isinstance(row,dict) and row.get("name"):
+            out.append(f"check:{row.get('name')}:{row.get('app_id')}:{row.get('id','unknown')}")
+    return list(dict.fromkeys(out))
+
+def _reconcile_record(
+    record:dict[str,Any],
+    provider:Callable[[str],dict[str,Any]],
+    fallback_observed_at:str,
+)->list[str]:
+    lifecycle=record["lifecycle"]
+    if lifecycle["current_stage"] not in {"ACCEPTED_FOR_WORK","IMPLEMENTED"}:
+        return []
+    acceptance=record["acceptance_receipt"]
+    if not isinstance(acceptance,dict):
+        return []
+    evidence=provider(acceptance["acceptance_id"])
+    if not isinstance(evidence,dict) or evidence.get("status")!="REPAIR_PR_FOUND":
+        return []
+    enriched={
+      **evidence,
+      "proposal_id":lifecycle["proposal_id"],
+      "acceptance_id":acceptance["acceptance_id"],
+      "source_ref":acceptance["acceptance_id"],
+      "observed_at":evidence.get("observed_at") or fallback_observed_at,
+      "evidence_refs":_implementation_refs(evidence),
+    }
+    advanced=[]
+    if lifecycle["current_stage"]=="ACCEPTED_FOR_WORK":
+        lifecycle=apply_governed_implementation_evidence(lifecycle,enriched)
+        advanced.append("IMPLEMENTED")
+    if (
+        lifecycle["current_stage"]=="IMPLEMENTED"
+        and enriched.get("foundation_success") is True
+        and enriched.get("independent_success") is True
+    ):
+        lifecycle=apply_governed_implementation_evidence(lifecycle,enriched)
+        advanced.append("TECHNICALLY_VERIFIED")
+    if advanced:
+        record["lifecycle"]=lifecycle
+        record["implementation_evidence"]=enriched
+    return advanced
+
 def apply_reviews_and_acceptances(
     state:dict[str,Any],reviews:dict[str,Any],approvals:dict[str,Any],*,
     base_sha:str,current_repository:str,source_branch:str,
+    current_external_milestone:str|None=None,
+    implementation_evidence_provider:Callable[[str],dict[str,Any]]|None=None,
+    reconcile_implementation:bool=False,
+    observed_at:str|None=None,
 )->tuple[dict[str,Any],dict[str,Any]]:
     validate_state(state)
     validate_review_state(reviews)
@@ -157,7 +242,7 @@ def apply_reviews_and_acceptances(
     req(isinstance(source_branch,str) and source_branch,"source branch required")
     out=json.loads(json.dumps(state))
     records={row["proposal_id"]:row for row in out["records"]}
-    added_reviews=[];accepted=[];blocked=[]
+    added_reviews=[];accepted=[];blocked=[];advancements=[]
     review_by_hash={}
     for review in reviews["reviews"]:
         review_by_hash[review["review_hash"]]=review
@@ -169,8 +254,7 @@ def apply_reviews_and_acceptances(
         lifecycle=lifecycle_from_review(review)
         record={
           "proposal_id":review["proposal_id"],"review_hash":review["review_hash"],
-          "lifecycle":lifecycle,"acceptance_receipt":None,"factory_work":None,
-          "factory_event_chain_valid":False,
+          "lifecycle":lifecycle,"acceptance_receipt":None,"implementation_evidence":None,
         }
         out["records"].append(record);records[review["proposal_id"]]=record
         out["sequence"]+=1;out["updated_at"]=review["reviewed_at"]
@@ -194,6 +278,12 @@ def apply_reviews_and_acceptances(
         if repository_id is None:
             blocked.append({"approval_id":approval["approval_id"],"reason":"NO_CURRENT_REPOSITORY_FACTORY_TARGET"})
             continue
+        try:
+            milestone=_external_milestone(current_external_milestone)
+            targets=_implementation_targets(repository_id)
+        except HunterDownstreamError as exc:
+            blocked.append({"approval_id":approval["approval_id"],"reason":str(exc)})
+            continue
         acceptance_id="HACC-"+hashlib.sha256(
             (approval["approval_id"]+"\0"+review["review_hash"]).encode("utf-8")
         ).hexdigest()[:20].upper()
@@ -201,44 +291,51 @@ def apply_reviews_and_acceptances(
           lifecycle,acceptance_id=acceptance_id,target_repository_id=repository_id,
           project_id=project_id,verifier_agent_id="AGT-TESTER",
           accepted_at=approval["approved_at"],
+          external_milestone=milestone,
+          implementation_target_paths=targets,
+          regression_requirement=_regression_requirement(),
           evidence_refs=[
             f"owner-approval:{approval['approval_id']}",
             f"owner-approval-reason:{approval['reason_hash']}",
             f"hunter-review-hash:{review['review_hash']}",
+            f"accepted-base:{base_sha}",
+            f"external-milestone:{milestone}",
           ],controlled_proof=False,
         )
-        bound=apply_acceptance(lifecycle,acceptance)
-        timestamp=datetime.fromisoformat(approval["approved_at"].replace("Z","+00:00")).timestamp()
-        with tempfile.TemporaryDirectory() as td:
-            factory=SoftwareFactory(Path(td)/"factory.sqlite3")
-            try:
-                bound,work=enqueue_factory_work(
-                    factory,bound,acceptance,base_sha=base_sha,now=timestamp
-                )
-                chain_ok=factory.event_chain_valid()
-            finally:
-                factory.close()
-        req(chain_ok,"Hunter factory queue event chain invalid")
-        record["lifecycle"]=bound
+        record["lifecycle"]=apply_acceptance(lifecycle,acceptance)
         record["acceptance_receipt"]=acceptance
-        record["factory_work"]=work
-        record["factory_event_chain_valid"]=True
         out["sequence"]+=1;out["updated_at"]=approval["approved_at"]
         accepted.append({
           "acceptance_id":acceptance_id,"approval_id":approval["approval_id"],
-          "proposal_id":review["proposal_id"],"factory_work_id":work["work_id"],
+          "proposal_id":review["proposal_id"],"external_milestone":milestone,
+          "scheduler_work_type":"IMPLEMENTATION",
         })
+    if reconcile_implementation:
+        provider=implementation_evidence_provider or find_repair_evidence
+        stamp=observed_at or datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
+        for record in out["records"]:
+            stages=_reconcile_record(record,provider,stamp)
+            for stage in stages:
+                out["sequence"]+=1
+                out["updated_at"]=record["implementation_evidence"]["observed_at"]
+                advancements.append({
+                  "proposal_id":record["proposal_id"],
+                  "acceptance_id":record["acceptance_receipt"]["acceptance_id"],
+                  "stage":stage,
+                  "factory_work_id":record["lifecycle"]["factory_work_id"],
+                })
     validate_state(out)
     report={
       "schema_version":"1.0.0",
-      "status":"UPDATED" if added_reviews or accepted else "NO_CHANGE",
+      "status":"UPDATED" if added_reviews or accepted or advancements else "NO_CHANGE",
       "added_review_ids":added_reviews,
       "accepted_work":accepted,
+      "implementation_advancements":advancements,
       "blocked_acceptances":blocked,
       "record_count":len(out["records"]),
       "sequence":out["sequence"],
-      "market_verified":False,
-      "revenue_verified":False,
+      "market_verified":any(r["lifecycle"]["market_verified"] for r in out["records"]),
+      "revenue_verified":any(r["lifecycle"]["revenue_verified"] for r in out["records"]),
       "merge_authority_granted":False,
       "deployment_authority_granted":False,
       "new_state_journal_domain_created":False,
@@ -255,12 +352,14 @@ def main()->None:
     ap.add_argument("--source-branch",required=True)
     ap.add_argument("--output-state",type=Path,required=True)
     ap.add_argument("--report",type=Path,required=True)
+    ap.add_argument("--reconcile-implementation",action="store_true")
     args=ap.parse_args()
     state=_load(args.state) if args.state.exists() else load_seed_state()
     updated,report=apply_reviews_and_acceptances(
       state,_load(args.reviews),_load(args.approvals),
       base_sha=args.base_sha,current_repository=args.current_repository,
       source_branch=args.source_branch,
+      reconcile_implementation=args.reconcile_implementation,
     )
     args.output_state.parent.mkdir(parents=True,exist_ok=True)
     args.output_state.write_text(json.dumps(updated,indent=2,sort_keys=True)+"\n",encoding="utf-8")
