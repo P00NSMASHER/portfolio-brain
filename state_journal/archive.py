@@ -4,6 +4,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,16 @@ ROOT = Path(__file__).resolve().parents[1]
 ACTIVE_MANIFEST = ROOT / "state_journal" / "ARCHIVE_MANIFEST.json"
 ARCHIVE_SCHEMA = "1.0.0"
 CHECKPOINT_PATH = "state_journal/CHECKPOINT.json.gz"
+SECRET_RE = re.compile(
+    rb"(?:github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|"
+    rb"sk-[A-Za-z0-9_-]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)",
+    re.I,
+)
+
+
+def _require_sanitized_archive(raw: bytes) -> None:
+    require(isinstance(raw, bytes), "Archive sanitization input must be bytes")
+    require(SECRET_RE.search(raw) is None, "Credential-like material prohibited from public archive")
 
 
 def _utc(value: str) -> datetime:
@@ -32,7 +43,9 @@ def _sha256_bytes(raw: bytes) -> str:
 
 
 def _gzip_json(document: dict) -> bytes:
-    return gzip.compress(canonical(document) + b"\n", compresslevel=9, mtime=0)
+    raw = canonical(document) + b"\n"
+    _require_sanitized_archive(raw)
+    return gzip.compress(raw, compresslevel=9, mtime=0)
 
 
 def _archived_provider_artifacts(state: dict) -> dict[str, str]:
@@ -206,8 +219,12 @@ def validate_manifest(
         require(_sha256_bytes(archive_raw) == manifest["archive_file_sha256"],
                 "Archived canonical snapshot file digest mismatch")
         try:
-            archived_state = strict_load(gzip.decompress(archive_raw))
-            checkpoint_doc = strict_load(gzip.decompress(checkpoint_file.read_bytes()))
+            archived_json = gzip.decompress(archive_raw)
+            checkpoint_json = gzip.decompress(checkpoint_file.read_bytes())
+            _require_sanitized_archive(archived_json)
+            _require_sanitized_archive(checkpoint_json)
+            archived_state = strict_load(archived_json)
+            checkpoint_doc = strict_load(checkpoint_json)
         except (OSError, EOFError) as exc:
             raise ValueError("Archive/checkpoint gzip invalid") from exc
 
