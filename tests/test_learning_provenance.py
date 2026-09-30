@@ -39,6 +39,27 @@ class LearningProvenanceTests(unittest.TestCase):
         self.assertFalse(classes["BASELINE_OR_SEED"]["fresh_learning_credit"])
         self.assertFalse(classes["PINNED_UPSTREAM"]["fresh_learning_credit"])
 
+    def test_checked_in_live_seed_is_context_only_even_if_populated(self):
+        seeded=load_seed_state()
+        seeded["sequence"]=1
+        seeded["updated_at"]="2026-09-27T03:44:02Z"
+        seeded["applied_source_keys"]=["value-outcome:MVOUT-SEED:sha256:"+"a"*64]
+        seeded["observations"]=[observation()]
+        with tempfile.TemporaryDirectory() as td:
+            path=Path(td)/"LIVE_OBSERVATION_STATE_SEED.json"
+            path.write_text(json.dumps(seeded))
+            with patch("learning.continuous_learning.LIVE_OBSERVATION_SEED_PATH",path):
+                with patch("learning.continuous_learning._checked_in_observations",return_value=[]):
+                    rebuilt=rebuild_from_sources(path)
+        self.assertEqual(rebuilt["source_mode"],"BASELINE_OR_SEED_ONLY")
+        self.assertEqual(rebuilt["source_observation_count"],0)
+        self.assertEqual(rebuilt["fresh_learning_observation_count"],0)
+        self.assertEqual(rebuilt["baseline_or_seed_observation_count"],1)
+        self.assertEqual(rebuilt["records"],[])
+        self.assertFalse(
+          rebuilt["provenance_freshness"]["BASELINE_OR_SEED"]["fresh_learning_credit"]
+        )
+
     def test_durable_verified_outcome_receives_fresh_credit_separately(self):
         state=load_seed_state()
         state["sequence"]=1
