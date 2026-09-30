@@ -2,11 +2,13 @@ import unittest
 
 from hunting.downstream_lifecycle import (
     APPROVAL_CODE,
+    HunterDownstreamError,
     acceptance_source_ref,
     apply_reviews_and_acceptances,
     load_seed_state,
 )
 from hunting.steps10_12_live_acceptance import controlled_review
+from repair.autonomous_repair import request_from_hunter_acceptance
 from scheduler.autonomous_scheduler import build_context, load_state, policy as scheduler_policy, schedule_cycle
 
 H=lambda c:"sha256:"+c*64
@@ -52,6 +54,40 @@ class HunterDownstreamLifecycleTests(unittest.TestCase):
           current_external_milestone=self.milestone,
           **kwargs,
         )
+
+    def implementation_evidence(self,state,*,foundation=True,independent=True):
+        acceptance=state["records"][0]["acceptance_receipt"]
+        request=request_from_hunter_acceptance(
+          {"work_type":"IMPLEMENTATION","source_ref":acceptance["acceptance_id"]},
+          state,
+          base_sha=self.base_sha,
+        )
+        fingerprint=request["fingerprint"]
+        head="a"*40
+        return {
+          "status":"REPAIR_PR_FOUND",
+          "source_ref":acceptance["acceptance_id"],
+          "factory_work_id":"AUTO-REPAIR-"+fingerprint.split(":",1)[1][:16].upper()+"-36758526194",
+          "request_fingerprint":fingerprint,
+          "base_sha":self.base_sha,
+          "candidate_sha":head,
+          "pr_number":321,
+          "head_sha":head,
+          "head_ref":"factory/auto-repair-controlled/attempt-1",
+          "foundation_success":foundation,
+          "independent_success":independent,
+          "checks":[
+            {"id":1,"name":"validate","conclusion":"success" if foundation else None,
+             "app_id":15368,"completed_at":"2026-09-30T14:06:00Z"},
+            {"id":2,"name":"portfolio-phase1-gate","conclusion":"success" if independent else None,
+             "app_id":5121826,"completed_at":"2026-09-30T14:06:01Z"},
+          ],
+          "observed_at":"2026-09-30T14:06:01Z",
+          "evidence_refs":[
+            "repair-pr:321","commit:"+head,
+            "check:validate:15368:1","check:portfolio-phase1-gate:5121826:2",
+          ],
+        }
 
     def test_review_alone_never_creates_downstream_work(self):
         state,report=self.apply()
@@ -107,19 +143,7 @@ class HunterDownstreamLifecycleTests(unittest.TestCase):
     def test_implementation_and_technical_evidence_do_not_claim_market_or_revenue(self):
         approvals=approval_ledger(self.review)
         accepted,_=self.apply(approvals=approvals)
-        acceptance=accepted["records"][0]["acceptance_receipt"]
-        evidence={
-          "status":"REPAIR_PR_FOUND",
-          "source_ref":acceptance["acceptance_id"],
-          "factory_work_id":"AUTO-REPAIR-"+"A"*16+"-attempt-1",
-          "pr_number":321,
-          "head_sha":"a"*40,
-          "foundation_success":True,
-          "independent_success":True,
-          "checks":[{"id":1,"name":"validate","conclusion":"success","app_id":15368,"completed_at":"2026-09-30T14:06:00Z"}],
-          "observed_at":"2026-09-30T14:06:00Z",
-          "evidence_refs":["repair-pr:321","commit:"+"a"*40,"check:validate:15368:1"],
-        }
+        evidence=self.implementation_evidence(accepted)
         verified,report=self.apply(
           accepted,approvals,
           reconcile_implementation=True,
@@ -131,6 +155,42 @@ class HunterDownstreamLifecycleTests(unittest.TestCase):
         self.assertEqual([x["stage"] for x in report["implementation_advancements"]],["IMPLEMENTED","TECHNICALLY_VERIFIED"])
         self.assertFalse(lifecycle["market_verified"])
         self.assertFalse(lifecycle["revenue_verified"])
+
+    def test_spoofed_factory_fingerprint_fails_closed(self):
+        approvals=approval_ledger(self.review)
+        accepted,_=self.apply(approvals=approvals)
+        evidence=self.implementation_evidence(accepted)
+        evidence["request_fingerprint"]="sha256:"+"0"*64
+        with self.assertRaisesRegex(HunterDownstreamError,"request fingerprint mismatch"):
+            self.apply(
+              accepted,approvals,
+              reconcile_implementation=True,
+              implementation_evidence_provider=lambda _source:evidence,
+              observed_at="2026-09-30T14:06:02Z",
+            )
+        self.assertEqual(accepted["records"][0]["lifecycle"]["current_stage"],"ACCEPTED_FOR_WORK")
+
+    def test_conflicting_pr_identity_after_implementation_fails_closed(self):
+        approvals=approval_ledger(self.review)
+        accepted,_=self.apply(approvals=approvals)
+        initial=self.implementation_evidence(accepted,foundation=False,independent=False)
+        implemented,_=self.apply(
+          accepted,approvals,
+          reconcile_implementation=True,
+          implementation_evidence_provider=lambda _source:initial,
+          observed_at="2026-09-30T14:06:02Z",
+        )
+        self.assertEqual(implemented["records"][0]["lifecycle"]["current_stage"],"IMPLEMENTED")
+        conflict=dict(initial)
+        conflict["head_sha"]="b"*40
+        conflict["candidate_sha"]="b"*40
+        with self.assertRaisesRegex(HunterDownstreamError,"conflicting Hunter implementation evidence"):
+            self.apply(
+              implemented,approvals,
+              reconcile_implementation=True,
+              implementation_evidence_provider=lambda _source:conflict,
+              observed_at="2026-09-30T14:06:03Z",
+            )
 
     def test_approval_must_bind_exact_review_hash(self):
         approvals=approval_ledger(self.review,source_ref="hunter-review:HREV-WRONG:"+H("e"))
