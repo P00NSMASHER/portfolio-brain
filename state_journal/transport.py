@@ -17,7 +17,7 @@ from urllib.parse import quote
 
 from runtime.artifact_state import BudgetedHTTP
 from state_journal.contracts import (MAX_BYTES, PRODUCERS, REPOSITORY, WORKFLOW_PRODUCERS,
-                                    JournalError, canonical, require, strict_load)
+                                    JournalError, canonical, event_hash, event_identity, require, strict_load)
 from state_journal.events import validate_event
 
 REPO_ID = 1387747549
@@ -64,6 +64,16 @@ def validate_provider_event(meta: dict, run: dict, jobs: dict, raw: bytes, uploa
     require(type(meta.get("id")) is int and meta["id"] > 0, "Artifact identity missing")
     attempt = run.get("run_attempt")
     require(type(attempt) is int and attempt > 0, "Source attempt missing")
+    source_event_hash = None
+    if attempt > 1 and "run_attempt" not in event:
+        source_event_hash = event["event_hash"]
+        event = dict(event)
+        event["run_attempt"] = attempt
+        event["event_id"] = event_identity(event["run_id"], event["event_type"], event["source_sha"], attempt)
+        event["event_hash"] = event_hash(event)
+        validate_event(event)
+    else:
+        require(event.get("run_attempt", 1) == attempt, "Event attempt does not match source attempt")
     expected_name = f"{EVENT_PREFIX}{event['run_id']}-{event['producer']}-{event['source_sha']}-{attempt}"
     require(meta.get("name") == expected_name, "Artifact event identity or attempt mismatch")
     require(run.get("id") == int(event["run_id"]) and run.get("head_sha") == event["source_sha"], "Source run/SHA mismatch")
@@ -99,6 +109,8 @@ def validate_provider_event(meta: dict, run: dict, jobs: dict, raw: bytes, uploa
                 "archive_digest": meta["digest"], "source_run_id": run["id"], "source_run_attempt": attempt,
                 "source_sha": event["source_sha"], "workflow_id": run["workflow_id"], "workflow_path": run["path"],
                 "source_conclusion": run["conclusion"], "event_hash": event["event_hash"], "job_id": job["id"]}
+    if source_event_hash is not None:
+        evidence["source_event_hash"] = source_event_hash
     return event, evidence
 
 
