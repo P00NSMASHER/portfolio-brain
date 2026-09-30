@@ -129,7 +129,7 @@ def _candidate_files(root: Path, changed_paths: list[str]) -> list[dict[str, str
     return files
 
 
-def finalize_factory_repair(
+def submit_factory_candidate(
     request: dict[str, Any],
     validation: dict[str, Any],
     *,
@@ -141,14 +141,14 @@ def finalize_factory_repair(
     token: str | None = None,
     now: float | None = None,
 ) -> dict[str, Any]:
-    """Commit a tested candidate through the factory and open its protected PR."""
+    """Commit builder-tested bytes through the factory; stop at VERIFYING."""
     validate_request(request)
     req(request["source_kind"] == "SCHEDULER_REPAIR_TASK", "factory bridge accepts scheduler repair tasks only")
     req(validation.get("request_id") == request["request_id"], "factory diff validation request mismatch")
     req(validation.get("fingerprint") == request["fingerprint"], "factory diff validation fingerprint mismatch")
     changed_paths = validation.get("changed_paths")
     req(isinstance(changed_paths, list) and bool(changed_paths), "factory candidate changed paths missing")
-    req(isinstance(test_log, bytes) and bool(test_log.strip()), "factory regression test log missing")
+    req(isinstance(test_log, bytes) and bool(test_log.strip()), "factory builder test log missing")
     diff_hash = validation.get("diff_hash")
     req(isinstance(diff_hash, str) and diff_hash.startswith("sha256:") and len(diff_hash) == 71,
         "factory diff hash missing")
@@ -160,63 +160,30 @@ def finalize_factory_repair(
         work = sf.get(work_id)
         req(work["state"] == "RUNNING", "factory work is not RUNNING before candidate commit")
         files = _candidate_files(candidate_root, changed_paths)
-        commit_packet = make_commit_action(
-            work,
-            files,
-            f"Autonomous repair {request['source_ref']}",
-        )
+        commit_packet = make_commit_action(work, files, f"Autonomous repair {request['source_ref']}")
         commit = ex.execute(commit_packet)
         commit_sha = commit.get("sha")
         req(isinstance(commit_sha, str) and len(commit_sha) == 40, "factory candidate commit SHA invalid")
 
-        test_receipt_hash = "sha256:" + hashlib.sha256(test_log).hexdigest()
+        builder_test_receipt_hash = "sha256:" + hashlib.sha256(test_log).hexdigest()
         sf.record_candidate_commit(
             work_id,
             "AGT-ENGINEER",
             commit_sha=commit_sha,
             changed_paths=changed_paths,
             test_commands=TEST_COMMANDS,
-            test_receipt_hashes=[test_receipt_hash],
+            test_receipt_hashes=[builder_test_receipt_hash],
             diff_hash=diff_hash,
             now=now,
         )
-        report_hash = hashv({
-            "factory_work_id": work_id,
-            "request_fingerprint": request["fingerprint"],
-            "candidate_commit_sha": commit_sha,
-            "diff_hash": diff_hash,
-            "test_receipt_hash": test_receipt_hash,
-        })
-        verification_id = sf.verify(
-            work_id,
-            VERIFIER_AGENT_ID,
-            "PASS",
-            report_hash=report_hash,
-            evidence_refs=[
-                f"repair-request:{request['request_id']}",
-                f"candidate-commit:{commit_sha}",
-                f"candidate-diff:{diff_hash}",
-                f"factory-test-receipt:{test_receipt_hash}",
-            ],
-            now=now,
-        )
-        pr_packet = sf.pr_action(work_id)
-        body = pr_packet.get("pr_body") or ""
-        req(f"REPAIR_SOURCE_REF:{request['source_ref']}" in body, "factory PR missing repair source marker")
-        req(f"AUTO_REPAIR_FINGERPRINT:{request['fingerprint']}" in body, "factory PR missing protected integration marker")
-        pr = ex.execute(pr_packet)
-        pr_number = pr.get("number")
-        pr_url = pr.get("html_url")
-        req(type(pr_number) is int and pr_number > 0, "factory PR number invalid")
-        req(isinstance(pr_url, str) and bool(pr_url), "factory PR URL invalid")
-        sf.record_pr(work_id, pr_number=pr_number, pr_url=pr_url, head_sha=commit_sha, now=now)
         work = sf.get(work_id)
-        req(work["state"] == "PR_OPEN", "factory work did not enter PR_OPEN")
+        req(work["state"] == "VERIFYING", "factory work did not stop at VERIFYING")
+        req(work["verification_id"] is None and work["pr_number"] is None,
+            "builder stage unexpectedly verified or opened a PR")
         req(sf.event_chain_valid(), "factory event chain invalid")
-
         receipt = {
             "schema_version": "1.0.0",
-            "status": "PR_OPEN",
+            "status": "CANDIDATE_SUBMITTED_AWAITING_INDEPENDENT_FACTORY_REVIEW",
             "factory_work_id": work_id,
             "request_id": request["request_id"],
             "fingerprint": request["fingerprint"],
@@ -225,10 +192,10 @@ def finalize_factory_repair(
             "candidate_commit_sha": commit_sha,
             "changed_paths": changed_paths,
             "diff_hash": diff_hash,
-            "test_receipt_hash": test_receipt_hash,
-            "factory_verification_id": verification_id,
-            "pr_number": pr_number,
-            "pr_url": pr_url,
+            "builder_test_receipt_hash": builder_test_receipt_hash,
+            "factory_state": work["state"],
+            "independent_factory_verified": False,
+            "pr_created": False,
             "foundation_success": False,
             "hosted_independent_success": False,
             "technical_candidate_tested": True,
@@ -243,6 +210,101 @@ def finalize_factory_repair(
     finally:
         sf.close()
 
+
+def verify_factory_candidate(
+    request: dict[str, Any],
+    *,
+    independent_test_log: bytes,
+    expected_commit_sha: str,
+    db_path: Path,
+    attempt_id: str,
+    executor: GitHubExecutor | None = None,
+    token: str | None = None,
+    now: float | None = None,
+) -> dict[str, Any]:
+    """Record fresh independent regression evidence, then open the factory PR."""
+    validate_request(request)
+    req(request["source_kind"] == "SCHEDULER_REPAIR_TASK", "factory bridge accepts scheduler repair tasks only")
+    req(isinstance(independent_test_log, bytes) and bool(independent_test_log.strip()),
+        "independent factory test log missing")
+    req(isinstance(expected_commit_sha, str) and re.fullmatch(r"[0-9a-f]{40}", expected_commit_sha) is not None,
+        "expected candidate commit SHA invalid")
+
+    work_id = factory_work_id(request, attempt_id)
+    ex = _executor(token, executor)
+    sf = SoftwareFactory(db_path)
+    try:
+        work = sf.get(work_id)
+        req(work["state"] == "VERIFYING", "factory work is not awaiting independent verification")
+        req(work["commit_sha"] == expected_commit_sha, "factory candidate commit identity drifted")
+        req(work["verification_id"] is None and work["pr_number"] is None,
+            "factory candidate was already verified or submitted")
+
+        independent_test_receipt_hash = "sha256:" + hashlib.sha256(independent_test_log).hexdigest()
+        report_hash = hashv({
+            "factory_work_id": work_id,
+            "request_fingerprint": request["fingerprint"],
+            "candidate_commit_sha": expected_commit_sha,
+            "diff_hash": work["diff_hash"],
+            "independent_test_receipt_hash": independent_test_receipt_hash,
+        })
+        verification_id = sf.verify(
+            work_id,
+            VERIFIER_AGENT_ID,
+            "PASS",
+            report_hash=report_hash,
+            evidence_refs=[
+                f"repair-request:{request['request_id']}",
+                f"candidate-commit:{expected_commit_sha}",
+                f"candidate-diff:{work['diff_hash']}",
+                f"independent-factory-test:{independent_test_receipt_hash}",
+            ],
+            now=now,
+        )
+        pr_packet = sf.pr_action(work_id)
+        body = pr_packet.get("pr_body") or ""
+        req(f"REPAIR_SOURCE_REF:{request['source_ref']}" in body, "factory PR missing repair source marker")
+        req(f"AUTO_REPAIR_FINGERPRINT:{request['fingerprint']}" in body,
+            "factory PR missing protected integration marker")
+        pr = ex.execute(pr_packet)
+        pr_number = pr.get("number")
+        pr_url = pr.get("html_url")
+        req(type(pr_number) is int and pr_number > 0, "factory PR number invalid")
+        req(isinstance(pr_url, str) and bool(pr_url), "factory PR URL invalid")
+        sf.record_pr(work_id, pr_number=pr_number, pr_url=pr_url, head_sha=expected_commit_sha, now=now)
+        work = sf.get(work_id)
+        req(work["state"] == "PR_OPEN", "factory work did not enter PR_OPEN")
+        req(sf.event_chain_valid(), "factory event chain invalid")
+
+        receipt = {
+            "schema_version": "1.0.0",
+            "status": "PR_OPEN",
+            "factory_work_id": work_id,
+            "request_id": request["request_id"],
+            "fingerprint": request["fingerprint"],
+            "base_sha": request["base_sha"],
+            "branch_name": work["branch_name"],
+            "candidate_commit_sha": expected_commit_sha,
+            "changed_paths": work["changed_paths"],
+            "diff_hash": work["diff_hash"],
+            "independent_test_receipt_hash": independent_test_receipt_hash,
+            "factory_verification_id": verification_id,
+            "pr_number": pr_number,
+            "pr_url": pr_url,
+            "independent_factory_verified": True,
+            "foundation_success": False,
+            "hosted_independent_success": False,
+            "technical_candidate_tested": True,
+            "market_verified": False,
+            "revenue_verified": False,
+            "merge_authority_granted": False,
+            "deployment_authority_granted": False,
+            "default_branch_write_authority_granted": False,
+        }
+        receipt["receipt_hash"] = hashv(receipt)
+        return receipt
+    finally:
+        sf.close()
 
 def _load(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -263,7 +325,7 @@ def main() -> None:
     p.add_argument("--attempt-id", required=True)
     p.add_argument("--output", type=Path, required=True)
 
-    p = sub.add_parser("finalize")
+    p = sub.add_parser("submit")
     p.add_argument("--request", type=Path, required=True)
     p.add_argument("--validation", type=Path, required=True)
     p.add_argument("--test-log", type=Path, required=True)
@@ -272,21 +334,35 @@ def main() -> None:
     p.add_argument("--attempt-id", required=True)
     p.add_argument("--output", type=Path, required=True)
 
+    p = sub.add_parser("verify")
+    p.add_argument("--request", type=Path, required=True)
+    p.add_argument("--independent-test-log", type=Path, required=True)
+    p.add_argument("--expected-commit-sha", required=True)
+    p.add_argument("--db", type=Path, required=True)
+    p.add_argument("--attempt-id", required=True)
+    p.add_argument("--output", type=Path, required=True)
+
     args = parser.parse_args()
     token = os.environ.get("PORTFOLIO_FACTORY_TOKEN") or os.environ.get("GITHUB_TOKEN")
     if args.command == "start":
         receipt = start_factory_repair(
+            _load(args.request), db_path=args.db, attempt_id=args.attempt_id, token=token,
+        )
+    elif args.command == "submit":
+        receipt = submit_factory_candidate(
             _load(args.request),
+            _load(args.validation),
+            test_log=args.test_log.read_bytes(),
+            candidate_root=args.candidate_root.resolve(),
             db_path=args.db,
             attempt_id=args.attempt_id,
             token=token,
         )
     else:
-        receipt = finalize_factory_repair(
+        receipt = verify_factory_candidate(
             _load(args.request),
-            _load(args.validation),
-            test_log=args.test_log.read_bytes(),
-            candidate_root=args.candidate_root.resolve(),
+            independent_test_log=args.independent_test_log.read_bytes(),
+            expected_commit_sha=args.expected_commit_sha,
             db_path=args.db,
             attempt_id=args.attempt_id,
             token=token,
