@@ -8,7 +8,7 @@ from itertools import groupby
 
 from agents.heartbeat_state import heartbeat
 from state_journal.contracts import (
-    DOMAINS, PRODUCERS, REPOSITORY, SCHEMA, MAX_BYTES,
+    DOMAINS, PRODUCERS, REPOSITORY, SCHEMA, EVENT_SCHEMA_ATTEMPT, MAX_BYTES,
     Conflict, JournalError, canonical, digest, event_hash, event_identity,
     fields, require, validate_domain,
 )
@@ -93,25 +93,57 @@ def validate_change(change: dict) -> None:
         require(rebuilt == change["after"], "Heartbeat operations do not reproduce after-state")
 
 
-def make_event(producer: str, run_id: str, source_sha: str, changes: list[dict]) -> dict:
+def make_event(producer: str, run_id: str, source_sha: str, changes: list[dict],
+               *, run_attempt: int | None = None) -> dict:
     require(producer in PRODUCERS, "Producer is not enrolled")
     kind = PRODUCERS[producer][0]
-    event = {"schema_version": SCHEMA, "repository": REPOSITORY, "producer": producer,
+    schema = EVENT_SCHEMA_ATTEMPT if run_attempt is not None else SCHEMA
+    event = {"schema_version": schema, "repository": REPOSITORY, "producer": producer,
              "run_id": run_id, "source_sha": source_sha, "event_type": kind,
-             "event_id": event_identity(run_id, kind, source_sha),
+             "event_id": event_identity(run_id, kind, source_sha, run_attempt),
              "changes": sorted(deepcopy(changes), key=lambda c: c["domain"])}
+    if run_attempt is not None:
+        require(type(run_attempt) is int and run_attempt > 0, "Provider run attempt required")
+        event["run_attempt"] = run_attempt
     event["event_hash"] = event_hash(event)
     validate_event(event)
     return event
 
 
+def upgrade_legacy_event_attempt(event: dict, run_attempt: int) -> dict:
+    """Normalize an already-validated v1 provider event without mutating its archive."""
+    validate_event(event)
+    require(event["schema_version"] == SCHEMA and "run_attempt" not in event,
+            "Only legacy events can be attempt-normalized")
+    require(type(run_attempt) is int and run_attempt > 0, "Provider run attempt required")
+    upgraded = deepcopy(event)
+    upgraded["schema_version"] = EVENT_SCHEMA_ATTEMPT
+    upgraded["run_attempt"] = run_attempt
+    upgraded["event_id"] = event_identity(
+        upgraded["run_id"], upgraded["event_type"], upgraded["source_sha"], run_attempt
+    )
+    upgraded["event_hash"] = event_hash(upgraded)
+    validate_event(upgraded)
+    return upgraded
+
+
 def validate_event(event: dict) -> None:
-    fields(event, {"schema_version", "repository", "producer", "run_id", "source_sha", "event_type", "event_id", "changes", "event_hash"}, "Event")
-    require(event["schema_version"] == SCHEMA and event["repository"] == REPOSITORY, "Event namespace mismatch")
+    legacy_fields = {"schema_version", "repository", "producer", "run_id", "source_sha", "event_type", "event_id", "changes", "event_hash"}
+    attempt_fields = legacy_fields | {"run_attempt"}
+    if event.get("schema_version") == SCHEMA:
+        fields(event, legacy_fields, "Event")
+        run_attempt = None
+    elif event.get("schema_version") == EVENT_SCHEMA_ATTEMPT:
+        fields(event, attempt_fields, "Event")
+        require(type(event["run_attempt"]) is int and event["run_attempt"] > 0, "Provider run attempt required")
+        run_attempt = event["run_attempt"]
+    else:
+        require(False, "Event schema version unsupported")
+    require(event["repository"] == REPOSITORY, "Event namespace mismatch")
     producer = event["producer"]
     require(producer in PRODUCERS, "Unknown producer")
     require(event["event_type"] == PRODUCERS[producer][0], "Producer/event type mismatch")
-    require(event["event_id"] == event_identity(event["run_id"], event["event_type"], event["source_sha"]), "Event identity mismatch")
+    require(event["event_id"] == event_identity(event["run_id"], event["event_type"], event["source_sha"], run_attempt), "Event identity mismatch")
     require(event["event_hash"] == event_hash(event), "Event hash mismatch")
     require(isinstance(event["changes"], list) and 0 < len(event["changes"]) <= len(DOMAINS), "Invalid transition count")
     domains = [c.get("domain") for c in event["changes"] if isinstance(c, dict)]
