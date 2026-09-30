@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from cost_governor.cost_governor import commit_reservation, load_state, reserve_model_execution, zero_usage
+from state_journal.contracts import WORKFLOW_PRODUCERS
 from operations.workflow_liveness import (
     WorkflowLivenessError,
     _download_artifact_archive,
@@ -366,6 +367,28 @@ class WorkflowLivenessTests(unittest.TestCase):
           for row in result["dispatches"]
         ))
         self.assertFalse(result["authority_granted"])
+
+    def test_controlled_canonical_outage_recovers_without_journal_mutation_authority(self):
+        dispatched=[]
+        result=recover_overdue(
+          None,[],
+          dispatch=lambda workflow,branch:dispatched.append((workflow,branch)),
+          at=AT,
+        )
+        self.assertEqual(result["status"],"RECOVERY_DISPATCHED")
+        self.assertEqual(result["hard_stop_reason"],"COST_STATE_UNAVAILABLE")
+        self.assertFalse(result["authority_granted"])
+        self.assertGreaterEqual(len(dispatched),1)
+
+        watchdog=(ROOT/".github/workflows/portfolio-cost-watchdog.yml").read_text()
+        self.assertNotIn("portfolio-cost-watchdog",WORKFLOW_PRODUCERS)
+        self.assertNotIn("state_journal.emitter",watchdog)
+        self.assertNotIn("Capture immutable state transition event",watchdog)
+        self.assertNotIn("Upload immutable state transition event",watchdog)
+        self.assertLess(
+          watchdog.index("Recover non-paid core workflows without canonical cost state"),
+          watchdog.index("Restore canonical cost-governor state"),
+        )
 
     def test_paid_hard_stop_is_visible_but_does_not_suppress_core_recovery(self):
         route = {
