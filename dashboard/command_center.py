@@ -85,6 +85,8 @@ def load_state_sources() -> dict[str, Any]:
             "age_minutes":None,
             "stale_after_minutes":None,
             "state_sequence":None,
+            "source_sequence":None,
+            "source_state_hash":None,
             "state_updated_at":None,
             "error_class":None,
         })
@@ -1248,7 +1250,8 @@ def render_html(snapshot: dict[str, Any]) -> str:
         <tr>
           <td><strong>{_e(source_labels[name])}</strong><span class="sub">{_e(src.get("source_kind"))}</span></td>
           <td>{source_badge(name)}</td>
-          <td class="num">{_e(src.get("state_sequence") if src.get("state_sequence") is not None else "—")}</td>
+          <td class="num">{_e(src.get("source_sequence") if src.get("source_sequence") is not None else src.get("state_sequence") if src.get("state_sequence") is not None else "—")}</td>
+          <td class="wrap"><code>{_e((src.get("source_state_hash") or "—")[:24])}</code></td>
           <td>{_e(src.get("artifact_created_at") or "—")}</td>
           <td>{_e(src.get("source_run_id") or "—")}</td>
           <td class="num">{_e(src.get("age_minutes") if src.get("age_minutes") is not None else "—")}</td>
@@ -1267,7 +1270,8 @@ def render_html(snapshot: dict[str, Any]) -> str:
             {source_badge(name)}
           </div>
           <div class="source-mobile-specs">
-            <div><span>Sequence</span><strong>{_e(src.get("state_sequence") if src.get("state_sequence") is not None else "—")}</strong></div>
+            <div><span>Sequence</span><strong>{_e(src.get("source_sequence") if src.get("source_sequence") is not None else src.get("state_sequence") if src.get("state_sequence") is not None else "—")}</strong></div>
+            <div><span>State hash</span><strong><code>{_e((src.get("source_state_hash") or "—")[:18])}</code></strong></div>
             <div><span>Age</span><strong>{_e(str(src.get("age_minutes")) + " min" if src.get("age_minutes") is not None else "—")}</strong></div>
             <div><span>Source run</span><strong>{_e(src.get("source_run_id") or "—")}</strong></div>
           </div>
@@ -2456,8 +2460,9 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
       {_badge(source_bundle["bridge_status"], _status_tone(source_bundle["bridge_status"]))}
     </div>
     <p>Bridge generated: {_e(source_bundle.get("generated_at") or "local fallback mode")}</p>
+    <p><strong>Evidence semantics:</strong> heartbeats prove liveness/connectivity only; notifications are alerts only; Pages is publication only. None grants technical, market, or revenue verification credit.</p>
     <div class="table-wrap source-desktop"><table>
-      <thead><tr><th>Subsystem</th><th>Status</th><th class="num">Seq</th><th>Artifact time</th><th>Source run</th><th class="num">Age min</th><th>Source</th></tr></thead>
+      <thead><tr><th>Subsystem</th><th>Status</th><th class="num">Seq</th><th>State hash</th><th>Artifact time</th><th>Source run</th><th class="num">Age min</th><th>Source</th></tr></thead>
       <tbody>{source_rows}</tbody>
     </table></div>
     <div class="source-mobile">{source_cards}</div>
