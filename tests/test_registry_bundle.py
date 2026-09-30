@@ -35,12 +35,12 @@ class RegistryBundleTests(unittest.TestCase):
         for profile in self.profiles:
             self.assertTrue(profile["runtime_enabled"])
             if profile["project_id"] in {"PRJ-001","PRJ-002","PRJ-003","PRJ-004","PRJ-005","PRJ-006"}:
-                self.assertEqual(profile["permissions"]["ACT"]["decision"],"BOUNDED")
-                self.assertNotIn("CUSTOMER_COMMUNICATION",profile["human_approval_required_for"])
+                self.assertEqual(profile["permissions"]["ACT"]["decision"],"HUMAN_APPROVAL_REQUIRED")
+                self.assertIn("CUSTOMER_COMMUNICATION",profile["human_approval_required_for"])
                 if profile["project_id"] in {"PRJ-005","PRJ-006"}:
                     self.assertIn("CONSEQUENTIAL_CHILD_FACING_CHANGE",profile["human_approval_required_for"])
-                    joined=" ".join(profile["permissions"]["ACT"]["conditions"])
-                    self.assertIn("VERIFIED_ADULT_STAKEHOLDER",joined)
+                joined=" ".join(profile["permissions"]["ACT"]["conditions"])
+                self.assertIn("explicit human approval",joined)
             else:
                 self.assertIn(profile["permissions"]["ACT"]["decision"],{"HUMAN_APPROVAL_REQUIRED","PROHIBITED"})
             self.assertFalse(profile["separation_of_duties"]["builder_may_self_approve"])
