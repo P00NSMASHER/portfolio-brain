@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agents.heartbeat_state import seed_state
-from state_journal.contracts import DOMAINS, JournalError, PRODUCERS, digest, strict_load, validate_source_evidence
+from state_journal.contracts import DOMAINS, JournalError, PRODUCERS, WORKFLOW_PRODUCERS, digest, strict_load, validate_source_evidence
 from state_journal import legacy_parity, smoke_dispatch
 from state_journal.emitter import capture
 from state_journal.events import make_change, make_event
@@ -50,6 +50,15 @@ class StateJournalTransportTests(unittest.TestCase):
         validate_source_evidence(evidence, event)
         self.assertEqual(evidence['source_run_id'],101)
         self.assertEqual(evidence['source_conclusion'],'success')
+
+    def test_step19_provider_canary_is_enrolled_runtime_caller(self):
+        self.assertEqual(WORKFLOW_PRODUCERS["provider-usability-acceptance"],"runtime-worker")
+        meta,run,jobs,raw,event=fixture()
+        run["path"]=".github/workflows/provider-usability-acceptance.yml"
+        actual,evidence=validate_provider_event(meta,run,jobs,raw,UPLOADS)
+        self.assertEqual(actual,event)
+        self.assertEqual(evidence["workflow_path"],".github/workflows/provider-usability-acceptance.yml")
+        validate_source_evidence(evidence,event)
 
     def test_failures_preserve_actual_published_state_without_claiming_work_success(self):
         meta,run,jobs,raw,event=fixture();run['conclusion']='failure'
