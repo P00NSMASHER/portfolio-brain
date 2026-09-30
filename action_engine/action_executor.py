@@ -40,7 +40,7 @@ def target_hash(target):return _sha(target.strip().casefold())
 def payload_hash(subject,body,campaign_id):return _sha(subject+"\0"+body+"\0"+campaign_id)
 def _safe_ref(x):return isinstance(x,str) and 1<=len(x)<=240 and "\n" not in x and "\r" not in x and "@" not in x
 
-def make_email_request(*,project_id,target,subject,body,campaign_id,evidence_refs,consequence="LOW",target_classification=None,requested_at=None):
+def make_email_request(*,project_id,target,subject,body,campaign_id,evidence_refs,consequence="LOW",target_classification=None,requested_at=None,human_approval_ref=None):
     requested_at=requested_at or _now();target=target.strip()
     project_constraint=policy().get("project_constraints",{}).get(project_id,{}).get("CUSTOMER_EMAIL",{})
     if target_classification is None and not project_constraint.get("required_target_classification"):
@@ -53,12 +53,13 @@ def make_email_request(*,project_id,target,subject,body,campaign_id,evidence_ref
       "project_id":project_id,"action_type":"CUSTOMER_EMAIL","consequence":consequence,
       "target_classification":target_classification,
       "target":target,"subject":subject,"body":body,"campaign_id":campaign_id,
-      "evidence_refs":list(evidence_refs),"requested_at":requested_at
+      "evidence_refs":list(evidence_refs),"requested_at":requested_at,
+      "human_approval":{"approved":human_approval_ref is not None,"approval_ref":human_approval_ref}
     }
     validate_request(out);return out
 
 def validate_request(r):
-    required={"schema_version","action_id","idempotency_key","project_id","action_type","consequence","target_classification","target","subject","body","campaign_id","evidence_refs","requested_at"}
+    required={"schema_version","action_id","idempotency_key","project_id","action_type","consequence","target_classification","target","subject","body","campaign_id","evidence_refs","requested_at","human_approval"}
     req(isinstance(r,dict) and set(r)==required,"action request fields changed")
     req(r["schema_version"]=="1.0.0","action request schema mismatch")
     req(r["project_id"] in policy()["allowed_project_ids"],"project not allowed for bounded actions")
@@ -78,6 +79,10 @@ def validate_request(r):
     req(isinstance(r["body"],str) and 1<=len(r["body"])<=cfg["max_body_chars"],"invalid body")
     req(isinstance(r["campaign_id"],str) and 1<=len(r["campaign_id"])<=120,"invalid campaign_id")
     req(isinstance(r["evidence_refs"],list) and r["evidence_refs"] and all(_safe_ref(x) for x in r["evidence_refs"]),"sanitized evidence refs required")
+    approval=r["human_approval"]
+    req(isinstance(approval,dict) and set(approval)=={"approved","approval_ref"} and type(approval["approved"]) is bool,"human approval contract invalid")
+    if approval["approved"]: req(_safe_ref(approval["approval_ref"]),"human approval reference must be sanitized")
+    else: req(approval["approval_ref"] is None,"unapproved request may not carry approval reference")
     _time(r["requested_at"],"requested_at")
     th=target_hash(r["target"]);ph=payload_hash(r["subject"],r["body"],r["campaign_id"])
     expected="action:"+hashlib.sha256((r["project_id"]+"\0"+r["action_type"]+"\0"+th+"\0"+ph).encode()).hexdigest()
@@ -116,6 +121,10 @@ def preflight(ledger,request,*,at=None,gmail_sent_today_count=0,gmail_target_sen
     if disabled:return {"status":"BLOCKED_KILL_SWITCH","can_execute":False,"reason_codes":["ACTION_KILL_SWITCH",reason]}
     if any(x["idempotency_key"]==request["idempotency_key"] for x in ledger["executions"]):
         return {"status":"DUPLICATE_SUPPRESSED","can_execute":False,"reason_codes":["EXISTING_SANITIZED_LEDGER_EXECUTION"]}
+    if policy().get("human_approval_required") is not True or policy().get("autonomous_execution_allowed") is not False:
+        return {"status":"BLOCKED_POLICY_CONFIGURATION","can_execute":False,"reason_codes":["HUMAN_APPROVAL_POLICY_INVALID"]}
+    if request["human_approval"]["approved"] is not True:
+        return {"status":"HUMAN_APPROVAL_REQUIRED","can_execute":False,"reason_codes":["EXPLICIT_HUMAN_APPROVAL_REQUIRED"]}
     cfg=policy()["allowed_actions"][request["action_type"]]
     project_constraint=policy().get("project_constraints",{}).get(request["project_id"],{}).get(request["action_type"],{})
     today=_day(at);th=target_hash(request["target"])
@@ -131,13 +140,14 @@ def preflight(ledger,request,*,at=None,gmail_sent_today_count=0,gmail_target_sen
     target_total=max(sum(1 for x in ledger_today if x["target_hash"]==th),int(gmail_target_sent_today_count))
     if target_total>=cfg["max_per_recipient_per_utc_day"]:
         return {"status":"BLOCKED_RATE_LIMIT","can_execute":False,"reason_codes":["RECIPIENT_DAILY_LIMIT"]}
-    reasons=["PROJECT_ALLOWLIST","GMAIL_DUPLICATE_CHECK_REQUIRED","RATE_LIMITS_PASS"]
+    reasons=["PROJECT_ALLOWLIST","EXPLICIT_HUMAN_APPROVAL","GMAIL_DUPLICATE_CHECK_REQUIRED","RATE_LIMITS_PASS"]
     if project_constraint.get("required_target_classification"):
         reasons.append("VERIFIED_ADULT_STAKEHOLDER_ONLY")
     return {"status":"APPROVED_GMAIL_CONNECTOR_ACTION","can_execute":True,"reason_codes":reasons}
 
 def record_gmail_send(ledger,request,*,gmail_message_id,gmail_thread_id,sent_at=None,evidence_refs=None):
     validate_ledger(ledger);validate_request(request)
+    req(request["human_approval"]["approved"] is True,"explicit human approval required before recording Gmail send")
     req(isinstance(gmail_message_id,str) and gmail_message_id,"gmail_message_id required")
     req(isinstance(gmail_thread_id,str) and gmail_thread_id,"gmail_thread_id required")
     sent_at=sent_at or _now();_time(sent_at,"sent_at")

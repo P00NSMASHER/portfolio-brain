@@ -80,10 +80,9 @@
           ]
         },
         "ACT": {
-          "decision": "BOUNDED",
+          "decision": "HUMAN_APPROVAL_REQUIRED",
           "conditions": [
-            "Customer email may execute only through action_engine/ACTION_POLICY.json and its idempotency, rate-limit, credential, evidence and kill-switch gates.",
-            "Payments, billing changes, money movement, legal/regulatory communication, claims/disputes, destructive deletion and private disclosure remain separately gated."
+            "Consequential external communication requires explicit human approval; Gmail is an optional transport only."
           ]
         }
       },
@@ -99,7 +98,8 @@
         "CONSEQUENTIAL_CHILD_FACING_CHANGE",
         "LIVE_MARKET_TRADING",
         "BROKERAGE_ORDER",
-        "AUTONOMOUS_INVESTMENT_POSITION"
+        "AUTONOMOUS_INVESTMENT_POSITION",
+        "CUSTOMER_COMMUNICATION"
       ],
       "hard_prohibitions": [],
       "separation_of_duties": {
@@ -133,10 +133,9 @@
           ]
         },
         "ACT": {
-          "decision": "BOUNDED",
+          "decision": "HUMAN_APPROVAL_REQUIRED",
           "conditions": [
-            "Customer email may execute only through action_engine/ACTION_POLICY.json and its idempotency, rate-limit, credential, evidence and kill-switch gates.",
-            "Payments, billing changes, money movement, legal/regulatory communication, claims/disputes, destructive deletion and private disclosure remain separately gated."
+            "Consequential external communication requires explicit human approval; Gmail is an optional transport only."
           ]
         }
       },
@@ -152,7 +151,8 @@
         "CONSEQUENTIAL_CHILD_FACING_CHANGE",
         "LIVE_MARKET_TRADING",
         "BROKERAGE_ORDER",
-        "AUTONOMOUS_INVESTMENT_POSITION"
+        "AUTONOMOUS_INVESTMENT_POSITION",
+        "CUSTOMER_COMMUNICATION"
       ],
       "hard_prohibitions": [],
       "separation_of_duties": {
@@ -186,10 +186,9 @@
           ]
         },
         "ACT": {
-          "decision": "BOUNDED",
+          "decision": "HUMAN_APPROVAL_REQUIRED",
           "conditions": [
-            "Customer email may execute only through action_engine/ACTION_POLICY.json and its idempotency, rate-limit, credential, evidence and kill-switch gates.",
-            "Payments, billing changes, money movement, legal/regulatory communication, claims/disputes, destructive deletion and private disclosure remain separately gated."
+            "Consequential external communication requires explicit human approval; Gmail is an optional transport only."
           ]
         }
       },
@@ -205,7 +204,8 @@
         "CONSEQUENTIAL_CHILD_FACING_CHANGE",
         "LIVE_MARKET_TRADING",
         "BROKERAGE_ORDER",
-        "AUTONOMOUS_INVESTMENT_POSITION"
+        "AUTONOMOUS_INVESTMENT_POSITION",
+        "CUSTOMER_COMMUNICATION"
       ],
       "hard_prohibitions": [],
       "separation_of_duties": {
@@ -239,10 +239,9 @@
           ]
         },
         "ACT": {
-          "decision": "BOUNDED",
+          "decision": "HUMAN_APPROVAL_REQUIRED",
           "conditions": [
-            "Customer email may execute only through action_engine/ACTION_POLICY.json and its idempotency, rate-limit, credential, evidence and kill-switch gates.",
-            "Payments, billing changes, money movement, legal/regulatory communication, claims/disputes, destructive deletion and private disclosure remain separately gated."
+            "Consequential external communication requires explicit human approval; Gmail is an optional transport only."
           ]
         }
       },
@@ -258,7 +257,8 @@
         "CONSEQUENTIAL_CHILD_FACING_CHANGE",
         "LIVE_MARKET_TRADING",
         "BROKERAGE_ORDER",
-        "AUTONOMOUS_INVESTMENT_POSITION"
+        "AUTONOMOUS_INVESTMENT_POSITION",
+        "CUSTOMER_COMMUNICATION"
       ],
       "hard_prohibitions": [],
       "separation_of_duties": {
@@ -292,11 +292,9 @@
           ]
         },
         "ACT": {
-          "decision": "BOUNDED",
+          "decision": "HUMAN_APPROVAL_REQUIRED",
           "conditions": [
-            "Adult-stakeholder customer email may execute only through action_engine/ACTION_POLICY.json and action_engine/EDUCATION_VALIDATION_POLICY.json.",
-            "Target classification must be VERIFIED_ADULT_STAKEHOLDER.",
-            "Direct minor contact, child-data collection, consequential child-facing changes, production changes, payments, legal/regulatory communication, private disclosure, and other non-allowlisted ACT remain prohibited or human-gated."
+            "Consequential external communication requires explicit human approval; Gmail is an optional transport only."
           ]
         }
       },
@@ -312,7 +310,8 @@
         "CONSEQUENTIAL_CHILD_FACING_CHANGE",
         "LIVE_MARKET_TRADING",
         "BROKERAGE_ORDER",
-        "AUTONOMOUS_INVESTMENT_POSITION"
+        "AUTONOMOUS_INVESTMENT_POSITION",
+        "CUSTOMER_COMMUNICATION"
       ],
       "hard_prohibitions": [],
       "separation_of_duties": {
@@ -346,11 +345,9 @@
           ]
         },
         "ACT": {
-          "decision": "BOUNDED",
+          "decision": "HUMAN_APPROVAL_REQUIRED",
           "conditions": [
-            "Adult-stakeholder customer email may execute only through action_engine/ACTION_POLICY.json and action_engine/EDUCATION_VALIDATION_POLICY.json.",
-            "Target classification must be VERIFIED_ADULT_STAKEHOLDER.",
-            "Direct minor contact, child-data collection, consequential child-facing changes, production changes, payments, legal/regulatory communication, private disclosure, and other non-allowlisted ACT remain prohibited or human-gated."
+            "Consequential external communication requires explicit human approval; Gmail is an optional transport only."
           ]
         }
       },
@@ -366,7 +363,8 @@
         "CONSEQUENTIAL_CHILD_FACING_CHANGE",
         "LIVE_MARKET_TRADING",
         "BROKERAGE_ORDER",
-        "AUTONOMOUS_INVESTMENT_POSITION"
+        "AUTONOMOUS_INVESTMENT_POSITION",
+        "CUSTOMER_COMMUNICATION"
       ],
       "hard_prohibitions": [],
       "separation_of_duties": {
