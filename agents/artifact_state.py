@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
 import json
 import os
@@ -13,8 +14,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from runtime.artifact_http import open_url
-from runtime.artifact_restore import InvalidStateArtifact
+from runtime.artifact_restore import InvalidStateArtifact, _atomic_write
 from runtime.artifact_restore import restore_latest_valid_state
+from state_journal.events import heartbeat_batches, replay_heartbeat_batch
 from agents.heartbeat_state import ARTIFACT_NAME, validate_state
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -171,14 +173,22 @@ def _later_equivalent_heartbeat(winner: dict, other: dict) -> bool:
     )
 
 
-def _resolve_equivalent_heartbeat_fork(
+def _canonical_bytes(value: dict) -> bytes:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def _state_hash(state: dict) -> str:
+    return "sha256:" + hashlib.sha256(_canonical_bytes(state)).hexdigest()
+
+
+def _valid_heartbeat_candidates(
     data: dict,
     *,
     current_run: str | None,
     expected_head_branch: str | None,
     download,
-    max_candidates: int = 5,
-) -> tuple[dict, list[int]]:
+    max_candidates: int,
+) -> list[tuple[dict, dict]]:
     candidates = [
         item
         for item in data.get("artifacts", [])
@@ -200,6 +210,24 @@ def _resolve_equivalent_heartbeat_fork(
         except Exception:
             continue
         valid.append((item, state))
+    return valid
+
+
+def _resolve_equivalent_heartbeat_fork(
+    data: dict,
+    *,
+    current_run: str | None,
+    expected_head_branch: str | None,
+    download,
+    max_candidates: int = 5,
+) -> tuple[dict, list[int]]:
+    valid = _valid_heartbeat_candidates(
+        data,
+        current_run=current_run,
+        expected_head_branch=expected_head_branch,
+        download=download,
+        max_candidates=max_candidates,
+    )
     if len(valid) < 2:
         raise InvalidStateArtifact("agent heartbeat fork recovery requires two valid candidates")
     highest_sequence = max(state["sequence"] for _, state in valid)
@@ -209,7 +237,7 @@ def _resolve_equivalent_heartbeat_fork(
 
     winners = []
     for entry in highest:
-        item, state = entry
+        _item, state = entry
         if all(
             other is entry or _later_equivalent_heartbeat(state, other[1])
             for other in highest
@@ -219,6 +247,131 @@ def _resolve_equivalent_heartbeat_fork(
         raise InvalidStateArtifact("agent heartbeat fork has no unique later equivalent update")
     return {"artifacts": [winners[0][0]]}, [int(entry[0].get("id")) for entry in highest]
 
+
+def _merge_commuting_heartbeat_fork(
+    data: dict,
+    *,
+    current_run: str | None,
+    expected_head_branch: str | None,
+    download,
+    max_candidates: int = 5,
+) -> tuple[dict, list[dict], list[int]]:
+    """Losslessly merge concurrent heartbeat branches from one exact predecessor.
+
+    This is intentionally narrower than a generic last-writer-wins repair. Every
+    highest-sequence branch must replay exactly from one unique predecessor using
+    the same heartbeat batches accepted by the canonical journal. Equal-time
+    different writes to the same agent remain ambiguous and fail closed.
+    """
+    valid = _valid_heartbeat_candidates(
+        data,
+        current_run=current_run,
+        expected_head_branch=expected_head_branch,
+        download=download,
+        max_candidates=max_candidates,
+    )
+    if len(valid) < 3:
+        raise InvalidStateArtifact("agent heartbeat fork merge requires exact predecessor evidence")
+    highest_sequence = max(state["sequence"] for _, state in valid)
+    highest = [entry for entry in valid if entry[1]["sequence"] == highest_sequence]
+    if len(highest) < 2:
+        raise InvalidStateArtifact("agent heartbeat fork merge found no highest-sequence fork")
+
+    predecessor_entries = [
+        entry for entry in valid if entry[1]["sequence"] == highest_sequence - 1
+    ]
+    predecessor_states = {}
+    for item, state in predecessor_entries:
+        predecessor_states.setdefault(_canonical_bytes(state), []).append((item, state))
+    if len(predecessor_states) != 1:
+        raise InvalidStateArtifact("agent heartbeat fork has no unique exact predecessor")
+    predecessor_group = next(iter(predecessor_states.values()))
+    base = predecessor_group[0][1]
+
+    batches: dict[bytes, dict] = {}
+    for _item, state in highest:
+        inferred = heartbeat_batches(base, state)
+        if not inferred:
+            raise InvalidStateArtifact("agent heartbeat fork branch is not exact-replayable")
+        for batch in inferred:
+            batches[_canonical_bytes(batch)] = batch
+    if len(batches) < 2:
+        raise InvalidStateArtifact("agent heartbeat fork merge has no distinct concurrent updates")
+
+    slots: dict[tuple[str, datetime], bytes] = {}
+    for batch in batches.values():
+        for agent_id, work_ids in batch["work_ids_by_agent"].items():
+            slot = (agent_id, _utc(batch["at"]))
+            core = {
+                "agent_id": agent_id,
+                "at": batch["at"],
+                "activity_kind": batch["activity_kind"],
+                "source_workflow": batch["source_workflow"],
+                "source_run_id": batch["source_run_id"],
+                "work_ids": work_ids,
+            }
+            core_bytes = _canonical_bytes(core)
+            prior = slots.get(slot)
+            if prior is not None and prior != core_bytes:
+                raise InvalidStateArtifact("agent heartbeat fork has ambiguous equal-time agent updates")
+            slots[slot] = core_bytes
+
+    merged = json.loads(json.dumps(base))
+    for key in sorted(batches, key=lambda value: (_utc(batches[value]["at"]), value)):
+        merged = replay_heartbeat_batch(merged, batches[key])
+    validate_state(merged)
+
+    base_ids = {row["event_id"] for row in base["recent_events"]}
+    merged_ids = {row["event_id"] for row in merged["recent_events"]}
+    for _item, state in highest:
+        added = {row["event_id"] for row in state["recent_events"] if row["event_id"] not in base_ids}
+        if not added or not added <= merged_ids:
+            raise InvalidStateArtifact("agent heartbeat fork merge did not retain every branch event")
+
+    sources = [entry[0] for entry in highest]
+    sources.extend(item for item, _state in predecessor_group)
+    deduped = {int(item["id"]): item for item in sources}
+    fork_ids = sorted((int(item["id"]) for item, _state in highest), reverse=True)
+    return merged, [deduped[key] for key in sorted(deduped, reverse=True)], fork_ids
+
+
+def _write_merged_fork(
+    output: Path,
+    metadata_output: Path | None,
+    merged: dict,
+    sources: list[dict],
+    fork_ids: list[int],
+) -> str:
+    status = "RESTORED_MERGED_COMMUTING_HEARTBEAT_FORK_" + "_".join(map(str, fork_ids))
+    _atomic_write(output, _canonical_bytes(merged) + b"\n")
+    if metadata_output is not None:
+        source_artifact_ids = [int(item["id"]) for item in sources]
+        source_run_ids = [int((item.get("workflow_run") or {})["id"]) for item in sources]
+        source_head_shas = [str((item.get("workflow_run") or {}).get("head_sha") or "") for item in sources]
+        source_artifact_digests = [item.get("digest") for item in sources]
+        metadata = {
+            "schema_version": "1.1.0",
+            "restore_status": status,
+            "artifact_id": None,
+            "artifact_name": ARTIFACT_NAME,
+            "artifact_created_at": max((item.get("created_at") or "") for item in sources),
+            "artifact_expires_at": min((item.get("expires_at") or "") for item in sources),
+            "source_run_id": None,
+            "source_head_sha": None,
+            "source_sequence": merged["sequence"],
+            "source_state_hash": _state_hash(merged),
+            "source_artifact_ids": source_artifact_ids,
+            "source_run_ids": source_run_ids,
+            "source_head_shas": source_head_shas,
+            "source_artifact_digests": source_artifact_digests,
+            "fork_artifact_ids": fork_ids,
+            "candidates_inspected": len(sources),
+        }
+        _atomic_write(
+            metadata_output,
+            (json.dumps(metadata, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"),
+        )
+    return status
 
 def restore(output: Path, metadata_output: Path | None = None) -> str:
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("PORTFOLIO_GITHUB_TOKEN")
@@ -279,12 +432,24 @@ def restore(output: Path, metadata_output: Path | None = None) -> str:
     except InvalidStateArtifact as exc:
         if str(exc) != "conflicting state artifacts at highest sequence":
             raise
-        recovered, fork_ids = _resolve_equivalent_heartbeat_fork(
-            data,
-            current_run=run,
-            expected_head_branch=os.environ.get("GITHUB_REF_NAME"),
-            download=download,
-        )
+        try:
+            recovered, fork_ids = _resolve_equivalent_heartbeat_fork(
+                data,
+                current_run=run,
+                expected_head_branch=os.environ.get("GITHUB_REF_NAME"),
+                download=download,
+            )
+        except InvalidStateArtifact as fork_exc:
+            if str(fork_exc) != "agent heartbeat fork has no unique later equivalent update":
+                raise
+            merged, sources, fork_ids = _merge_commuting_heartbeat_fork(
+                data,
+                current_run=run,
+                expected_head_branch=os.environ.get("GITHUB_REF_NAME"),
+                download=download,
+            )
+            return _write_merged_fork(output, metadata_output, merged, sources, fork_ids)
+
         restore_latest_valid_state(
             recovered,
             current_run=run,
