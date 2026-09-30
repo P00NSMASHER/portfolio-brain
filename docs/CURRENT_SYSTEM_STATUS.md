@@ -25,7 +25,9 @@
 - Runtime emits and persists project_forwarding_state.json plus a sanitized forwarding receipt inside portfolio-runtime-state; exact revision/project delivery keys suppress duplicates.
 - REPO-001 scout intake source: P00NSMASHER/github-value-hunt-ledger/intelligence/scout_queue/HUNTER-01.json at an exact source revision; maximum candidates per cycle: **2**.
 - REPO-001 output is candidate input only; the existing Hunter still performs exact-revision inspection, rights handling, ranking, proposal gating, and verification. No second Hunter exists.
-- ABVM (PRJ-006 / REPO-003) evidence scope: AUTOMATION_HEALTH, PROGRESS_EVIDENCE; persisted payload: SANITIZED_METADATA_ONLY.
+- REPO-001 license metadata is carried as provenance into pre-verification intake; intake does not create a separate SPDX allowlist or grant rights/reuse/value authority.
+- ABVM (PRJ-006 / REPO-003) repository forwarding scope: REPOSITORY_OBSERVATION.
+- ABVM automation evidence scope: AUTOMATION_HEALTH, PROGRESS_EVIDENCE; source: exact-head GitHub Actions run from .github/workflows/health-dashboard.yml; persisted payload: SANITIZED_METADATA_ONLY.
 - ABVM child-facing mutation=false, deployment authority=false, school-content publication authority=false.
 
 ## Evidence semantics
@@ -36,7 +38,7 @@
 - Technical verification credit from heartbeat/notification/Pages: **false**.
 - Market verification credit from heartbeat/notification/Pages: **false**.
 - Revenue verification credit from heartbeat/notification/Pages: **false**.
-- The command center exposes per-source status, age/freshness threshold, source run/head, state sequence, and canonical state hash; stale or fallback sources stay visibly non-live.
+- The command center exposes per-source status, age/freshness threshold, source run/head, state sequence, canonical state hash, restore status, and error class; stale, fallback, or blocked sources stay visibly non-live.
 
 ## Acceptance gates
 
