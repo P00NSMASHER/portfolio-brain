@@ -3,7 +3,8 @@
 
 This verifier never performs a provider call. The controlled canary is executed by
 runtime-worker under the existing cost governor; this module validates the
-sanitized provider-health artifact and exact-main identity after that run.
+sanitized provider-health artifact, the current run's successful model-analysis
+artifact, and exact-main identity after that run.
 """
 from __future__ import annotations
 
@@ -17,6 +18,7 @@ from typing import Any
 from runtime.provider_health import CURRENT_SCHEMA, ProviderHealthError, validate_provider_health
 
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
+SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 class ProviderUsabilityAcceptanceError(ValueError):
@@ -28,7 +30,7 @@ def _hash(value: Any) -> str:
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
-def _load_health(path: Path) -> dict[str, Any] | None:
+def _load_json(path: Path) -> dict[str, Any] | None:
     if not path.exists():
         return None
     try:
@@ -40,6 +42,7 @@ def _load_health(path: Path) -> dict[str, Any] | None:
 
 def build_receipt(
     provider_health: dict[str, Any] | None,
+    model_analysis: dict[str, Any] | None,
     *,
     source_run_id: int,
     source_head_sha: str,
@@ -53,7 +56,10 @@ def build_receipt(
 
     reasons: list[str] = []
     health_hash = None
+    analysis_hash = None
     state: dict[str, Any] = {}
+    analysis: dict[str, Any] = {}
+
     if provider_health is None:
         reasons.append("PROVIDER_HEALTH_ARTIFACT_MISSING")
     else:
@@ -63,6 +69,27 @@ def build_receipt(
             validate_provider_health(provider_health)
         except ProviderHealthError:
             reasons.append("PROVIDER_HEALTH_INVALID")
+
+    if model_analysis is None:
+        reasons.append("MODEL_ANALYSIS_ARTIFACT_MISSING")
+    else:
+        analysis = model_analysis
+        analysis_hash = _hash(model_analysis)
+        route = analysis.get("route")
+        receipt = analysis.get("receipt")
+        if (
+            analysis.get("schema_version") != "1.0.0"
+            or analysis.get("mode") != "daily"
+            or not isinstance(analysis.get("packet_hash"), str)
+            or SHA256.fullmatch(analysis.get("packet_hash", "")) is None
+            or not isinstance(route, dict)
+            or not isinstance(receipt, dict)
+        ):
+            reasons.append("MODEL_ANALYSIS_ARTIFACT_INVALID")
+        if analysis.get("status") != "SUCCESS":
+            reasons.append("MODEL_ANALYSIS_NOT_SUCCESSFUL")
+        if analysis.get("authority_granted") is not False or analysis.get("evidence_upgraded") is not False:
+            reasons.append("MODEL_ANALYSIS_AUTHORITY_WIDENED")
 
     if source_head_sha != observed_main_sha:
         reasons.append("MAIN_ADVANCED_DURING_CANARY")
@@ -93,6 +120,18 @@ def build_receipt(
         if state.get("authority_granted") is not False or state.get("evidence_upgraded") is not False:
             reasons.append("AUTHORITY_OR_EVIDENCE_WIDENED")
 
+    if analysis and state:
+        route = analysis.get("route") if isinstance(analysis.get("route"), dict) else {}
+        receipt = analysis.get("receipt") if isinstance(analysis.get("receipt"), dict) else {}
+        if route.get("provider_id") != state.get("provider_id"):
+            reasons.append("MODEL_ANALYSIS_PROVIDER_MISMATCH")
+        if route.get("model_id") != state.get("model_id"):
+            reasons.append("MODEL_ANALYSIS_MODEL_MISMATCH")
+        if receipt.get("provider_id") != state.get("provider_id"):
+            reasons.append("MODEL_ANALYSIS_RECEIPT_PROVIDER_MISMATCH")
+        if receipt.get("model_id") != state.get("model_id"):
+            reasons.append("MODEL_ANALYSIS_RECEIPT_MODEL_MISMATCH")
+
     body = {
         "schema_version": "1.0.0",
         "step": 19,
@@ -102,6 +141,8 @@ def build_receipt(
         "observed_main_sha": observed_main_sha,
         "exact_main_identity": source_head_sha == observed_main_sha,
         "provider_health_hash": health_hash,
+        "model_analysis_hash": analysis_hash,
+        "model_analysis_status": analysis.get("status"),
         "provider_id": state.get("provider_id"),
         "model_id": state.get("model_id"),
         "provider_status": state.get("status", "UNKNOWN"),
@@ -122,6 +163,7 @@ def build_receipt(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--provider-health", type=Path, required=True)
+    parser.add_argument("--model-analysis", type=Path, required=True)
     parser.add_argument("--source-run-id", type=int, required=True)
     parser.add_argument("--source-head-sha", required=True)
     parser.add_argument("--observed-main-sha", required=True)
@@ -130,7 +172,8 @@ def main() -> int:
     args = parser.parse_args()
 
     receipt = build_receipt(
-        _load_health(args.provider_health),
+        _load_json(args.provider_health),
+        _load_json(args.model_analysis),
         source_run_id=args.source_run_id,
         source_head_sha=args.source_head_sha,
         observed_main_sha=args.observed_main_sha,
