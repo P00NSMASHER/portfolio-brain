@@ -69,10 +69,10 @@ def validate_boundaries()->dict:
         for pid in adapter["project_ids"]:
             row=by_project[pid]
             req(row["capabilities"]["READ_OBSERVE"] is True,"adapter routes to project without read capability")
-            req(row["repository_id"]==adapter["repository_id"],"project capability repository binding mismatches enabled adapter")
+            req(adapter["repository_id"] in row["repository_ids"],"project capability repository binding mismatches enabled adapter")
 
     abvm=by_project["PRJ-006"]
-    req(abvm["repository_id"]=="REPO-003","ABVM repository binding changed")
+    req(abvm["repository_ids"]==["REPO-003"],"ABVM repository binding changed")
     req(abvm["observation_evidence_allowlist"]==["AUTOMATION_HEALTH","AUTOMATION_PROGRESS"],"ABVM observation scope widened")
     req(abvm["child_facing_mutation"] is False and abvm["school_content_publication"] is False,"ABVM child/school publication authority widened")
     trading=by_project["PRJ-007"]
