@@ -7,3 +7,4 @@ recovery-wake: 2026-09-30T10:00Z explicit-audited-recovery-run
 recovery-wake: 2026-09-30T15:26Z step7-checkpoint-archive-live-acceptance
 recovery-wake: 2026-09-30T16:47Z step7-history-fork-repaired-live-reducer
 recovery-wake: 2026-09-30T17:05Z step7-inflight-overlap-repaired-live-reducer
+recovery-wake: 2026-09-30T17:22Z step7-merged-predecessor-continuation-repaired
