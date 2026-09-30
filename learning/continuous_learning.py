@@ -218,15 +218,23 @@ def rebuild_from_sources(live_state_path:Path|None=None)->dict[str,Any]:
         live_sequence=live["sequence"]
     rebuilt=rebuild_state(rows)
     baseline_hash=canonical_hash(baseline)
+    verified_outcome_count=sum(
+      1 for row in rows
+      if any(
+        isinstance(ref,str) and ref.startswith("value-outcome:")
+        for ref in row["provenance_refs"]
+      )
+    )
+    live_observation_count=len(rows)-verified_outcome_count
     provenance_freshness={
       "LIVE_OBSERVATION":{
         "fresh_learning_credit":True,
-        "observation_count":0,
-        "source_refs":["runtime:live-observation-stream"],
+        "observation_count":live_observation_count,
+        "source_refs":["runtime:live-observation-stream","learning/live/learning_observation_state.json"],
       },
       "VERIFIED_OUTCOME":{
         "fresh_learning_credit":True,
-        "observation_count":len(rows),
+        "observation_count":verified_outcome_count,
         "source_refs":["learning/live/learning_observation_state.json"],
       },
       "PINNED_UPSTREAM":{
