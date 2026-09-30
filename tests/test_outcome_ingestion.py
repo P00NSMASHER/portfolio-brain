@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 import tempfile
 import unittest
@@ -144,8 +145,39 @@ class OutcomeIngestionTests(unittest.TestCase):
             self.apply(hunter,model,learning,conflict)
         self.assertEqual((hunter,model,learning),before)
 
-    def test_hunter_only_partial_identity_without_hash_fails_closed(self):
+    def test_hunter_only_hash_bound_partial_reconciles_exactly_once(self):
         hunter,_,_,_=self.apply()
+        model=model_seed(); learning=learning_seed()
+        hunter_sequence=hunter["sequence"]
+
+        hunter2,model2,learning2,report=self.apply(hunter,model,learning)
+        self.assertEqual(report["status"],"RECONCILED")
+        self.assertEqual(report["integrity_status"],"HEALTHY")
+        self.assertEqual(hunter2["sequence"],hunter_sequence)
+        self.assertEqual(len(model2["outcomes"]),2)
+        self.assertEqual(len(learning2["observations"]),3)
+
+        hunter3,model3,learning3,report3=self.apply(hunter2,model2,learning2)
+        self.assertEqual(report3["status"],"ALREADY_INGESTED")
+        self.assertEqual(hunter3["sequence"],hunter2["sequence"])
+        self.assertEqual(model3["sequence"],model2["sequence"])
+        self.assertEqual(learning3["sequence"],learning2["sequence"])
+
+    def test_hunter_only_hash_bound_conflict_fails_closed(self):
+        hunter,_,_,_=self.apply()
+        conflict=copy.deepcopy(self.outcome)
+        conflict["provenance_refs"]=["test:hunter-only-conflicting-identity"]
+        body=dict(conflict);body.pop("outcome_hash");conflict["outcome_hash"]=digest(body)
+        model=model_seed(); learning=learning_seed()
+        before=copy.deepcopy((hunter,model,learning))
+        with self.assertRaisesRegex(OutcomeIngestionError,"hash-bound Hunter"):
+            self.apply(hunter,model,learning,conflict)
+        self.assertEqual((hunter,model,learning),before)
+
+    def test_pre_v2_hunter_only_partial_identity_stays_fail_closed(self):
+        hunter=hunter_seed()
+        previous="HFB-"+hashlib.sha256(self.outcome["outcome_id"].encode()).hexdigest()[:24].upper()
+        hunter["feedback_ids"].append(previous)
         model=model_seed(); learning=learning_seed()
         before=copy.deepcopy((hunter,model,learning))
         with self.assertRaisesRegex(OutcomeIngestionError,"ambiguous prior Hunter"):
