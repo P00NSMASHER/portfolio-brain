@@ -194,33 +194,112 @@ def rebuild_state(observations: list[dict[str,Any]])->dict[str,Any]:
       "state_hash":canonical_hash({"source_snapshot_hash":source_hash,"records":final,"learning_alerts":alerts})
     }
 
+PROVENANCE_CLASSES=("LIVE_OBSERVATION","VERIFIED_OUTCOME","PINNED_UPSTREAM","BASELINE_OR_SEED")
+PINNED_CONTEXT_SOURCES=(
+    "learning/AI_BUSINESS_OS_LEARNING_ENGINE_PIN.json",
+    "memory/AI_BUSINESS_OS_VALUE_MEMORY_PIN.json",
+    "graph/AI_BUSINESS_OS_GRAPH_PIN.json",
+)
+
 def _checked_in_observations()->list[dict[str,Any]]:
     ledger=load("learning/LEARNING_OBSERVATION_LEDGER.json")
     req(ledger["schema_version"]=="1.0.0" and ledger["ledger_id"]=="portfolio-learning-observations","learning ledger identity mismatch")
     req(isinstance(ledger["observations"],list),"learning ledger observations must be list")
-    return list(ledger["observations"])
+    rows=list(ledger["observations"])
+    for row in rows: validate_observation(row)
+    return rows
+
+def _static_provenance_class(o:dict[str,Any])->str:
+    refs=o["provenance_refs"]
+    if any(
+      ref.startswith(("pinned-upstream:","upstream-pin:","memory-pin:","graph-pin:"))
+      for ref in refs
+    ):
+        return "PINNED_UPSTREAM"
+    return "BASELINE_OR_SEED"
+
+def _live_provenance_class(o:dict[str,Any])->str:
+    if o["evidence_state"]=="VERIFIED" and any(ref.startswith("value-outcome:") for ref in o["provenance_refs"]):
+        return "VERIFIED_OUTCOME"
+    return "LIVE_OBSERVATION"
+
+def _provenance_counts(
+    static_rows:list[dict[str,Any]], live_rows:list[dict[str,Any]]
+)->dict[str,int]:
+    counts={key:0 for key in PROVENANCE_CLASSES}
+    for row in static_rows: counts[_static_provenance_class(row)]+=1
+    for row in live_rows: counts[_live_provenance_class(row)]+=1
+    return counts
+
+def _record_live_provenance(
+    records:list[dict[str,Any]], live_rows:list[dict[str,Any]]
+)->None:
+    by_key={}
+    for row in live_rows:
+        key=memory_key(row)
+        bucket=by_key.setdefault(key,{key:0 for key in ("LIVE_OBSERVATION","VERIFIED_OUTCOME")})
+        bucket[_live_provenance_class(row)]+=1
+    for rec in records:
+        counts=by_key.get(rec["memory_key"],{"LIVE_OBSERVATION":0,"VERIFIED_OUTCOME":0})
+        rec["provenance_counts"]=counts
+        rec["fresh_learning_observation_count"]=sum(counts.values())
+        rec["fresh_learning_credit"]=rec["fresh_learning_observation_count"]>0
 
 def rebuild_from_sources(live_state_path:Path|None=None)->dict[str,Any]:
-    rows=_checked_in_observations()
-    source_mode="CHECKED_IN_ONLY"
+    # Checked-in knowledge is context only. It is validated and surfaced below,
+    # but it never enters the active reward/Q-value/promotion calculation.
+    static_rows=_checked_in_observations()
+    live_rows=[]
+    source_mode="BASELINE_CONTEXT_ONLY"
     live_sequence=None
     if live_state_path is not None and Path(live_state_path).exists():
         from learning.live_observations import validate_state as validate_live_state
         live=json.loads(Path(live_state_path).read_text(encoding="utf-8"))
         validate_live_state(live)
-        rows.extend(live["observations"])
-        source_mode="CHECKED_IN_PLUS_DURABLE_VERIFIED"
+        live_rows=list(live["observations"])
+        source_mode="LIVE_WITH_BASELINE_CONTEXT"
         live_sequence=live["sequence"]
-    rebuilt=rebuild_state(rows)
+
+    rebuilt=rebuild_state(live_rows)
+    _record_live_provenance(rebuilt["records"],live_rows)
+    provenance_counts=_provenance_counts(static_rows,live_rows)
+    baseline_keys=sorted({memory_key(row) for row in static_rows})
     rebuilt["source_mode"]=source_mode
     rebuilt["live_observation_state_sequence"]=live_sequence
-    rebuilt["live_observation_count"]=len(rows)-len(_checked_in_observations())
+    rebuilt["live_observation_count"]=len(live_rows)
+    rebuilt["fresh_learning_observation_count"]=len(live_rows)
+    rebuilt["baseline_context_observation_count"]=len(static_rows)
+    rebuilt["provenance_counts"]=provenance_counts
+    rebuilt["baseline_context"]={
+      "source_ref":"learning/LEARNING_OBSERVATION_LEDGER.json",
+      "source_snapshot_hash":canonical_hash(static_rows),
+      "observation_count":len(static_rows),
+      "memory_keys":baseline_keys,
+      "fresh_learning_credit":False,
+    }
+    rebuilt["context_sources"]=[
+      {
+        "source_ref":"learning/LEARNING_OBSERVATION_LEDGER.json",
+        "provenance_class":"BASELINE_OR_SEED",
+        "fresh_learning_credit":False,
+      },
+      *[
+        {
+          "source_ref":source_ref,
+          "provenance_class":"PINNED_UPSTREAM",
+          "fresh_learning_credit":False,
+        }
+        for source_ref in PINNED_CONTEXT_SOURCES
+      ],
+    ]
     rebuilt["state_hash"]=canonical_hash({
       "source_snapshot_hash":rebuilt["source_snapshot_hash"],
       "records":rebuilt["records"],
       "learning_alerts":rebuilt["learning_alerts"],
       "source_mode":source_mode,
       "live_observation_state_sequence":live_sequence,
+      "provenance_counts":provenance_counts,
+      "baseline_context":rebuilt["baseline_context"],
     })
     return rebuilt
 
