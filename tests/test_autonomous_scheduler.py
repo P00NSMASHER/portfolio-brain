@@ -2,6 +2,7 @@ import copy,os,tempfile,unittest
 from pathlib import Path
 from unittest.mock import patch
 from scheduler.autonomous_scheduler import _candidate,build_context,generate_candidates,is_hunter_proposal_continuation,load_state,mark_work,schedule_cycle
+from learning.continuous_learning import rebuild_from_ledger
 
 def proposal_state():
     proposal={
@@ -151,6 +152,21 @@ class SchedulerTests(unittest.TestCase):
         self.assertLess(reviews["HEXP-HIGH-NEW"]["source_rank_order"],reviews["HEXP-TEST-INBOX"]["source_rank_order"])
         self.assertLess(reviews["HEXP-TEST-INBOX"]["source_rank_order"],reviews["HEXP-SAME-NEW"]["source_rank_order"])
 
+
+    def test_subsequent_work_selection_consumes_fresh_learning_count(self):
+        empty=rebuild_from_ledger()
+        zero_ctx=build_context(learning_state=empty)
+        self.assertIn(
+            "UNC-LEARNING-PRJ-000",
+            {row["uncertainty_id"] for row in zero_ctx["uncertainty"]["candidates"]},
+        )
+        learned=copy.deepcopy(empty)
+        learned["source_observation_count"]=3
+        learned_ctx=build_context(learning_state=learned)
+        self.assertNotIn(
+            "UNC-LEARNING-PRJ-000",
+            {row["uncertainty_id"] for row in learned_ctx["uncertainty"]["candidates"]},
+        )
 
     def test_current_cycle_includes_research_hunt_integration_with_bounded_parallelism(self):
         state,receipt=schedule_cycle(load_state(),build_context(),at="2026-09-25T20:40:00Z")
