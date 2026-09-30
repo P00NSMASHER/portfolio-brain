@@ -1,0 +1,205 @@
+{
+  "schema_version": "1.0.0",
+  "boundary_id": "portfolio-brain-authority-matrix-v1",
+  "default_decision": "DENY",
+  "inheritance_policy": "NO_PROJECT_INHERITS_PORTFOLIO_BRAIN_AUTHORITY",
+  "core_autonomy_dependencies": {
+    "interactive_chatgpt_required": false,
+    "gmail_required": false
+  },
+  "semantics": {
+    "observation": "READ_ONLY_EVIDENCE",
+    "heartbeat": "CONNECTIVITY_TELEMETRY_ONLY",
+    "notification": "ALERT_ONLY",
+    "pages_publication": "SANITIZED_PUBLICATION_ONLY"
+  },
+  "authority_matrix": {
+    "OBSERVATION": {
+      "decision": "ALLOWED_READ_ONLY",
+      "verification_credit": "NONE_BY_ITSELF"
+    },
+    "REPOSITORY_CANDIDATE_WRITE": {
+      "decision": "PRJ_000_ISOLATED_CANDIDATE_ONLY",
+      "direct_main": false
+    },
+    "PR_CREATION": {
+      "decision": "PRJ_000_PROTECTED_CANDIDATE_ONLY",
+      "merge_authority": false
+    },
+    "PROTECTED_BOT_REPAIR_INTEGRATION": {
+      "decision": "BOUNDED_TRUSTED_INTEGRATOR_ONLY",
+      "requires_exact_head_checks": true,
+      "bypass_protection": false
+    },
+    "PRODUCTION_DEPLOYMENT": {
+      "decision": "HUMAN_GATED",
+      "autonomous": false
+    },
+    "CUSTOMER_EMAIL_GMAIL": {
+      "decision": "SEPARATE_EXPLICIT_ACTION_ENGINE_POLICY_ONLY",
+      "core_dependency": false,
+      "authority_from_observation": false
+    },
+    "FINANCIAL_ACTION": {
+      "decision": "HUMAN_GATED",
+      "autonomous": false
+    },
+    "DESTRUCTIVE_ACTION": {
+      "decision": "HUMAN_GATED",
+      "autonomous": false
+    },
+    "CHILD_FACING_ACTION": {
+      "decision": "HUMAN_GATED",
+      "autonomous": false
+    },
+    "LIVE_TRADING": {
+      "decision": "PROHIBITED",
+      "autonomous": false
+    },
+    "PAGES_PUBLIC_PUBLICATION": {
+      "decision": "SANITIZED_PUBLICATION_ONLY",
+      "production_deploy_authority": false,
+      "verification_credit": "NONE_BY_ITSELF"
+    }
+  },
+  "project_capabilities": [
+    {
+      "project_id": "PRJ-000",
+      "repository_id": "REPO-008",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": true,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "scope_note": "PORTFOLIO_CONTROL_PLANE"
+    },
+    {
+      "project_id": "PRJ-001",
+      "repository_id": "REPO-001",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY"
+    },
+    {
+      "project_id": "PRJ-002",
+      "repository_id": "REPO-001",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY"
+    },
+    {
+      "project_id": "PRJ-003",
+      "repository_id": "REPO-005",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY"
+    },
+    {
+      "project_id": "PRJ-004",
+      "repository_id": "REPO-007",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY"
+    },
+    {
+      "project_id": "PRJ-005",
+      "repository_id": "REPO-002",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "scope_note": "CHILD_FACING_MUTATION_HUMAN_GATED"
+    },
+    {
+      "project_id": "PRJ-006",
+      "repository_id": "REPO-003",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "scope_note": "ABVM_HEALTH_PROGRESS_OBSERVATION_ONLY",
+      "observation_evidence_allowlist": [
+        "AUTOMATION_HEALTH",
+        "AUTOMATION_PROGRESS"
+      ],
+      "child_facing_mutation": false,
+      "school_content_publication": false
+    },
+    {
+      "project_id": "PRJ-007",
+      "repository_id": "REPO-004",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "scope_note": "RESEARCH_ONLY_LIVE_TRADING_PROHIBITED"
+    },
+    {
+      "project_id": "PRJ-008",
+      "repository_id": "REPO-001",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "scope_note": "EXISTING_HUNTER_INTAKE_ONLY"
+    },
+    {
+      "project_id": "PRJ-009",
+      "repository_id": "REPO-001",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY"
+    },
+    {
+      "project_id": "PRJ-010",
+      "repository_id": "REPO-001",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY"
+    },
+    {
+      "project_id": "PRJ-011",
+      "repository_id": "REPO-001",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "scope_note": "RUNTIME_FORWARDING_OBSERVE_ONLY"
+    }
+  ]
+}
