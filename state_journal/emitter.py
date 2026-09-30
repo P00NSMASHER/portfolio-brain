@@ -23,7 +23,8 @@ def domain_paths(root: Path, producer: str, domain: str) -> tuple[Path, Path, Pa
     return root / before, root / after, root / seed if seed else None
 
 
-def capture(root: Path, producer: str, run_id: str, source_sha: str, published: dict) -> dict | None:
+def capture(root: Path, producer: str, run_id: str, source_sha: str, published: dict,
+            *, run_attempt: int | None = None) -> dict | None:
     require(producer in PRODUCERS, "Unenrolled producer")
     require(isinstance(published, dict) and set(published) == PRODUCERS[producer][1], "Publication outcomes must cover the producer's exact domains")
     require(all(type(v) is bool for v in published.values()), "Upload outcomes must be explicit booleans")
@@ -47,7 +48,7 @@ def capture(root: Path, producer: str, run_id: str, source_sha: str, published: 
             proofs = {"cycle_receipt": strict_load(receipt.read_bytes())}
         # Retain no-op publications too: they are observations, not success credit.
         changes.append(make_change(domain, before, after, proofs=proofs))
-    return make_event(producer, run_id, source_sha, changes) if changes else None
+    return make_event(producer, run_id, source_sha, changes, run_attempt=run_attempt) if changes else None
 
 
 def main() -> None:
@@ -58,7 +59,12 @@ def main() -> None:
     args = parser.parse_args()
     require(os.environ.get("GITHUB_REF") == "refs/heads/main", "Production event capture requires main, never a PR checkout")
     published = strict_load(os.environ.get("JOURNAL_PUBLISHED_DOMAINS", "{}").encode())
-    event = capture(args.root, args.producer, os.environ.get("GITHUB_RUN_ID", ""), os.environ.get("GITHUB_SHA", ""), published)
+    attempt_raw = os.environ.get("GITHUB_RUN_ATTEMPT", "")
+    require(attempt_raw.isdigit() and int(attempt_raw) > 0, "GITHUB_RUN_ATTEMPT required for production event capture")
+    event = capture(
+        args.root, args.producer, os.environ.get("GITHUB_RUN_ID", ""),
+        os.environ.get("GITHUB_SHA", ""), published, run_attempt=int(attempt_raw)
+    )
     if event is not None:
         args.output_dir.mkdir(parents=True, exist_ok=True)
         target = args.output_dir / "event.json"

@@ -11,6 +11,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "P00NSMASHER/portfolio-brain"
 SCHEMA = "1.0.0"
+EVENT_SCHEMA_ATTEMPT = "1.1.0"
 MAX_BYTES = 16 * 1024 * 1024
 MAX_EVENTS = 2000
 # (production validation module, continuation input, produced output, seed)
@@ -116,10 +117,14 @@ def validate_domain(domain: str, state: dict) -> None:
     canonical(state)
 
 
-def event_identity(run_id: str, event_type: str, source_sha: str) -> str:
+def event_identity(run_id: str, event_type: str, source_sha: str, run_attempt: int | None = None) -> str:
     positive_id(run_id); sha(source_sha)
     require(event_type in {value[0] for value in PRODUCERS.values()}, "Unknown event type")
-    return "PSE-" + digest([REPOSITORY, run_id, event_type, source_sha]).split(":", 1)[1]
+    identity = [REPOSITORY, run_id, event_type, source_sha]
+    if run_attempt is not None:
+        require(type(run_attempt) is int and run_attempt > 0, "Provider run attempt required")
+        identity.append(run_attempt)
+    return "PSE-" + digest(identity).split(":", 1)[1]
 
 
 def event_hash(event: dict) -> str:
@@ -140,6 +145,8 @@ def validate_source_evidence(source: dict, event: dict) -> None:
     for key in ("artifact_id", "source_run_id", "source_run_attempt", "workflow_id", "job_id"):
         require(type(source[key]) is int and source[key] > 0, "Invalid provider evidence identity")
     require(str(source["source_run_id"]) == event["run_id"] and source["source_sha"] == event["source_sha"], "Provider evidence run/SHA mismatch")
+    if event.get("schema_version") == EVENT_SCHEMA_ATTEMPT:
+        require(source["source_run_attempt"] == event.get("run_attempt"), "Provider evidence attempt mismatch")
     require(isinstance(source["archive_digest"], str) and re.fullmatch(r"sha256:[0-9a-f]{64}", source["archive_digest"]) is not None,
             "Archive digest required")
     name = source["workflow_path"]
