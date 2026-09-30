@@ -108,6 +108,61 @@ def select_latest_snapshot(states: list[dict]) -> dict:
     raise JournalError("Conflicting canonical snapshots; never select an arbitrary winner")
 
 
+def _roll_checkpoint_forward(state: dict, checkpoint_doc: dict, manifest: dict) -> tuple[dict, int]:
+    """Compact an old-root live snapshot without dropping post-checkpoint work."""
+    validate_snapshot(state)
+    validate_checkpoint(checkpoint_doc)
+    require(state["checkpoint"]["checkpoint_hash"] == manifest["archived_checkpoint_hash"],
+            "CONFLICTING_LINEAGE: live snapshot does not descend from archived checkpoint root")
+    require(state["sequence"] >= manifest["archived_sequence"],
+            "CONFLICTING_LINEAGE: live canonical sequence regressed behind archived source")
+    if state["sequence"] == manifest["archived_sequence"]:
+        require(state["state_hash"] == manifest["archived_state_hash"],
+                "CONFLICTING_LINEAGE: archived sequence has different canonical state")
+
+    archived_hashes = manifest_event_hashes(manifest)
+    live_events = {event["event_id"]: event for event in state["events"]}
+    missing = sorted(set(archived_hashes) - set(live_events))
+    require(not missing, "INCOMPLETE_REPLAY: live snapshot dropped archived events")
+    for event_id, event_hash in archived_hashes.items():
+        require(live_events[event_id]["event_hash"] == event_hash,
+                "CONFLICTING_LINEAGE: archived immutable event changed")
+
+    archived_artifacts = manifest_provider_artifacts(manifest)
+    live_artifacts: dict[int, str] = {}
+    for event_id, refs in state["evidence"].items():
+        for ref in refs:
+            if ref.get("kind") != "GITHUB_ACTIONS":
+                continue
+            artifact_id = ref["artifact_id"]
+            archive_digest = ref["archive_digest"]
+            previous = live_artifacts.get(artifact_id)
+            require(previous is None or previous == archive_digest,
+                    "CONFLICTING_LINEAGE: provider artifact digest changed inside live snapshot")
+            live_artifacts[artifact_id] = archive_digest
+            if event_id in archived_hashes:
+                require(archived_artifacts.get(artifact_id) == archive_digest,
+                        "INCOMPLETE_REPLAY: archived event gained unarchived provider evidence")
+    for artifact_id, archive_digest in archived_artifacts.items():
+        require(live_artifacts.get(artifact_id) == archive_digest,
+                "INCOMPLETE_REPLAY: archived provider evidence disappeared")
+
+    retained_ids = sorted(set(live_events) - set(archived_hashes))
+    retained_events = [live_events[event_id] for event_id in retained_ids]
+    retained_evidence = {event_id: state["evidence"][event_id] for event_id in retained_ids}
+    rolled = make_snapshot(
+        checkpoint_doc,
+        retained_events,
+        sequence=state["sequence"] + 1,
+        evidence=retained_evidence,
+        mode=state["mode"],
+        production_authority=state["production_authority"],
+    )
+    require(rolled["projection"]["projection_hash"] == state["projection"]["projection_hash"],
+            "INCOMPLETE_REPLAY: checkpoint plus retained replay does not reconstruct exact canonical state")
+    return rolled, len(retained_events)
+
+
 def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
                          upload_steps: dict, explicit_checkpoint: dict | None = None,
                          explicit_run_ids: list[int] | tuple[int, ...] = (),
@@ -122,6 +177,7 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
     archived_events = manifest_event_hashes(archive_manifest)
     archived_artifacts = manifest_provider_artifacts(archive_manifest)
     checkpoint_rollover = False
+    checkpoint_rollover_replay_events = 0
     recovered_from_archive_checkpoint = False
     if archive_manifest is not None:
         require(explicit_checkpoint is not None, "Active archive requires compacted checkpoint")
@@ -133,18 +189,8 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
             )
             recovered_from_archive_checkpoint = True
         elif state["checkpoint"]["checkpoint_hash"] != explicit_checkpoint["checkpoint_hash"]:
-            require(state["state_hash"] == archive_manifest["archived_state_hash"],
-                    "Live canonical state advanced beyond archived rollover source")
-            require(state["sequence"] == archive_manifest["archived_sequence"],
-                    "Live canonical sequence differs from archived rollover source")
-            require(state["projection"]["projection_hash"] == archive_manifest["archived_projection_hash"],
-                    "Live canonical projection differs from archived rollover source")
-            state = make_snapshot(
-                explicit_checkpoint, [],
-                sequence=archive_manifest["checkpoint_sequence"],
-                evidence={},
-                mode=state["mode"],
-                production_authority=state["production_authority"],
+            state, checkpoint_rollover_replay_events = _roll_checkpoint_forward(
+                state, explicit_checkpoint, archive_manifest
             )
             checkpoint_rollover = True
         else:
@@ -257,6 +303,7 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
                        "superseded_stale_main_observation_count": len(stale_main_observations),
                        "superseded_stale_main_observations": stale_main_observations,
                        "checkpoint_rollover": checkpoint_rollover,
+                       "checkpoint_rollover_replay_events": checkpoint_rollover_replay_events,
                        "recovered_from_archive_checkpoint": recovered_from_archive_checkpoint,
                        "active_archive_id": None if archive_manifest is None else archive_manifest["archive_id"],
                        "projection_hash": candidate["projection"]["projection_hash"]}
