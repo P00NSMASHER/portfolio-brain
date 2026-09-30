@@ -4,6 +4,8 @@ Autonomous portfolio intelligence control plane for PRJ-000.
 
 **Status: OPERATIONAL.** Steps 0–25 are complete. Ordinary operation runs through GitHub automation and durable machine-readable state; interactive ChatGPT is not a runtime dependency.
 
+The historical Steps 0–25 build ledger is distinct from the 2026-09-30 audit-remediation sequence tracked in issue #210. Current architecture facts are derived in `operations/ARCHITECTURE_STATUS.json` from the project registry, adapter registry, runtime policy, notification policy, and `governance/boundaries.json`; hosted gates and live receipts remain separate acceptance evidence.
+
 ## Operating mode
 
 Portfolio Brain can autonomously:
@@ -19,7 +21,11 @@ Paid model execution is enabled for governed OpenAI Luna, Terra, and Sol routes.
 
 ## Permanent authority boundaries
 
-Autonomous operation allows only narrowly bounded customer email through the action-engine policy. Education-product validation is limited to verified adult stakeholders and cannot contact minors, collect child data, or make consequential child-facing changes. Payment/cash movement, live trading or brokerage execution, deployment, secret changes, and unapproved consequential child-facing changes remain human-gated or prohibited. Merge authority is not human-gated: it is allowed only through the protected pull-request path after exact-head `validate` and the independent verifier App check both succeed, with no bypass.
+`governance/boundaries.json` is deny-by-default and contains explicit per-project `READ_OBSERVE`, `CANDIDATE_PR`, `DEPLOY`, and `EXTERNAL_ACTION` capabilities. Observation never inherits Portfolio Brain write/deploy authority. The runtime project-forwarding layer is read-only; only PRJ-000 has protected candidate-PR capability there, and that is not merge authority.
+
+Autonomous operation may use only narrowly bounded external actions explicitly granted by a separate machine policy, such as the existing action-engine email policy. Gmail/ChatGPT is not a core autonomy dependency and observation cannot grant email authority. Education-product validation is limited to verified adult stakeholders and cannot contact minors, collect child data, or make consequential child-facing changes. Payment/cash movement, financial actions, destructive actions, live trading or brokerage execution, meaningful-risk production deployment, secret changes, and unapproved consequential child-facing changes remain human-gated or prohibited. Protected bot repair integration remains subject to exact-head required checks and the independent verifier with no protection bypass.
+
+Heartbeats are connectivity telemetry, notifications are alerts, and GitHub Pages is sanitized publication. None of those classes independently counts as technical, market, or revenue verification. The public command center exposes source freshness, sequence, state hash, and stale/blocked provenance instead of treating publication success as substantive work.
 
 Because this repository is currently public, persistent state remains sanitized-only. Private customer/operational payloads, credentials, secrets and sensitive evidence bodies are not stored here.
 
@@ -27,7 +33,9 @@ Because this repository is currently public, persistent state remains sanitized-
 
 - `PORTFOLIO_BUILD_STATE.json` — durable Steps 0–25 build/operating record.
 - `operations/OPERATING_MODE_POLICY.json` — approved autonomous operating mode.
-- `operations/OPERATING_MODE_STATUS.json` — post-promotion verification evidence.
+- `operations/OPERATING_MODE_STATUS.json` — historical Step 25 promotion/post-promotion verification evidence.
+- `operations/ARCHITECTURE_STATUS.json` — current config-derived architecture status; not a substitute for hosted/live acceptance evidence.
+- `governance/boundaries.json` — machine-tested portfolio/project authority matrix.
 - `hostile/ATTACK_MATRIX.json` — Step 23 adversarial threat coverage.
 - `canary/CANARY_CONTRACT.md` — Step 24 no-prompt canary contract.
 - `.github/workflows/foundation-ci.yml` — deterministic full-chain validation.
