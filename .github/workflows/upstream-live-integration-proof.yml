@@ -1,0 +1,48 @@
+name: upstream-live-integration-proof
+
+on:
+  schedule:
+    - cron: "17 11 * * *"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - operations/TRIGGER_UPSTREAM_LIVE_PROOF
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-live-integration-proof
+  cancel-in-progress: false
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prove pin identity and live read-only integration separately
+        run: >-
+          python -m operations.upstream_live_probe
+          --pin-output operations/out/upstream_pin_identity.json
+          --live-output operations/out/upstream_live_integration.json
+
+      - name: Upload immutable proof receipts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-upstream-live-proof-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            operations/out/upstream_pin_identity.json
+            operations/out/upstream_live_integration.json
+          if-no-files-found: error
+          retention-days: 30
