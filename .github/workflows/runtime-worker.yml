@@ -160,6 +160,12 @@ jobs:
           --output-dir runtime/out
           ${TARGET_REPOSITORY_ID:+--target-repository-id "$TARGET_REPOSITORY_ID"}
 
+      - name: Observe constrained ABVM automation health and progress
+        if: ${{ steps.admission.outputs.allowed == 'true' && (inputs.mode == 'sync' || (inputs.mode == 'observe' && inputs.target_repository_id == 'REPO-003')) }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python -m adapters.abvm_health --output runtime/out/abvm_health_progress_evidence.json
+
       - name: Heartbeat Data Steward
         if: ${{ steps.admission.outputs.allowed == 'true' }}
         run: >-
