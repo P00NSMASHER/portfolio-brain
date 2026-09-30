@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0.0",
+  "acceptance_id": "STEP8-ACCEPTANCE-W2-20260930",
+  "purpose": "Controlled branch-only trigger for exact-main REPAIR/TEST/VERIFICATION and governed factory live acceptance.",
+  "authority_granted": false,
+  "merge_required": false
+}
