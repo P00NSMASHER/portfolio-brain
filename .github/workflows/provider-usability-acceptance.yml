@@ -93,15 +93,20 @@ jobs:
           pattern: portfolio-runtime-state
           path: step19/runtime
 
-      - name: Locate provider-health evidence
-        id: provider
+      - name: Locate current-run provider evidence
+        id: evidence
         shell: bash
         run: |
-          path="$(find step19/runtime -type f -name provider_health.json -print -quit 2>/dev/null || true)"
-          if [[ -z "$path" ]]; then
-            path="step19/runtime/provider_health.json"
+          provider_path="$(find step19/runtime -type f -name provider_health.json -print -quit 2>/dev/null || true)"
+          analysis_path="$(find step19/runtime -type f -name daily_model_analysis.json -print -quit 2>/dev/null || true)"
+          if [[ -z "$provider_path" ]]; then
+            provider_path="step19/runtime/provider_health.json"
           fi
-          echo "path=$path" >> "$GITHUB_OUTPUT"
+          if [[ -z "$analysis_path" ]]; then
+            analysis_path="step19/runtime/daily_model_analysis.json"
+          fi
+          echo "provider_path=$provider_path" >> "$GITHUB_OUTPUT"
+          echo "analysis_path=$analysis_path" >> "$GITHUB_OUTPUT"
 
       - name: Resolve protected main after canary
         id: current_main
@@ -135,7 +140,8 @@ jobs:
         shell: bash
         run: >-
           python -m runtime.provider_usability_acceptance
-          --provider-health "${{ steps.provider.outputs.path }}"
+          --provider-health "${{ steps.evidence.outputs.provider_path }}"
+          --model-analysis "${{ steps.evidence.outputs.analysis_path }}"
           --source-run-id "${{ github.run_id }}"
           --source-head-sha "${{ github.sha }}"
           --observed-main-sha "${{ steps.current_main.outputs.sha }}"
