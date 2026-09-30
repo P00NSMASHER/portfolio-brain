@@ -47,9 +47,12 @@
       "autonomous_allowed": false
     },
     "CUSTOMER_EMAIL_GMAIL": {
-      "decision": "HUMAN_APPROVAL_REQUIRED",
-      "autonomous_allowed": false,
-      "core_runtime_dependency": false
+      "decision": "EXPLICIT_MACHINE_POLICY_GATE",
+      "autonomous_allowed": true,
+      "core_runtime_dependency": false,
+      "policy_ref": "action_engine/ACTION_POLICY.json",
+      "provider": "CHATGPT_GMAIL_CONNECTOR",
+      "merge_or_deploy_authority": false
     },
     "FINANCIAL_ACTION": {
       "decision": "HUMAN_APPROVAL_REQUIRED",
