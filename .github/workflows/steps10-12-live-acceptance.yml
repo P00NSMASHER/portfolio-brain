@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: portfolio-steps10-12-live-acceptance
@@ -65,6 +66,7 @@ jobs:
           --source-sha "$GITHUB_SHA"
           --run-id "$GITHUB_RUN_ID"
           --source-branch "$GITHUB_REF_NAME"
+          --dispatch-live
           --output value_proof/out/steps10_12_live_acceptance.json
 
       - name: Upload tamper-evident acceptance receipt
