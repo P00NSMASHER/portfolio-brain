@@ -26,7 +26,6 @@ from hunting.lifecycle import (
     validate_lifecycle,
 )
 from hunting.proposal_review_state import validate_state as validate_review_state
-from operator_console.operator_console import validate_approval_ledger
 from operations.value_loop import build_value_loop_snapshot
 from repair.autonomous_repair import find_repair_evidence
 from software_factory.software_factory import policy as factory_policy
@@ -234,6 +233,10 @@ def apply_reviews_and_acceptances(
 )->tuple[dict[str,Any],dict[str,Any]]:
     validate_state(state)
     validate_review_state(reviews)
+    # Lazy import avoids downstream_lifecycle -> operator_console -> scheduler ->
+    # downstream_lifecycle during module initialization while preserving the
+    # canonical owner-approval validator at the mutation boundary.
+    from operator_console.operator_console import validate_approval_ledger
     validate_approval_ledger(approvals)
     req(isinstance(base_sha,str) and len(base_sha)==40 and
         all(c in "0123456789abcdef" for c in base_sha),"exact base SHA required")
