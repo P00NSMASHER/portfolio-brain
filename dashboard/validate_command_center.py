@@ -115,6 +115,24 @@ def validate_command_center() -> dict[str, object]:
         require(integrity["status"]=="HEALTHY" or snapshot["system"]["functional_status"]=="DEGRADED","incomplete verified learning propagation hidden behind operational health")
     readiness=snapshot["model_router"]["provider_readiness"]
     require(readiness["status"] in {"READY","MISSING_CREDENTIAL","BILLING_NOT_ACTIVE","QUOTA_EXHAUSTED","RATE_LIMITED","BUDGET_BLOCKED","PROVIDER_ERROR","UNKNOWN"}, "provider readiness status invalid")
+    for field in ("configured","enabled","credential_ready","call_verified"):
+        require(readiness.get(field) is None or type(readiness.get(field)) is bool, f"provider usability {field} invalid")
+    require(readiness.get("enabled") is not True or readiness.get("configured") is True, "provider enabled without configuration")
+    require(readiness.get("credential_ready") is not True or readiness.get("enabled") is True, "provider credential-ready while disabled")
+    require(readiness.get("call_verified") is not True or readiness.get("credential_ready") is True, "verified call without ready credential")
+    if readiness["status"]=="READY":
+        require(
+            readiness.get("configured") is True
+            and readiness.get("enabled") is True
+            and readiness.get("credential_ready") is True
+            and readiness.get("call_verified") is True,
+            "READY provider lacks verified usability",
+        )
+        require(isinstance(readiness.get("last_successful_at"),str) and readiness["last_successful_at"], "READY provider lacks last successful call")
+    else:
+        require(readiness.get("call_verified") is not True, "non-READY provider claims current verified call")
+    if readiness["status"]=="MISSING_CREDENTIAL":
+        require(readiness.get("credential_ready") is False, "missing-credential status lacks explicit failed credential check")
     require(readiness["authority_granted"] is False and readiness["evidence_upgraded"] is False, "provider health widened authority/evidence")
 
     action = snapshot["action_engine"]
@@ -173,6 +191,7 @@ def validate_command_center() -> dict[str, object]:
     require("Bounded Action Engine" in page, "action-engine panel missing")
     require("Enabled Model Routes" in page, "model-route panel missing")
     require("Provider Readiness" in page, "provider-readiness panel missing")
+    require("Credential ready" in page and "Call verified" in page and "Last successful call" in page, "provider usability dimensions missing from UI")
     require("Verified Learning Integrity" in page, "verified learning-integrity panel missing")
     require("cross-checks Hunter, model feedback, and continuous learning" in page, "learning-integrity explanation missing")
     require("Hunter Proposal Inbox" in page, "Hunter proposal inbox panel missing")
