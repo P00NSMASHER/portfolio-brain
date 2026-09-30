@@ -115,7 +115,7 @@ class IndependentVerifierTests(unittest.TestCase):
         self.assertEqual(payload["name"],"portfolio-phase1-gate")
         self.assertEqual(payload["conclusion"],"success")
 
-    def test_hosted_verifier_auto_integrates_only_bot_repair_prs(self):
+    def test_hosted_verifier_protected_integration_is_narrowly_classified(self):
         text=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text()
         permissions=text.split("permissions:",1)[1].split("concurrency:",1)[0]
         self.assertIn("contents: write",permissions)
@@ -123,15 +123,28 @@ class IndependentVerifierTests(unittest.TestCase):
         self.assertNotIn("actions: write",permissions)
         self.assertIn('branch.startswith("factory/auto-repair-")',text)
         self.assertIn('"AUTO_REPAIR_FINGERPRINT:" in body',text)
-        self.assertIn('pr.get("user",{}).get("login")=="github-actions[bot]"',text)
+        self.assertIn('branch.startswith("checkpoint/archive-")',text)
+        self.assertIn('"CHECKPOINT_ARCHIVE_CANDIDATE:true" in body',text)
+        self.assertIn('"state_journal/ARCHIVE_MANIFEST.json"',text)
+        self.assertIn('"state_journal/CHECKPOINT.json.gz"',text)
+        self.assertIn('"state_journal/POLICY.json"',text)
+        self.assertIn('path.startswith("state_journal/archive/")',text)
+        self.assertIn('status in {"added","modified"}',text)
+        self.assertIn('actor=="github-actions[bot]"',text)
         self.assertIn("/update-branch",text)
-        self.assertIn("steps.pr.outputs.autonomous == 'true'",text)
+        self.assertIn("steps.pr.outputs.protected_integration == 'true'",text)
         self.assertIn("merge_method=merge",text)
         self.assertIn('-f sha="$CANDIDATE_SHA"',text)
 
+    def test_checkpoint_candidate_carries_protected_integration_marker(self):
+        text=(ROOT/".github/workflows/portfolio-state-checkpoint-candidate.yml").read_text()
+        self.assertIn("CHECKPOINT_ARCHIVE_CANDIDATE:true",text)
+        self.assertIn("CHECKPOINT_ARCHIVE_SEQUENCE:",text)
+        self.assertNotIn("gh pr merge",text)
+
     def test_verifier_still_uses_independent_app_gate_before_merge(self):
         text=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text()
-        self.assertLess(text.index("Publish exact-head independent gate"),text.index("Merge verified autonomous repair through branch protection"))
+        self.assertLess(text.index("Publish exact-head independent gate"),text.index("Merge verified protected candidate through branch protection"))
         self.assertIn('app-id: "5121826"',text)
         self.assertIn("secrets.PORTFOLIO_VERIFIER_PRIVATE_KEY",text)
         self.assertNotIn("git push origin main",text.lower())
