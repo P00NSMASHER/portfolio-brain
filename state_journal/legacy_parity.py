@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def verify(projected: dict, work: Path) -> dict:
     require(isinstance(projected, dict) and set(projected) == set(DOMAINS), "Projection domain coverage mismatch")
-    legacy, refs = restore_all(ROOT, work)
+    legacy, refs = restore_all(ROOT, work, expected_states=projected)
     rows = {}
     for domain in sorted(DOMAINS):
         projected_hash = digest(projected[domain])

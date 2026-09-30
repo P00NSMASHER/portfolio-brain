@@ -16,7 +16,12 @@ from runtime.artifact_restore import restore_latest_valid_state
 class RestoreError(RuntimeError):
     pass
 
-def restore(output:Path,metadata_output:Path|None=None)->str:
+def restore(
+    output:Path,
+    metadata_output:Path|None=None,
+    *,
+    expected_state_hash:str|None=None,
+)->str:
     token=os.environ.get("GITHUB_TOKEN") or os.environ.get("PORTFOLIO_GITHUB_TOKEN")
     repo=os.environ.get("GITHUB_REPOSITORY")
     run=os.environ.get("GITHUB_RUN_ID")
@@ -57,6 +62,7 @@ def restore(output:Path,metadata_output:Path|None=None)->str:
       max_state_bytes=2_000_000,
       validator=validate_state,
       metadata_output=metadata_output,
+      expected_state_hash=expected_state_hash,
     )
 
 def main()->None:

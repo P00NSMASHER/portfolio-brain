@@ -30,16 +30,30 @@ RESTORERS = {
     "history": history_artifact.restore,
 }
 
-def _restore_runtime(output: Path, metadata: Path) -> str:
+def _restore_runtime(output: Path, metadata: Path, expected_state_hash: str | None = None) -> str:
+    if expected_state_hash is None:
+        return runtime_artifact.restore(
+            output=output,
+            metadata_output=metadata,
+            provider_health_output=None,
+            provider_health_metadata_output=None,
+        )
     return runtime_artifact.restore(
         output=output,
         metadata_output=metadata,
         provider_health_output=None,
         provider_health_metadata_output=None,
+        expected_state_hash=expected_state_hash,
     )
 
 
-def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
+def restore_domain(
+    root: Path,
+    domain: str,
+    work: Path,
+    *,
+    expected_state: dict | None = None,
+) -> tuple[dict, str]:
     require(domain in DOMAINS, "Unknown checkpoint domain")
     work.mkdir(parents=True, exist_ok=True)
     output = work / f"{domain}.json"
@@ -53,10 +67,18 @@ def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
         for _attempt in range(5):
             output.unlink(missing_ok=True)
             metadata.unlink(missing_ok=True)
+            expected_state_hash = None if expected_state is None else digest(expected_state)
             if domain == "runtime":
-                status = _restore_runtime(output, metadata)
+                status = _restore_runtime(output, metadata, expected_state_hash)
             else:
-                status = RESTORERS[domain](output, metadata)
+                if expected_state_hash is None:
+                    status = RESTORERS[domain](output, metadata)
+                else:
+                    status = RESTORERS[domain](
+                        output,
+                        metadata,
+                        expected_state_hash=expected_state_hash,
+                    )
             if not output.exists() or not metadata.exists() or reader is None:
                 break
             meta = json.loads(metadata.read_text())
@@ -150,10 +172,20 @@ def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
     return state, ref
 
 
-def restore_all(root: Path, work: Path) -> tuple[dict, dict]:
+def restore_all(
+    root: Path,
+    work: Path,
+    *,
+    expected_states: dict | None = None,
+) -> tuple[dict, dict]:
     states, refs = {}, {}
     for domain in sorted(DOMAINS):
-        state, ref = restore_domain(root, domain, work / domain)
+        state, ref = restore_domain(
+            root,
+            domain,
+            work / domain,
+            expected_state=None if expected_states is None else expected_states[domain],
+        )
         states[domain] = state
         refs[domain] = ref
     return states, refs

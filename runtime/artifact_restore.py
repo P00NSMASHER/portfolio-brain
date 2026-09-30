@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import hashlib
 import os
+import re
 import tempfile
 import zipfile
 from io import BytesIO
@@ -95,9 +96,12 @@ def restore_latest_valid_state(
     validator: Callable[[dict[str, Any]], None] | None = None,
     metadata_output: Path | None = None,
     max_candidates: int = 5,
+    expected_state_hash: str | None = None,
 ) -> str:
     if type(max_candidates) is not int or max_candidates < 1:
         raise ValueError("max_candidates must be a positive integer")
+    if expected_state_hash is not None and re.fullmatch(r"sha256:[0-9a-f]{64}", expected_state_hash) is None:
+        raise ValueError("expected_state_hash must be a SHA-256 state digest")
     candidates = [
         item
         for item in data.get("artifacts", [])
@@ -162,15 +166,25 @@ def restore_latest_valid_state(
     # preserves the newest-first candidate order.
     highest_sequence = max(entry[0] for entry in valid)
     highest = [entry for entry in valid if entry[0] == highest_sequence]
+    expected_match = False
     if len({entry[3] for entry in highest}) != 1:
         # A sequence is a durable-state version, not merely an ordering hint.
         # Divergent payloads claiming the same latest version are an ambiguous
         # fork caused by a race or corruption. Upload time cannot safely decide
-        # which branch contains every committed mutation, so fail closed.
-        raise InvalidStateArtifact("conflicting state artifacts at highest sequence")
+        # which branch contains every committed mutation, so fail closed unless
+        # an independently replayed canonical state identifies an exact branch.
+        matching = [entry for entry in highest if entry[3] == expected_state_hash]
+        if not matching:
+            raise InvalidStateArtifact("conflicting state artifacts at highest sequence")
+        highest = matching
+        expected_match = True
     sequence, item, payload, state_hash = highest[0]
     selected_newest_valid = item is valid[0][1]
-    status = "RESTORED" if selected_newest_valid else "RESTORED_HIGHEST_SEQUENCE"
+    status = (
+        "RESTORED_EXPECTED_STATE_AFTER_CONFLICT"
+        if expected_match
+        else "RESTORED" if selected_newest_valid else "RESTORED_HIGHEST_SEQUENCE"
+    )
     if rejected:
         status += f"_AFTER_REJECTING_{rejected}_INVALID"
     _atomic_write(output, payload)
