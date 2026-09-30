@@ -129,10 +129,12 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
     archived_artifacts = manifest_provider_artifacts(archive_manifest)
     checkpoint_rollover = False
     recovered_from_archive_checkpoint = False
+    expected_replay_events: dict[str, str] = {}
+    expected_replay_projection_hash: str | None = None
     if archive_manifest is not None:
         require(explicit_checkpoint is not None, "Active archive requires compacted checkpoint")
         require(explicit_checkpoint["checkpoint_hash"] == archive_manifest["new_checkpoint_hash"],
-                "Active archive/checkpoint binding mismatch")
+                "CORRUPTED_CHECKPOINT: active archive/checkpoint binding mismatch")
         if "checkpoint_state_hash" in archive_manifest:
             checkpoint_root = make_snapshot(
                 explicit_checkpoint, [],
@@ -150,24 +152,59 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
                 explicit_checkpoint, [], sequence=archive_manifest["checkpoint_sequence"], evidence={}
             )
             recovered_from_archive_checkpoint = True
-        elif state["checkpoint"]["checkpoint_hash"] != explicit_checkpoint["checkpoint_hash"]:
-            require(state["state_hash"] == archive_manifest["archived_state_hash"],
-                    "Live canonical state advanced beyond archived rollover source")
-            require(state["sequence"] == archive_manifest["archived_sequence"],
-                    "Live canonical sequence differs from archived rollover source")
-            require(state["projection"]["projection_hash"] == archive_manifest["archived_projection_hash"],
-                    "Live canonical projection differs from archived rollover source")
-            state = make_snapshot(
-                explicit_checkpoint, [],
-                sequence=archive_manifest["checkpoint_sequence"],
-                evidence={},
-                mode=state["mode"],
-                production_authority=state["production_authority"],
-            )
-            checkpoint_rollover = True
         else:
-            require(state["sequence"] >= archive_manifest["checkpoint_sequence"],
-                    "Canonical snapshot predates active compacted checkpoint")
+            live_root = state["checkpoint"]["checkpoint_hash"]
+            compacted_root = explicit_checkpoint["checkpoint_hash"]
+            archived_root = archive_manifest["archived_checkpoint_hash"]
+            if live_root == compacted_root:
+                require(
+                    state["sequence"] >= archive_manifest["checkpoint_sequence"],
+                    "CHECKPOINT_SEQUENCE_REGRESSION: canonical snapshot predates active compacted checkpoint",
+                )
+            elif live_root == archived_root:
+                require(
+                    state["sequence"] >= archive_manifest["archived_sequence"],
+                    "CHECKPOINT_SEQUENCE_REGRESSION: live source predates archived rollover source",
+                )
+                live_hashes = {event["event_id"]: event["event_hash"] for event in state["events"]}
+                for event_id, event_hash in archived_events.items():
+                    require(
+                        live_hashes.get(event_id) == event_hash,
+                        "CONFLICTING_LINEAGE: live pre-rollover snapshot does not contain archived source",
+                    )
+                if state["sequence"] == archive_manifest["archived_sequence"]:
+                    require(
+                        state["state_hash"] == archive_manifest["archived_state_hash"],
+                        "CONFLICTING_LINEAGE: same-sequence rollover source state differs",
+                    )
+                    require(
+                        state["projection"]["projection_hash"] == archive_manifest["archived_projection_hash"],
+                        "CONFLICTING_LINEAGE: same-sequence rollover projection differs",
+                    )
+                else:
+                    expected_replay_events = {
+                        event_id: event_hash
+                        for event_id, event_hash in live_hashes.items()
+                        if event_id not in archived_events
+                    }
+                    require(
+                        expected_replay_events,
+                        "INCOMPLETE_REPLAY: advanced pre-rollover snapshot has no trailing immutable events",
+                    )
+                    expected_replay_projection_hash = state["projection"]["projection_hash"]
+                state = make_snapshot(
+                    explicit_checkpoint, [],
+                    sequence=archive_manifest["checkpoint_sequence"],
+                    evidence={},
+                    mode=state["mode"],
+                    production_authority=state["production_authority"],
+                )
+                checkpoint_rollover = True
+            else:
+                raise JournalError(
+                    "CONFLICTING_LINEAGE: live canonical checkpoint root matches neither "
+                    "the archived predecessor nor the active compacted checkpoint"
+                )
     elif state is None:
         require(explicit_checkpoint is not None, "CHECKPOINT_REQUIRED: no automatic empty-state reset")
         state = make_snapshot(explicit_checkpoint, [], sequence=0, evidence={})
@@ -224,6 +261,26 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
             raise Conflict("Conflicting event identity is not a later rerun of an already committed source")
         incoming.append((event, provider))
 
+    if expected_replay_events:
+        replay_by_id = {event["event_id"]: (event, provider) for event, provider in incoming}
+        for event_id, event_hash in expected_replay_events.items():
+            row = replay_by_id.get(event_id)
+            require(
+                row is not None,
+                f"INCOMPLETE_REPLAY: retained replay is missing pre-rollover event {event_id}",
+            )
+            require(
+                row[0]["event_hash"] == event_hash,
+                f"CONFLICTING_LINEAGE: replay event hash changed for {event_id}",
+            )
+        expected_rows = [replay_by_id[event_id] for event_id in sorted(expected_replay_events)]
+        reconstructed = advance(state, expected_rows)
+        require(
+            reconstructed["projection"]["projection_hash"] == expected_replay_projection_hash,
+            "INCOMPLETE_REPLAY: checkpoint plus retained replay does not reconstruct "
+            "the pre-rollover canonical projection",
+        )
+
     # A queued push run can become stale while waiting for the global writer
     # lock. If both that stale main observation and the exact-current-main
     # observation were published from the same canonical predecessor, prefer
@@ -254,6 +311,8 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
                     comparison.get("merge_base_commit", {}).get("sha") == event["source_sha"],
                     "Stale main observation source is not an ancestor of exact current main",
                 )
+                if event["event_id"] in expected_replay_events:
+                    continue
                 drop_ids.add(event["event_id"])
                 stale_main_observations.append({
                     "artifact_id": provider.get("artifact_id"),
