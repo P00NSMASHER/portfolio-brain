@@ -137,8 +137,11 @@ class ArchiveLifecycleTests(unittest.TestCase):
             "workflow_run": {"id": 123, "head_branch": "main", "head_sha": "a" * 40},
         }
         manifest = {
+            "archive_id": "fixture-archive",
             "archived_provider_artifacts": {"77": artifact["digest"]},
             "archived_event_hashes": {},
+            "new_checkpoint_hash": state["checkpoint"]["checkpoint_hash"],
+            "checkpoint_sequence": state["sequence"],
         }
         self.assertEqual(_pending_events(state, [artifact], archived_ids=archived_artifact_ids(manifest)), [])
 
@@ -158,7 +161,7 @@ class ArchiveLifecycleTests(unittest.TestCase):
                 current_run="999",
                 upload_steps={},
                 explicit_checkpoint=state["checkpoint"],
-                archive_manifest=None,
+                archive_manifest=manifest,
             )
             self.assertEqual(candidate, state)
             self.assertEqual(receipt["new_deliveries"], 0)
