@@ -73,6 +73,14 @@ RESTORERS: dict[str, Callable[..., str]] = {
 
 CORE_HEALTH_SOURCES = {"runtime","scheduler","hunter","cost","notifications"}
 OPTIONAL_OBSERVABILITY_SOURCES = {"agents","provider","model_feedback","learning","hunter_proposals","hunter_proposal_reviews"}
+EVIDENCE_SEMANTICS = {
+    "heartbeat": "LIVENESS_CONNECTIVITY_ONLY",
+    "notification": "ALERT_ONLY",
+    "pages": "PUBLICATION_ONLY",
+    "technical_verification_credit": False,
+    "market_verification_credit": False,
+    "revenue_verification_credit": False,
+}
 
 
 class LiveStateBridgeError(ValueError):
@@ -274,14 +282,7 @@ def build_live_state(
         "health_sources": sorted(CORE_HEALTH_SOURCES),
         "optional_observability_sources": sorted(OPTIONAL_OBSERVABILITY_SOURCES),
         "sources": sources,
-        "evidence_semantics": {
-            "heartbeat": "LIVENESS_CONNECTIVITY_ONLY",
-            "notification": "ALERT_ONLY",
-            "pages": "PUBLICATION_ONLY",
-            "technical_verification_credit": False,
-            "market_verification_credit": False,
-            "revenue_verification_credit": False,
-        },
+        "evidence_semantics": dict(EVIDENCE_SEMANTICS),
     }
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
