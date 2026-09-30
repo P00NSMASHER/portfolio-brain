@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import urllib.error
 import urllib.parse
@@ -269,6 +270,9 @@ def evaluate_proofs(
         "schema_version": "1.0.0",
         "proof_type": "UPSTREAM_PIN_IDENTITY",
         "observed_at": at,
+        "portfolio_head_sha": os.environ.get("GITHUB_SHA"),
+        "workflow_run_id": os.environ.get("GITHUB_RUN_ID"),
+        "workflow_run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
         "status": pin_status,
         "integrations": pin_rows,
         "authority_granted": False,
@@ -278,6 +282,9 @@ def evaluate_proofs(
         "schema_version": "1.0.0",
         "proof_type": "UPSTREAM_LIVE_READ_ONLY_INTEGRATION",
         "observed_at": at,
+        "portfolio_head_sha": os.environ.get("GITHUB_SHA"),
+        "workflow_run_id": os.environ.get("GITHUB_RUN_ID"),
+        "workflow_run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
         "status": live_status,
         "integrations": live_rows,
         "authority_granted": False,
@@ -323,6 +330,9 @@ def main() -> None:
         blocked = {
             "schema_version": "1.0.0",
             "observed_at": at,
+            "portfolio_head_sha": os.environ.get("GITHUB_SHA"),
+            "workflow_run_id": os.environ.get("GITHUB_RUN_ID"),
+            "workflow_run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
             "status": "BLOCKED",
             "reason": type(exc).__name__,
             "detail": str(exc)[:400],
