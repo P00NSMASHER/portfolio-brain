@@ -44,7 +44,7 @@ PRODUCERS = {
 }
 RUNTIME_CALLERS = {"runtime-hourly-sync", "runtime-event-observe", "runtime-daily-learning", "runtime-weekly-synthesis", "provider-usability-acceptance"}
 # Factory is reusable; external callers must be enrolled explicitly before ingestion.
-WORKFLOW_PRODUCERS = {name: name for name in PRODUCERS if name not in {"runtime-worker", "software-factory-candidate"}}
+WORKFLOW_PRODUCERS = {name: name for name in PRODUCERS if name != "software-factory-candidate"}
 WORKFLOW_PRODUCERS.update({name: "runtime-worker" for name in RUNTIME_CALLERS})
 
 
