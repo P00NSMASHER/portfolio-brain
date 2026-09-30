@@ -1,4 +1,5 @@
 name: step8-executor-acceptance
+# Acceptance wake: re-run after governed factory post-PR validation dispatch fix.
 
 on:
   push:
