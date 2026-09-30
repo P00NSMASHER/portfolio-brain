@@ -453,11 +453,12 @@ def _http_json(url: str, token: str, *, method: str = "GET", payload: dict[str, 
         return json.loads(body.decode("utf-8")) if body else {}
 
 
-def find_repair_evidence(source_ref: str, token: str | None = None) -> dict[str, Any]:
+def find_repair_evidence(source_ref: str, token: str | None = None, *, pull_state: str = "all") -> dict[str, Any]:
     req(isinstance(source_ref, str) and source_ref, "repair evidence source ref missing")
+    req(pull_state in {"all", "open"}, "repair evidence pull-state filter invalid")
     token = token or os.environ.get("GITHUB_TOKEN") or os.environ.get("PORTFOLIO_GITHUB_TOKEN")
     req(isinstance(token, str) and token, "GitHub token required for repair evidence")
-    pulls = _http_json(f"https://api.github.com/repos/{REPOSITORY}/pulls?state=all&per_page=100", token)
+    pulls = _http_json(f"https://api.github.com/repos/{REPOSITORY}/pulls?state={pull_state}&per_page=100", token)
     marker = re.compile(
         rf"^(?:Source:\s*)?REPAIR_SOURCE_REF:{re.escape(source_ref)}\s*$",
         re.MULTILINE,
@@ -631,7 +632,7 @@ def main() -> int:
     elif args.command == "find-pr":
         request = json.loads(args.request.read_text(encoding="utf-8"))
         validate_request(request)
-        _write_json(args.output, find_repair_evidence(request["source_ref"]))
+        _write_json(args.output, find_repair_evidence(request["source_ref"], pull_state="open"))
     elif args.command == "dispatch":
         requests = json.loads(args.requests.read_text(encoding="utf-8"))
         token = os.environ.get("GITHUB_TOKEN", "")
