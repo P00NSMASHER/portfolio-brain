@@ -75,13 +75,23 @@ def generate(root: Path, *, reader: GitHubReader) -> dict:
     policy = strict_load(policy_path.read_bytes())
     state, run, artifact = latest_canonical(reader)
     active = load_active_manifest(root)
-    if active is not None and active["archived_sequence"] >= state["sequence"]:
-        return {
-            "status": "NOOP",
-            "reason": "ACTIVE_ARCHIVE_IS_CURRENT",
-            "archived_sequence": active["archived_sequence"],
-            "source_sequence": state["sequence"],
-        }
+    if active is not None:
+        require(
+            state["sequence"] >= active["archived_sequence"],
+            "CHECKPOINT_SEQUENCE_REGRESSION: latest canonical sequence predates active archive",
+        )
+        if state["sequence"] == active["archived_sequence"]:
+            require(
+                state["state_hash"] == active["archived_state_hash"],
+                "CONFLICTING_LINEAGE: same-sequence canonical state differs from active archive",
+            )
+            return {
+                "status": "NOOP",
+                "reason": "ACTIVE_ARCHIVE_IS_CURRENT",
+                "archived_sequence": active["archived_sequence"],
+                "source_sequence": state["sequence"],
+                "source_state_hash": state["state_hash"],
+            }
 
     require(_recovery_runs_are_archived(policy, state),
             "Recovery run ids are not all represented in canonical evidence")
