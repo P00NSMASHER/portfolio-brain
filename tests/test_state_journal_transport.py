@@ -147,6 +147,55 @@ class StateJournalTransportTests(unittest.TestCase):
         self.assertEqual(state['sequence'],0)
         self.assertFalse(receipt['production_authority'])
 
+    def test_committed_event_quarantines_later_conflicting_rerun_without_deleting_source_artifact(self):
+        meta,run,jobs,raw,original=fixture()
+        _,source1=validate_provider_event(meta,run,jobs,raw,UPLOADS)
+        base=checkpoint({'heartbeat':seed_state()},{'heartbeat':'fixture:heartbeat'})
+        committed=make_snapshot(
+            base,[original],sequence=1,evidence={original['event_id']:[source1]}
+        )
+        before=seed_state()
+        after=tick(
+            before,agent='AGT-HUNTER',run='101',
+            at='2026-09-29T14:00:01Z',producer='runtime-worker'
+        )
+        conflicting=make_event(
+            'runtime-worker','101',SHA,
+            [make_change('heartbeat',before,after)]
+        )
+        self.assertEqual(conflicting['event_id'],original['event_id'])
+        self.assertNotEqual(conflicting['event_hash'],original['event_hash'])
+        source2=copy.deepcopy(source1)
+        source2.update({
+            'artifact_id':13,
+            'archive_digest':'sha256:'+'2'*64,
+            'source_run_attempt':2,
+            'event_hash':conflicting['event_hash'],
+            'job_id':21,
+        })
+        artifact={
+            'id':13,
+            'name':f'{EVENT_PREFIX}101-runtime-worker-{SHA}-2',
+            'expired':False,
+            'digest':source2['archive_digest'],
+            'workflow_run':{'id':101,'head_sha':SHA,'head_branch':'main'},
+        }
+        class Reader:
+            def list_recent_journal_artifacts(self,*args,**kwargs):return [artifact]
+            def list_recent_artifacts(self,*args,**kwargs):return [artifact]
+            def event(self,*args,**kwargs):return conflicting,source2
+        with patch('state_journal.github_reducer.restore_snapshot',return_value=committed):
+            candidate,receipt=reduce_from_provider(
+                Reader(),since='2026-09-29T14:00:00Z',
+                current_run='999',upload_steps=UPLOADS
+            )
+        self.assertEqual(candidate,committed)
+        self.assertEqual(receipt['new_deliveries'],0)
+        self.assertEqual(receipt['quarantined_rerun_conflict_count'],1)
+        self.assertEqual(receipt['quarantined_rerun_conflicts'][0]['artifact_id'],13)
+        self.assertEqual(receipt['quarantined_rerun_conflicts'][0]['source_run_attempt'],2)
+        self.assertEqual(receipt['quarantined_rerun_conflicts'][0]['committed_source_run_attempt'],1)
+
     def test_checked_in_checkpoint_is_source_bound_and_complete(self):
         doc=strict_load(gzip.decompress((ROOT/'state_journal/CHECKPOINT.json.gz').read_bytes()))
         validate_checkpoint(doc)
