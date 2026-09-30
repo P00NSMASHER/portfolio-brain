@@ -210,6 +210,17 @@ class SchedulerRepairFactoryBridgeTests(unittest.TestCase):
         self.assertLess(correction, revalidate)
         self.assertLess(revalidate, corrected_tests)
         self.assertLess(corrected_tests, submit)
+    def test_factory_review_foundation_dispatch_is_repo_bound(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/portfolio-autonomous-repair.yml").read_text()
+        factory_review = workflow[workflow.index("  factory-review:"):]
+        command = 'gh workflow run foundation-ci.yml --repo "$GITHUB_REPOSITORY" --ref "$REPAIR_BRANCH"'
+        self.assertIn(command, factory_review)
+        self.assertNotIn(
+            'run: gh workflow run foundation-ci.yml --ref "$REPAIR_BRANCH"',
+            factory_review,
+        )
+
     def test_workflow_separates_builder_from_network_disabled_factory_review(self):
         root = Path(__file__).resolve().parents[1]
         workflow = (root / ".github/workflows/portfolio-autonomous-repair.yml").read_text()
