@@ -2,3 +2,4 @@ Trigger protected canonical reducer recovery proof after sequential rerun-attemp
 recovery-wake: 2026-09-30T09:02Z stale-main-observation-fork
 recovery-wake: 2026-09-30T09:25Z runtime-observe-fork-recovery
 recovery-wake: 2026-09-30T09:36Z terminal-legacy-parity
+recovery-wake: 2026-09-30T09:52Z in-flight-producer-overlap
