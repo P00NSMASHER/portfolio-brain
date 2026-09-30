@@ -21,6 +21,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 POLICY_PATH = ROOT / "repair" / "AUTONOMOUS_REPAIR_POLICY.json"
 REPOSITORY = "P00NSMASHER/portfolio-brain"
+SCHEDULER_REPOSITORY_ID = "REPO-008"
 TRUSTED_EVENTS = {"push", "schedule", "workflow_dispatch", "repository_dispatch", "workflow_run"}
 FAILURE_CONCLUSIONS = {"failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale"}
 SECRET_RE = re.compile(
@@ -156,6 +157,7 @@ def request_from_scheduler_work(work: dict[str, Any], repair_state: dict[str, An
     tasks = [row for row in repair_state.get("tasks", []) if row.get("repair_task_id") == work.get("source_ref")]
     req(len(tasks) == 1, "repair task is missing or ambiguous")
     task = tasks[0]
+    req(task.get("target_repository_id") == SCHEDULER_REPOSITORY_ID, "scheduler repair target repository is not portfolio-brain")
     req(task.get("state") == "READY_FOR_REPAIR", "repair task is no longer READY_FOR_REPAIR")
     requirement = task.get("regression_test_requirement")
     req(isinstance(requirement, str) and requirement, "repair task regression requirement missing")
@@ -428,12 +430,17 @@ def dispatch_requests(requests: list[dict[str, Any]], *, token: str, repository:
             f"https://api.github.com/repos/{repository}/actions/workflows/{encoded_workflow}/dispatches",
             token,
             method="POST",
-            payload={"ref": "main", "inputs": {"request_b64": request_b64}},
+            payload={"ref": "main", "inputs": {
+                "request_b64": request_b64,
+                "request_id": request["request_id"],
+                "request_fingerprint": request["fingerprint"],
+            }},
         )
         receipts.append({
             "request_id": request["request_id"],
             "fingerprint": request["fingerprint"],
             "workflow_file": workflow_file,
+            "dispatch_status": "ACCEPTED",
             "authority_granted": False,
         })
     return receipts
