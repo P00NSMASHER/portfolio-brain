@@ -1,9 +1,10 @@
 import json
 import unittest
 
+from repair.repair_engine import failure_to_task
 from runtime.state import bootstrap_state
-from scheduler.autonomous_scheduler import _candidate, _work_packet, build_context, generate_candidates, load_state, schedule_cycle
-from scheduler.work_executor import execute_cycle
+from scheduler.autonomous_scheduler import _candidate, _work_packet, build_context, generate_candidates, load_state, policy as scheduler_policy
+from scheduler.work_executor import DEFAULT_HANDLERS, execute_cycle
 
 
 AT = "2026-09-26T20:40:00Z"
@@ -111,14 +112,19 @@ class SchedulerWorkExecutorTests(unittest.TestCase):
         roles={
             "RESEARCH":("AGT-RESEARCHER","RESEARCH_EVIDENCE","OBSERVE"),
             "INTEGRATION":("AGT-PRODUCT-ANALYST","PRODUCT_ANALYSIS","OBSERVE"),
+            "REPAIR":("AGT-ENGINEER","ISOLATED_IMPLEMENTATION","MODIFY"),
+            "TEST":("AGT-TESTER","REGRESSION_VALIDATION","EXPERIMENT"),
+            "VERIFICATION":("AGT-AUDITOR","INDEPENDENT_AUDIT","EXPERIMENT"),
         }
         agent,goal,authority=roles[work_type]
+        internal=work_type in {"REPAIR","TEST","VERIFICATION"}
+        source_ref="RTASK-EXECUTOR" if internal else f"TEST-{work_type}"
         candidate=_candidate(
-            work_type,f"TEST-{work_type}",["PRJ-000"],agent,goal,authority,"LOW",
+            work_type,source_ref,["PRJ-000"],agent,goal,authority,"LOW",
             reason="Executor fixture with explicit external demand milestone.",
-            evidence_refs=["test:executor","external-milestone:VALIDATE_DEMAND"],
-            external_milestone="VALIDATE_DEMAND",
-            value_lane="CUSTOMER_DEMAND_VALIDATION",
+            evidence_refs=["test:executor","external-milestone:PUBLISH_PRODUCT" if internal else "external-milestone:VALIDATE_DEMAND"],
+            external_milestone="PUBLISH_PRODUCT" if internal else "VALIDATE_DEMAND",
+            value_lane="INTERNAL_BLOCKER" if internal else "CUSTOMER_DEMAND_VALIDATION",
             signal_basis="TEST_FIXTURE_EXPLICIT_EXTERNAL_MILESTONE",
         )
         state=load_state()
@@ -187,6 +193,72 @@ class SchedulerWorkExecutorTests(unittest.TestCase):
         self.assertNotIn(work["fingerprint"], updated["completed_fingerprints"])
         self.assertEqual(receipts[0]["status"], "DEFERRED")
         self.assertEqual(executed, [])
+
+    def test_default_handlers_cover_every_declared_scheduler_work_type(self):
+        self.assertEqual(set(DEFAULT_HANDLERS), set(scheduler_policy()["work_types"]))
+
+    def test_repair_handler_emits_real_autonomous_dispatch_request(self):
+        failure={
+          "schema_version":"1.0.0","failure_id":"RFAIL-EXECUTOR-0001","source_type":"FAILURE_PACKET",
+          "project_ids":["PRJ-000"],"target_repository_id":"REPO-008",
+          "target_paths":["learning/continuous_learning.py"],"failure_class":"REGRESSION",
+          "observation":"verified regression","reproduction_steps":["run fixture"],
+          "evidence_refs":["evidence:executor"],"regression_test_requirement":"preserve expected decision",
+          "evidence_state":"VERIFIED","sensitive_material_involved":False,
+          "benchmark_contaminated":False,"reported_at":"2026-09-26T20:00:00Z"
+        }
+        task=failure_to_task(failure)
+        candidate=_candidate(
+            "REPAIR",task["repair_task_id"],["PRJ-000"],"AGT-ENGINEER","ISOLATED_IMPLEMENTATION","MODIFY","HIGH",
+            reason="verified repair fixture",evidence_refs=[*task["evidence_refs"],"external-milestone:PUBLISH_PRODUCT"],
+            external_milestone="PUBLISH_PRODUCT",value_lane="INTERNAL_BLOCKER",
+            signal_basis="TEST_FIXTURE_EXPLICIT_EXTERNAL_MILESTONE",
+        )
+        state=load_state();state["work_items"]=[_work_packet(candidate,AT)]
+        updated,receipts,executed,meta=execute_cycle(
+            state,runtime_state=bootstrap_state(now=AT),max_items=1,at=AT,
+            context_overrides={"repair_state":{"tasks":[task]},"main_sha":"a"*40},
+        )
+        self.assertEqual(updated["work_items"][0]["state"],"COMPLETE")
+        self.assertEqual(receipts[0]["result_kind"],"AUTONOMOUS_REPAIR_DISPATCH_READY")
+        self.assertEqual(len(meta["context"]["repair_dispatch_requests"]),1)
+        request=meta["context"]["repair_dispatch_requests"][0]
+        self.assertEqual(request["source_ref"],task["repair_task_id"])
+        self.assertEqual(request["target_paths"],["learning/continuous_learning.py"])
+        self.assertEqual(len(executed),1)
+
+    def test_test_and_verification_handlers_bind_to_exact_pr_check_evidence(self):
+        state,work=self._single("TEST")
+        provider=lambda _source:{
+          "status":"REPAIR_PR_FOUND","pr_number":9,"head_sha":"c"*40,
+          "foundation_success":True,"independent_success":False,"checks":[]
+        }
+        updated,receipts,_,_=execute_cycle(
+            state,runtime_state=bootstrap_state(now=AT),max_items=1,at=AT,
+            context_overrides={"repair_evidence_provider":provider},
+        )
+        self.assertEqual(updated["work_items"][0]["state"],"COMPLETE")
+        self.assertEqual(receipts[0]["result_kind"],"REPAIR_FOUNDATION_TEST_VERIFIED")
+
+        state,work=self._single("VERIFICATION")
+        updated,receipts,_,_=execute_cycle(
+            state,runtime_state=bootstrap_state(now=AT),max_items=1,at=AT,
+            context_overrides={"repair_evidence_provider":provider},
+        )
+        self.assertEqual(updated["work_items"][0]["state"],"QUEUED")
+        self.assertEqual(receipts[0]["result_kind"],"REPAIR_INDEPENDENT_VERIFICATION_PENDING")
+
+        provider2=lambda _source:{
+          "status":"REPAIR_PR_FOUND","pr_number":9,"head_sha":"c"*40,
+          "foundation_success":True,"independent_success":True,"checks":[]
+        }
+        state,work=self._single("VERIFICATION")
+        updated,receipts,_,_=execute_cycle(
+            state,runtime_state=bootstrap_state(now=AT),max_items=1,at=AT,
+            context_overrides={"repair_evidence_provider":provider2},
+        )
+        self.assertEqual(updated["work_items"][0]["state"],"COMPLETE")
+        self.assertEqual(receipts[0]["result_kind"],"REPAIR_INDEPENDENTLY_VERIFIED")
 
     def test_unsupported_work_is_visible_and_not_completed(self):
         state, work = self._single("RESEARCH")

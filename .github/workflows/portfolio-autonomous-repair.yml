@@ -1,0 +1,202 @@
+name: portfolio-autonomous-repair
+
+on:
+  workflow_run:
+    workflows:
+      - "portfolio-state-reducer"
+      - "portfolio-cost-watchdog"
+      - "portfolio-autonomous-scheduler"
+      - "runtime-hourly-sync"
+      - "runtime-daily-learning"
+      - "runtime-weekly-synthesis"
+      - "hunter-autonomous-cycle"
+      - "command-center-pages"
+      - "agent-heartbeat-sweep"
+      - "portfolio-notification-cycle"
+    types: [completed]
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      request_b64:
+        description: "Sanitized scheduler repair request"
+        required: false
+        type: string
+      failed_run_id:
+        description: "Optional failed main workflow run id"
+        required: false
+        type: string
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  copilot-requests: write
+
+concurrency:
+  group: portfolio-autonomous-repair-${{ github.event.workflow_run.id || inputs.failed_run_id || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        github.event.workflow_run.conclusion == 'failure' ||
+        github.event.workflow_run.conclusion == 'cancelled' ||
+        github.event.workflow_run.conclusion == 'timed_out' ||
+        github.event.workflow_run.conclusion == 'action_required' ||
+        github.event.workflow_run.conclusion == 'startup_failure' ||
+        github.event.workflow_run.conclusion == 'stale'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+      COPILOT_AUTO_UPDATE: "false"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Prepare bounded repair request
+        id: prepare
+        env:
+          REQUEST_B64: ${{ inputs.request_b64 }}
+          MANUAL_RUN_ID: ${{ inputs.failed_run_id }}
+          EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          mkdir -p repair/out
+          BASE_SHA="$(git rev-parse HEAD)"
+          if [ -n "${REQUEST_B64:-}" ]; then
+            python - <<'PY'
+          import base64, json, os
+          from pathlib import Path
+          from repair.autonomous_repair import validate_request
+          raw=base64.b64decode(os.environ["REQUEST_B64"],validate=True)
+          req=json.loads(raw.decode("utf-8"))
+          validate_request(req)
+          Path("repair/out/request.json").write_text(json.dumps(req,indent=2,sort_keys=True)+"\n")
+          PY
+          else
+            RUN_ID="${MANUAL_RUN_ID:-${EVENT_RUN_ID:-}}"
+            test -n "$RUN_ID"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" > repair/out/source_run.json
+            gh run view "$RUN_ID" --log-failed > repair/out/failed.log || true
+            python -m repair.autonomous_repair from-run               --run-json repair/out/source_run.json               --failed-log repair/out/failed.log               --base-sha "$BASE_SHA"               --output repair/out/request.json
+          fi
+          python -m repair.autonomous_repair prompt             --request repair/out/request.json             --output repair/out/prompt.txt
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          from repair.autonomous_repair import branch_name
+          req=json.load(open("repair/out/request.json"))
+          print("fingerprint="+req["fingerprint"])
+          print("source_ref="+req["source_ref"])
+          print("branch="+branch_name(req)+"-"+os.environ["GITHUB_RUN_ID"])
+          label=req.get("source_workflow") or "verified repair task"
+          print("title=Auto-repair "+label.replace("\n"," ")[:120])
+          PY
+
+      - name: Suppress duplicate open repair PR
+        id: dedupe
+        run: |
+          set -euo pipefail
+          python -m repair.autonomous_repair find-pr             --request repair/out/request.json             --output repair/out/existing_pr.json
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          doc=json.load(open("repair/out/existing_pr.json"))
+          print("duplicate="+("true" if doc["status"]=="REPAIR_PR_FOUND" else "false"))
+          if doc.get("pr_number"):
+              print("pr_number="+str(doc["pr_number"]))
+          PY
+
+      - name: Create isolated repair branch
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' }}
+        env:
+          REPAIR_BRANCH: ${{ steps.prepare.outputs.branch }}
+        run: |
+          set -euo pipefail
+          git checkout -b "$REPAIR_BRANCH"
+
+      - name: Install GitHub Copilot CLI
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' }}
+        run: npm install -g @github/copilot
+
+      - name: Generate smallest repair in local worktree
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' }}
+        run: >-
+          copilot
+          -p "$(cat repair/out/prompt.txt)"
+          -s
+          --available-tools='view,grep,glob,edit,create,apply_patch'
+          --allow-tool=write
+          --no-ask-user
+
+      - name: Reject unsafe or non-regression repair
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' }}
+        run: >-
+          python -m repair.autonomous_repair validate-diff
+          --request repair/out/request.json
+          --repo-root .
+          --output repair/out/diff_validation.json
+
+      - name: Run deterministic pre-push verification
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' }}
+        run: |
+          set -euo pipefail
+          python -m compileall -q registry events adapters truth memory graph runtime hunting learning uncertainty experiments model_router agents allocator policy_replay attribution challenger software_factory repair transfer scheduler cost_governor workload_control commercial_evidence dashboard notifications hostile canary operations action_engine operator_console value_proof verification state_journal tests
+          python -m operations.validate_operating_mode
+          python -m unittest discover -s tests -p "test_*.py" -v
+
+      - name: Create isolated candidate commit
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' }}
+        env:
+          REPAIR_BRANCH: ${{ steps.prepare.outputs.branch }}
+        run: |
+          set -euo pipefail
+          git config user.name "portfolio-brain-autonomous-repair"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && { echo "No candidate changes after validation"; exit 1; }
+          git commit -m "Autonomous repair ${{ steps.prepare.outputs.source_ref }}"
+          git push origin "HEAD:refs/heads/$REPAIR_BRANCH"
+
+      - name: Open protected repair pull request
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' }}
+        id: pr
+        env:
+          REPAIR_BRANCH: ${{ steps.prepare.outputs.branch }}
+          PR_TITLE: ${{ steps.prepare.outputs.title }}
+        run: |
+          set -euo pipefail
+          python -m repair.autonomous_repair pr-body             --request repair/out/request.json             --validation repair/out/diff_validation.json             --output repair/out/pr_body.md
+          PR_URL="$(gh pr create --base main --head "$REPAIR_BRANCH" --title "$PR_TITLE" --body-file repair/out/pr_body.md)"
+          echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
+          echo "Created repair candidate: $PR_URL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dispatch exact-head foundation validation
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' }}
+        env:
+          REPAIR_BRANCH: ${{ steps.prepare.outputs.branch }}
+        run: gh workflow run foundation-ci.yml --ref "$REPAIR_BRANCH"
+
+      - name: Preserve sanitized repair evidence
+        if: ${{ always() && steps.dedupe.outputs.duplicate != 'true' && hashFiles('repair/out/diff_validation.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-autonomous-repair-${{ github.run_id }}
+          path: |
+            repair/out/diff_validation.json
+            repair/out/pr_body.md
+          if-no-files-found: error
+          retention-days: 30
