@@ -94,6 +94,85 @@ def _later_equivalent_single_heartbeat(winner: dict, other: dict) -> bool:
     return True
 
 
+def _later_equivalent_heartbeat_batch(winner: dict, other: dict) -> bool:
+    if winner["sequence"] != other["sequence"]:
+        return False
+    winner_events = winner["recent_events"]
+    other_events = other["recent_events"]
+    if len(winner_events) != len(other_events):
+        return False
+
+    common_prefix = 0
+    while (
+        common_prefix < len(winner_events)
+        and winner_events[common_prefix] == other_events[common_prefix]
+    ):
+        common_prefix += 1
+    winner_batch = winner_events[common_prefix:]
+    other_batch = other_events[common_prefix:]
+    if not winner_batch or len(winner_batch) != len(other_batch):
+        return False
+
+    def batch_identity(events: list[dict]) -> tuple[str, str, str] | None:
+        at_values = {event["at"] for event in events}
+        workflows = {event["source_workflow"] for event in events}
+        run_ids = {event["source_run_id"] for event in events}
+        if len(at_values) != 1 or len(workflows) != 1 or len(run_ids) != 1:
+            return None
+        return next(iter(at_values)), next(iter(workflows)), next(iter(run_ids))
+
+    winner_identity = batch_identity(winner_batch)
+    other_identity = batch_identity(other_batch)
+    if winner_identity is None or other_identity is None:
+        return False
+    if winner_identity[1] != other_identity[1]:
+        return False
+    if _utc(winner_identity[0]) <= _utc(other_identity[0]):
+        return False
+
+    winner_by_agent = {event["agent_id"]: event for event in winner_batch}
+    other_by_agent = {event["agent_id"]: event for event in other_batch}
+    if (
+        len(winner_by_agent) != len(winner_batch)
+        or len(other_by_agent) != len(other_batch)
+        or set(winner_by_agent) != set(other_by_agent)
+    ):
+        return False
+    for agent_id, winner_event in winner_by_agent.items():
+        other_event = other_by_agent[agent_id]
+        for key in ("activity_kind", "source_workflow", "work_ids"):
+            if winner_event.get(key) != other_event.get(key):
+                return False
+
+    changed_agents = {
+        agent_id
+        for agent_id in winner["agents"]
+        if winner["agents"][agent_id] != other["agents"][agent_id]
+    }
+    if changed_agents != set(winner_by_agent):
+        return False
+    for agent_id, winner_event in winner_by_agent.items():
+        other_event = other_by_agent[agent_id]
+        winner_row = winner["agents"][agent_id]
+        other_row = other["agents"][agent_id]
+        for key in ("role_key", "status", "recent_work_ids", "last_activity_kind", "source_workflow"):
+            if winner_row.get(key) != other_row.get(key):
+                return False
+        if winner_row.get("last_heartbeat_at") != winner_event["at"]:
+            return False
+        if other_row.get("last_heartbeat_at") != other_event["at"]:
+            return False
+        if winner_row.get("source_run_id") != winner_event["source_run_id"]:
+            return False
+        if other_row.get("source_run_id") != other_event["source_run_id"]:
+            return False
+
+    return (
+        winner["updated_at"] == winner_identity[0]
+        and other["updated_at"] == other_identity[0]
+    )
+
+
 def _full_health_sweep(state: dict) -> tuple[list[dict], list[dict]] | None:
     agent_ids = set(state["agents"])
     count = len(agent_ids)
@@ -166,7 +245,8 @@ def _later_equivalent_health_sweep(winner: dict, other: dict) -> bool:
 
 def _later_equivalent_heartbeat(winner: dict, other: dict) -> bool:
     return (
-        _later_equivalent_single_heartbeat(winner, other)
+        _later_equivalent_heartbeat_batch(winner, other)
+        or _later_equivalent_single_heartbeat(winner, other)
         or _later_equivalent_health_sweep(winner, other)
     )
 
