@@ -209,7 +209,8 @@ class GitHubReader:
                 "Run artifact listing incomplete; per-run artifact bound exceeded")
         return rows
 
-    def list_recent_journal_artifacts(self, since: str, *, max_pages: int = 20) -> list[dict]:
+    def list_recent_journal_artifacts(self, since: str, *, max_pages: int = 20,
+                                      explicit_run_ids: list[int] | tuple[int, ...] = ()) -> list[dict]:
         """Discover only reducer snapshots and enrolled producer events.
 
         Repository-wide artifact pagination eventually becomes unbounded because
@@ -258,15 +259,13 @@ class GitHubReader:
                 if len(snapshot_runs) == 2:
                     break
 
-        # Producer discovery stays anchored to the reviewed journal/checkpoint
-        # boundary. A producer may start before either recent reducer snapshot
-        # and publish its immutable event only after those snapshots complete
-        # (for example while queued on a writer lock). Advancing this boundary
-        # from reducer start/upload time can therefore silently lose a valid
-        # event. The per-workflow scan remains bounded by max_pages and fails
-        # closed; the explicit checkpoint/archive lifecycle is responsible for
-        # advancing this boundary safely.
         event_since = since
+        if len(snapshot_runs) == 2:
+            # Recent producer discovery may advance to the predecessor reducer
+            # start only because every reducer triggered by workflow_run also
+            # supplies that exact producer run explicitly below. This prevents
+            # in-flight/queued producers from falling through the overlap gap.
+            event_since = min(snapshot_runs[0][0]["created_at"], snapshot_runs[1][0]["created_at"])
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
         for workflow in sorted(WORKFLOW_PRODUCERS):
@@ -280,6 +279,18 @@ class GitHubReader:
                 for row in self._run_artifacts(run["id"]):
                     if row.get("name", "").startswith(EVENT_PREFIX):
                         retain(row)
+
+        for run_id in explicit_run_ids:
+            require(type(run_id) is int and run_id > 0, "Explicit recovery run ID invalid")
+            run = self.get(f"/actions/runs/{run_id}")
+            require(run.get("id") == run_id, "Explicit recovery run identity mismatch")
+            require(run.get("head_branch") == "main", "Explicit recovery run is not on main")
+            require(run.get("status") == "completed" and run.get("conclusion") in terminal,
+                    "Explicit recovery run is not terminal")
+            source_producer(run)
+            for row in self._run_artifacts(run_id):
+                if row.get("name", "").startswith(EVENT_PREFIX):
+                    retain(row)
 
         return sorted(
             result.values(),
