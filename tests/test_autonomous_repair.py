@@ -229,6 +229,7 @@ class AutonomousRepairTests(unittest.TestCase):
         self.assertIn("python -m repair.autonomous_repair validate-diff", text)
         self.assertIn('python -m unittest discover -s tests -p "test_*.py" -v', text)
         self.assertIn("gh workflow run foundation-ci.yml", text)
+        self.assertEqual(text.count('gh workflow run foundation-ci.yml --repo "$GITHUB_REPOSITORY" --ref "$REPAIR_BRANCH"'), 2)
         self.assertIn("software_factory.scheduler_repair_bridge start", text)
         self.assertIn("software_factory.scheduler_repair_bridge submit", text)
         self.assertIn("software_factory.scheduler_repair_bridge verify", text)

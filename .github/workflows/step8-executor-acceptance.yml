@@ -1,5 +1,6 @@
 name: step8-executor-acceptance
 # Step 9 autonomous PR-open acceptance retrigger; no authority change.
+# Post-fix Step 9 acceptance wake: verify factory PR open plus repository-scoped Foundation dispatch.
 
 on:
   push:
