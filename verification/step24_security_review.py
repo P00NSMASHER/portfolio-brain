@@ -224,10 +224,64 @@ def static_review(root: Path = ROOT) -> dict[str, Any]:
             "Machine-readable adapter/action boundaries are absent on this revision.",
             "governance/boundaries.json",
         ))
+    else:
+        boundary_doc = load_json(boundaries)
+        matrix = boundary_doc.get("authority_matrix", {})
+        caps = boundary_doc.get("project_capabilities", [])
+        required_human = ["PRODUCTION_DEPLOYMENT", "FINANCIAL_ACTION", "DESTRUCTIVE_ACTION", "CHILD_FACING_ACTION"]
+        human_gates_ok = all(
+            isinstance(matrix.get(name), dict)
+            and matrix[name].get("decision") == "HUMAN_GATED"
+            and matrix[name].get("autonomous") is False
+            for name in required_human
+        )
+        email_rule = matrix.get("CUSTOMER_EMAIL_GMAIL", {})
+        email_gate_ok = (
+            isinstance(email_rule, dict)
+            and email_rule.get("decision") in {"HUMAN_GATED", "PROHIBITED"}
+            and email_rule.get("authority_from_observation") is False
+        )
+        live_trading_ok = (
+            isinstance(matrix.get("LIVE_TRADING"), dict)
+            and matrix["LIVE_TRADING"].get("decision") == "PROHIBITED"
+            and matrix["LIVE_TRADING"].get("autonomous") is False
+        )
+        inheritance_ok = (
+            boundary_doc.get("default_decision") == "DENY"
+            and boundary_doc.get("inheritance_policy") == "NO_PROJECT_INHERITS_PORTFOLIO_BRAIN_AUTHORITY"
+            and boundary_doc.get("core_autonomy_dependencies", {}).get("interactive_chatgpt_required") is False
+            and boundary_doc.get("core_autonomy_dependencies", {}).get("gmail_required") is False
+        )
+        project_caps_ok = bool(caps) and all(
+            isinstance(row, dict)
+            and isinstance(row.get("capabilities"), dict)
+            and row["capabilities"].get("DEPLOY") is False
+            and row["capabilities"].get("EXTERNAL_ACTION") is False
+            and (row.get("project_id") == "PRJ-000" or row["capabilities"].get("CANDIDATE_PR") is False)
+            for row in caps
+        )
+        governance_ok = human_gates_ok and email_gate_ok and live_trading_ok and inheritance_ok and project_caps_ok
+        observed["governance_authority_matrix_fail_closed"] = governance_ok
+        observed["governance_email_human_gated"] = email_gate_ok
+        observed["governance_no_inherited_authority"] = inheritance_ok
+        observed["governance_project_caps_bounded"] = project_caps_ok
+        if not governance_ok:
+            findings.append(finding(
+                "ADAPTER_WRITE_AUTHORITY", "HIGH", "GOVERNANCE_AUTHORITY_MATRIX_NOT_FAIL_CLOSED",
+                "Authority matrix must deny inheritance, human-gate communications/deploy/financial/destructive/child-facing actions, prohibit live trading, and prevent downstream project deploy/external-action authority.",
+                "governance/boundaries.json",
+            ))
 
     gateways = operating.get("external_connector_gateways", {})
     allowed_actions = action.get("allowed_actions", {})
-    gmail_act = isinstance(gateways, dict) and "gmail" in gateways and "CUSTOMER_EMAIL" in allowed_actions
+    customer_email = allowed_actions.get("CUSTOMER_EMAIL") if isinstance(allowed_actions, dict) else None
+    explicit_human_gate = isinstance(customer_email, dict) and customer_email.get("requires_human_approval") is True
+    gmail_act = (
+        isinstance(gateways, dict)
+        and "gmail" in gateways
+        and isinstance(customer_email, dict)
+        and not explicit_human_gate
+    )
     observed["chatgpt_gmail_customer_email_authority_present"] = gmail_act
     if gmail_act:
         findings.append(finding(
