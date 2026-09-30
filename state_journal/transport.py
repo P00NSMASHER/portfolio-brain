@@ -18,7 +18,7 @@ from urllib.parse import quote
 from runtime.artifact_state import BudgetedHTTP
 from state_journal.contracts import (MAX_BYTES, PRODUCERS, REPOSITORY, WORKFLOW_PRODUCERS,
                                     JournalError, canonical, require, strict_load)
-from state_journal.events import validate_event
+from state_journal.events import upgrade_legacy_event_attempt, validate_event
 
 REPO_ID = 1387747549
 EVENT_PREFIX = "portfolio-state-event-v2-"
@@ -66,6 +66,14 @@ def validate_provider_event(meta: dict, run: dict, jobs: dict, raw: bytes, uploa
     require(type(attempt) is int and attempt > 0, "Source attempt missing")
     expected_name = f"{EVENT_PREFIX}{event['run_id']}-{event['producer']}-{event['source_sha']}-{attempt}"
     require(meta.get("name") == expected_name, "Artifact event identity or attempt mismatch")
+    if "run_attempt" in event:
+        require(event["run_attempt"] == attempt, "Event payload/provider attempt mismatch")
+    elif attempt > 1:
+        # Historical v1 emitters did not encode GitHub run_attempt in event_id.
+        # Preserve the immutable archive/digest, but normalize the admitted
+        # journal event so a legitimate rerun can follow attempt 1 instead of
+        # colliding with it.
+        event = upgrade_legacy_event_attempt(event, attempt)
     require(run.get("id") == int(event["run_id"]) and run.get("head_sha") == event["source_sha"], "Source run/SHA mismatch")
     require(run.get("head_branch") == "main" and run.get("event") in {"push", "schedule", "workflow_dispatch", "repository_dispatch", "workflow_run"},
             "PR or non-main source denied")
