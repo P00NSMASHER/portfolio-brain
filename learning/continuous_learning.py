@@ -200,27 +200,119 @@ def _checked_in_observations()->list[dict[str,Any]]:
     req(isinstance(ledger["observations"],list),"learning ledger observations must be list")
     return list(ledger["observations"])
 
+PROVENANCE_CLASSES={"LIVE_OBSERVATION","VERIFIED_OUTCOME","PINNED_UPSTREAM","BASELINE_OR_SEED"}
+
+def _live_provenance_class(observation:dict[str,Any])->str:
+    validate_observation(observation)
+    if any(
+        isinstance(ref,str) and ref.startswith("value-outcome:sha256:")
+        for ref in observation["provenance_refs"]
+    ):
+        return "VERIFIED_OUTCOME"
+    return "LIVE_OBSERVATION"
+
+def _source_descriptor(
+    source_ref:str,
+    provenance_class:str,
+    *,
+    observation_count:int=0,
+    context_record_count:int=0,
+    learning_credit_eligible:bool,
+    fresh:bool,
+)->dict[str,Any]:
+    req(provenance_class in PROVENANCE_CLASSES,"unknown learning provenance class")
+    req(type(observation_count) is int and observation_count>=0,"invalid provenance observation count")
+    req(type(context_record_count) is int and context_record_count>=0,"invalid provenance context count")
+    if provenance_class in {"PINNED_UPSTREAM","BASELINE_OR_SEED"}:
+        req(learning_credit_eligible is False and fresh is False,
+            "static or pinned source cannot receive fresh-learning credit")
+    return {
+      "source_ref":source_ref,
+      "provenance_class":provenance_class,
+      "observation_count":observation_count,
+      "context_record_count":context_record_count,
+      "learning_credit_eligible":learning_credit_eligible,
+      "fresh":fresh,
+    }
+
 def rebuild_from_sources(live_state_path:Path|None=None)->dict[str,Any]:
-    rows=_checked_in_observations()
-    source_mode="CHECKED_IN_ONLY"
+    # Checked-in rows remain useful audit/baseline context, but are intentionally
+    # excluded from the reward-bearing learner. This prevents a stale seed commit
+    # from masquerading as a newly observed production outcome.
+    baseline_rows=_checked_in_observations()
+    for row in baseline_rows:
+        validate_observation(row)
+
+    live_rows=[]
     live_sequence=None
+    source_mode="CHECKED_IN_ONLY"
     if live_state_path is not None and Path(live_state_path).exists():
         from learning.live_observations import validate_state as validate_live_state
         live=json.loads(Path(live_state_path).read_text(encoding="utf-8"))
         validate_live_state(live)
-        rows.extend(live["observations"])
-        source_mode="CHECKED_IN_PLUS_DURABLE_VERIFIED"
+        live_rows=list(live["observations"])
         live_sequence=live["sequence"]
-    rebuilt=rebuild_state(rows)
+        source_mode="CHECKED_IN_PLUS_DURABLE_VERIFIED"
+
+    class_counts={key:0 for key in sorted(PROVENANCE_CLASSES)}
+    for row in baseline_rows:
+        class_counts["BASELINE_OR_SEED"]+=1
+    for row in live_rows:
+        class_counts[_live_provenance_class(row)]+=1
+
+    pinned_context=1 if (ROOT/"graph"/"AI_BUSINESS_OS_GRAPH_PIN.json").exists() else 0
+    baseline_context_files=sum(
+        1 for path in (
+            ROOT/"learning"/"LEARNING_OBSERVATION_LEDGER.json",
+            ROOT/"memory"/"SHARED_VALUE_MEMORY_LEDGER.json",
+            ROOT/"graph"/"UNIVERSAL_GRAPH_LEDGER.json",
+        )
+        if path.exists()
+    )
+    sources=[
+      _source_descriptor(
+        "learning/LEARNING_OBSERVATION_LEDGER.json","BASELINE_OR_SEED",
+        observation_count=len(baseline_rows),context_record_count=1,
+        learning_credit_eligible=False,fresh=False,
+      ),
+      _source_descriptor(
+        "memory/SHARED_VALUE_MEMORY_LEDGER.json + graph/UNIVERSAL_GRAPH_LEDGER.json",
+        "BASELINE_OR_SEED",context_record_count=max(0,baseline_context_files-1),
+        learning_credit_eligible=False,fresh=False,
+      ),
+      _source_descriptor(
+        "graph/AI_BUSINESS_OS_GRAPH_PIN.json","PINNED_UPSTREAM",
+        context_record_count=pinned_context,learning_credit_eligible=False,fresh=False,
+      ),
+      _source_descriptor(
+        "learning/live/learning_observation_state.json","LIVE_OBSERVATION",
+        observation_count=class_counts["LIVE_OBSERVATION"],
+        learning_credit_eligible=True,fresh=True,
+      ),
+      _source_descriptor(
+        "learning/live/learning_observation_state.json","VERIFIED_OUTCOME",
+        observation_count=class_counts["VERIFIED_OUTCOME"],
+        learning_credit_eligible=True,fresh=True,
+      ),
+    ]
+
+    rebuilt=rebuild_state(live_rows)
     rebuilt["source_mode"]=source_mode
     rebuilt["live_observation_state_sequence"]=live_sequence
-    rebuilt["live_observation_count"]=len(rows)-len(_checked_in_observations())
+    rebuilt["live_observation_count"]=len(live_rows)
+    rebuilt["fresh_learning_observation_count"]=len(live_rows)
+    rebuilt["baseline_context_observation_count"]=len(baseline_rows)
+    rebuilt["all_source_observation_count"]=len(live_rows)+len(baseline_rows)
+    rebuilt["provenance_class_counts"]=class_counts
+    rebuilt["source_provenance"]=sources
     rebuilt["state_hash"]=canonical_hash({
       "source_snapshot_hash":rebuilt["source_snapshot_hash"],
       "records":rebuilt["records"],
       "learning_alerts":rebuilt["learning_alerts"],
       "source_mode":source_mode,
       "live_observation_state_sequence":live_sequence,
+      "provenance_class_counts":class_counts,
+      "source_provenance":sources,
     })
     return rebuilt
 
