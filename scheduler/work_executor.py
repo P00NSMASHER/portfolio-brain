@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 """Proof-carrying executor for already-authorized scheduler work.
 
-The scheduler decides *what* may run.  This module performs only the current
-bounded OBSERVE/analysis work that has an implementation path, emits sanitized
-receipts, and advances scheduler state only after the handler succeeds.
-
-Unsupported MODIFY/verification work is deliberately deferred rather than
-painted green.
+The scheduler decides *what* may run. This module performs bounded work with
+proof-carrying handlers. Repair work is handed to the isolated GitHub-hosted
+repair workflow; TEST and VERIFICATION resolve against exact repair-PR checks.
+Scheduler state advances only after the relevant handler succeeds.
 """
 from __future__ import annotations
 
@@ -31,6 +29,12 @@ from hunting.proposal_state import (
     load_seed_state as hunter_proposal_seed_state,
     validate_state as validate_hunter_proposal_state,
 )
+from repair.autonomous_repair import (
+    AutonomousRepairError,
+    find_repair_evidence,
+    request_from_scheduler_work,
+)
+from repair.repair_engine import build_repair_state
 from scheduler.autonomous_scheduler import (
     claim_work,
     complete_work,
@@ -44,7 +48,6 @@ from transfer.cross_project_transfer import build_transfer_state
 from uncertainty.highest_value_uncertainty import build_snapshot as build_uncertainty_snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
-SUPPORTED_TYPES = {"HUNT", "RESEARCH", "INTEGRATION", "EXPERIMENT"}
 
 
 class WorkExecutionError(RuntimeError):
@@ -363,11 +366,117 @@ def _experiment_handler(work: dict[str, Any], ctx: dict[str, Any]) -> dict[str, 
     }
 
 
+def _repair_handler(work: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+    repair_state = ctx.get("repair_state")
+    if repair_state is None:
+        repair_state = build_repair_state()
+        ctx["repair_state"] = repair_state
+    base_sha = ctx.get("main_sha") or os.environ.get("GITHUB_SHA", "")
+    try:
+        request = request_from_scheduler_work(work, repair_state, base_sha=base_sha)
+    except AutonomousRepairError:
+        return {
+            "status": "DEFERRED",
+            "result_kind": "REPAIR_TASK_NOT_DISPATCHABLE",
+            "evidence_refs": [f"repair:{work['source_ref']}", f"scheduler-work:{work['scheduler_work_id']}"],
+            "result": {"source_ref": work["source_ref"]},
+        }
+    dispatches = ctx.setdefault("repair_dispatch_requests", [])
+    if not any(row["fingerprint"] == request["fingerprint"] for row in dispatches):
+        dispatches.append(request)
+    return {
+        "status": "SUCCESS",
+        "result_kind": "AUTONOMOUS_REPAIR_DISPATCH_READY",
+        "evidence_refs": [*request["evidence_refs"], f"repair-request:{request['request_id']}"],
+        "result": {
+            "request_id": request["request_id"],
+            "fingerprint": request["fingerprint"],
+            "source_ref": request["source_ref"],
+            "target_path_count": len(request["target_paths"]),
+            "merge_authority_granted": False,
+            "deployment_authority_granted": False,
+        },
+    }
+
+
+def _repair_evidence(work: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+    provider = ctx.get("repair_evidence_provider")
+    if provider is not None:
+        return provider(work["source_ref"])
+    return find_repair_evidence(
+        work["source_ref"],
+        token=os.environ.get("PORTFOLIO_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN"),
+    )
+
+
+def _test_handler(work: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+    evidence = _repair_evidence(work, ctx)
+    refs = [f"repair:{work['source_ref']}"]
+    if evidence.get("pr_number"):
+        refs.extend([f"repair-pr:{evidence['pr_number']}", f"commit:{evidence['head_sha']}"])
+    if evidence.get("foundation_success") is not True:
+        return {
+            "status": "DEFERRED",
+            "result_kind": "REPAIR_FOUNDATION_TEST_PENDING",
+            "evidence_refs": refs,
+            "result": {
+                "source_ref": work["source_ref"],
+                "pr_number": evidence.get("pr_number"),
+                "foundation_success": False,
+            },
+        }
+    return {
+        "status": "SUCCESS",
+        "result_kind": "REPAIR_FOUNDATION_TEST_VERIFIED",
+        "evidence_refs": refs,
+        "result": {
+            "source_ref": work["source_ref"],
+            "pr_number": evidence["pr_number"],
+            "head_sha": evidence["head_sha"],
+            "foundation_success": True,
+        },
+    }
+
+
+def _verification_handler(work: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+    evidence = _repair_evidence(work, ctx)
+    refs = [f"repair:{work['source_ref']}"]
+    if evidence.get("pr_number"):
+        refs.extend([f"repair-pr:{evidence['pr_number']}", f"commit:{evidence['head_sha']}"])
+    if evidence.get("foundation_success") is not True or evidence.get("independent_success") is not True:
+        return {
+            "status": "DEFERRED",
+            "result_kind": "REPAIR_INDEPENDENT_VERIFICATION_PENDING",
+            "evidence_refs": refs,
+            "result": {
+                "source_ref": work["source_ref"],
+                "pr_number": evidence.get("pr_number"),
+                "foundation_success": bool(evidence.get("foundation_success")),
+                "independent_success": bool(evidence.get("independent_success")),
+            },
+        }
+    return {
+        "status": "SUCCESS",
+        "result_kind": "REPAIR_INDEPENDENTLY_VERIFIED",
+        "evidence_refs": refs,
+        "result": {
+            "source_ref": work["source_ref"],
+            "pr_number": evidence["pr_number"],
+            "head_sha": evidence["head_sha"],
+            "foundation_success": True,
+            "independent_success": True,
+        },
+    }
+
+
 DEFAULT_HANDLERS: dict[str, Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]] = {
     "HUNT": _hunt_handler,
+    "EXPERIMENT": _experiment_handler,
+    "REPAIR": _repair_handler,
+    "TEST": _test_handler,
     "RESEARCH": _research_handler,
     "INTEGRATION": _integration_handler,
-    "EXPERIMENT": _experiment_handler,
+    "VERIFICATION": _verification_handler,
 }
 
 
@@ -534,6 +643,12 @@ def write_outputs(
     (output_dir / "execution_cycle_receipt.json").write_text(json.dumps(meta["summary"], indent=2) + "\n", encoding="utf-8")
 
     ctx = meta["context"]
+    repair_dispatches = ctx.get("repair_dispatch_requests") or []
+    if repair_dispatches:
+        (output_dir / "repair_dispatch_requests.json").write_text(
+            json.dumps(repair_dispatches, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
     if ctx.get("hunter_receipt") is not None:
         hunter_output_dir.mkdir(parents=True, exist_ok=True)
         state = ctx["hunter_state"]

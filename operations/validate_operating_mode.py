@@ -261,6 +261,107 @@ def validate_operating_mode():
     req("workload_control.workload_gate preflight" in factory,"software factory is not workload controlled")
     req("cost_governor.workflow_gate" not in factory,"software factory is still coupled to paid cost governance")
     req("run: exit 3" in factory,"software factory must fail closed when workload admission is denied")
+    repair_policy=load("repair/AUTONOMOUS_REPAIR_POLICY.json")
+    req(repair_policy["schema_version"]=="1.0.0" and repair_policy["repair_id"]=="portfolio-autonomous-repair-v1",
+        "autonomous repair policy identity mismatch")
+    req(repair_policy["enabled"] is True and repair_policy["interactive_chatgpt_dependency"] is False,
+        "autonomous repair lost GitHub-hosted independence")
+    req(repair_policy["merge_authority"] is False and repair_policy["deployment_authority"] is False
+        and repair_policy["default_branch_write_authority"] is False,
+        "autonomous repair authority widened")
+    req(1<=repair_policy["max_scheduler_dispatches_per_cycle"]<=2
+        and 1<=repair_policy["max_changed_files"]<=20
+        and 1<=repair_policy["max_changed_lines"]<=5000,
+        "autonomous repair bounds widened")
+    req(repair_policy["foundation_check"]=={"name":"validate","integration_id":15368},
+        "autonomous repair foundation check binding changed")
+    req(repair_policy["independent_check"]=={"name":"portfolio-phase1-gate","integration_id":5121826},
+        "autonomous repair independent check binding changed")
+    integration=repair_policy.get("protected_integration",{})
+    req(integration.get("enabled") is True and integration.get("integrator")=="portfolio-independent-verifier",
+        "protected autonomous integration disabled or reassigned")
+    req(integration.get("eligible_branch_prefix")=="factory/auto-repair-"
+        and integration.get("required_pr_body_marker")=="AUTO_REPAIR_FINGERPRINT:"
+        and integration.get("required_pr_actor")=="github-actions[bot]",
+        "autonomous merge eligibility widened")
+    req(integration.get("refresh_stale_branch_onto_main") is True
+        and integration.get("merge_method")=="merge"
+        and integration.get("merge_api_respects_ruleset") is True
+        and integration.get("bypass_authority") is False,
+        "protected integration semantics weakened")
+    req(integration.get("required_checks")==[
+          {"name":"validate","integration_id":15368},
+          {"name":"portfolio-phase1-gate","integration_id":5121826},
+        ],"protected integration required checks changed")
+    req(set(p["event_driven_workflows"])=={
+          "runtime-event-observe","portfolio-autonomous-repair","portfolio-independent-verifier"
+        },"event-driven workflow inventory changed")
+    repair_workflow=(ROOT/".github/workflows/portfolio-autonomous-repair.yml").read_text().lower()
+    repair_triggers=workflow_top_level_triggers(ROOT/".github/workflows/portfolio-autonomous-repair.yml")
+    req({"workflow_run","workflow_dispatch"}<=repair_triggers and "schedule" not in repair_triggers,
+        "autonomous repair trigger class invalid")
+    for permission in ("actions: write","contents: write","pull-requests: write","copilot-requests: write"):
+        req(permission in repair_workflow,f"autonomous repair permission missing: {permission}")
+    for marker in (
+        "python -m repair.autonomous_repair validate-diff",
+        "python -m operations.validate_operating_mode",
+        'python -m unittest discover -s tests -p "test_*.py" -v',
+        "gh workflow run foundation-ci.yml",
+        "--no-ask-user",
+        "--available-tools='view,grep,glob,edit,create,apply_patch'",
+    ):
+        req(marker in repair_workflow,f"autonomous repair control missing: {marker}")
+    for forbidden in ("gh pr merge","/merges","git push origin main","--allow-tool='shell","--allow-all","--yolo"):
+        req(forbidden not in repair_workflow,f"autonomous repair contains prohibited integration action: {forbidden}")
+    scheduler_repair=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text().lower()
+    req("actions: write" in scheduler_repair and "contents: read" in scheduler_repair
+        and "contents: write" not in scheduler_repair and "pull-requests: read" in scheduler_repair,
+        "scheduler repair dispatch permissions invalid")
+    req("repair.autonomous_repair dispatch" in scheduler_repair
+        and "portfolio-autonomous-repair.yml" in scheduler_repair,
+        "scheduler repair dispatch path missing")
+    verifier=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text().lower()
+    verifier_triggers=workflow_top_level_triggers(ROOT/".github/workflows/portfolio-independent-verifier.yml")
+    req(verifier_triggers=={"workflow_run"},"independent verifier must be workflow_run-only")
+    req("actions: read" in verifier and "contents: write" in verifier and "pull-requests: write" in verifier,
+        "independent verifier/integrator permissions missing")
+    req("actions: write" not in verifier and "issues: write" not in verifier,
+        "independent verifier gained unrelated mutation authority")
+    for marker in (
+        'branch.startswith("factory/auto-repair-")',
+        '"auto_repair_fingerprint:" in body',
+        'pr.get("user",{}).get("login")=="github-actions[bot]"',
+        "/update-branch",
+        "merge_method=merge",
+        '-f sha="$candidate_sha"',
+        "steps.pr.outputs.autonomous == 'true'",
+    ):
+        req(marker in verifier,f"protected autonomous integration control missing: {marker}")
+    verifier_source=(ROOT/"verification/independent_verifier.py").read_text()
+    for anchor in (
+        '".github/workflows/portfolio-independent-verifier.yml"',
+        '"verification/independent_verifier.py"',
+        "candidate modifies immutable verifier trust anchor",
+        "MAX_PR_FILE_PAGES = 5",
+    ):
+        req(anchor in verifier_source,f"independent verifier trust-anchor control missing: {anchor}")
+    for marker in (
+        "actions/create-github-app-token@v2",
+        'app-id: "5121826"',
+        "secrets.portfolio_verifier_private_key",
+        "docker run --rm --network none --cap-drop=all --security-opt=no-new-privileges",
+        "ref: main",
+        "path: verifier-control",
+        "verification/independent_verifier.py",
+        "persist-credentials: false",
+    ):
+        req(marker in verifier,f"independent verifier isolation control missing: {marker}")
+    req(verifier.index("run candidate regressions in network-disabled containers")
+        < verifier.index("mint short-lived independent verifier app token"),
+        "verifier App token exists before candidate execution stops")
+    req(verifier.index("checkout trusted verifier controls from main")
+        < verifier.index("mint short-lived independent verifier app token"),
+        "trusted verifier controls are not loaded before token minting")
     event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text().lower()
     req("push:" in event and 'branches: ["main"]' in event,"main push observer missing")
     req('"operations/command_center_refresh_request.json"' in event,"trigger-only command-center refresh still creates redundant runtime work")
@@ -270,8 +371,6 @@ def validate_operating_mode():
     req({"schedule","workflow_run","push","workflow_dispatch"}<=watchdog_triggers,"watchdog independent recovery triggers incomplete")
     for producer in ("portfolio-autonomous-scheduler","runtime-hourly-sync","agent-heartbeat-sweep","hunter-autonomous-cycle","portfolio-notification-cycle"):
         req(f'- "{producer}"' in watchdog,f"watchdog liveness recovery anchor missing: {producer}")
-    for producer in ("portfolio-autonomous-scheduler","runtime-hourly-sync","agent-heartbeat-sweep","hunter-autonomous-cycle","portfolio-notification-cycle"):
-        req(f'- "{producer}"' in watchdog,f"watchdog missing liveness recovery anchor: {producer}")
     req("types: [completed]" in watchdog and 'branches: ["main"]' in watchdog,"watchdog liveness recovery anchors drifted")
     runtime_sync=(ROOT/".github/workflows/runtime-hourly-sync.yml").read_text().lower()
     req("push:" in runtime_sync and 'branches: ["main"]' in runtime_sync and '"adapters/**"' in runtime_sync and '"runtime/**"' in runtime_sync,"runtime repair wakeup trigger missing")
