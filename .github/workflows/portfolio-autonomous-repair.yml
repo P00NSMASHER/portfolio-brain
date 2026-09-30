@@ -21,6 +21,14 @@ on:
         description: "Sanitized scheduler repair request"
         required: false
         type: string
+      request_id:
+        description: "Deterministic scheduler repair request id"
+        required: false
+        type: string
+      request_fingerprint:
+        description: "Content-bound scheduler repair fingerprint"
+        required: false
+        type: string
       failed_run_id:
         description: "Optional failed main workflow run id"
         required: false
@@ -33,7 +41,7 @@ permissions:
   copilot-requests: write
 
 concurrency:
-  group: portfolio-autonomous-repair-${{ github.event.workflow_run.id || inputs.failed_run_id || github.run_id }}
+  group: portfolio-autonomous-repair-${{ inputs.request_id || github.event.workflow_run.id || inputs.failed_run_id || github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -72,6 +80,8 @@ jobs:
         id: prepare
         env:
           REQUEST_B64: ${{ inputs.request_b64 }}
+          EXPECTED_REQUEST_ID: ${{ inputs.request_id }}
+          EXPECTED_REQUEST_FINGERPRINT: ${{ inputs.request_fingerprint }}
           MANUAL_RUN_ID: ${{ inputs.failed_run_id }}
           EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
@@ -86,6 +96,12 @@ jobs:
           raw=base64.b64decode(os.environ["REQUEST_B64"],validate=True)
           req=json.loads(raw.decode("utf-8"))
           validate_request(req)
+          expected_id=os.environ.get("EXPECTED_REQUEST_ID")
+          expected_fingerprint=os.environ.get("EXPECTED_REQUEST_FINGERPRINT")
+          if expected_id and req["request_id"] != expected_id:
+              raise SystemExit("workflow dispatch request id mismatch")
+          if expected_fingerprint and req["fingerprint"] != expected_fingerprint:
+              raise SystemExit("workflow dispatch fingerprint mismatch")
           Path("repair/out/request.json").write_text(json.dumps(req,indent=2,sort_keys=True)+"\n")
           PY
           else
@@ -102,6 +118,8 @@ jobs:
           req=json.load(open("repair/out/request.json"))
           print("fingerprint="+req["fingerprint"])
           print("source_ref="+req["source_ref"])
+          print("source_kind="+req["source_kind"])
+          print("base_sha="+req["base_sha"])
           print("branch="+branch_name(req)+"-"+os.environ["GITHUB_RUN_ID"])
           label=req.get("source_workflow") or "verified repair task"
           print("title=Auto-repair "+label.replace("\n"," ")[:120])
@@ -120,8 +138,44 @@ jobs:
               print("pr_number="+str(doc["pr_number"]))
           PY
 
-      - name: Create isolated repair branch
-        if: ${{ steps.dedupe.outputs.duplicate != 'true' }}
+      - name: Restore exact admitted scheduler base
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind == 'SCHEDULER_REPAIR_TASK' }}
+        env:
+          REPAIR_BASE_SHA: ${{ steps.prepare.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+          git cat-file -e "$REPAIR_BASE_SHA^{commit}"
+          git switch --detach "$REPAIR_BASE_SHA"
+
+      - name: Start governed software-factory repair
+        id: factory_start
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind == 'SCHEDULER_REPAIR_TASK' }}
+        env:
+          PORTFOLIO_FACTORY_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -m software_factory.scheduler_repair_bridge start \
+            --request repair/out/request.json \
+            --db repair/out/factory.sqlite3 \
+            --attempt-id "$GITHUB_RUN_ID" \
+            --output repair/out/factory_start_receipt.json
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          doc=json.load(open("repair/out/factory_start_receipt.json"))
+          print("branch="+doc["branch_name"])
+          print("factory_work_id="+doc["factory_work_id"])
+          PY
+
+      - name: Create local scheduler factory worktree branch
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind == 'SCHEDULER_REPAIR_TASK' }}
+        env:
+          REPAIR_BRANCH: ${{ steps.factory_start.outputs.branch }}
+        run: |
+          set -euo pipefail
+          git switch -c "$REPAIR_BRANCH"
+
+      - name: Create isolated workflow-failure repair branch
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind != 'SCHEDULER_REPAIR_TASK' }}
         env:
           REPAIR_BRANCH: ${{ steps.prepare.outputs.branch }}
         run: |
@@ -154,12 +208,14 @@ jobs:
         if: ${{ steps.dedupe.outputs.duplicate != 'true' }}
         run: |
           set -euo pipefail
-          python -m compileall -q registry events adapters truth memory graph runtime hunting learning uncertainty experiments model_router agents allocator policy_replay attribution challenger software_factory repair transfer scheduler cost_governor workload_control commercial_evidence dashboard notifications hostile canary operations action_engine operator_console value_proof verification state_journal tests
-          python -m operations.validate_operating_mode
-          python -m unittest discover -s tests -p "test_*.py" -v
+          {
+            python -m compileall -q registry events adapters truth memory graph runtime hunting learning uncertainty experiments model_router agents allocator policy_replay attribution challenger software_factory repair transfer scheduler cost_governor workload_control commercial_evidence dashboard notifications hostile canary operations action_engine operator_console value_proof verification state_journal tests
+            python -m operations.validate_operating_mode
+            python -m unittest discover -s tests -p "test_*.py" -v
+          } 2>&1 | tee repair/out/test.log
 
-      - name: Create isolated candidate commit
-        if: ${{ steps.dedupe.outputs.duplicate != 'true' }}
+      - name: Create isolated workflow-failure candidate commit
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind != 'SCHEDULER_REPAIR_TASK' }}
         env:
           REPAIR_BRANCH: ${{ steps.prepare.outputs.branch }}
         run: |
@@ -171,8 +227,8 @@ jobs:
           git commit -m "Autonomous repair ${{ steps.prepare.outputs.source_ref }}"
           git push origin "HEAD:refs/heads/$REPAIR_BRANCH"
 
-      - name: Open protected repair pull request
-        if: ${{ steps.dedupe.outputs.duplicate != 'true' }}
+      - name: Open protected workflow-failure repair pull request
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind != 'SCHEDULER_REPAIR_TASK' }}
         id: pr
         env:
           REPAIR_BRANCH: ${{ steps.prepare.outputs.branch }}
@@ -184,10 +240,33 @@ jobs:
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
           echo "Created repair candidate: $PR_URL" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Finalize scheduler repair through software factory
+        id: factory_pr
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind == 'SCHEDULER_REPAIR_TASK' }}
+        env:
+          PORTFOLIO_FACTORY_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -m software_factory.scheduler_repair_bridge finalize \
+            --request repair/out/request.json \
+            --validation repair/out/diff_validation.json \
+            --test-log repair/out/test.log \
+            --candidate-root . \
+            --db repair/out/factory.sqlite3 \
+            --attempt-id "$GITHUB_RUN_ID" \
+            --output repair/out/factory_final_receipt.json
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          doc=json.load(open("repair/out/factory_final_receipt.json"))
+          print("url="+doc["pr_url"])
+          print("pr_number="+str(doc["pr_number"]))
+          PY
+          echo "Created governed factory repair candidate: ${{ steps.factory_pr.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Dispatch exact-head foundation validation
         if: ${{ steps.dedupe.outputs.duplicate != 'true' }}
         env:
-          REPAIR_BRANCH: ${{ steps.prepare.outputs.branch }}
+          REPAIR_BRANCH: ${{ steps.factory_start.outputs.branch || steps.prepare.outputs.branch }}
         run: gh workflow run foundation-ci.yml --ref "$REPAIR_BRANCH"
 
       - name: Preserve sanitized repair evidence
@@ -198,5 +277,7 @@ jobs:
           path: |
             repair/out/diff_validation.json
             repair/out/pr_body.md
+            repair/out/factory_start_receipt.json
+            repair/out/factory_final_receipt.json
           if-no-files-found: error
           retention-days: 30
