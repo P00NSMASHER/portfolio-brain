@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "engine_id": "portfolio-bounded-action-engine-v1",
-  "mode": "HUMAN_APPROVAL_GATED_GMAIL_CONNECTOR",
+  "mode": "CHATGPT_GMAIL_CONNECTOR_GATEWAY",
   "enabled": true,
   "authority_class": "ACT",
   "allowed_project_ids": [
