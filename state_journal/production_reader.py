@@ -5,9 +5,9 @@ from pathlib import Path
 
 from runtime.artifact_restore import _atomic_write
 from state_journal.contracts import DOMAINS, canonical, digest, require, strict_load, validate_domain
-from state_journal.github_reducer import restore_snapshot
+from state_journal.github_reducer import latest_snapshot_artifact, restore_snapshot
 from state_journal.reducer import validate_snapshot
-from state_journal.transport import EVENT_PREFIX, SNAPSHOT_ARTIFACT, GitHubReader, artifact_digest, extract_json
+from state_journal.transport import EVENT_PREFIX, SNAPSHOT_ARTIFACT, GitHubReader
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CACHE = ROOT / "state_journal/live/canonical_restore_cache.json"
@@ -92,7 +92,7 @@ def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, curren
                 continue
             seen_reducers.add(reducer_run["id"])
             fresh = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
-            artifacts = fresh.list_recent_artifacts(
+            artifacts = getattr(fresh, "list_recent_journal_artifacts", fresh.list_recent_artifacts)(
                 policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]
             )
             state = restore_snapshot(fresh, artifacts, current_run=current_run)
@@ -130,31 +130,15 @@ def restore_domain(domain: str, output: Path, metadata_output: Path | None = Non
         token = os.environ.get("GITHUB_TOKEN", "")
         require(bool(token), "GITHUB_TOKEN required for canonical restore")
         reader = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
-        artifacts = reader.list_recent_artifacts(
+        artifacts = getattr(reader, "list_recent_journal_artifacts", reader.list_recent_artifacts)(
             policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]
         )
         state = restore_snapshot(reader, artifacts, current_run=current_run)
         require(state is not None, "CANONICAL_SNAPSHOT_REQUIRED")
         require(state["mode"] == "CANONICAL" and state["production_authority"] is True,
                 "Latest reducer snapshot is not production-authoritative")
-        matching_snapshot_artifacts = []
-        for artifact in artifacts:
-            if artifact.get("name") != SNAPSHOT_ARTIFACT:
-                continue
-            source = artifact.get("workflow_run", {})
-            if source.get("head_branch") != "main" or str(source.get("id")) == str(current_run) or artifact.get("expired"):
-                continue
-            raw = reader.archive(artifact["id"])
-            artifact_digest(artifact, raw)
-            candidate = extract_json(raw, "snapshot.json")
-            validate_snapshot(candidate)
-            if candidate["state_hash"] == state["state_hash"]:
-                matching_snapshot_artifacts.append(artifact)
-        require(matching_snapshot_artifacts, "Canonical snapshot provider metadata missing")
-        snapshot_meta = max(
-            matching_snapshot_artifacts,
-            key=lambda row: (row.get("created_at", ""), row.get("id", 0)),
-        )
+        snapshot_meta = latest_snapshot_artifact(artifacts, current_run=current_run)
+        require(snapshot_meta is not None, "Canonical snapshot provider metadata missing")
         pending = _pending_events(state, artifacts)
         waited_for_reducer = bool(pending)
         if pending:
@@ -164,21 +148,8 @@ def restore_domain(domain: str, output: Path, metadata_output: Path | None = Non
             require(state["mode"] == "CANONICAL" and state["production_authority"] is True,
                     "Reducer catch-up snapshot is not production-authoritative")
             require(not _pending_events(state, artifacts), "STALE_CANONICAL_STATE_PENDING_REDUCTION")
-            matching_snapshot_artifacts = []
-            for artifact in artifacts:
-                if artifact.get("name") != SNAPSHOT_ARTIFACT:
-                    continue
-                source = artifact.get("workflow_run", {})
-                if source.get("head_branch") != "main" or str(source.get("id")) == str(current_run) or artifact.get("expired"):
-                    continue
-                raw = reader.archive(artifact["id"])
-                artifact_digest(artifact, raw)
-                candidate = extract_json(raw, "snapshot.json")
-                validate_snapshot(candidate)
-                if candidate["state_hash"] == state["state_hash"]:
-                    matching_snapshot_artifacts.append(artifact)
-            require(matching_snapshot_artifacts, "Canonical snapshot provider metadata missing after reducer wait")
-            snapshot_meta = max(matching_snapshot_artifacts, key=lambda row: (row.get("created_at", ""), row.get("id", 0)))
+            snapshot_meta = latest_snapshot_artifact(artifacts, current_run=current_run)
+            require(snapshot_meta is not None, "Canonical snapshot provider metadata missing after reducer wait")
         restore_status = "RESTORED_CANONICAL_AFTER_REDUCER_WAIT" if waited_for_reducer else "RESTORED_CANONICAL"
         cache = _cache_payload(state, snapshot_meta, current_run=current_run, waited_for_reducer=waited_for_reducer)
         _atomic_write(cache_path, canonical(cache) + b"\n")
