@@ -20,7 +20,7 @@ The runtime forwarding layer is read-only:
 - meaningful-risk production deployment remains human-gated;
 - financial and destructive actions remain human-gated;
 - live trading and brokerage execution remain prohibited;
-- child-facing consequential changes remain human-gated.
+- child-facing consequential changes remain human-gated.\n- Explicit human approval remains required for ACT-class operations not explicitly pre-authorized by machine policy.
 
 A separate action engine may exercise only authority explicitly granted by its own machine policy. That authority is never inherited from observation or forwarding.
 
