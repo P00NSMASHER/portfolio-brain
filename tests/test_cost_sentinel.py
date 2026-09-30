@@ -28,6 +28,59 @@ class CostSentinelTests(unittest.TestCase):
         self.assertFalse(budget["provider_readiness"]["provider_domain_blocked"])
         self.assertTrue(budget["provider_readiness"]["budget_domain_blocked"])
 
+    def test_legacy_ready_without_verified_usability_is_normalized_unknown(self):
+        snapshot = build_sentinel_snapshot(
+            cost_policy={"portfolio_ceiling":{"cost_usd":10}},
+            cost_state={"reservations":[]},
+            provider_registry={"providers":[]},
+            model_ledger={"calls":[],"outcomes":[]},
+            action_policy={"allowed_actions":{"CUSTOMER_EMAIL":{"max_per_utc_day":25}}},
+            action_ledger={"executions":[]},
+            provider_health={
+                "schema_version":"1.0.0","status":"READY",
+                "cost_gate_status":"COMMITTED",
+            },
+            at="2026-09-30T14:00:00Z",
+        )
+        readiness=snapshot["provider_readiness"]
+        self.assertEqual(readiness["status"],"UNKNOWN")
+        self.assertIsNone(readiness["configured"])
+        self.assertIsNone(readiness["enabled"])
+        self.assertIsNone(readiness["credential_ready"])
+        self.assertIsNone(readiness["call_verified"])
+        self.assertEqual(snapshot["allocation"]["next_paid_action"],"RESTORE_PROVIDER_READINESS_BEFORE_PAID_WORK")
+
+    def test_ready_requires_complete_verified_usability_vector(self):
+        common = dict(
+            cost_policy={"portfolio_ceiling":{"cost_usd":10}},
+            cost_state={"reservations":[]},
+            provider_registry={"providers":[]},
+            model_ledger={"calls":[],"outcomes":[]},
+            action_policy={"allowed_actions":{"CUSTOMER_EMAIL":{"max_per_utc_day":25}}},
+            action_ledger={"executions":[]},
+            at="2026-09-30T14:00:00Z",
+        )
+        config_only=build_sentinel_snapshot(
+            **common,
+            provider_health={
+                "status":"READY","configured":True,"enabled":True,
+                "credential_ready":True,"call_verified":False,
+                "last_successful_at":"2026-09-30T13:55:00Z",
+            },
+        )
+        self.assertEqual(config_only["provider_readiness"]["status"],"UNKNOWN")
+        self.assertEqual(config_only["allocation"]["next_paid_action"],"RESTORE_PROVIDER_READINESS_BEFORE_PAID_WORK")
+        verified=build_sentinel_snapshot(
+            **common,
+            provider_health={
+                "status":"READY","configured":True,"enabled":True,
+                "credential_ready":True,"call_verified":True,
+                "last_successful_at":"2026-09-30T13:55:00Z",
+            },
+        )
+        self.assertEqual(verified["provider_readiness"]["status"],"READY")
+        self.assertEqual(verified["allocation"]["next_paid_action"],"ONE_BOUNDED_TERRA_DAILY_ANALYSIS")
+
     def test_gmail_is_separate_and_reports_headroom(self):
         snapshot = build_sentinel_snapshot(
             cost_policy={"portfolio_ceiling":{"cost_usd":10}},
