@@ -44,6 +44,47 @@ def _timestamp(value: str) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
+def _replay_heartbeat_merge(base_state: dict, batches: dict[str, dict]) -> dict:
+    """Replay the accepted heartbeat union and return its exact synthetic state."""
+    latest = {}
+    for row in base_state["recent_events"]:
+        latest[(row["agent_id"], _timestamp(row["at"]))] = digest({k: v for k, v in row.items() if k != "event_id"})
+    for batch in batches.values():
+        for agent in batch["work_ids_by_agent"]:
+            slot = agent, _timestamp(batch["at"])
+            core = {k: batch[k] for k in ("at", "activity_kind", "source_workflow", "source_run_id")}
+            core.update(agent_id=agent, work_ids=batch["work_ids_by_agent"][agent])
+            core_hash = digest(core)
+            if slot in latest and latest[slot] != core_hash:
+                raise Conflict("Ambiguous equal-time heartbeat updates for one agent")
+            latest[slot] = core_hash
+    merged = deepcopy(base_state)
+    for key in sorted(batches, key=lambda k: (_timestamp(batches[k]["at"]), k)):
+        merged = replay_heartbeat_batch(merged, batches[key])
+    return merged
+
+
+def _replay_history_merge(base_state: dict, accepted_history: dict) -> dict:
+    """Replay the accepted history union and return its exact synthetic state."""
+    observations = {}
+    slots = {}
+    for point in accepted_history.values():
+        point_hash = digest(point)
+        slot = _timestamp(point["observed_at"])
+        prior = slots.get(slot)
+        if prior is not None and prior != point_hash:
+            raise Conflict("Ambiguous equal-time history observations")
+        slots[slot] = point_hash
+        observations[point_hash] = point
+    merged = deepcopy(base_state)
+    for key in sorted(observations, key=lambda k: (_timestamp(observations[k]["observed_at"]), k)):
+        try:
+            merged = replay_history_observation(merged, observations[key])
+        except ValueError as exc:
+            raise Conflict("History observations do not form a monotonic exact replay") from exc
+    return merged
+
+
 def replay(base: dict, events: list[dict]) -> dict:
     validate_checkpoint(base)
     require(isinstance(events, list) and len(events) <= MAX_EVENTS, "Event capacity exceeded; archive required, never truncate")
@@ -115,10 +156,14 @@ def replay(base: dict, events: list[dict]) -> dict:
                     known_heartbeat.add(change["after_hash"])
                     for batch in change["batches"]:
                         batches[digest(batch)] = batch
+                    # A lossless fork union is a real canonical predecessor even
+                    # when its synthetic hash is not any one branch's after_hash.
+                    known_heartbeat.add(digest(_replay_heartbeat_merge(base["states"]["heartbeat"], batches)))
                 elif change["domain"] == "history" and merge_history:
                     known_history.add(change["after_hash"])
                     key = change["before_hash"], change["after_hash"]
                     accepted_history[key] = history_ops[key]
+                    known_history.add(digest(_replay_history_merge(base["states"]["history"], accepted_history)))
                 else:
                     key = change["domain"], change["before_hash"], change["after_hash"]
                     if key not in consumed and change["before_hash"] != change["after_hash"]:
@@ -131,42 +176,10 @@ def replay(base: dict, events: list[dict]) -> dict:
             raise MissingPredecessor("Unresolved predecessors: " + ",".join(e["event_id"] for e in remaining))
 
     if batches:
-        # Equal-time different writes to the SAME agent are ambiguous. Different
-        # agents commute and their original event payloads are all preserved.
-        latest = {}
-        for row in base["states"]["heartbeat"]["recent_events"]:
-            latest[(row["agent_id"], _timestamp(row["at"]))] = digest({k: v for k, v in row.items() if k != "event_id"})
-        for key, batch in batches.items():
-            for agent in batch["work_ids_by_agent"]:
-                slot = agent, _timestamp(batch["at"])
-                core = {k: batch[k] for k in ("at", "activity_kind", "source_workflow", "source_run_id")}
-                core.update(agent_id=agent, work_ids=batch["work_ids_by_agent"][agent])
-                core_hash = digest(core)
-                if slot in latest and latest[slot] != core_hash:
-                    raise Conflict("Ambiguous equal-time heartbeat updates for one agent")
-                latest[slot] = core_hash
-        for key in sorted(batches, key=lambda k: (_timestamp(batches[k]["at"]), k)):
-            states["heartbeat"] = replay_heartbeat_batch(states["heartbeat"], batches[key])
+        states["heartbeat"] = _replay_heartbeat_merge(base["states"]["heartbeat"], batches)
 
     if accepted_history:
-        # Every accepted branch was proved to be exactly one native history
-        # observation from a known predecessor. Replay the union by observation
-        # time; a same-time disagreement has no safe ordering and fails closed.
-        observations = {}
-        slots = {}
-        for point in accepted_history.values():
-            point_hash = digest(point)
-            slot = _timestamp(point["observed_at"])
-            prior = slots.get(slot)
-            if prior is not None and prior != point_hash:
-                raise Conflict("Ambiguous equal-time history observations")
-            slots[slot] = point_hash
-            observations[point_hash] = point
-        for key in sorted(observations, key=lambda k: (_timestamp(observations[k]["observed_at"]), k)):
-            try:
-                states["history"] = replay_history_observation(states["history"], observations[key])
-            except ValueError as exc:
-                raise Conflict("History observations do not form a monotonic exact replay") from exc
+        states["history"] = _replay_history_merge(base["states"]["history"], accepted_history)
 
     for domain, state in states.items():
         validate_domain(domain, state)

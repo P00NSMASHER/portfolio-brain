@@ -414,13 +414,20 @@ class GitHubReader:
                 if len(snapshot_runs) == 2:
                     break
 
+        # Producer run discovery stays anchored to the reviewed
+        # journal/checkpoint boundary so an in-flight run that started before
+        # recent reducer snapshots cannot disappear. Artifact retrieval is
+        # narrower: once two successful reducer snapshots exist, a terminal
+        # producer run that both started and finished before the older reducer
+        # started is already covered by that predecessor snapshot and does not
+        # need another per-run artifact request. Runs that started earlier but
+        # remained active into the overlap window are still inspected.
         event_since = since
+        overlap_at = None
         if len(snapshot_runs) == 2:
-            # Recent producer discovery may advance to the predecessor reducer
-            # start only because every reducer triggered by workflow_run also
-            # supplies that exact producer run explicitly below. This prevents
-            # in-flight/queued producers from falling through the overlap gap.
-            event_since = min(snapshot_runs[0][0]["created_at"], snapshot_runs[1][0]["created_at"])
+            overlap = min(snapshot_runs[0][0]["created_at"], snapshot_runs[1][0]["created_at"])
+            overlap_at = datetime.fromisoformat(overlap.replace("Z", "+00:00"))
+            require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
         for workflow in sorted(WORKFLOW_PRODUCERS):
@@ -431,6 +438,17 @@ class GitHubReader:
                     and run.get("conclusion") in terminal
                 ):
                     continue
+                if overlap_at is not None:
+                    created_at = run.get("created_at")
+                    updated_at = run.get("updated_at")
+                    require(isinstance(created_at, str), "Workflow run created_at missing")
+                    require(isinstance(updated_at, str), "Workflow run updated_at missing")
+                    started = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                    finished = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+                    require(started.tzinfo is not None and finished.tzinfo is not None,
+                            "Workflow run timestamps require timezone")
+                    if started < overlap_at and finished < overlap_at:
+                        continue
                 for row in self._run_artifacts(run["id"]):
                     if row.get("name", "").startswith(EVENT_PREFIX):
                         retain(row)
