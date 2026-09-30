@@ -1,0 +1,71 @@
+name: portfolio-state-checkpoint-candidate
+
+on:
+  schedule:
+    - cron: "19 4 * * 0"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: portfolio-state-checkpoint-candidate
+  cancel-in-progress: false
+
+jobs:
+  checkpoint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate validated checkpoint/archive candidate
+        id: generate
+        run: |
+          set -euo pipefail
+          python -m state_journal.checkpoint_archive             --output state_journal/out/checkpoint_archive_receipt.json
+          if git diff --quiet -- state_journal; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open protected checkpoint archive pull request
+        if: ${{ steps.generate.outputs.changed == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          BRANCH="checkpoint/archive-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git add state_journal/ARCHIVE_MANIFEST.json                   state_journal/CHECKPOINT.json.gz                   state_journal/POLICY.json                   state_journal/archive/
+          git commit -m "Archive canonical journal checkpoint"
+          git push origin "$BRANCH"
+          SEQUENCE="$(python - <<'PY'
+          import json
+          print(json.load(open("state_journal/ARCHIVE_MANIFEST.json"))["archived_sequence"])
+          PY
+          )"
+          gh pr create             --base main             --head "$BRANCH"             --title "Archive canonical journal checkpoint sequence ${SEQUENCE}"             --body "Automated durable checkpoint/archive candidate. The full canonical snapshot and immutable lineage manifest are committed to protected Git history; CHECKPOINT.json.gz contains the exact archived projection. Merge only through required Foundation + portfolio-phase1-gate checks."
+
+      - name: Preserve checkpoint candidate receipt
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-state-checkpoint-candidate-${{ github.run_id }}
+          path: state_journal/out/checkpoint_archive_receipt.json
+          if-no-files-found: error
+          retention-days: 30

@@ -4,6 +4,7 @@ import argparse, os, time
 from pathlib import Path
 
 from runtime.artifact_restore import _atomic_write
+from state_journal.archive import archived_artifact_ids, load_active_manifest
 from state_journal.contracts import DOMAINS, canonical, digest, require, strict_load, validate_domain
 from state_journal.github_reducer import latest_snapshot_artifact, restore_snapshot
 from state_journal.reducer import validate_snapshot
@@ -55,8 +56,9 @@ def _known_event_artifact_ids(state: dict) -> set[int]:
     }
 
 
-def _pending_events(state: dict, artifacts: list[dict]) -> list[dict]:
+def _pending_events(state: dict, artifacts: list[dict], *, archived_ids: set[int] | None = None) -> list[dict]:
     known = _known_event_artifact_ids(state)
+    known.update(archived_ids or set())
     return [
         artifact for artifact in artifacts
         if artifact.get("name", "").startswith(EVENT_PREFIX)
@@ -67,6 +69,7 @@ def _pending_events(state: dict, artifacts: list[dict]) -> list[dict]:
 
 
 def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, current_run: str,
+                        archived_ids: set[int] | None = None,
                         timeout_seconds: int = 300, poll_seconds: float = 5.0,
                         clock=time.monotonic, sleep=time.sleep) -> tuple[GitHubReader, dict, list[dict]]:
     require(pending, "Pending-event wait requires at least one event")
@@ -96,7 +99,9 @@ def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, curren
                 policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]
             )
             state = restore_snapshot(fresh, artifacts, current_run=current_run)
-            if state is not None and pending_ids <= _known_event_artifact_ids(state):
+            known = _known_event_artifact_ids(state) if state is not None else set()
+            known.update(archived_ids or set())
+            if state is not None and pending_ids <= known:
                 return fresh, state, artifacts
         sleep(poll_seconds)
     require(False, "STALE_CANONICAL_STATE_REDUCTION_TIMEOUT")
@@ -105,6 +110,8 @@ def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, curren
 def restore_domain(domain: str, output: Path, metadata_output: Path | None = None) -> str:
     require(domain in DOMAINS, "Unknown canonical domain")
     policy = strict_load((ROOT / "state_journal/POLICY.json").read_bytes())
+    archive_manifest = load_active_manifest(ROOT)
+    archive_ids = archived_artifact_ids(archive_manifest)
     require(policy["mode"] == "CANONICAL", "Production canonical mode is not active")
     require(policy["canonical_snapshot_authorized"] is True, "Canonical snapshot is not authorized")
     require(policy["production_readers_enabled"] is True and policy["production_cutover_complete"] is True,
@@ -139,15 +146,16 @@ def restore_domain(domain: str, output: Path, metadata_output: Path | None = Non
                 "Latest reducer snapshot is not production-authoritative")
         snapshot_meta = latest_snapshot_artifact(artifacts, current_run=current_run)
         require(snapshot_meta is not None, "Canonical snapshot provider metadata missing")
-        pending = _pending_events(state, artifacts)
+        pending = _pending_events(state, artifacts, archived_ids=archive_ids)
         waited_for_reducer = bool(pending)
         if pending:
             reader, state, artifacts = _wait_for_reduction(
-                token, policy, pending, current_run=current_run
+                token, policy, pending, current_run=current_run, archived_ids=archive_ids
             )
             require(state["mode"] == "CANONICAL" and state["production_authority"] is True,
                     "Reducer catch-up snapshot is not production-authoritative")
-            require(not _pending_events(state, artifacts), "STALE_CANONICAL_STATE_PENDING_REDUCTION")
+            require(not _pending_events(state, artifacts, archived_ids=archive_ids),
+                    "STALE_CANONICAL_STATE_PENDING_REDUCTION")
             snapshot_meta = latest_snapshot_artifact(artifacts, current_run=current_run)
             require(snapshot_meta is not None, "Canonical snapshot provider metadata missing after reducer wait")
         restore_status = "RESTORED_CANONICAL_AFTER_REDUCER_WAIT" if waited_for_reducer else "RESTORED_CANONICAL"

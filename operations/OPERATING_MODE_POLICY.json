@@ -43,6 +43,14 @@
     "agent-heartbeat-sweep": {
       "cron": "29 */2 * * *",
       "purpose": "workload-controlled health-check heartbeat for every registered persistent agent"
+    },
+    "portfolio-state-reducer": {
+      "cron": "11 4 * * *",
+      "purpose": "daily canonical snapshot refresh from validated durable checkpoint/archive lineage"
+    },
+    "portfolio-state-checkpoint-candidate": {
+      "cron": "19 4 * * 0",
+      "purpose": "weekly protected candidate for durable canonical checkpoint/archive compaction"
     }
   },
   "event_driven_workflows": {

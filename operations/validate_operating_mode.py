@@ -201,11 +201,15 @@ def validate_operating_mode():
       "portfolio-notification-cycle":"7 */6 * * *",
       "command-center-pages":"37 * * * *",
       "agent-heartbeat-sweep":"29 */2 * * *",
+      "portfolio-state-reducer":"11 4 * * *",
+      "portfolio-state-checkpoint-candidate":"19 4 * * 0",
     }
     req(expected["runtime-daily-learning"].split()[0] != expected["command-center-pages"].split()[0],
         "daily learning must not collide with hourly command-center publication")
     req(expected["runtime-weekly-synthesis"].split()[0] != expected["runtime-hourly-sync"].split()[0],
         "weekly synthesis must not collide with hourly runtime sync")
+    req(expected["portfolio-state-reducer"].split()[0] != expected["portfolio-state-checkpoint-candidate"].split()[0],
+        "checkpoint candidate must not collide with daily reducer refresh")
     req(set(p["approved_recurring_workflows"])==set(expected),"approved recurring workflow set changed")
     workflow_dir=ROOT/".github/workflows"
     actual=scheduled_workflow_inventory(workflow_dir)
