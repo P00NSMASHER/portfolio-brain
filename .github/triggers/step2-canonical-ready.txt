@@ -1,1 +1,1 @@
-Trigger one protected canonical-ready reducer publication after Step-2 live parity.
+Trigger protected canonical reducer recovery proof after sequential rerun-attempt repair. 2026-09-30.
