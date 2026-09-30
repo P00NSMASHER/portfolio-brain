@@ -52,15 +52,28 @@ jobs:
       - name: Restore canonical Hunter proposal backlog
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m state_journal.production_reader --domain proposals --output hunting/live/hunter_proposal_state.json
+      - name: Restore REPO-001 scout intake dedupe state
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: >-
+          python -m hunting.repo_scout_artifact_state
+          --output hunting/live/repo_scout_intake_state.json
+          --metadata-output hunting/out/repo_scout_restore.json
       - name: Restore canonical agent heartbeat state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m state_journal.production_reader --domain heartbeat --output agents/live/agent_heartbeat_state.json
       - name: Verify Hunter calibration corpus
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m hunting.calibration --output hunting/out/calibration_report.json
+      - name: Intake bounded REPO-001 scout candidates
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
+        run: python -m hunting.repo_scout_intake --state hunting/live/repo_scout_intake_state.json --output-dir hunting/out
       - name: Run autonomous bounded Hunter cycle
         if: ${{ steps.workload.outputs.allowed == 'true' }}
-        run: python -m hunting.autonomous_hunter --state hunting/live/hunter_state.json --output-dir hunting/out
+        run: >-
+          python -m hunting.autonomous_hunter
+          --state hunting/live/hunter_state.json
+          --output-dir hunting/out
+          --repo-scout-intake hunting/out/repo_scout_intake.json
       - name: Heartbeat Hunter
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-

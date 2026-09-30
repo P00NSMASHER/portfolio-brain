@@ -125,6 +125,13 @@ jobs:
         if: ${{ steps.admission.outputs.allowed == 'true' }}
         run: python -m state_journal.production_reader --domain runtime --output runtime/live/runtime_state.json
 
+      - name: Restore durable project forwarding state
+        if: ${{ steps.admission.outputs.allowed == 'true' }}
+        run: >-
+          python -m runtime.forwarding_artifact_state
+          --output runtime/live/project_forwarding_state.json
+          --metadata-output runtime/out/project_forwarding_restore.json
+
       - name: Restore provider-health observability only
         if: ${{ steps.admission.outputs.allowed == 'true' }}
         run: >-
