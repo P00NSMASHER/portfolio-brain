@@ -68,9 +68,16 @@ jobs:
           assert e["project_id"]=="PRJ-006" and e["repository_id"]=="REPO-003"
           assert re.fullmatch(r"[0-9a-f]{40}",e["source_revision"])
           assert e["source_workflow_path"]==".github/workflows/health-dashboard.yml"
-          assert isinstance(e["source_run_id"],int)
-          assert isinstance(e["source_sequence"],int)
-          assert e["source_run_head_sha"]==e["source_revision"]
+          if e["automation_health"]=="BLOCKED_NO_EXACT_HEAD_HEALTH_RUN":
+              assert e["automation_progress"]=="SOURCE_REVISION_OBSERVED_HEALTH_RUN_MISSING"
+              assert e["source_run_id"] is None and e["source_sequence"] is None
+              assert e["source_run_head_sha"] is None
+          else:
+              assert e["automation_health"] in {"HEALTHY","DEGRADED","IN_PROGRESS"}
+              assert e["automation_progress"]=="EXACT_HEAD_HEALTH_RUN_OBSERVED"
+              assert isinstance(e["source_run_id"],int)
+              assert isinstance(e["source_sequence"],int)
+              assert e["source_run_head_sha"]==e["source_revision"]
           assert set(e["evidence_scope"])=={"AUTOMATION_HEALTH","PROGRESS_EVIDENCE"}
           assert e["payload_scope"]=="SANITIZED_OPERATIONAL_METADATA_ONLY"
           assert all(e[k] is False for k in (
