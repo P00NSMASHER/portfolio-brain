@@ -18,6 +18,7 @@ from state_journal.contracts import (
 from state_journal.reducer import make_snapshot, validate_snapshot, validate_checkpoint, advance, set_authority
 from state_journal.legacy_parity import verify as verify_legacy_parity
 from state_journal.transport import EVENT_PREFIX, SNAPSHOT_ARTIFACT, GitHubReader, artifact_digest, extract_json
+from runtime.artifact_state import _runtime_state_subsumes
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -274,6 +275,12 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
             if len(exact) != 1:
                 continue
             exact_event = exact[0][0]
+            exact_change = exact[0][2]
+            exact_receipt = exact_change["proofs"]["cycle_receipt"]
+            exact_changes_cursor = any(
+                observation.get("status") == "CHANGED"
+                for observation in exact_receipt.get("observations", [])
+            )
             for event, provider, change in rows:
                 if event["event_id"] == exact_event["event_id"]:
                     continue
@@ -282,6 +289,12 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
                     comparison.get("merge_base_commit", {}).get("sha") == event["source_sha"],
                     "Stale main observation source is not an ancestor of exact current main",
                 )
+                # A newer source SHA alone cannot discard a cursor-changing
+                # branch that the exact-current runtime state does not contain.
+                if exact_changes_cursor and not _runtime_state_subsumes(
+                    exact_change["after"], exact_receipt, change["after"]
+                ):
+                    continue
                 drop_ids.add(event["event_id"])
                 stale_main_observations.append({
                     "artifact_id": provider.get("artifact_id"),
