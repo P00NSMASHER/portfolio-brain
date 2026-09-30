@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from state_journal.contracts import DOMAINS, digest, validate_domain, require
 from state_journal.transport import GitHubReader
+from runtime.artifact_restore import InvalidStateArtifact
 from runtime import artifact_state as runtime_artifact
 from agents import artifact_state as heartbeat_artifact
 from hunting import artifact_state as hunter_artifact
@@ -49,14 +50,46 @@ def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("PORTFOLIO_GITHUB_TOKEN")
     reader = GitHubReader(token, max_requests=5) if token else None
     status = "NO_PRIOR_ARTIFACT"
+    run_cache: dict[int, dict] = {}
+
+    def source_run(run_id: int) -> dict:
+        if run_id not in run_cache:
+            assert reader is not None
+            run_cache[run_id] = reader.get(f"/actions/runs/{run_id}")
+        return run_cache[run_id]
+
     try:
         for _attempt in range(5):
             output.unlink(missing_ok=True)
             metadata.unlink(missing_ok=True)
-            if domain == "runtime":
-                status = _restore_runtime(output, metadata)
-            else:
-                status = RESTORERS[domain](output, metadata)
+            try:
+                if domain == "runtime":
+                    status = _restore_runtime(output, metadata)
+                else:
+                    status = RESTORERS[domain](output, metadata)
+            except InvalidStateArtifact as exc:
+                if (
+                    str(exc) != "conflicting state artifacts at highest sequence"
+                    or reader is None
+                    or not exc.conflicting_run_ids
+                ):
+                    raise
+                current_run = os.environ.get("GITHUB_RUN_ID")
+                nonterminal = None
+                for source_run_id in exc.conflicting_run_ids:
+                    if str(source_run_id) == str(current_run):
+                        continue
+                    run = source_run(source_run_id)
+                    if not (
+                        run.get("status") == "completed"
+                        and run.get("conclusion") in {"success", "failure", "cancelled", "timed_out"}
+                    ):
+                        nonterminal = source_run_id
+                        break
+                if nonterminal is None:
+                    raise
+                os.environ["GITHUB_RUN_ID"] = str(nonterminal)
+                continue
             if not output.exists() or not metadata.exists() or reader is None:
                 break
             meta = json.loads(metadata.read_text())
@@ -73,10 +106,10 @@ def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
                 source_run_ids = [source_run_id]
             nonterminal = None
             for source_run_id in source_run_ids:
-                source_run = reader.get(f"/actions/runs/{source_run_id}")
+                run = source_run(source_run_id)
                 if not (
-                    source_run.get("status") == "completed"
-                    and source_run.get("conclusion") in {"success", "failure", "cancelled", "timed_out"}
+                    run.get("status") == "completed"
+                    and run.get("conclusion") in {"success", "failure", "cancelled", "timed_out"}
                 ):
                     nonterminal = source_run_id
                     break

@@ -13,7 +13,9 @@ from typing import Any, Callable
 
 
 class InvalidStateArtifact(ValueError):
-    pass
+    def __init__(self, message: str, *, conflicting_run_ids: tuple[int, ...] = ()):
+        super().__init__(message)
+        self.conflicting_run_ids = conflicting_run_ids
 
 
 def _validated_payload(
@@ -167,7 +169,16 @@ def restore_latest_valid_state(
         # Divergent payloads claiming the same latest version are an ambiguous
         # fork caused by a race or corruption. Upload time cannot safely decide
         # which branch contains every committed mutation, so fail closed.
-        raise InvalidStateArtifact("conflicting state artifacts at highest sequence")
+        run_ids = {
+            (item.get("workflow_run") or {}).get("id")
+            for _, item, _, _ in highest
+        }
+        raise InvalidStateArtifact(
+            "conflicting state artifacts at highest sequence",
+            conflicting_run_ids=tuple(sorted(
+                run_id for run_id in run_ids if type(run_id) is int and run_id > 0
+            )),
+        )
     sequence, item, payload, state_hash = highest[0]
     selected_newest_valid = item is valid[0][1]
     status = "RESTORED" if selected_newest_valid else "RESTORED_HIGHEST_SEQUENCE"
