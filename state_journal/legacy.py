@@ -6,6 +6,7 @@ from pathlib import Path
 from state_journal.contracts import DOMAINS, digest, validate_domain, require
 from state_journal.transport import GitHubReader
 from runtime import artifact_state as runtime_artifact
+from runtime.artifact_restore import prefer_state_hash
 from agents import artifact_state as heartbeat_artifact
 from hunting import artifact_state as hunter_artifact
 from hunting import proposal_artifact_state as proposal_artifact
@@ -39,8 +40,16 @@ def _restore_runtime(output: Path, metadata: Path) -> str:
     )
 
 
-def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
+def restore_domain(
+    root: Path,
+    domain: str,
+    work: Path,
+    *,
+    expected_state: dict | None = None,
+) -> tuple[dict, str]:
     require(domain in DOMAINS, "Unknown checkpoint domain")
+    if expected_state is not None:
+        validate_domain(domain, expected_state)
     work.mkdir(parents=True, exist_ok=True)
     output = work / f"{domain}.json"
     metadata = work / f"{domain}.metadata.json"
@@ -53,10 +62,17 @@ def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
         for _attempt in range(5):
             output.unlink(missing_ok=True)
             metadata.unlink(missing_ok=True)
-            if domain == "runtime":
-                status = _restore_runtime(output, metadata)
+            if expected_state is None:
+                if domain == "runtime":
+                    status = _restore_runtime(output, metadata)
+                else:
+                    status = RESTORERS[domain](output, metadata)
             else:
-                status = RESTORERS[domain](output, metadata)
+                with prefer_state_hash(digest(expected_state)):
+                    if domain == "runtime":
+                        status = _restore_runtime(output, metadata)
+                    else:
+                        status = RESTORERS[domain](output, metadata)
             if not output.exists() or not metadata.exists() or reader is None:
                 break
             meta = json.loads(metadata.read_text())
@@ -150,10 +166,18 @@ def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
     return state, ref
 
 
-def restore_all(root: Path, work: Path) -> tuple[dict, dict]:
+def restore_all(
+    root: Path,
+    work: Path,
+    *,
+    expected_states: dict[str, dict] | None = None,
+) -> tuple[dict, dict]:
     states, refs = {}, {}
     for domain in sorted(DOMAINS):
-        state, ref = restore_domain(root, domain, work / domain)
+        expected_state = None if expected_states is None else expected_states[domain]
+        state, ref = restore_domain(
+            root, domain, work / domain, expected_state=expected_state
+        )
         states[domain] = state
         refs[domain] = ref
     return states, refs

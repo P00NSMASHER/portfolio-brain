@@ -7,6 +7,8 @@ import hashlib
 import os
 import tempfile
 import zipfile
+from contextlib import contextmanager
+from contextvars import ContextVar
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Callable
@@ -14,6 +16,21 @@ from typing import Any, Callable
 
 class InvalidStateArtifact(ValueError):
     pass
+
+
+_preferred_state_hash: ContextVar[str | None] = ContextVar(
+    "preferred_state_hash", default=None
+)
+
+
+@contextmanager
+def prefer_state_hash(state_hash: str):
+    """Prefer an independently verified hash only for an equal-sequence fork."""
+    token = _preferred_state_hash.set(state_hash)
+    try:
+        yield
+    finally:
+        _preferred_state_hash.reset(token)
 
 
 def _validated_payload(
@@ -163,11 +180,14 @@ def restore_latest_valid_state(
     highest_sequence = max(entry[0] for entry in valid)
     highest = [entry for entry in valid if entry[0] == highest_sequence]
     if len({entry[3] for entry in highest}) != 1:
-        # A sequence is a durable-state version, not merely an ordering hint.
-        # Divergent payloads claiming the same latest version are an ambiguous
-        # fork caused by a race or corruption. Upload time cannot safely decide
-        # which branch contains every committed mutation, so fail closed.
-        raise InvalidStateArtifact("conflicting state artifacts at highest sequence")
+        preferred_hash = _preferred_state_hash.get()
+        matching = [entry for entry in highest if entry[3] == preferred_hash]
+        if not preferred_hash or not matching:
+            # A sequence is a durable-state version, not merely an ordering
+            # hint. Without an exact independently verified match, the fork
+            # remains ambiguous and upload time cannot safely choose a branch.
+            raise InvalidStateArtifact("conflicting state artifacts at highest sequence")
+        highest = matching
     sequence, item, payload, state_hash = highest[0]
     selected_newest_valid = item is valid[0][1]
     status = "RESTORED" if selected_newest_valid else "RESTORED_HIGHEST_SEQUENCE"
