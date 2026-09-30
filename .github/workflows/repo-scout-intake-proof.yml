@@ -37,7 +37,8 @@ jobs:
           assert re.fullmatch(r"[0-9a-f]{40}",data["source_revision"])
           assert 0 <= data["selected_candidates"] <= data["max_intake"] == 2
           assert all(x["status"]=="ELIGIBLE_FOR_EXISTING_HUNTER_INSPECTION" for x in data["hints"])
-          assert all(x["authority_granted"] is False and x["rights_granted"] is False and x["value_verified"] is False for x in data["hints"])
+          assert data["authority_granted"] is False
+          assert all(x["authority_class"]=="OBSERVE" and x["rights_granted"] is False and x["value_verified"] is False and x["reuse_authority_granted"] is False for x in data["hints"])
           PY
       - name: Upload sanitized live intake receipt
         uses: actions/upload-artifact@v4
