@@ -152,6 +152,7 @@ def validate_operating_mode():
     req(p["schema_version"]=="1.0.0" and p["default_branch"]=="main","operating policy identity/default branch mismatch")
     req(p["release_phase"] in {"STEP25_FINAL_RELEASE_CANDIDATE","STEP25_OPERATIONAL"},"invalid release phase")
     req(p["interactive_chatgpt_runtime_dependency"] is False,"interactive ChatGPT became runtime dependency")
+    req(s.get("core_autonomy_external_connector_dependency") is False,"core autonomy gained an external connector dependency")
     req(p["paid_model_api_default"]=="FINITE_GOVERNED_BUDGET_PROVIDER_GATED","paid/model operating mode mismatch")
 
     operational=s["status"]=="OPERATIONAL"
@@ -418,6 +419,8 @@ def validate_operating_mode():
     req(gmail.get("provider")=="CHATGPT_GMAIL_CONNECTOR" and gmail.get("account_ref")=="PRIMARY_GMAIL_CONNECTOR","Gmail connector gateway binding missing")
     req(gmail.get("execution_task_id")=="6ab377c25df08191a6e2aa1537d9d2ef","Gmail gateway executor task mismatch")
     req(gmail.get("planner_task_id")=="6ab377be3184819186a3075f37a530b8","Gmail gateway planner task mismatch")
+    req(gmail.get("required_for_core_autonomy") is False,"Gmail became a core autonomy dependency")
+    req(gmail.get("execution_mode")=="OPTIONAL_EXPLICIT_MACHINE_POLICY_GATE","Gmail optional execution semantics drifted")
     req(load("action_engine/KILL_SWITCH.json").get("disabled") is False,"checked-in Gmail action kill switch unexpectedly active")
     req(not (ROOT/".github/workflows/portfolio-action-worker.yml").exists(),"obsolete SMTP action worker still present")
     gateway_status=s.get("connector_gateways",{}).get("gmail",{})
@@ -447,6 +450,7 @@ def validate_operating_mode():
       "step24_authority_violations":step24["authority_violations"],
       "step24_paid_cost_usd":step24["paid_cost_usd"],
       "interactive_chatgpt_runtime_dependency":False,
+      "core_autonomy_external_connector_dependency":False,
       "reasoning_fallback_provider":fallback["provider"],
       "reasoning_fallback_authority_granted":fallback["authority_granted"],
       "reasoning_fallback_evidence_upgraded":fallback["evidence_upgraded"],
