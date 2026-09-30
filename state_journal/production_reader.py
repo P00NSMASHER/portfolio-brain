@@ -109,8 +109,15 @@ def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, curren
             seen_reducers.add(reducer_run["id"])
             fresh = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
             effective_start = scan_start or policy["artifact_scan_start"]
+            covered_run_ids = {
+                ref["source_run_id"]
+                for refs in (archived_state or {}).get("evidence", {}).values()
+                for ref in refs
+                if ref.get("kind") == "GITHUB_ACTIONS" and type(ref.get("source_run_id")) is int
+            }
             artifacts = getattr(fresh, "list_recent_journal_artifacts", fresh.list_recent_artifacts)(
-                effective_start, max_pages=policy["limits"]["max_artifact_pages"]
+                effective_start, max_pages=policy["limits"]["max_artifact_pages"],
+                covered_run_ids=covered_run_ids,
             )
             state = restore_snapshot(
                 fresh, artifacts, current_run=current_run,
@@ -158,8 +165,15 @@ def restore_domain(domain: str, output: Path, metadata_output: Path | None = Non
             if archive_manifest is not None
             else policy["artifact_scan_start"]
         )
+        covered_run_ids = {
+            ref["source_run_id"]
+            for refs in (archived_state or {}).get("evidence", {}).values()
+            for ref in refs
+            if ref.get("kind") == "GITHUB_ACTIONS" and type(ref.get("source_run_id")) is int
+        }
         artifacts = getattr(reader, "list_recent_journal_artifacts", reader.list_recent_artifacts)(
-            scan_start, max_pages=policy["limits"]["max_artifact_pages"]
+            scan_start, max_pages=policy["limits"]["max_artifact_pages"],
+            covered_run_ids=covered_run_ids,
         )
         state = restore_snapshot(
             reader, artifacts, current_run=current_run,
