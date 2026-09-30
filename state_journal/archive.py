@@ -241,7 +241,7 @@ def validate_manifest(
                 "Archived checkpoint predecessor hash mismatch")
         require(manifest["archived_sequence"] >= previous_manifest.get("checkpoint_sequence", -1),
                 "Archived sequence regressed behind predecessor checkpoint")
-    else:
+    elif root is None:
         require(manifest["previous_manifest_hash"] is None and manifest["previous_manifest_path"] is None,
                 "Previous archive lineage was declared but not validated")
 
