@@ -95,6 +95,7 @@ def restore_latest_valid_state(
     validator: Callable[[dict[str, Any]], None] | None = None,
     metadata_output: Path | None = None,
     max_candidates: int = 5,
+    preferred_state_hash: str | None = None,
 ) -> str:
     if type(max_candidates) is not int or max_candidates < 1:
         raise ValueError("max_candidates must be a positive integer")
@@ -163,14 +164,20 @@ def restore_latest_valid_state(
     highest_sequence = max(entry[0] for entry in valid)
     highest = [entry for entry in valid if entry[0] == highest_sequence]
     if len({entry[3] for entry in highest}) != 1:
-        # A sequence is a durable-state version, not merely an ordering hint.
-        # Divergent payloads claiming the same latest version are an ambiguous
-        # fork caused by a race or corruption. Upload time cannot safely decide
-        # which branch contains every committed mutation, so fail closed.
-        raise InvalidStateArtifact("conflicting state artifacts at highest sequence")
+        matching = [
+            entry for entry in highest
+            if preferred_state_hash is not None and entry[3] == preferred_state_hash
+        ]
+        if not matching:
+            # A sequence is a durable-state version, not merely an ordering
+            # hint. Upload time cannot safely choose a divergent payload.
+            raise InvalidStateArtifact("conflicting state artifacts at highest sequence")
+        highest = matching
     sequence, item, payload, state_hash = highest[0]
     selected_newest_valid = item is valid[0][1]
     status = "RESTORED" if selected_newest_valid else "RESTORED_HIGHEST_SEQUENCE"
+    if preferred_state_hash is not None and len({entry[3] for entry in valid if entry[0] == highest_sequence}) > 1:
+        status = "RESTORED_REDUCER_VERIFIED_STATE_AFTER_CONFLICT"
     if rejected:
         status += f"_AFTER_REJECTING_{rejected}_INVALID"
     _atomic_write(output, payload)

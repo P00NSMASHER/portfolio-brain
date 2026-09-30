@@ -10,7 +10,9 @@ from dashboard.history_state import ARTIFACT_NAME,validate_state
 
 class RestoreError(RuntimeError):pass
 
-def restore(output:Path,metadata_output:Path|None=None)->str:
+def restore(
+    output:Path,metadata_output:Path|None=None,*,preferred_state_hash:str|None=None
+)->str:
     token=os.environ.get("GITHUB_TOKEN") or os.environ.get("PORTFOLIO_GITHUB_TOKEN")
     repo=os.environ.get("GITHUB_REPOSITORY");run=os.environ.get("GITHUB_RUN_ID")
     if not token or not repo:return "NO_ACTIONS_CONTEXT"
@@ -37,6 +39,7 @@ def restore(output:Path,metadata_output:Path|None=None)->str:
       member_name="history_state.json",expected_state_id="portfolio-command-center-history",
       max_archive_bytes=5_242_880,max_state_bytes=5_242_880,validator=validate_state,
       metadata_output=metadata_output,
+      preferred_state_hash=preferred_state_hash,
     )
 
 def main():

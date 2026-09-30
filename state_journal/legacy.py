@@ -30,21 +30,25 @@ RESTORERS = {
     "history": history_artifact.restore,
 }
 
-def _restore_runtime(output: Path, metadata: Path) -> str:
+def _restore_runtime(output: Path, metadata: Path, preferred_state_hash: str | None = None) -> str:
     return runtime_artifact.restore(
         output=output,
         metadata_output=metadata,
         provider_health_output=None,
         provider_health_metadata_output=None,
+        preferred_state_hash=preferred_state_hash,
     )
 
 
-def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
+def restore_domain(
+    root: Path, domain: str, work: Path, *, expected_state: dict | None = None
+) -> tuple[dict, str]:
     require(domain in DOMAINS, "Unknown checkpoint domain")
     work.mkdir(parents=True, exist_ok=True)
     output = work / f"{domain}.json"
     metadata = work / f"{domain}.metadata.json"
     seed = DOMAINS[domain][3]
+    preferred_state_hash = None if expected_state is None else digest(expected_state)
     original_run = os.environ.get("GITHUB_RUN_ID")
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("PORTFOLIO_GITHUB_TOKEN")
     reader = GitHubReader(token, max_requests=5) if token else None
@@ -54,9 +58,13 @@ def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
             output.unlink(missing_ok=True)
             metadata.unlink(missing_ok=True)
             if domain == "runtime":
-                status = _restore_runtime(output, metadata)
-            else:
+                status = _restore_runtime(output, metadata, preferred_state_hash)
+            elif preferred_state_hash is None:
                 status = RESTORERS[domain](output, metadata)
+            else:
+                status = RESTORERS[domain](
+                    output, metadata, preferred_state_hash=preferred_state_hash
+                )
             if not output.exists() or not metadata.exists() or reader is None:
                 break
             meta = json.loads(metadata.read_text())
@@ -150,10 +158,15 @@ def restore_domain(root: Path, domain: str, work: Path) -> tuple[dict, str]:
     return state, ref
 
 
-def restore_all(root: Path, work: Path) -> tuple[dict, dict]:
+def restore_all(
+    root: Path, work: Path, *, expected_states: dict | None = None
+) -> tuple[dict, dict]:
     states, refs = {}, {}
     for domain in sorted(DOMAINS):
-        state, ref = restore_domain(root, domain, work / domain)
+        state, ref = restore_domain(
+            root, domain, work / domain,
+            expected_state=None if expected_states is None else expected_states.get(domain),
+        )
         states[domain] = state
         refs[domain] = ref
     return states, refs

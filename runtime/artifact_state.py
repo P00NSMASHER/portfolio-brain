@@ -247,7 +247,8 @@ def _no_provider_metadata(path:Path|None)->None:
 
 def restore(*, output: Path, metadata_output: Path | None = None,
             provider_health_output:Path|None=None,
-            provider_health_metadata_output:Path|None=None)->str:
+            provider_health_metadata_output:Path|None=None,
+            preferred_state_hash:str|None=None)->str:
     token=os.environ.get("GITHUB_TOKEN") or os.environ.get("PORTFOLIO_GITHUB_TOKEN")
     repository=os.environ.get("GITHUB_REPOSITORY")
     current_run=os.environ.get("GITHUB_RUN_ID")
@@ -277,6 +278,7 @@ def restore(*, output: Path, metadata_output: Path | None = None,
             member_name="runtime_state.json",expected_state_id="portfolio-runtime-state",
             max_archive_bytes=budgets["max_output_bytes"],max_state_bytes=budgets["max_output_bytes"],
             validator=validate_state,metadata_output=metadata_output,
+            preferred_state_hash=preferred_state_hash,
         )
     except InvalidStateArtifact as exc:
         if str(exc) != "conflicting state artifacts at highest sequence":
@@ -295,6 +297,7 @@ def restore(*, output: Path, metadata_output: Path | None = None,
             member_name="runtime_state.json",expected_state_id="portfolio-runtime-state",
             max_archive_bytes=budgets["max_output_bytes"],max_state_bytes=budgets["max_output_bytes"],
             validator=validate_state,metadata_output=metadata_output,
+            preferred_state_hash=preferred_state_hash,
         )
         status="RESTORED_DOMINANT_RUNTIME_AFTER_CONCURRENT_FORK_" + "_".join(map(str, fork_ids))
     if provider_health_output is not None:
