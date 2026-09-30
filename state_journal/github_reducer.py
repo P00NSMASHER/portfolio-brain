@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 from runtime.artifact_restore import _atomic_write
-from state_journal.contracts import REPOSITORY, JournalError, canonical, digest, require, strict_load
+from state_journal.contracts import REPOSITORY, Conflict, JournalError, canonical, digest, require, strict_load
 from state_journal.reducer import make_snapshot, validate_snapshot, validate_checkpoint, advance, set_authority
 from state_journal.legacy_parity import verify as verify_legacy_parity
 from state_journal.transport import EVENT_PREFIX, SNAPSHOT_ARTIFACT, GitHubReader, artifact_digest, extract_json
@@ -103,8 +103,10 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
                 "Canonical checkpoint root changed")
     known_artifacts = {r["artifact_id"]: r["archive_digest"] for refs in state["evidence"].values()
                        for r in refs if r.get("kind") == "GITHUB_ACTIONS"}
+    committed_events = {event["event_id"]: event for event in state["events"]}
     incoming = []
     excluded = 0
+    rerun_conflicts = []
     for a in artifacts:
         if not a.get("name", "").startswith(EVENT_PREFIX):
             continue
@@ -115,11 +117,36 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
             require(a.get("digest") == known_artifacts[a["id"]], "Previously ingested provider digest changed")
             continue
         require(a.get("expired") is False, "Unconsumed event artifact expired; no silent evidence loss")
-        incoming.append(reader.event(a, upload_steps))
+        event, provider = reader.event(a, upload_steps)
+        committed = committed_events.get(event["event_id"])
+        if committed is not None and committed != event:
+            prior_attempts = sorted({
+                ref["source_run_attempt"]
+                for ref in state["evidence"].get(event["event_id"], [])
+                if ref.get("kind") == "GITHUB_ACTIONS"
+                and ref.get("source_run_id") == provider.get("source_run_id")
+                and ref.get("source_sha") == provider.get("source_sha")
+                and type(ref.get("source_run_attempt")) is int
+            })
+            attempt = provider.get("source_run_attempt")
+            if prior_attempts and type(attempt) is int and attempt > min(prior_attempts):
+                rerun_conflicts.append({
+                    "artifact_id": a["id"],
+                    "event_id": event["event_id"],
+                    "event_hash": event["event_hash"],
+                    "source_run_id": provider["source_run_id"],
+                    "source_run_attempt": attempt,
+                    "committed_source_run_attempt": min(prior_attempts),
+                })
+                continue
+            raise Conflict("Conflicting event identity is not a later rerun of an already committed source")
+        incoming.append((event, provider))
     candidate = advance(state, incoming)
     return candidate, {"status": "PASS", "mode": "SHADOW", "production_authority": False,
                        "canonical_sequence": candidate["sequence"], "events_total": candidate["event_count"],
                        "new_deliveries": len(incoming), "excluded_non_main_artifacts": excluded,
+                       "quarantined_rerun_conflict_count": len(rerun_conflicts),
+                       "quarantined_rerun_conflicts": rerun_conflicts,
                        "projection_hash": candidate["projection"]["projection_hash"]}
 
 
