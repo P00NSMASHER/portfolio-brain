@@ -88,7 +88,7 @@ def _request(core: dict[str, Any]) -> dict[str, Any]:
 
 def validate_request(data: dict[str, Any]) -> None:
     fields = {
-        "schema_version", "source_kind", "source_ref", "source_run_id", "source_workflow",
+        "schema_version", "source_kind", "source_ref", "project_ids", "source_run_id", "source_workflow",
         "source_workflow_path", "failed_head_sha", "base_sha", "target_paths",
         "regression_requirement", "failure_summary", "evidence_refs", "request_id", "fingerprint",
     }
@@ -96,6 +96,10 @@ def validate_request(data: dict[str, Any]) -> None:
     req(data["schema_version"] == "1.0.0", "autonomous repair request schema changed")
     req(data["source_kind"] in {"WORKFLOW_FAILURE", "SCHEDULER_REPAIR_TASK"}, "autonomous repair source kind invalid")
     req(isinstance(data["source_ref"], str) and data["source_ref"], "autonomous repair source ref missing")
+    req(isinstance(data["project_ids"], list) and data["project_ids"]
+        and len(data["project_ids"]) == len(set(data["project_ids"]))
+        and all(isinstance(x, str) and x for x in data["project_ids"]),
+        "autonomous repair project ids invalid")
     req(data["source_run_id"] is None or (type(data["source_run_id"]) is int and data["source_run_id"] > 0), "source run id invalid")
     req(data["source_workflow"] is None or isinstance(data["source_workflow"], str), "source workflow invalid")
     req(data["source_workflow_path"] is None or isinstance(data["source_workflow_path"], str), "source workflow path invalid")
@@ -133,6 +137,7 @@ def request_from_run(run: dict[str, Any], failed_log: str, *, base_sha: str) -> 
         "schema_version": "1.0.0",
         "source_kind": "WORKFLOW_FAILURE",
         "source_ref": f"workflow-run:{run['id']}",
+        "project_ids": ["PRJ-000"],
         "source_run_id": run["id"],
         "source_workflow": name,
         "source_workflow_path": workflows[name],
@@ -165,6 +170,7 @@ def request_from_scheduler_work(work: dict[str, Any], repair_state: dict[str, An
         "schema_version": "1.0.0",
         "source_kind": "SCHEDULER_REPAIR_TASK",
         "source_ref": work["source_ref"],
+        "project_ids": sorted(work.get("project_ids") or []),
         "source_run_id": None,
         "source_workflow": None,
         "source_workflow_path": None,
@@ -367,18 +373,52 @@ def _http_json(url: str, token: str, *, method: str = "GET", payload: dict[str, 
         return json.loads(body.decode("utf-8")) if body else {}
 
 
-def find_repair_evidence(source_ref: str, token: str | None = None) -> dict[str, Any]:
+def _body_marker(body: str, name: str) -> str | None:
+    prefix = name + ":"
+    for line in (body or "").splitlines():
+        if line.startswith(prefix):
+            value = line[len(prefix):].strip()
+            return value or None
+    return None
+
+
+def find_repair_evidence(source_ref: str, token: str | None = None,
+                         fingerprint: str | None = None) -> dict[str, Any]:
+    """Resolve a repair PR and bind check evidence to its exact current head.
+
+    A fingerprint filter is used by REPAIR dispatch/dedupe so a stale candidate
+    for the same source task cannot complete a newer exact-base request.
+    TEST/VERIFICATION may omit it and bind to the latest candidate for the task.
+    Closed/merged PRs remain observable because protected integration can finish
+    before the next scheduler cycle.
+    """
     req(isinstance(source_ref, str) and source_ref, "repair evidence source ref missing")
+    if fingerprint is not None:
+        req(isinstance(fingerprint, str) and fingerprint.startswith("sha256:"),
+            "repair evidence fingerprint invalid")
     token = token or os.environ.get("GITHUB_TOKEN") or os.environ.get("PORTFOLIO_GITHUB_TOKEN")
     req(isinstance(token, str) and token, "GitHub token required for repair evidence")
-    pulls = _http_json(f"https://api.github.com/repos/{REPOSITORY}/pulls?state=open&per_page=100", token)
-    marker = f"REPAIR_SOURCE_REF:{source_ref}"
-    matches = [row for row in pulls if marker in (row.get("body") or "")]
+    pulls = _http_json(f"https://api.github.com/repos/{REPOSITORY}/pulls?state=all&per_page=100", token)
+    source_marker = f"REPAIR_SOURCE_REF:{source_ref}"
+    matches = []
+    for row in pulls:
+        body = row.get("body") or ""
+        if source_marker not in body:
+            continue
+        repair_fingerprint = _body_marker(body, "AUTO_REPAIR_FINGERPRINT")
+        if fingerprint is not None and repair_fingerprint != fingerprint:
+            continue
+        matches.append(row)
     if not matches:
-        return {"status": "NO_REPAIR_PR", "source_ref": source_ref, "foundation_success": False,
-                "independent_success": False, "pr_number": None, "head_sha": None, "checks": []}
+        return {
+            "status": "NO_REPAIR_PR", "source_ref": source_ref,
+            "repair_fingerprint": fingerprint, "foundation_success": False,
+            "independent_success": False, "pr_number": None, "head_sha": None,
+            "factory_work_id": None, "factory_preflight_receipt": None, "checks": [],
+        }
     matches.sort(key=lambda row: (row.get("updated_at") or "", row.get("number") or 0), reverse=True)
     pr = matches[0]
+    body = pr.get("body") or ""
     head_sha = pr.get("head", {}).get("sha")
     req(_sha40(head_sha), "repair PR head SHA invalid")
     checks_doc = _http_json(f"https://api.github.com/repos/{REPOSITORY}/commits/{head_sha}/check-runs?per_page=100", token)
@@ -402,7 +442,12 @@ def find_repair_evidence(source_ref: str, token: str | None = None) -> dict[str,
     return {
         "status": "REPAIR_PR_FOUND",
         "source_ref": source_ref,
+        "repair_fingerprint": _body_marker(body, "AUTO_REPAIR_FINGERPRINT"),
+        "factory_work_id": _body_marker(body, "FACTORY_WORK_ID"),
+        "factory_preflight_receipt": _body_marker(body, "FACTORY_PREFLIGHT_RECEIPT"),
         "pr_number": pr.get("number"),
+        "pr_state": pr.get("state"),
+        "merged_at": pr.get("merged_at"),
         "head_sha": head_sha,
         "foundation_success": passed(foundation),
         "independent_success": passed(independent),
@@ -428,7 +473,10 @@ def dispatch_requests(requests: list[dict[str, Any]], *, token: str, repository:
             f"https://api.github.com/repos/{repository}/actions/workflows/{encoded_workflow}/dispatches",
             token,
             method="POST",
-            payload={"ref": "main", "inputs": {"request_b64": request_b64}},
+            payload={"ref": "main", "inputs": {
+                "request_b64": request_b64,
+                "request_fingerprint": request["fingerprint"],
+            }},
         )
         receipts.append({
             "request_id": request["request_id"],
@@ -498,7 +546,9 @@ def main() -> int:
     elif args.command == "find-pr":
         request = json.loads(args.request.read_text(encoding="utf-8"))
         validate_request(request)
-        _write_json(args.output, find_repair_evidence(request["source_ref"]))
+        _write_json(args.output, find_repair_evidence(
+            request["source_ref"], fingerprint=request["fingerprint"]
+        ))
     elif args.command == "dispatch":
         requests = json.loads(args.requests.read_text(encoding="utf-8"))
         token = os.environ.get("GITHUB_TOKEN", "")
