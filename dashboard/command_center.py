@@ -2639,6 +2639,11 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
       <div class="section-head" style="margin-top:16px"><h2>Provider Readiness</h2>{_badge(provider_readiness["status"],_status_tone(provider_readiness["status"]))}</div>
       <table><tbody>
         <tr><td>Provider/model</td><td class="num">{_e((provider_readiness.get("provider_id") or "—") + "::" + (provider_readiness.get("model_id") or "—"))}</td></tr>
+        <tr><td>Configured</td><td class="num">{_e("unknown" if provider_readiness.get("configured") is None else provider_readiness.get("configured"))}</td></tr>
+        <tr><td>Enabled</td><td class="num">{_e("unknown" if provider_readiness.get("enabled") is None else provider_readiness.get("enabled"))}</td></tr>
+        <tr><td>Credential ready</td><td class="num">{_e("unknown" if provider_readiness.get("credential_ready") is None else provider_readiness.get("credential_ready"))}</td></tr>
+        <tr><td>Call verified</td><td class="num">{_e("unknown" if provider_readiness.get("call_verified") is None else provider_readiness.get("call_verified"))}</td></tr>
+        <tr><td>Last successful call</td><td class="num">{_e(compact_timestamp(provider_readiness.get("last_successful_at")))}</td></tr>
         <tr><td>Latest governed analysis</td><td class="num">{_e(provider_readiness["source_analysis_status"])}</td></tr>
         <tr><td>Internal cost gate</td><td class="num">{_e(provider_readiness.get("cost_gate_status") or "not blocked")}</td></tr>
         <tr><td>Retryable</td><td class="num">{_e(provider_readiness["retryable"])}</td></tr>
