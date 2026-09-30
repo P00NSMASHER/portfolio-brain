@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from runtime.artifact_restore import _atomic_write
+from runtime.artifact_state import _runtime_state_subsumes
 from state_journal.archive import (
     archived_event_hashes as manifest_event_hashes,
     archived_provider_artifacts as manifest_provider_artifacts,
@@ -282,6 +283,26 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
                     comparison.get("merge_base_commit", {}).get("sha") == event["source_sha"],
                     "Stale main observation source is not an ancestor of exact current main",
                 )
+                exact_change = exact[0][2]
+                exact_receipt = (exact_change.get("proofs") or {}).get("cycle_receipt")
+                exact_targets = {
+                    row.get("repository_id")
+                    for row in (exact_receipt or {}).get("observations", [])
+                    if isinstance(row, dict)
+                }
+                stale_receipt = (change.get("proofs") or {}).get("cycle_receipt")
+                stale_targets = {
+                    row.get("repository_id")
+                    for row in (stale_receipt or {}).get("observations", [])
+                    if isinstance(row, dict)
+                }
+                if exact_targets & stale_targets:
+                    require(
+                        _runtime_state_subsumes(
+                            exact_change["after"], exact_receipt, change["after"]
+                        ),
+                        "Exact-current-main runtime observation does not subsume stale predecessor fork",
+                    )
                 drop_ids.add(event["event_id"])
                 stale_main_observations.append({
                     "artifact_id": provider.get("artifact_id"),
