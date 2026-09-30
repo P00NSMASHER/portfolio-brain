@@ -133,9 +133,7 @@ class AutonomousRepairTests(unittest.TestCase):
         self.assertEqual(receipts[0]["dispatch_status"], "ACCEPTED")
         payload = http.call_args.kwargs["payload"]
         self.assertEqual(payload["ref"], "main")
-        self.assertEqual(set(payload["inputs"]), {"request_b64", "request_id", "request_fingerprint"})
-        self.assertEqual(payload["inputs"]["request_id"], request["request_id"])
-        self.assertEqual(payload["inputs"]["request_fingerprint"], request["fingerprint"])
+        self.assertEqual(set(payload["inputs"]), {"request_b64"})
 
     def test_repair_evidence_binds_checks_to_exact_integrations(self):
         pulls = [{
@@ -173,7 +171,11 @@ class AutonomousRepairTests(unittest.TestCase):
         self.assertIn('python -m unittest discover -s tests -p "test_*.py" -v', text)
         self.assertIn("gh workflow run foundation-ci.yml", text)
         self.assertIn("software_factory.scheduler_repair_bridge start", text)
-        self.assertIn("software_factory.scheduler_repair_bridge finalize", text)
+        self.assertIn("software_factory.scheduler_repair_bridge submit", text)
+        self.assertIn("software_factory.scheduler_repair_bridge verify", text)
+        self.assertIn("  factory-review:", text)
+        self.assertIn("--network none", text)
+        self.assertNotIn("software_factory.scheduler_repair_bridge finalize", text)
         self.assertIn("SCHEDULER_REPAIR_TASK", text)
         self.assertIn("Create isolated workflow-failure repair branch", text)
         self.assertIn("--no-ask-user", text)
