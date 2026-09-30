@@ -342,7 +342,9 @@ def validate_operating_mode():
         '".github/workflows/portfolio-independent-verifier.yml"',
         '"verification/independent_verifier.py"',
         "candidate modifies immutable verifier trust anchor",
-        "MAX_PR_FILE_PAGES = 5",
+        "MAX_COMPARE_FILES = 300",
+        "_current_main_changed_files(compare)",
+        "current-main compare file listing hit verifier bound",
     ):
         req(anchor in verifier_source,f"independent verifier trust-anchor control missing: {anchor}")
     for marker in (
