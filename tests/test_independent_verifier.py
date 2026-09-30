@@ -13,17 +13,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class IndependentVerifierTests(unittest.TestCase):
-    def responses(self, *, foundation_app=15368, foundation_conclusion="success"):
+    def responses(self, *, foundation_app=15368, foundation_conclusion="success", compare_files=None):
         main_sha="b"*40
         head_sha="c"*40
+        if compare_files is None:
+            compare_files=[]
         return [
             {
                 "head":{"repo":{"full_name":"P00NSMASHER/portfolio-brain"},"sha":head_sha},
                 "base":{"repo":{"full_name":"P00NSMASHER/portfolio-brain"},"ref":"main"},
             },
-            [],
             {"commit":{"sha":main_sha}},
-            {"merge_base_commit":{"sha":main_sha}},
+            {"merge_base_commit":{"sha":main_sha},"files":compare_files},
             {"check_runs":[{
                 "name":"validate","conclusion":foundation_conclusion,
                 "app":{"id":foundation_app},
@@ -40,8 +41,7 @@ class IndependentVerifierTests(unittest.TestCase):
         self.assertIn("Independent isolated verification passed",summary)
 
     def test_candidate_cannot_rewrite_verifier_trust_anchors(self):
-        responses=self.responses()
-        responses[1]=[{"filename":"verification/independent_verifier.py"}]
+        responses=self.responses(compare_files=[{"filename":"verification/independent_verifier.py"}])
         with patch("verification.independent_verifier._api", side_effect=responses):
             with self.assertRaisesRegex(IndependentVerifierError,"immutable verifier trust anchor"):
                 verify_exact_head(
@@ -50,14 +50,41 @@ class IndependentVerifierTests(unittest.TestCase):
                 )
 
     def test_non_verifier_changes_remain_eligible(self):
-        responses=self.responses()
-        responses[1]=[{"filename":"runtime/state.py"},{"filename":"tests/test_runtime_new.py"}]
+        responses=self.responses(compare_files=[
+            {"filename":"runtime/state.py"},{"filename":"tests/test_runtime_new.py"}
+        ])
         with patch("verification.independent_verifier._api", side_effect=responses):
             ok,_=verify_exact_head(
                 token="token",pr_number=7,expected_head_sha="c"*40,
                 full_exit=0,phase1_exit=0,operating_exit=0,
             )
         self.assertTrue(ok)
+
+    def test_trust_anchor_scope_uses_current_main_compare_not_historical_pr_files(self):
+        calls=[]
+        responses=self.responses(compare_files=[{"filename":"verification/HOSTED_VERIFIER_BOOTSTRAP_PROOF.md"}])
+        def fake_api(token,path,**kwargs):
+            calls.append(path)
+            return responses.pop(0)
+        with patch("verification.independent_verifier._api", side_effect=fake_api):
+            ok,_=verify_exact_head(
+                token="token",pr_number=7,expected_head_sha="c"*40,
+                full_exit=0,phase1_exit=0,operating_exit=0,
+            )
+        self.assertTrue(ok)
+        self.assertFalse(any("/pulls/7/files" in path for path in calls))
+        self.assertTrue(any(path.startswith("/compare/") for path in calls))
+
+    def test_current_main_compare_file_cap_fails_closed(self):
+        responses=self.responses(compare_files=[
+            {"filename":f"runtime/generated-{index}.py"} for index in range(300)
+        ])
+        with patch("verification.independent_verifier._api", side_effect=responses):
+            with self.assertRaisesRegex(IndependentVerifierError,"compare file listing hit verifier bound"):
+                verify_exact_head(
+                    token="token",pr_number=7,expected_head_sha="c"*40,
+                    full_exit=0,phase1_exit=0,operating_exit=0,
+                )
 
     def test_foundation_check_from_wrong_app_cannot_authorize_gate(self):
         with patch("verification.independent_verifier._api", side_effect=self.responses(foundation_app=999)):
