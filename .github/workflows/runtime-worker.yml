@@ -208,6 +208,16 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Upload durable project forwarding state
+        if: ${{ steps.admission.outputs.allowed == 'true' && hashFiles('runtime/out/project_forwarding_state.json') != '' }}
+        id: journal_upload_project_forwarding
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-project-forwarding-state
+          path: runtime/out/project_forwarding_state.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Upload sanitized agent heartbeat state
         if: ${{ steps.admission.outputs.allowed == 'true' }}
         id: journal_upload_heartbeat
