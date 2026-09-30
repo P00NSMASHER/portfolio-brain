@@ -22,7 +22,13 @@ from learning.live_observations import (
     validate_state as validate_learning_state,
 )
 from model_router.feedback_state import validate_state as validate_model_feedback_state
-from value_proof.feedback_loop import apply_verified_value_feedback, validate_value_outcome
+from value_proof.feedback_loop import (
+    _hunter_feedback_id,
+    _legacy_hunter_feedback_id,
+    _previous_hunter_feedback_id,
+    apply_verified_value_feedback,
+    validate_value_outcome,
+)
 from value_proof.model_task import digest, load_contract
 from value_proof.verifier import load_verifier_contract
 
@@ -41,15 +47,19 @@ def _known_outcome_hashes(learning_state: dict[str, Any], outcome_id: str) -> se
             hashes.add(key[len(prefix):])
     return hashes
 
-def _hunter_feedback_ids(task_contract: dict[str, Any], outcome: dict[str, Any]) -> set[str]:
+def _hunter_feedback_identity(
+    task_contract: dict[str, Any], outcome: dict[str, Any]
+) -> tuple[str,str,set[str]]:
     source=task_contract["source_candidate"]
-    current="HFB-"+hashlib.sha256(outcome["outcome_id"].encode()).hexdigest()[:24].upper()
-    legacy_seed=json.dumps(
-        {"task_id":task_contract["task_id"],"finding_id":source["finding_id"],"value_class":"TECHNICAL"},
-        sort_keys=True,separators=(",",":"),
+    exact=_hunter_feedback_id(
+        outcome_id=outcome["outcome_id"],outcome_hash=outcome["outcome_hash"]
     )
-    legacy="HFB-"+hashlib.sha256(legacy_seed.encode()).hexdigest()[:24].upper()
-    return {current,legacy}
+    prefix=exact.rsplit("-",1)[0]+"-"
+    previous=_previous_hunter_feedback_id(outcome_id=outcome["outcome_id"])
+    legacy=_legacy_hunter_feedback_id(
+        task_id=task_contract["task_id"],finding_id=source["finding_id"]
+    )
+    return exact,prefix,{previous,legacy}
 
 def _reject_conflicting_identity(
     hunter_state: dict[str, Any],
@@ -70,12 +80,17 @@ def _reject_conflicting_identity(
     if combined and combined != {outcome["outcome_hash"]}:
         raise OutcomeIngestionError("conflicting verified outcome identity")
 
-    # Hunter's legacy state stores only feedback IDs, not the source outcome hash.
-    # If Hunter alone remembers this identity, we cannot prove whether a replay is
-    # the same outcome or a conflicting one. Fail closed rather than silently
-    # filling the other projections from an unverifiable partial state.
     hunter_feedback_ids=set(hunter_state["feedback_ids"])
-    if _hunter_feedback_ids(task_contract,outcome) & hunter_feedback_ids and not combined:
+    exact,prefix,ambiguous_legacy=_hunter_feedback_identity(task_contract,outcome)
+    same_outcome_hash_bound={fid for fid in hunter_feedback_ids if fid.startswith(prefix)}
+    if same_outcome_hash_bound and same_outcome_hash_bound != {exact}:
+        raise OutcomeIngestionError("conflicting hash-bound Hunter outcome identity")
+
+    # V2 Hunter feedback IDs bind both the outcome identity and exact outcome
+    # hash. That makes a Hunter-only partial publication safely reconcilable on
+    # the next recurring ingestion. Pre-V2 IDs are intentionally still
+    # ambiguous unless another projection supplies the exact source hash.
+    if ambiguous_legacy & hunter_feedback_ids and not combined and exact not in hunter_feedback_ids:
         raise OutcomeIngestionError(
             "ambiguous prior Hunter feedback identity without outcome hash"
         )
