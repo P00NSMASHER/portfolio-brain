@@ -6,6 +6,7 @@ from pathlib import Path
 
 from dashboard.live_state_bridge import EVIDENCE_SEMANTICS
 from governance.validate_boundaries import validate_boundaries
+from adapters.abvm_health import build_evidence as build_abvm_evidence, HEALTH_WORKFLOW_PATH
 from runtime.project_forwarding import ProjectForwardingError,build_project_delivery,forward_observations,seed_state
 
 def observation(repo_id,adapter_id,full_name,revision):
@@ -35,15 +36,27 @@ def build_proof():
     else:
         raise SystemExit("wrong-project forwarding did not fail closed")
     row=abvm_rows[0]
-    if set(row["evidence_scope"])!={"AUTOMATION_HEALTH","PROGRESS_EVIDENCE"}: raise SystemExit("ABVM evidence scope widened")
-    if any(row[k] for k in ("authority_granted","mutation_performed","deploy_authority","external_action_authority","child_facing_mutation_authority")):
+    if row["evidence_scope"]!=["REPOSITORY_OBSERVATION"]: raise SystemExit("ABVM repository observation was mislabeled")
+    if any(row[k] for k in ("authority_granted","mutation_performed","deploy_authority","external_action_authority","child_facing_mutation_authority","school_content_publication_authority")):
         raise SystemExit("ABVM delivery gained authority")
+    abvm_health=build_abvm_evidence("3"*40,[{
+      "id":301,"run_number":17,"run_attempt":1,"name":"ABVM Operational Health Dashboard",
+      "path":HEALTH_WORKFLOW_PATH,"head_branch":"main","head_sha":"3"*40,
+      "status":"completed","conclusion":"success","created_at":"2026-09-30T14:00:00Z","updated_at":"2026-09-30T14:00:10Z"
+    }],observed_at="2026-09-30T14:00:11Z")
+    if abvm_health["source_run_head_sha"]!=abvm_health["source_revision"] or abvm_health["automation_health"]!="HEALTHY":
+        raise SystemExit("ABVM health proof is not source-bound")
     if any(EVIDENCE_SEMANTICS[k] for k in ("technical_verification_credit","market_verification_credit","revenue_verification_credit")):
         raise SystemExit("telemetry/publication created verification credit")
     return {
       "schema_version":"1.0.0","status":"PASS",
       "step13":{"repo001_project_deliveries":len(repo1_projects),"exact_once_repeat_deliveries":len(second["deliveries"]),"duplicate_keys_suppressed":len(second["duplicate_delivery_keys"]),"wrong_project_rejected":wrong_project_rejected},
-      "step15":{"abvm_deliveries":len(abvm_rows),"evidence_scope":row["evidence_scope"],"child_facing_mutation_authority":row["child_facing_mutation_authority"],"deploy_authority":row["deploy_authority"]},
+      "step15":{"abvm_deliveries":len(abvm_rows),"repository_evidence_scope":row["evidence_scope"],
+                "automation_evidence_scope":abvm_health["evidence_scope"],"source_run_id":abvm_health["source_run_id"],
+                "source_run_head_sha":abvm_health["source_run_head_sha"],"automation_health":abvm_health["automation_health"],
+                "child_facing_mutation_authority":row["child_facing_mutation_authority"],
+                "school_content_publication_authority":row["school_content_publication_authority"],
+                "deploy_authority":row["deploy_authority"]},
       "step16":{"semantics":EVIDENCE_SEMANTICS},
       "step17":{"authority_model":validate_boundaries()["authority_model"]},
       "authority_granted":False,"mutation_performed":False
