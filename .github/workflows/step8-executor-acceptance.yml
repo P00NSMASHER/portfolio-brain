@@ -1,4 +1,5 @@
 name: step8-executor-acceptance
+# Step 9 autonomous PR-open acceptance retrigger; no authority change.
 
 on:
   push:
