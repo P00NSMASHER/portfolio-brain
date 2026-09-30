@@ -16,8 +16,8 @@ from pathlib import Path
 from urllib.parse import quote
 
 from runtime.artifact_state import BudgetedHTTP
-from state_journal.contracts import (MAX_BYTES, PRODUCERS, REPOSITORY, WORKFLOW_PRODUCERS,
-                                    JournalError, canonical, require, strict_load)
+from state_journal.contracts import (DOMAINS, MAX_BYTES, PRODUCERS, REPOSITORY, WORKFLOW_PRODUCERS,
+                                    JournalError, canonical, digest, require, strict_load, validate_domain)
 from state_journal.events import upgrade_legacy_event_attempt, validate_event
 
 REPO_ID = 1387747549
@@ -47,6 +47,111 @@ def artifact_digest(meta: dict, raw: bytes) -> None:
     require(meta.get("digest") == actual, "GitHub artifact digest mismatch or missing")
 
 
+def extract_domain_state(raw: bytes, domain: str) -> dict:
+    """Extract one validated domain state from a same-run durable artifact bundle."""
+    require(domain in DOMAINS, "Unknown state-artifact domain")
+    require(len(raw) <= MAX_BYTES, "State artifact exceeds byte limit")
+    member = Path(DOMAINS[domain][2]).name
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            infos = archive.infolist()
+            require(0 < len(infos) <= 100, "State artifact member count invalid")
+            for info in infos:
+                require(not info.is_dir(), "State artifact contains directory member")
+                path = Path(info.filename)
+                require(
+                    not path.is_absolute() and ".." not in path.parts,
+                    "State artifact member path unsafe",
+                )
+            matches = [info for info in infos if Path(info.filename).name == member]
+            require(len(matches) == 1, "State artifact missing or duplicates domain state")
+            require(matches[0].file_size <= MAX_BYTES, "Expanded state member exceeds byte limit")
+            state = strict_load(archive.read(matches[0]))
+    except (zipfile.BadZipFile, RuntimeError, OSError) as exc:
+        raise JournalError("Unreadable durable state artifact") from exc
+    validate_domain(domain, state)
+    return state
+
+
+def _artifact_time(value: object) -> datetime:
+    require(isinstance(value, str), "Artifact created_at missing")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise JournalError("Artifact created_at invalid") from exc
+    require(parsed.tzinfo is not None, "Artifact created_at requires timezone")
+    return parsed
+
+
+def validate_artifact_publication_fallback(
+    event: dict,
+    event_meta: dict,
+    run: dict,
+    jobs: dict,
+    run_artifacts: list[dict],
+    artifact_bytes: dict[int, bytes],
+    artifact_names: dict[str, dict[str, str]],
+) -> int:
+    """Prove a successful run's publication when GitHub omits every job step.
+
+    This fallback never admits failed/cancelled runs and never accepts partial
+    step metadata. Each changed domain must have exactly one exact-run durable
+    state artifact whose validated bytes equal the immutable event after-state.
+    """
+    require(run.get("conclusion") == "success",
+            "Step-metadata fallback requires successful source run")
+    job_rows = jobs.get("jobs", [])
+    require(isinstance(job_rows, list) and jobs.get("total_count") == len(job_rows),
+            "Incomplete source job listing")
+    require(len(job_rows) == 1, "Step-metadata fallback requires exactly one source job")
+    job = job_rows[0]
+    require(job.get("run_id") == run["id"] and job.get("run_attempt") == run["run_attempt"],
+            "Fallback job belongs to another run attempt")
+    require(job.get("status") == "completed" and job.get("conclusion") == "success",
+            "Fallback source job did not succeed")
+    require(job.get("steps") == [], "Partial source step metadata cannot use fallback")
+    producer_artifacts = artifact_names.get(event["producer"])
+    require(isinstance(producer_artifacts, dict), "Producer artifact map missing")
+
+    event_created = _artifact_time(event_meta.get("created_at"))
+    for change in event["changes"]:
+        domain = change["domain"]
+        expected_name = producer_artifacts.get(domain)
+        require(isinstance(expected_name, str) and expected_name,
+                f"Durable artifact mapping missing for {event['producer']}:{domain}")
+        matches = [row for row in run_artifacts if row.get("name") == expected_name]
+        require(len(matches) == 1,
+                f"Durable state artifact missing or ambiguous for {domain}")
+        meta = matches[0]
+        require(meta.get("expired") is False, f"Durable state artifact expired for {domain}")
+        source = meta.get("workflow_run", {})
+        require(
+            source.get("id") == run["id"]
+            and source.get("head_sha") == event["source_sha"]
+            and source.get("head_branch") == "main",
+            f"Durable state artifact source mismatch for {domain}",
+        )
+        require(
+            source.get("repository_id") == REPO_ID
+            and source.get("head_repository_id") == REPO_ID,
+            f"Durable state artifact repository mismatch for {domain}",
+        )
+        require(_artifact_time(meta.get("created_at")) <= event_created,
+                f"Durable state artifact was published after event for {domain}")
+        artifact_id = meta.get("id")
+        require(type(artifact_id) is int and artifact_id > 0,
+                f"Durable state artifact identity missing for {domain}")
+        raw = artifact_bytes.get(artifact_id)
+        require(isinstance(raw, bytes), f"Durable state artifact bytes missing for {domain}")
+        artifact_digest(meta, raw)
+        state = extract_domain_state(raw, domain)
+        require(digest(state) == change["after_hash"],
+                f"Durable state artifact hash does not match event for {domain}")
+        require(canonical(state) == canonical(change["after"]),
+                f"Durable state artifact payload does not match event for {domain}")
+    return job["id"]
+
+
 def source_producer(run: dict) -> str:
     path = run.get("path", "")
     require(isinstance(path, str) and re.fullmatch(r"\.github/workflows/[a-z0-9-]+\.yml", path) is not None,
@@ -56,7 +161,10 @@ def source_producer(run: dict) -> str:
     return WORKFLOW_PRODUCERS[stem]
 
 
-def validate_provider_event(meta: dict, run: dict, jobs: dict, raw: bytes, upload_steps: dict) -> tuple[dict, dict]:
+def validate_provider_event(meta: dict, run: dict, jobs: dict, raw: bytes, upload_steps: dict,
+                            *, run_artifacts: list[dict] | None = None,
+                            artifact_bytes: dict[int, bytes] | None = None,
+                            artifact_names: dict[str, dict[str, str]] | None = None) -> tuple[dict, dict]:
     artifact_digest(meta, raw)
     event = extract_json(raw, "event.json")
     validate_event(event)
@@ -87,26 +195,41 @@ def validate_provider_event(meta: dict, run: dict, jobs: dict, raw: bytes, uploa
             "Artifact is not bound to the source run")
     require(source.get("repository_id") == REPO_ID and source.get("head_repository_id") == REPO_ID, "Artifact repository identity mismatch")
     require(type(run.get("workflow_id")) is int and run["workflow_id"] > 0, "Workflow identity absent")
-    require(jobs.get("total_count") == len(jobs.get("jobs", [])), "Incomplete source job listing")
+    job_rows = jobs.get("jobs", [])
+    require(isinstance(job_rows, list) and jobs.get("total_count") == len(job_rows),
+            "Incomplete source job listing")
     candidates = []
-    for job in jobs["jobs"]:
+    any_steps = False
+    for job in job_rows:
         steps = job.get("steps", [])
+        require(isinstance(steps, list), "Source job steps malformed")
+        any_steps = any_steps or bool(steps)
         if any(s.get("name") == EMIT_STEP for s in steps):
             candidates.append(job)
-    require(len(candidates) == 1, "Source emitter job missing or ambiguous")
-    job = candidates[0]
-    require(job.get("run_id") == run["id"] and job.get("run_attempt") == attempt, "Emitter job belongs to another attempt")
-    required = [EMIT_STEP, UPLOAD_STEP] + [upload_steps[event["producer"]][c["domain"]] for c in event["changes"]]
-    for name in required:
-        matches = [s for s in job.get("steps", []) if s.get("name") == name]
-        require(len(matches) == 1 and matches[0].get("status") == "completed" and matches[0].get("conclusion") == "success",
-                f"Actual state/event publication step did not succeed: {name}")
+    if len(candidates) == 1:
+        job = candidates[0]
+        require(job.get("run_id") == run["id"] and job.get("run_attempt") == attempt,
+                "Emitter job belongs to another attempt")
+        required = [EMIT_STEP, UPLOAD_STEP] + [upload_steps[event["producer"]][c["domain"]] for c in event["changes"]]
+        for name in required:
+            matches = [s for s in job.get("steps", []) if s.get("name") == name]
+            require(len(matches) == 1 and matches[0].get("status") == "completed" and matches[0].get("conclusion") == "success",
+                    f"Actual state/event publication step did not succeed: {name}")
+        job_id = job["id"]
+    else:
+        require(not any_steps and len(candidates) == 0,
+                "Source emitter job missing or ambiguous")
+        require(run_artifacts is not None and artifact_bytes is not None and artifact_names is not None,
+                "Source step metadata unavailable and durable artifact proof missing")
+        job_id = validate_artifact_publication_fallback(
+            event, meta, run, jobs, run_artifacts, artifact_bytes, artifact_names
+        )
     # A failed overall run may have durably finalized cost or other state. That
     # transition is retained, but failure can NEVER be relabeled as useful work.
     evidence = {"kind": "GITHUB_ACTIONS", "repository": REPOSITORY, "artifact_id": meta["id"],
                 "archive_digest": meta["digest"], "source_run_id": run["id"], "source_run_attempt": attempt,
                 "source_sha": event["source_sha"], "workflow_id": run["workflow_id"], "workflow_path": run["path"],
-                "source_conclusion": run["conclusion"], "event_hash": event["event_hash"], "job_id": job["id"]}
+                "source_conclusion": run["conclusion"], "event_hash": event["event_hash"], "job_id": job_id}
     return event, evidence
 
 
@@ -305,4 +428,34 @@ class GitHubReader:
         run = self.get(f"/actions/runs/{run_id}/attempts/{attempt}")
         jobs = self.get(f"/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100")
         raw = self.archive(meta["id"])
-        return validate_provider_event(meta, run, jobs, raw, upload_steps)
+        job_rows = jobs.get("jobs", [])
+        all_steps_missing = (
+            isinstance(job_rows, list)
+            and bool(job_rows)
+            and all(job.get("steps") == [] for job in job_rows)
+        )
+        if not all_steps_missing:
+            return validate_provider_event(meta, run, jobs, raw, upload_steps)
+
+        run_artifacts = self._run_artifacts(int(run_id))
+        artifact_names = strict_load(
+            (Path(__file__).resolve().parent / "UPLOAD_ARTIFACTS.json").read_bytes()
+        )
+        event = extract_json(raw, "event.json")
+        validate_event(event)
+        needed_names = {
+            artifact_names.get(event["producer"], {}).get(change["domain"])
+            for change in event["changes"]
+        }
+        require(None not in needed_names, "Durable state artifact mapping incomplete")
+        artifacts = [
+            row for row in run_artifacts
+            if row.get("name") in needed_names
+        ]
+        artifact_bytes = {row["id"]: self.archive(row["id"]) for row in artifacts}
+        return validate_provider_event(
+            meta, run, jobs, raw, upload_steps,
+            run_artifacts=run_artifacts,
+            artifact_bytes=artifact_bytes,
+            artifact_names=artifact_names,
+        )
