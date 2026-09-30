@@ -116,27 +116,25 @@ class GitHubReader:
         # Existing transport strips authorization on cross-host artifact redirects.
         return self.http.bytes(f"{self.base}/actions/artifacts/{artifact_id}/zip")
 
-    def _recent_reducer_snapshots(self, since: str, *, max_pages: int) -> list[dict]:
-        """Return the newest two successful canonical snapshots since the reviewed cutover.
+    def _recent_reducer_snapshots(self, since: str, *, max_pages: int) -> list[tuple[dict, dict]]:
+        """Return the newest two successful reducer runs and their canonical snapshots.
 
-        The workflow-runs endpoint supports a server-side created filter, so old
-        repository artifacts do not have to be rescanned forever. The older of
-        the two snapshots is retained as an overlap anchor for late-visible
-        producer artifacts.
+        Reducer-specific run discovery avoids repository-wide run growth. The
+        older reducer *start time* is the overlap anchor: snapshot upload time is
+        too late because a producer event can arrive after that reducer scanned
+        inputs but before its snapshot upload completes.
         """
         created = quote(f">={since}", safe="")
         runs = {}
         run_page_limit = min(max_pages, 10)
         for page in range(1, run_page_limit + 1):
             response = self.get(
-                "/actions/runs?status=success&branch=main"
-                f"&created={created}&exclude_pull_requests=true&per_page=100&page={page}"
+                "/actions/workflows/portfolio-state-reducer.yml/runs"
+                f"?status=success&branch=main&created={created}&per_page=100&page={page}"
             )
             rows = response.get("workflow_runs")
             require(isinstance(rows, list), "Reducer run listing malformed")
             for run in rows:
-                if run.get("path") != ".github/workflows/portfolio-state-reducer.yml":
-                    continue
                 run_id = run.get("id")
                 require(type(run_id) is int and run_id > 0, "Reducer run identity missing")
                 require(run.get("head_branch") == "main", "Reducer anchor is not on main")
@@ -180,7 +178,7 @@ class GitHubReader:
                 ):
                     matches.append(artifact)
             require(len(matches) == 1, "Successful reducer snapshot artifact missing or ambiguous")
-            snapshots.append(matches[0])
+            snapshots.append((run, matches[0]))
         return snapshots
 
     def list_recent_artifacts(self, since: str, *, max_pages: int = 20) -> list[dict]:
@@ -189,14 +187,14 @@ class GitHubReader:
 
         anchors = self._recent_reducer_snapshots(since, max_pages=max_pages)
         if anchors:
-            overlap = anchors[-1].get("created_at")
-            require(isinstance(overlap, str), "Reducer snapshot created_at missing")
+            overlap = anchors[-1][0].get("created_at")
+            require(isinstance(overlap, str), "Reducer run created_at missing")
             overlap_at = datetime.fromisoformat(overlap.replace("Z", "+00:00"))
-            require(overlap_at.tzinfo is not None, "Reducer snapshot created_at requires timezone")
+            require(overlap_at.tzinfo is not None, "Reducer run created_at requires timezone")
             if overlap_at > boundary:
                 boundary = overlap_at
 
-        result = {row["id"]: row for row in anchors}
+        result = {artifact["id"]: artifact for _, artifact in anchors}
         previous_at = None
         for page in range(1, max_pages + 1):
             response = self.get(f"/actions/artifacts?per_page=100&page={page}")
