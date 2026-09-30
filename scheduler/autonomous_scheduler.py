@@ -68,10 +68,12 @@ def _allocation_maps(allocation):
     return plans,rec
 
 def build_context(*,factory_work_items=None,learning_state=None,hunter_proposal_state=None):
-    uncertainty=build_uncertainty_snapshot()
+    learning=learning_state or rebuild_from_ledger()
+    uncertainty=build_uncertainty_snapshot(
+        learning_observation_count=learning["source_observation_count"],
+    )
     experiments=build_experiment_portfolio(uncertainty)
     allocation=build_allocation_snapshot(uncertainty,experiments)
-    learning=learning_state or rebuild_from_ledger()
     repair=build_repair_state(learning)
     transfer=build_transfer_state(uncertainty)
     factory=list(factory_work_items if factory_work_items is not None else load("software_factory/SOFTWARE_FACTORY_LEDGER.json")["work_items"])
