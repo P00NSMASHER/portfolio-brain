@@ -11,7 +11,7 @@ import io
 import json
 import re
 import zipfile
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from runtime.artifact_state import BudgetedHTTP
@@ -115,9 +115,63 @@ class GitHubReader:
         # Existing transport strips authorization on cross-host artifact redirects.
         return self.http.bytes(f"{self.base}/actions/artifacts/{artifact_id}/zip")
 
-    def list_recent_artifacts(self, since: str, *, max_pages: int = 20) -> list[dict]:
-        boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
-        require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
+    def list_named_artifacts(self, name: str, *, max_pages: int = 20) -> list[dict]:
+        """Return a complete bounded scan for one exact artifact name."""
+        require(isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9_.-]+", name) is not None,
+                "Unsafe artifact name")
+        result = {}
+        for page in range(1, max_pages + 1):
+            response = self.get(f"/actions/artifacts?name={name}&per_page=100&page={page}")
+            rows = response.get("artifacts")
+            require(isinstance(rows, list), "Artifact listing malformed")
+            for row in rows:
+                artifact_id = row.get("id")
+                require(type(artifact_id) is int and artifact_id > 0, "Artifact listing identity missing")
+                created = row.get("created_at")
+                require(isinstance(created, str), "Artifact created_at missing")
+                at = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                require(at.tzinfo is not None, "Artifact created_at requires timezone")
+                previous = result.get(artifact_id)
+                if previous is not None:
+                    require(previous == row, "Artifact metadata changed during bounded scan")
+                else:
+                    result[artifact_id] = row
+            if len(rows) < 100:
+                return sorted(result.values(), key=lambda row: (row["created_at"], row["id"]), reverse=True)
+        raise JournalError("Named artifact scan incomplete at page bound")
+
+    def _latest_trusted_snapshot(self, *, max_pages: int) -> dict | None:
+        snapshots = self.list_named_artifacts(SNAPSHOT_ARTIFACT, max_pages=max_pages)
+        candidates = sorted(
+            (
+                row for row in snapshots
+                if row.get("name") == SNAPSHOT_ARTIFACT
+                and row.get("expired") is False
+                and row.get("workflow_run", {}).get("head_branch") == "main"
+            ),
+            key=lambda row: (row["created_at"], row["id"]),
+            reverse=True,
+        )
+        for row in candidates:
+            source = row.get("workflow_run", {})
+            run_id = source.get("id")
+            if type(run_id) is not int or run_id <= 0:
+                continue
+            run = self.get(f"/actions/runs/{run_id}")
+            if (
+                run.get("path") == ".github/workflows/portfolio-state-reducer.yml"
+                and run.get("head_branch") == "main"
+                and run.get("head_sha") == source.get("head_sha")
+                and run.get("status") == "completed"
+                and run.get("conclusion") == "success"
+                and run.get("repository", {}).get("full_name") == REPOSITORY
+                and run.get("head_repository", {}).get("full_name") == REPOSITORY
+            ):
+                return row
+        return None
+
+    def _legacy_bounded_artifact_scan(self, boundary: datetime, *, max_pages: int) -> list[dict]:
+        """Compatibility path for isolated reader fakes used by deterministic tests."""
         result = {}
         for page in range(1, max_pages + 1):
             response = self.get(f"/actions/artifacts?per_page=100&page={page}")
@@ -142,6 +196,70 @@ class GitHubReader:
                 ]
                 return sorted(selected, key=lambda row: (row["created_at"], row["id"]), reverse=True)
         raise JournalError("Artifact scan incomplete at page bound; checkpoint/archive required")
+
+    def list_recent_artifacts(self, since: str, *, max_pages: int = 20) -> list[dict]:
+        """List journal-relevant artifacts without scanning unrelated repo history.
+
+        A successful reducer snapshot is a durable checkpoint. After validating
+        its source run, enumerate only enrolled producer runs that could have
+        published events after that checkpoint and fetch their run-scoped
+        artifacts. Every collection remains bounded and incomplete pages fail
+        closed.
+        """
+        boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
+        require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
+        if not hasattr(self, "http") or not hasattr(self, "base"):
+            return self._legacy_bounded_artifact_scan(boundary, max_pages=max_pages)
+        result = {}
+        snapshot = self._latest_trusted_snapshot(max_pages=max_pages)
+        if snapshot is not None:
+            snapshot_at = datetime.fromisoformat(snapshot["created_at"].replace("Z", "+00:00"))
+            boundary = max(boundary, snapshot_at)
+            result[snapshot["id"]] = snapshot
+
+        run_boundary = boundary - timedelta(hours=1)
+        created = run_boundary.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        created_query = created.replace(":", "%3A")
+        for workflow in sorted(WORKFLOW_PRODUCERS):
+            for page in range(1, max_pages + 1):
+                response = self.get(
+                    f"/actions/workflows/{workflow}.yml/runs"
+                    f"?branch=main&created=%3E%3D{created_query}&per_page=100&page={page}"
+                )
+                runs = response.get("workflow_runs")
+                require(isinstance(runs, list), "Workflow run listing malformed")
+                for run in runs:
+                    run_id = run.get("id")
+                    require(type(run_id) is int and run_id > 0, "Workflow run identity missing")
+                    if run.get("head_branch") != "main":
+                        continue
+                    path = run.get("path", "")
+                    if Path(path).stem != workflow:
+                        continue
+                    artifacts_response = self.get(f"/actions/runs/{run_id}/artifacts?per_page=100")
+                    artifacts = artifacts_response.get("artifacts")
+                    total = artifacts_response.get("total_count")
+                    require(isinstance(artifacts, list) and type(total) is int, "Run artifact listing malformed")
+                    require(total == len(artifacts) and total <= 100, "Run artifact listing incomplete")
+                    for row in artifacts:
+                        artifact_id = row.get("id")
+                        require(type(artifact_id) is int and artifact_id > 0, "Artifact listing identity missing")
+                        created_at = row.get("created_at")
+                        require(isinstance(created_at, str), "Artifact created_at missing")
+                        at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                        require(at.tzinfo is not None, "Artifact created_at requires timezone")
+                        if at < boundary:
+                            continue
+                        previous = result.get(artifact_id)
+                        if previous is not None:
+                            require(previous == row, "Artifact metadata changed during bounded scan")
+                        else:
+                            result[artifact_id] = row
+                if len(runs) < 100:
+                    break
+            else:
+                raise JournalError(f"Workflow run scan incomplete at page bound: {workflow}")
+        return sorted(result.values(), key=lambda row: (row["created_at"], row["id"]), reverse=True)
 
     def event(self, meta: dict, upload_steps: dict) -> tuple[dict, dict]:
         match = re.fullmatch(r"portfolio-state-event-v2-([1-9][0-9]*)-([a-z0-9-]+)-([a-f0-9]{40})-([1-9][0-9]*)", meta.get("name", ""))
