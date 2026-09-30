@@ -50,6 +50,11 @@ jobs:
       }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      factory_pending: ${{ steps.factory_submit.outputs.pending }}
+      factory_handoff_artifact_id: ${{ steps.factory_handoff.outputs.artifact-id }}
+      factory_branch: ${{ steps.factory_submit.outputs.branch }}
+      factory_candidate_sha: ${{ steps.factory_submit.outputs.candidate_sha }}
     env:
       GH_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
@@ -224,33 +229,51 @@ jobs:
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
           echo "Created repair candidate: $PR_URL" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Finalize scheduler repair through software factory
-        id: factory_pr
+      - name: Submit scheduler candidate through software factory
+        id: factory_submit
         if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind == 'SCHEDULER_REPAIR_TASK' }}
         env:
           PORTFOLIO_FACTORY_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python -m software_factory.scheduler_repair_bridge finalize \
+          python -m software_factory.scheduler_repair_bridge submit \
             --request repair/out/request.json \
             --validation repair/out/diff_validation.json \
             --test-log repair/out/test.log \
             --candidate-root . \
             --db repair/out/factory.sqlite3 \
             --attempt-id "$GITHUB_RUN_ID" \
-            --output repair/out/factory_final_receipt.json
+            --output repair/out/factory_candidate_receipt.json
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import json
-          doc=json.load(open("repair/out/factory_final_receipt.json"))
-          print("url="+doc["pr_url"])
-          print("pr_number="+str(doc["pr_number"]))
+          doc=json.load(open("repair/out/factory_candidate_receipt.json"))
+          if doc["status"] != "CANDIDATE_SUBMITTED_AWAITING_INDEPENDENT_FACTORY_REVIEW":
+              raise SystemExit("factory candidate did not stop at independent-review boundary")
+          print("pending=true")
+          print("branch="+doc["branch_name"])
+          print("candidate_sha="+doc["candidate_commit_sha"])
           PY
-          echo "Created governed factory repair candidate: ${{ steps.factory_pr.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Dispatch exact-head foundation validation
-        if: ${{ steps.dedupe.outputs.duplicate != 'true' }}
+      - name: Upload exact factory review handoff
+        id: factory_handoff
+        if: ${{ steps.factory_submit.outputs.pending == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-factory-review-handoff-${{ github.run_id }}
+          path: |
+            repair/out/request.json
+            repair/out/diff_validation.json
+            repair/out/test.log
+            repair/out/factory.sqlite3
+            repair/out/factory_start_receipt.json
+            repair/out/factory_candidate_receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Dispatch exact-head foundation validation for workflow-failure repair
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind != 'SCHEDULER_REPAIR_TASK' }}
         env:
-          REPAIR_BRANCH: ${{ steps.factory_start.outputs.branch || steps.prepare.outputs.branch }}
+          REPAIR_BRANCH: ${{ steps.prepare.outputs.branch }}
         run: gh workflow run foundation-ci.yml --ref "$REPAIR_BRANCH"
 
       - name: Preserve sanitized repair evidence
@@ -262,6 +285,128 @@ jobs:
             repair/out/diff_validation.json
             repair/out/pr_body.md
             repair/out/factory_start_receipt.json
-            repair/out/factory_final_receipt.json
+            repair/out/factory_candidate_receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
+  factory-review:
+    needs: repair
+    if: ${{ needs.repair.outputs.factory_pending == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: write
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ github.token }}
+      PORTFOLIO_FACTORY_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout trusted factory controls from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: factory-control
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download exact builder handoff
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.repair.outputs.factory_handoff_artifact_id }}
+          path: factory-review
+          merge-multiple: true
+
+      - name: Bind review to exact remote candidate commit
+        id: candidate
+        env:
+          EXPECTED_BRANCH: ${{ needs.repair.outputs.factory_branch }}
+          EXPECTED_SHA: ${{ needs.repair.outputs.factory_candidate_sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          doc=json.load(open("factory-review/factory_candidate_receipt.json"))
+          if doc["branch_name"] != os.environ["EXPECTED_BRANCH"]:
+              raise SystemExit("factory review branch identity mismatch")
+          if doc["candidate_commit_sha"] != os.environ["EXPECTED_SHA"]:
+              raise SystemExit("factory review commit identity mismatch")
+          if doc["independent_factory_verified"] is not False or doc["pr_created"] is not False:
+              raise SystemExit("builder handoff overclaimed independent review")
+          PY
+          git -C factory-control fetch --no-tags origin "$EXPECTED_SHA"
+          git -C factory-control worktree add --detach "$GITHUB_WORKSPACE/candidate" "$EXPECTED_SHA"
+          test "$(git -C candidate rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Run fresh independent factory regressions without network or credentials
+        env:
+          GITHUB_TOKEN: ""
+          GH_TOKEN: ""
+          PORTFOLIO_FACTORY_TOKEN: ""
+        run: |
+          set -euo pipefail
+          mkdir -p factory-review/independent
+          docker pull python:3.12-bookworm
+          set +e
+          docker run --rm --network none --cap-drop=ALL --security-opt=no-new-privileges \
+            -v "$PWD/candidate:/src:ro" python:3.12-bookworm \
+            sh -lc 'mkdir -p /work && cp -R --no-preserve=ownership /src/. /work/ && cd /work && python -I -c '"'"'import sys,unittest;sys.path.insert(0,"/work");r=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.discover("/work/tests",pattern="test_*.py"));raise SystemExit(not r.wasSuccessful())'"'"'' \
+            > factory-review/independent/full.txt 2>&1
+          FULL=$?
+          docker run --rm --network none --cap-drop=ALL --security-opt=no-new-privileges \
+            -v "$PWD/candidate:/src:ro" python:3.12-bookworm \
+            sh -lc 'mkdir -p /work && cp -R --no-preserve=ownership /src/. /work/ && cd /work && python -I -c '"'"'import sys;sys.path.insert(0,"/work");from operations.validate_operating_mode import validate_operating_mode;print(validate_operating_mode())'"'"'' \
+            > factory-review/independent/operating.txt 2>&1
+          OPERATING=$?
+          set -e
+          cat factory-review/independent/full.txt factory-review/independent/operating.txt > factory-review/independent/review.log
+          test "$FULL" -eq 0
+          test "$OPERATING" -eq 0
+
+      - name: Record independent factory PASS and open protected PR
+        id: factory_pr
+        working-directory: factory-control
+        env:
+          EXPECTED_SHA: ${{ needs.repair.outputs.factory_candidate_sha }}
+        run: |
+          set -euo pipefail
+          python -m software_factory.scheduler_repair_bridge verify \
+            --request "$GITHUB_WORKSPACE/factory-review/request.json" \
+            --independent-test-log "$GITHUB_WORKSPACE/factory-review/independent/review.log" \
+            --expected-commit-sha "$EXPECTED_SHA" \
+            --db "$GITHUB_WORKSPACE/factory-review/factory.sqlite3" \
+            --attempt-id "$GITHUB_RUN_ID" \
+            --output "$GITHUB_WORKSPACE/factory-review/factory_final_receipt.json"
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          doc=json.load(open(os.environ["GITHUB_WORKSPACE"]+"/factory-review/factory_final_receipt.json"))
+          if doc["status"] != "PR_OPEN" or doc["independent_factory_verified"] is not True:
+              raise SystemExit("factory independent review did not reach PR_OPEN")
+          print("url="+doc["pr_url"])
+          print("pr_number="+str(doc["pr_number"]))
+          print("branch="+doc["branch_name"])
+          PY
+          echo "Created governed factory repair candidate: ${{ steps.factory_pr.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dispatch exact-head Foundation validation
+        env:
+          REPAIR_BRANCH: ${{ steps.factory_pr.outputs.branch }}
+        run: gh workflow run foundation-ci.yml --ref "$REPAIR_BRANCH"
+
+      - name: Preserve independent factory evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-factory-independent-review-${{ github.run_id }}
+          path: |
+            factory-review/factory_candidate_receipt.json
+            factory-review/independent/full.txt
+            factory-review/independent/operating.txt
+            factory-review/factory_final_receipt.json
           if-no-files-found: error
           retention-days: 30
