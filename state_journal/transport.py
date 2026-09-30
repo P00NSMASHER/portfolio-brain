@@ -460,21 +460,39 @@ class GitHubReader:
         run = self.get(f"/actions/runs/{run_id}/attempts/{attempt}")
         jobs = self.get(f"/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100")
         raw = self.archive(meta["id"])
+        event = extract_json(raw, "event.json")
+        validate_event(event)
+
+        # Most events use exact completed-step metadata and need no extra
+        # artifact downloads. Gather the bounded same-run artifact proof only
+        # when provider step metadata is absent or stale/inconclusive.
         job_rows = jobs.get("jobs", [])
-        all_steps_missing = (
-            isinstance(job_rows, list)
-            and bool(job_rows)
-            and all(job.get("steps") == [] for job in job_rows)
-        )
-        if not all_steps_missing:
+        require(isinstance(job_rows, list), "Source job listing malformed")
+        all_steps_missing = bool(job_rows) and all(job.get("steps") == [] for job in job_rows)
+        candidates = [
+            job for job in job_rows
+            if any(step.get("name") == EMIT_STEP for step in job.get("steps", []))
+        ]
+        fallback_needed = all_steps_missing
+        if len(candidates) == 1:
+            required = [
+                EMIT_STEP,
+                UPLOAD_STEP,
+                *[upload_steps[event["producer"]][change["domain"]] for change in event["changes"]],
+            ]
+            fallback_needed = any(
+                len(matches := [step for step in candidates[0].get("steps", []) if step.get("name") == name]) != 1
+                or matches[0].get("status") != "completed"
+                or matches[0].get("conclusion") != "success"
+                for name in required
+            )
+        if not fallback_needed:
             return validate_provider_event(meta, run, jobs, raw, upload_steps)
 
         run_artifacts = self._run_artifacts(int(run_id))
         artifact_names = strict_load(
             (Path(__file__).resolve().parent / "UPLOAD_ARTIFACTS.json").read_bytes()
         )
-        event = extract_json(raw, "event.json")
-        validate_event(event)
         needed_names = {
             artifact_names.get(event["producer"], {}).get(change["domain"])
             for change in event["changes"]
