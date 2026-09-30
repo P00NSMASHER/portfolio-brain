@@ -48,14 +48,15 @@ def validate_state(state:dict[str,Any])->None:
         expected={"delivery_id","delivery_key","project_id","repository_id","source_ref","source_revision",
                   "observation_receipt_hash","observation_status","capability","evidence_state","evidence_scope",
                   "payload_scope","authority_granted","mutation_performed","deploy_authority",
-                  "external_action_authority","child_facing_mutation_authority","forwarded_at"}
+                  "external_action_authority","child_facing_mutation_authority",
+                  "school_content_publication_authority","forwarded_at"}
         req(isinstance(row,dict) and set(row)==expected,"forwarding delivery fields changed")
         req(row["delivery_id"].startswith("PFD-") and row["delivery_id"] not in ids,"forwarding delivery id invalid")
         ids.add(row["delivery_id"])
         req(row["delivery_key"] in keys,"delivery missing dedupe key")
         req(row["capability"]=="READ_OBSERVE" and row["evidence_state"]=="OBSERVED","forwarding evidence authority widened")
         req(row["payload_scope"]=="SANITIZED_METADATA_ONLY","forwarding persisted payload widened")
-        for field in ("authority_granted","mutation_performed","deploy_authority","external_action_authority","child_facing_mutation_authority"):
+        for field in ("authority_granted","mutation_performed","deploy_authority","external_action_authority","child_facing_mutation_authority","school_content_publication_authority"):
             req(row[field] is False,"forwarding delivery gained authority: "+field)
 
 def load_state(path:Path|str|None=None)->dict[str,Any]:
@@ -103,7 +104,8 @@ def build_project_delivery(observation:dict[str,Any],project_id:str,*,at:str,ada
         abvm=policy["constrained_integrations"]["PRJ-006"]
         req(abvm["child_facing_mutation"] is False and abvm["deployment_authority"] is False and abvm["school_content_publication_authority"] is False,
             "ABVM constrained integration widened")
-        req(set(evidence_scope)==set(abvm["allowed_evidence"]),"ABVM forwarding scope mismatch")
+        req(evidence_scope==["REPOSITORY_OBSERVATION"],"ABVM repository forwarding must remain repository observation only")
+        req(set(abvm["allowed_evidence"])=={"AUTOMATION_HEALTH","PROGRESS_EVIDENCE"},"ABVM constrained evidence policy widened")
     return {
       "delivery_id":"PFD-"+hashlib.sha256(key.encode()).hexdigest()[:20].upper(),
       "delivery_key":key,
@@ -122,6 +124,7 @@ def build_project_delivery(observation:dict[str,Any],project_id:str,*,at:str,ada
       "deploy_authority":False,
       "external_action_authority":False,
       "child_facing_mutation_authority":False,
+      "school_content_publication_authority":False,
       "forwarded_at":at,
     }
 
