@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0.0",
+  "step": 19,
+  "purpose": "ONE_SHOT_PROTECTED_MAIN_PROVIDER_USABILITY_CANARY",
+  "trigger_scope": "PUSH_TO_MAIN_ONLY_WHEN_THIS_MARKER_CHANGES",
+  "bounded_by": "portfolio cost governor",
+  "authority_granted": false,
+  "evidence_upgraded": false,
+  "source_base_sha": "9945c37bc7b7b575b6f1278277139a8c76253942"
+}
