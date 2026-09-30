@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0.0",
+  "review_id": "portfolio-step24-least-privilege-v1",
+  "completion_policy": {
+    "critical_findings_allowed": 0,
+    "high_findings_allowed": 0,
+    "unknown_required_evidence_allowed": 0,
+    "configuration_only_counts_as_enforcement": false
+  },
+  "required_domains": [
+    "VERIFIER_TRUST_ANCHORS",
+    "VERIFIER_APP_SCOPES",
+    "WORKFLOW_PERMISSIONS",
+    "PR_HEAD_AND_FORK_RESTRICTIONS",
+    "CANDIDATE_NETWORK_ISOLATION",
+    "SECRET_HANDLING",
+    "ARTIFACT_TAMPER_RESISTANCE",
+    "BRANCH_PROTECTION",
+    "AUTOMERGE_SCOPE",
+    "ADAPTER_WRITE_AUTHORITY",
+    "SANITIZED_PUBLIC_PERSISTENCE",
+    "REPO_006_ACCESS"
+  ],
+  "required_live_evidence": {
+    "observed_main_sha": "exact 40-character main SHA",
+    "ruleset": "full active main ruleset including bypass_actors and required check integration IDs",
+    "verifier_app": "App 5121826 permissions observed from an exact-head check run",
+    "artifact_probe": "exact run/head/artifact/digest receipt proving immutable evidence identity"
+  },
+  "trusted_identities": {
+    "foundation_check": {
+      "name": "validate",
+      "app_id": 15368
+    },
+    "independent_check": {
+      "name": "portfolio-phase1-gate",
+      "app_id": 5121826
+    }
+  },
+  "invariants": [
+    "Step 24 is never COMPLETE from repository configuration alone.",
+    "Missing live evidence is UNKNOWN/BLOCKED, never PASS.",
+    "Candidate code never receives verifier credentials.",
+    "Candidate verification is network-disabled and credential-free.",
+    "Autonomous repair generation has no merge, deployment, repository-settings, secrets, or direct-main authority.",
+    "Only same-repository protected repair PRs with exact-head Foundation and App 5121826 checks may be considered for trusted integration.",
+    "Public persistence remains sanitized-only.",
+    "REPO-006 remains blocked or explicitly read-only until a separate access decision is evidenced.",
+    "No unresolved CRITICAL finding may be waived by this harness."
+  ]
+}
