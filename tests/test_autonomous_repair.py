@@ -169,11 +169,21 @@ class AutonomousRepairTests(unittest.TestCase):
         self.assertEqual(set(payload["inputs"]), {"request_b64"})
 
     def test_repair_evidence_binds_checks_to_exact_integrations(self):
+        fingerprint="sha256:"+"f"*64
         pulls = [{
             "number": 7,
-            "body": "REPAIR_SOURCE_REF:RTASK-X\n",
+            "body": (
+                "Factory work: AUTO-REPAIR-"+"F"*16+"-36758526194\n"
+                "Source: REPAIR_SOURCE_REF:RTASK-X\n"
+                f"AUTO_REPAIR_FINGERPRINT:{fingerprint}\n"
+                "Base: "+"b"*40+"\n"
+                "Candidate: "+"c"*40+"\n"
+            ),
             "updated_at": "2026-09-29T20:00:00Z",
-            "head": {"sha": "c" * 40},
+            "head": {
+                "sha": "c" * 40,
+                "ref": "factory/auto-repair-controlled/attempt-1",
+            },
         }]
         checks = {"check_runs": [
             {"name": "validate", "conclusion": "success", "app": {"id": 15368}},
@@ -184,6 +194,22 @@ class AutonomousRepairTests(unittest.TestCase):
         self.assertTrue(result["foundation_success"])
         self.assertTrue(result["independent_success"])
         self.assertEqual(result["head_sha"], "c" * 40)
+        self.assertEqual(result["candidate_sha"], "c" * 40)
+        self.assertEqual(result["base_sha"], "b" * 40)
+        self.assertEqual(result["request_fingerprint"], fingerprint)
+        self.assertEqual(result["factory_work_id"], "AUTO-REPAIR-"+"F"*16+"-36758526194")
+        self.assertEqual(result["head_ref"], "factory/auto-repair-controlled/attempt-1")
+
+    def test_repair_evidence_source_marker_is_exact_not_substring(self):
+        pulls = [{
+            "number": 8,
+            "body": "REPAIR_SOURCE_REF:RTASK-X-SPOOF\n",
+            "updated_at": "2026-09-29T20:00:00Z",
+            "head": {"sha": "c" * 40, "ref": "factory/auto-repair-spoof/attempt-1"},
+        }]
+        with patch("repair.autonomous_repair._http_json", side_effect=[pulls]):
+            result = find_repair_evidence("RTASK-X", token="token")
+        self.assertEqual(result["status"], "NO_REPAIR_PR")
 
 
     def test_policy_never_grants_merge_deploy_or_default_branch_write(self):
