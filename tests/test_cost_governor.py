@@ -45,7 +45,7 @@ def github_request(*, run_id="100", attempt=1, minutes=5, workflow="runtime-work
 class CostGovernorTests(unittest.TestCase):
 
     def test_only_paid_workflows_finalize_cost_state(self):
-        paid_workflows = ["model-value-proof.yml", "runtime-worker.yml"]
+        paid_workflows = ["model-value-proof.yml", "runtime-worker.yml", "repair-candidate-cycle.yml"]
         for filename in paid_workflows:
             with self.subTest(workflow=filename):
                 workflow = (ROOT / ".github/workflows" / filename).read_text()
@@ -89,6 +89,7 @@ class CostGovernorTests(unittest.TestCase):
             "runtime-worker::runtime-daily",
             "runtime-worker::runtime-weekly",
             "model-value-proof::proof",
+            "repair-candidate-cycle::plan-build",
         ]
         for key in keys:
             cfg = p["workflow_job_ceilings"][key]
@@ -199,6 +200,30 @@ class CostGovernorTests(unittest.TestCase):
                     minutes,
                 )
 
+
+
+    def test_repair_candidate_cycle_separates_paid_planning_from_nonpaid_execution(self):
+        workflow=(ROOT/".github/workflows/repair-candidate-cycle.yml").read_text()
+        self.assertIn("group: portfolio-cost-governed-autonomy",workflow)
+        self.assertIn("--workflow-id repair-candidate-cycle",workflow)
+        self.assertIn("--job-id plan-build",workflow)
+        self.assertIn("cost_governor.workflow_gate preflight",workflow)
+        self.assertIn("cost_governor.workflow_gate finalize",workflow)
+        wp=workload_policy()
+        for job,group,minutes in [
+            ("replay","portfolio-repair-replay",5),
+            ("submit","portfolio-software-factory",5),
+            ("finalize","portfolio-scheduler",3),
+        ]:
+            self.assertIn(f"--job-id {job}",workflow)
+            decision=evaluate_workload(
+                workflow_id="repair-candidate-cycle",
+                job_id=job,
+                estimated_minutes=minutes,
+            )
+            self.assertEqual(decision["status"],"WORKLOAD_ALLOWED")
+            self.assertEqual(decision["concurrency_group"],group)
+            self.assertEqual(wp["services"][f"repair-candidate-cycle::{job}"]["max_minutes_per_job"],minutes)
 
     def test_runtime_sync_and_observe_are_nonpaid_workload_lanes(self):
         workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text()

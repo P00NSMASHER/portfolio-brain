@@ -157,6 +157,18 @@
         "github_runner_minutes": 0
       },
       "max_minutes_per_job": 5
+    },
+    "repair-candidate-cycle::plan-build": {
+      "daily_ceiling": {
+        "cost_usd": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "model_calls": 0,
+        "api_calls": 0,
+        "github_job_starts": 0,
+        "github_runner_minutes": 0
+      },
+      "max_minutes_per_job": 5
     }
   },
   "retry_limits": {
@@ -180,7 +192,8 @@
     "runtime-worker",
     "runtime-daily-learning",
     "runtime-weekly-synthesis",
-    "model-value-proof"
+    "model-value-proof",
+    "repair-candidate-cycle"
   ],
   "max_cancellations_per_cycle": 8,
   "invariants": [

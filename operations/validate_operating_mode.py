@@ -261,6 +261,42 @@ def validate_operating_mode():
     req("workload_control.workload_gate preflight" in factory,"software factory is not workload controlled")
     req("cost_governor.workflow_gate" not in factory,"software factory is still coupled to paid cost governance")
     req("run: exit 3" in factory,"software factory must fail closed when workload admission is denied")
+    repair_path=ROOT/".github/workflows/repair-candidate-cycle.yml"
+    repair_cycle=repair_path.read_text().lower()
+    repair_triggers=workflow_top_level_triggers(repair_path)
+    req("workflow_run" in repair_triggers and "schedule" not in repair_triggers and "workflow_call" not in repair_triggers,
+        "repair candidate cycle must be event-driven from scheduler completion")
+    req('workflows: ["portfolio-autonomous-scheduler"]' in repair_cycle
+        and "types: [completed]" in repair_cycle and 'branches: ["main"]' in repair_cycle,
+        "repair candidate cycle scheduler trigger binding missing")
+    req("github.event.workflow_run.conclusion == 'success'" in repair_cycle
+        and "github.event.workflow_run.head_branch == 'main'" in repair_cycle
+        and "github.event.workflow_run.head_repository.full_name == github.repository" in repair_cycle,
+        "repair candidate cycle trigger provenance gate missing")
+    req("run-id: ${{ github.event.workflow_run.id }}" in repair_cycle
+        and "github-token: ${{ github.token }}" in repair_cycle,
+        "repair candidate cycle does not consume the exact triggering scheduler artifact")
+    req("steps.select.outputs.has_work == 'true'" in repair_cycle
+        and "needs.plan-build.outputs.has_work == 'true'" in repair_cycle,
+        "repair candidate cycle can spend or continue without selected repair work")
+    req("group: portfolio-cost-governed-autonomy" in repair_cycle,"repair planning lost paid-state serialization")
+    req("cost_governor.workflow_gate preflight" in repair_cycle and "cost_governor.workflow_gate finalize" in repair_cycle,
+        "repair planning lost paid wrapper governance")
+    for job in ("replay","submit","finalize"):
+        req(f"--job-id {job}" in repair_cycle,f"repair {job} workload gate missing")
+        req(f"repair-candidate-cycle::{job}" in workload["services"],f"repair {job} workload policy missing")
+    req("software_factory.candidate_submitter" in repair_cycle,"repair cycle remote candidate submission missing")
+    req("software_factory.complete_repair_work" in repair_cycle,"repair cycle scheduler completion missing")
+    req(repair_cycle.count("contents: write")==1 and "pull-requests: write" not in repair_cycle
+        and "create_pr" not in repair_cycle and "merge_pr" not in repair_cycle
+        and "deployment_authorized: true" not in repair_cycle,
+        "repair candidate cycle widened write authority beyond isolated candidate submission")
+    repair_policy=p.get("event_driven_workflows",{}).get("repair-candidate-cycle",{})
+    req(repair_policy.get("trigger")=="workflow_run:portfolio-autonomous-scheduler:completed:main",
+        "repair candidate workflow event trigger is not recorded in operating policy")
+    scheduler_body=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text().lower()
+    req("contents: write" not in scheduler_body and "repair-candidate-cycle.yml" not in scheduler_body,
+        "scheduler directly owns candidate write authority")
     event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text().lower()
     req("push:" in event and 'branches: ["main"]' in event,"main push observer missing")
     req('"operations/command_center_refresh_request.json"' in event,"trigger-only command-center refresh still creates redundant runtime work")

@@ -49,6 +49,10 @@
     "runtime-event-observe": {
       "trigger": "push:main",
       "purpose": "bounded source observation after main changes"
+    },
+    "repair-candidate-cycle": {
+      "trigger": "workflow_run:portfolio-autonomous-scheduler:completed:main",
+      "purpose": "on successful main scheduler completion, process one real queued REPAIR through paid model planning, isolated build/replay, idempotent remote candidate submission, and scheduler completion; no verification, PR, merge, or deployment"
     }
   },
   "reusable_nonrecurring_workflows": {

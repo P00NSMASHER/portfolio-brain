@@ -73,7 +73,7 @@ jobs:
         id: execute
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: >-
-          python -m scheduler.work_executor
+          python -m scheduler.engineering_executor
           --state scheduler/out/scheduler_state.json
           --runtime-state runtime/live/runtime_state.json
           --hunter-state hunting/live/hunter_state.json

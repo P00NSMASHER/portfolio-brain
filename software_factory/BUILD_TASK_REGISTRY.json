@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "mode": "REVIEWED_EXACT_TASKS_ONLY",
+  "tasks": [],
+  "note": "No production task is authorized by this implementation PR. Add an exact source_ref, task_path and independently reviewed task_hash only after existing project/factory approvals. Test fixtures do not authorize production work."
+}
