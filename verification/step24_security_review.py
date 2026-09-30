@@ -535,7 +535,8 @@ def static_review(root: Path = ROOT) -> dict[str, Any]:
         and isinstance(customer_email, dict)
         and not explicit_human_gate
     )
-    observed["chatgpt_gmail_customer_email_gateway_present"] = gmail_act\n    observed["chatgpt_gmail_customer_email_policy_bounded"] = canonical_email_gate_ok
+    observed["chatgpt_gmail_customer_email_gateway_present"] = gmail_act
+    observed["chatgpt_gmail_customer_email_policy_bounded"] = canonical_email_gate_ok
     if gmail_act and not canonical_email_gate_ok:
         findings.append(finding(
             "ADAPTER_WRITE_AUTHORITY", "HIGH", "CHATGPT_GMAIL_CUSTOMER_EMAIL_AUTHORITY_PRESENT",
