@@ -32,10 +32,33 @@ def ready_health():
     }
 
 
+def ready_analysis():
+    return {
+        "schema_version": "1.0.0",
+        "mode": "daily",
+        "status": "SUCCESS",
+        "packet_hash": "sha256:" + ("1" * 64),
+        "route": {
+            "tier": "TIER_2",
+            "provider_id": "openai",
+            "model_id": "gpt-5.6-terra",
+            "route_id": "ROUTE-TEST",
+        },
+        "receipt": {
+            "provider_id": "openai",
+            "model_id": "gpt-5.6-terra",
+        },
+        "analysis_text": "{}",
+        "authority_granted": False,
+        "evidence_upgraded": False,
+    }
+
+
 class ProviderUsabilityAcceptanceTests(unittest.TestCase):
-    def receipt(self, health=None, *, observed=SHA):
+    def receipt(self, health=None, analysis=None, *, observed=SHA):
         return build_receipt(
             ready_health() if health is None else health,
+            ready_analysis() if analysis is None else analysis,
             source_run_id=12345,
             source_head_sha=SHA,
             observed_main_sha=observed,
@@ -51,6 +74,8 @@ class ProviderUsabilityAcceptanceTests(unittest.TestCase):
         self.assertTrue(receipt["call_verified"])
         self.assertTrue(receipt["last_successful_at"])
         self.assertEqual(receipt["cost_gate_status"], "COMMITTED")
+        self.assertEqual(receipt["model_analysis_status"], "SUCCESS")
+        self.assertTrue(receipt["model_analysis_hash"].startswith("sha256:"))
         self.assertFalse(receipt["authority_granted"])
         self.assertFalse(receipt["evidence_upgraded"])
 
@@ -115,6 +140,7 @@ class ProviderUsabilityAcceptanceTests(unittest.TestCase):
     def test_missing_provider_health_artifact_is_blocked(self):
         receipt = build_receipt(
             None,
+            ready_analysis(),
             source_run_id=12345,
             source_head_sha=SHA,
             observed_main_sha=SHA,
@@ -122,6 +148,25 @@ class ProviderUsabilityAcceptanceTests(unittest.TestCase):
         self.assertEqual(receipt["status"], "BLOCKED")
         self.assertIn("PROVIDER_HEALTH_ARTIFACT_MISSING", receipt["reason_codes"])
         self.assertIsNone(receipt["provider_health_hash"])
+
+    def test_stale_health_without_current_analysis_artifact_cannot_pass(self):
+        receipt = build_receipt(
+            ready_health(),
+            None,
+            source_run_id=12345,
+            source_head_sha=SHA,
+            observed_main_sha=SHA,
+        )
+        self.assertEqual(receipt["status"], "BLOCKED")
+        self.assertIn("MODEL_ANALYSIS_ARTIFACT_MISSING", receipt["reason_codes"])
+        self.assertIsNone(receipt["model_analysis_hash"])
+
+    def test_model_analysis_provider_identity_must_match_health(self):
+        analysis = ready_analysis()
+        analysis["route"]["model_id"] = "other-model"
+        receipt = self.receipt(analysis=analysis)
+        self.assertEqual(receipt["status"], "BLOCKED")
+        self.assertIn("MODEL_ANALYSIS_MODEL_MISMATCH", receipt["reason_codes"])
 
     def test_invalid_health_cannot_be_rescued_by_boolean_flags(self):
         health = ready_health()
