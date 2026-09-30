@@ -24,7 +24,7 @@ IMMUTABLE_TRUST_ANCHORS = {
     ".github/workflows/portfolio-independent-verifier.yml",
     "verification/independent_verifier.py",
 }
-MAX_PR_FILE_PAGES = 5
+MAX_COMPARE_FILES = 300
 
 
 class IndependentVerifierError(RuntimeError):
@@ -67,19 +67,21 @@ def _api(token: str, path: str, *, method: str = "GET", payload: dict[str, Any] 
         return json.loads(raw.decode("utf-8")) if raw else {}
 
 
-def _pr_changed_files(token: str, pr_number: int) -> set[str]:
-    req(type(pr_number) is int and pr_number > 0, "PR number invalid")
+def _current_main_changed_files(compare: dict[str, Any]) -> set[str]:
+    rows = compare.get("files")
+    req(isinstance(rows, list), "current-main compare file listing malformed")
+    # GitHub's compare API caps file output at 300 entries. Exactly 300 is
+    # ambiguous, so fail closed rather than risk missing a trust-anchor change.
+    req(len(rows) < MAX_COMPARE_FILES, "current-main compare file listing hit verifier bound")
     changed: set[str] = set()
-    for page in range(1, MAX_PR_FILE_PAGES + 1):
-        rows = _api(token, f"/pulls/{pr_number}/files?per_page=100&page={page}")
-        req(isinstance(rows, list), "PR file listing malformed")
-        for row in rows:
-            filename = row.get("filename")
-            req(isinstance(filename, str) and filename and not filename.startswith("/"), "PR filename invalid")
-            changed.add(filename)
-        if len(rows) < 100:
-            return changed
-    raise IndependentVerifierError("PR file listing exceeded verifier page bound")
+    for row in rows:
+        filename = row.get("filename")
+        req(
+            isinstance(filename, str) and filename and not filename.startswith("/"),
+            "current-main compare filename invalid",
+        )
+        changed.add(filename)
+    return changed
 
 
 def verify_exact_head(
@@ -98,9 +100,6 @@ def verify_exact_head(
     req(pr.get("base", {}).get("repo", {}).get("full_name") == REPOSITORY, "PR base repository mismatch")
     req(pr.get("base", {}).get("ref") == "main", "PR base is not main")
     req(pr.get("head", {}).get("sha") == expected_head_sha, "PR head moved after Foundation validation")
-    changed_files = _pr_changed_files(token, pr_number)
-    touched_anchors = sorted(changed_files & IMMUTABLE_TRUST_ANCHORS)
-    req(not touched_anchors, "candidate modifies immutable verifier trust anchor: " + ",".join(touched_anchors))
 
     main = _api(token, "/branches/main")
     main_sha = main.get("commit", {}).get("sha")
@@ -114,6 +113,9 @@ def verify_exact_head(
     )
     merge_base = compare.get("merge_base_commit", {}).get("sha")
     req(merge_base == main_sha, "candidate does not contain current main")
+    changed_files = _current_main_changed_files(compare)
+    touched_anchors = sorted(changed_files & IMMUTABLE_TRUST_ANCHORS)
+    req(not touched_anchors, "candidate modifies immutable verifier trust anchor: " + ",".join(touched_anchors))
 
     checks = _api(token, f"/commits/{expected_head_sha}/check-runs?per_page=100").get("check_runs", [])
     foundation = [
