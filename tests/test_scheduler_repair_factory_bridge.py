@@ -174,6 +174,13 @@ class SchedulerRepairFactoryBridgeTests(unittest.TestCase):
         self.assertIn("portfolio-phase1-gate", body)
         self.assertFalse(any("/merge" in url for _, url, _ in transport.calls))
 
+    def test_workflow_prevents_python_bytecode_from_contaminating_candidate_diff(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/portfolio-autonomous-repair.yml").read_text()
+        self.assertIn('PYTHONDONTWRITEBYTECODE: "1"', workflow)
+        self.assertIn("python -m repair.autonomous_repair validate-diff", workflow)
+        self.assertIn("software_factory.scheduler_repair_bridge submit", workflow)
+
     def test_workflow_separates_builder_from_network_disabled_factory_review(self):
         root = Path(__file__).resolve().parents[1]
         workflow = (root / ".github/workflows/portfolio-autonomous-repair.yml").read_text()
