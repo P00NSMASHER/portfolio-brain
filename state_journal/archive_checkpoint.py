@@ -175,6 +175,10 @@ def load_durable_archive(reader, *, now: datetime | None = None, allow_missing: 
     Missing bootstrap archive is distinguishable from corruption. Once present,
     corruption or stale replay evidence always fails closed.
     """
+    if not hasattr(reader, "read_archive_branch_files"):
+        if allow_missing:
+            return None, None, {"status": "MISSING_CHECKPOINT", "reason": "archive reader unavailable"}
+        raise JournalError("MISSING_CHECKPOINT: archive reader unavailable")
     try:
         files, branch_meta = reader.read_archive_branch_files(
             [ARCHIVE_MANIFEST_PATH, ARCHIVE_SNAPSHOT_PATH]
