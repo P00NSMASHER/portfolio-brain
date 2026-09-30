@@ -146,6 +146,7 @@ def submit_factory_candidate(
     req(request["source_kind"] == "SCHEDULER_REPAIR_TASK", "factory bridge accepts scheduler repair tasks only")
     req(validation.get("request_id") == request["request_id"], "factory diff validation request mismatch")
     req(validation.get("fingerprint") == request["fingerprint"], "factory diff validation fingerprint mismatch")
+    req(validation.get("base_sha") == request["base_sha"], "factory diff validation base SHA mismatch")
     changed_paths = validation.get("changed_paths")
     req(isinstance(changed_paths, list) and bool(changed_paths), "factory candidate changed paths missing")
     req(isinstance(test_log, bytes) and bool(test_log.strip()), "factory builder test log missing")
