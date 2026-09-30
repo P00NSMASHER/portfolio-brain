@@ -1,0 +1,241 @@
+{
+  "schema_version": "1.0.0",
+  "boundary_id": "portfolio-authority-boundaries-v1",
+  "default_policy": "DENY",
+  "inheritance_policy": "NO_PROJECT_INHERITS_PORTFOLIO_BRAIN_AUTHORITY",
+  "capability_keys": [
+    "READ_OBSERVE",
+    "CANDIDATE_PR",
+    "DEPLOY",
+    "EXTERNAL_ACTION"
+  ],
+  "core_autonomy_dependencies": {
+    "interactive_chatgpt_required": false,
+    "gmail_required": false,
+    "external_customer_communication_required": false
+  },
+  "projects": [
+    {
+      "project_id": "PRJ-000",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": true,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "hard_boundaries": []
+    },
+    {
+      "project_id": "PRJ-001",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "hard_boundaries": []
+    },
+    {
+      "project_id": "PRJ-002",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "hard_boundaries": []
+    },
+    {
+      "project_id": "PRJ-003",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "hard_boundaries": []
+    },
+    {
+      "project_id": "PRJ-004",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "hard_boundaries": []
+    },
+    {
+      "project_id": "PRJ-005",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "hard_boundaries": [
+        "CHILD_FACING_ACTIONS_HUMAN_GATED",
+        "PRODUCTION_DEPLOYMENT_HUMAN_GATED"
+      ]
+    },
+    {
+      "project_id": "PRJ-006",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "hard_boundaries": [
+        "CHILD_FACING_MUTATION_HUMAN_GATED",
+        "SCHOOL_CONTENT_PUBLICATION_HUMAN_GATED",
+        "PRODUCTION_DEPLOYMENT_HUMAN_GATED"
+      ]
+    },
+    {
+      "project_id": "PRJ-007",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "hard_boundaries": [
+        "LIVE_TRADING_PROHIBITED",
+        "BROKER_ORDER_EXECUTION_PROHIBITED"
+      ]
+    },
+    {
+      "project_id": "PRJ-008",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "hard_boundaries": []
+    },
+    {
+      "project_id": "PRJ-009",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "hard_boundaries": []
+    },
+    {
+      "project_id": "PRJ-010",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "hard_boundaries": []
+    },
+    {
+      "project_id": "PRJ-011",
+      "capabilities": {
+        "READ_OBSERVE": true,
+        "CANDIDATE_PR": false,
+        "DEPLOY": false,
+        "EXTERNAL_ACTION": false
+      },
+      "hard_boundaries": []
+    }
+  ],
+  "action_matrix": {
+    "observation": {
+      "decision": "PROJECT_CAPABILITY",
+      "required_capability": "READ_OBSERVE",
+      "verification_credit": [],
+      "notes": "Read-only evidence collection; no downstream authority."
+    },
+    "repository_candidate_write": {
+      "decision": "PROJECT_CAPABILITY",
+      "required_capability": "CANDIDATE_PR",
+      "scope": "ISOLATED_BRANCH_ONLY",
+      "verification_credit": [],
+      "notes": "Candidate writes never imply merge or deployment."
+    },
+    "pr_creation": {
+      "decision": "PROJECT_CAPABILITY",
+      "required_capability": "CANDIDATE_PR",
+      "scope": "ISOLATED_BRANCH_ONLY",
+      "verification_credit": [],
+      "notes": "PR creation is candidate state, not deployment."
+    },
+    "protected_bot_repair_integration": {
+      "decision": "ALLOWED_IF_PROTECTED_EXACT_HEAD_CHECKS_PASS",
+      "project_ids": [
+        "PRJ-000"
+      ],
+      "eligible_branch_prefix": "factory/auto-repair-",
+      "required_checks": [
+        {
+          "name": "validate",
+          "integration_id": 15368
+        },
+        {
+          "name": "portfolio-phase1-gate",
+          "integration_id": 5121826
+        }
+      ],
+      "bypass_authority": false,
+      "deployment_authority": false,
+      "verification_credit": [
+        "TECHNICAL_VERIFIED"
+      ]
+    },
+    "production_deployment": {
+      "decision": "HUMAN_APPROVAL_REQUIRED",
+      "verification_credit": [],
+      "notes": "Observation, candidate PRs, and Pages do not grant deployment authority."
+    },
+    "customer_email_gmail": {
+      "decision": "HUMAN_APPROVAL_REQUIRED",
+      "core_autonomy_dependency": false,
+      "verification_credit": [],
+      "notes": "Concrete communication requires explicit human approval."
+    },
+    "financial_actions": {
+      "decision": "HUMAN_APPROVAL_REQUIRED",
+      "verification_credit": [],
+      "notes": "Payments, purchases, billing changes, and money movement are human-gated."
+    },
+    "destructive_actions": {
+      "decision": "HUMAN_APPROVAL_REQUIRED",
+      "verification_credit": [],
+      "notes": "Destructive or irreversible state change is human-gated."
+    },
+    "child_facing_actions": {
+      "decision": "HUMAN_APPROVAL_REQUIRED",
+      "project_ids": [
+        "PRJ-005",
+        "PRJ-006"
+      ],
+      "verification_credit": [],
+      "notes": "Child-facing mutation and school-content publication are human-gated."
+    },
+    "live_trading": {
+      "decision": "PROHIBITED",
+      "project_ids": [
+        "PRJ-007"
+      ],
+      "verification_credit": [],
+      "notes": "Research only; no brokerage orders or autonomous positions."
+    },
+    "pages_publication": {
+      "decision": "ALLOWED_SANITIZED_PUBLICATION_ONLY",
+      "project_ids": [
+        "PRJ-000"
+      ],
+      "production_deployment_authority": false,
+      "public_persistence": "SANITIZED_ONLY",
+      "verification_credit": [],
+      "notes": "Pages publication is not production deployment and creates no outcome verification."
+    }
+  }
+}

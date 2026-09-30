@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0.0",
+  "status_id": "portfolio-governance-config-status-v1",
+  "source_of_truth": [
+    "governance/boundaries.json",
+    "adapters/ADAPTER_REGISTRY.json",
+    "notifications/NOTIFICATION_POLICY.json"
+  ],
+  "registered_project_boundaries": 12,
+  "registered_repository_adapters": 8,
+  "adapter_authority_classes": [
+    "OBSERVE"
+  ],
+  "core_autonomy_dependencies": {
+    "interactive_chatgpt_required": false,
+    "gmail_required": false,
+    "external_customer_communication_required": false
+  },
+  "gmail_customer_communication": "HUMAN_APPROVAL_REQUIRED",
+  "production_deployment": "HUMAN_APPROVAL_REQUIRED",
+  "live_trading": "PROHIBITED",
+  "pages_publication": "ALLOWED_SANITIZED_PUBLICATION_ONLY",
+  "notification_authority_class": "NONE",
+  "acceptance_proof_status": "TRACKED_SEPARATELY_IN_GITHUB_ISSUE_210"
+}

@@ -30,6 +30,10 @@ jobs:
         run: python -m registry.validate_registry
       - name: Validate Step 4 adapters
         run: python -m adapters.validate_adapters
+      - name: Validate remediation authority boundaries
+        run: python -m governance.validate_boundaries
+      - name: Validate generated governance status
+        run: python -m governance.status --check
       - name: Validate Step 5 truth integration
         run: python -m truth.validate_truth_integration
       - name: Validate Step 6 shared memory

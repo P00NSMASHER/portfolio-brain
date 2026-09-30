@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0.0",
+  "intake_id": "repo-001-scout-to-hunter-v1",
+  "source_repository_id": "REPO-001",
+  "source_repository_full_name": "P00NSMASHER/github-value-hunt-ledger",
+  "source_path_pattern": "intelligence/scout_queue/HUNTER-*.json",
+  "required_source_authority": "PRE_VERIFICATION_DISCOVERY_ONLY",
+  "required_candidate_status": "PRE_VERIFICATION_CANDIDATE",
+  "worker_targets": {
+    "HUNTER-01": "PRJ-005",
+    "HUNTER-04": "PRJ-005",
+    "HUNTER-07": "PRJ-005"
+  },
+  "target_capability_keys": {
+    "PRJ-005": "capability-coverage:starblox"
+  },
+  "min_triage_score": 40,
+  "required_root_code_signals_any": [
+    "src",
+    "tests"
+  ],
+  "max_queue_documents_per_cycle": 1,
+  "max_candidates_per_cycle": 1,
+  "max_state_records": 256,
+  "downstream_authority": "OBSERVE",
+  "existing_hunter_module": "hunting.autonomous_hunter",
+  "reuse_rights_granted": false,
+  "value_verification_granted": false,
+  "invariants": [
+    "Bounded REPO-001 scout output reuses existing Portfolio Brain Hunter inspection/classification/ranking/proposal functions.",
+    "This bridge is not a second Hunter scheduler or search engine.",
+    "Source repository revision plus deterministic finding identity forms the dedupe key.",
+    "Pre-verification scout triage grants no reuse, write, deploy, market, or revenue authority."
+  ]
+}

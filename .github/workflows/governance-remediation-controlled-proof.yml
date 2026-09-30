@@ -1,0 +1,32 @@
+name: governance-remediation-controlled-proof
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ["governance/**","adapters/project_forwarder.py","adapters/abvm_observer.py","hunting/repo_scout_intake.py","hunting/REPO_SCOUT_INTAKE_POLICY.json",".github/workflows/governance-remediation-controlled-proof.yml"]
+  push:
+    branches: ["main"]
+    paths: ["governance/**","adapters/project_forwarder.py","adapters/abvm_observer.py","hunting/repo_scout_intake.py","hunting/REPO_SCOUT_INTAKE_POLICY.json"]
+permissions:
+  contents: read
+jobs:
+  controlled-live-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Deterministic remediation regressions
+        run: python -m unittest tests.test_steps13_18_governance -v
+      - name: Read-only exact-once, REPO-001 intake, and ABVM proof
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python -m governance.live_proof --at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --output governance/out/steps13-15-live-proof.json
+      - name: Upload sanitized proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-steps13-15-live-proof-${{ github.sha }}
+          path: governance/out/steps13-15-live-proof.json
+          if-no-files-found: error
+          retention-days: 30
