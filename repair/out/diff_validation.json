@@ -1,0 +1,30 @@
+{
+  "base_sha": "f2e51fd88c172f1a69d1fae0f69ed82c2966ac40",
+  "changed_lines": 255,
+  "changed_paths": [
+    "agents/artifact_state.py",
+    "repair/out/existing_pr.json",
+    "repair/out/failed.log",
+    "repair/out/prompt.txt",
+    "repair/out/request.json",
+    "repair/out/source_run.json",
+    "tests/test_agent_heartbeat_batch_fork_recovery.py"
+  ],
+  "deployment_authority_granted": false,
+  "diff_hash": "sha256:e4383c6802e9916d2c250639cb571a2948e1d497b72cb7fd3d6b5663a498e862",
+  "fingerprint": "sha256:a1dabfecc0b78ebc799a7b3217cc77603a8788e83cd0997febf43fff05cd02ca",
+  "implementation_paths": [
+    "agents/artifact_state.py",
+    "repair/out/existing_pr.json",
+    "repair/out/failed.log",
+    "repair/out/prompt.txt",
+    "repair/out/request.json",
+    "repair/out/source_run.json"
+  ],
+  "merge_authority_granted": false,
+  "request_id": "ARQ-A1DABFECC0B78EBC799A",
+  "schema_version": "1.0.0",
+  "test_paths": [
+    "tests/test_agent_heartbeat_batch_fork_recovery.py"
+  ]
+}

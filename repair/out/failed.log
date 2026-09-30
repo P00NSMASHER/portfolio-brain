@@ -1,0 +1,20 @@
+reduce	Replay verified immutable producer events	﻿2026-09-30T15:17:21.9021573Z ##[group]Run if [ "$INITIALIZE_JOURNAL" = "true" ]; then
+reduce	Replay verified immutable producer events	2026-09-30T15:17:21.9024230Z ^[[36;1mif [ "$INITIALIZE_JOURNAL" = "true" ]; then^[[0m
+reduce	Replay verified immutable producer events	2026-09-30T15:17:21.9027929Z ^[[36;1m  python -m state_journal.github_reducer --initialize --checkpoint state_journal/CHECKPOINT.json.gz^[[0m
+reduce	Replay verified immutable producer events	2026-09-30T15:17:21.9031677Z ^[[36;1melse^[[0m
+reduce	Replay verified immutable producer events	2026-09-30T15:17:21.9033350Z ^[[36;1m  python -m state_journal.github_reducer^[[0m
+reduce	Replay verified immutable producer events	2026-09-30T15:17:21.9035449Z ^[[36;1mfi^[[0m
+reduce	Replay verified immutable producer events	2026-09-30T15:17:21.9331176Z shell: /usr/bin/bash -e {0}
+reduce	Replay verified immutable producer events	2026-09-30T15:17:21.9332454Z env:
+reduce	Replay verified immutable producer events	2026-09-30T15:17:21.9343661Z   GITHUB_TOKEN: ***
+reduce	Replay verified immutable producer events	2026-09-30T15:17:21.9345116Z   INITIALIZE_JOURNAL: 
+reduce	Replay verified immutable producer events	2026-09-30T15:17:21.9346170Z   TRIGGER_WORKFLOW_RUN_ID: 36734547529
+reduce	Replay verified immutable producer events	2026-09-30T15:17:21.9347603Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+reduce	Replay verified immutable producer events	2026-09-30T15:17:21.9349845Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+reduce	Replay verified immutable producer events	2026-09-30T15:17:21.9351699Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+reduce	Replay verified immutable producer events	2026-09-30T15:17:21.9353349Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+reduce	Replay verified immutable producer events	2026-09-30T15:17:21.9355094Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+reduce	Replay verified immutable producer events	2026-09-30T15:17:21.9356791Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+reduce	Replay verified immutable producer events	2026-09-30T15:17:21.9358223Z ##[endgroup]
+reduce	Replay verified immutable producer events	2026-09-30T15:17:43.2436724Z {"status": "BLOCKED", "mode": "SHADOW", "production_authority": false, "reason_type": "InvalidStateArtifact", "reason": "agent heartbeat fork has no unique later equivalent update"}
+reduce	Replay verified immutable producer events	2026-09-30T15:17:43.2604228Z ##[error]Process completed with exit code 1.

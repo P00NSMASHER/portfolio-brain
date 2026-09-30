@@ -1,0 +1,9 @@
+{
+  "checks": [],
+  "foundation_success": false,
+  "head_sha": null,
+  "independent_success": false,
+  "pr_number": null,
+  "source_ref": "workflow-run:36735563999",
+  "status": "NO_REPAIR_PR"
+}

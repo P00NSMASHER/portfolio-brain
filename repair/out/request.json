@@ -1,0 +1,20 @@
+{
+  "base_sha": "f2e51fd88c172f1a69d1fae0f69ed82c2966ac40",
+  "evidence_refs": [
+    "github-actions-run:36735563999",
+    "github:P00NSMASHER/portfolio-brain@f2e51fd88c172f1a69d1fae0f69ed82c2966ac40",
+    "workflow:.github/workflows/portfolio-state-reducer.yml"
+  ],
+  "failed_head_sha": "f2e51fd88c172f1a69d1fae0f69ed82c2966ac40",
+  "failure_summary": "reduce\tReplay verified immutable producer events\t\ufeff2026-09-30T15:17:21.9021573Z ##[group]Run if [ \"$INITIALIZE_JOURNAL\" = \"true\" ]; then\nreduce\tReplay verified immutable producer events\t2026-09-30T15:17:21.9024230Z ^[[36;1mif [ \"$INITIALIZE_JOURNAL\" = \"true\" ]; then^[[0m\nreduce\tReplay verified immutable producer events\t2026-09-30T15:17:21.9027929Z ^[[36;1m  python -m state_journal.github_reducer --initialize --checkpoint state_journal/CHECKPOINT.json.gz^[[0m\nreduce\tReplay verified immutable producer events\t2026-09-30T15:17:21.9031677Z ^[[36;1melse^[[0m\nreduce\tReplay verified immutable producer events\t2026-09-30T15:17:21.9033350Z ^[[36;1m  python -m state_journal.github_reducer^[[0m\nreduce\tReplay verified immutable producer events\t2026-09-30T15:17:21.9035449Z ^[[36;1mfi^[[0m\nreduce\tReplay verified immutable producer events\t2026-09-30T15:17:21.9331176Z shell: /usr/bin/bash -e {0}\nreduce\tReplay verified immutable producer events\t2026-09-30T15:17:21.9332454Z env:\n[REDACTED_SENSITIVE_LINE]\nreduce\tReplay verified immutable producer events\t2026-09-30T15:17:21.9345116Z   INITIALIZE_JOURNAL: \nreduce\tReplay verified immutable producer events\t2026-09-30T15:17:21.9346170Z   TRIGGER_WORKFLOW_RUN_ID: 36734547529\nreduce\tReplay verified immutable producer events\t2026-09-30T15:17:21.9347603Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64\nreduce\tReplay verified immutable producer events\t2026-09-30T15:17:21.9349845Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig\nreduce\tReplay verified immutable producer events\t2026-09-30T15:17:21.9351699Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64\nreduce\tReplay verified immutable producer events\t2026-09-30T15:17:21.9353349Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64\nreduce\tReplay verified immutable producer events\t2026-09-30T15:17:21.9355094Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64\nreduce\tReplay verified immutable producer events\t2026-09-30T15:17:21.9356791Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib\nreduce\tReplay verified immutable producer events\t2026-09-30T15:17:21.9358223Z ##[endgroup]\nreduce\tReplay verified immutable producer events\t2026-09-30T15:17:43.2436724Z {\"status\": \"BLOCKED\", \"mode\": \"SHADOW\", \"production_authority\": false, \"reason_type\": \"InvalidStateArtifact\", \"reason\": \"agent heartbeat fork has no unique later equivalent update\"}\nreduce\tReplay verified immutable producer events\t2026-09-30T15:17:43.2604228Z ##[error]Process completed with exit code 1.\n",
+  "fingerprint": "sha256:a1dabfecc0b78ebc799a7b3217cc77603a8788e83cd0997febf43fff05cd02ca",
+  "regression_requirement": "Add or strengthen a regression test that reproduces the observed failure before the fix.",
+  "request_id": "ARQ-A1DABFECC0B78EBC799A",
+  "schema_version": "1.0.0",
+  "source_kind": "WORKFLOW_FAILURE",
+  "source_ref": "workflow-run:36735563999",
+  "source_run_id": 36735563999,
+  "source_workflow": "portfolio-state-reducer",
+  "source_workflow_path": ".github/workflows/portfolio-state-reducer.yml",
+  "target_paths": []
+}
