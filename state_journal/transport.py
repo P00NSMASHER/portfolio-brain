@@ -13,6 +13,7 @@ import re
 import zipfile
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 
 from runtime.artifact_state import BudgetedHTTP
 from state_journal.contracts import (MAX_BYTES, PRODUCERS, REPOSITORY, WORKFLOW_PRODUCERS,
@@ -115,10 +116,86 @@ class GitHubReader:
         # Existing transport strips authorization on cross-host artifact redirects.
         return self.http.bytes(f"{self.base}/actions/artifacts/{artifact_id}/zip")
 
+    def _recent_reducer_snapshots(self, since: str, *, max_pages: int) -> list[tuple[dict, dict]]:
+        """Return the newest two successful reducer runs and their canonical snapshots.
+
+        Reducer-specific run discovery avoids repository-wide run growth. The
+        older reducer *start time* is the overlap anchor: snapshot upload time is
+        too late because a producer event can arrive after that reducer scanned
+        inputs but before its snapshot upload completes.
+        """
+        created = quote(f">={since}", safe="")
+        runs = {}
+        run_page_limit = min(max_pages, 10)
+        for page in range(1, run_page_limit + 1):
+            response = self.get(
+                "/actions/workflows/portfolio-state-reducer.yml/runs"
+                f"?status=success&branch=main&created={created}&per_page=100&page={page}"
+            )
+            rows = response.get("workflow_runs")
+            require(isinstance(rows, list), "Reducer run listing malformed")
+            for run in rows:
+                run_id = run.get("id")
+                require(type(run_id) is int and run_id > 0, "Reducer run identity missing")
+                require(run.get("head_branch") == "main", "Reducer anchor is not on main")
+                require(run.get("status") == "completed" and run.get("conclusion") == "success",
+                        "Reducer anchor is not successful")
+                created_at = run.get("created_at")
+                require(isinstance(created_at, str), "Reducer run created_at missing")
+                at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                require(at.tzinfo is not None, "Reducer run created_at requires timezone")
+                previous = runs.get(run_id)
+                if previous is not None:
+                    require(previous == run, "Reducer run metadata changed during bounded scan")
+                else:
+                    runs[run_id] = run
+            if len(rows) < 100:
+                break
+        else:
+            raise JournalError("Reducer run scan incomplete at page bound; checkpoint/archive required")
+
+        ordered = sorted(
+            runs.values(),
+            key=lambda row: (row["created_at"], row["id"]),
+            reverse=True,
+        )[:2]
+        snapshots = []
+        for run in ordered:
+            response = self.get(
+                f"/actions/runs/{run['id']}/artifacts?name={SNAPSHOT_ARTIFACT}&per_page=10"
+            )
+            rows = response.get("artifacts")
+            require(isinstance(rows, list), "Reducer snapshot artifact listing malformed")
+            matches = []
+            for artifact in rows:
+                if artifact.get("name") != SNAPSHOT_ARTIFACT or artifact.get("expired"):
+                    continue
+                source = artifact.get("workflow_run") or {}
+                if (
+                    source.get("id") == run["id"]
+                    and source.get("head_branch") == "main"
+                    and source.get("head_sha") == run.get("head_sha")
+                ):
+                    matches.append(artifact)
+            require(len(matches) == 1, "Successful reducer snapshot artifact missing or ambiguous")
+            snapshots.append((run, matches[0]))
+        return snapshots
+
     def list_recent_artifacts(self, since: str, *, max_pages: int = 20) -> list[dict]:
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
-        result = {}
+
+        anchors = self._recent_reducer_snapshots(since, max_pages=max_pages)
+        if anchors:
+            overlap = anchors[-1][0].get("created_at")
+            require(isinstance(overlap, str), "Reducer run created_at missing")
+            overlap_at = datetime.fromisoformat(overlap.replace("Z", "+00:00"))
+            require(overlap_at.tzinfo is not None, "Reducer run created_at requires timezone")
+            if overlap_at > boundary:
+                boundary = overlap_at
+
+        result = {artifact["id"]: artifact for _, artifact in anchors}
+        previous_at = None
         for page in range(1, max_pages + 1):
             response = self.get(f"/actions/artifacts?per_page=100&page={page}")
             rows = response.get("artifacts")
@@ -126,21 +203,24 @@ class GitHubReader:
             for row in rows:
                 artifact_id = row.get("id")
                 require(type(artifact_id) is int and artifact_id > 0, "Artifact listing identity missing")
-                created = row.get("created_at")
-                require(isinstance(created, str), "Artifact created_at missing")
-                at = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                created_at = row.get("created_at")
+                require(isinstance(created_at, str), "Artifact created_at missing")
+                at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
                 require(at.tzinfo is not None, "Artifact created_at requires timezone")
+                if previous_at is not None:
+                    require(at <= previous_at, "Artifact listing is not newest-first; bounded scan unsafe")
+                previous_at = at
                 previous = result.get(artifact_id)
                 if previous is not None:
                     require(previous == row, "Artifact metadata changed during bounded scan")
-                else:
+                elif at >= boundary:
                     result[artifact_id] = row
-            if len(rows) < 100:
-                selected = [
-                    row for row in result.values()
-                    if datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")) >= boundary
-                ]
-                return sorted(selected, key=lambda row: (row["created_at"], row["id"]), reverse=True)
+
+            # GitHub currently returns repository artifacts newest-first. We
+            # verify that ordering above before using the time boundary; any
+            # provider ordering change fails closed rather than dropping state.
+            if len(rows) < 100 or (rows and previous_at is not None and previous_at < boundary):
+                return sorted(result.values(), key=lambda row: (row["created_at"], row["id"]), reverse=True)
         raise JournalError("Artifact scan incomplete at page bound; checkpoint/archive required")
 
     def event(self, meta: dict, upload_steps: dict) -> tuple[dict, dict]:
