@@ -42,7 +42,130 @@ def fixture():
     return meta,run,{'total_count':1,'jobs':[job]},raw,event
 
 
+def fallback_workflow_source():
+    lines = []
+    for domain, step_name in UPLOADS["runtime-worker"].items():
+        lines.extend([
+            f"- name: {step_name}",
+            f"  if: ${{{{ steps.journal_upload_{domain}.outcome == 'success' }}}}",
+        ])
+    lines.extend([
+        f"- name: {EMIT_STEP}",
+        "  run: python -m state_journal.emitter --producer runtime-worker",
+        f"- name: {UPLOAD_STEP}",
+        "  name: portfolio-state-event-v2-${{ github.run_id }}-runtime-worker-${{ github.sha }}-${{ github.run_attempt }}",
+    ])
+    return "\n".join(lines)
+
+
+def fallback_job_log(meta, event):
+    published = {"runtime": False, "heartbeat": True, "cost": False}
+    return "\n".join([
+        "##[group]Run python -m state_journal.emitter --producer runtime-worker",
+        "python -m state_journal.emitter --producer runtime-worker",
+        "  JOURNAL_PUBLISHED_DOMAINS: " + json.dumps(published),
+        json.dumps({
+            "emitted": True,
+            "event_id": event["event_id"],
+            "production_backend_changed": False,
+        }),
+        "##[group]Run actions/upload-artifact@v4",
+        f"  name: {meta['name']}",
+        "SHA256 digest of uploaded artifact zip is " + meta["digest"].removeprefix("sha256:"),
+        f"Artifact {meta['name']}.zip successfully finalized. Artifact ID {meta['id']}",
+    ]).encode("utf-8")
+
+
 class StateJournalTransportTests(unittest.TestCase):
+    def test_empty_step_metadata_requires_exact_log_and_source_workflow_proof(self):
+        meta,run,jobs,raw,event=fixture()
+        jobs["jobs"][0]["steps"]=[]
+        actual,evidence=validate_provider_event(
+            meta,run,jobs,raw,UPLOADS,
+            job_logs={20:fallback_job_log(meta,event)},
+            workflow_source=fallback_workflow_source(),
+        )
+        self.assertEqual(actual,event)
+        validate_source_evidence(evidence,event)
+        self.assertEqual(evidence["job_id"],20)
+
+    def test_empty_step_fallback_rejects_missing_or_tampered_execution_proof(self):
+        meta,run,jobs,raw,event=fixture()
+        jobs["jobs"][0]["steps"]=[]
+
+        with self.assertRaisesRegex(JournalError,"job logs were not supplied"):
+            validate_provider_event(
+                meta,run,jobs,raw,UPLOADS,
+                workflow_source=fallback_workflow_source(),
+            )
+
+        bad_event_log=fallback_job_log(meta,event).replace(
+            event["event_id"].encode("utf-8"), b"PSE-" + b"0"*64
+        )
+        with self.assertRaisesRegex(JournalError,"emitter receipt"):
+            validate_provider_event(
+                meta,run,jobs,raw,UPLOADS,
+                job_logs={20:bad_event_log},
+                workflow_source=fallback_workflow_source(),
+            )
+
+        bad_digest_log=fallback_job_log(meta,event).replace(
+            meta["digest"].removeprefix("sha256:").encode("utf-8"), b"0"*64
+        )
+        with self.assertRaisesRegex(JournalError,"upload digest"):
+            validate_provider_event(
+                meta,run,jobs,raw,UPLOADS,
+                job_logs={20:bad_digest_log},
+                workflow_source=fallback_workflow_source(),
+            )
+
+        source=fallback_workflow_source().replace(
+            "steps.journal_upload_heartbeat.outcome == 'success'",
+            "steps.journal_upload_heartbeat.outcome == 'failure'",
+        )
+        with self.assertRaisesRegex(JournalError,"publication binding changed: heartbeat"):
+            validate_provider_event(
+                meta,run,jobs,raw,UPLOADS,
+                job_logs={20:fallback_job_log(meta,event)},
+                workflow_source=source,
+            )
+
+    def test_reader_wires_empty_step_fallback_but_normal_steps_need_no_log(self):
+        meta,run,jobs,raw,event=fixture()
+        calls=[]
+
+        reader=object.__new__(GitHubReader)
+        def get_empty(suffix):
+            calls.append(suffix)
+            if suffix.endswith("/attempts/1"):
+                return run
+            if suffix.endswith("/attempts/1/jobs?per_page=100"):
+                empty=copy.deepcopy(jobs)
+                empty["jobs"][0]["steps"]=[]
+                return empty
+            raise AssertionError(suffix)
+        reader.get=get_empty
+        reader.archive=lambda artifact_id: raw
+        reader.job_log=lambda job_id: fallback_job_log(meta,event)
+        reader.workflow_source=lambda path,sha: fallback_workflow_source()
+        actual,evidence=reader.event(meta,UPLOADS)
+        self.assertEqual(actual,event)
+        self.assertEqual(evidence["job_id"],20)
+
+        reader2=object.__new__(GitHubReader)
+        def get_normal(suffix):
+            if suffix.endswith("/attempts/1"):
+                return run
+            if suffix.endswith("/attempts/1/jobs?per_page=100"):
+                return jobs
+            raise AssertionError(suffix)
+        reader2.get=get_normal
+        reader2.archive=lambda artifact_id: raw
+        reader2.job_log=lambda job_id: (_ for _ in ()).throw(AssertionError("unexpected job log"))
+        reader2.workflow_source=lambda path,sha: (_ for _ in ()).throw(AssertionError("unexpected workflow source"))
+        actual,_=reader2.event(meta,UPLOADS)
+        self.assertEqual(actual,event)
+
     def test_exact_source_and_publication_steps_admit_event(self):
         meta,run,jobs,raw,event=fixture()
         actual,evidence=validate_provider_event(meta,run,jobs,raw,UPLOADS)
