@@ -4,7 +4,7 @@ import argparse, os, time
 from pathlib import Path
 
 from runtime.artifact_restore import _atomic_write
-from state_journal.archive import archived_artifact_ids, load_active_manifest
+from state_journal.archive import archived_artifact_ids, archived_source_attempts, load_active_manifest
 from state_journal.contracts import DOMAINS, canonical, digest, require, strict_load, validate_domain
 from state_journal.github_reducer import latest_snapshot_artifact, restore_snapshot
 from state_journal.reducer import validate_snapshot
@@ -70,6 +70,7 @@ def _pending_events(state: dict, artifacts: list[dict], *, archived_ids: set[int
 
 def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, current_run: str,
                         archived_ids: set[int] | None = None,
+                        archived_attempts: set[tuple[int, int]] | None = None,
                         timeout_seconds: int = 300, poll_seconds: float = 5.0,
                         clock=time.monotonic, sleep=time.sleep) -> tuple[GitHubReader, dict, list[dict]]:
     require(pending, "Pending-event wait requires at least one event")
@@ -96,7 +97,9 @@ def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, curren
             seen_reducers.add(reducer_run["id"])
             fresh = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
             artifacts = getattr(fresh, "list_recent_journal_artifacts", fresh.list_recent_artifacts)(
-                policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]
+                policy["artifact_scan_start"],
+                max_pages=policy["limits"]["max_artifact_pages"],
+                covered_run_attempts=archived_attempts or set(),
             )
             state = restore_snapshot(fresh, artifacts, current_run=current_run)
             known = _known_event_artifact_ids(state) if state is not None else set()
@@ -112,6 +115,7 @@ def restore_domain(domain: str, output: Path, metadata_output: Path | None = Non
     policy = strict_load((ROOT / "state_journal/POLICY.json").read_bytes())
     archive_manifest = load_active_manifest(ROOT)
     archive_ids = archived_artifact_ids(archive_manifest)
+    archive_attempts = archived_source_attempts(archive_manifest)
     require(policy["mode"] == "CANONICAL", "Production canonical mode is not active")
     require(policy["canonical_snapshot_authorized"] is True, "Canonical snapshot is not authorized")
     require(policy["production_readers_enabled"] is True and policy["production_cutover_complete"] is True,
@@ -138,7 +142,9 @@ def restore_domain(domain: str, output: Path, metadata_output: Path | None = Non
         require(bool(token), "GITHUB_TOKEN required for canonical restore")
         reader = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
         artifacts = getattr(reader, "list_recent_journal_artifacts", reader.list_recent_artifacts)(
-            policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]
+            policy["artifact_scan_start"],
+            max_pages=policy["limits"]["max_artifact_pages"],
+            covered_run_attempts=archive_attempts,
         )
         state = restore_snapshot(reader, artifacts, current_run=current_run)
         require(state is not None, "CANONICAL_SNAPSHOT_REQUIRED")
@@ -150,7 +156,8 @@ def restore_domain(domain: str, output: Path, metadata_output: Path | None = Non
         waited_for_reducer = bool(pending)
         if pending:
             reader, state, artifacts = _wait_for_reduction(
-                token, policy, pending, current_run=current_run, archived_ids=archive_ids
+                token, policy, pending, current_run=current_run,
+                archived_ids=archive_ids, archived_attempts=archive_attempts,
             )
             require(state["mode"] == "CANONICAL" and state["production_authority"] is True,
                     "Reducer catch-up snapshot is not production-authoritative")
