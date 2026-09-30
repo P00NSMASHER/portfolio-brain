@@ -93,25 +93,32 @@ def validate_change(change: dict) -> None:
         require(rebuilt == change["after"], "Heartbeat operations do not reproduce after-state")
 
 
-def make_event(producer: str, run_id: str, source_sha: str, changes: list[dict]) -> dict:
+def make_event(producer: str, run_id: str, source_sha: str, changes: list[dict], *, run_attempt: int = 1) -> dict:
     require(producer in PRODUCERS, "Producer is not enrolled")
+    require(type(run_attempt) is int and run_attempt > 0, "Provider run attempt required")
     kind = PRODUCERS[producer][0]
     event = {"schema_version": SCHEMA, "repository": REPOSITORY, "producer": producer,
              "run_id": run_id, "source_sha": source_sha, "event_type": kind,
-             "event_id": event_identity(run_id, kind, source_sha),
+             "event_id": event_identity(run_id, kind, source_sha, run_attempt),
              "changes": sorted(deepcopy(changes), key=lambda c: c["domain"])}
+    if run_attempt > 1:
+        event["run_attempt"] = run_attempt
     event["event_hash"] = event_hash(event)
     validate_event(event)
     return event
 
 
 def validate_event(event: dict) -> None:
-    fields(event, {"schema_version", "repository", "producer", "run_id", "source_sha", "event_type", "event_id", "changes", "event_hash"}, "Event")
+    base_fields = {"schema_version", "repository", "producer", "run_id", "source_sha", "event_type", "event_id", "changes", "event_hash"}
+    require(isinstance(event, dict) and set(event) in {frozenset(base_fields), frozenset(base_fields | {"run_attempt"})},
+            "Event has unexpected fields")
+    run_attempt = event.get("run_attempt", 1)
+    require(type(run_attempt) is int and run_attempt > 0, "Provider run attempt required")
     require(event["schema_version"] == SCHEMA and event["repository"] == REPOSITORY, "Event namespace mismatch")
     producer = event["producer"]
     require(producer in PRODUCERS, "Unknown producer")
     require(event["event_type"] == PRODUCERS[producer][0], "Producer/event type mismatch")
-    require(event["event_id"] == event_identity(event["run_id"], event["event_type"], event["source_sha"]), "Event identity mismatch")
+    require(event["event_id"] == event_identity(event["run_id"], event["event_type"], event["source_sha"], run_attempt), "Event identity mismatch")
     require(event["event_hash"] == event_hash(event), "Event hash mismatch")
     require(isinstance(event["changes"], list) and 0 < len(event["changes"]) <= len(DOMAINS), "Invalid transition count")
     domains = [c.get("domain") for c in event["changes"] if isinstance(c, dict)]
