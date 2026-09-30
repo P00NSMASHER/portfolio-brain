@@ -55,11 +55,6 @@ def latest_canonical(reader: GitHubReader) -> tuple[dict, dict, dict]:
     raise ValueError("No live canonical reducer snapshot available for checkpoint rollover")
 
 
-def _safe_previous_manifest_hash(root: Path) -> str | None:
-    manifest = load_active_manifest(root)
-    return None if manifest is None else manifest["manifest_hash"]
-
-
 def _recovery_runs_are_archived(policy: dict, state: dict) -> bool:
     recovery = policy.get("recovery_run_ids", [])
     if not recovery:
@@ -95,7 +90,7 @@ def generate(root: Path, *, reader: GitHubReader) -> dict:
         source_head_sha=run["head_sha"],
         source_artifact_digest=artifact["digest"],
         source_artifact_created_at=artifact["created_at"],
-        previous_manifest_hash=_safe_previous_manifest_hash(root),
+        previous_manifest=active,
     )
     archive_file = root / archive_path
     immutable_manifest = root / manifest["manifest_path"]
