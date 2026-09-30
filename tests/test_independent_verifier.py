@@ -154,6 +154,14 @@ class IndependentVerifierTests(unittest.TestCase):
         self.assertGreaterEqual(text.count('sys.path.insert(0,"/work")'),3)
         self.assertEqual(text.count("python -I -c"),3)
 
+    def test_hosted_verifier_image_includes_git_without_relaxing_isolation(self):
+        text=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text()
+        self.assertNotIn("python:3.12-slim",text)
+        self.assertEqual(text.count("python:3.12-bookworm"),4)
+        self.assertEqual(text.count("--network none"),3)
+        self.assertEqual(text.count("--cap-drop=ALL"),3)
+        self.assertEqual(text.count("--security-opt=no-new-privileges"),3)
+
     def test_publish_check_rejects_wrong_app_attribution(self):
         response={
             "id":123,"name":"portfolio-phase1-gate","head_sha":"c"*40,
