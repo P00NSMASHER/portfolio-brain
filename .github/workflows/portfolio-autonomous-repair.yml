@@ -21,14 +21,6 @@ on:
         description: "Sanitized scheduler repair request"
         required: false
         type: string
-      request_id:
-        description: "Deterministic scheduler repair request id"
-        required: false
-        type: string
-      request_fingerprint:
-        description: "Content-bound scheduler repair fingerprint"
-        required: false
-        type: string
       failed_run_id:
         description: "Optional failed main workflow run id"
         required: false
@@ -41,7 +33,7 @@ permissions:
   copilot-requests: write
 
 concurrency:
-  group: portfolio-autonomous-repair-${{ inputs.request_id || github.event.workflow_run.id || inputs.failed_run_id || github.run_id }}
+  group: portfolio-autonomous-repair-${{ github.event.workflow_run.id || inputs.failed_run_id || github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -80,8 +72,6 @@ jobs:
         id: prepare
         env:
           REQUEST_B64: ${{ inputs.request_b64 }}
-          EXPECTED_REQUEST_ID: ${{ inputs.request_id }}
-          EXPECTED_REQUEST_FINGERPRINT: ${{ inputs.request_fingerprint }}
           MANUAL_RUN_ID: ${{ inputs.failed_run_id }}
           EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
@@ -96,12 +86,6 @@ jobs:
           raw=base64.b64decode(os.environ["REQUEST_B64"],validate=True)
           req=json.loads(raw.decode("utf-8"))
           validate_request(req)
-          expected_id=os.environ.get("EXPECTED_REQUEST_ID")
-          expected_fingerprint=os.environ.get("EXPECTED_REQUEST_FINGERPRINT")
-          if expected_id and req["request_id"] != expected_id:
-              raise SystemExit("workflow dispatch request id mismatch")
-          if expected_fingerprint and req["fingerprint"] != expected_fingerprint:
-              raise SystemExit("workflow dispatch fingerprint mismatch")
           Path("repair/out/request.json").write_text(json.dumps(req,indent=2,sort_keys=True)+"\n")
           PY
           else
