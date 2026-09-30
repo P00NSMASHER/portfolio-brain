@@ -1,4 +1,5 @@
 name: step8-executor-acceptance
+# Final post-fix wake: stale pre-fix Step-9 candidate closed; require fresh factory PR and exact-head gates.
 # Step 9 autonomous PR-open acceptance retrigger; no authority change.
 # Post-fix Step 9 acceptance wake: verify factory PR open plus repository-scoped Foundation dispatch.
 
