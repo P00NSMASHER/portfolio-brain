@@ -44,6 +44,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Recover non-paid core workflows without canonical cost state
+        run: >-
+          python -m operations.workflow_liveness
+          --without-cost-state
+          --output operations/out/workflow_liveness_pre_restore.json
+      - name: Preserve pre-restore liveness recovery evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-workflow-liveness-pre-restore-${{ github.run_id }}-${{ github.run_attempt }}
+          path: operations/out/workflow_liveness_pre_restore.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Restore canonical cost-governor state
         run: python -m state_journal.production_reader --domain cost --output cost_governor/live/cost_state.json --metadata-output cost_governor/live/cost_restore.json
       - name: Cancel only managed autonomous runs on hard stop
