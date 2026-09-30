@@ -350,6 +350,23 @@ class WorkflowLivenessTests(unittest.TestCase):
         self.assertEqual(len(result["dispatches"]),2)
 
 
+    def test_nonpaid_recovery_does_not_require_canonical_cost_state(self):
+        dispatched=[]
+        result=recover_overdue(
+          None,[],
+          dispatch=lambda workflow,branch:dispatched.append((workflow,branch)),
+          at=AT,
+        )
+        self.assertEqual(result["status"],"RECOVERY_DISPATCHED")
+        self.assertEqual(result["hard_stop_reason"],"COST_STATE_UNAVAILABLE")
+        self.assertEqual(dispatched[0][0],"portfolio-autonomous-scheduler.yml")
+        self.assertEqual(dispatched[1][0],"runtime-hourly-sync.yml")
+        self.assertTrue(all(
+          row.get("admission_domain")=="WORKLOAD"
+          for row in result["dispatches"]
+        ))
+        self.assertFalse(result["authority_granted"])
+
     def test_paid_hard_stop_is_visible_but_does_not_suppress_core_recovery(self):
         route = {
             "status":"ROUTED","tier":2,"route_id":"MRT-LIVENESS-OVERAGE",
@@ -397,6 +414,13 @@ class WorkflowLivenessTests(unittest.TestCase):
     def test_watchdog_workflow_persists_liveness_receipt_and_keeps_actions_write_only(self):
         workflow=(ROOT/".github/workflows/portfolio-cost-watchdog.yml").read_text()
         self.assertIn("python -m operations.workflow_liveness",workflow)
+        self.assertIn("--without-cost-state",workflow)
+        self.assertIn("Recover non-paid core workflows without canonical cost state",workflow)
+        self.assertIn("portfolio-workflow-liveness-pre-restore",workflow)
+        self.assertLess(
+          workflow.index("Recover non-paid core workflows without canonical cost state"),
+          workflow.index("Restore canonical cost-governor state"),
+        )
         self.assertIn("portfolio-workflow-liveness",workflow)
         self.assertIn("actions: write",workflow)
         self.assertIn("contents: read",workflow)
