@@ -10,7 +10,7 @@ from runtime.artifact_restore import _atomic_write
 from state_journal.archive import (
     archived_event_hashes as manifest_event_hashes,
     archived_provider_artifacts as manifest_provider_artifacts,
-    load_active_manifest,
+    load_active_archive,
 )
 from state_journal.contracts import REPOSITORY, Conflict, JournalError, canonical, digest, require, strict_load
 from state_journal.reducer import make_snapshot, validate_snapshot, validate_checkpoint, advance, set_authority
@@ -111,10 +111,22 @@ def select_latest_snapshot(states: list[dict]) -> dict:
 def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
                          upload_steps: dict, explicit_checkpoint: dict | None = None,
                          explicit_run_ids: list[int] | tuple[int, ...] = (),
-                         archive_manifest: dict | None = None) -> tuple[dict, dict]:
+                         archive_manifest: dict | None = None,
+                         archive_state: dict | None = None) -> tuple[dict, dict]:
+    covered_run_ids = {
+        ref["source_run_id"]
+        for refs in (archive_state or {}).get("evidence", {}).values()
+        for ref in refs
+        if ref.get("kind") == "GITHUB_ACTIONS" and type(ref.get("source_run_id")) is int
+    }
+    if archive_manifest is not None and archive_manifest.get("schema_version") == "1.1.0":
+        covered_run_ids.update(archive_manifest["archived_source_run_ids"])
     journal_reader = getattr(reader, "list_recent_journal_artifacts", None)
     artifacts = (
-        journal_reader(since, explicit_run_ids=explicit_run_ids)
+        journal_reader(
+            since, explicit_run_ids=explicit_run_ids,
+            covered_run_ids=covered_run_ids,
+        )
         if journal_reader is not None
         else reader.list_recent_artifacts(since)
     )
@@ -306,12 +318,23 @@ def main() -> None:
             require(trigger_run.isdigit() and int(trigger_run) > 0, "Trigger workflow run ID invalid")
             recovery_run_ids = [*recovery_run_ids, int(trigger_run)]
         recovery_run_ids = sorted(set(recovery_run_ids))
-        archive_manifest = load_active_manifest(ROOT)
+        active_archive = load_active_archive(ROOT)
+        archive_manifest = None if active_archive is None else active_archive[0]
+        archive_state = None if active_archive is None else active_archive[1]
+        archive_checkpoint = None if active_archive is None else active_archive[2]
+        if archive_checkpoint is not None:
+            require(bootstrap == archive_checkpoint, "Active archive checkpoint differs from reviewed checkpoint")
         state, receipt = reduce_from_provider(reader, since=policy["artifact_scan_start"],
                                              current_run=os.environ.get("GITHUB_RUN_ID", ""), upload_steps=upload_steps,
                                              explicit_checkpoint=bootstrap, explicit_run_ids=recovery_run_ids,
-                                             archive_manifest=archive_manifest)
+                                             archive_manifest=archive_manifest, archive_state=archive_state)
         receipt["explicit_recovery_run_ids"] = recovery_run_ids
+        receipt["archive_replay_covered_run_count"] = 0 if archive_state is None else len({
+            ref["source_run_id"]
+            for refs in archive_state["evidence"].values()
+            for ref in refs
+            if ref.get("kind") == "GITHUB_ACTIONS" and type(ref.get("source_run_id")) is int
+        })
         validate_snapshot(state)
         parity = verify_legacy_parity(state["projection"]["states"], args.output_dir / "legacy-parity-work")
         receipt["legacy_parity"] = parity["status"]
