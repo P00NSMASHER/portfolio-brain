@@ -31,6 +31,8 @@ from hunting.proposal_state import (
 )
 from repair.autonomous_repair import (
     AutonomousRepairError,
+    REPOSITORY as REPAIR_REPOSITORY,
+    dispatch_requests,
     find_repair_evidence,
     request_from_scheduler_work,
 )
@@ -381,18 +383,59 @@ def _repair_handler(work: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]
             "evidence_refs": [f"repair:{work['source_ref']}", f"scheduler-work:{work['scheduler_work_id']}"],
             "result": {"source_ref": work["source_ref"]},
         }
-    dispatches = ctx.setdefault("repair_dispatch_requests", [])
-    if not any(row["fingerprint"] == request["fingerprint"] for row in dispatches):
-        dispatches.append(request)
+
+    requests = ctx.setdefault("repair_dispatch_requests", [])
+    if not any(row["fingerprint"] == request["fingerprint"] for row in requests):
+        requests.append(request)
+
+    dispatcher = ctx.get("repair_dispatcher")
+    if dispatcher is None:
+        token = os.environ.get("PORTFOLIO_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
+        if not token:
+            raise WorkExecutionError("GitHub token required before REPAIR can complete")
+        receipts = dispatch_requests(
+            [request],
+            token=token,
+            repository=REPAIR_REPOSITORY,
+            workflow_file="portfolio-autonomous-repair.yml",
+        )
+        if len(receipts) != 1:
+            raise WorkExecutionError("repair dispatch did not return exactly one receipt")
+        dispatch_receipt = receipts[0]
+    else:
+        dispatch_receipt = dispatcher(request)
+
+    if not isinstance(dispatch_receipt, dict):
+        raise WorkExecutionError("repair dispatcher receipt must be an object")
+    if dispatch_receipt.get("request_id") != request["request_id"]:
+        raise WorkExecutionError("repair dispatch request identity mismatch")
+    if dispatch_receipt.get("fingerprint") != request["fingerprint"]:
+        raise WorkExecutionError("repair dispatch fingerprint mismatch")
+    if dispatch_receipt.get("dispatch_status") != "ACCEPTED":
+        raise WorkExecutionError("repair dispatch was not accepted")
+    if dispatch_receipt.get("authority_granted") is not False:
+        raise WorkExecutionError("repair dispatcher widened authority")
+
+    accepted = ctx.setdefault("repair_dispatch_receipts", [])
+    if not any(row["fingerprint"] == request["fingerprint"] for row in accepted):
+        accepted.append(dispatch_receipt)
     return {
         "status": "SUCCESS",
-        "result_kind": "AUTONOMOUS_REPAIR_DISPATCH_READY",
-        "evidence_refs": [*request["evidence_refs"], f"repair-request:{request['request_id']}"],
+        "result_kind": "AUTONOMOUS_REPAIR_DISPATCHED",
+        "evidence_refs": [
+            *request["evidence_refs"],
+            f"repair-request:{request['request_id']}",
+            f"repair-dispatch:{request['fingerprint']}",
+        ],
         "result": {
             "request_id": request["request_id"],
             "fingerprint": request["fingerprint"],
             "source_ref": request["source_ref"],
             "target_path_count": len(request["target_paths"]),
+            "dispatch_status": "ACCEPTED",
+            "technical_verified": False,
+            "market_verified": False,
+            "revenue_verified": False,
             "merge_authority_granted": False,
             "deployment_authority_granted": False,
         },
@@ -647,6 +690,12 @@ def write_outputs(
     if repair_dispatches:
         (output_dir / "repair_dispatch_requests.json").write_text(
             json.dumps(repair_dispatches, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    repair_dispatch_receipts = ctx.get("repair_dispatch_receipts") or []
+    if repair_dispatch_receipts:
+        (output_dir / "repair_dispatch_receipts.json").write_text(
+            json.dumps(repair_dispatch_receipts, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
     if ctx.get("hunter_receipt") is not None:
