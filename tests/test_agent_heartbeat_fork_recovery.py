@@ -111,14 +111,14 @@ class AgentHeartbeatForkRecoveryTests(unittest.TestCase):
         data={'artifacts':[
             candidate(2,'2026-09-28T13:51:05Z','runtime'),
             candidate(1,'2026-09-28T13:50:57Z','hunt'),
-            candidate(0,'2026-09-28T13:50:50Z','base'),
+            candidate(3,'2026-09-28T13:50:50Z','base'),
         ]}
         payloads={'runtime':bundle(runtime),'hunt':bundle(hunt),'base':bundle(base)}
         merged,sources,fork_ids=_merge_commuting_heartbeat_fork(
             data,current_run='999',expected_head_branch='main',download=payloads.__getitem__,
         )
         self.assertEqual(merged,expected)
-        self.assertEqual({item['id'] for item in sources},{0,1,2})
+        self.assertEqual({item['id'] for item in sources},{1,2,3})
         self.assertEqual(fork_ids,[2,1])
         self.assertEqual(merged['sequence'],2)
         self.assertEqual(
