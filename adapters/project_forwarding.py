@@ -98,7 +98,7 @@ def forward_cycle(cycle: dict, *, requested_project_id: str|None=None, requested
         for project_id in project_ids:
             require_capability(project_id,requested_capability,boundaries)
             row=capability_row(project_id,boundaries)
-            req(row["repository_id"]==adapter["repository_id"],"project/repository routing mismatch")
+            req(adapter["repository_id"] in row["repository_ids"],"project/repository routing mismatch")
             core={
               "schema_version":"1.0.0",
               "project_adapter_id":f"PFA-{project_id}",
