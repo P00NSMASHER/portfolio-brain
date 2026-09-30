@@ -209,19 +209,36 @@ class GitHubReader:
                 "Run artifact listing incomplete; per-run artifact bound exceeded")
         return rows
 
-    def list_recent_journal_artifacts(self, since: str, *, max_pages: int = 20,
-                                      explicit_run_ids: list[int] | tuple[int, ...] = ()) -> list[dict]:
-        """Discover only reducer snapshots and enrolled producer events.
+    def list_recent_journal_artifacts(
+        self,
+        since: str,
+        *,
+        max_pages: int = 20,
+        explicit_run_ids: list[int] | tuple[int, ...] = (),
+        covered_run_attempts: set[tuple[int, int]] | frozenset[tuple[int, int]] = frozenset(),
+    ) -> list[dict]:
+        """Discover reducer snapshots and enrolled producer events with bounded replay proof.
 
-        Repository-wide artifact pagination eventually becomes unbounded because
-        receipts, previews, and other unrelated artifacts accumulate. Journal
-        restore instead enumerates the closed workflow allowlist, validates each
-        run later through the existing provider checks, and scans events only
-        from the older of the two newest successful reducer publications.
+        Repository-wide artifact pagination is intentionally avoided. For each
+        producer run in the replay window, a missing event artifact is acceptable
+        only when that exact run/attempt is already covered by the validated
+        durable checkpoint. Otherwise, if the producer's immutable-event upload
+        step succeeded but the artifact is gone, recovery fails closed with
+        MISSING_REPLAY instead of silently dropping an event.
         """
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
         require(type(max_pages) is int and max_pages > 0, "Artifact page bound invalid")
+        covered = set(covered_run_attempts)
+        require(
+            all(
+                isinstance(item, tuple)
+                and len(item) == 2
+                and all(type(value) is int and value > 0 for value in item)
+                for item in covered
+            ),
+            "Archived run/attempt coverage invalid",
+        )
         result: dict[int, dict] = {}
 
         def retain(row: dict) -> None:
@@ -236,6 +253,42 @@ class GitHubReader:
                 require(previous == row, "Artifact metadata changed during bounded scan")
             else:
                 result[artifact_id] = row
+
+        def retain_run_events(run: dict) -> None:
+            run_id = run.get("id")
+            attempt = run.get("run_attempt")
+            require(type(run_id) is int and run_id > 0, "Producer run identity missing")
+            require(type(attempt) is int and attempt > 0, "Producer run attempt missing")
+            rows = self._run_artifacts(run_id)
+            events = [row for row in rows if row.get("name", "").startswith(EVENT_PREFIX)]
+            for row in events:
+                retain(row)
+            if events or (run_id, attempt) in covered:
+                return
+
+            jobs = self.get(f"/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100")
+            job_rows = jobs.get("jobs")
+            total = jobs.get("total_count")
+            require(
+                isinstance(job_rows, list)
+                and type(total) is int
+                and total == len(job_rows)
+                and total <= 100,
+                "Replay source job listing incomplete",
+            )
+            uploaded = [
+                step
+                for job in job_rows
+                for step in job.get("steps", [])
+                if step.get("name") == UPLOAD_STEP
+                and step.get("status") == "completed"
+                and step.get("conclusion") == "success"
+            ]
+            require(
+                not uploaded,
+                f"MISSING_REPLAY: run {run_id} attempt {attempt} published an immutable event "
+                "but its artifact is unavailable",
+            )
 
         reducer_runs = self._workflow_runs_since(
             "portfolio-state-reducer.yml", since, max_pages=max_pages
@@ -261,10 +314,10 @@ class GitHubReader:
 
         event_since = since
         if len(snapshot_runs) == 2:
-            # Recent producer discovery may advance to the predecessor reducer
-            # start only because every reducer triggered by workflow_run also
-            # supplies that exact producer run explicitly below. This prevents
-            # in-flight/queued producers from falling through the overlap gap.
+            # Scan from the predecessor reducer publication as an additional
+            # overlap. The durable checkpoint also carries an explicit replay
+            # overlap boundary, so queued/racing producers cannot disappear at
+            # the rollover boundary.
             event_since = min(snapshot_runs[0][0]["created_at"], snapshot_runs[1][0]["created_at"])
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
@@ -276,9 +329,7 @@ class GitHubReader:
                     and run.get("conclusion") in terminal
                 ):
                     continue
-                for row in self._run_artifacts(run["id"]):
-                    if row.get("name", "").startswith(EVENT_PREFIX):
-                        retain(row)
+                retain_run_events(run)
 
         for run_id in explicit_run_ids:
             require(type(run_id) is int and run_id > 0, "Explicit recovery run ID invalid")
@@ -288,9 +339,7 @@ class GitHubReader:
             require(run.get("status") == "completed" and run.get("conclusion") in terminal,
                     "Explicit recovery run is not terminal")
             source_producer(run)
-            for row in self._run_artifacts(run_id):
-                if row.get("name", "").startswith(EVENT_PREFIX):
-                    retain(row)
+            retain_run_events(run)
 
         return sorted(
             result.values(),
