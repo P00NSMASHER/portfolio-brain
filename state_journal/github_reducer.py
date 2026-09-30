@@ -75,6 +75,29 @@ def _runtime_observation_change(event: dict) -> dict | None:
     return None
 
 
+def _runtime_self_observation_identity(event: dict, change: dict) -> tuple[str, str] | None:
+    receipt = (change.get("proofs") or {}).get("cycle_receipt")
+    if not isinstance(receipt, dict) or receipt.get("mode") != "observe":
+        return None
+    observations = receipt.get("observations")
+    if not isinstance(observations, list) or len(observations) != 1:
+        return None
+    observation = observations[0]
+    if not isinstance(observation, dict) or observation.get("repository_id") != "REPO-008":
+        return None
+    current_sha = observation.get("current_sha")
+    cycle_id = receipt.get("cycle_id")
+    if not isinstance(current_sha, str) or len(current_sha) != 40:
+        return None
+    if not isinstance(cycle_id, str) or not cycle_id:
+        return None
+    semantic_observation = {
+        key: value for key, value in observation.items()
+        if key not in {"observed_at", "receipt_hash"}
+    }
+    return cycle_id, digest(semantic_observation)
+
+
 def _authority_payload(state: dict) -> dict:
     return {
         key: state[key]
@@ -173,16 +196,47 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
             if len({change["after_hash"] for _, _, change in rows}) <= 1:
                 continue
             exact = [row for row in rows if row[0].get("source_sha") == current_sha]
-            if len(exact) != 1:
+            winner = exact[0] if len(exact) == 1 else None
+            authority_sha = current_sha
+            reason = "STALE_MAIN_OBSERVATION_SUPERSEDED_BY_EXACT_MAIN"
+
+            # Historical queued runs can deadlock canonical recovery before a
+            # producer on the newest main is allowed to execute. Resolve only a
+            # duplicate self-observation where every event has the same
+            # deterministic cycle identity and same observation payload (apart
+            # from execution timestamps), and exactly one event was executed
+            # from the repository head that was actually observed. The observed
+            # head must itself remain an ancestor of current main.
+            if winner is None:
+                identities = [
+                    _runtime_self_observation_identity(event, change)
+                    for event, _, change in rows
+                ]
+                if all(identity is not None for identity in identities) and len(set(identities)) == 1:
+                    receipt = (rows[0][2].get("proofs") or {}).get("cycle_receipt") or {}
+                    observed_sha = (receipt.get("observations") or [{}])[0].get("current_sha")
+                    observed_exact = [row for row in rows if row[0].get("source_sha") == observed_sha]
+                    if len(observed_exact) == 1:
+                        comparison = reader.get(f"/compare/{observed_sha}...{current_sha}")
+                        require(
+                            comparison.get("merge_base_commit", {}).get("sha") == observed_sha,
+                            "Observed main head is not an ancestor of exact current main",
+                        )
+                        winner = observed_exact[0]
+                        authority_sha = observed_sha
+                        reason = "STALE_MAIN_OBSERVATION_SUPERSEDED_BY_OBSERVED_MAIN_HEAD"
+
+            if winner is None:
                 continue
-            exact_event = exact[0][0]
+
+            exact_event = winner[0]
             for event, provider, change in rows:
                 if event["event_id"] == exact_event["event_id"]:
                     continue
-                comparison = reader.get(f"/compare/{event['source_sha']}...{current_sha}")
+                comparison = reader.get(f"/compare/{event['source_sha']}...{authority_sha}")
                 require(
                     comparison.get("merge_base_commit", {}).get("sha") == event["source_sha"],
-                    "Stale main observation source is not an ancestor of exact current main",
+                    "Stale main observation source is not an ancestor of authoritative main observation",
                 )
                 drop_ids.add(event["event_id"])
                 stale_main_observations.append({
@@ -192,9 +246,9 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
                     "source_run_id": provider.get("source_run_id"),
                     "source_sha": event["source_sha"],
                     "superseded_by_event_id": exact_event["event_id"],
-                    "superseded_by_source_sha": current_sha,
+                    "superseded_by_source_sha": authority_sha,
                     "before_hash": before_hash,
-                    "reason": "STALE_MAIN_OBSERVATION_SUPERSEDED_BY_EXACT_MAIN",
+                    "reason": reason,
                 })
         if drop_ids:
             incoming = [(event, provider) for event, provider in incoming if event["event_id"] not in drop_ids]
