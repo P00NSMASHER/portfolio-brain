@@ -4,7 +4,7 @@ import argparse, os, time
 from pathlib import Path
 
 from runtime.artifact_restore import _atomic_write
-from state_journal.archive import archived_artifact_ids, load_active_manifest
+from state_journal.archive import archived_artifact_ids, load_active_archive
 from state_journal.contracts import DOMAINS, canonical, digest, require, strict_load, validate_domain
 from state_journal.github_reducer import latest_snapshot_artifact, restore_snapshot
 from state_journal.reducer import validate_snapshot
@@ -68,8 +68,23 @@ def _pending_events(state: dict, artifacts: list[dict], *, archived_ids: set[int
     ]
 
 
+def _assert_no_expired_unconsumed(state: dict, artifacts: list[dict], *, archived_ids: set[int] | None = None) -> None:
+    known = _known_event_artifact_ids(state)
+    known.update(archived_ids or set())
+    missing = [
+        artifact["id"]
+        for artifact in artifacts
+        if artifact.get("name", "").startswith(EVENT_PREFIX)
+        and artifact.get("workflow_run", {}).get("head_branch") == "main"
+        and artifact.get("expired") is True
+        and artifact.get("id") not in known
+    ]
+    require(not missing, "EXPIRED_EVIDENCE: unconsumed event artifacts expired: " + ",".join(map(str, missing)))
+
+
 def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, current_run: str,
                         archived_ids: set[int] | None = None,
+                        covered_run_ids: set[int] | None = None,
                         timeout_seconds: int = 300, poll_seconds: float = 5.0,
                         clock=time.monotonic, sleep=time.sleep) -> tuple[GitHubReader, dict, list[dict]]:
     require(pending, "Pending-event wait requires at least one event")
@@ -96,7 +111,8 @@ def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, curren
             seen_reducers.add(reducer_run["id"])
             fresh = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
             artifacts = getattr(fresh, "list_recent_journal_artifacts", fresh.list_recent_artifacts)(
-                policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]
+                policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"],
+                covered_run_ids=covered_run_ids or set(),
             )
             state = restore_snapshot(fresh, artifacts, current_run=current_run)
             known = _known_event_artifact_ids(state) if state is not None else set()
@@ -110,8 +126,16 @@ def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, curren
 def restore_domain(domain: str, output: Path, metadata_output: Path | None = None) -> str:
     require(domain in DOMAINS, "Unknown canonical domain")
     policy = strict_load((ROOT / "state_journal/POLICY.json").read_bytes())
-    archive_manifest = load_active_manifest(ROOT)
+    active_archive = load_active_archive(ROOT)
+    archive_manifest = None if active_archive is None else active_archive[0]
+    archive_state = None if active_archive is None else active_archive[1]
     archive_ids = archived_artifact_ids(archive_manifest)
+    covered_run_ids = {
+        ref["source_run_id"]
+        for refs in (archive_state or {}).get("evidence", {}).values()
+        for ref in refs
+        if ref.get("kind") == "GITHUB_ACTIONS" and type(ref.get("source_run_id")) is int
+    }
     require(policy["mode"] == "CANONICAL", "Production canonical mode is not active")
     require(policy["canonical_snapshot_authorized"] is True, "Canonical snapshot is not authorized")
     require(policy["production_readers_enabled"] is True and policy["production_cutover_complete"] is True,
@@ -138,27 +162,49 @@ def restore_domain(domain: str, output: Path, metadata_output: Path | None = Non
         require(bool(token), "GITHUB_TOKEN required for canonical restore")
         reader = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
         artifacts = getattr(reader, "list_recent_journal_artifacts", reader.list_recent_artifacts)(
-            policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]
+            policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"],
+            covered_run_ids=covered_run_ids,
         )
         state = restore_snapshot(reader, artifacts, current_run=current_run)
+        snapshot_meta = latest_snapshot_artifact(artifacts, current_run=current_run)
+        restored_from_archive = state is None and archive_state is not None
+        if restored_from_archive:
+            state = archive_state
+            snapshot_meta = {
+                "id": archive_manifest["source_artifact_id"],
+                "name": SNAPSHOT_ARTIFACT,
+                "created_at": archive_manifest["source_artifact_created_at"],
+                "expires_at": None,
+                "workflow_run": {
+                    "id": archive_manifest["source_reducer_run_id"],
+                    "head_sha": archive_manifest["source_head_sha"],
+                },
+            }
         require(state is not None, "CANONICAL_SNAPSHOT_REQUIRED")
         require(state["mode"] == "CANONICAL" and state["production_authority"] is True,
                 "Latest reducer snapshot is not production-authoritative")
-        snapshot_meta = latest_snapshot_artifact(artifacts, current_run=current_run)
+        _assert_no_expired_unconsumed(state, artifacts, archived_ids=archive_ids)
         require(snapshot_meta is not None, "Canonical snapshot provider metadata missing")
         pending = _pending_events(state, artifacts, archived_ids=archive_ids)
         waited_for_reducer = bool(pending)
         if pending:
             reader, state, artifacts = _wait_for_reduction(
-                token, policy, pending, current_run=current_run, archived_ids=archive_ids
+                token, policy, pending, current_run=current_run, archived_ids=archive_ids,
+                covered_run_ids=covered_run_ids,
             )
             require(state["mode"] == "CANONICAL" and state["production_authority"] is True,
                     "Reducer catch-up snapshot is not production-authoritative")
+            _assert_no_expired_unconsumed(state, artifacts, archived_ids=archive_ids)
             require(not _pending_events(state, artifacts, archived_ids=archive_ids),
                     "STALE_CANONICAL_STATE_PENDING_REDUCTION")
             snapshot_meta = latest_snapshot_artifact(artifacts, current_run=current_run)
             require(snapshot_meta is not None, "Canonical snapshot provider metadata missing after reducer wait")
-        restore_status = "RESTORED_CANONICAL_AFTER_REDUCER_WAIT" if waited_for_reducer else "RESTORED_CANONICAL"
+        if waited_for_reducer:
+            restore_status = "RESTORED_CANONICAL_AFTER_REDUCER_WAIT"
+        elif restored_from_archive:
+            restore_status = "RESTORED_CANONICAL_DURABLE_ARCHIVE"
+        else:
+            restore_status = "RESTORED_CANONICAL"
         cache = _cache_payload(state, snapshot_meta, current_run=current_run, waited_for_reducer=waited_for_reducer)
         _atomic_write(cache_path, canonical(cache) + b"\n")
     projected = state["projection"]["states"]
