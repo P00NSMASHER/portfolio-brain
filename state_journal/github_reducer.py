@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from runtime.artifact_restore import _atomic_write
+from state_journal.archive_checkpoint import load_durable_archive
 from state_journal.contracts import REPOSITORY, Conflict, JournalError, canonical, digest, require, strict_load
 from state_journal.reducer import make_snapshot, validate_snapshot, validate_checkpoint, advance, set_authority
 from state_journal.legacy_parity import verify as verify_legacy_parity
@@ -48,10 +49,39 @@ def _restore_snapshot_artifact(reader: GitHubReader, artifact: dict) -> dict:
     return state
 
 
-def restore_snapshot(reader: GitHubReader, artifacts: list[dict], *, current_run: str) -> dict | None:
+def _assert_archive_lineage(live: dict, archived: dict, manifest: dict) -> None:
+    validate_snapshot(live); validate_snapshot(archived)
+    require(archived["sequence"] == manifest["canonical_sequence"], "Durable checkpoint sequence binding changed")
+    require(archived["state_hash"] == manifest["canonical_state_hash"], "Durable checkpoint state binding changed")
+    require(live["sequence"] >= archived["sequence"],
+            "CONFLICTING_LINEAGE: live canonical sequence regressed behind durable checkpoint")
+    if live["sequence"] == archived["sequence"]:
+        require(live["state_hash"] == archived["state_hash"],
+                "CONFLICTING_LINEAGE: same canonical sequence has different state")
+        return
+    require(live["checkpoint"]["checkpoint_hash"] == archived["checkpoint"]["checkpoint_hash"],
+            "CONFLICTING_LINEAGE: canonical checkpoint root changed")
+    archived_events = {event["event_id"]: event for event in archived["events"]}
+    live_events = {event["event_id"]: event for event in live["events"]}
+    require(set(archived_events) <= set(live_events),
+            "INCOMPLETE_REPLAY: live snapshot dropped events covered by durable checkpoint")
+    for event_id, event in archived_events.items():
+        require(live_events[event_id] == event,
+                "CONFLICTING_LINEAGE: immutable archived event changed")
+        old_refs = archived["evidence"].get(event_id, [])
+        new_refs = live["evidence"].get(event_id, [])
+        require(all(ref in new_refs for ref in old_refs),
+                "INCOMPLETE_REPLAY: archived source evidence disappeared")
+
+
+def restore_snapshot(reader: GitHubReader, artifacts: list[dict], *, current_run: str,
+                     archived_state: dict | None = None,
+                     archive_manifest: dict | None = None) -> dict | None:
+    if (archived_state is None) != (archive_manifest is None):
+        raise JournalError("Durable checkpoint state/manifest must be supplied together")
     candidates = snapshot_candidates(artifacts, current_run=current_run)
     if not candidates:
-        return None
+        return archived_state
     latest = _restore_snapshot_artifact(reader, candidates[0])
     if len(candidates) > 1:
         predecessor = _restore_snapshot_artifact(reader, candidates[1])
@@ -60,6 +90,8 @@ def restore_snapshot(reader: GitHubReader, artifacts: list[dict], *, current_run
             selected = select_latest_snapshot([predecessor, latest])
             require(selected["state_hash"] == latest["state_hash"],
                     "Latest snapshot does not preserve same-sequence canonical authority")
+    if archived_state is not None:
+        _assert_archive_lineage(latest, archived_state, archive_manifest)
     return latest
 
 
@@ -105,14 +137,19 @@ def select_latest_snapshot(states: list[dict]) -> dict:
 
 def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
                          upload_steps: dict, explicit_checkpoint: dict | None = None,
-                         explicit_run_ids: list[int] | tuple[int, ...] = ()) -> tuple[dict, dict]:
+                         explicit_run_ids: list[int] | tuple[int, ...] = (),
+                         archived_state: dict | None = None,
+                         archive_manifest: dict | None = None) -> tuple[dict, dict]:
     journal_reader = getattr(reader, "list_recent_journal_artifacts", None)
     artifacts = (
         journal_reader(since, explicit_run_ids=explicit_run_ids)
         if journal_reader is not None
         else reader.list_recent_artifacts(since)
     )
-    state = restore_snapshot(reader, artifacts, current_run=current_run)
+    state = restore_snapshot(
+        reader, artifacts, current_run=current_run,
+        archived_state=archived_state, archive_manifest=archive_manifest,
+    )
     if state is None:
         require(explicit_checkpoint is not None, "CHECKPOINT_REQUIRED: no automatic empty-state reset")
         state = make_snapshot(explicit_checkpoint, [], sequence=0, evidence={})
@@ -249,7 +286,10 @@ def main() -> None:
         validate_checkpoint(bootstrap)
         token = os.environ.get("GITHUB_TOKEN", "")
         require(bool(token), "Read-only GitHub token is required")
-        reader = GitHubReader(token)
+        reader = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
+        archived_state, archive_manifest, archive_status = load_durable_archive(
+            reader, allow_missing=True
+        )
         upload_steps = strict_load((ROOT / "state_journal/UPLOAD_STEPS.json").read_bytes())
         recovery_run_ids = policy.get("recovery_run_ids", [])
         require(isinstance(recovery_run_ids, list), "Recovery run IDs must be a list")
@@ -260,10 +300,20 @@ def main() -> None:
             require(trigger_run.isdigit() and int(trigger_run) > 0, "Trigger workflow run ID invalid")
             recovery_run_ids = [*recovery_run_ids, int(trigger_run)]
         recovery_run_ids = sorted(set(recovery_run_ids))
-        state, receipt = reduce_from_provider(reader, since=policy["artifact_scan_start"],
-                                             current_run=os.environ.get("GITHUB_RUN_ID", ""), upload_steps=upload_steps,
-                                             explicit_checkpoint=bootstrap, explicit_run_ids=recovery_run_ids)
+        scan_start = (
+            archive_manifest["replay_scan_start"]
+            if archive_manifest is not None
+            else policy["artifact_scan_start"]
+        )
+        state, receipt = reduce_from_provider(
+            reader, since=scan_start,
+            current_run=os.environ.get("GITHUB_RUN_ID", ""), upload_steps=upload_steps,
+            explicit_checkpoint=bootstrap, explicit_run_ids=recovery_run_ids,
+            archived_state=archived_state, archive_manifest=archive_manifest,
+        )
         receipt["explicit_recovery_run_ids"] = recovery_run_ids
+        receipt["archive_checkpoint"] = archive_status
+        receipt["artifact_scan_start_effective"] = scan_start
         validate_snapshot(state)
         parity = verify_legacy_parity(state["projection"]["states"], args.output_dir / "legacy-parity-work")
         receipt["legacy_parity"] = parity["status"]
