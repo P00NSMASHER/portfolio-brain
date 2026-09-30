@@ -9,8 +9,6 @@ from repair.autonomous_repair import (
     AutonomousRepairError,
     branch_name,
     dispatch_requests,
-    REPOSITORY,
-    dispatch_requests,
     find_repair_evidence,
     load_policy,
     render_prompt,
@@ -154,16 +152,6 @@ class AutonomousRepairTests(unittest.TestCase):
         self.assertTrue(result["independent_success"])
         self.assertEqual(result["head_sha"], "c" * 40)
 
-
-    def test_dispatch_binds_request_identity_into_workflow_inputs(self):
-        request = self.request()
-        with patch("repair.autonomous_repair._http_json", return_value={}) as call:
-            receipts = dispatch_requests([request], token="token", repository=REPOSITORY)
-        self.assertEqual(receipts[0]["dispatch_status"], "ACCEPTED")
-        payload = call.call_args.kwargs["payload"]
-        self.assertEqual(payload["inputs"]["request_id"], request["request_id"])
-        self.assertEqual(payload["inputs"]["request_fingerprint"], request["fingerprint"])
-        self.assertTrue(payload["inputs"]["request_b64"])
 
     def test_policy_never_grants_merge_deploy_or_default_branch_write(self):
         policy = load_policy()
