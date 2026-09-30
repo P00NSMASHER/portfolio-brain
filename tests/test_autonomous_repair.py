@@ -8,6 +8,7 @@ from unittest.mock import patch
 from repair.autonomous_repair import (
     AutonomousRepairError,
     branch_name,
+    dispatch_requests,
     find_repair_evidence,
     load_policy,
     render_prompt,
@@ -120,6 +121,19 @@ class AutonomousRepairTests(unittest.TestCase):
                 validate_diff(request, root)
         finally:
             td.cleanup()
+
+    def test_scheduler_dispatch_uses_only_declared_workflow_input(self):
+        request = self.request()
+        with patch("repair.autonomous_repair._http_json", return_value={}) as http:
+            receipts = dispatch_requests(
+                [request],
+                token="token",
+                repository="P00NSMASHER/portfolio-brain",
+            )
+        self.assertEqual(receipts[0]["dispatch_status"], "ACCEPTED")
+        payload = http.call_args.kwargs["payload"]
+        self.assertEqual(payload["ref"], "main")
+        self.assertEqual(set(payload["inputs"]), {"request_b64"})
 
     def test_repair_evidence_binds_checks_to_exact_integrations(self):
         pulls = [{
