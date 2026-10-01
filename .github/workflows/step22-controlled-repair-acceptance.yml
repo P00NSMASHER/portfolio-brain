@@ -15,7 +15,6 @@ permissions:
 concurrency:
   group: portfolio-step22-controlled-repair
   cancel-in-progress: true
-  queue: max
 
 jobs:
   dispatch:
