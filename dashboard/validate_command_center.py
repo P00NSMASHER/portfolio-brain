@@ -32,9 +32,13 @@ def validate_command_center() -> dict[str, object]:
         "current_blocker","action_required_from_owner","last_verified_customer_or_market_signal",
     },"primary operator view must contain exactly six business answers")
     require(primary["money_earned"].startswith("$"),"primary money answer invalid")
-    require(primary["closest_external_milestone"] in snapshot["value_loop"]["business_investment_evidence_classes"] or primary["closest_external_milestone"] in {
-        "PUBLISH_PRODUCT","GET_BUYER_RESPONSE","DELIVER_PAID_WORK","VERIFY_PAYMENT","TEST_PRICE","VALIDATE_DEMAND"
-    },"primary external milestone invalid")
+    if snapshot["revenue_focus"]["truth_state"]=="RETIRED":
+        require(primary["closest_external_milestone"] is None,"retired commercial loop exposed an active external milestone")
+        require(primary["active_external_experiment"] is None and primary["action_required_from_owner"] is None,"retired commercial loop exposed active experiment/owner action")
+    else:
+        require(primary["closest_external_milestone"] in snapshot["value_loop"]["business_investment_evidence_classes"] or primary["closest_external_milestone"] in {
+            "PUBLISH_PRODUCT","GET_BUYER_RESPONSE","DELIVER_PAID_WORK","VERIFY_PAYMENT","TEST_PRICE","VALIDATE_DEMAND"
+        },"primary external milestone invalid")
 
     require(snapshot["system"]["project_count"] == len(snapshot["projects"]), "project coverage mismatch")
     require(snapshot["system"]["project_count"] == 12, "registered project coverage drifted")
