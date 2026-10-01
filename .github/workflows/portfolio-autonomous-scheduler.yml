@@ -3,6 +3,10 @@ name: portfolio-autonomous-scheduler
 on:
   schedule:
     - cron: "23 * * * *"
+    # Bounded Step-23 final-acceptance soak windows for 2026-10-01 UTC.
+    - cron: "18 17 1 10 *"
+    - cron: "38 17 1 10 *"
+    - cron: "58 17 1 10 *"
   repository_dispatch:
     types: ["portfolio_schedule"]
   workflow_dispatch:
