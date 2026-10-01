@@ -84,6 +84,8 @@ def search_concepts_for_gap(gap):
 def detect_gaps():
     projects=load("registry/projects.json")["projects"]
     mapped=_project_capability_map()
+    hunter_policy=load_policy()
+    commercial_disabled=hunter_policy.get("commercial_speculation",{}).get("enabled") is False
     gaps=[]
     for p in projects:
         if p["registration_state"]!="REGISTERED" or p["lifecycle_status"] in {"RETIRED","PAUSED"}: continue
@@ -99,11 +101,11 @@ def detect_gaps():
           "project_name":p["canonical_name"],
           "categories":categories,
           "evidence_refs":[f"registry:project:{p['project_id']}","graph:no-HAS_CAPABILITY-edge"],
-          "importance":5 if p["project_type"] in {"BUSINESS","PRODUCT"} else 4,
-          "uncertainty":5,"downstream_reuse":4 if p["project_type"]!="PORTFOLIO" else 5,
-          "external_validation_value":4 if p["project_type"] in {"BUSINESS","PRODUCT"} else 3,
+          "importance":5 if p["project_type"]=="PORTFOLIO" else 4,
+          "uncertainty":5,"downstream_reuse":5 if p["project_type"]=="PORTFOLIO" else 4,
+          "external_validation_value":0 if commercial_disabled else (4 if p["project_type"] in {"BUSINESS","PRODUCT"} else 3),
         })
-    gaps.sort(key=lambda g:(-g["importance"],-g["external_validation_value"],g["gap_id"]))
+    gaps.sort(key=lambda g:(-g["importance"],-g["downstream_reuse"],g["gap_id"]))
     return gaps
 
 def negative_hits(state,gap_id,strategy_id,query):
