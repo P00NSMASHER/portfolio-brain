@@ -3,11 +3,11 @@ name: hunter-autonomous-cycle
 on:
   schedule:
     - cron: "47 */6 * * *"
-    # Exact Step-23 soak window; real schedule events only, normal cadence remains unchanged.
-    - cron: "21 18 1 10 *"
-    - cron: "46 18 1 10 *"
-    - cron: "11 19 1 10 *"
-    - cron: "36 19 1 10 *"
+    # Bounded Step-23 final-acceptance soak windows for 2026-10-01 UTC.
+    # These are real schedule events; they do not replace or weaken the normal cadence.
+    - cron: "8 19 1 10 *"
+    - cron: "8 20 1 10 *"
+    - cron: "8 21 1 10 *"
   push:
     branches: ["main"]
     paths:
