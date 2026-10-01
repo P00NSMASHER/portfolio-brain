@@ -206,6 +206,82 @@ def validate_step21(receipt: dict[str, Any]) -> None:
     _require(stages["next_scheduling_cycle"]["run_ids"], "Step 21 next scheduling cycle run missing")
 
 
+STEP22_MAINTENANCE_EXACT_PATHS = {
+    "state_journal/ARCHIVE_MANIFEST.json",
+    "state_journal/CHECKPOINT.json.gz",
+    "state_journal/POLICY.json",
+}
+STEP22_MAINTENANCE_PREFIXES = ("state_journal/archive/",)
+
+
+def _validate_step22_maintenance(receipt: dict[str, Any], policy: dict[str, Any]) -> None:
+    repair_merge = receipt["repair_merge_sha"]
+    exact_main = receipt["exact_main_sha"]
+    lineage = receipt.get("maintenance_lineage")
+    _require(isinstance(lineage, list), "Step 22 maintenance lineage must be a list")
+    if repair_merge == exact_main:
+        _require(lineage == [], "Step 22 maintenance lineage present without a main transition")
+        return
+
+    _require(len(lineage) == 1, "Step 22 permits exactly one bounded checkpoint/archive maintenance merge")
+    row = lineage[0]
+    _require(isinstance(row, dict), "Step 22 maintenance row invalid")
+    _require(row.get("kind") == "CHECKPOINT_ARCHIVE_MAINTENANCE",
+             "Step 22 intervening merge is not checkpoint/archive maintenance")
+    _validate_sha40(row.get("base_sha"), "Step 22 maintenance.base_sha")
+    _validate_sha40(row.get("head_sha"), "Step 22 maintenance.head_sha")
+    _validate_sha40(row.get("merge_sha"), "Step 22 maintenance.merge_sha")
+    _require(row["base_sha"] == repair_merge, "Step 22 maintenance does not start at repair merge")
+    _require(row["merge_sha"] == exact_main, "Step 22 maintenance does not end at exact continuation main")
+    pr_number = row.get("pr_number")
+    run_id = row.get("workflow_run_id")
+    _require(type(pr_number) is int and pr_number > 0, "Step 22 maintenance PR invalid")
+    _require(type(run_id) is int and run_id > 0, "Step 22 maintenance workflow run invalid")
+    _require(row.get("actor_login") == "github-actions[bot]",
+             "Step 22 maintenance PR was not bot-created")
+    branch = row.get("branch")
+    _require(isinstance(branch, str) and branch.startswith("checkpoint/archive-"),
+             "Step 22 maintenance branch is not checkpoint/archive isolated")
+    _require(row.get("protected_merge") is True, "Step 22 maintenance merge was not protected")
+    _require(row.get("authority_granted") is False and row.get("evidence_upgraded") is False,
+             "Step 22 maintenance widened authority/evidence")
+
+    paths = row.get("changed_paths")
+    _require(isinstance(paths, list) and paths and len(paths) == len(set(paths)),
+             "Step 22 maintenance changed paths invalid")
+    for changed in paths:
+        _require(
+            changed in STEP22_MAINTENANCE_EXACT_PATHS
+            or any(changed.startswith(prefix) for prefix in STEP22_MAINTENANCE_PREFIXES),
+            f"Step 22 maintenance touched non-archive path: {changed}",
+        )
+    _require(STEP22_MAINTENANCE_EXACT_PATHS.issubset(set(paths)),
+             "Step 22 maintenance omitted required checkpoint/archive control files")
+    _require(any(path.startswith("state_journal/archive/") for path in paths),
+             "Step 22 maintenance contains no immutable archive path")
+
+    _validate_trusted_check(
+        row.get("foundation_check"),
+        field="Step 22 maintenance Foundation",
+        expected_name=policy["foundation_check_name"],
+        expected_app_id=policy["foundation_app_id"],
+        expected_head_sha=row["head_sha"],
+    )
+    _validate_trusted_check(
+        row.get("hosted_verifier_check"),
+        field="Step 22 maintenance hosted verifier",
+        expected_name=policy["hosted_verifier_check_name"],
+        expected_app_id=policy["hosted_verifier_app_id"],
+        expected_head_sha=row["head_sha"],
+    )
+    archive_id = row.get("archive_id")
+    checkpoint_sequence = row.get("checkpoint_sequence")
+    _require(isinstance(archive_id, str) and archive_id.startswith("canonical-archive-seq-"),
+             "Step 22 maintenance archive identity invalid")
+    _require(type(checkpoint_sequence) is int and checkpoint_sequence > 0,
+             "Step 22 maintenance checkpoint sequence invalid")
+
+
 def validate_step22(receipt: dict[str, Any]) -> None:
     policy = _load_policy()
     _common(receipt, step=22)
@@ -225,8 +301,8 @@ def validate_step22(receipt: dict[str, Any]) -> None:
     _require(type(repair_pr) is int and repair_pr > 0, "Step 22 repair PR invalid")
     _validate_sha40(receipt.get("repair_head_sha"), "Step 22.repair_head_sha")
     _validate_sha40(receipt.get("repair_merge_sha"), "Step 22.repair_merge_sha")
-    _require(receipt["repair_merge_sha"] == receipt["exact_main_sha"], "Step 22 repair merge SHA is not exact main")
     _require(receipt.get("protected_merge") is True, "Step 22 merge was not protected")
+    _validate_step22_maintenance(receipt, policy)
     stages = _validate_stages(receipt, policy["step22_stages"])
     _require(stages["new_regression_added"]["artifact_hashes"] or stages["new_regression_added"]["source_shas"],
              "Step 22 regression evidence missing")
@@ -253,7 +329,8 @@ def validate_step22(receipt: dict[str, Any]) -> None:
     _require(repair_pr in stages["repair_pr_opened"]["pr_numbers"], "Step 22 repair PR stage does not match repair PR")
     _require(receipt["repair_head_sha"] in stages["foundation_exact_head"]["source_shas"], "Step 22 Foundation check is not bound to repair head")
     _require(receipt["repair_head_sha"] in stages["hosted_verifier_gate"]["source_shas"], "Step 22 hosted verifier is not bound to repair head")
-    _require(receipt["exact_main_sha"] in stages["protected_merge"]["source_shas"], "Step 22 protected merge is not bound to exact main")
+    _require(receipt["repair_merge_sha"] in stages["protected_merge"]["source_shas"],
+             "Step 22 protected merge is not bound to repair merge")
     for key in ("subsequent_runtime_cycle", "subsequent_reducer_cycle", "subsequent_scheduler_cycle"):
         _require(stages[key]["run_ids"], f"Step 22 {key} proof missing")
         _require(receipt["exact_main_sha"] in stages[key]["source_shas"], f"Step 22 {key} is not bound to repaired main")
