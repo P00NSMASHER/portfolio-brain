@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "purpose": "Protected-main trigger surface for the Step 22 controlled self-repair proof.",
-  "nonce": "TRIGGER-20260930-STEP22-021",
+  "nonce": "TRIGGER-20260930-STEP22-0211",
   "rule": "Only a protected PR whose merge commit contains [step22-fault] may intentionally change nonce to launch the bounded acceptance job.",
-  "reason": "Retry Step 22 after making permanent control-plane tests candidate-compatible while preserving exact-main BASELINE arm enforcement"
+  "reason": "Retry Step 22 on current main and cancel only stale prior Step-22 acceptance attempts"
 }
