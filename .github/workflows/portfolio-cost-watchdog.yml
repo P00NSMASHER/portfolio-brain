@@ -2,10 +2,11 @@ name: portfolio-cost-watchdog
 
 on:
   schedule:
-    # Managed autonomous jobs are capped at five minutes, so sub-hour polling
-    # cannot reliably interrupt them before completion. Hourly enforcement keeps
-    # the independent kill-switch backstop while cutting control-plane starts 75%.
     - cron: "53 * * * *"
+    # Exact Step-23 soak window; real schedule events only, normal cadence remains unchanged.
+    - cron: "50 17 1 10 *"
+    - cron: "10 18 1 10 *"
+    - cron: "30 18 1 10 *"
   # GitHub scheduled delivery can be delayed or skipped. Recheck liveness after
   # any core producer finishes so one surviving trigger can recover overdue peers.
   workflow_run:

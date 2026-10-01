@@ -213,19 +213,22 @@ def validate_operating_mode():
         "checkpoint candidate must not collide with daily reducer refresh")
     req(set(p["approved_recurring_workflows"])==set(expected),"approved recurring workflow set changed")
     # Exact, date-bounded Step-23 soak windows. These do not replace the
-    # approved steady-state cadence. Four slow-cadence workflows receive three
-    # soak samples and the scheduler receives one exact handler-proof schedule.
+    # approved steady-state cadence. They exist solely to collect the three
+    # genuine event=schedule cycles required by final acceptance on one SHA.
     step23_bounded_crons={
-      "portfolio-state-reducer":["5 17 1 10 *","25 17 1 10 *","45 17 1 10 *"],
-      "hunter-autonomous-cycle":["8 17 1 10 *","28 17 1 10 *","48 17 1 10 *"],
-      "agent-heartbeat-sweep":["11 17 1 10 *","31 17 1 10 *","51 17 1 10 *"],
-      "portfolio-notification-cycle":["14 17 1 10 *","34 17 1 10 *","54 17 1 10 *"],
-      "portfolio-autonomous-scheduler":["0 17 1 10 *"],
+      "portfolio-state-reducer":["40 17 1 10 *","0 18 1 10 *","20 18 1 10 *"],
+      "runtime-hourly-sync":["42 17 1 10 *","2 18 1 10 *","22 18 1 10 *"],
+      "portfolio-autonomous-scheduler":["44 17 1 10 *","4 18 1 10 *","24 18 1 10 *"],
+      "hunter-autonomous-cycle":["46 17 1 10 *","6 18 1 10 *","26 18 1 10 *"],
+      "agent-heartbeat-sweep":["48 17 1 10 *","8 18 1 10 *","28 18 1 10 *"],
+      "portfolio-cost-watchdog":["50 17 1 10 *","10 18 1 10 *","30 18 1 10 *"],
+      "portfolio-notification-cycle":["52 17 1 10 *","12 18 1 10 *","32 18 1 10 *"],
+      "command-center-pages":["54 17 1 10 *","14 18 1 10 *","34 18 1 10 *"],
     }
     req(set(step23_bounded_crons)=={
-      "portfolio-state-reducer","hunter-autonomous-cycle",
-      "agent-heartbeat-sweep","portfolio-notification-cycle",
-      "portfolio-autonomous-scheduler",
+      "portfolio-state-reducer","runtime-hourly-sync","portfolio-autonomous-scheduler",
+      "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
+      "portfolio-notification-cycle","command-center-pages",
     },"Step 23 bounded schedule scope changed")
     req(all(cron.split()[2:4]==["1","10"] for rows in step23_bounded_crons.values() for cron in rows),
         "Step 23 bounded schedules are not date-scoped to 2026-10-01 UTC")
