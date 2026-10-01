@@ -6,14 +6,16 @@ from state_journal.contracts import JournalError
 from state_journal.transport import EVENT_PREFIX, SNAPSHOT_ARTIFACT, GitHubReader
 
 
-def run(run_id, created_at, *, conclusion="success", updated_at=None):
+def run(run_id, created_at, *, conclusion="success", updated_at=None, run_attempt=1):
     return {
         "id": run_id,
         "created_at": created_at,
         "updated_at": updated_at or created_at,
         "head_branch": "main",
+        "head_sha": "a" * 40,
         "status": "completed",
         "conclusion": conclusion,
+        "run_attempt": run_attempt,
     }
 
 
@@ -204,6 +206,73 @@ class ScopedJournalDiscoveryTests(unittest.TestCase):
             and "created=%3E%3D2026-09-29T16%3A35%3A30Z" in call
             for call in calls
         ))
+
+    def test_reducer_rerun_selects_only_latest_successful_attempt_snapshot(self):
+        reader = object.__new__(GitHubReader)
+        snapshot_old = artifact(9, SNAPSHOT_ARTIFACT, "2026-10-01T13:54:38Z", 202)
+        snapshot_new = artifact(10, SNAPSHOT_ARTIFACT, "2026-10-01T14:04:28Z", 202)
+
+        def get(suffix):
+            if suffix.startswith("/actions/workflows/portfolio-state-reducer.yml/runs?"):
+                return {"workflow_runs": [
+                    run(
+                        202, "2026-10-01T14:03:04Z",
+                        updated_at="2026-10-01T14:04:34Z",
+                        run_attempt=2,
+                    ),
+                ]}
+            if suffix == "/actions/runs/202/artifacts?per_page=100":
+                return {"total_count": 2, "artifacts": [snapshot_new, snapshot_old]}
+            if suffix == "/actions/runs/202/attempts/2":
+                return {
+                    "id": 202,
+                    "run_attempt": 2,
+                    "head_branch": "main",
+                    "head_sha": "a" * 40,
+                    "status": "completed",
+                    "conclusion": "success",
+                    "run_started_at": "2026-10-01T14:03:03Z",
+                }
+            raise AssertionError("unexpected GitHub request: " + suffix)
+
+        reader.get = get
+        with patch("state_journal.transport.WORKFLOW_PRODUCERS", {}):
+            rows = reader.list_recent_journal_artifacts("2026-10-01T13:00:00Z")
+
+        self.assertEqual([row["id"] for row in rows], [10])
+
+    def test_reducer_rerun_rejects_ambiguous_latest_attempt_snapshots(self):
+        reader = object.__new__(GitHubReader)
+        first = artifact(10, SNAPSHOT_ARTIFACT, "2026-10-01T14:04:27Z", 202)
+        second = artifact(11, SNAPSHOT_ARTIFACT, "2026-10-01T14:04:28Z", 202)
+
+        def get(suffix):
+            if suffix.startswith("/actions/workflows/portfolio-state-reducer.yml/runs?"):
+                return {"workflow_runs": [
+                    run(
+                        202, "2026-10-01T14:03:04Z",
+                        updated_at="2026-10-01T14:04:34Z",
+                        run_attempt=2,
+                    ),
+                ]}
+            if suffix == "/actions/runs/202/artifacts?per_page=100":
+                return {"total_count": 2, "artifacts": [first, second]}
+            if suffix == "/actions/runs/202/attempts/2":
+                return {
+                    "id": 202,
+                    "run_attempt": 2,
+                    "head_branch": "main",
+                    "head_sha": "a" * 40,
+                    "status": "completed",
+                    "conclusion": "success",
+                    "run_started_at": "2026-10-01T14:03:03Z",
+                }
+            raise AssertionError("unexpected GitHub request: " + suffix)
+
+        reader.get = get
+        with patch("state_journal.transport.WORKFLOW_PRODUCERS", {}), \
+             self.assertRaisesRegex(JournalError, "latest attempt snapshot missing/ambiguous"):
+            reader.list_recent_journal_artifacts("2026-10-01T13:00:00Z")
 
     def test_per_run_artifact_overflow_fails_closed(self):
         reader = object.__new__(GitHubReader)
