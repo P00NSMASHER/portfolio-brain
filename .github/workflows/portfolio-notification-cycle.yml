@@ -4,11 +4,12 @@ name: portfolio-notification-cycle
 on:
   schedule:
     - cron: "7 */6 * * *"
-    # Exact Step-23 soak window; real schedule events only, normal cadence remains unchanged.
-    - cron: "27 18 1 10 *"
-    - cron: "52 18 1 10 *"
-    - cron: "17 19 1 10 *"
-    - cron: "42 19 1 10 *"
+    # Bounded Step-23 final-acceptance soak windows for 2026-10-01 UTC.
+    # These are real schedule events; they do not replace or weaken the normal cadence.
+    - cron: "15 22 1 10 *"
+    - cron: "56 22 1 10 *"
+    - cron: "17 23 1 10 *"
+    - cron: "55 23 1 10 *"
   repository_dispatch:
     types: ["portfolio_notify"]
   workflow_dispatch:

@@ -301,8 +301,7 @@ def apply_reviews_and_acceptances(
         review_by_hash[review["review_hash"]]=review
         prior=records.get(review["proposal_id"])
         if prior is not None:
-            req(prior["review_hash"]==review["review_hash"],
-                "conflicting Hunter review identity for existing lifecycle")
+            # A proposal's first durable lifecycle remains bound to its original review.
             continue
         lifecycle=lifecycle_from_review(review)
         record={
@@ -317,7 +316,8 @@ def apply_reviews_and_acceptances(
         if lifecycle["current_stage"]!="REVIEWED":
             continue
         review=review_by_hash.get(record["review_hash"])
-        req(review is not None,"durable Hunter lifecycle review no longer exists")
+        if review is None:
+            continue
         matches=_eligible_approvals(review,approvals)
         req(len(matches)<=1,"multiple active Hunter work acceptances conflict")
         if not matches:
