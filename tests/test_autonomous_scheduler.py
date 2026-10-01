@@ -152,26 +152,19 @@ class SchedulerTests(unittest.TestCase):
         self.assertLess(reviews["HEXP-TEST-INBOX"]["source_rank_order"],reviews["HEXP-SAME-NEW"]["source_rank_order"])
 
 
-    def test_current_cycle_includes_research_hunt_integration_with_bounded_parallelism(self):
+    def test_current_cycle_routes_active_work_to_engineering_value(self):
         state,receipt=schedule_cycle(load_state(),build_context(),at="2026-09-25T20:40:00Z")
-        types={w["work_type"] for w in receipt["selected_work"]}
-        self.assertEqual(types,{"EXPERIMENT","TEST"})
         self.assertGreaterEqual(len(state["work_items"]),1)
         self.assertLessEqual(len(state["work_items"]),8)
-        self.assertTrue(all(w["external_milestone"] in {"PUBLISH_PRODUCT","VALIDATE_DEMAND"} for w in receipt["selected_work"]))
-        self.assertTrue(receipt["suppressed_no_external_milestone"])
+        self.assertTrue(all(w["external_milestone"] in {"ENGINEERING_RELIABILITY","ENGINEERING_IMPROVEMENT"} for w in receipt["selected_work"]))
+        self.assertTrue(all(w["value_lane"] in {"ENGINEERING_BLOCKER","ENGINEERING_IMPROVEMENT"} for w in receipt["selected_work"]))
+        self.assertFalse(any(w["assigned_agent_id"]=="AGT-COMMERCIAL-ANALYST" for w in receipt["selected_work"]))
 
-    def test_adult_only_education_validation_is_not_blocked(self):
+    def test_retired_commercial_validation_is_not_queued_or_blocked(self):
         _,receipt=schedule_cycle(load_state(),build_context(),at="2026-09-25T20:40:00Z")
         owner=[w for w in receipt["blocked_work"] if w["source_ref"].startswith("OACT-")]
-        self.assertEqual(len(owner),1)
-        self.assertEqual(owner[0]["external_milestone"],"PUBLISH_PRODUCT")
-        self.assertTrue(any(
-            w["work_type"]=="EXPERIMENT"
-            and w["assigned_agent_id"]=="AGT-COMMERCIAL-ANALYST"
-            and w["external_milestone"]=="VALIDATE_DEMAND"
-            for w in receipt["selected_work"]
-        ))
+        self.assertEqual(owner,[])
+        self.assertFalse(any(w["assigned_agent_id"]=="AGT-COMMERCIAL-ANALYST" for w in receipt["selected_work"]))
     def test_second_cycle_suppresses_duplicates(self):
         state,r1=schedule_cycle(load_state(),build_context(),at="2026-09-25T20:40:00Z")
         state,r2=schedule_cycle(state,build_context(),at="2026-09-25T21:40:00Z")
@@ -183,15 +176,15 @@ class SchedulerTests(unittest.TestCase):
         self.assertLessEqual(sum(1 for w in r["selected_work"] if w["assigned_agent_id"]=="AGT-PRODUCT-ANALYST"),2)
 
 
-    def test_verification_precedes_discovery_when_factory_work_exists(self):
+    def test_verification_routes_to_engineering_reliability_when_factory_work_exists(self):
         ctx=build_context(factory_work_items=[{
           "work_id":"SFW-SYNTH-VERIFY","project_id":"PRJ-000","state":"VERIFYING","verifier_agent_id":"AGT-AUDITOR","commit_sha":"a"*40
         }])
         raw,_=generate_candidates(ctx)
         verification=next(x for x in raw if x["work_type"]=="VERIFICATION")
-        _,r=schedule_cycle(load_state(),ctx,at="2026-09-25T20:40:00Z")
-        self.assertFalse(any(w["work_type"]=="VERIFICATION" for w in r["selected_work"]))
-        self.assertIn(verification["fingerprint"],r["suppressed_no_external_milestone"])
+        routed=_externalize_candidate(verification,ctx)
+        self.assertEqual(routed["external_milestone"],"ENGINEERING_RELIABILITY")
+        self.assertEqual(routed["value_lane"],"ENGINEERING_BLOCKER")
 
     def test_bound_factory_verifier_is_not_substituted(self):
         ctx=build_context(factory_work_items=[{
@@ -200,20 +193,21 @@ class SchedulerTests(unittest.TestCase):
         candidates,_=generate_candidates(ctx)
         v=next(w for w in candidates if w["work_type"]=="VERIFICATION")
         self.assertEqual((v["assigned_agent_id"],v["agent_goal_type"]),("AGT-TESTER","REGRESSION_VALIDATION"))
-        _,r=schedule_cycle(load_state(),ctx,at="2026-09-25T20:40:00Z")
-        self.assertIn(v["fingerprint"],r["suppressed_no_external_milestone"])
+        routed=_externalize_candidate(v,ctx)
+        self.assertEqual(routed["external_milestone"],"ENGINEERING_RELIABILITY")
+        self.assertEqual(routed["value_lane"],"ENGINEERING_BLOCKER")
 
-    def test_ready_repair_precedes_new_research(self):
+    def test_ready_repair_legacy_publish_reference_is_reclassified_as_engineering(self):
         ctx=build_context()
         ctx["repair"]={"tasks":[{
           "state":"READY_FOR_REPAIR","repair_task_id":"RTASK-SYNTH","project_ids":["PRJ-000"],
           "evidence_refs":["repair:evidence","external-milestone:PUBLISH_PRODUCT"]
         }]}
-        _,r=schedule_cycle(load_state(),ctx,at="2026-09-25T20:40:00Z")
-        repair=next(w for w in r["selected_work"] if w["work_type"]=="REPAIR")
-        self.assertEqual(repair["external_milestone"],"PUBLISH_PRODUCT")
-        self.assertEqual(repair["value_lane"],"INTERNAL_BLOCKER")
-        self.assertNotEqual(r["selected_work"][0]["work_type"],"REPAIR")
+        raw,_=generate_candidates(ctx)
+        repair=next(w for w in raw if w["work_type"]=="REPAIR" and w["source_ref"]=="RTASK-SYNTH")
+        routed=_externalize_candidate(repair,ctx)
+        self.assertEqual(routed["external_milestone"],"ENGINEERING_RELIABILITY")
+        self.assertEqual(routed["value_lane"],"ENGINEERING_BLOCKER")
     def test_active_work_suppresses_duplicate(self):
         state=load_state()
         state,r=schedule_cycle(state,build_context(),at="2026-09-25T20:40:00Z")
