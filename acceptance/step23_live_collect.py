@@ -90,12 +90,22 @@ def select_artifact(gh: GH, workflow: str, run_id: int) -> tuple[dict[str, Any],
     prefixes = EVIDENCE_ARTIFACTS[workflow]
     selected = None
     for prefix in prefixes:
-        matches = [a for a in rows if a.get("name") == prefix or str(a.get("name") or "").startswith(prefix)]
+        # Prefer an exact artifact name before treating the value as a prefix.
+        # This matters for watchdog runs, which intentionally publish both
+        # "portfolio-workflow-liveness" and a pre-restore diagnostic whose
+        # name begins with the same text.
+        exact = [a for a in rows if a.get("name") == prefix]
+        if len(exact) == 1:
+            selected = exact[0]
+            break
+        if len(exact) > 1:
+            raise RuntimeError(f"{workflow} run {run_id} exact artifact {prefix} ambiguous")
+        matches = [a for a in rows if str(a.get("name") or "").startswith(prefix)]
         if len(matches) == 1:
             selected = matches[0]
             break
         if len(matches) > 1:
-            raise RuntimeError(f"{workflow} run {run_id} artifact {prefix} ambiguous")
+            raise RuntimeError(f"{workflow} run {run_id} artifact prefix {prefix} ambiguous")
     if selected is None:
         raise RuntimeError(f"{workflow} run {run_id} evidence artifact missing")
     digest = selected.get("digest")
