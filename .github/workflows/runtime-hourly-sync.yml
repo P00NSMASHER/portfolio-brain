@@ -3,6 +3,10 @@ name: runtime-hourly-sync
 on:
   schedule:
     - cron: "17 * * * *"
+    # Bounded Step-23 final-acceptance soak windows for 2026-10-01 UTC.
+    - cron: "2 17 1 10 *"
+    - cron: "22 17 1 10 *"
+    - cron: "42 17 1 10 *"
   # Do not wait for best-effort cron after runtime/adapter repairs land on main.
   # This remains the same governed OBSERVE-only sync job and does not widen authority.
   push:
