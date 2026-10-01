@@ -93,6 +93,14 @@ jobs:
       - name: Validate state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -c "import json; from hunting.autonomous_hunter import validate_state; validate_state(json.load(open('hunting/out/hunter_state.json')))"
+      - name: Upload REPO-001 scout intake dedupe state
+        if: ${{ steps.workload.outputs.allowed == 'true' && hashFiles('hunting/out/repo_scout_intake_state.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-repo-scout-intake-state
+          path: hunting/out/repo_scout_intake_state.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload sanitized Hunter continuation state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         id: journal_upload_hunter

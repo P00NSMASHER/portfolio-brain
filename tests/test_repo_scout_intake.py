@@ -1,5 +1,10 @@
 import unittest
+from pathlib import Path
+
+from hunting.repo_scout_artifact_state import ARTIFACT_NAME
 from hunting.repo_scout_intake import ScoutIntakeError, build_intake, seed_state
+
+ROOT=Path(__file__).resolve().parents[1]
 
 def queue():
     return {"schema_version":2,"authority":"PRE_VERIFICATION_DISCOVERY_ONLY","worker_id":"HUNTER-01","candidates":[
@@ -10,6 +15,12 @@ def queue():
     ]}
 
 class RepoScoutIntakeTests(unittest.TestCase):
+    def test_scout_state_uses_dedicated_artifact_family(self):
+        self.assertEqual(ARTIFACT_NAME,"portfolio-repo-scout-intake-state")
+        workflow=(ROOT/".github/workflows/hunter-autonomous-cycle.yml").read_text()
+        self.assertIn("name: portfolio-repo-scout-intake-state",workflow)
+        self.assertIn("path: hunting/out/repo_scout_intake_state.json",workflow)
+
     def test_intake_is_bounded_eligible_and_preverification_only(self):
         state,receipt=build_intake(queue(),source_revision="1"*40,prior_state=seed_state(),at="2026-09-30T14:00:00Z")
         self.assertEqual(receipt["selected_candidates"],2)

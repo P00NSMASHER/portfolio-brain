@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Restore REPO-001 scout-intake dedupe state from the Hunter artifact."""
+"""Restore REPO-001 scout-intake dedupe state from its dedicated artifact."""
 from __future__ import annotations
 import argparse,json,os,time,urllib.request
 from pathlib import Path
@@ -7,7 +7,7 @@ from runtime.artifact_http import open_url
 from runtime.artifact_restore import restore_latest_valid_state
 from hunting.repo_scout_intake import validate_state
 
-ARTIFACT_NAME="portfolio-hunter-state"
+ARTIFACT_NAME="portfolio-repo-scout-intake-state"
 class RestoreError(RuntimeError): pass
 def restore(output:Path,metadata_output:Path|None=None)->str:
     token=os.environ.get("GITHUB_TOKEN") or os.environ.get("PORTFOLIO_GITHUB_TOKEN");repo=os.environ.get("GITHUB_REPOSITORY");run=os.environ.get("GITHUB_RUN_ID")
