@@ -50,6 +50,31 @@ def artifact_hashes(gh:GH,run_id:int)->list[str]:
     doc=gh.get(f"/actions/runs/{run_id}/artifacts?per_page=100")
     return sorted({a["digest"] for a in doc.get("artifacts",[]) if isinstance(a.get("digest"),str) and a["digest"].startswith("sha256:")})
 
+def select_trusted_check(checks:list[dict[str,Any]],*,name:str,app_id:int,head_sha:str)->dict[str,Any]:
+    rows=[
+      x for x in checks
+      if x.get("name")==name
+      and x.get("app",{}).get("id")==app_id
+      and x.get("head_sha")==head_sha
+      and x.get("status")=="completed"
+      and isinstance(x.get("completed_at"),str)
+    ]
+    successful=[x for x in rows if x.get("conclusion")=="success"]
+    if not successful:
+        raise RuntimeError("Step22 trusted check missing: "+name)
+    key=lambda x:(x["completed_at"],int(x.get("id") or 0))
+    chosen=max(successful,key=key)
+    later_non_success=[
+      x for x in rows
+      if key(x)>key(chosen) and x.get("conclusion")!="success"
+    ]
+    if later_non_success:
+        raise RuntimeError("Step22 trusted check superseded by non-success: "+name)
+    return {
+      "check_run_id":chosen["id"],"name":name,"app_id":app_id,
+      "head_sha":head_sha,"conclusion":"success","completed_at":chosen["completed_at"],
+    }
+
 def main()->None:
     ap=argparse.ArgumentParser()
     ap.add_argument("--fingerprint",required=True);ap.add_argument("--fault-receipt-hash",required=True)
@@ -104,12 +129,8 @@ def main()->None:
     merge_sha=merged["merge_commit_sha"];head=merged["head"]["sha"]
 
     checks=gh.get(f"/commits/{head}/check-runs?per_page=100").get("check_runs",[])
-    def trusted(name,app):
-        rows=[x for x in checks if x.get("name")==name and x.get("conclusion")=="success" and x.get("app",{}).get("id")==app]
-        if len(rows)!=1: raise RuntimeError("Step22 trusted check missing/ambiguous: "+name)
-        x=rows[0]
-        return {"check_run_id":x["id"],"name":name,"app_id":app,"head_sha":head,"conclusion":"success","completed_at":x["completed_at"]}
-    foundation=trusted("validate",15368);hosted=trusted("portfolio-phase1-gate",5121826)
+    foundation=select_trusted_check(checks,name="validate",app_id=15368,head_sha=head)
+    hosted=select_trusted_check(checks,name="portfolio-phase1-gate",app_id=5121826,head_sha=head)
     main_sha=gh.get("/branches/main")["commit"]["sha"]
     if main_sha!=merge_sha: raise RuntimeError("protected main moved before Step22 health continuation")
 
