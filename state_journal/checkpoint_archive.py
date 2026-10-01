@@ -11,7 +11,12 @@ from runtime.artifact_restore import _atomic_write
 from state_journal.archive import ACTIVE_MANIFEST, build_rollover, load_active_manifest
 from state_journal.contracts import canonical, require, strict_load
 from state_journal.reducer import validate_snapshot
-from state_journal.transport import SNAPSHOT_ARTIFACT, GitHubReader, artifact_digest, extract_json
+from state_journal.transport import (
+    GitHubReader,
+    artifact_digest,
+    extract_json,
+    latest_run_snapshot,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -37,14 +42,12 @@ def latest_canonical(reader: GitHubReader) -> tuple[dict, dict, dict]:
         require(isinstance(rows, list), "Reducer artifact listing malformed")
         require(artifacts.get("total_count") == len(rows) and len(rows) <= 100,
                 "Reducer artifact listing incomplete")
-        matches = [
+        meta = latest_run_snapshot([
             row for row in rows
-            if row.get("name") == SNAPSHOT_ARTIFACT and row.get("expired") is False
-        ]
-        require(len(matches) <= 1, "Reducer published multiple canonical snapshots")
-        if not matches:
+            if row.get("expired") is False
+        ])
+        if meta is None:
             continue
-        meta = matches[0]
         raw = reader.archive(meta["id"])
         artifact_digest(meta, raw)
         state = extract_json(raw, "snapshot.json")

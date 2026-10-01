@@ -83,6 +83,23 @@ def _artifact_time(value: object) -> datetime:
     return parsed
 
 
+def latest_run_snapshot(artifacts: list[dict]) -> dict | None:
+    """Select the latest live reducer snapshot when a run spans retries."""
+    snapshots = [
+        row for row in artifacts
+        if row.get("name") == SNAPSHOT_ARTIFACT and not row.get("expired")
+    ]
+    if not snapshots:
+        return None
+    for row in snapshots:
+        require(type(row.get("id")) is int and row["id"] > 0, "Snapshot artifact identity missing")
+        _artifact_time(row.get("created_at"))
+    return max(
+        snapshots,
+        key=lambda row: (_artifact_time(row["created_at"]), row["id"]),
+    )
+
+
 def validate_artifact_publication_fallback(
     event: dict,
     event_meta: dict,
@@ -403,14 +420,10 @@ class GitHubReader:
                 and run.get("conclusion") == "success"
             ):
                 continue
-            snapshots = [
-                row for row in self._run_artifacts(run["id"])
-                if row.get("name") == SNAPSHOT_ARTIFACT and not row.get("expired")
-            ]
-            require(len(snapshots) <= 1, "Reducer published multiple canonical snapshots in one run")
-            if snapshots:
-                retain(snapshots[0])
-                snapshot_runs.append((run, snapshots[0]))
+            snapshot = latest_run_snapshot(self._run_artifacts(run["id"]))
+            if snapshot is not None:
+                retain(snapshot)
+                snapshot_runs.append((run, snapshot))
                 if len(snapshot_runs) == 2:
                     break
 
