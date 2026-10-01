@@ -3,6 +3,11 @@ name: portfolio-autonomous-scheduler
 on:
   schedule:
     - cron: "23 * * * *"
+    # Temporary Step-23 acceptance-only schedule events for 2026-10-01 UTC.
+    - cron: "20 17 1 10 *"
+    - cron: "50 17 1 10 *"
+    - cron: "20 18 1 10 *"
+    - cron: "50 18 1 10 *"
   repository_dispatch:
     types: ["portfolio_schedule"]
   workflow_dispatch:
