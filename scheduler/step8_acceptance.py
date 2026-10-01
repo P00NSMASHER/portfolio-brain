@@ -109,6 +109,15 @@ def prove(source_ref: str) -> dict:
       "main_sha":main_sha,
       "queued_types":["REPAIR","TEST","VERIFICATION"],
       "completed_types":[row["work_type"] for row in executed],
+      "handler_executions":[
+        {
+          "kind":row["work_type"],
+          "execution_id":row["execution_id"],
+          "status":row["status"],
+          "result_kind":row["result_kind"],
+        }
+        for row in receipts
+      ],
       "result_kinds":kinds,
       "repair_request_id":repair_requests[0]["request_id"],
       "repair_fingerprint":repair_requests[0]["fingerprint"],
