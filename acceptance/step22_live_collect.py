@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Live collector for the bounded Step 22 autonomous self-repair proof."""
 from __future__ import annotations
-import argparse, hashlib, json, os, re, time, urllib.error, urllib.parse, urllib.request
+import argparse, base64, hashlib, json, os, re, time, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -75,12 +75,93 @@ def select_trusted_check(checks:list[dict[str,Any]],*,name:str,app_id:int,head_s
       "head_sha":head_sha,"conclusion":"success","completed_at":chosen["completed_at"],
     }
 
+STEP22_MAINTENANCE_EXACT_PATHS = {
+    "state_journal/ARCHIVE_MANIFEST.json",
+    "state_journal/CHECKPOINT.json.gz",
+    "state_journal/POLICY.json",
+}
+STEP22_MAINTENANCE_PREFIXES = ("state_journal/archive/",)
+
+
+def verify_checkpoint_maintenance(gh:GH, *, pr_number:int, repair_merge_sha:str)->dict[str,Any]:
+    pr=gh.get(f"/pulls/{pr_number}")
+    if not pr.get("merged_at"):
+        raise RuntimeError("Step22 checkpoint maintenance PR is not merged")
+    if pr.get("user",{}).get("login")!="github-actions[bot]":
+        raise RuntimeError("Step22 checkpoint maintenance PR is not bot-created")
+    branch=pr.get("head",{}).get("ref") or ""
+    if not branch.startswith("checkpoint/archive-"):
+        raise RuntimeError("Step22 checkpoint maintenance branch is not isolated")
+    base_sha=pr.get("base",{}).get("sha")
+    head_sha=pr.get("head",{}).get("sha")
+    merge_sha=pr.get("merge_commit_sha")
+    if base_sha!=repair_merge_sha:
+        raise RuntimeError("Step22 checkpoint maintenance does not start at repair merge")
+    if not all(isinstance(x,str) and re.fullmatch(r"[0-9a-f]{40}",x) for x in (head_sha,merge_sha)):
+        raise RuntimeError("Step22 checkpoint maintenance Git identity invalid")
+    files=gh.get(f"/pulls/{pr_number}/files?per_page=100")
+    changed=[row["filename"] for row in files]
+    if not changed or len(changed)!=len(set(changed)):
+        raise RuntimeError("Step22 checkpoint maintenance changed paths invalid")
+    for changed_path in changed:
+        if not (
+            changed_path in STEP22_MAINTENANCE_EXACT_PATHS
+            or any(changed_path.startswith(prefix) for prefix in STEP22_MAINTENANCE_PREFIXES)
+        ):
+            raise RuntimeError("Step22 checkpoint maintenance touched non-archive path: "+changed_path)
+    if not STEP22_MAINTENANCE_EXACT_PATHS.issubset(set(changed)):
+        raise RuntimeError("Step22 checkpoint maintenance omitted required control files")
+    if not any(x.startswith("state_journal/archive/") for x in changed):
+        raise RuntimeError("Step22 checkpoint maintenance contains no immutable archive file")
+    checks=gh.get(f"/commits/{head_sha}/check-runs?per_page=100").get("check_runs",[])
+    foundation=select_trusted_check(checks,name="validate",app_id=15368,head_sha=head_sha)
+    hosted=select_trusted_check(checks,name="portfolio-phase1-gate",app_id=5121826,head_sha=head_sha)
+    run_match=re.fullmatch(r"checkpoint/archive-(\d+)",branch)
+    if not run_match:
+        raise RuntimeError("Step22 checkpoint maintenance run identity missing")
+    workflow_run_id=int(run_match.group(1))
+    run=gh.get(f"/actions/runs/{workflow_run_id}")
+    if run.get("name")!="portfolio-state-checkpoint-candidate" or run.get("conclusion")!="success":
+        raise RuntimeError("Step22 checkpoint maintenance workflow did not succeed")
+    if run.get("head_sha")!=repair_merge_sha:
+        raise RuntimeError("Step22 checkpoint maintenance workflow was not based on repair merge")
+    manifest_doc=gh.get(f"/contents/state_journal/ARCHIVE_MANIFEST.json?ref={merge_sha}")
+    raw=base64.b64decode(manifest_doc["content"])
+    manifest=json.loads(raw.decode("utf-8"))
+    archive_id=manifest.get("archive_id")
+    checkpoint_sequence=manifest.get("checkpoint_sequence")
+    if not (isinstance(archive_id,str) and archive_id.startswith("canonical-archive-seq-")):
+        raise RuntimeError("Step22 checkpoint maintenance archive identity invalid")
+    if type(checkpoint_sequence) is not int or checkpoint_sequence<=0:
+        raise RuntimeError("Step22 checkpoint maintenance checkpoint sequence invalid")
+    return {
+      "kind":"CHECKPOINT_ARCHIVE_MAINTENANCE",
+      "workflow_run_id":workflow_run_id,
+      "pr_number":pr_number,
+      "actor_login":"github-actions[bot]",
+      "branch":branch,
+      "base_sha":base_sha,
+      "head_sha":head_sha,
+      "merge_sha":merge_sha,
+      "changed_paths":changed,
+      "foundation_check":foundation,
+      "hosted_verifier_check":hosted,
+      "archive_id":archive_id,
+      "checkpoint_sequence":checkpoint_sequence,
+      "merged_at":pr["merged_at"],
+      "protected_merge":True,
+      "authority_granted":False,
+      "evidence_upgraded":False,
+    }
+
+
 def main()->None:
     ap=argparse.ArgumentParser()
     ap.add_argument("--fingerprint",required=True);ap.add_argument("--fault-receipt-hash",required=True)
     ap.add_argument("--fault-detected-at",required=True);ap.add_argument("--fault-base-sha",required=True)
     ap.add_argument("--dispatch-run-id",type=int,required=True);ap.add_argument("--dispatched-at",required=True)
     ap.add_argument("--output-meta",type=Path,required=True);ap.add_argument("--output-receipt",type=Path,required=True)
+    ap.add_argument("--maintenance-pr-number",type=int)
     ap.add_argument("--timeout-seconds",type=int,default=1500)
     args=ap.parse_args()
     repo=os.environ["GITHUB_REPOSITORY"];token=os.environ["GITHUB_TOKEN"];gh=GH(repo,token)
@@ -131,8 +212,17 @@ def main()->None:
     checks=gh.get(f"/commits/{head}/check-runs?per_page=100").get("check_runs",[])
     foundation=select_trusted_check(checks,name="validate",app_id=15368,head_sha=head)
     hosted=select_trusted_check(checks,name="portfolio-phase1-gate",app_id=5121826,head_sha=head)
+    maintenance_lineage=[]
+    continuation_sha=merge_sha
+    if args.maintenance_pr_number is not None:
+        maintenance=verify_checkpoint_maintenance(
+            gh,pr_number=args.maintenance_pr_number,repair_merge_sha=merge_sha,
+        )
+        maintenance_lineage=[maintenance]
+        continuation_sha=maintenance["merge_sha"]
     main_sha=gh.get("/branches/main")["commit"]["sha"]
-    if main_sha!=merge_sha: raise RuntimeError("protected main moved before Step22 health continuation")
+    if main_sha!=continuation_sha:
+        raise RuntimeError("protected main is not the exact Step22 continuation head")
 
     cycle_dispatch_at=now_iso()
     gh.post("/actions/workflows/runtime-hourly-sync.yml/dispatches",{"ref":"main"})
@@ -140,7 +230,7 @@ def main()->None:
 
     def workflow_run(workflow:str,event:str):
         doc=gh.get(f"/actions/workflows/{workflow}/runs?branch=main&event={event}&per_page=30")
-        rows=[x for x in doc.get("workflow_runs",[]) if x.get("head_sha")==merge_sha and x.get("created_at")>=cycle_dispatch_at]
+        rows=[x for x in doc.get("workflow_runs",[]) if x.get("head_sha")==continuation_sha and x.get("created_at")>=cycle_dispatch_at]
         rows.sort(key=lambda x:x["id"],reverse=True)
         if not rows:return None
         x=rows[0]
@@ -152,7 +242,7 @@ def main()->None:
     reducer_after=min(runtime["created_at"],scheduler["created_at"])
     def reducer_run():
         doc=gh.get("/actions/workflows/portfolio-state-reducer.yml/runs?branch=main&per_page=50")
-        rows=[x for x in doc.get("workflow_runs",[]) if x.get("head_sha")==merge_sha and x.get("created_at")>=reducer_after]
+        rows=[x for x in doc.get("workflow_runs",[]) if x.get("head_sha")==continuation_sha and x.get("created_at")>=reducer_after]
         rows.sort(key=lambda x:x["id"],reverse=True)
         for x in rows:
             if x.get("status")=="completed":
@@ -160,12 +250,13 @@ def main()->None:
                 if x.get("conclusion") not in {"cancelled","skipped"}: raise RuntimeError("Step22 reducer continuation failed: "+str(x.get("conclusion")))
         return None
     reducer=wait_until(reducer_run,deadline=deadline,desc="Step22 reducer continuation")
-    if gh.get("/branches/main")["commit"]["sha"]!=merge_sha: raise RuntimeError("protected main moved during Step22 finalization")
+    if gh.get("/branches/main")["commit"]["sha"]!=continuation_sha:
+        raise RuntimeError("protected main moved during Step22 finalization")
 
     def cycle_row(x):
         return {"run_id":x["id"],"head_sha":x["head_sha"],"conclusion":x["conclusion"],"created_at":x["created_at"],"completed_at":x["updated_at"],"artifact_hashes":artifact_hashes(gh,x["id"])}
     meta={
-      "schema_version":"1.0.0","current_main_sha":merge_sha,
+      "schema_version":"1.0.0","current_main_sha":continuation_sha,
       "fault":{"base_sha":args.fault_base_sha,"detected_at":args.fault_detected_at,"dispatched_at":args.dispatched_at,"dispatch_run_id":args.dispatch_run_id,"receipt_hash":args.fault_receipt_hash,"fingerprint":args.fingerprint},
       "repair":{
         "base_sha":args.fault_base_sha,"workflow_run_id":repair_run_id,"workflow_created_at":run["created_at"],
@@ -175,6 +266,7 @@ def main()->None:
         "foundation_check":foundation,"hosted_verifier_check":hosted,"merged_at":merged["merged_at"],"merge_sha":merge_sha,
         "merge_receipt_hash":hv({"pr_number":prn,"candidate_head_sha":head,"merge_sha":merge_sha,"merged_at":merged["merged_at"]}),
       },
+      "maintenance_lineage":maintenance_lineage,
       "cycles":{"runtime":cycle_row(runtime),"reducer":cycle_row(reducer),"scheduler":cycle_row(scheduler)},
     }
     receipt=build_receipt(meta)
