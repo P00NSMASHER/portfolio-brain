@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "purpose": "Protected-main trigger surface for the Step 22 controlled self-repair proof.",
-  "nonce": "TRIGGER-20260930-STEP22-02111",
+  "nonce": "TRIGGER-20261001-STEP22-0132Z",
   "rule": "Only a protected PR whose merge commit contains [step22-fault] may intentionally change nonce to launch the bounded acceptance job.",
-  "reason": "Retry Step 22 after correcting workflow concurrency schema"
+  "reason": "Fresh protected-main Step 22 retrigger after corrected workflow concurrency schema"
 }
