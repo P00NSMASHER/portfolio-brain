@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "purpose": "Resume Step 22 final evidence collection for the already protected-merged controlled repair without rerunning the fault.",
+  "expected_protected_main_sha": "3a1f3fdfae4e1f79328333b2ac6506b6e11a4b12",
+  "fingerprint": "sha256:697e46b9f75459af557e7bf4b0494b3f521009607703ba9ca5257aa983b34b5a",
+  "fault_receipt_hash": "sha256:c4d57d18b5b944479073790a9fd0f55a09c4dddfdf6bdcbb7755700a49ef21b5",
+  "fault_detected_at": "2026-10-01T01:38:53Z",
+  "fault_base_sha": "b7febc3e34fddbb252b4a03ff74a96d6d1e58b1a",
+  "dispatch_run_id": 36802085278,
+  "dispatched_at": "2026-10-01T01:38:54Z",
+  "repair_workflow_run_id": 36802095946,
+  "repair_pr_number": 350,
+  "repair_candidate_head_sha": "13ea9c41de5577e0efecb1c4d579a332caa8e997",
+  "repair_merge_sha": "3a1f3fdfae4e1f79328333b2ac6506b6e11a4b12",
+  "failed_finalizer_job_id": 110359705662,
+  "failed_reason": "Collector required exactly one successful trusted check; GitHub recorded multiple successful Foundation reruns on the same exact candidate head."
+}
