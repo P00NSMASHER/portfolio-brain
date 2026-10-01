@@ -95,6 +95,7 @@ class OperatingModeTests(unittest.TestCase):
           "hunter-autonomous-cycle":["8 17 1 10 *","28 17 1 10 *","48 17 1 10 *"],
           "agent-heartbeat-sweep":["11 17 1 10 *","31 17 1 10 *","51 17 1 10 *"],
           "portfolio-notification-cycle":["14 17 1 10 *","34 17 1 10 *","54 17 1 10 *"],
+          "portfolio-autonomous-scheduler":["0 17 1 10 *"],
         }
         for name,crons in bounded_step23.items():
             expected[name].extend(crons)
@@ -102,6 +103,7 @@ class OperatingModeTests(unittest.TestCase):
         self.assertEqual(set(bounded_step23),{
           "portfolio-state-reducer","hunter-autonomous-cycle",
           "agent-heartbeat-sweep","portfolio-notification-cycle",
+          "portfolio-autonomous-scheduler",
         })
         self.assertTrue(all(cron.split()[2:4]==["1","10"] for rows in bounded_step23.values() for cron in rows))
 
