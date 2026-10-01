@@ -15,7 +15,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: portfolio-step23-scheduled-soak-951319
+  group: portfolio-step23-scheduled-soak-951319-v2
   cancel-in-progress: false
 
 jobs:
