@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "purpose": "Collect exact-main Step 23 scheduled soak evidence after compact final schedule merge on repaired main; never mix prior-main evidence.",
+  "exact_main_sha": "c52d11ff37bc5fcb68fa0a96407ecd8e6fee23a1",
+  "soak_start": "2026-10-01T20:44:15Z",
+  "required_successes_per_workflow": 3,
+  "required_workflows": [
+    "portfolio-state-reducer",
+    "runtime-hourly-sync",
+    "portfolio-autonomous-scheduler",
+    "hunter-autonomous-cycle",
+    "agent-heartbeat-sweep",
+    "portfolio-cost-watchdog",
+    "portfolio-notification-cycle",
+    "command-center-pages"
+  ],
+  "required_handler_types": [
+    "REPAIR",
+    "TEST",
+    "VERIFICATION"
+  ],
+  "poll_seconds": 45,
+  "max_resets": 5
+}
