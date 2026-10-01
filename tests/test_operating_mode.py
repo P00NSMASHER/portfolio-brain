@@ -108,7 +108,7 @@ class OperatingModeTests(unittest.TestCase):
           "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
           "portfolio-notification-cycle","command-center-pages",
         })
-        self.assertTrue(all(cron.split()[2:4]==["1","10"] for rows in bounded_step23.values() for cron in rows))
+        self.assertTrue(all(cron.split()[2:4]==["2","10"] for rows in bounded_step23.values() for cron in rows))
 
     def test_learning_crons_avoid_known_hourly_writer_collisions(self):
         policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())["approved_recurring_workflows"]
