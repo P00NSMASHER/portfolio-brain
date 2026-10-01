@@ -1,29 +1,28 @@
 {
   "schema_version": "1.0.0",
   "factory_id": "micro-product-factory-v1",
-  "status": "ACTIVE",
+  "status": "RETIRED",
   "authority_class": "PLAN_ONLY",
   "market": "Roblox Creator Store",
   "product_type_priority": [
     "MODEL",
     "PLUGIN"
   ],
-  "north_star": "VERIFIED_EXTERNAL_CASH",
+  "north_star": "VERIFIED_ENGINEERING_IMPROVEMENT",
   "verified_revenue_usd": 0,
   "verified_sales_count": 0,
   "published_count": 0,
   "build_caps": {
-    "max_hours_per_sku": 4,
-    "max_paid_ai_spend_usd_per_sku": 10,
+    "max_hours_per_sku": 0,
+    "max_paid_ai_spend_usd_per_sku": 0,
     "initial_price_min_usd": 2.99,
     "initial_price_max_usd": 9.99
   },
   "portfolio_rules": [
-    "Models first because throughput is higher and publishing friction is lower than plugins.",
-    "One reusable core may power multiple SKUs, but each listing must solve a distinct buyer problem.",
-    "No Brookhaven-specific art, UI, names, proprietary assets, school-specific content, private data, or unverified third-party code.",
-    "A weak SKU does not earn extra engineering merely because time was already spent on it.",
-    "Sales, reviews, support requests and repeat demand outrank internal completion metrics."
+    "This factory is historical evidence only and creates no new commercial work.",
+    "Existing artifacts and hashes remain preserved for provenance; publication, demand testing, and replacement SKU generation are not active objectives.",
+    "No paid-model/API budget or engineering capacity may be allocated to these SKUs by autonomous planning.",
+    "Verified engineering improvements to active projects outrank all former marketplace hypotheses."
   ],
   "skus": [
     {
@@ -52,7 +51,7 @@
         "shipped_third_party_code": false
       },
       "commercial_source_policy": "ORIGINAL_DEPENDENCY_FREE",
-      "build_prompt": "Use the existing original Quiz & Reward Engine v1.0 artifact. Preserve its dependency-free source and verified SHA. Complete only the remaining Roblox Creator Store upload/listing steps, keep the $3.99 launch price, and do not alter product code unless a new runtime defect is reproduced."
+      "build_prompt": "Retired historical SKU SKU-001. Do not build, publish, market, expand, or spend model/API budget on this commercial experiment. Preserve existing artifact evidence only."
     },
     {
       "sku_id": "SKU-002",
@@ -81,7 +80,7 @@
         "shipped_third_party_code": false,
         "defect_fix": "release session-owned house when owner leaves"
       },
-      "build_prompt": "Use the existing original House Controls Pack v1.1 artifact. Run the documented Roblox Studio runtime QA matrix for ownership isolation, owner-leave release, lights, garage, lock enforcement, recolor, replay/spam resistance and mobile controls. Fix only reproduced defects. Do not publish until runtime QA passes."
+      "build_prompt": "Retired historical SKU SKU-002. Do not build, publish, market, expand, or spend model/API budget on this commercial experiment. Preserve existing artifact evidence only."
     },
     {
       "sku_id": "SKU-003",
@@ -110,7 +109,7 @@
         "shipped_third_party_code": false,
         "defect_fix": "atomic one-time redemption reservation closes concurrent double-grant race"
       },
-      "build_prompt": "Use the existing original Redeem Code System v1.1 artifact. Run the documented Roblox Studio runtime QA for valid/invalid codes, expiration, atomic one-time persistence, DataStore failure behavior, concurrent replay protection, two-player isolation and mobile controls. Fix only reproduced defects. Do not publish until runtime QA passes."
+      "build_prompt": "Retired historical SKU SKU-003. Do not build, publish, market, expand, or spend model/API budget on this commercial experiment. Preserve existing artifact evidence only."
     },
     {
       "sku_id": "SKU-004",
@@ -122,7 +121,7 @@
       "buyer_problem": "Randomized no-repeat question rotation is useful, but it is stronger as part of Quiz & Reward Engine than as a separate first-batch product.",
       "reuse_source": "Generic quiz-engine patterns only.",
       "reuse_boundary": "No school-specific source material.",
-      "build_prompt": "Do not build separately unless buyer evidence later shows demand for a standalone question-bank component."
+      "build_prompt": "Retired historical SKU SKU-004. Do not build, publish, market, expand, or spend model/API budget on this commercial experiment. Preserve existing artifact evidence only."
     },
     {
       "sku_id": "SKU-005",
@@ -134,7 +133,7 @@
       "buyer_problem": "Roleplay creators need plot claiming and occupancy state, but current paid competition is stronger than the first-batch alternatives.",
       "reuse_source": "Generic ownership/occupancy lessons only.",
       "reuse_boundary": "No Brookhaven assets, UI, names or proprietary structure.",
-      "build_prompt": "Revisit only after live sales/support evidence from the first three products."
+      "build_prompt": "Retired historical SKU SKU-005. Do not build, publish, market, expand, or spend model/API budget on this commercial experiment. Preserve existing artifact evidence only."
     },
     {
       "sku_id": "SKU-006",
@@ -146,7 +145,7 @@
       "buyer_problem": "Creators need shop systems, but the current Creator Store category is crowded with low-cost alternatives.",
       "reuse_source": "Original generic implementation if revived.",
       "reuse_boundary": "No copied commercial game assets or UI.",
-      "build_prompt": "Do not build until buyer evidence justifies competing in a crowded category."
+      "build_prompt": "Retired historical SKU SKU-006. Do not build, publish, market, expand, or spend model/API budget on this commercial experiment. Preserve existing artifact evidence only."
     },
     {
       "sku_id": "SKU-007",
@@ -158,7 +157,7 @@
       "buyer_problem": "Mobile UI problems are common, but current paid/free tooling competition is comparatively strong.",
       "reuse_source": "Responsive-layout lessons only.",
       "reuse_boundary": "Create wholly original Roblox UI if revived.",
-      "build_prompt": "Hold unless a narrower unmet mobile use case is identified."
+      "build_prompt": "Retired historical SKU SKU-007. Do not build, publish, market, expand, or spend model/API budget on this commercial experiment. Preserve existing artifact evidence only."
     },
     {
       "sku_id": "SKU-008",
@@ -170,14 +169,14 @@
       "buyer_problem": "AI-assisted Roblox creators need objective detection of common structural, mobile, client/server and release defects.",
       "reuse_source": "Failure-pattern lessons plus original inspection rules.",
       "reuse_boundary": "No copying third-party plugin code or assets.",
-      "build_prompt": "Prototype only after the model launch batch produces marketplace evidence."
+      "build_prompt": "Retired historical SKU SKU-008. Do not build, publish, market, expand, or spend model/API budget on this commercial experiment. Preserve existing artifact evidence only."
     }
   ],
   "factory_guardrails": {
     "version": "1.0.0",
-    "status": "READY",
+    "status": "RETIRED",
     "sku001_policy": "ORIGINAL_DEPENDENCY_FREE",
-    "launch_batch_rule": "SKU-001 through SKU-003 are the only first-batch products.",
+    "launch_batch_rule": "Commercial launch batch retired; preserve SKU-001 through SKU-003 as historical artifacts only.",
     "rojo_role": "DEVELOPMENT_BUILD_TOOL_ONLY",
     "internal_qa_only": [
       "command-console-style deterministic debug hooks",
@@ -187,10 +186,6 @@
     ],
     "shipping_rule": "Do not ship Cmdr, test-runner, coverage, Rojo runtime code, or other third-party dependencies unless a specific product-level need and license review justify it."
   },
-  "first_launch_batch": [
-    "SKU-001",
-    "SKU-002",
-    "SKU-003"
-  ],
-  "launch_batch_state": "THREE_ARTIFACTS_BUILT_NOT_YET_PUBLISHED"
+  "first_launch_batch": [],
+  "launch_batch_state": "RETIRED_NO_FURTHER_COMMERCIAL_WORK"
 }
