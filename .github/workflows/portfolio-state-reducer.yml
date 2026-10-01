@@ -4,9 +4,10 @@ on:
   schedule:
     - cron: "11 4 * * *"
     # Exact Step-23 soak window; real schedule events only, normal cadence remains unchanged.
-    - cron: "40 17 1 10 *"
-    - cron: "0 18 1 10 *"
-    - cron: "20 18 1 10 *"
+    - cron: "15 18 1 10 *"
+    - cron: "40 18 1 10 *"
+    - cron: "5 19 1 10 *"
+    - cron: "30 19 1 10 *"
   push:
     branches: ["main"]
     paths:
