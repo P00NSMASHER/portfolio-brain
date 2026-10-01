@@ -1,5 +1,6 @@
 name: step23-scheduled-soak-finalize
 # Observer generation: 9513192.
+# Observer selector generation: exact-artifact-v2.
 
 on:
   push:
