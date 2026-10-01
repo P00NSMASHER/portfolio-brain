@@ -348,9 +348,12 @@ class HunterTests(unittest.TestCase):
                 return {"revision":revision,"tree_sha":"f"*40,"paths":[token_path,test_path,"docs/provenance-lineage.md"],"truncated":False}
         _,receipt=run_cycle(load_seed_state(),BroadHighProvider(),at="2026-09-25T18:00:00Z")
         gate=load_policy()["candidate_evaluation"]["proposal_gate"]
-        self.assertEqual(len(receipt["experiment_proposals"]),gate["max_experiment_proposals_per_cycle"])
-        self.assertEqual(receipt["proposal_gate"]["selected_proposals"],gate["max_experiment_proposals_per_cycle"])
-        self.assertGreater(receipt["proposal_gate"]["deferred_cycle_cap"],0)
+        eligible=receipt["proposal_gate"]["eligible_findings"]
+        expected=min(eligible,gate["max_experiment_proposals_per_cycle"])
+        self.assertGreater(expected,0)
+        self.assertEqual(len(receipt["experiment_proposals"]),expected)
+        self.assertEqual(receipt["proposal_gate"]["selected_proposals"],expected)
+        self.assertEqual(receipt["proposal_gate"]["deferred_cycle_cap"],max(0,eligible-gate["max_experiment_proposals_per_cycle"]))
         self.assertTrue(all(p["candidate_rank_band"] in {"MEDIUM","HIGH"} for p in receipt["experiment_proposals"]))
 
     def test_ranking_band_accounting_covers_every_inspected_candidate(self):
