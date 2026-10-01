@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "policy_id": "portfolio-external-value-loop-v1",
+  "policy_id": "portfolio-engineering-value-loop-v2",
   "external_milestones": [
     "PUBLISH_PRODUCT",
     "GET_BUYER_RESPONSE",
@@ -32,14 +32,9 @@
     "MARKET_VERIFIED",
     "REVENUE_VERIFIED"
   ],
-  "investment_credit_classes": [
-    "MARKET_VERIFIED",
-    "REVENUE_VERIFIED"
-  ],
+  "investment_credit_classes": [],
   "technical_routing_credit_classes": [
-    "TECHNICAL_VERIFIED",
-    "MARKET_VERIFIED",
-    "REVENUE_VERIFIED"
+    "TECHNICAL_VERIFIED"
   ],
   "owner_action_authority": "HUMAN_APPROVAL_REQUIRED",
   "supply_sensor": "PUBLIC_GITHUB",
@@ -49,14 +44,10 @@
     "VERIFIED_PAYMENT"
   ],
   "invariants": [
-    "Every queued scheduler work item has one external_milestone.",
-    "Work without a defensible external milestone is suppressed rather than queued to keep the Brain busy.",
-    "External-value blockers outrank demand validation, which outranks deliverable completion, which outranks internal blockers.",
-    "Internal repair/test/verification may enter the queue only when it directly blocks an external milestone.",
-    "TECHNICAL_VERIFIED may improve technical/model routing but cannot increase business investment.",
-    "Only MARKET_VERIFIED and REVENUE_VERIFIED may increase business investment.",
-    "PUBLIC_GITHUB is a supply sensor only and never proves customer demand.",
-    "Publishing, spending, payment setup and consequential customer communication remain human-approved actions.",
-    "Owner-action completion is inferred only from new verified external/source evidence; the queue does not paint itself green."
+    "Commercial speculation is retired and cannot create scheduler work, owner-action requests, or investment credit.",
+    "Historical MARKET_VERIFIED or REVENUE_VERIFIED evidence remains evidence only and does not authorize new commercial work.",
+    "TECHNICAL_VERIFIED may improve engineering routing when bound to exact evidence.",
+    "PUBLIC_GITHUB remains untrusted supply evidence and never creates authority by itself.",
+    "Publishing, spending, payment setup and consequential customer communication remain human-approved actions if independently requested outside this retired loop."
   ]
 }
