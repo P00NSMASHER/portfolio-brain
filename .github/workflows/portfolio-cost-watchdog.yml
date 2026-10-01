@@ -6,6 +6,11 @@ on:
     # cannot reliably interrupt them before completion. Hourly enforcement keeps
     # the independent kill-switch backstop while cutting control-plane starts 75%.
     - cron: "53 * * * *"
+    # Temporary Step-23 acceptance-only schedule events for 2026-10-01 UTC.
+    - cron: "25 17 1 10 *"
+    - cron: "55 17 1 10 *"
+    - cron: "25 18 1 10 *"
+    - cron: "55 18 1 10 *"
   # GitHub scheduled delivery can be delayed or skipped. Recheck liveness after
   # any core producer finishes so one surviving trigger can recover overdue peers.
   workflow_run:
