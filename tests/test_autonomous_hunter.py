@@ -34,6 +34,17 @@ class HunterTests(unittest.TestCase):
         self.assertGreaterEqual(len(gaps),1)
         self.assertTrue(all(g["need_type"]=="UNMAPPED_CAPABILITY_COVERAGE" for g in gaps))
 
+    def test_commercial_speculation_has_zero_hunter_weight(self):
+        policy=load_policy()
+        commercial=policy["commercial_speculation"]
+        self.assertFalse(commercial["enabled"])
+        self.assertEqual(commercial["expected_future_revenue_usd"],0)
+        self.assertEqual(commercial["priority_weight"],0)
+        self.assertFalse(commercial["new_business_ideas_allowed"])
+        self.assertFalse(commercial["marketplace_demand_hunting_allowed"])
+        self.assertFalse(commercial["outreach_idea_generation_allowed"])
+        self.assertTrue(all(g["external_validation_value"]==0 for g in detect_gaps()))
+
     def test_objective_selection_reserves_exploration_budget(self):
         objectives=select_objectives(load_seed_state())
         self.assertTrue(any(x["exploration"] for x in objectives))
