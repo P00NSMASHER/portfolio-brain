@@ -223,64 +223,83 @@ def _validate_step22_maintenance(receipt: dict[str, Any], policy: dict[str, Any]
         _require(lineage == [], "Step 22 maintenance lineage present without a main transition")
         return
 
-    _require(len(lineage) == 1, "Step 22 permits exactly one bounded checkpoint/archive maintenance merge")
-    row = lineage[0]
-    _require(isinstance(row, dict), "Step 22 maintenance row invalid")
-    _require(row.get("kind") == "CHECKPOINT_ARCHIVE_MAINTENANCE",
-             "Step 22 intervening merge is not checkpoint/archive maintenance")
-    _validate_sha40(row.get("base_sha"), "Step 22 maintenance.base_sha")
-    _validate_sha40(row.get("head_sha"), "Step 22 maintenance.head_sha")
-    _validate_sha40(row.get("merge_sha"), "Step 22 maintenance.merge_sha")
-    _require(row["base_sha"] == repair_merge, "Step 22 maintenance does not start at repair merge")
-    _require(row["merge_sha"] == exact_main, "Step 22 maintenance does not end at exact continuation main")
-    pr_number = row.get("pr_number")
-    run_id = row.get("workflow_run_id")
-    _require(type(pr_number) is int and pr_number > 0, "Step 22 maintenance PR invalid")
-    _require(type(run_id) is int and run_id > 0, "Step 22 maintenance workflow run invalid")
-    _require(row.get("actor_login") == "github-actions[bot]",
-             "Step 22 maintenance PR was not bot-created")
-    branch = row.get("branch")
-    _require(isinstance(branch, str) and branch.startswith("checkpoint/archive-"),
-             "Step 22 maintenance branch is not checkpoint/archive isolated")
-    _require(row.get("protected_merge") is True, "Step 22 maintenance merge was not protected")
-    _require(row.get("authority_granted") is False and row.get("evidence_upgraded") is False,
-             "Step 22 maintenance widened authority/evidence")
+    _require(1 <= len(lineage) <= 2,
+             "Step 22 permits only bounded checkpoint/archive maintenance lineage")
+    expected_base = repair_merge
+    archive_rows = 0
+    trigger_rows = 0
+    for row in lineage:
+        _require(isinstance(row, dict), "Step 22 maintenance row invalid")
+        kind = row.get("kind")
+        _validate_sha40(row.get("base_sha"), "Step 22 maintenance.base_sha")
+        _validate_sha40(row.get("head_sha"), "Step 22 maintenance.head_sha")
+        _validate_sha40(row.get("merge_sha"), "Step 22 maintenance.merge_sha")
+        _require(row["base_sha"] == expected_base, "Step 22 maintenance lineage is not contiguous")
+        expected_base = row["merge_sha"]
+        pr_number = row.get("pr_number")
+        _require(type(pr_number) is int and pr_number > 0, "Step 22 maintenance PR invalid")
+        actor = row.get("actor_login")
+        _require(isinstance(actor, str) and actor, "Step 22 maintenance PR actor missing")
+        branch = row.get("branch")
+        _require(isinstance(branch, str) and branch, "Step 22 maintenance branch missing")
+        _require(row.get("protected_merge") is True, "Step 22 maintenance merge was not protected")
+        _require(row.get("authority_granted") is False and row.get("evidence_upgraded") is False,
+                 "Step 22 maintenance widened authority/evidence")
+        paths = row.get("changed_paths")
+        _require(isinstance(paths, list) and paths and len(paths) == len(set(paths)),
+                 "Step 22 maintenance changed paths invalid")
 
-    paths = row.get("changed_paths")
-    _require(isinstance(paths, list) and paths and len(paths) == len(set(paths)),
-             "Step 22 maintenance changed paths invalid")
-    for changed in paths:
-        _require(
-            changed in STEP22_MAINTENANCE_EXACT_PATHS
-            or any(changed.startswith(prefix) for prefix in STEP22_MAINTENANCE_PREFIXES),
-            f"Step 22 maintenance touched non-archive path: {changed}",
+        if kind == "CHECKPOINT_ARCHIVE_TRIGGER":
+            trigger_rows += 1
+            _require(trigger_rows == 1 and archive_rows == 0,
+                     "Step 22 checkpoint trigger must precede archive maintenance")
+            _require(paths == ["state_journal/TRIGGER_CHECKPOINT_ARCHIVE"],
+                     "Step 22 checkpoint trigger touched more than the dedicated trigger")
+        elif kind == "CHECKPOINT_ARCHIVE_MAINTENANCE":
+            archive_rows += 1
+            _require(archive_rows == 1, "Step 22 permits exactly one archive maintenance merge")
+            _require(actor == "github-actions[bot]",
+                     "Step 22 archive maintenance PR was not bot-created")
+            _require(branch.startswith("checkpoint/archive-"),
+                     "Step 22 archive maintenance branch is not isolated")
+            for changed in paths:
+                _require(
+                    changed in STEP22_MAINTENANCE_EXACT_PATHS
+                    or any(changed.startswith(prefix) for prefix in STEP22_MAINTENANCE_PREFIXES),
+                    f"Step 22 maintenance touched non-archive path: {changed}",
+                )
+            _require(STEP22_MAINTENANCE_EXACT_PATHS.issubset(set(paths)),
+                     "Step 22 maintenance omitted required checkpoint/archive control files")
+            _require(any(path.startswith("state_journal/archive/") for path in paths),
+                     "Step 22 maintenance contains no immutable archive path")
+            run_id = row.get("workflow_run_id")
+            _require(type(run_id) is int and run_id > 0, "Step 22 maintenance workflow run invalid")
+            archive_id = row.get("archive_id")
+            checkpoint_sequence = row.get("checkpoint_sequence")
+            _require(isinstance(archive_id, str) and archive_id.startswith("canonical-archive-seq-"),
+                     "Step 22 maintenance archive identity invalid")
+            _require(type(checkpoint_sequence) is int and checkpoint_sequence > 0,
+                     "Step 22 maintenance checkpoint sequence invalid")
+        else:
+            raise FinalAcceptanceError("Step 22 intervening merge is not checkpoint/archive maintenance")
+
+        _validate_trusted_check(
+            row.get("foundation_check"),
+            field="Step 22 maintenance Foundation",
+            expected_name=policy["foundation_check_name"],
+            expected_app_id=policy["foundation_app_id"],
+            expected_head_sha=row["head_sha"],
         )
-    _require(STEP22_MAINTENANCE_EXACT_PATHS.issubset(set(paths)),
-             "Step 22 maintenance omitted required checkpoint/archive control files")
-    _require(any(path.startswith("state_journal/archive/") for path in paths),
-             "Step 22 maintenance contains no immutable archive path")
+        _validate_trusted_check(
+            row.get("hosted_verifier_check"),
+            field="Step 22 maintenance hosted verifier",
+            expected_name=policy["hosted_verifier_check_name"],
+            expected_app_id=policy["hosted_verifier_app_id"],
+            expected_head_sha=row["head_sha"],
+        )
 
-    _validate_trusted_check(
-        row.get("foundation_check"),
-        field="Step 22 maintenance Foundation",
-        expected_name=policy["foundation_check_name"],
-        expected_app_id=policy["foundation_app_id"],
-        expected_head_sha=row["head_sha"],
-    )
-    _validate_trusted_check(
-        row.get("hosted_verifier_check"),
-        field="Step 22 maintenance hosted verifier",
-        expected_name=policy["hosted_verifier_check_name"],
-        expected_app_id=policy["hosted_verifier_app_id"],
-        expected_head_sha=row["head_sha"],
-    )
-    archive_id = row.get("archive_id")
-    checkpoint_sequence = row.get("checkpoint_sequence")
-    _require(isinstance(archive_id, str) and archive_id.startswith("canonical-archive-seq-"),
-             "Step 22 maintenance archive identity invalid")
-    _require(type(checkpoint_sequence) is int and checkpoint_sequence > 0,
-             "Step 22 maintenance checkpoint sequence invalid")
-
+    _require(archive_rows == 1, "Step 22 maintenance lineage lacks protected archive rollover")
+    _require(expected_base == exact_main, "Step 22 maintenance lineage does not end at exact continuation main")
 
 def validate_step22(receipt: dict[str, Any]) -> None:
     policy = _load_policy()
