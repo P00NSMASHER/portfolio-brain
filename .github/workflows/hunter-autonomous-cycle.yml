@@ -3,6 +3,11 @@ name: hunter-autonomous-cycle
 on:
   schedule:
     - cron: "47 */6 * * *"
+    # Temporary Step-23 acceptance-only schedule events for 2026-10-01 UTC.
+    - cron: "26 17 1 10 *"
+    - cron: "56 17 1 10 *"
+    - cron: "26 18 1 10 *"
+    - cron: "56 18 1 10 *"
   push:
     branches: ["main"]
     paths:
