@@ -407,6 +407,43 @@ class GitHubReader:
                 row for row in self._run_artifacts(run["id"])
                 if row.get("name") == SNAPSHOT_ARTIFACT and not row.get("expired")
             ]
+            if len(snapshots) > 1:
+                # GitHub reruns keep artifacts from earlier attempts under the
+                # same workflow run ID. Bind the canonical publication to the
+                # latest successful run attempt instead of treating preserved
+                # prior-attempt evidence as an ambiguous same-attempt write.
+                attempt = run.get("run_attempt")
+                require(type(attempt) is int and attempt > 1,
+                        "Reducer published multiple canonical snapshots in one run")
+                attempt_run = self.get(f"/actions/runs/{run['id']}/attempts/{attempt}")
+                require(
+                    attempt_run.get("id") == run["id"]
+                    and attempt_run.get("run_attempt") == attempt
+                    and attempt_run.get("head_branch") == "main"
+                    and attempt_run.get("head_sha") == run.get("head_sha")
+                    and attempt_run.get("status") == "completed"
+                    and attempt_run.get("conclusion") == "success",
+                    "Reducer latest attempt identity/status mismatch",
+                )
+                started_raw = attempt_run.get("run_started_at")
+                require(isinstance(started_raw, str),
+                        "Reducer latest attempt start time missing")
+                started_at = datetime.fromisoformat(started_raw.replace("Z", "+00:00"))
+                require(started_at.tzinfo is not None,
+                        "Reducer latest attempt start time requires timezone")
+                latest_attempt = []
+                for row in snapshots:
+                    created_raw = row.get("created_at")
+                    require(isinstance(created_raw, str),
+                            "Reducer snapshot created_at missing")
+                    created_at = datetime.fromisoformat(created_raw.replace("Z", "+00:00"))
+                    require(created_at.tzinfo is not None,
+                            "Reducer snapshot created_at requires timezone")
+                    if created_at >= started_at:
+                        latest_attempt.append(row)
+                require(len(latest_attempt) == 1,
+                        "Reducer latest attempt snapshot missing/ambiguous")
+                snapshots = latest_attempt
             require(len(snapshots) <= 1, "Reducer published multiple canonical snapshots in one run")
             if snapshots:
                 retain(snapshots[0])
