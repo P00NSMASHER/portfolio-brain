@@ -5,9 +5,9 @@ on:
     - cron: "29 */2 * * *"
     # Bounded Step-23 final-acceptance soak windows for 2026-10-01 UTC.
     # These are real schedule events; they do not replace or weaken the normal cadence.
-    - cron: "11 19 1 10 *"
-    - cron: "11 20 1 10 *"
-    - cron: "11 21 1 10 *"
+    - cron: "26 19 1 10 *"
+    - cron: "56 19 1 10 *"
+    - cron: "26 20 1 10 *"
   workflow_dispatch:
 
 permissions:

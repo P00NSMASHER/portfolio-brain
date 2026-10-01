@@ -216,14 +216,14 @@ def validate_operating_mode():
     # approved steady-state cadence. They exist solely to collect the three
     # genuine event=schedule cycles required by final acceptance on one SHA.
     step23_bounded_crons={
-      "portfolio-state-reducer":["5 19 1 10 *","5 20 1 10 *","5 21 1 10 *"],
-      "runtime-hourly-sync":["17 18 1 10 *","42 18 1 10 *","7 19 1 10 *","32 19 1 10 *"],
-      "portfolio-autonomous-scheduler":["19 18 1 10 *","44 18 1 10 *","9 19 1 10 *","34 19 1 10 *"],
-      "hunter-autonomous-cycle":["8 19 1 10 *","8 20 1 10 *","8 21 1 10 *"],
-      "agent-heartbeat-sweep":["11 19 1 10 *","11 20 1 10 *","11 21 1 10 *"],
-      "portfolio-cost-watchdog":["25 18 1 10 *","50 18 1 10 *","15 19 1 10 *","40 19 1 10 *"],
-      "portfolio-notification-cycle":["14 19 1 10 *","14 20 1 10 *","14 21 1 10 *"],
-      "command-center-pages":["29 18 1 10 *","54 18 1 10 *","19 19 1 10 *","44 19 1 10 *"],
+      "portfolio-state-reducer":["16 19 1 10 *","46 19 1 10 *","16 20 1 10 *"],
+      "runtime-hourly-sync":["18 19 1 10 *","48 19 1 10 *","18 20 1 10 *"],
+      "portfolio-autonomous-scheduler":["44 19 1 10 *","14 20 1 10 *","44 20 1 10 *"],
+      "hunter-autonomous-cycle":["20 19 1 10 *","50 19 1 10 *","20 20 1 10 *"],
+      "agent-heartbeat-sweep":["26 19 1 10 *","56 19 1 10 *","26 20 1 10 *"],
+      "portfolio-cost-watchdog":["15 19 1 10 *","45 19 1 10 *","15 20 1 10 *"],
+      "portfolio-notification-cycle":["32 19 1 10 *","2 20 1 10 *","32 20 1 10 *"],
+      "command-center-pages":["38 19 1 10 *","8 20 1 10 *","38 20 1 10 *"],
     }
     req(set(step23_bounded_crons)=={
       "portfolio-state-reducer","runtime-hourly-sync","portfolio-autonomous-scheduler",
