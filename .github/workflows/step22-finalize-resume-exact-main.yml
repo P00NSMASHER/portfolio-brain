@@ -1,0 +1,145 @@
+name: step22-finalize-resume-exact-main
+
+on:
+  push:
+    branches: ["acceptance/step22-resume-exact-main-20261001"]
+    paths:
+      - ".github/workflows/step22-finalize-resume-exact-main.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  checks: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: portfolio-step22-finalize-resume-exact-main-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Wait for exact-head Foundation and hosted verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, time, urllib.request
+          from acceptance.step22_live_collect import select_trusted_check
+
+          repo=os.environ["GITHUB_REPOSITORY"]
+          token=os.environ["GITHUB_TOKEN"]
+          head=os.environ["GITHUB_SHA"]
+          deadline=time.monotonic()+1200
+          def get(path):
+              req=urllib.request.Request(
+                  "https://api.github.com/repos/"+repo+path,
+                  headers={
+                      "Authorization":"Bearer "+token,
+                      "Accept":"application/vnd.github+json",
+                      "X-GitHub-Api-Version":"2022-11-28",
+                      "User-Agent":"portfolio-step22-resume-exact/1.0",
+                  },
+              )
+              with urllib.request.urlopen(req,timeout=30) as r:
+                  return json.load(r)
+          while time.monotonic()<deadline:
+              checks=get("/commits/"+head+"/check-runs?per_page=100").get("check_runs",[])
+              try:
+                  foundation=select_trusted_check(checks,name="validate",app_id=15368,head_sha=head)
+                  hosted=select_trusted_check(checks,name="portfolio-phase1-gate",app_id=5121826,head_sha=head)
+              except RuntimeError:
+                  time.sleep(10)
+                  continue
+              print(json.dumps({"foundation":foundation,"hosted":hosted},sort_keys=True))
+              break
+          else:
+              raise SystemExit("STEP22_RESUME_TRUSTED_HEAD_CHECKS_TIMEOUT")
+          PY
+
+      - name: Require exact protected main and bind resume inputs
+        id: cfg
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, urllib.request
+          doc=json.load(open("acceptance/STEP22_RESUME_EXACT.json",encoding="utf-8"))
+          req=urllib.request.Request(
+              "https://api.github.com/repos/"+os.environ["GITHUB_REPOSITORY"]+"/branches/main",
+              headers={
+                  "Authorization":"Bearer "+os.environ["GITHUB_TOKEN"],
+                  "Accept":"application/vnd.github+json",
+                  "X-GitHub-Api-Version":"2022-11-28",
+                  "User-Agent":"portfolio-step22-resume-exact/1.0",
+              },
+          )
+          with urllib.request.urlopen(req,timeout=30) as r:
+              current=json.load(r)["commit"]["sha"]
+          expected=doc["expected_protected_main_sha"]
+          if current!=expected:
+              raise SystemExit("STEP22_RESUME_MAIN_MOVED: expected "+expected+" observed "+current)
+          with open(os.environ["GITHUB_OUTPUT"],"a",encoding="utf-8") as out:
+              for key in ("fingerprint","fault_receipt_hash","fault_detected_at","fault_base_sha","dispatch_run_id","dispatched_at"):
+                  out.write(key+"="+str(doc[key])+"\n")
+          print("protected main bound:", current)
+          PY
+
+      - name: Resume final Step 22 evidence collection
+        run: >-
+          python -m acceptance.step22_live_collect
+          --fingerprint "${{ steps.cfg.outputs.fingerprint }}"
+          --fault-receipt-hash "${{ steps.cfg.outputs.fault_receipt_hash }}"
+          --fault-detected-at "${{ steps.cfg.outputs.fault_detected_at }}"
+          --fault-base-sha "${{ steps.cfg.outputs.fault_base_sha }}"
+          --dispatch-run-id "${{ steps.cfg.outputs.dispatch_run_id }}"
+          --dispatched-at "${{ steps.cfg.outputs.dispatched_at }}"
+          --timeout-seconds 1800
+          --output-meta acceptance/out/step22_resumed_meta.json
+          --output-receipt acceptance/out/step22_resumed_receipt.json
+
+      - name: Validate unchanged final Step 22 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from acceptance.final_acceptance import validate_step22
+          cfg=json.load(open("acceptance/STEP22_RESUME_EXACT.json",encoding="utf-8"))
+          receipt=json.load(open("acceptance/out/step22_resumed_receipt.json",encoding="utf-8"))
+          validate_step22(receipt)
+          if receipt["exact_main_sha"] != cfg["expected_protected_main_sha"]:
+              raise SystemExit("STEP22_RESUME_EXACT_MAIN_MISMATCH")
+          if receipt["repair_pr_number"] != cfg["repair_pr_number"]:
+              raise SystemExit("STEP22_RESUME_REPAIR_PR_MISMATCH")
+          if receipt["repair_head_sha"] != cfg["repair_candidate_head_sha"]:
+              raise SystemExit("STEP22_RESUME_REPAIR_HEAD_MISMATCH")
+          if receipt["repair_merge_sha"] != cfg["repair_merge_sha"]:
+              raise SystemExit("STEP22_RESUME_REPAIR_MERGE_MISMATCH")
+          print(json.dumps({"status":receipt["status"],"receipt_hash":receipt["receipt_hash"]},sort_keys=True))
+          PY
+
+      - name: Upload resumed Step 22 acceptance evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-step22-resumed-exact-${{ github.run_id }}
+          path: |
+            acceptance/STEP22_RESUME_EXACT.json
+            acceptance/out/step22_resumed_meta.json
+            acceptance/out/step22_resumed_receipt.json
+          if-no-files-found: error
+          retention-days: 30
