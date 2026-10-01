@@ -216,10 +216,10 @@ def validate_operating_mode():
     # approved steady-state cadence and are intentionally limited to the four
     # slow-cadence required acceptance workflows on 2026-10-01 UTC.
     step23_bounded_crons={
-      "portfolio-state-reducer":["5 17 1 10 *","25 17 1 10 *","45 17 1 10 *"],
-      "hunter-autonomous-cycle":["8 17 1 10 *","28 17 1 10 *","48 17 1 10 *"],
-      "agent-heartbeat-sweep":["11 17 1 10 *","31 17 1 10 *","51 17 1 10 *"],
-      "portfolio-notification-cycle":["14 17 1 10 *","34 17 1 10 *","54 17 1 10 *"],
+      "portfolio-state-reducer":["5 19 1 10 *","5 20 1 10 *","5 21 1 10 *"],
+      "hunter-autonomous-cycle":["8 19 1 10 *","8 20 1 10 *","8 21 1 10 *"],
+      "agent-heartbeat-sweep":["11 19 1 10 *","11 20 1 10 *","11 21 1 10 *"],
+      "portfolio-notification-cycle":["14 19 1 10 *","14 20 1 10 *","14 21 1 10 *"],
     }
     req(set(step23_bounded_crons)=={
       "portfolio-state-reducer","hunter-autonomous-cycle",
