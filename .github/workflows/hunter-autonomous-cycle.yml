@@ -5,9 +5,9 @@ on:
     - cron: "47 */6 * * *"
     # Bounded Step-23 final-acceptance soak windows for 2026-10-01 UTC.
     # These are real schedule events; they do not replace or weaken the normal cadence.
-    - cron: "20 19 1 10 *"
-    - cron: "50 19 1 10 *"
-    - cron: "20 20 1 10 *"
+    - cron: "52 20 1 10 *"
+    - cron: "7 21 1 10 *"
+    - cron: "22 21 1 10 *"
   push:
     branches: ["main"]
     paths:
