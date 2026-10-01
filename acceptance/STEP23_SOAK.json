@@ -1,1 +1,24 @@
-{}
+{
+  "schema_version": "1.0.0",
+  "purpose": "Collect exact-main Step 23 scheduled soak evidence after future fallback schedule merge; never mix prior-main evidence.",
+  "exact_main_sha": "edcdfa1c1065cea499a2f25277497240a4913cd9",
+  "soak_start": "2026-10-01T18:02:29Z",
+  "required_successes_per_workflow": 3,
+  "required_workflows": [
+    "portfolio-state-reducer",
+    "runtime-hourly-sync",
+    "portfolio-autonomous-scheduler",
+    "hunter-autonomous-cycle",
+    "agent-heartbeat-sweep",
+    "portfolio-cost-watchdog",
+    "portfolio-notification-cycle",
+    "command-center-pages"
+  ],
+  "required_handler_types": [
+    "REPAIR",
+    "TEST",
+    "VERIFICATION"
+  ],
+  "poll_seconds": 45,
+  "max_resets": 5
+}
