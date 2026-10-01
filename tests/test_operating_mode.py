@@ -91,19 +91,22 @@ class OperatingModeTests(unittest.TestCase):
         actual=scheduled_workflow_inventory(ROOT/".github/workflows")
         expected={name:[entry["cron"]] for name,entry in policy["approved_recurring_workflows"].items()}
         bounded_step23={
-          "portfolio-state-reducer":["5 17 1 10 *","25 17 1 10 *","45 17 1 10 *"],
-          "hunter-autonomous-cycle":["8 17 1 10 *","28 17 1 10 *","48 17 1 10 *"],
-          "agent-heartbeat-sweep":["11 17 1 10 *","31 17 1 10 *","51 17 1 10 *"],
-          "portfolio-notification-cycle":["14 17 1 10 *","34 17 1 10 *","54 17 1 10 *"],
-          "portfolio-autonomous-scheduler":["0 17 1 10 *"],
+          "portfolio-state-reducer":["30 17 1 10 *","50 17 1 10 *","10 18 1 10 *"],
+          "runtime-hourly-sync":["32 17 1 10 *","52 17 1 10 *","12 18 1 10 *"],
+          "portfolio-autonomous-scheduler":["34 17 1 10 *","54 17 1 10 *","14 18 1 10 *"],
+          "hunter-autonomous-cycle":["36 17 1 10 *","56 17 1 10 *","16 18 1 10 *"],
+          "agent-heartbeat-sweep":["38 17 1 10 *","58 17 1 10 *","18 18 1 10 *"],
+          "portfolio-cost-watchdog":["40 17 1 10 *","0 18 1 10 *","20 18 1 10 *"],
+          "portfolio-notification-cycle":["42 17 1 10 *","2 18 1 10 *","22 18 1 10 *"],
+          "command-center-pages":["44 17 1 10 *","4 18 1 10 *","24 18 1 10 *"],
         }
         for name,crons in bounded_step23.items():
             expected[name].extend(crons)
         self.assertEqual(actual,expected)
         self.assertEqual(set(bounded_step23),{
-          "portfolio-state-reducer","hunter-autonomous-cycle",
-          "agent-heartbeat-sweep","portfolio-notification-cycle",
-          "portfolio-autonomous-scheduler",
+          "portfolio-state-reducer","runtime-hourly-sync","portfolio-autonomous-scheduler",
+          "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
+          "portfolio-notification-cycle","command-center-pages",
         })
         self.assertTrue(all(cron.split()[2:4]==["1","10"] for rows in bounded_step23.values() for cron in rows))
 
