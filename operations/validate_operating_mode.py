@@ -212,11 +212,27 @@ def validate_operating_mode():
     req(expected["portfolio-state-reducer"].split()[0] != expected["portfolio-state-checkpoint-candidate"].split()[0],
         "checkpoint candidate must not collide with daily reducer refresh")
     req(set(p["approved_recurring_workflows"])==set(expected),"approved recurring workflow set changed")
+    # Exact, date-bounded Step-23 soak windows. These do not replace the
+    # approved steady-state cadence and are intentionally limited to the four
+    # slow-cadence required acceptance workflows on 2026-10-01 UTC.
+    step23_bounded_crons={
+      "portfolio-state-reducer":["5 17 1 10 *","25 17 1 10 *","45 17 1 10 *"],
+      "hunter-autonomous-cycle":["8 17 1 10 *","28 17 1 10 *","48 17 1 10 *"],
+      "agent-heartbeat-sweep":["11 17 1 10 *","31 17 1 10 *","51 17 1 10 *"],
+      "portfolio-notification-cycle":["14 17 1 10 *","34 17 1 10 *","54 17 1 10 *"],
+    }
+    req(set(step23_bounded_crons)=={
+      "portfolio-state-reducer","hunter-autonomous-cycle",
+      "agent-heartbeat-sweep","portfolio-notification-cycle",
+    },"Step 23 bounded schedule scope changed")
+    req(all(cron.split()[2:4]==["1","10"] for rows in step23_bounded_crons.values() for cron in rows),
+        "Step 23 bounded schedules are not date-scoped to 2026-10-01 UTC")
     workflow_dir=ROOT/".github/workflows"
     actual=scheduled_workflow_inventory(workflow_dir)
     req(set(actual)==set(expected),"scheduled workflow inventory differs from approved operating policy")
     for name,cron in expected.items():
-        req(actual[name]==[cron],f"{name} cron mismatch")
+        approved=[cron,*step23_bounded_crons.get(name,[])]
+        req(actual[name]==approved,f"{name} cron mismatch")
     workload=load("workload_control/WORKLOAD_POLICY.json")
     req(workload["mode"]=="GITHUB_NATIVE_WORKLOAD_CONTROL","workload control mode changed")
     workload_workflows={
