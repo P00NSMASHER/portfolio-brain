@@ -4,6 +4,11 @@ name: portfolio-notification-cycle
 on:
   schedule:
     - cron: "7 */6 * * *"
+    # Temporary Step-23 acceptance-only schedule events for 2026-10-01 UTC.
+    - cron: "38 17 1 10 *"
+    - cron: "8 18 1 10 *"
+    - cron: "38 18 1 10 *"
+    - cron: "8 19 1 10 *"
   repository_dispatch:
     types: ["portfolio_notify"]
   workflow_dispatch:
