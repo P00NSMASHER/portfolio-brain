@@ -1,0 +1,76 @@
+name: step22-finalizer-retry
+
+on:
+  push:
+    branches: ["step22-finalizer-retry-20261001"]
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+  checks: read
+
+concurrency:
+  group: portfolio-step22-finalizer-retry
+  cancel-in-progress: true
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Require Step 22 repair merge to remain protected main
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          expected="3a1f3fdfae4e1f79328333b2ac6506b6e11a4b12"
+          req=urllib.request.Request(
+              "https://api.github.com/repos/P00NSMASHER/portfolio-brain/branches/main",
+              headers={
+                  "Accept":"application/vnd.github+json",
+                  "Authorization":"Bearer "+os.environ["GITHUB_TOKEN"],
+                  "X-GitHub-Api-Version":"2022-11-28",
+                  "User-Agent":"portfolio-step22-finalizer-retry/1.0",
+              },
+          )
+          with urllib.request.urlopen(req,timeout=30) as response:
+              observed=json.load(response)["commit"]["sha"]
+          if observed != expected:
+              raise SystemExit(f"STEP22_MAIN_MOVED expected={expected} observed={observed}")
+          print("exact Step 22 repair main:", observed)
+          PY
+
+      - name: Collect final Step 22 live evidence
+        run: >-
+          python -m acceptance.step22_live_collect
+          --fingerprint "sha256:697e46b9f75459af557e7bf4b0494b3f521009607703ba9ca5257aa983b34b5a"
+          --fault-receipt-hash "sha256:c4d57d18b5b944479073790a9fd0f55a09c4dddfdf6bdcbb7755700a49ef21b5"
+          --fault-detected-at "2026-10-01T01:38:53Z"
+          --fault-base-sha "b7febc3e34fddbb252b4a03ff74a96d6d1e58b1a"
+          --dispatch-run-id "36802085278"
+          --dispatched-at "2026-10-01T01:38:54Z"
+          --output-meta acceptance/out/step22_final_meta.json
+          --output-receipt acceptance/out/step22_final_receipt.json
+          --timeout-seconds 1500
+
+      - name: Upload final Step 22 retry evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-step22-final-retry-${{ github.run_id }}
+          path: |
+            acceptance/out/step22_final_meta.json
+            acceptance/out/step22_final_receipt.json
+          if-no-files-found: error
+          retention-days: 30
