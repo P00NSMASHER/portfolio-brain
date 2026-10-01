@@ -173,7 +173,8 @@ def build_repair_issues(snapshot: dict[str, Any]) -> list[dict[str, str]]:
         add("REVIEW", "Work awaits a human gate", f"{snapshot['portfolio']['blocked_action_count']} blocked items.",
             "dashboard/executive_dashboard.py", "Summarize the exact approval or authority boundary for each item; do not bypass it.")
     commercial=snapshot["commercial_validation"]
-    if commercial["evidence_status"]=="STALE_OR_UNAVAILABLE":
+    commercial_retired=snapshot.get("revenue_focus",{}).get("policy_status")=="RETIRED"
+    if not commercial_retired and commercial["evidence_status"]=="STALE_OR_UNAVAILABLE":
         add(
             "REVIEW",
             "Commercial evidence observation is stale or unavailable",
@@ -189,7 +190,7 @@ def build_repair_issues(snapshot: dict[str, Any]) -> list[dict[str, str]]:
                 "without VERIFIED evidence and independent verification."
             ),
         )
-    elif commercial["evidence_status"]=="CURRENT_SCOPE_OBSERVED":
+    elif not commercial_retired and commercial["evidence_status"]=="CURRENT_SCOPE_OBSERVED":
         add(
             "REVIEW",
             "Commercial evidence is current but scope-limited",
@@ -249,7 +250,8 @@ def build_recommended_upgrades(snapshot: dict[str, Any]) -> list[dict[str, str]]
         )
 
     commercial=snapshot["commercial_validation"]
-    if commercial["live_external_evidence_feed"] is False:
+    commercial_retired=snapshot.get("revenue_focus",{}).get("policy_status")=="RETIRED"
+    if not commercial_retired and commercial["live_external_evidence_feed"] is False:
         add(
             "HIGH VALUE",
             "Automate the sanitized commercial-evidence refresh",
@@ -269,7 +271,7 @@ def build_recommended_upgrades(snapshot: dict[str, Any]) -> list[dict[str, str]]
             ),
         )
 
-    if commercial["current_external_payment_state"]=="UNKNOWN":
+    if not commercial_retired and commercial["current_external_payment_state"]=="UNKNOWN":
         add(
             "HIGH VALUE",
             "Add a sanitized payment-outcome observation",
@@ -285,7 +287,7 @@ def build_recommended_upgrades(snapshot: dict[str, Any]) -> list[dict[str, str]]
             ),
         )
 
-    if snapshot["telemetry"]["verified_external_outcomes"]==0:
+    if not commercial_retired and snapshot["telemetry"]["verified_external_outcomes"]==0:
         add(
             "HIGH VALUE",
             "Produce the first independently verified external outcome",
@@ -688,6 +690,9 @@ def build_command_center_snapshot() -> dict[str, Any]:
         },
         "revenue_focus": {
             "objective_id": revenue_objective["objective_id"],
+            "objective_status": revenue_objective["status"],
+            "policy_status": revenue_policy["status"],
+            "factory_status": micro_product_factory["status"],
             "objective_title": revenue_objective["title"],
             "objective_statement": revenue_objective["statement"],
             "governing_principle": revenue_policy["governing_principle"],
@@ -704,7 +709,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
             "price_min_usd": micro_product_factory["build_caps"]["initial_price_min_usd"],
             "price_max_usd": micro_product_factory["build_caps"]["initial_price_max_usd"],
             "next_sku": sorted(micro_product_factory["skus"], key=lambda row: row["rank"])[0],
-            "truth_state": "EARNING" if micro_product_factory["verified_sales_count"] > 0 else "UNPROVEN",
+            "truth_state": "RETIRED" if revenue_policy["status"]=="RETIRED" or micro_product_factory["status"]=="RETIRED" else ("EARNING" if micro_product_factory["verified_sales_count"] > 0 else "UNPROVEN"),
         },
         "micro_product_factory": micro_product_factory,
         "commercial_validation": {
@@ -1115,11 +1120,13 @@ def render_html(snapshot: dict[str, Any]) -> str:
         upgrade_cards = '<p class="repair-empty">No upgrade recommendations are currently generated from this snapshot.</p>'
 
     ranked_skus = sorted(micro_factory["skus"], key=lambda row: row["rank"])
+    commercial_retired = revenue_focus["truth_state"] == "RETIRED"
     def product_card(sku: dict[str, Any]) -> str:
+        action = '<span class="action-link">Retired · historical artifact only</span>' if commercial_retired else f'<a class="action-link primary-action" href="{_e(_chatgpt_action_link(sku["build_prompt"]))}" target="_blank" rel="noopener noreferrer">Build {_e(sku["sku_id"])}</a>'
         return f'''<article class="product-card">
-          <div class="product-card-top"><span class="product-rank">#{sku["rank"]:02d}</span><div><h3>{_e(sku["name"])}</h3><p>{_e(sku["buyer_problem"])}</p></div>{_badge(sku["status"], "good" if sku["status"]=="READY" else "neutral")}</div>
-          <div class="product-stats"><span><small>Format</small><strong>{_e(sku["format"])}</strong></span><span><small>Price</small><strong>${sku["price_usd"]:.2f}</strong></span></div>
-          <a class="action-link primary-action" href="{_e(_chatgpt_action_link(sku['build_prompt']))}" target="_blank" rel="noopener noreferrer">Build {_e(sku["sku_id"])}</a>
+          <div class="product-card-top"><span class="product-rank">#{sku["rank"]:02d}</span><div><h3>{_e(sku["name"])}</h3><p>{_e(sku["buyer_problem"])}</p></div>{_badge("RETIRED" if commercial_retired else sku["status"], "neutral" if commercial_retired else ("good" if sku["status"]=="READY" else "neutral"))}</div>
+          <div class="product-stats"><span><small>Format</small><strong>{_e(sku["format"])}</strong></span><span><small>Historical price</small><strong>${sku["price_usd"]:.2f}</strong></span></div>
+          {action}
           <details class="product-meta"><summary>Details</summary><p><strong>Source:</strong> {_e(sku["reuse_source"])}</p><p><strong>Boundary:</strong> {_e(sku["reuse_boundary"])}</p></details>
         </article>'''
     product_primary_cards = "".join(product_card(sku) for sku in ranked_skus[:3])
@@ -2345,7 +2352,7 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
 }}
 </style>
 </head>
-<body data-design="revenue-first-v5" data-mobile-optimized="true">
+<body data-design="engineering-first-v6" data-mobile-optimized="true">
 <div class="shell">
 <aside>
   <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Simple operator mode</small></div></div>
@@ -2360,7 +2367,7 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
     <div class="hero-copy">
       <div class="eyebrow"><span class="signal-dot"></span>Portfolio Intelligence System</div>
       <h1>Portfolio Brain Command Center</h1>
-      <p class="hero-lede">Six answers only: money, experiment, milestone, blocker, owner action, and verified market signal.</p>
+      <p class="hero-lede">{'Commercial speculation is retired. The Brain now prioritizes verified engineering autonomy, reliability, security, and maintainability.' if commercial_retired else 'Six answers only: money, experiment, milestone, blocker, owner action, and verified market signal.'}</p>
       <div class="hero-badges">{_badge(system["functional_status"], _status_tone(system["functional_status"]))} {_badge(revenue_focus["truth_state"], "good" if revenue_focus["truth_state"]=="EARNING" else "warn")} {_badge("READ ONLY", "neutral")}</div>
     </div>
     <div class="actions">
@@ -2395,31 +2402,31 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
 
   <section class="operator-focus" id="revenue-focus" aria-labelledby="revenue-title">
     <div class="truth-strip {'truth-good' if revenue_focus['truth_state']=='EARNING' else 'truth-warn'}">
-      <strong>{'VERIFIED CASH EXISTS' if revenue_focus['truth_state']=='EARNING' else 'REVENUE NOT PROVEN'}</strong>
-      <span>{'Verified micro-product sales are recorded.' if revenue_focus['truth_state']=='EARNING' else 'No verified micro-product sale exists yet. Infrastructure health does not count as commercial success.'}</span>
+      <strong>{'COMMERCIAL SPECULATION RETIRED' if commercial_retired else ('VERIFIED CASH EXISTS' if revenue_focus['truth_state']=='EARNING' else 'REVENUE NOT PROVEN')}</strong>
+      <span>{'Expected future revenue from prior speculative businesses is treated as zero; no new commercial work is allocated.' if commercial_retired else ('Verified micro-product sales are recorded.' if revenue_focus['truth_state']=='EARNING' else 'No verified micro-product sale exists yet. Infrastructure health does not count as commercial success.')}</span>
     </div>
     <div class="focus-grid">
       <article class="focus-card focus-money">
         <div class="focus-label">NORTH STAR</div>
-        <h2 id="revenue-title">Verified cash, not activity.</h2>
+        <h2 id="revenue-title">{'Verified engineering improvement, not speculative revenue.' if commercial_retired else 'Verified cash, not activity.'}</h2>
         <div class="money-number">${revenue_focus["micro_product_verified_revenue_usd"]:.2f}</div>
         <p>Verified micro-product revenue · {revenue_focus["micro_product_verified_sales_count"]} sale(s) · {revenue_focus["micro_product_published_count"]} published SKU(s).</p>
         <div class="focus-mini"><span>Payment evidence</span>{_badge(revenue_focus["cash_evidence_state"], "warn" if revenue_focus["cash_evidence_state"]=="UNKNOWN" else "good")}</div>
         <div class="focus-mini"><span>Paid model/API spend today</span><strong>${revenue_focus["paid_model_spend_today_usd"]:.2f}</strong></div>
       </article>
       <article class="focus-card">
-        <div class="focus-label">CURRENT BET</div>
+        <div class="focus-label">{'RETIRED EXPERIMENT' if commercial_retired else 'CURRENT BET'}</div>
         <h2>{_e(revenue_focus["strategy_name"])}</h2>
         <p>{_e(revenue_focus["governing_principle"])}</p>
         <div class="guardrail-row"><span>≤ {revenue_focus["max_hours_per_sku"]}h / SKU</span><span>≤ ${revenue_focus["max_paid_ai_spend_usd_per_sku"]} AI spend</span><span>${revenue_focus["price_min_usd"]:.2f}–${revenue_focus["price_max_usd"]:.2f}</span></div>
         <p class="focus-note">Market: <strong>{_e(revenue_focus["market"])}</strong>. Large speculative startups remain frozen.</p>
       </article>
       <article class="focus-card focus-next">
-        <div class="focus-label">DO NEXT</div>
+        <div class="focus-label">{'HISTORICAL ARTIFACT' if commercial_retired else 'DO NEXT'}</div>
         <h2>{_e(next_sku["sku_id"])} · {_e(next_sku["name"])}</h2>
         <p>{_e(next_sku["buyer_problem"])}</p>
         <div class="focus-next-price"><span>Price test</span><strong>${next_sku["price_usd"]:.2f}</strong></div>
-        <a class="action-link primary-action large-action" href="{_e(_chatgpt_action_link(next_sku['build_prompt']))}" target="_blank" rel="noopener noreferrer">Build {_e(next_sku["sku_id"])}</a>
+        {('<span class="action-link large-action">Retired · no build or publication work</span>' if commercial_retired else f'<a class="action-link primary-action large-action" href="{_e(_chatgpt_action_link(next_sku["build_prompt"]))}" target="_blank" rel="noopener noreferrer">Build {_e(next_sku["sku_id"])}</a>')}
       </article>
     </div>
   </section>
@@ -2434,7 +2441,7 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
   </section>
 
   <section class="card product-factory" id="micro-products" aria-labelledby="products-title">
-    <div class="section-head product-head"><div><div class="focus-label">MICRO-PRODUCT FACTORY · BOUNDED BETS</div><h2 id="products-title">Build small. Publish. Measure. Kill losers.</h2><p>{_e(revenue_focus["objective_statement"])}</p></div>{_badge(str(len(ranked_skus)) + " tracked SKUs", "neutral")}</div>
+    <div class="section-head product-head"><div><div class="focus-label">MICRO-PRODUCT FACTORY · HISTORICAL ONLY</div><h2 id="products-title">Build small. Publish. Measure. Kill losers.</h2><p>{_e(revenue_focus["objective_statement"])}</p></div>{_badge(str(len(ranked_skus)) + " tracked SKUs", "neutral")}</div>
     <div class="factory-scoreboard">
       <div><span>Published</span><strong>{micro_factory["published_count"]}</strong></div>
       <div><span>Verified sales</span><strong>{micro_factory["verified_sales_count"]}</strong></div>
