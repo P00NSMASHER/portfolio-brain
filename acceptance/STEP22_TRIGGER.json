@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "purpose": "Protected-main trigger surface for the Step 22 controlled self-repair proof.",
-  "nonce": "TRIGGER-20260930-STEP22-0211111",
+  "nonce": "TRIGGER-20261001-STEP22-POST-CHECKPOINT-FINAL",
   "rule": "Only a protected PR whose merge commit contains [step22-fault] may intentionally change nonce to launch the bounded acceptance job.",
-  "reason": "Final controlled Step 22 self-repair proof after candidate/full-suite and acceptance concurrency repairs"
+  "reason": "Fresh exact-main Step 22 proof after canonical checkpoint/archive sequence 106 recovered journal capacity"
 }
