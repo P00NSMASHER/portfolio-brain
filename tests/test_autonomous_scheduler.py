@@ -1,7 +1,7 @@
 import copy,os,tempfile,unittest
 from pathlib import Path
 from unittest.mock import patch
-from scheduler.autonomous_scheduler import _candidate,build_context,generate_candidates,is_hunter_proposal_continuation,load_state,mark_work,schedule_cycle
+from scheduler.autonomous_scheduler import _candidate,_externalize_candidate,build_context,generate_candidates,is_hunter_proposal_continuation,load_state,mark_work,schedule_cycle
 
 def proposal_state():
     proposal={
