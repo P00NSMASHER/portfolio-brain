@@ -230,8 +230,8 @@ def validate_operating_mode():
       "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
       "portfolio-notification-cycle","command-center-pages",
     },"Step 23 bounded schedule scope changed")
-    req(all(cron.split()[2:4]==["1","10"] for rows in step23_bounded_crons.values() for cron in rows),
-        "Step 23 bounded schedules are not date-scoped to 2026-10-01 UTC")
+    req(all(cron.split()[2:4]==["2","10"] for rows in step23_bounded_crons.values() for cron in rows),
+        "Step 23 bounded schedules are not date-scoped to 2026-10-02 UTC")
     workflow_dir=ROOT/".github/workflows"
     actual=scheduled_workflow_inventory(workflow_dir)
     req(set(actual)==set(expected),"scheduled workflow inventory differs from approved operating policy")
