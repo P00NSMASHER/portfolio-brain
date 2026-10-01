@@ -2,13 +2,11 @@ name: agent-heartbeat-sweep
 
 on:
   schedule:
+    - cron: "29 */2 * * *"
     # Exact Step-23 soak window; real schedule events only, normal cadence remains unchanged.
     - cron: "38 17 1 10 *"
     - cron: "58 17 1 10 *"
     - cron: "18 18 1 10 *"
-    - cron: "29 */2 * * *"
-    # Bounded Step-23 final-acceptance soak windows for 2026-10-01 UTC.
-    # These are real schedule events; they do not replace or weaken the normal cadence.
   workflow_dispatch:
 
 permissions:
