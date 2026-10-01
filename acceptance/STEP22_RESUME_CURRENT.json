@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "purpose": "Resume final Step 22 evidence collection on the exact protected repair main without changing the final acceptance contract.",
+  "expected_protected_main_sha": "f378774457e6471ae21223f4f6ecfae9036513e7",
+  "fingerprint": "sha256:6aa925570e5cd696d7679cd122845b00df6e9805981c335b2ccc071680979090",
+  "fault_receipt_hash": "sha256:07f3c62bb0fb043dc5b1097ae41e9ea95e35108a3814a1e9eb9963a745b3487d",
+  "fault_detected_at": "2026-10-01T13:30:36Z",
+  "fault_base_sha": "7df5eae44e74d075d48d3557b4dbf1c38b588235",
+  "dispatch_run_id": 36869166027,
+  "dispatched_at": "2026-10-01T13:30:37Z",
+  "repair_workflow_run_id": 36869185875,
+  "repair_pr_number": 360,
+  "repair_candidate_head_sha": "0da664d5ee52f1cecdcabb91fcf0c90968d2718a",
+  "repair_merge_sha": "f378774457e6471ae21223f4f6ecfae9036513e7",
+  "failed_finalizer_job_id": 110392277805,
+  "failed_reason": "Multiple legitimate successful Foundation check reruns exist on the exact repair candidate head."
+}
