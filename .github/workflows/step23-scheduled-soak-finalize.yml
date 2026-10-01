@@ -21,11 +21,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 270
     env:
-      GITHUB_TOKEN: \${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: \${{ github.sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - uses: actions/setup-python@v5
@@ -107,7 +107,7 @@ jobs:
       - name: Upload tamper-evident Step 23 evidence
         uses: actions/upload-artifact@v4
         with:
-          name: portfolio-step23-final-\${{ github.run_id }}
+          name: portfolio-step23-final-${{ github.run_id }}
           path: |
             acceptance/STEP23_SOAK.json
             acceptance/out/step23_soak_meta.json
