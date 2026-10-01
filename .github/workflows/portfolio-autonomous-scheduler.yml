@@ -2,11 +2,11 @@ name: portfolio-autonomous-scheduler
 
 on:
   schedule:
+    - cron: "23 * * * *"
     # Exact Step-23 soak window; real schedule events only, normal cadence remains unchanged.
     - cron: "34 17 1 10 *"
     - cron: "54 17 1 10 *"
     - cron: "14 18 1 10 *"
-    - cron: "23 * * * *"
   repository_dispatch:
     types: ["portfolio_schedule"]
   workflow_dispatch:
