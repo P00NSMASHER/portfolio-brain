@@ -105,9 +105,12 @@ def main()->None:
 
     checks=gh.get(f"/commits/{head}/check-runs?per_page=100").get("check_runs",[])
     def trusted(name,app):
-        rows=[x for x in checks if x.get("name")==name and x.get("conclusion")=="success" and x.get("app",{}).get("id")==app]
-        if len(rows)!=1: raise RuntimeError("Step22 trusted check missing/ambiguous: "+name)
+        rows=[x for x in checks if x.get("name")==name and x.get("app",{}).get("id")==app and x.get("status")=="completed"]
+        if not rows: raise RuntimeError("Step22 trusted check missing: "+name)
+        rows.sort(key=lambda x:((x.get("completed_at") or ""),int(x.get("id") or 0)),reverse=True)
         x=rows[0]
+        if x.get("conclusion")!="success":
+            raise RuntimeError("Step22 latest trusted check did not succeed: "+name)
         return {"check_run_id":x["id"],"name":name,"app_id":app,"head_sha":head,"conclusion":"success","completed_at":x["completed_at"]}
     foundation=trusted("validate",15368);hosted=trusted("portfolio-phase1-gate",5121826)
     main_sha=gh.get("/branches/main")["commit"]["sha"]
