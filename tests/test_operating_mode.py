@@ -91,14 +91,14 @@ class OperatingModeTests(unittest.TestCase):
         actual=scheduled_workflow_inventory(ROOT/".github/workflows")
         expected={name:[entry["cron"]] for name,entry in policy["approved_recurring_workflows"].items()}
         bounded_step23={
-          "portfolio-state-reducer":["1 22 1 10 *","42 22 1 10 *","3 23 1 10 *","41 23 1 10 *"],
-          "runtime-hourly-sync":["2 22 1 10 *","43 22 1 10 *","4 23 1 10 *","42 23 1 10 *"],
-          "portfolio-autonomous-scheduler":["3 22 1 10 *","44 22 1 10 *","5 23 1 10 *","43 23 1 10 *"],
-          "hunter-autonomous-cycle":["7 22 1 10 *","48 22 1 10 *","9 23 1 10 *","47 23 1 10 *"],
-          "agent-heartbeat-sweep":["11 22 1 10 *","52 22 1 10 *","13 23 1 10 *","51 23 1 10 *"],
-          "portfolio-cost-watchdog":["0 22 1 10 *","41 22 1 10 *","2 23 1 10 *","40 23 1 10 *"],
-          "portfolio-notification-cycle":["15 22 1 10 *","56 22 1 10 *","17 23 1 10 *","55 23 1 10 *"],
-          "command-center-pages":["19 22 1 10 *","0 23 1 10 *","21 23 1 10 *","59 23 1 10 *"],
+          "portfolio-state-reducer":["31 0 2 10 *","16 1 2 10 *","1 2 2 10 *","46 2 2 10 *"],
+          "runtime-hourly-sync":["32 0 2 10 *","17 1 2 10 *","2 2 2 10 *","47 2 2 10 *"],
+          "portfolio-autonomous-scheduler":["34 0 2 10 *","19 1 2 10 *","4 2 2 10 *","49 2 2 10 *"],
+          "hunter-autonomous-cycle":["40 0 2 10 *","25 1 2 10 *","10 2 2 10 *","55 2 2 10 *"],
+          "agent-heartbeat-sweep":["46 0 2 10 *","31 1 2 10 *","16 2 2 10 *","1 3 2 10 *"],
+          "portfolio-cost-watchdog":["30 0 2 10 *","15 1 2 10 *","0 2 2 10 *","45 2 2 10 *"],
+          "portfolio-notification-cycle":["52 0 2 10 *","37 1 2 10 *","22 2 2 10 *","7 3 2 10 *"],
+          "command-center-pages":["58 0 2 10 *","43 1 2 10 *","28 2 2 10 *","13 3 2 10 *"],
         }
         for name,crons in bounded_step23.items():
             expected[name].extend(crons)
@@ -108,7 +108,7 @@ class OperatingModeTests(unittest.TestCase):
           "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
           "portfolio-notification-cycle","command-center-pages",
         })
-        self.assertTrue(all(cron.split()[2:4]==["1","10"] for rows in bounded_step23.values() for cron in rows))
+        self.assertTrue(all(cron.split()[2:4]==["2","10"] for rows in bounded_step23.values() for cron in rows))
 
     def test_learning_crons_avoid_known_hourly_writer_collisions(self):
         policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())["approved_recurring_workflows"]
