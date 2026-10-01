@@ -23,14 +23,20 @@ def build_receipt(meta:dict[str,Any])->dict[str,Any]:
     fault=meta["fault"];repair=meta["repair"];cycles=meta["cycles"]
     merge_sha=repair["merge_sha"];head=repair["candidate_head_sha"];pr=repair["pr_number"]
     foundation=repair["foundation_check"];hosted=repair["hosted_verifier_check"]
-    req(meta["current_main_sha"]==merge_sha,"Step22 finalization not on repair exact main")
+    exact_main=meta["current_main_sha"];maintenance=meta.get("maintenance_lineage") or []
+    if maintenance:
+        req(len(maintenance)==1,"Step22 permits one checkpoint/archive maintenance merge")
+        req(maintenance[0]["base_sha"]==merge_sha,"Step22 maintenance does not start at repair merge")
+        req(maintenance[0]["merge_sha"]==exact_main,"Step22 maintenance does not end at continuation main")
+    else:
+        req(exact_main==merge_sha,"Step22 finalization not on repair exact main")
     req(fault["base_sha"]==repair["base_sha"],"Step22 repair base lost fault identity")
     req(repair["new_regression_added"] is True,"Step22 new regression missing")
     req(repair["full_test_suite_passed"] is True,"Step22 full suite proof missing")
     req(repair["actor_login"]=="github-actions[bot]","Step22 repair PR actor mismatch")
     req(repair["branch"].startswith("factory/auto-repair-"),"Step22 repair branch not isolated")
     for name,row in cycles.items():
-        req(row["head_sha"]==merge_sha,f"Step22 {name} cycle is not on repair main")
+        req(row["head_sha"]==exact_main,f"Step22 {name} cycle is not on exact continuation main")
         req(row["conclusion"]=="success",f"Step22 {name} cycle failed")
     stages=[
       _stage("fault_detected",fault["detected_at"],run_ids=[fault["dispatch_run_id"]],artifact_hashes=[fault["receipt_hash"]],source_shas=[fault["base_sha"]]),
@@ -42,12 +48,12 @@ def build_receipt(meta:dict[str,Any])->dict[str,Any]:
       _stage("foundation_exact_head",foundation["completed_at"],check_run_ids=[foundation["check_run_id"]],source_shas=[head]),
       _stage("hosted_verifier_gate",hosted["completed_at"],check_run_ids=[hosted["check_run_id"]],source_shas=[head]),
       _stage("protected_merge",repair["merged_at"],pr_numbers=[pr],artifact_hashes=[repair["merge_receipt_hash"]],source_shas=[merge_sha]),
-      _stage("subsequent_runtime_cycle",cycles["runtime"]["completed_at"],run_ids=[cycles["runtime"]["run_id"]],artifact_hashes=cycles["runtime"].get("artifact_hashes",[]),source_shas=[merge_sha]),
-      _stage("subsequent_reducer_cycle",cycles["reducer"]["completed_at"],run_ids=[cycles["reducer"]["run_id"]],artifact_hashes=cycles["reducer"].get("artifact_hashes",[]),source_shas=[merge_sha]),
-      _stage("subsequent_scheduler_cycle",cycles["scheduler"]["completed_at"],run_ids=[cycles["scheduler"]["run_id"]],artifact_hashes=cycles["scheduler"].get("artifact_hashes",[]),source_shas=[merge_sha]),
+      _stage("subsequent_runtime_cycle",cycles["runtime"]["completed_at"],run_ids=[cycles["runtime"]["run_id"]],artifact_hashes=cycles["runtime"].get("artifact_hashes",[]),source_shas=[exact_main]),
+      _stage("subsequent_reducer_cycle",cycles["reducer"]["completed_at"],run_ids=[cycles["reducer"]["run_id"]],artifact_hashes=cycles["reducer"].get("artifact_hashes",[]),source_shas=[exact_main]),
+      _stage("subsequent_scheduler_cycle",cycles["scheduler"]["completed_at"],run_ids=[cycles["scheduler"]["run_id"]],artifact_hashes=cycles["scheduler"].get("artifact_hashes",[]),source_shas=[exact_main]),
     ]
     receipt=bind_receipt({
-      "schema_version":"1.0.0","step":22,"status":"PASS","exact_main_sha":merge_sha,
+      "schema_version":"1.0.0","step":22,"status":"PASS","exact_main_sha":exact_main,
       "fault_mechanism":"CONTROLLED_REPRODUCIBLE_FIXTURE","production_main_damaged":False,
       "fault_reversible":True,"new_regression_added":True,"full_test_suite_passed":True,
       "repair_branch_prefix":"factory/auto-repair-","hosted_verifier_app_id":5121826,
@@ -55,6 +61,7 @@ def build_receipt(meta:dict[str,Any])->dict[str,Any]:
       "repair_pr_actor_kind":"BOT","repair_pr_actor_login":"github-actions[bot]",
       "repair_pr_number":pr,"repair_head_sha":head,"repair_merge_sha":merge_sha,
       "protected_merge":True,"foundation_check":foundation,"hosted_verifier_check":hosted,
+      "maintenance_lineage":maintenance,
       "stages":stages,
     })
     validate_step22(receipt)
