@@ -21,6 +21,11 @@ on:
       - ".github/workflows/command-center-pages.yml"
   schedule:
     - cron: "37 * * * *"
+    # Temporary Step-23 acceptance-only schedule events for 2026-10-01 UTC.
+    - cron: "44 17 1 10 *"
+    - cron: "14 18 1 10 *"
+    - cron: "44 18 1 10 *"
+    - cron: "14 19 1 10 *"
   # Core producers already trigger the watchdog. Publish after its receipt
   # instead of publishing both before and after the same verification cycle.
   # All completions (including failure) remain visible; cron is the fallback.
