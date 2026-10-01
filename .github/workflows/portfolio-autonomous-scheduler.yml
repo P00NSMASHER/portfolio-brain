@@ -4,9 +4,9 @@ on:
   schedule:
     - cron: "23 * * * *"
     # Exact Step-23 soak window; real schedule events only, normal cadence remains unchanged.
-    - cron: "44 19 1 10 *"
-    - cron: "14 20 1 10 *"
-    - cron: "44 20 1 10 *"
+    - cron: "1 21 1 10 *"
+    - cron: "16 21 1 10 *"
+    - cron: "31 21 1 10 *"
   repository_dispatch:
     types: ["portfolio_schedule"]
   workflow_dispatch:
