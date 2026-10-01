@@ -208,6 +208,7 @@ jobs:
           set +e
           python -m compileall -q registry events adapters truth memory graph runtime hunting learning uncertainty experiments model_router agents allocator policy_replay attribution challenger software_factory repair transfer scheduler cost_governor workload_control commercial_evidence dashboard notifications hostile canary operations action_engine operator_console value_proof verification state_journal tests >> repair/out/test-initial.log 2>&1
           COMPILE=$?
+          find . -type d -name __pycache__ -prune -exec rm -rf {} +
           python -m operations.validate_operating_mode >> repair/out/test-initial.log 2>&1
           OPERATING=$?
           python -m unittest discover -s tests -p "test_*.py" -v >> repair/out/test-initial.log 2>&1
@@ -329,6 +330,7 @@ jobs:
           set -euo pipefail
           {
             python -m compileall -q registry events adapters truth memory graph runtime hunting learning uncertainty experiments model_router agents allocator policy_replay attribution challenger software_factory repair transfer scheduler cost_governor workload_control commercial_evidence dashboard notifications hostile canary operations action_engine operator_console value_proof verification state_journal tests
+            find . -type d -name __pycache__ -prune -exec rm -rf {} +
             python -m operations.validate_operating_mode
             python -m unittest discover -s tests -p "test_*.py" -v
           } 2>&1 | tee repair/out/test.log
