@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
   "purpose": "Protected-main trigger surface for the Step 22 controlled self-repair proof.",
-  "nonce": "ARMED_NOT_TRIGGERED",
+  "nonce": "TRIGGER-20260930-STEP22-1",
   "rule": "Only a protected PR whose merge commit contains [step22-fault] may intentionally change nonce to launch the bounded acceptance job."
 }
