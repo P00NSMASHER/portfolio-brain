@@ -101,8 +101,8 @@ def detect_gaps():
           "project_name":p["canonical_name"],
           "categories":categories,
           "evidence_refs":[f"registry:project:{p['project_id']}","graph:no-HAS_CAPABILITY-edge"],
-          "importance":5 if p["project_type"]=="PORTFOLIO" else 4,
-          "uncertainty":5,"downstream_reuse":5 if p["project_type"]=="PORTFOLIO" else 4,
+          "importance":5,
+          "uncertainty":5,"downstream_reuse":5,
           "external_validation_value":0 if commercial_disabled else (4 if p["project_type"] in {"BUSINESS","PRODUCT"} else 3),
         })
     gaps.sort(key=lambda g:(-g["importance"],-g["downstream_reuse"],g["gap_id"]))
