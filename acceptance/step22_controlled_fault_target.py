@@ -8,4 +8,4 @@ new regression-test file.
 
 
 def acceptance_value() -> str:
-    return "CANDIDATE"
+    return "BASELINE"
