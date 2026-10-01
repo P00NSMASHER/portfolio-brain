@@ -407,12 +407,21 @@ class GitHubReader:
                 row for row in self._run_artifacts(run["id"])
                 if row.get("name") == SNAPSHOT_ARTIFACT and not row.get("expired")
             ]
-            require(len(snapshots) <= 1, "Reducer published multiple canonical snapshots in one run")
-            if snapshots:
-                retain(snapshots[0])
-                snapshot_runs.append((run, snapshots[0]))
+            for row in snapshots:
+                artifact_id = row.get("id")
+                require(type(artifact_id) is int and artifact_id > 0, "Artifact listing identity missing")
+                created = row.get("created_at")
+                require(isinstance(created, str), "Artifact created_at missing")
+                at = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                require(at.tzinfo is not None, "Artifact created_at requires timezone")
+            snapshots.sort(key=lambda row: (row["created_at"], row["id"]), reverse=True)
+            for snapshot in snapshots:
+                retain(snapshot)
+                snapshot_runs.append((run, snapshot))
                 if len(snapshot_runs) == 2:
                     break
+            if len(snapshot_runs) == 2:
+                break
 
         # Producer run discovery stays anchored to the reviewed
         # journal/checkpoint boundary so an in-flight run that started before
