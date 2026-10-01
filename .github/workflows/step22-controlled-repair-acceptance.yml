@@ -19,6 +19,13 @@ concurrency:
 
 jobs:
   dispatch:
+    outputs:
+      request_id: ${{ steps.fault.outputs.request_id }}
+      fingerprint: ${{ steps.fault.outputs.fingerprint }}
+      fault_receipt_hash: ${{ steps.fault.outputs.receipt_hash }}
+      fault_detected_at: ${{ steps.fault.outputs.detected_at }}
+      fault_base_sha: ${{ steps.fault.outputs.base_sha }}
+      dispatched_at: ${{ steps.repair_dispatch.outputs.dispatched_at }}
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' ||
@@ -63,9 +70,12 @@ jobs:
           print("fingerprint="+doc["request"]["fingerprint"])
           print("request_b64="+doc["request_b64"])
           print("receipt_hash="+doc["fault_receipt_hash"])
+          print("detected_at="+doc["detected_at"])
+          print("base_sha="+doc["base_sha"])
           PY
 
       - name: Dispatch existing governed autonomous repair lane
+        id: repair_dispatch
         env:
           REQUEST_B64: ${{ steps.fault.outputs.request_b64 }}
         shell: bash
@@ -75,11 +85,52 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --ref main \
             -f request_b64="$REQUEST_B64"
+          echo "dispatched_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
       - name: Preserve controlled-fault dispatch receipt
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-step22-controlled-fault-${{ github.run_id }}
           path: acceptance/out/step22_controlled_fault.json
+          if-no-files-found: error
+          retention-days: 30
+
+  finalize:
+    needs: dispatch
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+      checks: read
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Follow bot repair through protected merge and healthy continuation
+        run: >-
+          python -m acceptance.step22_live_collect
+          --fingerprint "${{ needs.dispatch.outputs.fingerprint }}"
+          --fault-receipt-hash "${{ needs.dispatch.outputs.fault_receipt_hash }}"
+          --fault-detected-at "${{ needs.dispatch.outputs.fault_detected_at }}"
+          --fault-base-sha "${{ needs.dispatch.outputs.fault_base_sha }}"
+          --dispatch-run-id "${{ github.run_id }}"
+          --dispatched-at "${{ needs.dispatch.outputs.dispatched_at }}"
+          --output-meta acceptance/out/step22_final_meta.json
+          --output-receipt acceptance/out/step22_final_receipt.json
+      - name: Upload final Step 22 acceptance evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-step22-final-${{ github.run_id }}
+          path: |
+            acceptance/out/step22_final_meta.json
+            acceptance/out/step22_final_receipt.json
           if-no-files-found: error
           retention-days: 30
