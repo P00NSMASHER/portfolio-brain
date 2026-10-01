@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "purpose": "Collect exact-main Step 23 scheduled soak evidence after accelerated schedule merge; never mix prior-main evidence.",
+  "exact_main_sha": "95131923c9d9d032a0169f6c7e62f6de0c94eb81",
+  "soak_start": "2026-10-01T17:29:24Z",
+  "required_successes_per_workflow": 3,
+  "required_workflows": [
+    "portfolio-state-reducer",
+    "runtime-hourly-sync",
+    "portfolio-autonomous-scheduler",
+    "hunter-autonomous-cycle",
+    "agent-heartbeat-sweep",
+    "portfolio-cost-watchdog",
+    "portfolio-notification-cycle",
+    "command-center-pages"
+  ],
+  "required_handler_types": [
+    "REPAIR",
+    "TEST",
+    "VERIFICATION"
+  ],
+  "poll_seconds": 45,
+  "max_resets": 5
+}
