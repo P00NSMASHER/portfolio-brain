@@ -6,6 +6,10 @@ on:
     # cannot reliably interrupt them before completion. Hourly enforcement keeps
     # the independent kill-switch backstop while cutting control-plane starts 75%.
     - cron: "53 * * * *"
+    # Bounded Step-23 final-acceptance soak windows for 2026-10-01 UTC.
+    - cron: "16 17 1 10 *"
+    - cron: "36 17 1 10 *"
+    - cron: "56 17 1 10 *"
   # GitHub scheduled delivery can be delayed or skipped. Recheck liveness after
   # any core producer finishes so one surviving trigger can recover overdue peers.
   workflow_run:
