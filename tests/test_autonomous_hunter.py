@@ -34,6 +34,17 @@ class HunterTests(unittest.TestCase):
         self.assertGreaterEqual(len(gaps),1)
         self.assertTrue(all(g["need_type"]=="UNMAPPED_CAPABILITY_COVERAGE" for g in gaps))
 
+    def test_commercial_speculation_has_zero_hunter_weight(self):
+        policy=load_policy()
+        commercial=policy["commercial_speculation"]
+        self.assertFalse(commercial["enabled"])
+        self.assertEqual(commercial["expected_future_revenue_usd"],0)
+        self.assertEqual(commercial["priority_weight"],0)
+        self.assertFalse(commercial["new_business_ideas_allowed"])
+        self.assertFalse(commercial["marketplace_demand_hunting_allowed"])
+        self.assertFalse(commercial["outreach_idea_generation_allowed"])
+        self.assertTrue(all(g["external_validation_value"]==0 for g in detect_gaps()))
+
     def test_objective_selection_reserves_exploration_budget(self):
         objectives=select_objectives(load_seed_state())
         self.assertTrue(any(x["exploration"] for x in objectives))
@@ -337,9 +348,12 @@ class HunterTests(unittest.TestCase):
                 return {"revision":revision,"tree_sha":"f"*40,"paths":[token_path,test_path,"docs/provenance-lineage.md"],"truncated":False}
         _,receipt=run_cycle(load_seed_state(),BroadHighProvider(),at="2026-09-25T18:00:00Z")
         gate=load_policy()["candidate_evaluation"]["proposal_gate"]
-        self.assertEqual(len(receipt["experiment_proposals"]),gate["max_experiment_proposals_per_cycle"])
-        self.assertEqual(receipt["proposal_gate"]["selected_proposals"],gate["max_experiment_proposals_per_cycle"])
-        self.assertGreater(receipt["proposal_gate"]["deferred_cycle_cap"],0)
+        eligible=receipt["proposal_gate"]["eligible_findings"]
+        expected=min(eligible,gate["max_experiment_proposals_per_cycle"])
+        self.assertGreater(expected,0)
+        self.assertEqual(len(receipt["experiment_proposals"]),expected)
+        self.assertEqual(receipt["proposal_gate"]["selected_proposals"],expected)
+        self.assertEqual(receipt["proposal_gate"]["deferred_cycle_cap"],max(0,eligible-gate["max_experiment_proposals_per_cycle"]))
         self.assertTrue(all(p["candidate_rank_band"] in {"MEDIUM","HIGH"} for p in receipt["experiment_proposals"]))
 
     def test_ranking_band_accounting_covers_every_inspected_candidate(self):

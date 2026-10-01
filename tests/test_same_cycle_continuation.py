@@ -111,15 +111,17 @@ class SameCycleContinuationTests(unittest.TestCase):
             at=AT,
             context_overrides={"hunter_provider":ProposalProvider()},
         )
-        self.assertEqual(report["status"],"NO_ELIGIBLE_CONTINUATION")
-        self.assertEqual(report["selected_count"],0)
-        self.assertEqual(report["attempted_count"],0)
-        self.assertEqual(report["completed_count"],0)
-        self.assertEqual(selected,[])
-        self.assertEqual(receipts,[])
-        self.assertEqual(executed,[])
-        self.assertEqual(summary,primary_summary(state))
-        self.assertEqual(updated,state)
+        self.assertEqual(report["status"],"EXECUTED")
+        self.assertEqual(report["selected_count"],1)
+        self.assertEqual(report["attempted_count"],1)
+        self.assertEqual(report["completed_count"],1)
+        self.assertEqual(len(selected),1)
+        self.assertEqual(selected[0]["external_milestone"],"ENGINEERING_IMPROVEMENT")
+        self.assertEqual(selected[0]["value_lane"],"ENGINEERING_IMPROVEMENT")
+        self.assertEqual(len(receipts),1)
+        self.assertEqual(len(executed),1)
+        self.assertNotEqual(summary,primary_summary(state))
+        self.assertNotEqual(updated,state)
     def test_existing_primary_queued_work_prevents_same_cycle_retry(self):
         pstate=proposal_state()
         scheduled,receipt=schedule_cycle(

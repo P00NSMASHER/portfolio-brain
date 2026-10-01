@@ -46,18 +46,18 @@ def validate_scheduler():
     req(proposal_review_seed["reviews"]==[] and proposal_review_seed["applied_execution_ids"]==[],"Hunter proposal review seed invented review evidence")
     context=build_context();state,receipt=schedule_cycle(seed,context,at="2026-09-25T20:40:00Z")
     selected=receipt["selected_work"]
-    req(1<=len(selected)<=p["max_new_work_per_cycle"],"external-value scheduler selected no bounded work")
-    req(all(w["external_milestone"] in p["external_milestones"] for w in selected),"queued work missing external milestone")
+    req(p.get("commercial_speculation_enabled") is False,"commercial speculation scheduler lane re-enabled")
+    req(1<=len(selected)<=p["max_new_work_per_cycle"],"engineering-first scheduler selected no bounded work")
+    req(all(w["external_milestone"] in p["external_milestones"] for w in selected),"queued work missing routing milestone")
     req(all(w["value_lane"] in p["value_lane_precedence"] for w in selected),"queued work missing value lane")
     req(all(w["required_authority"]!="ACT" for w in [*selected,*receipt["blocked_work"]]),"scheduler created ACT work")
-    req(not any(w["work_type"] in {"HUNT","RESEARCH","INTEGRATION"} for w in selected),"supply/internal activity entered queue without explicit external milestone")
-    req(any(w["work_type"]=="EXPERIMENT" and w["assigned_agent_id"]=="AGT-COMMERCIAL-ANALYST" and w["external_milestone"]=="VALIDATE_DEMAND" for w in selected),"bounded demand validation not queued")
-    req(any(w["work_type"]=="TEST" and w["source_ref"] in {"SKU-002","SKU-003"} and w["external_milestone"]=="PUBLISH_PRODUCT" for w in selected),"publish-blocking runtime QA not queued")
+    req(all(w["external_milestone"] in {"ENGINEERING_RELIABILITY","ENGINEERING_IMPROVEMENT"} for w in selected),"commercial milestone entered active queue")
+    req(all(w["value_lane"] in {"ENGINEERING_BLOCKER","ENGINEERING_IMPROVEMENT"} for w in selected),"commercial value lane entered active queue")
+    req(not any(w["assigned_agent_id"]=="AGT-COMMERCIAL-ANALYST" for w in selected),"commercial analyst work entered retired commercial queue")
     owner=[w for w in receipt["blocked_work"] if w["source_ref"].startswith("OACT-")]
-    req(len(owner)==1 and owner[0]["external_milestone"]=="PUBLISH_PRODUCT" and owner[0]["value_lane"]=="EXTERNAL_VALUE_BLOCKER","owner publish checkpoint missing")
-    req(receipt["suppressed_no_external_milestone"],"busywork without external milestones was not suppressed")
+    req(owner==[],"retired owner publish checkpoint remained active")
     lane=[p["value_lane_precedence"][w["value_lane"]] for w in selected]
-    req(lane==sorted(lane),"value lane precedence did not dominate selection")
+    req(lane==sorted(lane),"engineering value lane precedence did not dominate selection")
     req(len(state["work_items"])==len(selected),"scheduler state did not persist queue")
     wf=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text().lower()
     for token in ["contents: read","actions: write","pull-requests: read","23 * * * *","portfolio_scheduler_disabled","actions/upload-artifact@v4","cancel-in-progress: false"]:

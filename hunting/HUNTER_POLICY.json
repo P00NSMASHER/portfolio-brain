@@ -3,7 +3,7 @@
   "hunter_id": "portfolio-autonomous-hunter-v1",
   "enabled": true,
   "authority_class": "OBSERVE",
-  "objective_function": "DISCOVER_SUPPLY_SEPARATELY_FROM_DEMAND_AND_ONLY_CONNECT_TO_EXTERNAL_VALUE_AFTER_MARKET_EVIDENCE",
+  "objective_function": "DISCOVER_VERIFIABLE_ENGINEERING_IMPROVEMENTS_FOR_ACTIVE_PROJECTS_WITH_ZERO_COMMERCIAL_SPECULATION_WEIGHT",
   "repository_count_reward": 0,
   "source_allowlist": [
     "PUBLIC_GITHUB"
@@ -180,5 +180,15 @@
     },
     "implementation_regression_requirement": "Add a new focused regression test proving the accepted local capability while preserving clean-room reimplementation and all existing governance boundaries.",
     "acceptance_milestone_binding": "CURRENT_VALUE_LOOP_CLOSEST_EXTERNAL_MILESTONE_AS_ROUTING_CONTEXT_NOT_VALUE_PROOF"
+  },
+  "commercial_speculation": {
+    "enabled": false,
+    "expected_future_revenue_usd": 0,
+    "new_business_ideas_allowed": false,
+    "marketplace_demand_hunting_allowed": false,
+    "outreach_idea_generation_allowed": false,
+    "commercial_build_authorization": false,
+    "priority_weight": 0,
+    "replacement_priority": "VERIFIED_ENGINEERING_IMPROVEMENT"
   }
 }

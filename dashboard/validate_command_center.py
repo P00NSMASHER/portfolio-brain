@@ -32,9 +32,13 @@ def validate_command_center() -> dict[str, object]:
         "current_blocker","action_required_from_owner","last_verified_customer_or_market_signal",
     },"primary operator view must contain exactly six business answers")
     require(primary["money_earned"].startswith("$"),"primary money answer invalid")
-    require(primary["closest_external_milestone"] in snapshot["value_loop"]["business_investment_evidence_classes"] or primary["closest_external_milestone"] in {
-        "PUBLISH_PRODUCT","GET_BUYER_RESPONSE","DELIVER_PAID_WORK","VERIFY_PAYMENT","TEST_PRICE","VALIDATE_DEMAND"
-    },"primary external milestone invalid")
+    if snapshot["revenue_focus"]["truth_state"]=="RETIRED":
+        require(primary["closest_external_milestone"] is None,"retired commercial loop exposed an active external milestone")
+        require(primary["active_external_experiment"] is None and primary["action_required_from_owner"] is None,"retired commercial loop exposed active experiment/owner action")
+    else:
+        require(primary["closest_external_milestone"] in snapshot["value_loop"]["business_investment_evidence_classes"] or primary["closest_external_milestone"] in {
+            "PUBLISH_PRODUCT","GET_BUYER_RESPONSE","DELIVER_PAID_WORK","VERIFY_PAYMENT","TEST_PRICE","VALIDATE_DEMAND"
+        },"primary external milestone invalid")
 
     require(snapshot["system"]["project_count"] == len(snapshot["projects"]), "project coverage mismatch")
     require(snapshot["system"]["project_count"] == 12, "registered project coverage drifted")
@@ -74,12 +78,12 @@ def validate_command_center() -> dict[str, object]:
     revenue=snapshot["revenue_focus"]
     factory=snapshot["micro_product_factory"]
     require(revenue["objective_id"]=="OBJ-001","revenue objective missing")
-    require(revenue["strategy_name"]=="Roblox micro-product factory","revenue strategy drifted")
+    require(revenue["strategy_name"]=="RETIRED — Roblox micro-product factory","retired commercial strategy drifted")
     require(revenue["market"]=="Roblox Creator Store","micro-product market drifted")
-    require(revenue["truth_state"] in {"UNPROVEN","EARNING"},"revenue truth state invalid")
+    require(revenue["truth_state"]=="RETIRED" and revenue["objective_status"]=="RETIRED" and revenue["policy_status"]=="RETIRED" and revenue["factory_status"]=="RETIRED","commercial retirement state invalid")
     require(factory["authority_class"]=="PLAN_ONLY","micro-product factory widened authority")
-    require(factory["build_caps"]["max_hours_per_sku"]<=4,"micro-product time cap widened")
-    require(factory["build_caps"]["max_paid_ai_spend_usd_per_sku"]<=10,"micro-product spend cap widened")
+    require(factory["status"]=="RETIRED" and factory["build_caps"]["max_hours_per_sku"]==0,"retired micro-product time budget active")
+    require(factory["build_caps"]["max_paid_ai_spend_usd_per_sku"]==0,"retired micro-product spend budget active")
     require(len(factory["skus"])>=5,"micro-product SKU set incomplete")
     require(factory["verified_sales_count"]>=0 and factory["verified_revenue_usd"]>=0,"micro-product outcome values invalid")
 
@@ -151,17 +155,17 @@ def validate_command_center() -> dict[str, object]:
     require("Portfolio Brain Command Center" in page, "command-center title missing")
     require("Live State Bridge" in page, "live-state bridge panel missing")
     require("Brain improvements worth considering" in page and "IMPROVE NEXT · EVIDENCE BACKED" in page, "recommended upgrades board missing")
-    require("Verified cash, not activity." in page and "REVENUE NOT PROVEN" in page or "VERIFIED CASH EXISTS" in page, "revenue-first operator focus missing")
-    require("Micro-Product Factory" in page or "MICRO-PRODUCT FACTORY" in page, "micro-product factory board missing")
+    require("Verified engineering improvement, not speculative revenue." in page and "COMMERCIAL SPECULATION RETIRED" in page, "engineering-first operator focus missing")
+    require("MICRO-PRODUCT FACTORY · HISTORICAL ONLY" in page, "historical micro-product evidence board missing")
     require(
         "Quiz &amp; Reward Engine" in page
         and "House Controls Pack" in page
         and "Redeem Code System" in page,
-        "current first-launch-batch micro-product SKUs missing",
+        "historical micro-product evidence missing",
     )
-    require(page.index("Verified cash, not activity.") < page.index("FIX FIRST · SYSTEM DIAGNOSTICS") < page.index("MICRO-PRODUCT FACTORY · BOUNDED BETS") < page.index("IMPROVE NEXT · EVIDENCE BACKED") < page.index('class="grid kpis"'), "revenue-first dashboard hierarchy drifted")
+    require(page.index("Verified engineering improvement, not speculative revenue.") < page.index("FIX FIRST · SYSTEM DIAGNOSTICS") < page.index("MICRO-PRODUCT FACTORY · HISTORICAL ONLY") < page.index("IMPROVE NEXT · EVIDENCE BACKED") < page.index('class="grid kpis"'), "engineering-first dashboard hierarchy drifted")
     require("Run upgrade" in page and "https://chatgpt.com/?prompt=" in page, "recommended upgrade action buttons missing")
-    require("OWNER ACTION REQUIRED: Publish SKU-001" in page, "owner publish checkpoint missing from primary operator view")
+    require("OWNER ACTION REQUIRED: Publish SKU-001" not in page and "Build SKU-001" not in page, "retired commercial work still exposes active owner/build action")
     require("What matters right now" in page and "Money earned" in page and "Active external experiment" in page, "six-answer primary surface missing")
     require("Closest external milestone" in page and "Current blocker" in page and "Action required from you" in page and "Last verified customer / market signal" in page, "six-answer labels incomplete")
     require('id="operator-primary"' in page and 'id="advanced-content" class="advanced-content" hidden' in page, "diagnostics are not hidden behind the primary view")
@@ -181,7 +185,7 @@ def validate_command_center() -> dict[str, object]:
     require("Daily runner-minute quota</td><td class=\"num\">None" in page, "retired runner-minute quota is not explicit")
     for retired_label in ("Accounted runner minutes today", "<td>Daily GitHub job starts</td>", "<td>Daily runner minutes</td>", "Governed runner minutes committed"):
         require(retired_label not in page, f"paid-cost UI still conflates GitHub workload: {retired_label}")
-    require('data-design="revenue-first-v5"' in page, "v5 visual-design marker missing")
+    require('data-design="engineering-first-v6"' in page, "engineering-first visual-design marker missing")
     require("font-family:-apple-system" in page, "native system typography stack missing")
     require("-webkit-backdrop-filter" in page and "border-radius:var(--radius-xl)" in page, "premium glass/card design contract missing")
     require("Durable Work Queue" in page, "durable queue panel missing")

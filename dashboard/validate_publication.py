@@ -60,10 +60,11 @@ def validate_publication() -> dict[str, object]:
     revenue=snapshot["revenue_focus"]
     factory=snapshot["micro_product_factory"]
     require(revenue["objective_id"]=="OBJ-001","public revenue objective missing")
-    require(revenue["strategy_name"]=="Roblox micro-product factory","public revenue strategy drifted")
+    require(revenue["strategy_name"]=="RETIRED — Roblox micro-product factory","public retired commercial strategy drifted")
     require(factory["authority_class"]=="PLAN_ONLY","public micro-product factory widened authority")
-    require(factory["build_caps"]["max_hours_per_sku"]<=4,"public micro-product time cap widened")
-    require(factory["build_caps"]["max_paid_ai_spend_usd_per_sku"]<=10,"public micro-product spend cap widened")
+    require(revenue["truth_state"]=="RETIRED" and revenue["objective_status"]=="RETIRED" and revenue["policy_status"]=="RETIRED" and revenue["factory_status"]=="RETIRED","public commercial retirement state invalid")
+    require(factory["status"]=="RETIRED" and factory["build_caps"]["max_hours_per_sku"]==0,"public retired micro-product time budget active")
+    require(factory["build_caps"]["max_paid_ai_spend_usd_per_sku"]==0,"public retired micro-product spend budget active")
 
     commercial=snapshot["commercial_validation"]
     require(commercial["evidence_status"] in {"CURRENT_SCOPE_OBSERVED","STALE_OR_UNAVAILABLE"},"public commercial evidence status invalid")
@@ -118,7 +119,8 @@ def validate_publication() -> dict[str, object]:
     require('if [[ "$GITHUB_EVENT_NAME" == "push" ]]' in workflow, "source-change publication override missing")
     require("Verify deployed source commit" in workflow and "source-commit.txt" in workflow, "end-to-end Pages deployment proof missing")
     require("Brain improvements worth considering" in html_text and "IMPROVE NEXT · EVIDENCE BACKED" in html_text, "public recommended upgrades board missing")
-    require("OWNER ACTION REQUIRED: Publish SKU-001" in html_text and "Show operations & diagnostics" in html_text, "public owner-action checkpoint or diagnostics disclosure missing")
+    require("OWNER ACTION REQUIRED: Publish SKU-001" not in html_text and "Build SKU-001" not in html_text, "public retired commercial action still active")
+    require("Show operations & diagnostics" in html_text, "public diagnostics disclosure missing")
     primary=snapshot["primary_operator_view"]
     require(set(primary)=={
         "money_earned","active_external_experiment","closest_external_milestone",
@@ -130,15 +132,15 @@ def validate_publication() -> dict[str, object]:
     require(html_text.index('id="operator-primary"') < html_text.index('id="advanced-content"') < html_text.index('id="revenue-focus"'), "public primary/diagnostic hierarchy drifted")
     require("Show operations & diagnostics" in html_text, "public diagnostic disclosure missing")
     require('class="mobile-dock"' in html_text, "public mobile quick-action dock missing")
-    require("Verified cash, not activity." in html_text, "public revenue-first operator focus missing")
+    require("Verified engineering improvement, not speculative revenue." in html_text and "COMMERCIAL SPECULATION RETIRED" in html_text, "public engineering-first operator focus missing")
     require(
-        "MICRO-PRODUCT FACTORY · BOUNDED BETS" in html_text
+        "MICRO-PRODUCT FACTORY · HISTORICAL ONLY" in html_text
         and "Quiz &amp; Reward Engine" in html_text
         and "House Controls Pack" in html_text
         and "Redeem Code System" in html_text,
-        "public current first-launch-batch micro-product factory missing",
+        "public historical micro-product evidence missing",
     )
-    require(html_text.index("Verified cash, not activity.") < html_text.index("FIX FIRST · SYSTEM DIAGNOSTICS") < html_text.index("MICRO-PRODUCT FACTORY · BOUNDED BETS") < html_text.index("IMPROVE NEXT · EVIDENCE BACKED") < html_text.index('class="grid kpis"'), "public revenue-first hierarchy drifted")
+    require(html_text.index("Verified engineering improvement, not speculative revenue.") < html_text.index("FIX FIRST · SYSTEM DIAGNOSTICS") < html_text.index("MICRO-PRODUCT FACTORY · HISTORICAL ONLY") < html_text.index("IMPROVE NEXT · EVIDENCE BACKED") < html_text.index('class="grid kpis"'), "public engineering-first hierarchy drifted")
     require("Operational Telemetry" in html_text and "History & Trends" in html_text, "public telemetry/trends panels missing")
     require("Commercial Evidence" in html_text and "Retired FreightRecovery Baseline" in html_text, "public commercial provenance UI missing")
     require("Observed gateway threads" in html_text and "Human-reply threads in scope" in html_text, "public scoped commercial evidence UI missing")
@@ -150,7 +152,7 @@ def validate_publication() -> dict[str, object]:
     require(snapshot["hunter_proposals"]["evidence_reviewed_count"]<=snapshot["hunter_proposals"]["proposal_count"],"public Hunter proposal review count invalid")
     require("Verified Model Value" in html_text, "public verified model value panel missing")
     require("project-mobile-card" in html_text and "project-desktop" in html_text, "public responsive portfolio view missing")
-    require('data-design="revenue-first-v5"' in html_text, "public v5 design marker missing")
+    require('data-design="engineering-first-v6"' in html_text, "public engineering-first design marker missing")
     require("fonts.googleapis.com" not in lower and "<script src=" not in lower, "public redesign introduced external presentation dependency")
     require("operator-console" not in lower and "operator console" not in lower, "private operator console leaked into public command center")
 

@@ -121,18 +121,43 @@ def _value_loop_candidates(value_loop):
 def _externalize_candidate(candidate,context):
     p=policy();milestones=set(p["external_milestones"]);lanes=set(p["value_lane_precedence"])
     out=json.loads(json.dumps(candidate))
+    commercial_enabled=p.get("commercial_speculation_enabled",True)
+
+    def engineering_route():
+        if out["work_type"] in {"REPAIR","TEST","VERIFICATION"}:
+            out["external_milestone"]="ENGINEERING_RELIABILITY"
+            out["value_lane"]="ENGINEERING_BLOCKER"
+            out["signal_basis"]="VERIFIED_ENGINEERING_RELIABILITY"
+        else:
+            out["external_milestone"]="ENGINEERING_IMPROVEMENT"
+            out["value_lane"]="ENGINEERING_IMPROVEMENT"
+            out["signal_basis"]="VERIFIED_ENGINEERING_OPPORTUNITY"
+        return out
+
+    if not commercial_enabled and out["work_type"]=="EXPERIMENT" and out["assigned_agent_id"]=="AGT-COMMERCIAL-ANALYST":
+        return None
+
     if out.get("external_milestone") is not None:
         req(out["external_milestone"] in milestones,"candidate external milestone invalid")
         req(out.get("value_lane") in lanes,"candidate value lane invalid")
+        if not commercial_enabled and out["external_milestone"] in {"PUBLISH_PRODUCT","GET_BUYER_RESPONSE","DELIVER_PAID_WORK","VERIFY_PAYMENT","TEST_PRICE","VALIDATE_DEMAND"}:
+            return engineering_route()
         return out
+
     refs=out.get("evidence_refs") or []
     explicit=[ref.split(":",1)[1] for ref in refs if isinstance(ref,str) and ref.startswith("external-milestone:")]
     if explicit:
         req(len(set(explicit))==1 and explicit[0] in milestones,"ambiguous external milestone evidence")
+        if not commercial_enabled and explicit[0] in {"PUBLISH_PRODUCT","GET_BUYER_RESPONSE","DELIVER_PAID_WORK","VERIFY_PAYMENT","TEST_PRICE","VALIDATE_DEMAND"}:
+            return engineering_route()
         out["external_milestone"]=explicit[0]
         out["value_lane"]="INTERNAL_BLOCKER" if out["work_type"] in {"REPAIR","TEST","VERIFICATION"} else "PRODUCT_DELIVERABLE_COMPLETION"
         out["signal_basis"]="EXPLICIT_EXTERNAL_MILESTONE"
         return out
+
+    if not commercial_enabled:
+        return engineering_route()
+
     if out["work_type"]=="EXPERIMENT" and out["assigned_agent_id"]=="AGT-COMMERCIAL-ANALYST":
         out["external_milestone"]="VALIDATE_DEMAND"
         out["value_lane"]="CUSTOMER_DEMAND_VALIDATION"
@@ -247,11 +272,12 @@ def generate_candidates(context):
     for rec in plans["HUNTER_RUNS"]["recommendations"]:
         candidates.append(_source_candidate(unc_by,rec,"HUNT","AGT-HUNTER","PUBLIC_HUNT","OBSERVE","MEDIUM","Step 15 allocated Hunter capacity to this capability-evidence gap."))
     # Human-gated experiments remain blocked unless an exact owner approval unlocks OBSERVE-only preparation.
+    commercial_enabled=p.get("commercial_speculation_enabled",True)
     for exp in context["experiments"]["plans"]:
         if exp["status"]=="HUMAN_APPROVAL_REQUIRED":
             u=unc_by[exp["uncertainty_id"]]
             approval=_owner_approval(exp,u)
-            if approval is not None:
+            if approval is not None and commercial_enabled:
                 candidates.append(_candidate("EXPERIMENT",exp["experiment_id"],exp["project_ids"],"AGT-COMMERCIAL-ANALYST","EXTERNAL_EVIDENCE_ANALYSIS","OBSERVE","HIGH",
                     pareto=u["ranking"]["pareto_layer"],rank=u["ranking"]["rank_order"],share=(alloc["HUMAN_REVIEW"].get(u["uncertainty_id"]) or {}).get("share_basis_points"),
                     approvals=[],blockers=exp["hard_blockers"],reason="Exact owner approval is recorded; scheduler may prepare evidence work only while any channel ACT remains independently action-policy gated.",
@@ -261,7 +287,7 @@ def generate_candidates(context):
                     pareto=u["ranking"]["pareto_layer"],rank=u["ranking"]["rank_order"],share=(alloc["HUMAN_REVIEW"].get(u["uncertainty_id"]) or {}).get("share_basis_points"),
                     approvals=exp["approval_requirements"],blockers=exp["hard_blockers"],reason="Experiment is high-value but HUMAN_GATED_ACT; scheduler may surface it for review but cannot execute it.",
                     evidence_refs=[*u["evidence_refs"],f"experiment:{exp['experiment_id']}"]))
-        elif exp["status"]=="READY_FOR_BOUNDED_EXECUTION" and exp["execution_mode"]=="BOUNDED_EXTERNAL_VALIDATION":
+        elif commercial_enabled and exp["status"]=="READY_FOR_BOUNDED_EXECUTION" and exp["execution_mode"]=="BOUNDED_EXTERNAL_VALIDATION":
             u=unc_by[exp["uncertainty_id"]]
             candidates.append(_candidate("EXPERIMENT",exp["experiment_id"],exp["project_ids"],"AGT-COMMERCIAL-ANALYST","EXTERNAL_EVIDENCE_ANALYSIS","OBSERVE","HIGH",
                 pareto=u["ranking"]["pareto_layer"],rank=u["ranking"]["rank_order"],

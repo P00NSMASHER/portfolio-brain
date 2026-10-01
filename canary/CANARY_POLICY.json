@@ -10,11 +10,7 @@
   "max_paid_cost_usd": 0,
   "max_runtime_api_reads": 8,
   "max_selected_scheduler_work": 8,
-  "expected_first_selected_work_types": [
-    "EXPERIMENT",
-    "TEST"
-  ],
-  "expected_blocked_approval_count": 1,
+  "expected_blocked_approval_count": 0,
   "continuation_requires_zero_new_selected_work": true,
   "continuation_requires_duplicate_suppression": true,
   "learning_promotion_allowed": false,
@@ -40,10 +36,23 @@
   "invariants": [
     "The canary executes from deterministic local state and exact persisted cursor identities without live web/model/API access.",
     "The canary uses only Tier-0 deterministic logic and zero paid model/API budget.",
-    "The scheduler may surface human-gated work but the canary never executes it.",
-    "The first cycle may enqueue only work bound to an explicit external milestone: demand validation and publish-blocking QA in the checked-in state; the shadow canary performs no external action and continuation must enqueue no duplicate work.",
-    "The owner publish checkpoint remains blocked for human action, is visible to notifications, and cannot be satisfied by the canary.",
+    "Commercial speculation is retired: the canary must not enqueue commercial-analyst work, owner publish checkpoints, demand validation, or marketplace actions.",
+    "The first cycle may enqueue only engineering reliability/improvement work; continuation must enqueue no duplicate work.",
     "Learning rebuild may summarize evidence but cannot promote unverified observations or change authority.",
     "All persisted canary artifacts are sanitized state and receipt metadata only."
+  ],
+  "allowed_first_selected_work_types": [
+    "HUNT",
+    "EXPERIMENT",
+    "IMPLEMENTATION",
+    "REPAIR",
+    "TEST",
+    "RESEARCH",
+    "INTEGRATION",
+    "VERIFICATION"
+  ],
+  "required_active_milestones": [
+    "ENGINEERING_RELIABILITY",
+    "ENGINEERING_IMPROVEMENT"
   ]
 }

@@ -108,6 +108,8 @@ def _owner_action_for_publish(sku: dict) -> dict:
 
 
 def _publish_ready(factory: dict) -> list[dict]:
+    if factory.get("status") != "ACTIVE":
+        return []
     return sorted(
         [
             sku for sku in factory.get("skus", [])
@@ -119,6 +121,8 @@ def _publish_ready(factory: dict) -> list[dict]:
 
 
 def _qa_blockers(factory: dict) -> list[dict]:
+    if factory.get("status") != "ACTIVE":
+        return []
     rows = []
     for sku in sorted(factory.get("skus", []), key=lambda row: (row.get("rank", 999), row.get("sku_id", ""))):
         if sku.get("status") != "READY_FOR_RUNTIME_QA":
@@ -197,7 +201,11 @@ def build_value_loop_snapshot(*, hunter_proposal_state: dict | None = None, comm
     owner_actions = [_owner_action_for_publish(ready[0])] if ready else []
     blockers = _qa_blockers(factory)
 
-    if ready:
+    if factory.get("status") != "ACTIVE":
+        active = None
+        closest = None
+        blocker = None
+    elif ready:
         active = {
             "experiment_id": f"EXT-{ready[0]['sku_id']}-PUBLISH-PRICE-DEMAND",
             "kind": "PRICE_AND_DEMAND_TEST",

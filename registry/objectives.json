@@ -33,29 +33,27 @@
       "schema_version": "1.0.0",
       "objective_id": "OBJ-001",
       "project_id": "PRJ-000",
-      "title": "Produce verified cash through bounded micro-products before new startup expansion",
-      "statement": "Prioritize many cheap, bounded digital products with low support burden and measurable marketplace demand, starting with Roblox Creator Store models built from reusable capabilities already present in the portfolio. Freeze large speculative startups until verified external payment proves where further investment belongs.",
-      "status": "ACTIVE",
-      "priority": "CRITICAL",
+      "title": "Retired commercial micro-product experiment",
+      "statement": "Historical record of the former micro-product revenue experiment. Expected future revenue from the prior speculative businesses is treated as zero; no new engineering, research, outreach, marketplace publication, or paid-model budget may be allocated to this objective.",
+      "status": "RETIRED",
+      "priority": "LOW",
       "success_conditions": [
-        "At least one micro-product records independently verified external payment.",
-        "Every SKU has a bounded build-time cap, paid-AI spend cap, explicit price hypothesis, testable buyer use case, and kill rule before engineering begins.",
-        "Further engineering allocation follows actual sales, reviews, or buyer support evidence rather than internal feature count or opportunity scoring."
+        "Historical commercial evidence remains preserved without being treated as an active objective.",
+        "No scheduler, Hunter, factory, dashboard action, or paid-model allocation creates new speculative commercial work from this objective.",
+        "Engineering capacity is routed to verified reliability, autonomy, security, maintainability, and user-requested project improvements instead."
       ],
       "constraints": [
-        "Do not fabricate demand, revenue, customer interest, sales, reviews, or payment.",
-        "Do not make purchases, publish paid listings, send unapproved external communications, or create customer commitments outside existing human authority gates.",
-        "Do not reuse copyrighted game assets, proprietary UI, trademarks, private code, or employer/customer data in commercial products without separate rights.",
-        "Prefer generic reusable mechanics built from existing portfolio capabilities and keep customer secrets and private payloads out of the public repository."
+        "Expected future revenue from the retired speculative businesses is zero for planning purposes.",
+        "Do not generate replacement businesses, SaaS concepts, micro-products, outreach campaigns, or marketplace experiments merely to seek revenue.",
+        "Do not delete historical evidence or misstate historical commercial results."
       ],
       "evidence_requirements": [
-        "Provider-backed payment or settlement evidence tied to the specific engagement.",
-        "Delivery and customer-acceptance evidence tied to the agreed scope.",
-        "Current market-demand evidence or an inbound buyer request for the service category."
+        "Active scheduler and Hunter policies show commercial speculation disabled.",
+        "Micro-product factory and revenue-reset policy are retired while retaining historical records."
       ],
       "provenance": {
         "source_type": "OWNER_DECLARATION",
-        "source_ref": "Owner revenue reset instruction in ChatGPT on 2026-09-27"
+        "source_ref": "Owner commercial-retirement and autonomy-first instruction in ChatGPT on 2026-10-01"
       }
     }
   ]

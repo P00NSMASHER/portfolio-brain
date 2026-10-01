@@ -1,53 +1,46 @@
 {
   "schema_version": "1.0.0",
   "policy_id": "revenue-reset-2026-09-27",
-  "status": "ACTIVE",
+  "status": "RETIRED",
   "objective_ref": "OBJ-001",
-  "governing_principle": "Verified cash from many cheap, bounded products outranks speculative startup creation, internal architecture, feature count, opportunity scores, and polished dashboards.",
+  "governing_principle": "Commercial speculation is retired and assigned zero expected future revenue. Engineering capacity goes to verified autonomy, reliability, security, maintainability, and explicit user-requested project improvements.",
   "freeze": {
     "net_new_startup_architecture": true,
     "speculative_vertical_expansion": true,
     "new_marketing_site": true,
     "new_payment_product": true,
     "new_brand_or_logo_work": true,
-    "bounded_micro_products_allowed": true,
+    "bounded_micro_products_allowed": false,
     "existing_product_correctness_maintenance_allowed": true
   },
   "primary_experiment": {
-    "name": "Roblox micro-product factory",
-    "thesis": "Ship small reusable Creator Store products cheaply, measure actual buyer behavior, kill non-sellers, and concentrate engineering only where sales/reviews prove demand.",
+    "name": "RETIRED — Roblox micro-product factory",
+    "thesis": "Historical experiment only. No further product construction, marketplace publication, demand testing, or commercial expansion is authorized by this policy.",
     "initial_market": "Roblox Creator Store",
     "initial_format": "Paid models first; plugins only for genuinely tool-shaped functionality.",
     "price_range_usd": [
       2.99,
       9.99
     ],
-    "max_build_hours_per_sku": 4,
-    "max_paid_ai_spend_usd_per_sku": 10,
-    "launch_batch_size": 5,
-    "first_sku_ids": [
-      "SKU-001",
-      "SKU-002",
-      "SKU-003",
-      "SKU-004",
-      "SKU-005"
-    ],
+    "max_build_hours_per_sku": 0,
+    "max_paid_ai_spend_usd_per_sku": 0,
+    "launch_batch_size": 0,
+    "first_sku_ids": [],
     "success_evidence": [
       "verified marketplace sale",
       "verified marketplace review or support request demonstrating use",
       "repeat sales without additional paid acquisition",
       "buyer request for an adjacent feature or bundle"
     ],
-    "failure_rule": "Do not rescue a weak SKU with more engineering. After reasonable marketplace exposure and at most one packaging/title/thumbnail iteration, a product with no buyer signal returns to HOLD or KILL while stronger SKUs receive the time.",
-    "build_rule": "Reuse proven generic mechanics where possible. A micro-product that exceeds the four-hour or ten-dollar cap must be split, explicitly re-approved, or stopped.",
+    "failure_rule": "Experiment retired. Preserve historical evidence; allocate no further engineering or commercial-validation work.",
+    "build_rule": "Do not build additional SKUs or spend paid-model budget under this retired experiment.",
     "rights_rule": "Commercial SKUs must be original/generic implementations. Brookhaven-specific assets, proprietary UI/art, school-specific content, private data, and unverified third-party code are excluded."
   },
   "resource_rules": [
-    "Engineering capacity goes first to the next bounded SKU or to fixes demanded by verified buyers.",
-    "Research may inspect marketplace demand, competing listings, pricing, reviews, and buyer language but may not invent demand.",
-    "Do not build a new SaaS, marketplace, enterprise diagnostic, dashboard feature, agent hierarchy, recovery vertical, brand, or marketing site merely to create activity.",
-    "Do not use paid model/work credits above the per-SKU cap without explicit owner approval.",
-    "Actual sales and support evidence determine which product families expand."
+    "Engineering capacity goes to verified autonomy, reliability, security, maintainability, and explicit user-requested improvements.",
+    "Commercial speculation, marketplace-demand research, outreach generation, replacement business ideation, and new revenue experiments receive zero autonomous allocation.",
+    "Historical commercial evidence may be observed for record integrity but cannot create new work, investment credit, or owner action requests.",
+    "Do not use paid model/API budget for retired commercial experiments."
   ],
   "authority": {
     "cash_spend": "HUMAN_APPROVAL_REQUIRED",

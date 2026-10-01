@@ -154,7 +154,7 @@ class OperationalTelemetryTests(unittest.TestCase):
         scheduler,receipt=schedule_cycle(
             load_scheduler_state(),build_context(),at="2026-09-26T10:00:00Z"
         )
-        work=next(row for row in receipt["selected_work"] if row["work_type"]=="TEST")
+        work=receipt["selected_work"][0]
         scheduler["work_items"]=[work]
         agents=seed_state()
         agents=heartbeat(
@@ -179,7 +179,7 @@ class OperationalTelemetryTests(unittest.TestCase):
         scheduler,receipt=schedule_cycle(
             load_scheduler_state(),build_context(),at="2026-09-26T10:00:00Z"
         )
-        work=next(row for row in receipt["selected_work"] if row["work_type"]=="TEST")
+        work=receipt["selected_work"][0]
         scheduler["work_items"]=[work]
         agents=heartbeat(
             seed_state(),

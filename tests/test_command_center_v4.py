@@ -233,42 +233,44 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertIn('Current payment/checkout state</td><td class="num">UNKNOWN',public)
         self.assertNotIn("Live checkout sessions</td>",public)
         self.assertNotIn("Live payment intents</td>",public)
-        issue=next(
-            row for row in snapshot["repair_issues"]
-            if row["title"]=="Commercial evidence is current but scope-limited"
-        )
-        self.assertEqual(issue["severity"],"REVIEW")
-        self.assertIn("Do not broaden the zero-reply result",issue["prompt"])
+        self.assertFalse(any(
+            row["title"] in {
+                "Commercial evidence is current but scope-limited",
+                "Commercial evidence observation is stale or unavailable",
+            }
+            for row in snapshot["repair_issues"]
+        ))
 
-    def test_revenue_first_hierarchy_keeps_repairs_products_and_upgrades_copyable(self):
+    def test_engineering_first_hierarchy_keeps_history_and_upgrades_visible(self):
         snapshot=build_command_center_snapshot()
+        self.assertEqual(snapshot["revenue_focus"]["truth_state"],"RETIRED")
+        self.assertEqual(snapshot["revenue_focus"]["objective_status"],"RETIRED")
+        self.assertEqual(snapshot["revenue_focus"]["policy_status"],"RETIRED")
+        self.assertEqual(snapshot["revenue_focus"]["factory_status"],"RETIRED")
         upgrades=snapshot["recommended_upgrades"]
-        self.assertGreaterEqual(len(upgrades),1)
         self.assertLessEqual(len(upgrades),5)
         self.assertTrue(all(row["priority"] in {"HIGH VALUE","NEXT"} for row in upgrades))
         self.assertTrue(all(row["prompt"] and row["evidence_ref"] for row in upgrades))
-        self.assertTrue(all("P00NSMASHER/portfolio-brain" in row["prompt"] for row in upgrades))
+        self.assertFalse(any("payment" in row["title"].lower() or "commercial" in row["title"].lower() for row in upgrades))
         public=render_html(snapshot)
-        revenue=public.index("Verified cash, not activity.")
+        engineering=public.index("Verified engineering improvement, not speculative revenue.")
         diagnostics=public.index("FIX FIRST · SYSTEM DIAGNOSTICS")
-        products=public.index("MICRO-PRODUCT FACTORY · BOUNDED BETS")
+        products=public.index("MICRO-PRODUCT FACTORY · HISTORICAL ONLY")
         recommendations=public.index("IMPROVE NEXT · EVIDENCE BACKED")
         kpis=public.index('class="grid kpis"')
-        self.assertLess(revenue,diagnostics)
+        self.assertLess(engineering,diagnostics)
         self.assertLess(diagnostics,products)
         self.assertLess(products,recommendations)
         self.assertLess(recommendations,kpis)
-        self.assertIn("Brain improvements worth considering",public)
+        self.assertIn("COMMERCIAL SPECULATION RETIRED",public)
         self.assertIn("Quiz &amp; Reward Engine",public)
         self.assertIn("House Controls Pack",public)
         self.assertIn("Redeem Code System",public)
-        self.assertIn("Run upgrade",public)
-        self.assertIn("https://chatgpt.com/?prompt=",public)
-        self.assertIn("Build SKU-001",public)
+        self.assertIn("Retired · historical artifact only",public)
+        self.assertNotIn("Build SKU-001",public)
+        self.assertNotIn("OWNER ACTION REQUIRED: Publish SKU-001",public)
         self.assertIn("Show operations & diagnostics",public)
-        self.assertIn("What matters right now",public)
-        self.assertIn('id="advanced-content"',public)
-        self.assertIn('class="mobile-dock"',public)
+        self.assertIn('data-design="engineering-first-v6"',public)
 
     def test_primary_operator_surface_is_exactly_six_business_answers(self):
         snapshot=build_command_center_snapshot()
@@ -349,7 +351,7 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertIn("functional_reasons",snapshot["system"])
         public=render_html(snapshot)
         self.assertIn("Functional health",public)
-        self.assertIn("REVENUE NOT PROVEN",public)
+        self.assertIn("COMMERCIAL SPECULATION RETIRED",public)
         self.assertIn("READ ONLY",public)
 
 

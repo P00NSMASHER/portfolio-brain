@@ -111,11 +111,11 @@ class HunterProposalStateTests(unittest.TestCase):
         hunter=load_seed_state()
         backlog=None
         earliest=set()
-        for cycle in range(18):
+        for cycle in range(30):
             hunter,receipt=run_cycle(
                 hunter,
                 BroadHighProvider(1000+cycle*10),
-                at=f"2026-09-27T{cycle:02d}:30:00Z",
+                at=f"2026-09-{27+cycle//24:02d}T{cycle%24:02d}:30:00Z",
             )
             backlog=build_proposal_state(hunter,receipt,prior_state=backlog)
             if cycle==0:

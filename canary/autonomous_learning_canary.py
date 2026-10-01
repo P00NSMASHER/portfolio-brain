@@ -103,10 +103,12 @@ def execute_canary(output_dir):
     scheduler_state_1,scheduler_receipt_1=schedule_cycle(scheduler_seed,build_context(),at=T1)
     validate_scheduler_state(scheduler_state_1)
     first_types=sorted({w["work_type"] for w in scheduler_receipt_1["selected_work"]})
-    req(first_types==policy["expected_first_selected_work_types"],"unexpected first canary scheduler selection")
+    req(first_types and all(t in policy["allowed_first_selected_work_types"] for t in first_types),"unexpected first canary scheduler selection")
     req(len(scheduler_receipt_1["selected_work"])<=policy["max_selected_scheduler_work"],"scheduler canary selection ceiling exceeded")
     req(len(scheduler_receipt_1["blocked_work"])==policy["expected_blocked_approval_count"],"approval-blocked work count drifted")
     req(all(w["required_authority"]!="ACT" for w in [*scheduler_receipt_1["selected_work"],*scheduler_receipt_1["blocked_work"]]),"canary surfaced ACT-authorized work")
+    req(all(w["external_milestone"] in policy["required_active_milestones"] for w in scheduler_receipt_1["selected_work"]),"canary selected non-engineering milestone")
+    req(not any(w["assigned_agent_id"]=="AGT-COMMERCIAL-ANALYST" for w in scheduler_receipt_1["selected_work"]),"canary selected retired commercial work")
     _write(checkpoint/"scheduler_state.json",scheduler_state_1)
 
     workload_decision_1=evaluate_workload(
@@ -216,6 +218,7 @@ def execute_canary(output_dir):
         "scheduler_selected_count":len(scheduler_receipt_1["selected_work"]),
         "scheduler_selected_work_types":first_types,
         "scheduler_blocked_approval_count":len(scheduler_receipt_1["blocked_work"]),
+        "scheduler_selected_milestones":sorted({w["external_milestone"] for w in scheduler_receipt_1["selected_work"]}),
         "cost_status":workload_decision_1["status"],
         "cost_duplicate_probe":"WORKLOAD_CONTROLLED",
         "admission_domain":"WORKLOAD",
