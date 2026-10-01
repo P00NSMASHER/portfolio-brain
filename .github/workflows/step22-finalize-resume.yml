@@ -20,7 +20,7 @@ concurrency:
 jobs:
   resume:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 60
     env:
       GITHUB_TOKEN: ${{ github.token }}
     steps:
@@ -94,7 +94,104 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"],"a",encoding="utf-8") as out:
               for key in ("fingerprint","fault_receipt_hash","fault_detected_at","fault_base_sha","dispatch_run_id","dispatched_at"):
                   out.write(key+"="+str(doc[key])+"\n")
-          print("protected main bound:", current)
+              out.write("repair_merge_sha="+doc["repair_merge_sha"]+"\n")
+          print("protected repair main bound:", current)
+          PY
+
+      - name: Dispatch protected checkpoint/archive rollover
+        id: checkpoint_dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          DISPATCHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh workflow run portfolio-state-checkpoint-candidate.yml --repo "$GITHUB_REPOSITORY" --ref main
+          echo "dispatched_at=$DISPATCHED_AT" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for checkpoint candidate and protected merge
+        id: maintenance
+        env:
+          DISPATCHED_AT: ${{ steps.checkpoint_dispatch.outputs.dispatched_at }}
+          REPAIR_MERGE_SHA: ${{ steps.cfg.outputs.repair_merge_sha }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, time, urllib.request
+
+          repo=os.environ["GITHUB_REPOSITORY"]
+          token=os.environ["GITHUB_TOKEN"]
+          dispatched_at=os.environ["DISPATCHED_AT"]
+          repair_merge=os.environ["REPAIR_MERGE_SHA"]
+          deadline=time.monotonic()+2400
+
+          def get(path):
+              req=urllib.request.Request(
+                  "https://api.github.com/repos/"+repo+path,
+                  headers={
+                      "Authorization":"Bearer "+token,
+                      "Accept":"application/vnd.github+json",
+                      "X-GitHub-Api-Version":"2022-11-28",
+                      "User-Agent":"portfolio-step22-checkpoint-resume/1.0",
+                  },
+              )
+              with urllib.request.urlopen(req,timeout=30) as r:
+                  return json.load(r)
+
+          workflow_run=None
+          while time.monotonic()<deadline:
+              doc=get("/actions/workflows/portfolio-state-checkpoint-candidate.yml/runs?branch=main&event=workflow_dispatch&per_page=20")
+              rows=[
+                  row for row in doc.get("workflow_runs",[])
+                  if row.get("head_sha")==repair_merge
+                  and row.get("created_at","")>=dispatched_at
+              ]
+              rows.sort(key=lambda row:row["id"],reverse=True)
+              if rows:
+                  workflow_run=rows[0]
+                  if workflow_run.get("status")=="completed":
+                      if workflow_run.get("conclusion")!="success":
+                          raise SystemExit("STEP22_CHECKPOINT_WORKFLOW_FAILED:"+str(workflow_run.get("conclusion")))
+                      break
+              time.sleep(5)
+          else:
+              raise SystemExit("STEP22_CHECKPOINT_WORKFLOW_TIMEOUT")
+
+          run_id=workflow_run["id"]
+          expected_branch="checkpoint/archive-"+str(run_id)
+          maintenance_pr=None
+          while time.monotonic()<deadline:
+              pulls=get("/pulls?state=all&per_page=100&sort=created&direction=desc")
+              matches=[
+                  row for row in pulls
+                  if row.get("head",{}).get("ref")==expected_branch
+                  and row.get("base",{}).get("ref")=="main"
+              ]
+              if len(matches)>1:
+                  raise SystemExit("STEP22_CHECKPOINT_PR_AMBIGUOUS")
+              if matches:
+                  maintenance_pr=matches[0]
+                  if maintenance_pr.get("merged_at"):
+                      break
+              time.sleep(5)
+          else:
+              raise SystemExit("STEP22_CHECKPOINT_PR_MERGE_TIMEOUT")
+
+          if maintenance_pr.get("base",{}).get("sha")!=repair_merge:
+              raise SystemExit("STEP22_CHECKPOINT_PR_BASE_MISMATCH")
+          merge_sha=maintenance_pr.get("merge_commit_sha")
+          current=get("/branches/main")["commit"]["sha"]
+          if current!=merge_sha:
+              raise SystemExit("STEP22_CHECKPOINT_MERGE_NOT_EXACT_MAIN")
+          with open(os.environ["GITHUB_OUTPUT"],"a",encoding="utf-8") as out:
+              out.write("workflow_run_id="+str(run_id)+"\n")
+              out.write("pr_number="+str(maintenance_pr["number"])+"\n")
+              out.write("merge_sha="+merge_sha+"\n")
+          print(json.dumps({
+              "workflow_run_id":run_id,
+              "pr_number":maintenance_pr["number"],
+              "merge_sha":merge_sha,
+          },sort_keys=True))
           PY
 
       - name: Resume final Step 22 evidence collection
@@ -106,6 +203,7 @@ jobs:
           --fault-base-sha "${{ steps.cfg.outputs.fault_base_sha }}"
           --dispatch-run-id "${{ steps.cfg.outputs.dispatch_run_id }}"
           --dispatched-at "${{ steps.cfg.outputs.dispatched_at }}"
+          --maintenance-pr-number "${{ steps.maintenance.outputs.pr_number }}"
           --timeout-seconds 1500
           --output-meta acceptance/out/step22_resumed_meta.json
           --output-receipt acceptance/out/step22_resumed_receipt.json
