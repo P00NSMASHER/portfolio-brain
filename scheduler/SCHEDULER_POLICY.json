@@ -141,17 +141,22 @@
     "reuse_spare_capacity_only": true
   },
   "value_lane_precedence": {
-    "EXTERNAL_VALUE_BLOCKER": 0,
-    "CUSTOMER_DEMAND_VALIDATION": 1,
-    "PRODUCT_DELIVERABLE_COMPLETION": 2,
-    "INTERNAL_BLOCKER": 3
+    "ENGINEERING_BLOCKER": 0,
+    "ENGINEERING_IMPROVEMENT": 1,
+    "EXTERNAL_VALUE_BLOCKER": 2,
+    "CUSTOMER_DEMAND_VALIDATION": 3,
+    "PRODUCT_DELIVERABLE_COMPLETION": 4,
+    "INTERNAL_BLOCKER": 5
   },
   "external_milestones": [
+    "ENGINEERING_RELIABILITY",
+    "ENGINEERING_IMPROVEMENT",
     "PUBLISH_PRODUCT",
     "GET_BUYER_RESPONSE",
     "DELIVER_PAID_WORK",
     "VERIFY_PAYMENT",
     "TEST_PRICE",
     "VALIDATE_DEMAND"
-  ]
+  ],
+  "commercial_speculation_enabled": false
 }
