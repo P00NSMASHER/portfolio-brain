@@ -13,7 +13,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: portfolio-step22-controlled-repair
+  group: portfolio-step22-controlled-repair-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
