@@ -71,9 +71,11 @@ class SchedulerTests(unittest.TestCase):
         candidates,_=generate_candidates(ctx)
         proposal=next(x for x in candidates if x["source_ref"]=="HEXP-TEST-INBOX")
         _,receipt=schedule_cycle(load_state(),ctx,at="2026-09-27T09:20:00Z")
-        self.assertFalse(any(w["source_ref"]=="HEXP-TEST-INBOX" for w in receipt["selected_work"]))
-        self.assertIn(proposal["fingerprint"],receipt["suppressed_no_external_milestone"])
-        self.assertTrue(all(w["external_milestone"] for w in receipt["selected_work"]))
+        selected=next(w for w in receipt["selected_work"] if w["source_ref"]=="HEXP-TEST-INBOX")
+        self.assertEqual(selected["fingerprint"],proposal["fingerprint"])
+        self.assertEqual(selected["external_milestone"],"ENGINEERING_IMPROVEMENT")
+        self.assertEqual(selected["value_lane"],"ENGINEERING_IMPROVEMENT")
+        self.assertNotIn(proposal["fingerprint"],receipt["suppressed_no_external_milestone"])
 
     def test_filtered_continuation_scheduler_selects_only_hunter_proposal_review(self):
         ctx=build_context(hunter_proposal_state=proposal_state())
@@ -84,8 +86,10 @@ class SchedulerTests(unittest.TestCase):
             candidate_filter=is_hunter_proposal_continuation,
             max_new_items=1,
         )
-        self.assertEqual(receipt["selected_work"],[])
-        self.assertIn(proposal["fingerprint"],receipt["suppressed_no_external_milestone"])
+        self.assertEqual(len(receipt["selected_work"]),1)
+        self.assertEqual(receipt["selected_work"][0]["fingerprint"],proposal["fingerprint"])
+        self.assertEqual(receipt["selected_work"][0]["external_milestone"],"ENGINEERING_IMPROVEMENT")
+        self.assertNotIn(proposal["fingerprint"],receipt["suppressed_no_external_milestone"])
     def test_filtered_continuation_scheduler_cannot_widen_cycle_limit(self):
         ctx=build_context(hunter_proposal_state=proposal_state())
         with self.assertRaises(Exception):
