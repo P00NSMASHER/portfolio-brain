@@ -239,6 +239,7 @@ class AutonomousRepairTests(unittest.TestCase):
         self.assertNotIn("\n  schedule:", text)
         self.assertIn("copilot-requests: write", text)
         self.assertIn("python -m repair.autonomous_repair validate-diff", text)
+        self.assertEqual(text.count("find . -type d -name __pycache__ -prune -exec rm -rf {} +"), 2)
         self.assertIn('python -m unittest discover -s tests -p "test_*.py" -v', text)
         self.assertIn("gh workflow run foundation-ci.yml", text)
         self.assertEqual(text.count('gh workflow run foundation-ci.yml --repo "$GITHUB_REPOSITORY" --ref "$REPAIR_BRANCH"'), 2)
