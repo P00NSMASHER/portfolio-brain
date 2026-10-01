@@ -22,9 +22,10 @@ on:
   schedule:
     - cron: "37 * * * *"
     # Exact Step-23 soak window; real schedule events only, normal cadence remains unchanged.
-    - cron: "59 20 1 10 *"
-    - cron: "14 21 1 10 *"
-    - cron: "29 21 1 10 *"
+    - cron: "19 22 1 10 *"
+    - cron: "0 23 1 10 *"
+    - cron: "21 23 1 10 *"
+    - cron: "59 23 1 10 *"
   # Core producers already trigger the watchdog. Publish after its receipt
   # instead of publishing both before and after the same verification cycle.
   # All completions (including failure) remain visible; cron is the fallback.
