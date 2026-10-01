@@ -407,10 +407,13 @@ class GitHubReader:
                 row for row in self._run_artifacts(run["id"])
                 if row.get("name") == SNAPSHOT_ARTIFACT and not row.get("expired")
             ]
-            require(len(snapshots) <= 1, "Reducer published multiple canonical snapshots in one run")
             if snapshots:
-                retain(snapshots[0])
-                snapshot_runs.append((run, snapshots[0]))
+                latest_snapshot = max(
+                    snapshots,
+                    key=lambda row: (row.get("created_at", ""), row.get("id", 0)),
+                )
+                retain(latest_snapshot)
+                snapshot_runs.append((run, latest_snapshot))
                 if len(snapshot_runs) == 2:
                     break
 
