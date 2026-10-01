@@ -116,6 +116,29 @@ def main()->None:
     main_sha=gh.get("/branches/main")["commit"]["sha"]
     if main_sha!=merge_sha: raise RuntimeError("protected main moved before Step22 health continuation")
 
+    def reducer_after(after:str,desc:str):
+        def find():
+            doc=gh.get("/actions/workflows/portfolio-state-reducer.yml/runs?branch=main&event=workflow_dispatch&per_page=30")
+            rows=[
+                x for x in doc.get("workflow_runs",[])
+                if x.get("head_sha")==merge_sha and x.get("created_at")>=after
+            ]
+            rows.sort(key=lambda x:x["id"],reverse=True)
+            if not rows:return None
+            x=rows[0]
+            if x.get("status")!="completed":return None
+            if x.get("conclusion")!="success":
+                raise RuntimeError(desc+" failed: "+str(x.get("conclusion")))
+            return x
+        return wait_until(find,deadline=deadline,desc=desc)
+
+    # GITHUB_TOKEN-dispatched workflows do not recursively emit workflow_run
+    # triggers. Explicitly catch up the reducer before asking production readers
+    # to restore, then explicitly reduce the continuation events afterward.
+    pre_reducer_dispatch_at=now_iso()
+    gh.post("/actions/workflows/portfolio-state-reducer.yml/dispatches",{"ref":"main"})
+    reducer_after(pre_reducer_dispatch_at,"Step22 pre-continuation reducer catch-up")
+
     cycle_dispatch_at=now_iso()
     gh.post("/actions/workflows/runtime-hourly-sync.yml/dispatches",{"ref":"main"})
     gh.post("/actions/workflows/portfolio-autonomous-scheduler.yml/dispatches",{"ref":"main"})
@@ -131,17 +154,10 @@ def main()->None:
         return x
     runtime=wait_until(lambda:workflow_run("runtime-hourly-sync.yml","workflow_dispatch"),deadline=deadline,desc="Step22 runtime continuation")
     scheduler=wait_until(lambda:workflow_run("portfolio-autonomous-scheduler.yml","workflow_dispatch"),deadline=deadline,desc="Step22 scheduler continuation")
-    reducer_after=min(runtime["created_at"],scheduler["created_at"])
-    def reducer_run():
-        doc=gh.get("/actions/workflows/portfolio-state-reducer.yml/runs?branch=main&per_page=50")
-        rows=[x for x in doc.get("workflow_runs",[]) if x.get("head_sha")==merge_sha and x.get("created_at")>=reducer_after]
-        rows.sort(key=lambda x:x["id"],reverse=True)
-        for x in rows:
-            if x.get("status")=="completed":
-                if x.get("conclusion")=="success":return x
-                if x.get("conclusion") not in {"cancelled","skipped"}: raise RuntimeError("Step22 reducer continuation failed: "+str(x.get("conclusion")))
-        return None
-    reducer=wait_until(reducer_run,deadline=deadline,desc="Step22 reducer continuation")
+
+    post_reducer_dispatch_at=now_iso()
+    gh.post("/actions/workflows/portfolio-state-reducer.yml/dispatches",{"ref":"main"})
+    reducer=reducer_after(post_reducer_dispatch_at,"Step22 reducer continuation")
     if gh.get("/branches/main")["commit"]["sha"]!=merge_sha: raise RuntimeError("protected main moved during Step22 finalization")
 
     def cycle_row(x):
