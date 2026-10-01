@@ -21,6 +21,10 @@ on:
       - ".github/workflows/command-center-pages.yml"
   schedule:
     - cron: "37 * * * *"
+    # Bounded Step-23 final-acceptance soak windows for 2026-10-01 UTC.
+    - cron: "3 17 1 10 *"
+    - cron: "24 17 1 10 *"
+    - cron: "44 17 1 10 *"
   # Core producers already trigger the watchdog. Publish after its receipt
   # instead of publishing both before and after the same verification cycle.
   # All completions (including failure) remain visible; cron is the fallback.
