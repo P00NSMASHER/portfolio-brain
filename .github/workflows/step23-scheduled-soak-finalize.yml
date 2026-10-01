@@ -1,6 +1,6 @@
 name: step23-scheduled-soak-finalize
 # Observer generation: edcdfa1.
-# Observer selector generation: exact-artifact-v3.
+# Observer selector generation: exact-artifact-v2.
 
 on:
   push:
