@@ -90,7 +90,20 @@ class OperatingModeTests(unittest.TestCase):
         policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
         actual=scheduled_workflow_inventory(ROOT/".github/workflows")
         expected={name:[entry["cron"]] for name,entry in policy["approved_recurring_workflows"].items()}
+        bounded_step23={
+          "portfolio-state-reducer":["5 17 1 10 *","25 17 1 10 *","45 17 1 10 *"],
+          "hunter-autonomous-cycle":["8 17 1 10 *","28 17 1 10 *","48 17 1 10 *"],
+          "agent-heartbeat-sweep":["11 17 1 10 *","31 17 1 10 *","51 17 1 10 *"],
+          "portfolio-notification-cycle":["14 17 1 10 *","34 17 1 10 *","54 17 1 10 *"],
+        }
+        for name,crons in bounded_step23.items():
+            expected[name].extend(crons)
         self.assertEqual(actual,expected)
+        self.assertEqual(set(bounded_step23),{
+          "portfolio-state-reducer","hunter-autonomous-cycle",
+          "agent-heartbeat-sweep","portfolio-notification-cycle",
+        })
+        self.assertTrue(all(cron.split()[2:4]==["1","10"] for rows in bounded_step23.values() for cron in rows))
 
     def test_learning_crons_avoid_known_hourly_writer_collisions(self):
         policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())["approved_recurring_workflows"]
