@@ -93,6 +93,7 @@ def step22():
         "repair_head_sha": SHA,
         "repair_merge_sha": SHA,
         "protected_merge": True,
+        "maintenance_lineage": [],
         "foundation_check": {
             "check_run_id": 601, "name": "validate", "app_id": 15368,
             "head_sha": SHA, "conclusion": "success",
@@ -335,6 +336,87 @@ class FinalAcceptanceContractTests(unittest.TestCase):
         receipt = bind_receipt(receipt)
         with self.assertRaisesRegex(FinalAcceptanceError, "damaged production main"):
             validate_step22(receipt)
+
+    def test_step22_accepts_one_verified_checkpoint_archive_maintenance_merge(self):
+        receipt = step22()
+        continuation = "c" * 40
+        maintenance_head = "d" * 40
+        receipt["exact_main_sha"] = continuation
+        receipt["maintenance_lineage"] = [{
+            "kind": "CHECKPOINT_ARCHIVE_MAINTENANCE",
+            "workflow_run_id": 700,
+            "pr_number": 701,
+            "actor_login": "github-actions[bot]",
+            "branch": "checkpoint/archive-700",
+            "base_sha": SHA,
+            "head_sha": maintenance_head,
+            "merge_sha": continuation,
+            "changed_paths": [
+                "state_journal/ARCHIVE_MANIFEST.json",
+                "state_journal/CHECKPOINT.json.gz",
+                "state_journal/POLICY.json",
+                "state_journal/archive/canonical-seq-00000106-test.json.gz",
+                "state_journal/archive/canonical-seq-00000106-test.manifest.json",
+            ],
+            "foundation_check": {
+                "check_run_id": 702, "name": "validate", "app_id": 15368,
+                "head_sha": maintenance_head, "conclusion": "success",
+            },
+            "hosted_verifier_check": {
+                "check_run_id": 703, "name": "portfolio-phase1-gate", "app_id": 5121826,
+                "head_sha": maintenance_head, "conclusion": "success",
+            },
+            "archive_id": "canonical-archive-seq-00000106",
+            "checkpoint_sequence": 107,
+            "protected_merge": True,
+            "authority_granted": False,
+            "evidence_upgraded": False,
+        }]
+        stages = {row["stage_id"]: row for row in receipt["stages"]}
+        for name in ("subsequent_runtime_cycle", "subsequent_reducer_cycle", "subsequent_scheduler_cycle"):
+            stages[name]["source_shas"] = [continuation]
+        validate_step22(bind_receipt(receipt))
+
+    def test_step22_rejects_non_archive_intervening_change(self):
+        receipt = step22()
+        continuation = "c" * 40
+        maintenance_head = "d" * 40
+        receipt["exact_main_sha"] = continuation
+        receipt["maintenance_lineage"] = [{
+            "kind": "CHECKPOINT_ARCHIVE_MAINTENANCE",
+            "workflow_run_id": 700,
+            "pr_number": 701,
+            "actor_login": "github-actions[bot]",
+            "branch": "checkpoint/archive-700",
+            "base_sha": SHA,
+            "head_sha": maintenance_head,
+            "merge_sha": continuation,
+            "changed_paths": [
+                "state_journal/ARCHIVE_MANIFEST.json",
+                "state_journal/CHECKPOINT.json.gz",
+                "state_journal/POLICY.json",
+                "state_journal/archive/canonical-seq-00000106-test.json.gz",
+                ".github/workflows/portfolio-state-reducer.yml",
+            ],
+            "foundation_check": {
+                "check_run_id": 702, "name": "validate", "app_id": 15368,
+                "head_sha": maintenance_head, "conclusion": "success",
+            },
+            "hosted_verifier_check": {
+                "check_run_id": 703, "name": "portfolio-phase1-gate", "app_id": 5121826,
+                "head_sha": maintenance_head, "conclusion": "success",
+            },
+            "archive_id": "canonical-archive-seq-00000106",
+            "checkpoint_sequence": 107,
+            "protected_merge": True,
+            "authority_granted": False,
+            "evidence_upgraded": False,
+        }]
+        stages = {row["stage_id"]: row for row in receipt["stages"]}
+        for name in ("subsequent_runtime_cycle", "subsequent_reducer_cycle", "subsequent_scheduler_cycle"):
+            stages[name]["source_shas"] = [continuation]
+        with self.assertRaisesRegex(FinalAcceptanceError, "non-archive path"):
+            validate_step22(bind_receipt(receipt))
 
     def test_step23_rejects_canonical_regression(self):
         receipt = step23()
