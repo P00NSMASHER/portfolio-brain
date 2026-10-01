@@ -395,7 +395,7 @@ class GitHubReader:
         reducer_runs = self._workflow_runs_since(
             "portfolio-state-reducer.yml", since, max_pages=max_pages
         )
-        snapshot_runs: list[tuple[dict, dict]] = []
+        snapshot_runs: list[dict] = []
         for run in reducer_runs:
             if not (
                 run.get("head_branch") == "main"
@@ -407,17 +407,17 @@ class GitHubReader:
                 row for row in self._run_artifacts(run["id"])
                 if row.get("name") == SNAPSHOT_ARTIFACT and not row.get("expired")
             ]
-            require(len(snapshots) <= 1, "Reducer published multiple canonical snapshots in one run")
             if snapshots:
-                retain(snapshots[0])
-                snapshot_runs.append((run, snapshots[0]))
+                for snapshot in snapshots:
+                    retain(snapshot)
+                snapshot_runs.append(run)
                 if len(snapshot_runs) == 2:
                     break
 
         # Producer run discovery stays anchored to the reviewed
         # journal/checkpoint boundary so an in-flight run that started before
         # recent reducer snapshots cannot disappear. Artifact retrieval is
-        # narrower: once two successful reducer snapshots exist, a terminal
+        # narrower: once two distinct successful reducer runs exist, a terminal
         # producer run that both started and finished before the older reducer
         # started is already covered by that predecessor snapshot and does not
         # need another per-run artifact request. Runs that started earlier but
@@ -425,7 +425,7 @@ class GitHubReader:
         event_since = since
         overlap_at = None
         if len(snapshot_runs) == 2:
-            overlap = min(snapshot_runs[0][0]["created_at"], snapshot_runs[1][0]["created_at"])
+            overlap = min(snapshot_runs[0]["created_at"], snapshot_runs[1]["created_at"])
             overlap_at = datetime.fromisoformat(overlap.replace("Z", "+00:00"))
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 

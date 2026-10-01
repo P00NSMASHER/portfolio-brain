@@ -30,10 +30,9 @@ def snapshot_candidates(artifacts: list[dict], *, current_run: str) -> list[dict
         return []
     require(any(not a.get("expired") for a in candidates), "Canonical journal expired; explicit recovery required")
     active = [a for a in candidates if not a.get("expired")]
-    # The sole reducer is serialized and publishes exactly one snapshot only
-    # after a successful replay step. Provider creation order therefore is the
-    # canonical publication order; historical snapshot count must never become
-    # a permanent reader outage.
+    # A reducer attempt publishes at most one snapshot after successful replay;
+    # rerunning a workflow can leave snapshots from earlier attempts. Provider
+    # creation order therefore remains the canonical publication order.
     return sorted(active, key=lambda a: (str(a.get("created_at") or ""), a.get("id", 0)), reverse=True)
 
 

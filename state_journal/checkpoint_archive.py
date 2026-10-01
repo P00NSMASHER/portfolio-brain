@@ -41,10 +41,12 @@ def latest_canonical(reader: GitHubReader) -> tuple[dict, dict, dict]:
             row for row in rows
             if row.get("name") == SNAPSHOT_ARTIFACT and row.get("expired") is False
         ]
-        require(len(matches) <= 1, "Reducer published multiple canonical snapshots")
         if not matches:
             continue
-        meta = matches[0]
+        meta = max(
+            matches,
+            key=lambda row: (str(row.get("created_at") or ""), row.get("id", 0)),
+        )
         raw = reader.archive(meta["id"])
         artifact_digest(meta, raw)
         state = extract_json(raw, "snapshot.json")
