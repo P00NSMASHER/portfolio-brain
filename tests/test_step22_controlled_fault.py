@@ -2,6 +2,7 @@ import base64
 import json
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from acceptance.step22_controlled_fault import TARGET_PATH, build_plan
 from acceptance.step22_controlled_fault_target import acceptance_value
@@ -11,8 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class Step22ControlledFaultTests(unittest.TestCase):
-    def test_fixture_is_nonproduction_baseline(self):
-        self.assertEqual(acceptance_value(), "BASELINE")
+    def test_fixture_is_nonproduction_and_main_arm_is_enforced_by_planner(self):
         self.assertEqual(TARGET_PATH, "acceptance/step22_controlled_fault_target.py")
         runtime_text = "\n".join(
             p.read_text(encoding="utf-8", errors="ignore")
@@ -22,7 +22,8 @@ class Step22ControlledFaultTests(unittest.TestCase):
 
     def test_plan_is_fail_closed_and_repair_policy_compatible(self):
         sha = "a" * 40
-        plan = build_plan(sha, at="2026-09-30T20:30:00Z")
+        with patch("acceptance.step22_controlled_fault.acceptance_value", return_value="BASELINE"):
+            plan = build_plan(sha, at="2026-09-30T20:30:00Z")
         self.assertEqual(plan["status"], "CONTROLLED_FAULT_DETECTED")
         self.assertEqual(plan["fault_mechanism"], "CONTROLLED_REPRODUCIBLE_FIXTURE")
         self.assertFalse(plan["production_main_damaged"])
@@ -43,6 +44,12 @@ class Step22ControlledFaultTests(unittest.TestCase):
         decoded = json.loads(base64.b64decode(plan["request_b64"]).decode("utf-8"))
         self.assertEqual(decoded, request)
         self.assertTrue(plan["fault_receipt_hash"].startswith("sha256:"))
+
+    def test_planner_fails_closed_when_fixture_is_not_armed_on_main(self):
+        sha = "a" * 40
+        with patch("acceptance.step22_controlled_fault.acceptance_value", return_value="CANDIDATE"):
+            with self.assertRaisesRegex(Exception, "fixture is not armed"):
+                build_plan(sha, at="2026-09-30T20:30:00Z")
 
     def test_workflow_has_no_merge_or_default_branch_write_authority(self):
         text = (ROOT / ".github" / "workflows" / "step22-controlled-repair-acceptance.yml").read_text()
