@@ -1,4 +1,5 @@
 name: step22-finalize-resume-current
+# Sequenced runtime -> reducer -> scheduler continuation.
 
 on:
   push:
