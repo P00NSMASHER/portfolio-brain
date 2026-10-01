@@ -317,7 +317,13 @@ def _merge_commuting_heartbeat_fork(
             slots[slot] = core_bytes
 
     merged = json.loads(json.dumps(base))
-    for key in sorted(batches, key=lambda value: (_utc(batches[value]["at"]), value)):
+    for key in sorted(
+        batches,
+        key=lambda value: (
+            _utc(batches[value]["at"]),
+            hashlib.sha256(value).hexdigest(),
+        ),
+    ):
         merged = replay_heartbeat_batch(merged, batches[key])
     validate_state(merged)
 
