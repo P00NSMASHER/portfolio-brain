@@ -236,7 +236,7 @@ def validate_operating_mode():
     actual=scheduled_workflow_inventory(workflow_dir)
     req(set(actual)==set(expected),"scheduled workflow inventory differs from approved operating policy")
     for name,cron in expected.items():
-        approved=[*step23_bounded_crons.get(name,[]),cron]
+        approved=[cron,*step23_bounded_crons.get(name,[])]
         req(actual[name]==approved,f"{name} cron mismatch")
     workload=load("workload_control/WORKLOAD_POLICY.json")
     req(workload["mode"]=="GITHUB_NATIVE_WORKLOAD_CONTROL","workload control mode changed")
