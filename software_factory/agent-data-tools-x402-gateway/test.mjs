@@ -83,6 +83,21 @@ try{
   });
   assert.equal(badRdap.status,400);
 
+  const sec=await fetch(base+'/api/sec-filings?ticker=AAPL&form=10-K&limit=1');
+  assert.equal(sec.status,402);
+  const secHeader=sec.headers.get('payment-required');
+  assert.ok(secHeader,'native SEC route should emit PAYMENT-REQUIRED');
+  const secDoc=JSON.parse(Buffer.from(secHeader,'base64').toString('utf8'));
+  assert.equal(secDoc.resource.url.endsWith('/api/sec-filings'),true);
+  assert.equal(secDoc.accepts[0].amount,'5000');
+  assert.equal(secDoc.accepts[0].extra.name,'USD Coin');
+  assert.equal(secDoc.resource.serviceName,'SEC Recent Filings');
+
+  const badSec=await fetch(base+'/api/sec-filings',{
+    headers:{'PAYMENT-SIGNATURE':Buffer.from(JSON.stringify({x402Version:2}),'utf8').toString('base64')}
+  });
+  assert.equal(badSec.status,400);
+
   for(const path of ['/api/pa-entity-one?q=OpenAI','/api/pa-business?q=OpenAI&limit=1']){
     const r=await fetch(base+path,{redirect:'manual'});
     assert.equal(r.status,402,path+' should return 402 unpaid');
