@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { Readable } from 'node:stream';
+import https from 'node:https';
 
 const PORT = Number(process.env.PORT || 3000);
 const PAY_TO = '0x708f7b52b56eafd7fc1de65fc7752ed732914021';
@@ -46,15 +46,18 @@ function agent(req){
   return {version:'1.3',origin:new URL(origin(req)).host,display_name:'Agent Data Tools x402',description:'Eight pay-per-call x402 endpoints for registry, SEC, Census, OFAC, RDAP and Treasury data, plus a vendor-intake decision gate.',payout_address:PAY_TO,payments:{x402:{networks:[{network:'base',asset:'USDC',contract:USDC}]}},
     intents:Object.entries(routes).map(([path,r])=>({name:path.slice(5).replaceAll('-','_'),description:desc(path),endpoint:path,method:'GET',price:{amount:Number(r[1]),currency:'USDC'}}))};
 }
-async function proxy(req,res,r){
-  try{
-    const u=new URL(req.url,'http://gateway.local'), target=new URL(r[0]); target.search=u.search;
-    const headers=new Headers();
-    for(const [k,v] of Object.entries(req.headers)){if(v==null||['host','connection','transfer-encoding'].includes(k.toLowerCase()))continue; Array.isArray(v)?v.forEach(x=>headers.append(k,x)):headers.set(k,v);}
-    const up=await fetch(target,{method:'GET',headers,redirect:'manual'});
-    res.statusCode=up.status; up.headers.forEach((v,k)=>res.setHeader(k,v)); res.setHeader('x-x402-gateway','transparent-proxy');
-    if(!up.body)return res.end(); Readable.fromWeb(up.body).pipe(res);
-  }catch(e){send(res,502,{error:'gateway_upstream_error',detail:e instanceof Error?e.message:String(e)});}
+function proxy(req,res,r){
+  const u=new URL(req.url,'http://gateway.local'), target=new URL(r[0]); target.search=u.search;
+  const headers={...req.headers};
+  delete headers.host; delete headers.connection; delete headers['transfer-encoding'];
+  const upstream=https.request(target,{method:'GET',headers},up=>{
+    res.statusCode=up.statusCode||502;
+    for(const [k,v] of Object.entries(up.headers)){if(v!==undefined)res.setHeader(k,v);}
+    res.setHeader('x-x402-gateway','transparent-proxy');
+    up.pipe(res);
+  });
+  upstream.on('error',e=>send(res,502,{error:'gateway_upstream_error',detail:e.message}));
+  upstream.end();
 }
 
 http.createServer(async(req,res)=>{
