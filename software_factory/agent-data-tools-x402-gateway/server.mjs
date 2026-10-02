@@ -61,9 +61,13 @@ function decodePaymentHeader(value){
 function paymentRequirements(priceUsd){
   return {scheme:'exact',network:NETWORK,amount:String(Math.round(Number(priceUsd)*1e6)),asset:USDC,payTo:PAY_TO,maxTimeoutSeconds:60,extra:{name:'USD Coin',version:'2'}};
 }
+const nativeResourceMeta={
+  '/api/treasury-average-rates':{serviceName:'Treasury Average Rates',tags:['Treasury','interest-rates','government','macro','finance']},
+  '/api/us-address-geocode':{serviceName:'Census Address Geocoder',tags:['Census','geocoding','address','geography','US']}
+};
 function paymentDocument(req,path){
-  const r=routes[path];
-  return {x402Version:2,resource:{url:origin(req)+path,description:desc(path),mimeType:'application/json',serviceName:'Treasury Average Rates',tags:['Treasury','interest-rates','government','macro','finance']},accepts:[paymentRequirements(r[1])]};
+  const r=routes[path], meta=nativeResourceMeta[path]||{serviceName:'Agent Data Tool',tags:['data']};
+  return {x402Version:2,resource:{url:origin(req)+path,description:desc(path),mimeType:'application/json',serviceName:meta.serviceName,tags:meta.tags},accepts:[paymentRequirements(r[1])]};
 }
 function sendPaymentRequired(req,res,path,reason='payment_required'){
   const doc=paymentDocument(req,path), r=routes[path];
@@ -118,6 +122,53 @@ async function serveTreasury(req,res,u){
   }catch{return send(res,503,{error:'Payment facilitator is temporarily unavailable; no result was served.'});}
 }
 
+function firstGeoByKey(geographies,key){
+  const value=geographies&&geographies[key];
+  return Array.isArray(value)&&value.length?value[0]:null;
+}
+function firstGeoByPattern(geographies,pattern){
+  for(const [key,value] of Object.entries(geographies||{})){if(pattern.test(key)&&Array.isArray(value)&&value.length)return value[0];}
+  return null;
+}
+async function geocodeAddress(address){
+  const u=new URL('https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress');
+  u.searchParams.set('address',address);
+  u.searchParams.set('benchmark','Public_AR_Current');
+  u.searchParams.set('vintage','Current_Current');
+  u.searchParams.set('format','json');
+  const r=await fetchWithTimeout(u,{headers:{accept:'application/json','user-agent':'agent-data-tools-x402/1.0'}},10000);
+  if(!r.ok)throw new Error('census_http_'+r.status);
+  const data=await r.json(), match=data?.result?.addressMatches?.[0];
+  if(!match)return {input:address,matched:false,matchedAddress:null,coordinates:null,addressComponents:null,geographies:null,source:'U.S. Census Bureau Geocoding Services'};
+  const geos=match.geographies||{};
+  const state=firstGeoByKey(geos,'States'), county=firstGeoByKey(geos,'Counties'), tract=firstGeoByKey(geos,'Census Tracts');
+  const block=firstGeoByKey(geos,'Census Blocks')||firstGeoByPattern(geos,/^\\d{4} Census Blocks$/i);
+  const district=firstGeoByPattern(geos,/^(?:\\d+(?:st|nd|rd|th) )?Congressional Districts$/i);
+  return {input:address,matched:true,matchedAddress:match.matchedAddress??null,coordinates:{longitude:match.coordinates?.x??null,latitude:match.coordinates?.y??null},addressComponents:match.addressComponents??null,geographies:{stateFips:state?.STATE??null,countyFips:county?.COUNTY??null,countyGeoid:county?.GEOID??null,tract:tract?.TRACT??null,tractGeoid:tract?.GEOID??null,block:block?.BLOCK??null,blockGeoid:block?.GEOID??null,congressionalDistrict:district?.CD??district?.BASENAME??null},source:'U.S. Census Bureau Geocoding Services'};
+}
+async function serveCensus(req,res,u){
+  const path='/api/us-address-geocode';
+  const signature=req.headers['payment-signature']||req.headers['x-payment'];
+  if(!signature)return sendPaymentRequired(req,res,path);
+  let payload;
+  try{payload=decodePaymentHeader(String(signature));}catch{return sendPaymentRequired(req,res,path,'invalid_payment_header');}
+  const address=(u.searchParams.get('address')||'').trim().replace(/\\s+/g,' ');
+  if(address.length<6)return send(res,400,{error:'address must contain at least 6 characters.'});
+  if(address.length>240)return send(res,400,{error:'address must be 240 characters or fewer.'});
+  const requirements=paymentRequirements(routes[path][1]);
+  try{
+    const verified=await facilitatorPost('verify',payload,requirements);
+    if(verified.isValid!==true&&verified.success!==true)return sendPaymentRequired(req,res,path,String(verified.invalidReason||verified.errorReason||'payment_verification_failed'));
+    let result;
+    try{result=await geocodeAddress(address);}catch{return send(res,502,{error:'Census geocoder unavailable; payment was not settled.'});}
+    const settled=await facilitatorPost('settle',payload,requirements);
+    if(settled.success!==true)return sendPaymentRequired(req,res,path,String(settled.errorReason||'payment_settlement_failed'));
+    const body=JSON.stringify({...result,paid:true},null,2);
+    res.writeHead(200,{'content-type':'application/json; charset=utf-8','content-length':Buffer.byteLength(body),'cache-control':'no-store','access-control-allow-origin':'*','access-control-expose-headers':'PAYMENT-RESPONSE, x402-settled','PAYMENT-RESPONSE':encodePaymentHeader(settled),'x402-settled':'true'});
+    res.end(body);
+  }catch{return send(res,503,{error:'Payment facilitator is temporarily unavailable; no result was served.'});}
+}
+
 function proxy(req,res,r){
   const u=new URL(req.url,'http://gateway.local'), target=new URL(r[0]); target.search=u.search;
   const headers={...req.headers};
@@ -145,6 +196,7 @@ http.createServer(async(req,res)=>{
   if(u.pathname==='/skill.md')return send(res,200,'# Agent Data Tools x402\n\nUse /api/vendor-intake-gate for a bounded proceed or human_review decision. Other routes return direct public-data lookups. Unpaid calls return HTTP 402; pay the quote and retry the same gateway URL with PAYMENT-SIGNATURE.','text/markdown; charset=utf-8');
   if(u.pathname==='/'){return send(res,200,`<!doctype html><meta name="viewport" content="width=device-width"><title>Agent Data Tools x402</title><main style="max-width:800px;margin:40px auto;font:16px system-ui"><h1>Agent Data Tools x402</h1><p>Unique-host transparent gateway for eight x402 v2 paid endpoints.</p><p><a href="/openapi.json">OpenAPI</a> · <a href="/.well-known/x402">x402 discovery</a> · <a href="/.well-known/agent.json">agent.json</a></p></main>`,'text/html; charset=utf-8');}
   if(u.pathname==='/api/treasury-average-rates')return serveTreasury(req,res,u);
+  if(u.pathname==='/api/us-address-geocode')return serveCensus(req,res,u);
   if(routes[u.pathname])return proxy(req,res,routes[u.pathname]);
   return send(res,404,{error:'not_found'});
 }).listen(PORT,'0.0.0.0',()=>console.log(`Agent Data Tools x402 gateway listening on ${PORT}`));

@@ -52,6 +52,22 @@ try{
   const badBody=await badPayment.json();
   assert.equal(badBody.error,'invalid_payment_header');
 
+  const census=await fetch(base+'/api/us-address-geocode?address=4600%20Silver%20Hill%20Rd%2C%20Washington%2C%20DC%2020233');
+  assert.equal(census.status,402);
+  const censusHeader=census.headers.get('payment-required');
+  assert.ok(censusHeader,'native Census route should emit PAYMENT-REQUIRED');
+  const censusDoc=JSON.parse(Buffer.from(censusHeader,'base64').toString('utf8'));
+  assert.equal(censusDoc.resource.url.endsWith('/api/us-address-geocode'),true);
+  assert.equal(censusDoc.accepts[0].amount,'5000');
+  assert.equal(censusDoc.accepts[0].asset,'0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913');
+  assert.equal(censusDoc.accepts[0].extra.name,'USD Coin');
+  assert.equal(censusDoc.resource.serviceName,'Census Address Geocoder');
+
+  const badCensus=await fetch(base+'/api/us-address-geocode?address=x',{
+    headers:{'PAYMENT-SIGNATURE':Buffer.from(JSON.stringify({x402Version:2}),'utf8').toString('base64')}
+  });
+  assert.equal(badCensus.status,400);
+
   for(const path of ['/api/pa-entity-one?q=OpenAI','/api/pa-business?q=OpenAI&limit=1']){
     const r=await fetch(base+path,{redirect:'manual'});
     assert.equal(r.status,402,path+' should return 402 unpaid');
