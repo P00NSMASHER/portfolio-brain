@@ -456,16 +456,15 @@ class GitHubReader:
 
         # Producer run discovery stays anchored to the reviewed
         # journal/checkpoint boundary so an in-flight run that started before
-        # recent reducer snapshots cannot disappear. Artifact retrieval is
-        # narrower: once two successful reducer snapshots exist, a terminal
-        # producer run that both started and finished before the older reducer
-        # started is already covered by that predecessor snapshot and does not
-        # need another per-run artifact request. Runs that started earlier but
-        # remained active into the overlap window are still inspected.
+        # a recent reducer snapshot cannot disappear. Artifact retrieval is
+        # narrower: a terminal producer run that both started and finished
+        # before a successful snapshot run started is already covered by that
+        # snapshot and needs no per-run artifact request. Runs that started
+        # earlier but remained active into the overlap window are still inspected.
         event_since = since
         overlap_at = None
-        if len(snapshot_runs) == 2:
-            overlap = min(snapshot_runs[0][0]["created_at"], snapshot_runs[1][0]["created_at"])
+        if snapshot_runs:
+            overlap = min(run["created_at"] for run, _ in snapshot_runs)
             overlap_at = datetime.fromisoformat(overlap.replace("Z", "+00:00"))
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 
