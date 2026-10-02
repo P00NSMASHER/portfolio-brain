@@ -320,16 +320,22 @@ class GitHubReader:
                 return sorted(selected, key=lambda row: (row["created_at"], row["id"]), reverse=True)
         raise JournalError("Artifact scan incomplete at page bound; checkpoint/archive required")
 
-    def _workflow_runs_since(self, workflow_file: str, since: str, *, max_pages: int) -> list[dict]:
-        require(re.fullmatch(r"[a-z0-9-]+\.yml", workflow_file) is not None, "Unsafe workflow file")
+    def _workflow_runs_since(self, workflow_file: str | None, since: str, *, max_pages: int) -> list[dict]:
+        if workflow_file is not None:
+            require(re.fullmatch(r"[a-z0-9-]+\.yml", workflow_file) is not None, "Unsafe workflow file")
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Workflow boundary requires timezone")
         encoded = quote(f">={since}", safe="")
         result = {}
         for page in range(1, max_pages + 1):
-            response = self.get(
-                f"/actions/workflows/{workflow_file}/runs?branch=main&created={encoded}&per_page=100&page={page}"
-            )
+            if workflow_file is None:
+                suffix = f"/actions/runs?branch=main&created={encoded}&per_page=100&page={page}"
+            else:
+                suffix = (
+                    f"/actions/workflows/{workflow_file}/runs?"
+                    f"branch=main&created={encoded}&per_page=100&page={page}"
+                )
+            response = self.get(suffix)
             rows = response.get("workflow_runs")
             require(isinstance(rows, list), "Workflow run listing malformed")
             for row in rows:
@@ -341,6 +347,15 @@ class GitHubReader:
                 require(at.tzinfo is not None, "Workflow run created_at requires timezone")
                 if at < boundary:
                     continue
+                if workflow_file is None:
+                    path = row.get("path")
+                    require(isinstance(path, str), "Workflow run path missing")
+                    path = path.split("@", 1)[0]
+                    if path not in {
+                        f".github/workflows/{workflow}.yml"
+                        for workflow in WORKFLOW_PRODUCERS
+                    }:
+                        continue
                 previous = result.get(run_id)
                 if previous is not None:
                     require(previous == row, "Workflow run metadata changed during bounded scan")
@@ -373,6 +388,8 @@ class GitHubReader:
         restore instead enumerates the closed workflow allowlist, validates each
         run later through the existing provider checks, and scans events only
         from the older of the two newest successful reducer publications.
+        Producer runs share one repository run scan so request usage does not
+        scale with the number of enrolled workflows.
         """
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
@@ -470,8 +487,25 @@ class GitHubReader:
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
+        if len(WORKFLOW_PRODUCERS) > 1 and getattr(self, "http", None) is not None:
+            discovered_runs = self._workflow_runs_since(None, event_since, max_pages=max_pages)
+            runs_by_workflow = {
+                workflow: [
+                    run for run in discovered_runs
+                    if run.get("path", "").split("@", 1)[0]
+                    == f".github/workflows/{workflow}.yml"
+                ]
+                for workflow in WORKFLOW_PRODUCERS
+            }
+        else:
+            runs_by_workflow = {
+                workflow: self._workflow_runs_since(
+                    f"{workflow}.yml", event_since, max_pages=max_pages
+                )
+                for workflow in WORKFLOW_PRODUCERS
+            }
         for workflow in sorted(WORKFLOW_PRODUCERS):
-            for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
+            for run in runs_by_workflow[workflow]:
                 if not (
                     run.get("head_branch") == "main"
                     and run.get("status") == "completed"
