@@ -1,0 +1,118 @@
+name: step23-artifact-anchor-diagnostic
+
+on:
+  push:
+    branches:
+      - diagnostic/step23-artifact-coverage-20261002
+    paths:
+      - '.github/workflows/step23-artifact-anchor-diagnostic.yml'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Prove stable artifact coverage to reducer anchor
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import json, os, time, urllib.request
+
+          repo=os.environ["REPOSITORY"]; token=os.environ["GH_TOKEN"]
+          root=f"https://api.github.com/repos/{repo}"
+          calls=0
+          def get(path):
+              global calls
+              calls += 1
+              req=urllib.request.Request(root+path,headers={
+                  "Authorization":f"Bearer {token}",
+                  "Accept":"application/vnd.github+json",
+                  "X-GitHub-Api-Version":"2022-11-28",
+                  "User-Agent":"step23-anchor-diagnostic",
+              })
+              with urllib.request.urlopen(req,timeout=30) as r:
+                  return json.load(r)
+
+          reducer=get("/actions/workflows/portfolio-state-reducer.yml/runs?branch=main&status=success&per_page=20")
+          anchors=[]
+          for run in reducer.get("workflow_runs",[]):
+              arts=get(f"/actions/runs/{run['id']}/artifacts?per_page=100").get("artifacts",[])
+              snaps=[a for a in arts if a.get("name")=="portfolio-state-canonical" and not a.get("expired")]
+              if snaps:
+                  anchors.append({"run":run,"artifact":snaps[0]})
+              if len(anchors)==2: break
+          if len(anchors)!=2:
+              raise SystemExit("need two successful reducer snapshot anchors")
+          older=min(anchors,key=lambda x:x["run"]["created_at"])
+          anchor_id=older["artifact"]["id"]
+
+          def scan():
+              seq=[]; rows={}; anchor_page=None; total_counts=[]
+              for page in range(1,21):
+                  doc=get(f"/actions/artifacts?per_page=100&page={page}")
+                  total_counts.append(doc.get("total_count"))
+                  batch=doc.get("artifacts",[])
+                  for a in batch:
+                      aid=a["id"]
+                      if aid not in rows:
+                          seq.append(aid); rows[aid]=a
+                      else:
+                          if rows[aid] != a:
+                              raise SystemExit("artifact metadata changed within scan")
+                  if anchor_id in rows:
+                      anchor_page=page
+                      break
+                  if len(batch)<100: break
+              return {"seq":seq,"rows":rows,"anchor_page":anchor_page,"total_counts":total_counts}
+
+          passes=[]
+          for _ in range(3):
+              passes.append(scan())
+              time.sleep(1)
+
+          pairs=[]
+          for i in range(len(passes)-1):
+              a,b=passes[i],passes[i+1]
+              apos={v:k for k,v in enumerate(a["seq"])}
+              bpos={v:k for k,v in enumerate(b["seq"])}
+              common=[v for v in a["seq"] if v in bpos]
+              agreement=None
+              for frontier in common:
+                  aa=a["seq"][apos[frontier]:apos.get(anchor_id, -1)+1]
+                  bb=b["seq"][bpos[frontier]:bpos.get(anchor_id, -1)+1]
+                  if aa and bb and aa==bb and aa[-1]==anchor_id:
+                      agreement={"frontier_id":frontier,"length":len(aa)}
+                      break
+              pairs.append({
+                  "passes":[i+1,i+2],
+                  "anchor_pages":[a["anchor_page"],b["anchor_page"]],
+                  "anchor_present":anchor_id in apos and anchor_id in bpos,
+                  "stable_suffix_to_anchor":agreement,
+                  "first_ids":[a["seq"][:3],b["seq"][:3]],
+                  "unique_counts":[len(a["seq"]),len(b["seq"])],
+                  "total_count_ranges":[[min(a["total_counts"]),max(a["total_counts"])],[min(b["total_counts"]),max(b["total_counts"])]],
+              })
+
+          result={
+              "head_sha":os.environ["GITHUB_SHA"],
+              "anchor_run_id":older["run"]["id"],
+              "anchor_artifact_id":anchor_id,
+              "anchor_created_at":older["artifact"]["created_at"],
+              "calls":calls,
+              "passes":[{"anchor_page":p["anchor_page"],"unique":len(p["seq"])} for p in passes],
+              "pairs":pairs,
+          }
+          print(json.dumps(result,sort_keys=True,indent=2))
+          if not any(p["stable_suffix_to_anchor"] for p in pairs):
+              raise SystemExit("no stable repeated artifact-ID suffix to reducer anchor")
+          PY
