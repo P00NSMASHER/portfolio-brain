@@ -269,9 +269,14 @@ class GitHubReader:
     def __init__(self, token: str, *, max_requests: int = 100):
         self.http = BudgetedHTTP(token, max_requests=max_requests, retries=1, backoff=1)
         self.base = f"https://api.github.com/repos/{REPOSITORY}"
+        self._run_cache: dict[int, dict] = {}
 
     def get(self, suffix: str) -> dict:
         require(suffix.startswith("/") and ".." not in suffix and "://" not in suffix, "Unsafe API suffix")
+        match = re.fullmatch(r"/actions/runs/([1-9][0-9]*)", suffix)
+        run_cache = getattr(self, "_run_cache", {})
+        if match is not None and int(match.group(1)) in run_cache:
+            return run_cache[int(match.group(1))]
         return self.http.json(self.base + suffix)
 
     def archive(self, artifact_id: int) -> bytes:
@@ -347,6 +352,10 @@ class GitHubReader:
                 else:
                     result[run_id] = row
             if len(rows) < 100:
+                run_cache = getattr(self, "_run_cache", None)
+                if run_cache is None:
+                    run_cache = self._run_cache = {}
+                run_cache.update(result)
                 return sorted(
                     result.values(),
                     key=lambda row: (row["created_at"], row["id"]),
