@@ -158,7 +158,9 @@ def build_repair_issues(snapshot: dict[str, Any]) -> list[dict[str, str]]:
         add("HIGH", "Durable failures need diagnosis", f"{telemetry['failures']['count']} failure signals.",
             "dashboard/operational_telemetry.py", "Classify each current failure, repair its root cause and check an independent run.")
     provider = snapshot["model_router"]["provider_readiness"]
-    if snapshot["model_router"]["enabled_non_tier0_route_count"] and provider["status"] != "READY":
+    if (snapshot["model_router"]["enabled_non_tier0_route_count"]
+            and provider["status"] != "READY"
+            and sources["sources"].get("provider",{}).get("status") == "LIVE"):
         add("HIGH", "Model route is unverified", f"Provider status {provider['status']}; cost gate {provider.get('cost_gate_status') or 'unknown'}.",
             "runtime/provider_health.py", "Verify one bounded governed model call if authorized; keep provider billing and cost limits separate.")
     integrity = snapshot["learning_loop"]["integrity"]
@@ -552,7 +554,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
         functional_reasons.append(f"{stale_source_count} subsystem source(s) are stale or using fallback")
     if telemetry["failures"]["count"]:
         functional_reasons.append(f"{telemetry['failures']['count']} durable failure/stall signal(s)")
-    if enabled_model_routes and provider_health["status"] != "READY":
+    if (enabled_model_routes and provider_health["status"] != "READY"
+            and state_sources["sources"].get("provider",{}).get("status") == "LIVE"):
         functional_reasons.append(f"enabled model route provider is {provider_health['status']}")
     if learning_integrity["status"]=="DEGRADED":
         functional_reasons.append("verified value has not reconciled across all durable learning layers")
@@ -604,7 +607,8 @@ def build_command_center_snapshot() -> dict[str, Any]:
                 "evidence_ref": "cost_governor/COST_GOVERNOR_POLICY.json",
             }
         )
-    if provider_health["status"] not in {"READY", "UNKNOWN"}:
+    if (provider_health["status"] not in {"READY", "UNKNOWN"}
+            and state_sources["sources"].get("provider",{}).get("status") == "LIVE"):
         alerts.append(
             {
                 "severity": "HIGH" if provider_health["status"] in {"MISSING_CREDENTIAL", "BILLING_NOT_ACTIVE", "QUOTA_EXHAUSTED"} else "MEDIUM",
