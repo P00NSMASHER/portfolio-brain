@@ -1,0 +1,79 @@
+name: step23-exact-name-live-diagnostic
+
+on:
+  push:
+    branches: ["diagnostic/step23-exact-name-live-20261002"]
+    paths:
+      - ".github/workflows/step23-exact-name-live-diagnostic.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Exercise exact-name journal discovery against live GitHub
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from state_journal.contracts import strict_load
+          from state_journal.github_reducer import restore_snapshot
+          from state_journal.production_reader import _pending_events
+          from state_journal.archive import archived_artifact_ids, load_active_manifest
+          from state_journal.transport import EVENT_PREFIX, GitHubReader, SNAPSHOT_ARTIFACT
+
+          policy = strict_load(open("state_journal/POLICY.json", "rb").read())
+          reader = GitHubReader(
+              os.environ["GITHUB_TOKEN"],
+              max_requests=policy["limits"]["max_read_requests"],
+          )
+          artifacts = reader.list_recent_journal_artifacts(
+              policy["artifact_scan_start"],
+              max_pages=policy["limits"]["max_artifact_pages"],
+          )
+          after_discovery = reader.http.requests
+          state = restore_snapshot(
+              reader,
+              artifacts,
+              current_run=os.environ["GITHUB_RUN_ID"],
+          )
+          if state is None:
+              raise SystemExit("NO_CANONICAL_SNAPSHOT")
+          archive_ids = archived_artifact_ids(load_active_manifest())
+          pending = _pending_events(state, artifacts, archived_ids=archive_ids)
+          receipt = {
+              "diagnostic_only": True,
+              "counts_for_step23": False,
+              "repair_head": "d50d5b11dba69dd439065696319905df800c5790",
+              "target_protected_main": "b48e2962be3fc3ac1a96637b1682137ffead7d2c",
+              "artifact_scan_start": policy["artifact_scan_start"],
+              "max_read_requests": policy["limits"]["max_read_requests"],
+              "requests_after_discovery": after_discovery,
+              "requests_after_snapshot_restore": reader.http.requests,
+              "artifact_count": len(artifacts),
+              "snapshot_artifact_ids": [
+                  a["id"] for a in artifacts if a.get("name") == SNAPSHOT_ARTIFACT
+              ],
+              "event_artifact_ids": [
+                  a["id"] for a in artifacts
+                  if str(a.get("name") or "").startswith(EVENT_PREFIX)
+              ],
+              "pending_event_count": len(pending),
+          }
+          print(json.dumps(receipt, sort_keys=True))
+          PY
