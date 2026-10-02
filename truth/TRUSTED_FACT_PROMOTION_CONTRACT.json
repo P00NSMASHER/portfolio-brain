@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "input": "PINNED_AI_BUSINESS_OS_TRUTH_RECEIPT",
+  "adapter": "truth.truth_adapter.project_receipt",
+  "promotable_truth_states": ["VERIFIED"],
+  "held_truth_states": ["UNKNOWN", "STALE", "CONTRADICTED"],
+  "decision_values": ["PROMOTE", "HOLD"],
+  "requires_exact_pinned_source_identity": true,
+  "promotion_requires_upstream_proven": true,
+  "promotion_requires_required_findings_satisfied": true,
+  "stale_is_not_proof": true,
+  "contradicted_is_not_proof": true,
+  "unknown_is_not_proof": true,
+  "authority_change": "NONE"
+}
