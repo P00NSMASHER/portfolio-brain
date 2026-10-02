@@ -9,6 +9,8 @@ on:
       - ".github/workflows/step23-scheduled-soak-finalize.yml"
       - "acceptance/STEP23_SOAK.json"
       - "acceptance/step23_live_collect.py"
+      - "state_journal/transport.py"
+      - "tests/test_state_journal_snapshot_request_budget_regression.py"
 
 permissions:
   actions: read
