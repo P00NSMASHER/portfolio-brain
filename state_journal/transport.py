@@ -557,7 +557,8 @@ class GitHubReader:
         # page bound. With monotonic newest-to-oldest metadata, a run that
         # started strictly after the oldest scanned artifact is fully covered:
         # every artifact it could have published must already be in the scanned
-        # window. Only the older unresolved tail falls back to per-run queries.
+        # window. If ordering is ambiguous, exact per-run listings recover all
+        # candidate runs instead.
         if overlap_at is not None and len(post_overlap_runs) > max_pages:
             overlap_raw = overlap_at.isoformat().replace("+00:00", "Z")
             post_overlap_ids = {run["id"] for run in post_overlap_runs}
@@ -576,20 +577,26 @@ class GitHubReader:
             if scan_complete:
                 self._event_run_artifacts.update(grouped)
             else:
-                require(ordering_proven and oldest_seen is not None,
-                        "Artifact scan incomplete at page bound; checkpoint/archive required")
                 unresolved = []
                 resolved_ids = set()
-                for run in post_overlap_runs:
-                    created_at = run.get("created_at")
-                    require(isinstance(created_at, str), "Workflow run created_at missing")
-                    started = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-                    require(started.tzinfo is not None,
-                            "Workflow run created_at requires timezone")
-                    if started > oldest_seen:
-                        resolved_ids.add(run["id"])
-                    else:
-                        unresolved.append(run)
+                if ordering_proven:
+                    require(oldest_seen is not None,
+                            "Ordered artifact scan did not establish its oldest artifact")
+                    for run in post_overlap_runs:
+                        created_at = run.get("created_at")
+                        require(isinstance(created_at, str), "Workflow run created_at missing")
+                        started = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                        require(started.tzinfo is not None,
+                                "Workflow run created_at requires timezone")
+                        if started > oldest_seen:
+                            resolved_ids.add(run["id"])
+                        else:
+                            unresolved.append(run)
+                else:
+                    # An inverted/ambiguous repository-wide page scan cannot
+                    # establish coverage for any run; recover from exact-run
+                    # listings instead of treating the partial scan as proof.
+                    unresolved = post_overlap_runs
                 self._event_run_artifacts.update(
                     {run_id: grouped[run_id] for run_id in resolved_ids}
                 )
