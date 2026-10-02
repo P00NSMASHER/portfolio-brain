@@ -378,6 +378,13 @@ class GitHubReader:
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
         require(type(max_pages) is int and max_pages > 0, "Artifact page bound invalid")
         result: dict[int, dict] = {}
+        discovered_runs: dict[int, dict] = {}
+        run_artifacts_cache: dict[int, list[dict]] = {}
+
+        def run_artifacts(run_id: int) -> list[dict]:
+            if run_id not in run_artifacts_cache:
+                run_artifacts_cache[run_id] = self._run_artifacts(run_id)
+            return run_artifacts_cache[run_id]
 
         def retain(row: dict) -> None:
             artifact_id = row.get("id")
@@ -398,6 +405,7 @@ class GitHubReader:
         self._snapshot_source_runs: dict[int, dict] = {}
         snapshot_runs: list[tuple[dict, dict]] = []
         for run in reducer_runs:
+            discovered_runs[run["id"]] = run
             if not (
                 run.get("head_branch") == "main"
                 and run.get("status") == "completed"
@@ -405,7 +413,7 @@ class GitHubReader:
             ):
                 continue
             snapshots = [
-                row for row in self._run_artifacts(run["id"])
+                row for row in run_artifacts(run["id"])
                 if row.get("name") == SNAPSHOT_ARTIFACT and not row.get("expired")
             ]
             if len(snapshots) > 1:
@@ -472,6 +480,11 @@ class GitHubReader:
         terminal = {"success", "failure", "cancelled", "timed_out"}
         for workflow in sorted(WORKFLOW_PRODUCERS):
             for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
+                previous_run = discovered_runs.get(run["id"])
+                if previous_run is not None:
+                    require(previous_run == run, "Workflow run metadata changed during bounded scan")
+                else:
+                    discovered_runs[run["id"]] = run
                 if not (
                     run.get("head_branch") == "main"
                     and run.get("status") == "completed"
@@ -489,19 +502,21 @@ class GitHubReader:
                             "Workflow run timestamps require timezone")
                     if started < overlap_at and finished < overlap_at:
                         continue
-                for row in self._run_artifacts(run["id"]):
+                for row in run_artifacts(run["id"]):
                     if row.get("name", "").startswith(EVENT_PREFIX):
                         retain(row)
 
         for run_id in explicit_run_ids:
             require(type(run_id) is int and run_id > 0, "Explicit recovery run ID invalid")
-            run = self.get(f"/actions/runs/{run_id}")
+            run = discovered_runs.get(run_id)
+            if run is None or not isinstance(run.get("path"), str):
+                run = self.get(f"/actions/runs/{run_id}")
             require(run.get("id") == run_id, "Explicit recovery run identity mismatch")
             require(run.get("head_branch") == "main", "Explicit recovery run is not on main")
             require(run.get("status") == "completed" and run.get("conclusion") in terminal,
                     "Explicit recovery run is not terminal")
             source_producer(run)
-            for row in self._run_artifacts(run_id):
+            for row in run_artifacts(run_id):
                 if row.get("name", "").startswith(EVENT_PREFIX):
                     retain(row)
 
