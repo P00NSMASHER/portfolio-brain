@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "purpose": "Collect exact-main Step 23 scheduled soak evidence on protected main 57879a4f after the latest unrelated protected merge; never mix prior-main evidence.",
+  "exact_main_sha": "57879a4f9cebba7a64fbd3ea876443f08db65aa7",
+  "soak_start": "2026-10-02T14:16:48Z",
+  "required_successes_per_workflow": 3,
+  "required_workflows": [
+    "portfolio-state-reducer",
+    "runtime-hourly-sync",
+    "portfolio-autonomous-scheduler",
+    "hunter-autonomous-cycle",
+    "agent-heartbeat-sweep",
+    "portfolio-cost-watchdog",
+    "portfolio-notification-cycle",
+    "command-center-pages"
+  ],
+  "required_handler_types": [
+    "REPAIR",
+    "TEST",
+    "VERIFICATION"
+  ],
+  "poll_seconds": 45,
+  "max_resets": 5
+}
