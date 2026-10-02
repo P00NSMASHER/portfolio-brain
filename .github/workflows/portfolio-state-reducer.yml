@@ -3,12 +3,12 @@ name: portfolio-state-reducer
 on:
   schedule:
     - cron: "11 4 * * *"
-    # Bounded Step-23 final-acceptance soak windows for 2026-10-01 UTC.
+    # Bounded Step-23 final-acceptance soak windows for 2026-10-02 UTC.
     # These are real schedule events; they do not replace or weaken the normal cadence.
-    - cron: "7 15 2 10 *"
-    - cron: "37 15 2 10 *"
-    - cron: "7 16 2 10 *"
-    - cron: "37 16 2 10 *"
+    - cron: "17 18 2 10 *"
+    - cron: "47 18 2 10 *"
+    - cron: "17 19 2 10 *"
+    - cron: "47 19 2 10 *"
   push:
     branches: ["main"]
     paths:
