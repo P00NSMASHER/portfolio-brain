@@ -20,10 +20,11 @@ The service exposes one public origin with:
 Discovery surfaces:
 
 - `/.well-known/x402`
+- `/.well-known/agent.json`
 - `/openapi.json`
 - `/llms.txt`
 - `/skill.md`
-- `/health`
+- `/health` and `/healthz`
 
 ## Payment contract
 
@@ -54,3 +55,10 @@ The service verifies payment first, performs the authoritative-data operation, a
 The repository workflow `x402 Render Gateway Smoke` checks syntax, server startup, discovery resource count, OpenAPI route count, and the unpaid Base-USDC 402 challenge.
 
 A separate isolated deep smoke was used during development to verify live government sources and the vendor decision policy without changing this production branch.
+
+
+## Marketplace readiness
+
+The 402 challenge includes x402 v2 Base USDC payment requirements plus Bazaar discovery metadata. The same-origin discovery document publishes the eight route URLs, accepted payment requirements, examples, tags, and service names. The Agent402-style manifest is available at `/.well-known/agent.json`.
+
+Catalog inclusion is settlement-driven on Bazaar-style facilitators: a public route still needs a successful paid settlement that carries the discovery extension before that facilitator can catalog it. Self-funded catalog-seeding payments should be tracked separately from outside-buyer revenue.
