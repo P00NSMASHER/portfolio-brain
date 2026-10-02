@@ -245,8 +245,25 @@ def build_live_state(
     provider_metadata_path=metadata_dir/"provider.json"
     provider_metadata=json.loads(provider_metadata_path.read_text(encoding="utf-8")) if provider_metadata_path.exists() else {}
     provider_restore_status=provider_metadata.get("restore_status","NO_VALID_PROVIDER_HEALTH_ARTIFACT")
+    provider_state=None
+    provider_artifact_age=None
+    provider_state_age=None
+    provider_freshness_basis=None
     if provider_restore_status.startswith("RESTORED") and provider_path.exists():
-        provider_freshness,provider_age=_classify(provider_metadata,now=now,stale_after_minutes=STALE_AFTER_MINUTES["provider"])
+        provider_state=json.loads(provider_path.read_text(encoding="utf-8"))
+        provider_freshness,provider_artifact_age=_classify(
+            provider_metadata,now=now,stale_after_minutes=STALE_AFTER_MINUTES["provider"]
+        )
+        state_updated_at=provider_state.get("updated_at")
+        require(isinstance(state_updated_at,str) and state_updated_at,
+                "restored provider health updated_at missing")
+        provider_state_age=round(max(0.0,(now-_time(state_updated_at)).total_seconds()/60.0),1)
+        if provider_state_age>STALE_AFTER_MINUTES["provider"]:
+            provider_freshness="STALE"
+        provider_age=max(
+            age for age in (provider_artifact_age,provider_state_age) if age is not None
+        )
+        provider_freshness_basis="ARTIFACT_AND_PROVIDER_STATE_UPDATED_AT"
         provider_ref=provider_metadata.get("artifact_name")
         provider_kind="GITHUB_ACTIONS_ARTIFACT"
     else:
@@ -254,13 +271,15 @@ def build_live_state(
         provider_kind="CHECKED_IN_SEED"
         provider_freshness=_fallback_status(provider_restore_status,provider_metadata.get("error_class"))
         provider_age=None
-    provider_state=json.loads(provider_path.read_text(encoding="utf-8"))
+        provider_state=json.loads(provider_path.read_text(encoding="utf-8"))
     sources["provider"]={
       "status":provider_freshness,"source_kind":provider_kind,"source_ref":provider_ref,
       "restore_status":provider_restore_status,"source_run_id":provider_metadata.get("source_run_id"),
       "source_head_sha":provider_metadata.get("source_head_sha"),"artifact_id":provider_metadata.get("artifact_id"),
       "artifact_created_at":provider_metadata.get("artifact_created_at"),
       "artifact_expires_at":provider_metadata.get("artifact_expires_at"),"age_minutes":provider_age,
+      "artifact_age_minutes":provider_artifact_age,"state_age_minutes":provider_state_age,
+      "freshness_basis":provider_freshness_basis,
       "stale_after_minutes":STALE_AFTER_MINUTES["provider"],"state_sequence":provider_state.get("sequence"),
       "source_sequence":provider_state.get("sequence"),"source_state_hash":_hash_value(provider_state),
       "state_updated_at":provider_state.get("updated_at"),"error_class":provider_metadata.get("error_class"),
