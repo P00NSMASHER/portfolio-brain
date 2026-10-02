@@ -376,7 +376,7 @@ def _nonterminal_fingerprints(state):
 
 def _open_agent_counts(state):
     counts={}
-    for w in working_state["work_items"]:
+    for w in state["work_items"]:
         if w["state"] in {"QUEUED","ACTIVE"}:
             agent=w["assigned_agent_id"]
             counts[agent]=counts.get(agent,0)+1
@@ -463,7 +463,7 @@ def schedule_cycle(state,context=None,*,at=None,candidate_filter:Callable[[dict[
             suppressed.append(c["fingerprint"]);continue
         eligible.append(c)
     # Preserve stale external leases as holds rather than creating overlapping work.
-    for w in state["work_items"]:
+    for w in working_state["work_items"]:
         if w["state"]=="ACTIVE" and w["lease_expires_at"] is not None:
             try: expired=float(w["lease_expires_at"])<=datetime.fromisoformat(at.replace("Z","+00:00")).timestamp()
             except Exception: expired=False
