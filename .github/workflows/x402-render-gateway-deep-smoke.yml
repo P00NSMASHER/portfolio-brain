@@ -1,0 +1,104 @@
+name: x402 Gateway Deep Smoke
+
+on:
+  push:
+    branches:
+      - x402-render-gateway-deep-smoke
+    paths:
+      - '.github/workflows/x402-render-gateway-deep-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  live-sources:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: x402-render-gateway
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build isolated deep-smoke harness
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          let source = fs.readFileSync('server.js', 'utf8');
+          const listener = /server\.listen\(PORT, '0\.0\.0\.0', \(\) => \{[\s\S]*?\n\}\);\s*$/;
+          if (!listener.test(source)) {
+            throw new Error('server listener block not found');
+          }
+          const test = String.raw`
+          async function __deepSmoke() {
+            const address = '600 North Second Street, Suite 401, Harrisburg, PA 17101';
+
+            const pa = await paSearch('OpenAI OpCo', 3);
+            if (!pa.ranked.length || !/OPENAI OPCO/i.test(pa.ranked[0].businessName || '')) {
+              throw new Error('PA registry best match failed');
+            }
+
+            const census = await geocode(address);
+            if (census.matched !== true || !census.coordinates) {
+              throw new Error('Census address match failed');
+            }
+
+            const rdap = await lookupDomain('openai.com');
+            if (rdap.registered !== true || !rdap.authoritativeRdap) {
+              throw new Error('RDAP registration check failed');
+            }
+
+            const treasury = await latestTreasuryRates('Total Marketable');
+            if (!(treasury.count > 0) || !treasury.recordDate) {
+              throw new Error('Treasury latest rates failed');
+            }
+
+            const ofac = await screenOfac('OpenAI OpCo', 3, 90);
+            if (!Array.isArray(ofac.candidates) || ofac.minScore !== 90) {
+              throw new Error('OFAC screen contract failed');
+            }
+
+            const good = await vendorGate('OpenAI OpCo', address, 'openai.com');
+            if (good.decision !== 'proceed') {
+              throw new Error('Expected known aligned vendor example to proceed: ' + JSON.stringify(good.reviewTriggers));
+            }
+            if (good.evidence?.address?.consistent !== true || good.evidence?.domain?.nameAligned !== true) {
+              throw new Error('Aligned vendor evidence contract failed');
+            }
+
+            const bad = await vendorGate(
+              'OpenAI OpCo',
+              '1600 Pennsylvania Avenue NW, Washington, DC 20500',
+              'openai.com'
+            );
+            if (bad.decision !== 'human_review') {
+              throw new Error('Mismatched address did not trigger human_review');
+            }
+            if (!bad.reviewTriggers.some(x => x.code === 'registered_address_differs')) {
+              throw new Error('Mismatched address missing registered_address_differs trigger');
+            }
+
+            console.log(JSON.stringify({
+              paBestMatch: pa.ranked[0].businessName,
+              censusMatched: census.matched,
+              rdapRegistered: rdap.registered,
+              treasuryDate: treasury.recordDate,
+              ofacCandidatesAbove90: ofac.totalCandidatesAboveThreshold,
+              alignedDecision: good.decision,
+              mismatchedDecision: bad.decision,
+              mismatchedTriggers: bad.reviewTriggers.map(x => x.code)
+            }, null, 2));
+          }
+
+          __deepSmoke().catch(error => {
+            console.error(error);
+            process.exit(1);
+          });
+          `;
+          source = source.replace(listener, test);
+          fs.writeFileSync('/tmp/x402-deep-smoke.mjs', source);
+          NODE
+
+      - name: Run live authoritative-source and decision-gate checks
+        run: node /tmp/x402-deep-smoke.mjs
