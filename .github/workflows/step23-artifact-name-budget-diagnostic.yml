@@ -27,7 +27,7 @@ jobs:
         run: |
           mkdir -p acceptance/out
           python - <<'PY'
-          import json, math, os, urllib.parse, urllib.request
+          import json, math, os, urllib.parse, urllib.request\n          from datetime import datetime
           from pathlib import Path
 
           repo = os.environ["GITHUB_REPOSITORY"]
