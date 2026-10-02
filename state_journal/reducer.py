@@ -13,7 +13,7 @@ from pathlib import Path
 
 from runtime.artifact_restore import _atomic_write
 from state_journal.contracts import (
-    SCHEMA, MAX_BYTES, MAX_EVENTS, Conflict, MissingPredecessor, canonical, digest,
+    SCHEMA, MAX_SNAPSHOT_BYTES, MAX_EVENTS, Conflict, MissingPredecessor, canonical, digest,
     fields, require, validate_domain, validate_source_evidence,
 )
 from state_journal.events import validate_event, replay_heartbeat_batch
@@ -207,7 +207,7 @@ def make_snapshot(base: dict, events: list[dict], *, sequence: int, evidence: di
              "evidence": deepcopy(evidence), "projection": projected,
              "event_count": len(unique)}
     state["state_hash"] = digest(state)
-    require(len(canonical(state)) <= MAX_BYTES, "Journal capacity exceeded; do not drop evidence")
+    require(len(canonical(state)) <= MAX_SNAPSHOT_BYTES, "Journal capacity exceeded; do not drop evidence")
     return state
 
 

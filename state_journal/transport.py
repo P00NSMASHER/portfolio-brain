@@ -16,8 +16,9 @@ from pathlib import Path
 from urllib.parse import quote
 
 from runtime.artifact_state import BudgetedHTTP
-from state_journal.contracts import (DOMAINS, MAX_BYTES, PRODUCERS, REPOSITORY, WORKFLOW_PRODUCERS,
-                                    JournalError, canonical, digest, require, strict_load, validate_domain)
+from state_journal.contracts import (DOMAINS, MAX_BYTES, MAX_SNAPSHOT_BYTES, PRODUCERS, REPOSITORY,
+                                    WORKFLOW_PRODUCERS, JournalError, canonical, digest, require,
+                                    strict_load, validate_domain)
 from state_journal.events import upgrade_legacy_event_attempt, validate_event
 
 REPO_ID = 1387747549
@@ -27,7 +28,9 @@ EMIT_STEP = "Capture immutable state transition event"
 UPLOAD_STEP = "Upload immutable state transition event"
 
 
-def extract_json(raw: bytes, member: str) -> dict:
+def extract_json(raw: bytes, member: str, *, max_bytes: int | None = None) -> dict:
+    if max_bytes is None:
+        max_bytes = MAX_SNAPSHOT_BYTES if member == "snapshot.json" else MAX_BYTES
     require(len(raw) <= MAX_BYTES, "Archive exceeds byte limit")
     try:
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
@@ -36,8 +39,8 @@ def extract_json(raw: bytes, member: str) -> dict:
             require(all(not i.is_dir() and i.filename in {member, "delivery.json"} for i in infos), "Unexpected archive member/path")
             matches = [i for i in infos if i.filename == member]
             require(len(matches) == 1, "Missing or duplicate archive JSON member")
-            require(matches[0].file_size <= MAX_BYTES, "Expanded member exceeds byte limit")
-            return strict_load(archive.read(matches[0]))
+            require(matches[0].file_size <= max_bytes, "Expanded member exceeds byte limit")
+            return strict_load(archive.read(matches[0]), max_bytes=max_bytes)
     except (zipfile.BadZipFile, RuntimeError, OSError) as exc:
         raise JournalError("Unreadable immutable archive") from exc
 

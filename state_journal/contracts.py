@@ -13,6 +13,8 @@ REPOSITORY = "P00NSMASHER/portfolio-brain"
 SCHEMA = "1.0.0"
 EVENT_SCHEMA_ATTEMPT = "1.1.0"
 MAX_BYTES = 16 * 1024 * 1024
+# Aggregate snapshots retain multiple individually bounded immutable events.
+MAX_SNAPSHOT_BYTES = 32 * 1024 * 1024
 MAX_EVENTS = 2000
 # (production validation module, continuation input, produced output, seed)
 DOMAINS = {
@@ -76,8 +78,8 @@ def digest(value: Any) -> str:
     return "sha256:" + hashlib.sha256(canonical(value)).hexdigest()
 
 
-def strict_load(raw: bytes) -> dict:
-    require(len(raw) <= MAX_BYTES, "JSON byte limit exceeded")
+def strict_load(raw: bytes, *, max_bytes: int = MAX_BYTES) -> dict:
+    require(len(raw) <= max_bytes, "JSON byte limit exceeded")
     def unique(pairs):
         result = {}
         for key, value in pairs:

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from runtime.artifact_restore import _atomic_write
 from state_journal.archive import archived_artifact_ids, load_active_manifest
-from state_journal.contracts import DOMAINS, canonical, digest, require, strict_load, validate_domain
+from state_journal.contracts import MAX_SNAPSHOT_BYTES, DOMAINS, canonical, digest, require, strict_load, validate_domain
 from state_journal.github_reducer import latest_snapshot_artifact, restore_snapshot
 from state_journal.reducer import validate_snapshot
 from state_journal.transport import EVENT_PREFIX, SNAPSHOT_ARTIFACT, GitHubReader
@@ -35,7 +35,7 @@ def _cache_payload(state: dict, snapshot_meta: dict, *, current_run: str, waited
 def _load_cache(path: Path, *, current_run: str) -> dict | None:
     if not path.exists():
         return None
-    doc = strict_load(path.read_bytes())
+    doc = strict_load(path.read_bytes(), max_bytes=MAX_SNAPSHOT_BYTES + 4096)
     required = {"schema_version","run_id","state","snapshot_meta","waited_for_reducer","cache_hash"}
     require(set(doc) == required and doc["schema_version"] == "1.0.0", "Canonical cache fields changed")
     core = {key: doc[key] for key in required if key != "cache_hash"}

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from runtime.artifact_restore import _atomic_write
 from state_journal.archive import ACTIVE_MANIFEST, build_rollover, load_active_manifest
-from state_journal.contracts import canonical, require, strict_load
+from state_journal.contracts import MAX_SNAPSHOT_BYTES, canonical, require, strict_load
 from state_journal.reducer import validate_snapshot
 from state_journal.transport import SNAPSHOT_ARTIFACT, GitHubReader, artifact_digest, extract_json
 
@@ -47,7 +47,7 @@ def latest_canonical(reader: GitHubReader) -> tuple[dict, dict, dict]:
         meta = matches[0]
         raw = reader.archive(meta["id"])
         artifact_digest(meta, raw)
-        state = extract_json(raw, "snapshot.json")
+        state = extract_json(raw, "snapshot.json", max_bytes=MAX_SNAPSHOT_BYTES)
         validate_snapshot(state)
         require(state["mode"] == "CANONICAL" and state["production_authority"] is True,
                 "Latest reducer snapshot is not production-authoritative")

@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from state_journal.contracts import JournalError, canonical, digest, fields, require, strict_load
+from state_journal.contracts import MAX_SNAPSHOT_BYTES, JournalError, canonical, digest, fields, require, strict_load
 from state_journal.reducer import checkpoint, validate_checkpoint, validate_snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -321,7 +321,7 @@ def validate_manifest(
             checkpoint_json = gzip.decompress(checkpoint_file.read_bytes())
             _require_sanitized_archive(archived_json)
             _require_sanitized_archive(checkpoint_json)
-            archived_state = strict_load(archived_json)
+            archived_state = strict_load(archived_json, max_bytes=MAX_SNAPSHOT_BYTES)
             checkpoint_doc = strict_load(checkpoint_json)
         except (OSError, EOFError) as exc:
             raise ValueError("Archive/checkpoint gzip invalid") from exc
