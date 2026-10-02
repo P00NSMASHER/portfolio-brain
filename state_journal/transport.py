@@ -27,6 +27,10 @@ EMIT_STEP = "Capture immutable state transition event"
 UPLOAD_STEP = "Upload immutable state transition event"
 
 
+class _RequestBudgetReserved(Exception):
+    pass
+
+
 def extract_json(raw: bytes, member: str) -> dict:
     require(len(raw) <= MAX_BYTES, "Archive exceeds byte limit")
     try:
@@ -320,13 +324,18 @@ class GitHubReader:
                 return sorted(selected, key=lambda row: (row["created_at"], row["id"]), reverse=True)
         raise JournalError("Artifact scan incomplete at page bound; checkpoint/archive required")
 
-    def _workflow_runs_since(self, workflow_file: str, since: str, *, max_pages: int) -> list[dict]:
+    def _workflow_runs_since(
+        self, workflow_file: str, since: str, *, max_pages: int,
+        request_threshold: int | None = None,
+    ) -> list[dict]:
         require(re.fullmatch(r"[a-z0-9-]+\.yml", workflow_file) is not None, "Unsafe workflow file")
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Workflow boundary requires timezone")
         encoded = quote(f">={since}", safe="")
         result = {}
         for page in range(1, max_pages + 1):
+            if request_threshold is not None and self.http.requests >= request_threshold:
+                raise _RequestBudgetReserved
             response = self.get(
                 f"/actions/workflows/{workflow_file}/runs?branch=main&created={encoded}&per_page=100&page={page}"
             )
@@ -368,11 +377,10 @@ class GitHubReader:
                                       explicit_run_ids: list[int] | tuple[int, ...] = ()) -> list[dict]:
         """Discover only reducer snapshots and enrolled producer events.
 
-        Repository-wide artifact pagination eventually becomes unbounded because
-        receipts, previews, and other unrelated artifacts accumulate. Journal
-        restore instead enumerates the closed workflow allowlist, validates each
-        run later through the existing provider checks, and scans events only
-        from the older of the two newest successful reducer publications.
+        Prefer the closed workflow allowlist because unrelated repository
+        artifacts accumulate. If per-run lookups approach the API budget, fall
+        back to a bounded repository artifact scan over the reducer overlap
+        window; provider validation remains unchanged.
         """
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
@@ -467,28 +475,57 @@ class GitHubReader:
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
-        for workflow in sorted(WORKFLOW_PRODUCERS):
-            for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
-                if not (
-                    run.get("head_branch") == "main"
-                    and run.get("status") == "completed"
-                    and run.get("conclusion") in terminal
+        http = getattr(self, "http", None)
+        request_threshold = (
+            None if http is None else http.max_requests - max_pages
+        )
+
+        def list_recent_events_from_repository() -> None:
+            artifact_boundary = (
+                overlap_at.isoformat().replace("+00:00", "Z")
+                if overlap_at is not None else event_since
+            )
+            for row in self.list_recent_artifacts(artifact_boundary, max_pages=max_pages):
+                if (
+                    row.get("name", "").startswith(EVENT_PREFIX)
+                    and (row.get("workflow_run") or {}).get("head_branch") == "main"
                 ):
-                    continue
-                if overlap_at is not None:
-                    created_at = run.get("created_at")
-                    updated_at = run.get("updated_at")
-                    require(isinstance(created_at, str), "Workflow run created_at missing")
-                    require(isinstance(updated_at, str), "Workflow run updated_at missing")
-                    started = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-                    finished = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
-                    require(started.tzinfo is not None and finished.tzinfo is not None,
-                            "Workflow run timestamps require timezone")
-                    if started < overlap_at and finished < overlap_at:
+                    retain(row)
+
+        try:
+            for workflow in sorted(WORKFLOW_PRODUCERS):
+                runs = self._workflow_runs_since(
+                    f"{workflow}.yml", event_since, max_pages=max_pages,
+                    request_threshold=request_threshold,
+                )
+                for run in runs:
+                    if not (
+                        run.get("head_branch") == "main"
+                        and run.get("status") == "completed"
+                        and run.get("conclusion") in terminal
+                    ):
                         continue
-                for row in self._run_artifacts(run["id"]):
-                    if row.get("name", "").startswith(EVENT_PREFIX):
-                        retain(row)
+                    if overlap_at is not None:
+                        created_at = run.get("created_at")
+                        updated_at = run.get("updated_at")
+                        require(isinstance(created_at, str), "Workflow run created_at missing")
+                        require(isinstance(updated_at, str), "Workflow run updated_at missing")
+                        started = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                        finished = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+                        require(started.tzinfo is not None and finished.tzinfo is not None,
+                                "Workflow run timestamps require timezone")
+                        if started < overlap_at and finished < overlap_at:
+                            continue
+                    if request_threshold is not None and self.http.requests >= request_threshold:
+                        raise _RequestBudgetReserved
+                    for row in self._run_artifacts(run["id"]):
+                        if row.get("name", "").startswith(EVENT_PREFIX):
+                            retain(row)
+        except _RequestBudgetReserved:
+            # Keep the normal workflow-scoped path while it fits. Under
+            # pressure, switch to the same strict, bounded artifact scan and
+            # reserve enough API calls to finish that scan.
+            list_recent_events_from_repository()
 
         for run_id in explicit_run_ids:
             require(type(run_id) is int and run_id > 0, "Explicit recovery run ID invalid")
