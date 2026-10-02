@@ -470,6 +470,7 @@ class GitHubReader:
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
+        producer_runs = []
         for workflow in sorted(WORKFLOW_PRODUCERS):
             for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
                 if not (
@@ -489,6 +490,35 @@ class GitHubReader:
                             "Workflow run timestamps require timezone")
                     if started < overlap_at and finished < overlap_at:
                         continue
+                producer_runs.append(run)
+
+        http = getattr(self, "http", None)
+        max_requests = getattr(http, "max_requests", None)
+        requests = getattr(http, "requests", None)
+        if type(max_requests) is int and type(requests) is int:
+            attempts = getattr(http, "retries", 0) + 1
+            reserved_reads = (2 + 2 * len(explicit_run_ids)) * attempts
+            producer_read_bound = len(producer_runs) * attempts
+            use_repository_scan = requests + producer_read_bound + reserved_reads > max_requests
+        else:
+            use_repository_scan = len(producer_runs) > len(WORKFLOW_PRODUCERS)
+        if use_repository_scan:
+            # Per-run artifact calls scale with every producer execution. Once
+            # those calls would exhaust the budget (reserving two reads for
+            # snapshot archives), use the bounded repository scan instead.
+            producer_run_ids = {run["id"] for run in producer_runs}
+            for row in self.list_recent_artifacts(since, max_pages=max_pages):
+                if not row.get("name", "").startswith(EVENT_PREFIX):
+                    continue
+                source = row.get("workflow_run")
+                require(isinstance(source, dict), "Event artifact source run metadata missing")
+                source_run_id = source.get("id")
+                require(type(source_run_id) is int and source_run_id > 0,
+                        "Event artifact source run identity missing")
+                if source_run_id in producer_run_ids:
+                    retain(row)
+        else:
+            for run in producer_runs:
                 for row in self._run_artifacts(run["id"]):
                     if row.get("name", "").startswith(EVENT_PREFIX):
                         retain(row)
