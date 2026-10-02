@@ -88,7 +88,8 @@ def build_context(*,factory_work_items=None,learning_state=None,hunter_proposal_
         hunter_lifecycle_state=json.loads(lifecycle_live.read_text()) if lifecycle_live.exists() else hunter_lifecycle_seed()
     validate_hunter_lifecycle_state(hunter_lifecycle_state)
     value_loop=build_value_loop_snapshot(hunter_proposal_state=hunter_proposal_state)
-    return {"uncertainty":uncertainty,"experiments":experiments,"allocation":allocation,"learning":learning,"repair":repair,"transfer":transfer,"factory_work_items":factory,"hunter_proposal_state":hunter_proposal_state,"hunter_lifecycle_state":hunter_lifecycle_state,"value_loop":value_loop}
+    micro_product_factory=load("operations/MICRO_PRODUCT_FACTORY.json")
+    return {"uncertainty":uncertainty,"experiments":experiments,"allocation":allocation,"learning":learning,"repair":repair,"transfer":transfer,"factory_work_items":factory,"hunter_proposal_state":hunter_proposal_state,"hunter_lifecycle_state":hunter_lifecycle_state,"value_loop":value_loop,"micro_product_factory":micro_product_factory}
 
 def _candidate(work_type,source_ref,project_ids,assigned_agent_id,goal_type,authority,consequence,*,pareto=None,rank=None,share=None,approvals=None,blockers=None,continuation_class="NEW_WORK",reason,evidence_refs,external_milestone=None,value_lane=None,signal_basis=None):
     req(continuation_class in {"CONTINUATION","NEW_WORK"},"invalid scheduler continuation class")
@@ -375,7 +376,7 @@ def _nonterminal_fingerprints(state):
 
 def _open_agent_counts(state):
     counts={}
-    for w in state["work_items"]:
+    for w in working_state["work_items"]:
         if w["state"] in {"QUEUED","ACTIVE"}:
             agent=w["assigned_agent_id"]
             counts[agent]=counts.get(agent,0)+1
@@ -393,12 +394,48 @@ def _compact_terminal_history(work_items,*,incoming_count,max_items):
     evicted=[w["fingerprint"] for i,w in enumerate(work_items) if w["state"] not in open_states and i not in keep_terminal]
     return retained,evicted
 
+def _retired_source_refs(context):
+    factory=context.get("micro_product_factory")
+    if not isinstance(factory,dict) or factory.get("status")!="RETIRED":
+        return set()
+    guardrails=factory.get("factory_guardrails")
+    req(isinstance(guardrails,dict) and guardrails.get("status")=="RETIRED",
+        "retired micro-product factory guardrails mismatch")
+    req(factory.get("launch_batch_state")=="RETIRED_NO_FURTHER_COMMERCIAL_WORK",
+        "retired micro-product factory launch state mismatch")
+    refs=set()
+    for sku in factory.get("skus",[]):
+        sku_id=sku.get("sku_id") if isinstance(sku,dict) else None
+        req(isinstance(sku_id,str) and sku_id,"retired micro-product SKU identity missing")
+        refs.add(sku_id)
+    return refs
+
+def _reconcile_retired_work(state,context):
+    """Terminally dispose only work whose source is explicitly retired."""
+    retired=_retired_source_refs(context)
+    if not retired:
+        return json.loads(json.dumps(state)),[]
+    out=json.loads(json.dumps(state));cancelled=[]
+    for work in out["work_items"]:
+        if work["state"] not in {"QUEUED","ACTIVE"} or work.get("source_ref") not in retired:
+            continue
+        work["state"]="CANCELLED"
+        work["lease_owner"]=None;work["lease_expires_at"]=None
+        fingerprint=work["fingerprint"]
+        if fingerprint not in out["completed_fingerprints"]:
+            out["completed_fingerprints"].append(fingerprint)
+        cancelled.append(work["scheduler_work_id"])
+    validate_state(out)
+    return out,sorted(cancelled)
+
 def schedule_cycle(state,context=None,*,at=None,candidate_filter:Callable[[dict[str,Any]],bool]|None=None,max_new_items:int|None=None):
     validate_state(state);at=at or now_iso();disabled,reason=killed()
     if disabled:
         receipt={"schema_version":"1.0.0","cycle_id":"disabled","status":"DISABLED","reason":reason,"finished_at":at,"selected_work":[],"blocked_work":[],"suppressed_duplicates":[],"stale_lease_holds":[]}
         return state,receipt
-    context=context or build_context();raw_candidates,raw_blocked=generate_candidates(context)
+    context=context or build_context()
+    working_state,retired_cancelled=_reconcile_retired_work(state,context)
+    raw_candidates,raw_blocked=generate_candidates(context)
     candidates=[];blocked=[];suppressed_no_external_milestone=[]
     for candidate in raw_candidates:
         externalized=_externalize_candidate(candidate,context)
@@ -416,7 +453,7 @@ def schedule_cycle(state,context=None,*,at=None,candidate_filter:Callable[[dict[
         req(callable(candidate_filter),"scheduler candidate filter invalid")
         candidates=[candidate for candidate in candidates if candidate_filter(candidate)]
         blocked=[candidate for candidate in blocked if candidate_filter(candidate)]
-    completed=set(state["completed_fingerprints"]);open_fp=_nonterminal_fingerprints(state);open_counts=_open_agent_counts(state)
+    completed=set(working_state["completed_fingerprints"]);open_fp=_nonterminal_fingerprints(working_state);open_counts=_open_agent_counts(working_state)
     suppressed=[];stale=[];eligible=[]
     for c in candidates:
         ok,why=_role_valid(c)
@@ -443,11 +480,11 @@ def schedule_cycle(state,context=None,*,at=None,candidate_filter:Callable[[dict[
         agent=c["assigned_agent_id"]
         if open_counts.get(agent,0)+new_counts.get(agent,0)>=per_agent_limit:continue
         selected.append(_work_packet(c,at));new_counts[agent]=new_counts.get(agent,0)+1
-    new_state=json.loads(json.dumps(state))
-    new_state["sequence"]+=1;new_state["updated_at"]=at
+    new_state=json.loads(json.dumps(working_state))
+    new_state["sequence"]=state["sequence"]+1;new_state["updated_at"]=at
     retained,compacted=_compact_terminal_history(new_state["work_items"],incoming_count=len(selected),max_items=scheduler_policy["max_queue_items"])
     new_state["work_items"]=[*retained,*selected]
-    cycle_seed={"prior_sequence":state["sequence"],"selected":[w["fingerprint"] for w in selected],"blocked":[b["fingerprint"] for b in blocked],"suppressed":sorted(suppressed),"compacted":compacted}
+    cycle_seed={"prior_sequence":state["sequence"],"selected":[w["fingerprint"] for w in selected],"blocked":[b["fingerprint"] for b in blocked],"suppressed":sorted(suppressed),"compacted":compacted,"retired_work_cancelled":retired_cancelled}
     cid="sched-"+hashlib.sha256(canon(cycle_seed).encode()).hexdigest()[:24]
     fresh_learning_count=context["learning"].get("fresh_learning_observation_count",context["learning"].get("source_observation_count",0))
     req(type(fresh_learning_count) is int and fresh_learning_count>=0,"scheduler fresh learning receipt count invalid")
@@ -456,6 +493,7 @@ def schedule_cycle(state,context=None,*,at=None,candidate_filter:Callable[[dict[
              "blocked_work":[_work_packet(b,at,"BLOCKED_APPROVAL" if b["approval_requirements"] else "BLOCKED_POLICY") for b in blocked],
              "suppressed_duplicates":sorted(suppressed),"suppressed_no_external_milestone":sorted(set(suppressed_no_external_milestone)),
              "stale_lease_holds":sorted(stale),"compacted_terminal_work":compacted,
+             "retired_work_cancelled":retired_cancelled,
              "fresh_learning_observation_count":fresh_learning_count,
              "uncertainty_snapshot_hash":context["uncertainty"]["snapshot_hash"],
              "selection_method":"EXTERNAL_VALUE_LANE_THEN_WORK_GATE_THEN_CONTINUATION_CLASS_SOURCE_PARETO_RANK_ALLOCATION_SHARE_NO_SCALAR_SCORE"}
