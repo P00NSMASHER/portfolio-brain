@@ -470,6 +470,7 @@ class GitHubReader:
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
+        producer_runs: dict[int, dict] = {}
         for workflow in sorted(WORKFLOW_PRODUCERS):
             for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
                 if not (
@@ -489,7 +490,39 @@ class GitHubReader:
                             "Workflow run timestamps require timezone")
                     if started < overlap_at and finished < overlap_at:
                         continue
-                for row in self._run_artifacts(run["id"]):
+                run_id = run["id"]
+                previous = producer_runs.get(run_id)
+                if previous is not None:
+                    require(previous == run, "Workflow run metadata changed during bounded scan")
+                else:
+                    producer_runs[run_id] = run
+
+        http = getattr(self, "http", None)
+        remaining = (
+            http.max_requests - http.requests
+            if http is not None
+            and type(getattr(http, "max_requests", None)) is int
+            and type(getattr(http, "requests", None)) is int
+            else None
+        )
+        snapshot_reserve = min(len(snapshot_runs), 2)
+        if remaining is not None and len(producer_runs) > max(0, remaining - snapshot_reserve):
+            # Avoid one artifact request per producer run when that fan-out
+            # would consume the budget reserved for restoring the snapshots.
+            # The global scan remains page-bounded; only artifacts belonging
+            # to the already allowlisted candidate runs are retained.
+            scan_pages = min(max_pages, remaining - snapshot_reserve)
+            require(scan_pages > 0, "Artifact request budget cannot reserve canonical snapshot restore")
+            candidate_ids = set(producer_runs)
+            for row in self.list_recent_artifacts(since, max_pages=scan_pages):
+                if (
+                    row.get("workflow_run", {}).get("id") in candidate_ids
+                    and row.get("name", "").startswith(EVENT_PREFIX)
+                ):
+                    retain(row)
+        else:
+            for run_id in producer_runs:
+                for row in self._run_artifacts(run_id):
                     if row.get("name", "").startswith(EVENT_PREFIX):
                         retain(row)
 
