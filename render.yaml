@@ -1,6 +1,8 @@
 services:
   - type: web
     name: agent-data-tools-x402
+    repo: https://github.com/P00NSMASHER/portfolio-brain
+    branch: agent-data-tools-standalone
     runtime: node
     plan: free
     region: ohio
@@ -8,4 +10,4 @@ services:
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /api/health
-    autoDeploy: false
+    autoDeployTrigger: off
