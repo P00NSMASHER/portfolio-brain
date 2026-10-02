@@ -269,9 +269,15 @@ class GitHubReader:
     def __init__(self, token: str, *, max_requests: int = 100):
         self.http = BudgetedHTTP(token, max_requests=max_requests, retries=1, backoff=1)
         self.base = f"https://api.github.com/repos/{REPOSITORY}"
+        self._workflow_run_cache: dict[int, dict] = {}
 
     def get(self, suffix: str) -> dict:
         require(suffix.startswith("/") and ".." not in suffix and "://" not in suffix, "Unsafe API suffix")
+        match = re.fullmatch(r"/actions/runs/([1-9][0-9]*)", suffix)
+        if match is not None:
+            cached = self._workflow_run_cache.get(int(match.group(1)))
+            if cached is not None:
+                return cached
         return self.http.json(self.base + suffix)
 
     def archive(self, artifact_id: int) -> bytes:
@@ -374,6 +380,7 @@ class GitHubReader:
         run later through the existing provider checks, and scans events only
         from the older of the two newest successful reducer publications.
         """
+        self._workflow_run_cache = getattr(self, "_workflow_run_cache", {})
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
         require(type(max_pages) is int and max_pages > 0, "Artifact page bound invalid")
@@ -395,6 +402,7 @@ class GitHubReader:
         reducer_runs = self._workflow_runs_since(
             "portfolio-state-reducer.yml", since, max_pages=max_pages
         )
+        self._workflow_run_cache.update({run["id"]: run for run in reducer_runs})
         snapshot_runs: list[tuple[dict, dict]] = []
         for run in reducer_runs:
             if not (
