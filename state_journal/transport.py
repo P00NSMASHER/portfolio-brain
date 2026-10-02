@@ -269,6 +269,7 @@ class GitHubReader:
     def __init__(self, token: str, *, max_requests: int = 100):
         self.http = BudgetedHTTP(token, max_requests=max_requests, retries=1, backoff=1)
         self.base = f"https://api.github.com/repos/{REPOSITORY}"
+        self._workflow_run_cache: dict[tuple[int, int], dict] = {}
 
     def get(self, suffix: str) -> dict:
         require(suffix.startswith("/") and ".." not in suffix and "://" not in suffix, "Unsafe API suffix")
@@ -326,6 +327,9 @@ class GitHubReader:
         require(boundary.tzinfo is not None, "Workflow boundary requires timezone")
         encoded = quote(f">={since}", safe="")
         result = {}
+        run_cache = getattr(self, "_workflow_run_cache", None)
+        if run_cache is None:
+            run_cache = self._workflow_run_cache = {}
         for page in range(1, max_pages + 1):
             response = self.get(
                 f"/actions/workflows/{workflow_file}/runs?branch=main&created={encoded}&per_page=100&page={page}"
@@ -346,6 +350,9 @@ class GitHubReader:
                     require(previous == row, "Workflow run metadata changed during bounded scan")
                 else:
                     result[run_id] = row
+                    attempt = row.get("run_attempt")
+                    if type(attempt) is int and attempt > 0:
+                        run_cache[(run_id, attempt)] = row
             if len(rows) < 100:
                 return sorted(
                     result.values(),
@@ -353,6 +360,12 @@ class GitHubReader:
                     reverse=True,
                 )
         raise JournalError("Workflow run scan incomplete at page bound; checkpoint/archive required")
+
+    def _event_source_run(self, run_id: int, attempt: int) -> dict:
+        cached = getattr(self, "_workflow_run_cache", {}).get((run_id, attempt))
+        if cached is not None:
+            return cached
+        return self.get(f"/actions/runs/{run_id}/attempts/{attempt}")
 
     def _run_artifacts(self, run_id: int) -> list[dict]:
         require(type(run_id) is int and run_id > 0, "Invalid workflow run ID")
@@ -518,7 +531,7 @@ class GitHubReader:
         match = re.fullmatch(r"portfolio-state-event-v2-([1-9][0-9]*)-([a-z0-9-]+)-([a-f0-9]{40})-([1-9][0-9]*)", meta.get("name", ""))
         require(match is not None, "Malformed event archive name")
         run_id, _, _, attempt = match.groups()
-        run = self.get(f"/actions/runs/{run_id}/attempts/{attempt}")
+        run = self._event_source_run(int(run_id), int(attempt))
         jobs = self.get(f"/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100")
         raw = self.archive(meta["id"])
         event = extract_json(raw, "event.json")
