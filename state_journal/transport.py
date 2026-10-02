@@ -470,6 +470,7 @@ class GitHubReader:
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
+        producer_run_ids: set[int] = set()
         for workflow in sorted(WORKFLOW_PRODUCERS):
             for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
                 if not (
@@ -489,7 +490,42 @@ class GitHubReader:
                             "Workflow run timestamps require timezone")
                     if started < overlap_at and finished < overlap_at:
                         continue
-                for row in self._run_artifacts(run["id"]):
+                producer_run_ids.add(run["id"])
+
+        # Run listings are cheap compared with per-run artifact listings. Keep
+        # discovery within the request budget by using one bounded repository
+        # artifact scan when fetching artifacts for every eligible run would
+        # leave no room for the snapshot and explicit-recovery reads.
+        http = getattr(self, "http", None)
+        max_requests = getattr(http, "max_requests", None)
+        requests = getattr(http, "requests", None)
+        retries = getattr(http, "retries", 0)
+        attempts_per_request = retries + 1 if type(retries) is int and retries >= 0 else 1
+        reserve = (2 + 2 * len(explicit_run_ids)) * attempts_per_request
+        remaining = max_requests - requests if (
+            type(max_requests) is int and type(requests) is int
+        ) else None
+        use_bounded_artifact_scan = (
+            remaining is not None
+            and len(producer_run_ids) * attempts_per_request > remaining - reserve
+        )
+        if use_bounded_artifact_scan:
+            page_bound = min(max_pages, (remaining - reserve) // attempts_per_request)
+            require(page_bound > 0, "Artifact request budget cannot cover bounded journal scan")
+            for row in self.list_recent_artifacts(event_since, max_pages=page_bound):
+                name = row.get("name", "")
+                if not isinstance(name, str) or not name.startswith(EVENT_PREFIX):
+                    continue
+                source = row.get("workflow_run")
+                require(isinstance(source, dict), "Artifact workflow run metadata malformed")
+                source_run_id = source.get("id")
+                require(type(source_run_id) is int and source_run_id > 0,
+                        "Artifact workflow run identity missing")
+                if source_run_id in producer_run_ids:
+                    retain(row)
+        else:
+            for run_id in sorted(producer_run_ids):
+                for row in self._run_artifacts(run_id):
                     if row.get("name", "").startswith(EVENT_PREFIX):
                         retain(row)
 
