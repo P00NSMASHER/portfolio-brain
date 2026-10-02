@@ -356,12 +356,18 @@ class GitHubReader:
 
     def _run_artifacts(self, run_id: int) -> list[dict]:
         require(type(run_id) is int and run_id > 0, "Invalid workflow run ID")
+        cache = getattr(self, "_run_artifact_cache", None)
+        if cache is None:
+            cache = self._run_artifact_cache = {}
+        if run_id in cache:
+            return cache[run_id]
         response = self.get(f"/actions/runs/{run_id}/artifacts?per_page=100")
         rows = response.get("artifacts")
         require(isinstance(rows, list), "Run artifact listing malformed")
         total = response.get("total_count")
         require(type(total) is int and total == len(rows) and total <= 100,
                 "Run artifact listing incomplete; per-run artifact bound exceeded")
+        cache[run_id] = rows
         return rows
 
     def list_recent_journal_artifacts(self, since: str, *, max_pages: int = 20,
@@ -377,6 +383,8 @@ class GitHubReader:
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
         require(type(max_pages) is int and max_pages > 0, "Artifact page bound invalid")
+        self._run_artifact_cache = {}
+        self._event_run_cache = {}
         result: dict[int, dict] = {}
 
         def retain(row: dict) -> None:
@@ -478,6 +486,9 @@ class GitHubReader:
                     and run.get("conclusion") in terminal
                 ):
                     continue
+                attempt = run.get("run_attempt")
+                if type(attempt) is int and attempt > 0:
+                    self._event_run_cache[(run["id"], attempt)] = run
                 if overlap_at is not None:
                     created_at = run.get("created_at")
                     updated_at = run.get("updated_at")
@@ -518,7 +529,10 @@ class GitHubReader:
         match = re.fullmatch(r"portfolio-state-event-v2-([1-9][0-9]*)-([a-z0-9-]+)-([a-f0-9]{40})-([1-9][0-9]*)", meta.get("name", ""))
         require(match is not None, "Malformed event archive name")
         run_id, _, _, attempt = match.groups()
-        run = self.get(f"/actions/runs/{run_id}/attempts/{attempt}")
+        cached_run = getattr(self, "_event_run_cache", {}).get((int(run_id), int(attempt)))
+        run = cached_run or self.get(f"/actions/runs/{run_id}/attempts/{attempt}")
+        require(run.get("id") == int(run_id) and run.get("run_attempt") == int(attempt),
+                "Source run attempt identity mismatch")
         jobs = self.get(f"/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100")
         raw = self.archive(meta["id"])
         event = extract_json(raw, "event.json")
