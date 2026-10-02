@@ -8,13 +8,15 @@ deterministic EVIDENCE_SCHEMA record for downstream consumers.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import re
 from datetime import datetime, timezone
 from typing import Any
 
 from events.validate_event import compute_evidence_hash, validate_evidence
-from truth.promotion_gate import PromotionGateError, promotion_decision
+from truth.promotion_gate import promotion_decision
 
 EVIDENCE_ID = re.compile(r"^EVD-[A-Z0-9-]{8,}$")
 
@@ -25,14 +27,20 @@ def _require(ok: bool, message: str) -> None:
     if not ok:
         raise PromotionEvidenceError(message)
 
-def _evaluated_at_iso(value: Any) -> str:
-    _require(type(value) in (int, float), "evaluated_at must be numeric")
-    _require(math.isfinite(value) and value >= 0, "evaluated_at must be finite and non-negative")
+def _canonical_hash(value: Any) -> str:
+    raw = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    ).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+def _normalize_observed_at(value: Any) -> str:
+    _require(isinstance(value, str) and value, "observed_at must be an ISO-8601 timestamp")
     try:
-        stamp = datetime.fromtimestamp(value, tz=timezone.utc)
-    except (OverflowError, OSError, ValueError) as exc:
-        raise PromotionEvidenceError("evaluated_at is outside supported timestamp range") from exc
-    return stamp.isoformat().replace("+00:00", "Z")
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise PromotionEvidenceError("observed_at must be an ISO-8601 timestamp") from exc
+    _require(parsed.tzinfo is not None, "observed_at must include timezone")
+    return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 def _support_bindings(
     receipt: dict[str, Any],
@@ -77,13 +85,20 @@ def promoted_fact_evidence(
     source_revision: str,
     source_blob_sha: str,
     source_receipt_ref: str,
+    observed_at: str,
     basis_bindings: list[dict[str, str]],
 ) -> dict[str, Any]:
     """Emit one deterministic VERIFIED evidence receipt for a promotable claim.
 
-    HOLD decisions fail closed. No memory, graph, event, or authority mutation is
-    performed here.
+    HOLD decisions fail closed. The caller supplies the actual receipt-observation
+    time; this adapter never invents retrieval timestamps. No memory, graph,
+    event, or authority mutation is performed here.
     """
+    _require(
+        isinstance(source_receipt_ref, str) and 0 < len(source_receipt_ref) <= 1000,
+        "source_receipt_ref must satisfy EVIDENCE_SCHEMA",
+    )
+    stamp = _normalize_observed_at(observed_at)
     decision = promotion_decision(
         receipt,
         project_id=project_id,
@@ -97,11 +112,32 @@ def promoted_fact_evidence(
         "only PROMOTE decisions can become trusted Portfolio Brain evidence",
     )
     _require(decision["authority_change"] == "NONE", "promotion cannot grant authority")
+    _require(
+        type(decision["evaluated_at"]) in (int, float)
+        and math.isfinite(decision["evaluated_at"])
+        and decision["evaluated_at"] >= 0,
+        "evaluated_at must be finite and non-negative",
+    )
 
     upstream_support_ids, basis_evidence_ids = _support_bindings(receipt, basis_bindings)
-    stamp = _evaluated_at_iso(decision["evaluated_at"])
-    promotion_hex = decision["promotion_hash"].split(":", 1)[1]
-    evidence_id = "EVD-TRUTH-" + promotion_hex[:24].upper()
+    subject_ref = "truth-claim:" + decision["claim_id"]
+    support_refs = [
+        "truth-projection:" + decision["projection_hash"],
+        "truth-promotion:" + decision["promotion_hash"],
+        "truth-upstream-receipt:sha256:" + decision["upstream_receipt_hash"],
+        "truth-upstream-evidence-set:sha256:" + decision["upstream_evidence_set_hash"],
+        *["truth-upstream-evidence:" + value for value in upstream_support_ids],
+    ]
+    _require(len(subject_ref) <= 300, "claim subject exceeds EVIDENCE_SCHEMA limit")
+    _require(all(len(value) <= 300 for value in support_refs), "support reference exceeds EVIDENCE_SCHEMA limit")
+
+    identity_seed = {
+        "promotion_hash": decision["promotion_hash"],
+        "observed_at": stamp,
+        "source_receipt_ref": source_receipt_ref,
+        "basis_evidence_ids": basis_evidence_ids,
+    }
+    evidence_id = "EVD-TRUTH-" + _canonical_hash(identity_seed)[:24].upper()
 
     record = {
         "schema_version": "1.0.0",
@@ -109,7 +145,7 @@ def promoted_fact_evidence(
         "project_id": decision["project_id"],
         "evidence_type": "DETERMINISTIC_DERIVATION",
         "evidence_state": "VERIFIED",
-        "subject_refs": ["truth-claim:" + decision["claim_id"]],
+        "subject_refs": [subject_ref],
         "source": {
             "source_kind": "SYSTEM",
             "source_ref": source_receipt_ref,
@@ -132,13 +168,7 @@ def promoted_fact_evidence(
                 "promotion gate; basis bindings exactly cover required upstream support."
             ),
         },
-        "supports_refs": [
-            "truth-projection:" + decision["projection_hash"],
-            "truth-promotion:" + decision["promotion_hash"],
-            "truth-upstream-receipt:sha256:" + decision["upstream_receipt_hash"],
-            "truth-upstream-evidence-set:sha256:" + decision["upstream_evidence_set_hash"],
-            *["truth-upstream-evidence:" + value for value in upstream_support_ids],
-        ],
+        "supports_refs": support_refs,
         "contradicts_refs": [],
         "evidence_hash": "",
     }

@@ -31,32 +31,33 @@ def finding(status, support_ids=None):
         "required": True,
         "status": status,
         "reason": "reason",
-        "supporting_evidence_ids": list(support_ids or []),
+        "supporting_evidence_ids": list(["upstream-a", "upstream-b"] if support_ids is None else support_ids),
         "contradicting_evidence_ids": ["contra"] if status in {"CONFLICTED", "CONTRADICTED"} else [],
         "stale_evidence_ids": ["stale"] if status == "STALE" else [],
         "inadmissible_evidence_ids": [],
     }
 
-def receipt(verdict="PROVEN", status="SATISFIED", support_ids=None, evaluated_at=200.0):
+def receipt(verdict="PROVEN", status="SATISFIED", support_ids=None, evaluated_at=200.0, claim_id="claim-1"):
     return resign_receipt({
-        "claim_id": "claim-1",
+        "claim_id": claim_id,
         "claim_hash": H,
         "verdict": verdict,
         "evaluated_at": evaluated_at,
-        "findings": [finding(status, support_ids or ["upstream-a", "upstream-b"])],
+        "findings": [finding(status, support_ids)],
         "evidence_set_hash": "b" * 64,
         "receipt_hash": "",
     })
 
-def emit(value, bindings=None):
+def emit(value, bindings=None, observed_at="2026-10-02T18:30:00Z", source_receipt_ref="ai-business-os://truth/receipt/1"):
     pin = load_pin()
     return promoted_fact_evidence(
         value,
         project_id="PRJ-001",
         source_revision=pin["source_revision"],
         source_blob_sha=pin["source_blob_sha"],
-        source_receipt_ref="ai-business-os://truth/receipt/1",
-        basis_bindings=bindings or [
+        source_receipt_ref=source_receipt_ref,
+        observed_at=observed_at,
+        basis_bindings=bindings if bindings is not None else [
             {"upstream_evidence_id": "upstream-a", "portfolio_evidence_id": "EVD-BASIS-00000001"},
             {"upstream_evidence_id": "upstream-b", "portfolio_evidence_id": "EVD-BASIS-00000002"},
         ],
@@ -75,7 +76,8 @@ class TruthPromotionEvidenceTests(unittest.TestCase):
         )
         self.assertEqual(row["actor"]["actor_id"], "portfolio-truth-promotion-adapter")
         self.assertNotEqual(row["verification"]["verifier_actor_id"], row["actor"]["actor_id"])
-        self.assertEqual(row["source"]["retrieved_at"], "1970-01-01T00:03:20Z")
+        self.assertEqual(row["source"]["retrieved_at"], "2026-10-02T18:30:00Z")
+        self.assertEqual(row["observed_at"], "2026-10-02T18:30:00Z")
         self.assertTrue(row["evidence_hash"].startswith("sha256:"))
 
     def test_binding_order_does_not_change_evidence_identity(self):
@@ -86,9 +88,16 @@ class TruthPromotionEvidenceTests(unittest.TestCase):
         ]
         self.assertEqual(emit(value), emit(copy.deepcopy(value), bindings))
 
+    def test_distinct_observation_time_gets_distinct_immutable_identity(self):
+        value = receipt()
+        first = emit(value, observed_at="2026-10-02T18:30:00Z")
+        second = emit(copy.deepcopy(value), observed_at="2026-10-02T18:31:00Z")
+        self.assertNotEqual(first["evidence_id"], second["evidence_id"])
+        self.assertNotEqual(first["evidence_hash"], second["evidence_hash"])
+
     def test_hold_decision_cannot_emit_verified_evidence(self):
         with self.assertRaisesRegex(PromotionEvidenceError, "only PROMOTE"):
-            emit(receipt("NOT_PROVEN", "STALE", ["upstream-a", "upstream-b"]))
+            emit(receipt("NOT_PROVEN", "STALE"))
 
     def test_basis_mapping_must_exactly_cover_required_upstream_support(self):
         with self.assertRaisesRegex(PromotionEvidenceError, "exactly cover"):
@@ -115,16 +124,20 @@ class TruthPromotionEvidenceTests(unittest.TestCase):
             ])
 
     def test_promotion_requires_explicit_upstream_support_identities(self):
-        value = receipt(support_ids=[])
-        value["findings"][0]["supporting_evidence_ids"] = []
-        resign_receipt(value)
         with self.assertRaisesRegex(PromotionEvidenceError, "explicit upstream support"):
-            emit(value, [])
+            emit(receipt(support_ids=[]), [])
 
     def test_nonfinite_evaluation_time_cannot_become_schema_evidence(self):
-        value = receipt(evaluated_at=math.nan)
         with self.assertRaisesRegex(PromotionEvidenceError, "finite and non-negative"):
-            emit(value)
+            emit(receipt(evaluated_at=math.nan))
+
+    def test_observation_timestamp_and_schema_lengths_fail_closed(self):
+        with self.assertRaisesRegex(PromotionEvidenceError, "include timezone"):
+            emit(receipt(), observed_at="2026-10-02T18:30:00")
+        with self.assertRaisesRegex(PromotionEvidenceError, "source_receipt_ref"):
+            emit(receipt(), source_receipt_ref="x" * 1001)
+        with self.assertRaisesRegex(PromotionEvidenceError, "claim subject"):
+            emit(receipt(claim_id="x" * 300))
 
 if __name__ == "__main__":
     unittest.main()
