@@ -23,6 +23,7 @@ from state_journal.events import upgrade_legacy_event_attempt, validate_event
 REPO_ID = 1387747549
 EVENT_PREFIX = "portfolio-state-event-v2-"
 SNAPSHOT_ARTIFACT = "portfolio-canonical-shadow-state"
+_REGISTERED_WORKFLOW_NAMES = frozenset(WORKFLOW_PRODUCERS)
 EMIT_STEP = "Capture immutable state transition event"
 UPLOAD_STEP = "Upload immutable state transition event"
 
@@ -354,6 +355,55 @@ class GitHubReader:
                 )
         raise JournalError("Workflow run scan incomplete at page bound; checkpoint/archive required")
 
+    def _producer_workflow_runs_since(self, since: str, *, max_pages: int) -> dict[str, list[dict]]:
+        workflows = sorted(WORKFLOW_PRODUCERS)
+        # A repository-wide run listing is complete only for the full enrolled
+        # set; partial scopes retain the narrower workflow-specific queries.
+        if frozenset(workflows) != _REGISTERED_WORKFLOW_NAMES:
+            return {
+                workflow: self._workflow_runs_since(f"{workflow}.yml", since, max_pages=max_pages)
+                for workflow in workflows
+            }
+
+        boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
+        require(boundary.tzinfo is not None, "Workflow boundary requires timezone")
+        by_path = {f".github/workflows/{workflow}.yml": workflow for workflow in workflows}
+        result = {workflow: {} for workflow in workflows}
+        encoded = quote(f">={since}", safe="")
+        for page in range(1, max_pages + 1):
+            response = self.get(
+                f"/actions/runs?branch=main&created={encoded}&per_page=100&page={page}"
+            )
+            rows = response.get("workflow_runs")
+            require(isinstance(rows, list), "Workflow run listing malformed")
+            for row in rows:
+                workflow = by_path.get(row.get("path"))
+                if workflow is None:
+                    continue
+                run_id = row.get("id")
+                require(type(run_id) is int and run_id > 0, "Workflow run identity missing")
+                created = row.get("created_at")
+                require(isinstance(created, str), "Workflow run created_at missing")
+                at = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                require(at.tzinfo is not None, "Workflow run created_at requires timezone")
+                if at < boundary:
+                    continue
+                previous = result[workflow].get(run_id)
+                if previous is not None:
+                    require(previous == row, "Workflow run metadata changed during bounded scan")
+                else:
+                    result[workflow][run_id] = row
+            if len(rows) < 100:
+                return {
+                    workflow: sorted(
+                        runs.values(),
+                        key=lambda row: (row["created_at"], row["id"]),
+                        reverse=True,
+                    )
+                    for workflow, runs in result.items()
+                }
+        raise JournalError("Workflow run scan incomplete at page bound; checkpoint/archive required")
+
     def _run_artifacts(self, run_id: int) -> list[dict]:
         require(type(run_id) is int and run_id > 0, "Invalid workflow run ID")
         response = self.get(f"/actions/runs/{run_id}/artifacts?per_page=100")
@@ -470,8 +520,9 @@ class GitHubReader:
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
+        workflow_runs = self._producer_workflow_runs_since(event_since, max_pages=max_pages)
         for workflow in sorted(WORKFLOW_PRODUCERS):
-            for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
+            for run in workflow_runs[workflow]:
                 if not (
                     run.get("head_branch") == "main"
                     and run.get("status") == "completed"
