@@ -134,10 +134,15 @@ jobs:
           open("artifact_page_diagnostic.json","w",encoding="utf-8").write(json.dumps(result,indent=2,sort_keys=True)+"\n")
           PY
 
+      - name: Estimate safe exact-fallback request budget
+        run: python diagnostics/step23_request_budget_diagnostic.py
+
       - name: Upload diagnostic
         uses: actions/upload-artifact@v4
         with:
           name: step23-live-artifact-pages-${{ github.run_id }}
-          path: artifact_page_diagnostic.json
+          path: |
+            artifact_page_diagnostic.json
+            request_budget_diagnostic.json
           if-no-files-found: error
           retention-days: 7
