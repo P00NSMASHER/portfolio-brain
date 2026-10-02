@@ -470,6 +470,7 @@ class GitHubReader:
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
+        producer_run_ids: set[int] = set()
         for workflow in sorted(WORKFLOW_PRODUCERS):
             for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
                 if not (
@@ -489,9 +490,7 @@ class GitHubReader:
                             "Workflow run timestamps require timezone")
                     if started < overlap_at and finished < overlap_at:
                         continue
-                for row in self._run_artifacts(run["id"]):
-                    if row.get("name", "").startswith(EVENT_PREFIX):
-                        retain(row)
+                producer_run_ids.add(run["id"])
 
         for run_id in explicit_run_ids:
             require(type(run_id) is int and run_id > 0, "Explicit recovery run ID invalid")
@@ -501,6 +500,11 @@ class GitHubReader:
             require(run.get("status") == "completed" and run.get("conclusion") in terminal,
                     "Explicit recovery run is not terminal")
             source_producer(run)
+            for row in self._run_artifacts(run_id):
+                if row.get("name", "").startswith(EVENT_PREFIX):
+                    retain(row)
+
+        for run_id in sorted(producer_run_ids):
             for row in self._run_artifacts(run_id):
                 if row.get("name", "").startswith(EVENT_PREFIX):
                     retain(row)
