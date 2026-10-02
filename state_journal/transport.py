@@ -396,6 +396,7 @@ class GitHubReader:
             "portfolio-state-reducer.yml", since, max_pages=max_pages
         )
         self._snapshot_source_runs: dict[int, dict] = {}
+        discovered_producer_runs: dict[int, dict] = {}
         snapshot_runs: list[tuple[dict, dict]] = []
         for run in reducer_runs:
             if not (
@@ -489,18 +490,24 @@ class GitHubReader:
                             "Workflow run timestamps require timezone")
                     if started < overlap_at and finished < overlap_at:
                         continue
-                for row in self._run_artifacts(run["id"]):
+                run_artifacts = self._run_artifacts(run["id"])
+                discovered_producer_runs[run["id"]] = run
+                for row in run_artifacts:
                     if row.get("name", "").startswith(EVENT_PREFIX):
                         retain(row)
 
         for run_id in explicit_run_ids:
             require(type(run_id) is int and run_id > 0, "Explicit recovery run ID invalid")
-            run = self.get(f"/actions/runs/{run_id}")
+            run = discovered_producer_runs.get(run_id)
+            if run is None:
+                run = self.get(f"/actions/runs/{run_id}")
             require(run.get("id") == run_id, "Explicit recovery run identity mismatch")
             require(run.get("head_branch") == "main", "Explicit recovery run is not on main")
             require(run.get("status") == "completed" and run.get("conclusion") in terminal,
                     "Explicit recovery run is not terminal")
             source_producer(run)
+            if run_id in discovered_producer_runs:
+                continue
             for row in self._run_artifacts(run_id):
                 if row.get("name", "").startswith(EVENT_PREFIX):
                     retain(row)
