@@ -6,6 +6,7 @@ on:
       - agent-data-tools-standalone
     paths:
       - 'services/agent-data-tools-standalone/**'
+      - 'render.yaml'
       - '.github/workflows/agent-data-tools-standalone.yml'
   workflow_dispatch:
 
@@ -27,3 +28,22 @@ jobs:
       - run: node --check src/x402.mjs
       - run: node --check src/data.mjs
       - run: node --check src/server.mjs
+      - name: Start local seller
+        run: |
+          npm start > /tmp/agent-data-tools.log 2>&1 &
+          echo $! > /tmp/agent-data-tools.pid
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:3000/api/health && exit 0
+            sleep 1
+          done
+          cat /tmp/agent-data-tools.log
+          exit 1
+      - name: AgentCash discover
+        run: npx -y @agentcash/discovery@latest discover http://127.0.0.1:3000
+      - name: AgentCash check paid routes
+        run: |
+          set -e
+          for route in             /api/pa-entity-one             /api/pa-business             /api/vendor-intake-gate             /api/sec-filings             /api/us-address-geocode             /api/ofac-sdn-screen             /api/domain-rdap             /api/treasury-average-rates
+          do
+            npx -y @agentcash/discovery@latest check "http://127.0.0.1:3000$route"
+          done
