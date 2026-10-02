@@ -470,6 +470,7 @@ class GitHubReader:
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
+        eligible_runs: dict[int, dict] = {}
         for workflow in sorted(WORKFLOW_PRODUCERS):
             for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
                 if not (
@@ -489,6 +490,35 @@ class GitHubReader:
                             "Workflow run timestamps require timezone")
                     if started < overlap_at and finished < overlap_at:
                         continue
+                eligible_runs[run["id"]] = run
+
+        # Per-run artifact lookups are precise, but can exhaust the shared API
+        # budget when many producer runs overlap the journal window. In that
+        # case, use the existing bounded repository scan and retain only
+        # artifacts bound to the same eligible main-branch producer runs.
+        http = getattr(self, "http", None)
+        max_requests = getattr(http, "max_requests", None)
+        requests_used = getattr(http, "requests", None)
+        explicit_request_reserve = 2 * len(explicit_run_ids)
+        use_global_artifact_scan = (
+            type(max_requests) is int
+            and type(requests_used) is int
+            and requests_used + len(eligible_runs) + explicit_request_reserve > max_requests
+        )
+        if use_global_artifact_scan:
+            remaining = max_requests - requests_used - explicit_request_reserve
+            require(remaining > 0, "Artifact scan cannot fit within remaining API request budget")
+            artifacts = self.list_recent_artifacts(
+                since, max_pages=min(max_pages, remaining)
+            )
+            for row in artifacts:
+                if (
+                    row.get("name", "").startswith(EVENT_PREFIX)
+                    and (row.get("workflow_run") or {}).get("id") in eligible_runs
+                ):
+                    retain(row)
+        else:
+            for run in eligible_runs.values():
                 for row in self._run_artifacts(run["id"]):
                     if row.get("name", "").startswith(EVENT_PREFIX):
                         retain(row)
