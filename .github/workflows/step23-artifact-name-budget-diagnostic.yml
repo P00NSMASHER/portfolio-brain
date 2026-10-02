@@ -1,0 +1,251 @@
+name: step23-artifact-name-budget-diagnostic
+
+on:
+  push:
+    branches: ["acceptance/step23-soak-b48e-20261002"]
+    paths:
+      - ".github/workflows/step23-artifact-name-budget-diagnostic.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Measure exact-name artifact listing budget
+        shell: bash
+        run: |
+          mkdir -p acceptance/out
+          python - <<'PY'
+          import json
+          import math
+          import os
+          import urllib.parse
+          import urllib.request
+          from datetime import datetime
+          from pathlib import Path
+
+          from state_journal.contracts import WORKFLOW_PRODUCERS
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          token = os.environ["GITHUB_TOKEN"]
+          policy = json.load(open("state_journal/POLICY.json", encoding="utf-8"))
+          max_reads = int(policy["limits"]["max_read_requests"])
+          boundary = policy["artifact_scan_start"]
+          boundary_dt = datetime.fromisoformat(boundary.replace("Z", "+00:00"))
+          names_doc = json.load(open("state_journal/UPLOAD_ARTIFACTS.json", encoding="utf-8"))
+          durable_names = sorted({name for mapping in names_doc.values() for name in mapping.values()})
+
+          reads = 0
+          measurements = []
+
+          def get(path):
+              global reads
+              if reads >= max_reads:
+                  raise RuntimeError("READ_BUDGET_EXHAUSTED")
+              reads += 1
+              req = urllib.request.Request(
+                  "https://api.github.com/repos/" + repo + path,
+                  headers={
+                      "Authorization": "Bearer " + token,
+                      "Accept": "application/vnd.github+json",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                      "User-Agent": "portfolio-step23-name-budget/1.2",
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  return json.load(response)
+
+          def stable_exact_name(name):
+              q = urllib.parse.quote(name, safe="")
+              first = get(f"/actions/artifacts?name={q}&per_page=100&page=1")
+              first_rows = first.get("artifacts", [])
+              if not isinstance(first_rows, list):
+                  raise RuntimeError("MALFORMED_EXACT_NAME_LISTING")
+              total = int(first.get("total_count", 0))
+              pages = math.ceil(total / 100) if total else 1
+              if reads + max(0, pages - 1) + 1 > max_reads:
+                  raise RuntimeError("EXACT_NAME_LISTING_WOULD_EXCEED_READ_BUDGET")
+
+              seen_rows = {}
+              for artifact in first_rows:
+                  if artifact.get("name") != name:
+                      raise RuntimeError("EXACT_NAME_FILTER_RETURNED_OTHER_NAME")
+                  seen_rows[artifact["id"]] = artifact
+              for page in range(2, pages + 1):
+                  doc = get(f"/actions/artifacts?name={q}&per_page=100&page={page}")
+                  for artifact in doc.get("artifacts", []):
+                      if artifact.get("name") != name:
+                          raise RuntimeError("EXACT_NAME_FILTER_RETURNED_OTHER_NAME")
+                      previous = seen_rows.get(artifact["id"])
+                      if previous is not None and previous != artifact:
+                          raise RuntimeError("ARTIFACT_METADATA_CHANGED_DURING_SCAN")
+                      seen_rows[artifact["id"]] = artifact
+
+              stable = get(f"/actions/artifacts?name={q}&per_page=100&page=1")
+              if int(stable.get("total_count", -1)) != total or stable.get("artifacts", []) != first_rows:
+                  raise RuntimeError("EXACT_NAME_LISTING_CHANGED_DURING_SCAN")
+              if len(seen_rows) != total:
+                  raise RuntimeError("EXACT_NAME_LISTING_INCOMPLETE")
+
+              measurements.append({
+                  "name": name,
+                  "total_count": total,
+                  "pages_required": pages,
+                  "reads_with_stability_recheck": pages + 1,
+              })
+              return list(seen_rows.values())
+
+          def stable_workflow_runs(workflow):
+              encoded = urllib.parse.quote(f">={boundary}", safe="")
+              first = get(
+                  f"/actions/workflows/{workflow}.yml/runs?branch=main&created={encoded}&per_page=100&page=1"
+              )
+              first_rows = first.get("workflow_runs", [])
+              if not isinstance(first_rows, list):
+                  raise RuntimeError("MALFORMED_WORKFLOW_RUN_LISTING:" + workflow)
+              total = int(first.get("total_count", 0))
+              pages = math.ceil(total / 100) if total else 1
+              if reads + max(0, pages - 1) + 1 > max_reads:
+                  raise RuntimeError("WORKFLOW_RUN_LISTING_WOULD_EXCEED_READ_BUDGET:" + workflow)
+
+              seen_rows = {row["id"]: row for row in first_rows}
+              for page in range(2, pages + 1):
+                  doc = get(
+                      f"/actions/workflows/{workflow}.yml/runs?branch=main&created={encoded}&per_page=100&page={page}"
+                  )
+                  for row in doc.get("workflow_runs", []):
+                      previous = seen_rows.get(row["id"])
+                      if previous is not None and previous != row:
+                          raise RuntimeError("WORKFLOW_RUN_METADATA_CHANGED_DURING_SCAN:" + workflow)
+                      seen_rows[row["id"]] = row
+
+              stable = get(
+                  f"/actions/workflows/{workflow}.yml/runs?branch=main&created={encoded}&per_page=100&page=1"
+              )
+              if int(stable.get("total_count", -1)) != total or stable.get("workflow_runs", []) != first_rows:
+                  raise RuntimeError("WORKFLOW_RUN_LISTING_CHANGED_DURING_SCAN:" + workflow)
+              if len(seen_rows) != total:
+                  raise RuntimeError("WORKFLOW_RUN_LISTING_INCOMPLETE:" + workflow)
+              return list(seen_rows.values())
+
+          durable_rows = []
+          for name in durable_names:
+              durable_rows.extend(stable_exact_name(name))
+
+          snapshot_rows = stable_exact_name("portfolio-canonical-shadow-state")
+
+          reducer_runs = stable_workflow_runs("portfolio-state-reducer")
+          reducer_by_id = {
+              row["id"]: row for row in reducer_runs
+              if row.get("head_branch") == "main"
+              and row.get("status") == "completed"
+              and row.get("conclusion") == "success"
+          }
+          snapshot_source_ids = {
+              (row.get("workflow_run") or {}).get("id")
+              for row in snapshot_rows
+              if row.get("expired") is False
+          }
+          successful_snapshot_runs = [
+              row for run_id, row in reducer_by_id.items()
+              if run_id in snapshot_source_ids
+          ]
+          successful_snapshot_runs.sort(
+              key=lambda row: (row["created_at"], int(row["id"])),
+              reverse=True,
+          )
+          if len(successful_snapshot_runs) < 2:
+              raise RuntimeError("NEED_TWO_SUCCESSFUL_REDUCER_SNAPSHOTS")
+          overlap_dt = min(
+              datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
+              for row in successful_snapshot_runs[:2]
+          )
+          overlap = overlap_dt.isoformat().replace("+00:00", "Z")
+
+          durable_run_ids = {
+              (row.get("workflow_run") or {}).get("id")
+              for row in durable_rows
+              if isinstance(row.get("created_at"), str)
+              and datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")) >= overlap_dt
+              and type((row.get("workflow_run") or {}).get("id")) is int
+          }
+
+          post_overlap_run_ids = set()
+          crossover_run_ids = set()
+          for workflow in sorted(WORKFLOW_PRODUCERS):
+              rows = stable_workflow_runs(workflow)
+              for row in rows:
+                  if not (
+                      row.get("head_branch") == "main"
+                      and row.get("status") == "completed"
+                      and row.get("conclusion") in {"success", "failure", "cancelled", "timed_out"}
+                  ):
+                      continue
+                  started = datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
+                  finished = datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00"))
+                  if started >= overlap_dt:
+                      post_overlap_run_ids.add(row["id"])
+                  elif finished >= overlap_dt:
+                      crossover_run_ids.add(row["id"])
+
+          candidate_run_ids = sorted((durable_run_ids & post_overlap_run_ids) | crossover_run_ids)
+          event_artifacts = []
+          for run_id in candidate_run_ids:
+              doc = get(f"/actions/runs/{run_id}/artifacts?per_page=100")
+              rows = doc.get("artifacts", [])
+              if int(doc.get("total_count", len(rows))) != len(rows) or len(rows) > 100:
+                  raise RuntimeError("RUN_ARTIFACT_LISTING_INCOMPLETE")
+              event_artifacts.extend(
+                  row for row in rows
+                  if str(row.get("name") or "").startswith("portfolio-state-event-v2-")
+              )
+
+          minimum_validation_reads = 2 * len(event_artifacts)
+          projected_minimum_total_reads = reads + minimum_validation_reads
+
+          receipt = {
+              "diagnostic_only": True,
+              "counts_for_step23": False,
+              "exact_main_sha": "b48e2962be3fc3ac1a96637b1682137ffead7d2c",
+              "artifact_scan_start": boundary,
+              "reducer_overlap": overlap,
+              "max_read_requests": max_reads,
+              "durable_exact_names": len(durable_names),
+              "reads_used_through_event_discovery": reads,
+              "durable_run_ids_after_overlap": len(durable_run_ids),
+              "post_overlap_enrolled_terminal_runs": len(post_overlap_run_ids),
+              "crossover_terminal_runs": len(crossover_run_ids),
+              "candidate_runs_requiring_exact_artifact_query": len(candidate_run_ids),
+              "event_artifacts_discovered": len(event_artifacts),
+              "minimum_event_validation_reads": minimum_validation_reads,
+              "projected_minimum_total_reads": projected_minimum_total_reads,
+              "projected_minimum_fits_100": projected_minimum_total_reads <= max_reads,
+              "candidate_run_ids": candidate_run_ids,
+              "event_artifact_ids": sorted(int(row["id"]) for row in event_artifacts),
+              "measurements": measurements,
+          }
+          Path("acceptance/out/step23_artifact_name_budget.json").write_text(
+              json.dumps(receipt, sort_keys=True, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(receipt, sort_keys=True))
+          PY
+
+      - name: Upload diagnostic receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: step23-artifact-name-budget-${{ github.run_id }}
+          path: acceptance/out/step23_artifact_name_budget.json
+          if-no-files-found: error
+          retention-days: 7

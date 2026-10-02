@@ -1,0 +1,209 @@
+name: step23-candidate-run-budget-diagnostic
+
+on:
+  push:
+    branches: ["acceptance/step23-soak-b48e-20261002"]
+    paths:
+      - ".github/workflows/step23-candidate-run-budget-diagnostic.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Measure producer candidate run budget
+        shell: bash
+        run: |
+          mkdir -p acceptance/out
+          python - <<'PY'
+          import json, math, os, urllib.parse, urllib.request
+          from datetime import datetime
+          from pathlib import Path
+          from state_journal.contracts import WORKFLOW_PRODUCERS
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          token = os.environ["GITHUB_TOKEN"]
+          policy = json.load(open("state_journal/POLICY.json", encoding="utf-8"))
+          since = policy["artifact_scan_start"]
+          max_reads = int(policy["limits"]["max_read_requests"])
+          max_pages = int(policy["limits"]["max_artifact_pages"])
+          upload = json.load(open("state_journal/UPLOAD_ARTIFACTS.json", encoding="utf-8"))
+          durable_names = sorted({n for mapping in upload.values() for n in mapping.values()})
+          terminal = {"success", "failure", "cancelled", "timed_out"}
+
+          reads = 0
+          read_classes = {"reducer_runs": 0, "reducer_artifacts": 0, "producer_runs": 0, "exact_name_artifacts": 0}
+
+          def parse_time(v):
+              return datetime.fromisoformat(v.replace("Z", "+00:00"))
+
+          def get(path, cls):
+              global reads
+              if reads >= max_reads:
+                  raise RuntimeError("READ_BUDGET_EXHAUSTED")
+              reads += 1
+              read_classes[cls] += 1
+              req = urllib.request.Request(
+                  "https://api.github.com/repos/" + repo + path,
+                  headers={
+                      "Authorization": "Bearer " + token,
+                      "Accept": "application/vnd.github+json",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                      "User-Agent": "portfolio-step23-candidate-budget/1.0",
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  return json.load(response)
+
+          encoded = urllib.parse.quote(">=" + since, safe="")
+
+          # Reproduce the reader's two-snapshot overlap boundary conservatively.
+          reducer_runs = []
+          for page in range(1, max_pages + 1):
+              doc = get(
+                  f"/actions/workflows/portfolio-state-reducer.yml/runs?branch=main&created={encoded}&per_page=100&page={page}",
+                  "reducer_runs",
+              )
+              rows = doc.get("workflow_runs", [])
+              reducer_runs.extend(rows)
+              if len(rows) < 100:
+                  break
+          snapshot_runs = []
+          for run in reducer_runs:
+              if not (
+                  run.get("head_branch") == "main"
+                  and run.get("status") == "completed"
+                  and run.get("conclusion") == "success"
+              ):
+                  continue
+              arts = get(f"/actions/runs/{run['id']}/artifacts?per_page=100", "reducer_artifacts")
+              snaps = [
+                  a for a in arts.get("artifacts", [])
+                  if a.get("name") == "portfolio-canonical-shadow-state" and a.get("expired") is False
+              ]
+              if len(snaps) == 1:
+                  snapshot_runs.append(run)
+                  if len(snapshot_runs) == 2:
+                      break
+              elif len(snaps) > 1:
+                  raise RuntimeError(f"AMBIGUOUS_REDUCER_SNAPSHOT run={run['id']}")
+
+          overlap_at = None
+          if len(snapshot_runs) == 2:
+              overlap_at = min(parse_time(snapshot_runs[0]["created_at"]), parse_time(snapshot_runs[1]["created_at"]))
+
+          unresolved = {}
+          post_overlap = {}
+          crossover = {}
+          for workflow in sorted(WORKFLOW_PRODUCERS):
+              workflow_runs = {}
+              for page in range(1, max_pages + 1):
+                  doc = get(
+                      f"/actions/workflows/{workflow}.yml/runs?branch=main&created={encoded}&per_page=100&page={page}",
+                      "producer_runs",
+                  )
+                  rows = doc.get("workflow_runs", [])
+                  for run in rows:
+                      if parse_time(run["created_at"]) >= parse_time(since):
+                          workflow_runs[int(run["id"])] = run
+                  if len(rows) < 100:
+                      break
+              for run_id, run in workflow_runs.items():
+                  if not (
+                      run.get("head_branch") == "main"
+                      and run.get("status") == "completed"
+                      and run.get("conclusion") in terminal
+                  ):
+                      continue
+                  if overlap_at is None:
+                      crossover[run_id] = run
+                      unresolved[run_id] = run
+                      continue
+                  started = parse_time(run["created_at"])
+                  finished = parse_time(run["updated_at"])
+                  if started < overlap_at and finished < overlap_at:
+                      continue
+                  if started < overlap_at:
+                      crossover[run_id] = run
+                  else:
+                      post_overlap[run_id] = run
+                  unresolved[run_id] = run
+
+          durable_run_ids = set()
+          exact_name_rows = 0
+          exact_name_pages = {}
+          for name in durable_names:
+              q = urllib.parse.quote(name, safe="")
+              first = get(f"/actions/artifacts?name={q}&per_page=100&page=1", "exact_name_artifacts")
+              total = int(first.get("total_count", 0))
+              pages = math.ceil(total / 100) if total else 1
+              exact_name_pages[name] = pages
+              docs = [first]
+              for page in range(2, pages + 1):
+                  docs.append(get(f"/actions/artifacts?name={q}&per_page=100&page={page}", "exact_name_artifacts"))
+              seen = set()
+              for doc in docs:
+                  for art in doc.get("artifacts", []):
+                      aid = int(art["id"])
+                      if aid in seen:
+                          continue
+                      seen.add(aid)
+                      exact_name_rows += 1
+                      wr = art.get("workflow_run") or {}
+                      run_id = wr.get("id")
+                      if type(run_id) is int:
+                          durable_run_ids.add(run_id)
+              if len(seen) != total:
+                  raise RuntimeError(f"EXACT_NAME_LISTING_INCOMPLETE name={name} total={total} unique={len(seen)}")
+
+          unresolved_ids = set(unresolved)
+          durable_candidates = unresolved_ids & durable_run_ids
+          no_durable_match = unresolved_ids - durable_run_ids
+          projected_discovery_reads = reads + len(durable_candidates)
+
+          receipt = {
+              "diagnostic_only": True,
+              "counts_for_step23": False,
+              "exact_main_sha": "b48e2962be3fc3ac1a96637b1682137ffead7d2c",
+              "artifact_scan_start": since,
+              "max_read_requests": max_reads,
+              "reads_used_before_candidate_exact_queries": reads,
+              "read_classes": read_classes,
+              "overlap_at": overlap_at.isoformat().replace("+00:00", "Z") if overlap_at else None,
+              "snapshot_run_ids": [int(r["id"]) for r in snapshot_runs],
+              "terminal_unresolved_runs": len(unresolved_ids),
+              "post_overlap_runs": len(post_overlap),
+              "crossover_runs": len(crossover),
+              "durable_artifact_run_candidates": len(durable_candidates),
+              "unresolved_runs_without_durable_match": len(no_durable_match),
+              "projected_discovery_reads_with_one_exact_artifact_query_per_candidate": projected_discovery_reads,
+              "projected_discovery_fits_100_read_cap": projected_discovery_reads <= max_reads,
+              "durable_candidate_run_ids": sorted(durable_candidates),
+              "exact_name_rows_seen": exact_name_rows,
+              "exact_name_pages": exact_name_pages,
+          }
+          Path("acceptance/out/step23_candidate_run_budget.json").write_text(
+              json.dumps(receipt, sort_keys=True, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(receipt, sort_keys=True))
+          PY
+
+      - name: Upload diagnostic receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: step23-candidate-run-budget-${{ github.run_id }}
+          path: acceptance/out/step23_candidate_run_budget.json
+          if-no-files-found: error
+          retention-days: 7
