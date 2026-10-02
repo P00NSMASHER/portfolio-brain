@@ -49,6 +49,45 @@ class ArtifactPageEnvelopeRegressionTests(unittest.TestCase):
         self.assertEqual(len(rows), 200)
         self.assertEqual(len(calls), 2)
 
+
+    def test_duplicate_offset_drift_does_not_create_false_page_inversion(self):
+        page1 = [
+            artifact(1 + index, f"2026-10-02T12:{59-index//2:02d}:{30 if index % 2 else 0:02d}Z")
+            for index in range(100)
+        ]
+        # Simulate ten new artifacts arriving between page requests: the next
+        # offset page repeats the tail of page 1, then continues with older rows.
+        duplicates = page1[-10:]
+        page2 = duplicates + [
+            artifact(1000 + index, "2026-10-02T11:55:00Z")
+            for index in range(90)
+        ]
+        reader, _ = self._reader({1: page1, 2: page2})
+        rows, complete, ordering_proven, _ = reader._scan_recent_artifacts(
+            "2026-10-02T10:00:00Z", max_pages=2
+        )
+        self.assertFalse(complete)
+        self.assertTrue(ordering_proven)
+        self.assertEqual(len(rows), 190)
+
+    def test_unseen_cross_page_inversion_still_fails_closed(self):
+        page1 = [
+            artifact(1 + index, "2026-10-02T12:28:00Z")
+            for index in range(100)
+        ]
+        page2 = [
+            artifact(9999, "2026-10-02T12:29:00Z"),
+        ] + [
+            artifact(201 + index, "2026-10-02T12:27:00Z")
+            for index in range(99)
+        ]
+        reader, _ = self._reader({1: page1, 2: page2})
+        _, complete, ordering_proven, _ = reader._scan_recent_artifacts(
+            "2026-10-02T10:00:00Z", max_pages=2
+        )
+        self.assertFalse(complete)
+        self.assertFalse(ordering_proven)
+
     def test_cross_page_envelope_inversion_remains_fail_closed(self):
         page1 = [
             artifact(1 + index, "2026-10-02T12:28:00Z")

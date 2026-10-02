@@ -284,11 +284,14 @@ class GitHubReader:
 
         A page-bounded scan can still prove the absence of artifacts for runs
         that started strictly after the oldest scanned artifact when pagination
-        page envelopes are monotonic newest-to-oldest. Row jitter never enables
-        the early boundary shortcut: that shortcut still requires full row
-        monotonicity. A partial bounded scan may use page-envelope coverage only
-        after at least two non-overlapping pages; any cross-page inversion stays
-        ambiguous and fails closed.
+        page envelopes are monotonic newest-to-oldest. Offset pagination may
+        repeat already-seen artifacts when newer artifacts arrive during the
+        scan; those duplicate rows do not create a coverage inversion. Row
+        jitter never enables the early boundary shortcut: that shortcut still
+        requires full row monotonicity. A partial bounded scan may use page-
+        envelope coverage only after at least two pages make unseen progress;
+        any inversion by a previously unseen artifact stays ambiguous and fails
+        closed.
         """
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
@@ -299,6 +302,7 @@ class GitHubReader:
         row_order_proven = True
         page_envelope_proven = True
         pages_seen = 0
+        unseen_pages = 0
         complete = False
         for page in range(1, max_pages + 1):
             response = self.get(f"/actions/artifacts?per_page=100&page={page}")
@@ -307,6 +311,7 @@ class GitHubReader:
             pages_seen = page
             crossed_boundary = False
             page_times = []
+            page_unseen_times = []
             for row in rows:
                 artifact_id = row.get("id")
                 require(type(artifact_id) is int and artifact_id > 0, "Artifact listing identity missing")
@@ -327,12 +332,17 @@ class GitHubReader:
                     require(previous == row, "Artifact metadata changed during bounded scan")
                 else:
                     result[artifact_id] = row
-            if page_times:
-                page_newest = max(page_times)
-                page_oldest = min(page_times)
-                if previous_page_oldest is not None and page_newest > previous_page_oldest:
+                    page_unseen_times.append(at)
+            if page_unseen_times:
+                unseen_pages += 1
+                page_newest_unseen = max(page_unseen_times)
+                page_oldest_unseen = min(page_unseen_times)
+                if previous_page_oldest is not None and page_newest_unseen > previous_page_oldest:
                     page_envelope_proven = False
-                previous_page_oldest = page_oldest
+                previous_page_oldest = page_oldest_unseen
+            elif rows:
+                # A full duplicate page proves no additional coverage.
+                page_envelope_proven = False
             # Preserve the original fail-closed boundary shortcut: a full page
             # may terminate early only when row order itself is monotonic.
             if len(rows) < 100 or (row_order_proven and crossed_boundary):
@@ -345,7 +355,7 @@ class GitHubReader:
         return (
             sorted(selected, key=lambda row: (row["created_at"], row["id"]), reverse=True),
             complete,
-            row_order_proven or (pages_seen >= 2 and page_envelope_proven),
+            row_order_proven or (pages_seen >= 2 and unseen_pages >= 2 and page_envelope_proven),
             oldest_seen,
         )
 
