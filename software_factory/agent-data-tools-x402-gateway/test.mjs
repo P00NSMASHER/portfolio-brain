@@ -32,6 +32,26 @@ try{
   assert.equal(agent.version,'1.3');
   assert.equal(agent.intents.length,8);
 
+  const treasury=await fetch(base+'/api/treasury-average-rates?security=Total%20Marketable');
+  assert.equal(treasury.status,402);
+  const treasuryHeader=treasury.headers.get('payment-required');
+  assert.ok(treasuryHeader,'native Treasury route should emit PAYMENT-REQUIRED');
+  const treasuryDoc=JSON.parse(Buffer.from(treasuryHeader,'base64').toString('utf8'));
+  assert.equal(treasuryDoc.x402Version,2);
+  assert.equal(treasuryDoc.accepts[0].network,'eip155:8453');
+  assert.equal(treasuryDoc.accepts[0].amount,'5000');
+  assert.equal(treasuryDoc.accepts[0].asset,'0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913');
+  assert.equal(treasuryDoc.accepts[0].extra.name,'USD Coin');
+  assert.equal(treasuryDoc.accepts[0].extra.version,'2');
+
+  const badPayment=await fetch(base+'/api/treasury-average-rates',{
+    headers:{'PAYMENT-SIGNATURE':'not-base64-json'}
+  });
+  assert.equal(badPayment.status,402);
+  assert.ok(badPayment.headers.get('payment-required'));
+  const badBody=await badPayment.json();
+  assert.equal(badBody.error,'invalid_payment_header');
+
   for(const path of ['/api/pa-entity-one?q=OpenAI','/api/pa-business?q=OpenAI&limit=1']){
     const r=await fetch(base+path,{redirect:'manual'});
     assert.equal(r.status,402,path+' should return 402 unpaid');
