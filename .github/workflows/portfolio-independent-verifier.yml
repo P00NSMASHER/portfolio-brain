@@ -4,81 +4,30 @@ on:
   workflow_run:
     workflows: ["foundation-ci"]
     types: [completed]
-  workflow_dispatch:
-    inputs:
-      candidate_sha:
-        description: "Exact autonomous repair candidate SHA"
-        required: true
-        type: string
-      candidate_branch:
-        description: "Exact autonomous repair candidate branch"
-        required: true
-        type: string
-      foundation_run_id:
-        description: "Successful exact-head foundation-ci workflow_dispatch run ID"
-        required: true
-        type: string
 
 permissions:
-  actions: write
+  actions: read
   contents: write
   pull-requests: write
 
 concurrency:
-  group: portfolio-independent-verifier-${{ github.event.workflow_run.head_sha || inputs.candidate_sha || github.run_id }}
+  group: portfolio-independent-verifier-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: false
 
 jobs:
   verify:
     if: >-
       ${{
-        (
-          github.event_name == 'workflow_run' &&
-          github.event.workflow_run.conclusion == 'success' &&
-          github.event.workflow_run.head_branch != 'main' &&
-          (github.event.workflow_run.event == 'pull_request' || github.event.workflow_run.event == 'workflow_dispatch')
-        ) ||
-        github.event_name == 'workflow_dispatch'
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch != 'main' &&
+        (github.event.workflow_run.event == 'pull_request' || github.event.workflow_run.event == 'workflow_dispatch')
       }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      CANDIDATE_SHA: ${{ github.event.workflow_run.head_sha || inputs.candidate_sha }}
-      CANDIDATE_BRANCH: ${{ github.event.workflow_run.head_branch || inputs.candidate_branch }}
-      FOUNDATION_RUN_ID: ${{ github.event.workflow_run.id || inputs.foundation_run_id }}
+      CANDIDATE_SHA: ${{ github.event.workflow_run.head_sha }}
+      CANDIDATE_BRANCH: ${{ github.event.workflow_run.head_branch }}
     steps:
-      - name: Bind explicit verifier dispatch to successful exact-head Foundation
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          [[ "$FOUNDATION_RUN_ID" =~ ^[1-9][0-9]*$ ]]
-          case "$CANDIDATE_BRANCH" in
-            factory/auto-repair-*) ;;
-            *) echo "Explicit verifier dispatch is limited to autonomous repair branches" >&2; exit 1 ;;
-          esac
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" > "$RUNNER_TEMP/foundation-run.json"
-          python - <<'PY'
-          import json, os
-          from pathlib import Path
-
-          run=json.loads((Path(os.environ["RUNNER_TEMP"])/"foundation-run.json").read_text(encoding="utf-8"))
-          expected_sha=os.environ["CANDIDATE_SHA"]
-          expected_branch=os.environ["CANDIDATE_BRANCH"]
-          expected_repo=os.environ["GITHUB_REPOSITORY"]
-          checks={
-              "repository": run.get("repository",{}).get("full_name") == expected_repo,
-              "workflow": run.get("name") == "foundation-ci" and run.get("path") == ".github/workflows/foundation-ci.yml",
-              "event": run.get("event") == "workflow_dispatch",
-              "status": run.get("status") == "completed" and run.get("conclusion") == "success",
-              "head": run.get("head_sha") == expected_sha and run.get("head_branch") == expected_branch,
-          }
-          failed=[name for name,ok in checks.items() if not ok]
-          if failed:
-              raise SystemExit("foundation dispatch evidence mismatch: "+",".join(failed))
-          PY
-
       - name: Resolve exact same-repository pull request
         id: pr
         env:
@@ -126,40 +75,8 @@ jobs:
           MERGE_BASE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${MAIN_SHA}...${CANDIDATE_SHA}" --jq .merge_base_commit.sha)"
           if [ "$MERGE_BASE" != "$MAIN_SHA" ]; then
             gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/update-branch" -f expected_head_sha="$CANDIDATE_SHA"
-            if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-              NEW_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha)"
-              test "$NEW_SHA" != "$CANDIDATE_SHA"
-              gh workflow run foundation-ci.yml --repo "$GITHUB_REPOSITORY" --ref "$CANDIDATE_BRANCH"
-              FOUNDATION_RUN_ID=""
-              for attempt in $(seq 1 120); do
-                FOUNDATION_RUN_ID="$(
-                  gh run list --repo "$GITHUB_REPOSITORY" --workflow foundation-ci.yml \
-                    --branch "$CANDIDATE_BRANCH" --event workflow_dispatch --limit 20 \
-                    --json databaseId,headSha \
-                    --jq ".[] | select(.headSha == \"$NEW_SHA\") | .databaseId" | head -n 1
-                )"
-                if [ -n "$FOUNDATION_RUN_ID" ]; then
-                  break
-                fi
-                sleep 2
-              done
-              test -n "$FOUNDATION_RUN_ID"
-              gh run watch "$FOUNDATION_RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status
-              RUN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .head_sha)"
-              RUN_BRANCH="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .head_branch)"
-              RUN_EVENT="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .event)"
-              RUN_CONCLUSION="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .conclusion)"
-              test "$RUN_SHA" = "$NEW_SHA"
-              test "$RUN_BRANCH" = "$CANDIDATE_BRANCH"
-              test "$RUN_EVENT" = "workflow_dispatch"
-              test "$RUN_CONCLUSION" = "success"
-              echo "CANDIDATE_SHA=$NEW_SHA" >> "$GITHUB_ENV"
-              echo "updated=false" >> "$GITHUB_OUTPUT"
-              echo "Autonomous repair branch refreshed and exact-head Foundation passed on the refreshed head." >> "$GITHUB_STEP_SUMMARY"
-            else
-              echo "updated=true" >> "$GITHUB_OUTPUT"
-              echo "Autonomous repair branch refreshed onto current main; normal PR verification restarts on the new head." >> "$GITHUB_STEP_SUMMARY"
-            fi
+            echo "updated=true" >> "$GITHUB_OUTPUT"
+            echo "Autonomous repair branch refreshed onto current main; verification restarts on the new head." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "updated=false" >> "$GITHUB_OUTPUT"
           fi
@@ -260,7 +177,7 @@ jobs:
         if: ${{ always() && steps.refresh.outputs.updated != 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: portfolio-independent-verifier-${{ env.CANDIDATE_SHA }}
+          name: portfolio-independent-verifier-${{ github.event.workflow_run.head_sha }}
           path: |
             verifier-results/full.txt
             verifier-results/phase1.txt
