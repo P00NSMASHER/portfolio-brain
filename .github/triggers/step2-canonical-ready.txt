@@ -9,3 +9,4 @@ recovery-wake: 2026-09-30T16:47Z step7-history-fork-repaired-live-reducer
 recovery-wake: 2026-09-30T17:05Z step7-inflight-overlap-repaired-live-reducer
 recovery-wake: 2026-09-30T17:22Z step7-merged-predecessor-continuation-repaired
 recovery-wake: 2026-09-30T17:30Z step7-post-sequence41-production-reader-proof
+recovery-wake: 2026-10-02T21:25Z step23-exact-name-index-final-soak
