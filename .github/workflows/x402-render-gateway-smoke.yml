@@ -1,0 +1,60 @@
+name: x402 Render Gateway Smoke
+
+on:
+  push:
+    branches:
+      - x402-render-gateway
+    paths:
+      - 'x402-render-gateway/**'
+      - 'render.yaml'
+      - '.github/workflows/x402-render-gateway-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: x402-render-gateway
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax check
+        run: node --check server.js
+
+      - name: Start gateway
+        run: |
+          PORT=10000 node server.js > /tmp/x402-gateway.log 2>&1 &
+          echo $! > /tmp/x402-gateway.pid
+          for i in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:10000/health >/tmp/health.json; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/x402-gateway.log
+          exit 1
+
+      - name: Verify discovery surfaces
+        run: |
+          curl --fail --silent http://127.0.0.1:10000/openapi.json > /tmp/openapi.json
+          curl --fail --silent http://127.0.0.1:10000/.well-known/x402 > /tmp/x402.json
+          node -e "const f=require('fs'); const o=JSON.parse(f.readFileSync('/tmp/openapi.json')); const x=JSON.parse(f.readFileSync('/tmp/x402.json')); if(Object.keys(o.paths||{}).length!==8) process.exit(1); if((x.resources||[]).length!==8) process.exit(1);"
+
+      - name: Verify unpaid x402 challenge
+        run: |
+          curl --silent --dump-header /tmp/headers.txt --output /tmp/body.json --write-out '%{http_code}' 'http://127.0.0.1:10000/api/pa-entity-one?q=OpenAI' > /tmp/status.txt
+          test "$(cat /tmp/status.txt)" = "402"
+          grep -qi '^payment-required:' /tmp/headers.txt
+          node -e "const f=require('fs'); const b=JSON.parse(f.readFileSync('/tmp/body.json')); if(b.x402Version!==2) process.exit(1); const a=b.accepts&&b.accepts[0]; if(!a||a.network!=='eip155:8453'||a.amount!=='1000'||a.extra?.name!=='USD Coin'||a.extra?.version!=='2') process.exit(1);"
+
+      - name: Stop gateway
+        if: always()
+        run: |
+          if [ -f /tmp/x402-gateway.pid ]; then
+            kill "$(cat /tmp/x402-gateway.pid)" || true
+          fi

@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: agent-data-tools-x402
+    runtime: node
+    plan: free
+    region: ohio
+    rootDir: x402-render-gateway
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeployTrigger: commit
