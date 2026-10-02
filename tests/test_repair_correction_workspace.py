@@ -13,36 +13,27 @@ class RepairCorrectionWorkspaceTests(unittest.TestCase):
         self.assertIn('["git","diff","--cached","--name-only","-z"]',step)
         self.assertIn("staged candidate paths differ from validated candidate paths",step)
 
-    def test_clean_candidates_wait_for_exact_head_foundation_before_verifier_handoff(self):
+    def test_trusted_pr_submitter_is_scoped_to_pr_creation_only(self):
         workflow=(ROOT/".github/workflows/portfolio-autonomous-repair.yml").read_text(encoding="utf-8")
-        self.assertEqual(workflow.count("gh workflow run foundation-ci.yml"),2)
-        self.assertEqual(workflow.count('gh run watch "$FOUNDATION_RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status'),2)
-        self.assertEqual(workflow.count('test "$RUN_SHA" = "$CANDIDATE_SHA"'),2)
-        self.assertEqual(workflow.count('test "$RUN_BRANCH" = "$REPAIR_BRANCH"'),2)
-        self.assertEqual(workflow.count('test "$RUN_EVENT" = "workflow_dispatch"'),2)
-        self.assertEqual(workflow.count('test "$RUN_CONCLUSION" = "success"'),2)
-        self.assertEqual(workflow.count("gh workflow run portfolio-independent-verifier.yml"),2)
-        self.assertEqual(workflow.count('-f foundation_run_id="$FOUNDATION_RUN_ID"'),2)
+        self.assertEqual(workflow.count("secrets.PORTFOLIO_REPAIR_PR_TOKEN"),4)
+        workflow_pr=workflow.split("- name: Open protected workflow-failure repair pull request",1)[1].split("- name: Submit scheduler candidate through software factory",1)[0]
+        self.assertIn('GH_TOKEN: ${{ secrets.PORTFOLIO_REPAIR_PR_TOKEN || github.token }}',workflow_pr)
+        self.assertIn("TRUSTED_PR_SUBMITTER:",workflow_pr)
+        factory_pr=workflow.split("- name: Record independent factory PASS and open protected PR",1)[1].split("- name: Preserve independent factory evidence",1)[0]
+        self.assertIn('PORTFOLIO_FACTORY_TOKEN: ${{ secrets.PORTFOLIO_REPAIR_PR_TOKEN || github.token }}',factory_pr)
+        prefix=workflow.split("- name: Open protected workflow-failure repair pull request",1)[0]
+        self.assertNotIn("PORTFOLIO_REPAIR_PR_TOKEN",prefix)
 
-    def test_explicit_verifier_handoff_is_bound_to_successful_foundation_evidence(self):
-        workflow=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text(encoding="utf-8")
-        self.assertIn("workflow_dispatch:",workflow)
-        self.assertIn("foundation_run_id:",workflow)
-        self.assertIn("Bind explicit verifier dispatch to successful exact-head Foundation",workflow)
-        self.assertIn('[[ "$FOUNDATION_RUN_ID" =~ ^[1-9][0-9]*$ ]]',workflow)
-        self.assertIn("factory/auto-repair-*",workflow)
-        self.assertIn('/actions/runs/${FOUNDATION_RUN_ID}',workflow)
-        self.assertIn('"workflow": run.get("name") == "foundation-ci"',workflow)
-        self.assertIn('run.get("path") == ".github/workflows/foundation-ci.yml"',workflow)
-        self.assertIn('run.get("event") == "workflow_dispatch"',workflow)
-        self.assertIn('run.get("status") == "completed" and run.get("conclusion") == "success"',workflow)
-        self.assertIn('run.get("head_sha") == expected_sha and run.get("head_branch") == expected_branch',workflow)
-        self.assertIn("actions: write",workflow)
-        self.assertIn('if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then',workflow)
-        self.assertIn('test "$NEW_SHA" != "$CANDIDATE_SHA"',workflow)
-        self.assertIn('gh workflow run foundation-ci.yml --repo "$GITHUB_REPOSITORY" --ref "$CANDIDATE_BRANCH"',workflow)
-        self.assertIn('test "$RUN_SHA" = "$NEW_SHA"',workflow)
-        self.assertIn('echo "CANDIDATE_SHA=$NEW_SHA" >> "$GITHUB_ENV"',workflow)
+    def test_trusted_pr_submitter_avoids_duplicate_foundation_dispatch(self):
+        workflow=(ROOT/".github/workflows/portfolio-autonomous-repair.yml").read_text(encoding="utf-8")
+        self.assertIn("steps.pr.outputs.trusted_submitter != 'true'",workflow)
+        self.assertIn("steps.factory_pr.outputs.trusted_submitter != 'true'",workflow)
+        self.assertEqual(workflow.count("gh workflow run foundation-ci.yml"),2)
+        verifier=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text(encoding="utf-8")
+        self.assertNotIn("workflow_dispatch:",verifier)
+        self.assertIn('workflows: ["foundation-ci"]',verifier)
+        self.assertIn("actions: read",verifier)
+        self.assertNotIn("actions: write",verifier)
 
     def test_failed_first_pass_cleans_generated_residue_without_widening_policy(self):
         workflow=(ROOT/".github/workflows/portfolio-autonomous-repair.yml").read_text(encoding="utf-8")
