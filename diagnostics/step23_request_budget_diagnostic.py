@@ -97,6 +97,45 @@ event_count=sum(len(v) for v in event_by_run.values())
 event_validation_lower_bound=event_count*2
 estimated_lower_bound=discovery_calls+exact_run_artifact_queries+event_validation_lower_bound
 
+
+upload_map=json.load(open("state_journal/UPLOAD_ARTIFACTS.json",encoding="utf-8"))
+stable_names=sorted({name for producer in upload_map.values() for name in producer.values()})
+eligible_ids={r["id"] for r in post+crossover}
+state_artifact_run_ids=set()
+name_scans={}
+name_scan_calls_before=calls
+for name in stable_names:
+    encoded_name=urllib.parse.quote(name,safe="")
+    collected=[]
+    reported_total=None
+    pages=0
+    for page in range(1,21):
+        doc=get(f"/actions/artifacts?name={encoded_name}&per_page=100&page={page}")
+        rows=doc.get("artifacts",[])
+        total=doc.get("total_count")
+        if type(total) is not int:
+            raise SystemExit("STATE_ARTIFACT_TOTAL_COUNT_MISSING:"+name)
+        if reported_total is None:
+            reported_total=total
+        elif reported_total != total:
+            raise SystemExit("STATE_ARTIFACT_TOTAL_COUNT_CHANGED:"+name)
+        pages += 1
+        collected.extend(rows)
+        if len(rows)<100 or len(collected)>=reported_total:
+            break
+    complete_for_name = reported_total is not None and len({a["id"] for a in collected}) >= reported_total
+    if not complete_for_name:
+        raise SystemExit("STATE_ARTIFACT_NAME_SCAN_INCOMPLETE:"+name+":"+str(reported_total))
+    matching={int((a.get("workflow_run") or {}).get("id")) for a in collected if (a.get("workflow_run") or {}).get("id") in eligible_ids}
+    state_artifact_run_ids.update(matching)
+    name_scans[name]={"total_count":reported_total,"pages":pages,"eligible_run_matches":len(matching)}
+state_scan_calls=calls-name_scan_calls_before
+candidate_runs=[r for r in post+crossover if r["id"] in state_artifact_run_ids]
+candidate_ids={r["id"] for r in candidate_runs}
+candidate_event_found={rid for rid in found_event_runs if rid in candidate_ids}
+candidate_exact_queries=len(candidate_runs)
+semantic_path_estimate = calls + candidate_exact_queries + (len(candidate_event_found)*2)
+
 result={
     "artifact_scan_start":since,
     "overlap_at":overlap_raw,
@@ -115,6 +154,13 @@ result={
     "event_validation_calls_lower_bound":event_validation_lower_bound,
     "estimated_total_lower_bound":estimated_lower_bound,
     "max_requests":policy["limits"]["max_read_requests"],
+    "stable_state_artifact_names":stable_names,
+    "state_artifact_name_scans":name_scans,
+    "state_artifact_name_scan_calls":state_scan_calls,
+    "eligible_runs_with_published_state_artifact":len(candidate_runs),
+    "eligible_runs_proven_no_published_state_artifact":len(eligible_ids-candidate_ids),
+    "semantic_exact_run_queries_needed":candidate_exact_queries,
+    "semantic_path_estimated_lower_bound":semantic_path_estimate,
     "sample_missing_post":missing_post[:20],
 }
 print(json.dumps(result,indent=2,sort_keys=True))
