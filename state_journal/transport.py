@@ -283,14 +283,16 @@ class GitHubReader:
         """Return bounded artifact metadata plus whether the requested boundary was fully proven.
 
         A page-bounded scan can still prove the absence of artifacts for runs
-        that started strictly after the oldest monotonically scanned artifact.
-        Callers may use that partial proof to avoid re-querying every recent run,
-        while an unordered partial scan remains unusable and fails closed.
+        that started strictly after the oldest scanned artifact when pagination
+        page envelopes are monotonic newest-to-oldest. Row order inside one page
+        is not authoritative because concurrent uploads can jitter it. A later
+        page whose newest row is newer than the prior page's oldest row makes
+        the boundary ambiguous and still fails closed.
         """
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
         result = {}
-        previous_created = None
+        previous_page_oldest = None
         oldest_seen = None
         ordering_proven = True
         complete = False
@@ -299,6 +301,7 @@ class GitHubReader:
             rows = response.get("artifacts")
             require(isinstance(rows, list), "Artifact listing malformed")
             crossed_boundary = False
+            page_times = []
             for row in rows:
                 artifact_id = row.get("id")
                 require(type(artifact_id) is int and artifact_id > 0, "Artifact listing identity missing")
@@ -306,9 +309,7 @@ class GitHubReader:
                 require(isinstance(created, str), "Artifact created_at missing")
                 at = datetime.fromisoformat(created.replace("Z", "+00:00"))
                 require(at.tzinfo is not None, "Artifact created_at requires timezone")
-                if previous_created is not None and at > previous_created:
-                    ordering_proven = False
-                previous_created = at
+                page_times.append(at)
                 if oldest_seen is None or at < oldest_seen:
                     oldest_seen = at
                 if at < boundary:
@@ -318,6 +319,12 @@ class GitHubReader:
                     require(previous == row, "Artifact metadata changed during bounded scan")
                 else:
                     result[artifact_id] = row
+            if page_times:
+                page_newest = max(page_times)
+                page_oldest = min(page_times)
+                if previous_page_oldest is not None and page_newest > previous_page_oldest:
+                    ordering_proven = False
+                previous_page_oldest = page_oldest
             if len(rows) < 100 or (ordering_proven and crossed_boundary):
                 complete = True
                 break
