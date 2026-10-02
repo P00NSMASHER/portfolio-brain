@@ -37,6 +37,12 @@ class RepairCorrectionWorkspaceTests(unittest.TestCase):
         self.assertIn('run.get("event") == "workflow_dispatch"',workflow)
         self.assertIn('run.get("status") == "completed" and run.get("conclusion") == "success"',workflow)
         self.assertIn('run.get("head_sha") == expected_sha and run.get("head_branch") == expected_branch',workflow)
+        self.assertIn("actions: write",workflow)
+        self.assertIn('if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then',workflow)
+        self.assertIn('test "$NEW_SHA" != "$CANDIDATE_SHA"',workflow)
+        self.assertIn('gh workflow run foundation-ci.yml --repo "$GITHUB_REPOSITORY" --ref "$CANDIDATE_BRANCH"',workflow)
+        self.assertIn('test "$RUN_SHA" = "$NEW_SHA"',workflow)
+        self.assertIn('echo "CANDIDATE_SHA=$NEW_SHA" >> "$GITHUB_ENV"',workflow)
 
     def test_failed_first_pass_cleans_generated_residue_without_widening_policy(self):
         workflow=(ROOT/".github/workflows/portfolio-autonomous-repair.yml").read_text(encoding="utf-8")
