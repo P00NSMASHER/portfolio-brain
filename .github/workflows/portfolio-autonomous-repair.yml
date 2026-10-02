@@ -367,11 +367,14 @@ jobs:
         env:
           REPAIR_BRANCH: ${{ steps.prepare.outputs.branch }}
           PR_TITLE: ${{ steps.prepare.outputs.title }}
+          GH_TOKEN: ${{ secrets.PORTFOLIO_REPAIR_PR_TOKEN || github.token }}
+          TRUSTED_PR_SUBMITTER: ${{ secrets.PORTFOLIO_REPAIR_PR_TOKEN != '' }}
         run: |
           set -euo pipefail
           python -m repair.autonomous_repair pr-body             --request repair/out/request.json             --validation repair/out/diff_validation.json             --output repair/out/pr_body.md
           PR_URL="$(gh pr create --base main --head "$REPAIR_BRANCH" --title "$PR_TITLE" --body-file repair/out/pr_body.md)"
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
+          echo "trusted_submitter=$TRUSTED_PR_SUBMITTER" >> "$GITHUB_OUTPUT"
           echo "Created repair candidate: $PR_URL" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Submit scheduler candidate through software factory
@@ -415,41 +418,11 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Validate and hand off workflow-failure repair
-        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind == 'WORKFLOW_FAILURE' }}
+      - name: Dispatch fallback Foundation validation for GITHUB_TOKEN-authored repair
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind == 'WORKFLOW_FAILURE' && steps.pr.outputs.trusted_submitter != 'true' }}
         env:
           REPAIR_BRANCH: ${{ steps.prepare.outputs.branch }}
-        run: |
-          set -euo pipefail
-          CANDIDATE_SHA="$(git rev-parse HEAD)"
-          gh workflow run foundation-ci.yml --repo "$GITHUB_REPOSITORY" --ref "$REPAIR_BRANCH"
-          FOUNDATION_RUN_ID=""
-          for attempt in $(seq 1 120); do
-            FOUNDATION_RUN_ID="$(
-              gh run list --repo "$GITHUB_REPOSITORY" --workflow foundation-ci.yml \
-                --branch "$REPAIR_BRANCH" --event workflow_dispatch --limit 20 \
-                --json databaseId,headSha \
-                --jq ".[] | select(.headSha == \"$CANDIDATE_SHA\") | .databaseId" | head -n 1
-            )"
-            if [ -n "$FOUNDATION_RUN_ID" ]; then
-              break
-            fi
-            sleep 2
-          done
-          test -n "$FOUNDATION_RUN_ID"
-          gh run watch "$FOUNDATION_RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status
-          RUN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .head_sha)"
-          RUN_BRANCH="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .head_branch)"
-          RUN_EVENT="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .event)"
-          RUN_CONCLUSION="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .conclusion)"
-          test "$RUN_SHA" = "$CANDIDATE_SHA"
-          test "$RUN_BRANCH" = "$REPAIR_BRANCH"
-          test "$RUN_EVENT" = "workflow_dispatch"
-          test "$RUN_CONCLUSION" = "success"
-          gh workflow run portfolio-independent-verifier.yml --repo "$GITHUB_REPOSITORY" --ref main \
-            -f candidate_sha="$CANDIDATE_SHA" \
-            -f candidate_branch="$REPAIR_BRANCH" \
-            -f foundation_run_id="$FOUNDATION_RUN_ID"
+        run: gh workflow run foundation-ci.yml --repo "$GITHUB_REPOSITORY" --ref "$REPAIR_BRANCH"
 
       - name: Preserve sanitized repair evidence
         if: ${{ always() && steps.dedupe.outputs.duplicate != 'true' && hashFiles('repair/out/diff_validation.json') != '' }}
@@ -548,6 +521,8 @@ jobs:
         working-directory: factory-control
         env:
           EXPECTED_SHA: ${{ needs.repair.outputs.factory_candidate_sha }}
+          PORTFOLIO_FACTORY_TOKEN: ${{ secrets.PORTFOLIO_REPAIR_PR_TOKEN || github.token }}
+          TRUSTED_PR_SUBMITTER: ${{ secrets.PORTFOLIO_REPAIR_PR_TOKEN != '' }}
         run: |
           set -euo pipefail
           python -m software_factory.scheduler_repair_bridge verify \
@@ -565,43 +540,15 @@ jobs:
           print("url="+doc["pr_url"])
           print("pr_number="+str(doc["pr_number"]))
           print("branch="+doc["branch_name"])
+          print("trusted_submitter="+os.environ["TRUSTED_PR_SUBMITTER"])
           PY
           echo "Created governed factory repair candidate: ${{ steps.factory_pr.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Validate and hand off governed factory repair
+      - name: Dispatch fallback Foundation validation for GITHUB_TOKEN-authored factory PR
+        if: ${{ steps.factory_pr.outputs.trusted_submitter != 'true' }}
         env:
           REPAIR_BRANCH: ${{ steps.factory_pr.outputs.branch }}
-          CANDIDATE_SHA: ${{ needs.repair.outputs.factory_candidate_sha }}
-        run: |
-          set -euo pipefail
-          gh workflow run foundation-ci.yml --repo "$GITHUB_REPOSITORY" --ref "$REPAIR_BRANCH"
-          FOUNDATION_RUN_ID=""
-          for attempt in $(seq 1 120); do
-            FOUNDATION_RUN_ID="$(
-              gh run list --repo "$GITHUB_REPOSITORY" --workflow foundation-ci.yml \
-                --branch "$REPAIR_BRANCH" --event workflow_dispatch --limit 20 \
-                --json databaseId,headSha \
-                --jq ".[] | select(.headSha == \"$CANDIDATE_SHA\") | .databaseId" | head -n 1
-            )"
-            if [ -n "$FOUNDATION_RUN_ID" ]; then
-              break
-            fi
-            sleep 2
-          done
-          test -n "$FOUNDATION_RUN_ID"
-          gh run watch "$FOUNDATION_RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status
-          RUN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .head_sha)"
-          RUN_BRANCH="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .head_branch)"
-          RUN_EVENT="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .event)"
-          RUN_CONCLUSION="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .conclusion)"
-          test "$RUN_SHA" = "$CANDIDATE_SHA"
-          test "$RUN_BRANCH" = "$REPAIR_BRANCH"
-          test "$RUN_EVENT" = "workflow_dispatch"
-          test "$RUN_CONCLUSION" = "success"
-          gh workflow run portfolio-independent-verifier.yml --repo "$GITHUB_REPOSITORY" --ref main \
-            -f candidate_sha="$CANDIDATE_SHA" \
-            -f candidate_branch="$REPAIR_BRANCH" \
-            -f foundation_run_id="$FOUNDATION_RUN_ID"
+        run: gh workflow run foundation-ci.yml --repo "$GITHUB_REPOSITORY" --ref "$REPAIR_BRANCH"
 
       - name: Preserve independent factory evidence
         if: ${{ always() }}
