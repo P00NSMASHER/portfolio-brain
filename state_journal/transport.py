@@ -372,7 +372,8 @@ class GitHubReader:
         receipts, previews, and other unrelated artifacts accumulate. Journal
         restore instead enumerates the closed workflow allowlist, validates each
         run later through the existing provider checks, and scans events only
-        from the older of the two newest successful reducer publications.
+        from the overlap with successful reducer publications, narrowing to
+        the newest snapshot only when the bounded API request budget requires it.
         """
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
@@ -456,20 +457,24 @@ class GitHubReader:
 
         # Producer run discovery stays anchored to the reviewed
         # journal/checkpoint boundary so an in-flight run that started before
-        # recent reducer snapshots cannot disappear. Artifact retrieval is
-        # narrower: once two successful reducer snapshots exist, a terminal
-        # producer run that both started and finished before the older reducer
-        # started is already covered by that predecessor snapshot and does not
-        # need another per-run artifact request. Runs that started earlier but
-        # remained active into the overlap window are still inspected.
+        # the newest reducer snapshot cannot disappear. A terminal producer
+        # run that both started and finished before that snapshot started is
+        # already covered by it and needs no per-run artifact request. Runs
+        # that started earlier but remained active into the overlap window are
+        # still inspected.
         event_since = since
         overlap_at = None
+        latest_overlap_at = None
         if len(snapshot_runs) == 2:
             overlap = min(snapshot_runs[0][0]["created_at"], snapshot_runs[1][0]["created_at"])
             overlap_at = datetime.fromisoformat(overlap.replace("Z", "+00:00"))
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
+            latest_overlap = max(snapshot_runs[0][0]["created_at"], snapshot_runs[1][0]["created_at"])
+            latest_overlap_at = datetime.fromisoformat(latest_overlap.replace("Z", "+00:00"))
+            require(latest_overlap_at.tzinfo is not None, "Latest reducer overlap boundary requires timezone")
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
+        producer_runs = []
         for workflow in sorted(WORKFLOW_PRODUCERS):
             for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
                 if not (
@@ -478,20 +483,41 @@ class GitHubReader:
                     and run.get("conclusion") in terminal
                 ):
                     continue
-                if overlap_at is not None:
-                    created_at = run.get("created_at")
-                    updated_at = run.get("updated_at")
-                    require(isinstance(created_at, str), "Workflow run created_at missing")
-                    require(isinstance(updated_at, str), "Workflow run updated_at missing")
-                    started = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-                    finished = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
-                    require(started.tzinfo is not None and finished.tzinfo is not None,
-                            "Workflow run timestamps require timezone")
-                    if started < overlap_at and finished < overlap_at:
-                        continue
-                for row in self._run_artifacts(run["id"]):
-                    if row.get("name", "").startswith(EVENT_PREFIX):
-                        retain(row)
+                producer_runs.append(run)
+
+        http = getattr(self, "http", None)
+        max_requests = getattr(http, "max_requests", None)
+        requests_used = getattr(http, "requests", None)
+        if (
+            latest_overlap_at is not None
+            and type(max_requests) is int
+            and type(requests_used) is int
+        ):
+            remaining = max_requests - requests_used
+            required = 0
+            for run in producer_runs:
+                started = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
+                finished = datetime.fromisoformat(run["updated_at"].replace("Z", "+00:00"))
+                require(started.tzinfo is not None and finished.tzinfo is not None,
+                        "Workflow run timestamps require timezone")
+                if not (started < overlap_at and finished < overlap_at):
+                    required += 1
+            if required > remaining:
+                # The newest snapshot already covers runs completed before it
+                # began; keep overlapping runs so late-published events survive.
+                overlap_at = latest_overlap_at
+
+        for run in producer_runs:
+            if overlap_at is not None:
+                started = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
+                finished = datetime.fromisoformat(run["updated_at"].replace("Z", "+00:00"))
+                require(started.tzinfo is not None and finished.tzinfo is not None,
+                        "Workflow run timestamps require timezone")
+                if started < overlap_at and finished < overlap_at:
+                    continue
+            for row in self._run_artifacts(run["id"]):
+                if row.get("name", "").startswith(EVENT_PREFIX):
+                    retain(row)
 
         for run_id in explicit_run_ids:
             require(type(run_id) is int and run_id > 0, "Explicit recovery run ID invalid")
