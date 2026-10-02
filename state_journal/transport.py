@@ -354,6 +354,64 @@ class GitHubReader:
                 )
         raise JournalError("Workflow run scan incomplete at page bound; checkpoint/archive required")
 
+    def _journal_workflow_runs_since(self, since: str, *, max_pages: int) -> dict[str, list[dict]]:
+        """List enrolled workflow runs in one bounded query instead of one per workflow."""
+        if not isinstance(getattr(self, "http", None), BudgetedHTTP):
+            # Preserve support for lightweight readers that provide only get().
+            return {
+                workflow: self._workflow_runs_since(
+                    f"{workflow}.yml", since, max_pages=max_pages
+                )
+                for workflow in ("portfolio-state-reducer", *WORKFLOW_PRODUCERS)
+            }
+
+        boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
+        require(boundary.tzinfo is not None, "Workflow boundary requires timezone")
+        encoded = quote(f">={since}", safe="")
+        by_path = {
+            f".github/workflows/{workflow}.yml": workflow
+            for workflow in ("portfolio-state-reducer", *WORKFLOW_PRODUCERS)
+        }
+        result: dict[str, dict[int, dict]] = {
+            workflow: {} for workflow in ("portfolio-state-reducer", *WORKFLOW_PRODUCERS)
+        }
+        for page in range(1, max_pages + 1):
+            response = self.get(
+                f"/actions/runs?branch=main&created={encoded}&per_page=100&page={page}"
+            )
+            rows = response.get("workflow_runs")
+            require(isinstance(rows, list), "Workflow run listing malformed")
+            for row in rows:
+                path = row.get("path")
+                if isinstance(path, str) and path.endswith("@refs/heads/main"):
+                    path = path.removesuffix("@refs/heads/main")
+                workflow = by_path.get(path)
+                if workflow is None:
+                    continue
+                run_id = row.get("id")
+                require(type(run_id) is int and run_id > 0, "Workflow run identity missing")
+                created = row.get("created_at")
+                require(isinstance(created, str), "Workflow run created_at missing")
+                at = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                require(at.tzinfo is not None, "Workflow run created_at requires timezone")
+                if at < boundary:
+                    continue
+                previous = result[workflow].get(run_id)
+                if previous is not None:
+                    require(previous == row, "Workflow run metadata changed during bounded scan")
+                else:
+                    result[workflow][run_id] = row
+            if len(rows) < 100:
+                return {
+                    workflow: sorted(
+                        workflow_runs.values(),
+                        key=lambda row: (row["created_at"], row["id"]),
+                        reverse=True,
+                    )
+                    for workflow, workflow_runs in result.items()
+                }
+        raise JournalError("Workflow run scan incomplete at page bound; checkpoint/archive required")
+
     def _run_artifacts(self, run_id: int) -> list[dict]:
         require(type(run_id) is int and run_id > 0, "Invalid workflow run ID")
         response = self.get(f"/actions/runs/{run_id}/artifacts?per_page=100")
@@ -392,9 +450,8 @@ class GitHubReader:
             else:
                 result[artifact_id] = row
 
-        reducer_runs = self._workflow_runs_since(
-            "portfolio-state-reducer.yml", since, max_pages=max_pages
-        )
+        workflow_runs = self._journal_workflow_runs_since(since, max_pages=max_pages)
+        reducer_runs = workflow_runs["portfolio-state-reducer"]
         self._snapshot_source_runs: dict[int, dict] = {}
         snapshot_runs: list[tuple[dict, dict]] = []
         for run in reducer_runs:
@@ -471,7 +528,7 @@ class GitHubReader:
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
         for workflow in sorted(WORKFLOW_PRODUCERS):
-            for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
+            for run in workflow_runs[workflow]:
                 if not (
                     run.get("head_branch") == "main"
                     and run.get("status") == "completed"
