@@ -372,7 +372,9 @@ class GitHubReader:
         receipts, previews, and other unrelated artifacts accumulate. Journal
         restore instead enumerates the closed workflow allowlist, validates each
         run later through the existing provider checks, and scans events only
-        from the older of the two newest successful reducer publications.
+        from the older of the two newest successful reducer publications. If
+        individual run lookups cannot fit the remaining request budget, a
+        bounded ordered repository scan is filtered back to those eligible runs.
         """
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
@@ -470,6 +472,7 @@ class GitHubReader:
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
+        producer_run_ids: set[int] = set()
         for workflow in sorted(WORKFLOW_PRODUCERS):
             for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
                 if not (
@@ -489,10 +492,9 @@ class GitHubReader:
                             "Workflow run timestamps require timezone")
                     if started < overlap_at and finished < overlap_at:
                         continue
-                for row in self._run_artifacts(run["id"]):
-                    if row.get("name", "").startswith(EVENT_PREFIX):
-                        retain(row)
+                producer_run_ids.add(run["id"])
 
+        explicit_ids: set[int] = set()
         for run_id in explicit_run_ids:
             require(type(run_id) is int and run_id > 0, "Explicit recovery run ID invalid")
             run = self.get(f"/actions/runs/{run_id}")
@@ -501,6 +503,46 @@ class GitHubReader:
             require(run.get("status") == "completed" and run.get("conclusion") in terminal,
                     "Explicit recovery run is not terminal")
             source_producer(run)
+            explicit_ids.add(run_id)
+
+        producer_run_ids -= explicit_ids
+        http = getattr(self, "http", None)
+        max_requests = getattr(http, "max_requests", None)
+        requests_used = getattr(http, "requests", None)
+        remaining_requests = (
+            max_requests - requests_used
+            if type(max_requests) is int and type(requests_used) is int
+            else None
+        )
+        explicit_request_count = len(explicit_ids)
+        use_repository_scan = (
+            remaining_requests is not None
+            and remaining_requests >= explicit_request_count
+            and bool(producer_run_ids)
+            and len(producer_run_ids) > remaining_requests - explicit_request_count
+        )
+        if use_repository_scan:
+            scan_budget = remaining_requests - explicit_request_count
+            rows = self.list_recent_artifacts(
+                since, max_pages=min(max_pages, max(1, scan_budget))
+            )
+            for row in rows:
+                name = row.get("name", "")
+                if not name.startswith(EVENT_PREFIX):
+                    continue
+                source = row.get("workflow_run")
+                source_run_id = source.get("id") if isinstance(source, dict) else None
+                match = re.match(rf"{re.escape(EVENT_PREFIX)}([1-9][0-9]*)-", name)
+                named_run_id = int(match.group(1)) if match else None
+                if source_run_id in producer_run_ids or named_run_id in producer_run_ids:
+                    retain(row)
+        else:
+            for run_id in sorted(producer_run_ids):
+                for row in self._run_artifacts(run_id):
+                    if row.get("name", "").startswith(EVENT_PREFIX):
+                        retain(row)
+
+        for run_id in sorted(explicit_ids):
             for row in self._run_artifacts(run_id):
                 if row.get("name", "").startswith(EVENT_PREFIX):
                     retain(row)
