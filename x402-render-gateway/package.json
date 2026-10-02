@@ -8,5 +8,6 @@
   },
   "scripts": {
     "start": "node server.js"
-  }
+  },
+  "description": "Quota-independent x402 seller gateway for eight authoritative public-data tools"
 }
