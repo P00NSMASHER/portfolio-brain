@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
-  "purpose": "Collect exact-main Step 23 scheduled soak evidence after robust four-wave schedule merge; never mix prior-main evidence.",
-  "exact_main_sha": "28ed0bca5cdd9c18e718e9aba890a24710af5a77",
-  "soak_start": "2026-10-01T21:46:34Z",
+  "purpose": "Collect exact-main Step 23 scheduled soak evidence after post-Hunter-fix four-wave schedule merge; never mix prior-main evidence.",
+  "exact_main_sha": "2abebc699db084a06b7cf77cebbd2ce848e3ee7b",
+  "soak_start": "2026-10-01T23:25:45Z",
   "required_successes_per_workflow": 3,
   "required_workflows": [
     "portfolio-state-reducer",
