@@ -255,8 +255,8 @@ def build_live_state(
             provider_metadata,now=now,stale_after_minutes=STALE_AFTER_MINUTES["provider"]
         )
         state_updated_at=provider_state.get("updated_at")
-        require(isinstance(state_updated_at,str) and state_updated_at,
-                "restored provider health updated_at missing")
+        if not isinstance(state_updated_at,str) or not state_updated_at:
+            raise ValueError("restored provider health updated_at missing")
         provider_state_age=round(max(0.0,(now-_time(state_updated_at)).total_seconds()/60.0),1)
         if provider_state_age>STALE_AFTER_MINUTES["provider"]:
             provider_freshness="STALE"
