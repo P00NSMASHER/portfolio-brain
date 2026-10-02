@@ -1,0 +1,137 @@
+{
+  "schema_version": "1.0.0",
+  "manifest_id": "portfolio-step23-live-evidence-v1",
+  "status": "WAITING_FOR_LIVE_EVIDENCE",
+  "exact_main_sha": "2abebc699db084a06b7cf77cebbd2ce848e3ee7b",
+  "run_classification_policy": "EXPLICIT",
+  "required_successful_scheduled_cycles_per_workflow": 3,
+  "required_handler_types": [
+    "REPAIR",
+    "TEST",
+    "VERIFICATION"
+  ],
+  "workflows": {
+    "portfolio-state-reducer": {
+      "bounded_crons": [
+        "1 0 2 10 *",
+        "46 0 2 10 *",
+        "31 1 2 10 *",
+        "16 2 2 10 *"
+      ],
+      "successful_run_ids": [],
+      "cancelled_coalesced_run_ids": [],
+      "failure_run_ids": []
+    },
+    "runtime-hourly-sync": {
+      "bounded_crons": [
+        "2 0 2 10 *",
+        "48 0 2 10 *",
+        "33 1 2 10 *",
+        "18 2 2 10 *"
+      ],
+      "successful_run_ids": [],
+      "cancelled_coalesced_run_ids": [],
+      "failure_run_ids": []
+    },
+    "portfolio-autonomous-scheduler": {
+      "bounded_crons": [
+        "5 0 2 10 *",
+        "51 0 2 10 *",
+        "36 1 2 10 *",
+        "21 2 2 10 *"
+      ],
+      "successful_run_ids": [],
+      "cancelled_coalesced_run_ids": [],
+      "failure_run_ids": []
+    },
+    "hunter-autonomous-cycle": {
+      "bounded_crons": [
+        "10 0 2 10 *",
+        "55 0 2 10 *",
+        "40 1 2 10 *",
+        "25 2 2 10 *"
+      ],
+      "successful_run_ids": [],
+      "cancelled_coalesced_run_ids": [],
+      "failure_run_ids": []
+    },
+    "agent-heartbeat-sweep": {
+      "bounded_crons": [
+        "15 0 2 10 *",
+        "0 1 2 10 *",
+        "45 1 2 10 *",
+        "31 2 2 10 *"
+      ],
+      "successful_run_ids": [],
+      "cancelled_coalesced_run_ids": [],
+      "failure_run_ids": []
+    },
+    "portfolio-cost-watchdog": {
+      "bounded_crons": [
+        "0 0 2 10 *",
+        "45 0 2 10 *",
+        "30 1 2 10 *",
+        "15 2 2 10 *"
+      ],
+      "successful_run_ids": [],
+      "cancelled_coalesced_run_ids": [],
+      "failure_run_ids": []
+    },
+    "portfolio-notification-cycle": {
+      "bounded_crons": [
+        "20 0 2 10 *",
+        "5 1 2 10 *",
+        "50 1 2 10 *",
+        "35 2 2 10 *"
+      ],
+      "successful_run_ids": [],
+      "cancelled_coalesced_run_ids": [],
+      "failure_run_ids": []
+    },
+    "command-center-pages": {
+      "bounded_crons": [
+        "25 0 2 10 *",
+        "10 1 2 10 *",
+        "55 1 2 10 *",
+        "39 2 2 10 *"
+      ],
+      "successful_run_ids": [],
+      "cancelled_coalesced_run_ids": [],
+      "failure_run_ids": []
+    }
+  },
+  "receipt_inputs": {
+    "runs": [],
+    "canonical_samples": [],
+    "pending_events_start": null,
+    "pending_events_final": null,
+    "handler_execution_evidence": [],
+    "hunter_substantive_work_evidence": [],
+    "dashboard": {
+      "fresh": false,
+      "hash": null,
+      "run_id": null,
+      "completed_at": null,
+      "artifact_name": null
+    },
+    "hash_traceability_pass": false
+  },
+  "completion_requirements": {
+    "exact_main_must_remain_unchanged": true,
+    "all_runs_must_be_event_schedule": true,
+    "no_actual_failure_in_claimed_window": true,
+    "cancelled_requires_later_same_workflow_success": true,
+    "canonical_sample_count_minimum": 3,
+    "canonical_sequence_must_not_regress": true,
+    "pending_events_final_must_equal": 0,
+    "handler_types_required": [
+      "REPAIR",
+      "TEST",
+      "VERIFICATION"
+    ],
+    "substantive_hunter_work_required": true,
+    "heartbeat_only_hunter_work_rejected": true,
+    "dashboard_must_be_fresh_and_hash_traceable": true,
+    "final_validator": "acceptance.final_acceptance.validate_step23"
+  }
+}
