@@ -367,11 +367,14 @@ jobs:
         env:
           REPAIR_BRANCH: ${{ steps.prepare.outputs.branch }}
           PR_TITLE: ${{ steps.prepare.outputs.title }}
+          GH_TOKEN: ${{ secrets.PORTFOLIO_REPAIR_PR_TOKEN || github.token }}
+          TRUSTED_PR_SUBMITTER: ${{ secrets.PORTFOLIO_REPAIR_PR_TOKEN != '' }}
         run: |
           set -euo pipefail
           python -m repair.autonomous_repair pr-body             --request repair/out/request.json             --validation repair/out/diff_validation.json             --output repair/out/pr_body.md
           PR_URL="$(gh pr create --base main --head "$REPAIR_BRANCH" --title "$PR_TITLE" --body-file repair/out/pr_body.md)"
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
+          echo "trusted_submitter=$TRUSTED_PR_SUBMITTER" >> "$GITHUB_OUTPUT"
           echo "Created repair candidate: $PR_URL" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Submit scheduler candidate through software factory
@@ -415,8 +418,8 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Dispatch exact-head foundation validation for workflow-failure repair
-        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind == 'WORKFLOW_FAILURE' }}
+      - name: Dispatch fallback Foundation validation for GITHUB_TOKEN-authored repair
+        if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind == 'WORKFLOW_FAILURE' && steps.pr.outputs.trusted_submitter != 'true' }}
         env:
           REPAIR_BRANCH: ${{ steps.prepare.outputs.branch }}
         run: gh workflow run foundation-ci.yml --repo "$GITHUB_REPOSITORY" --ref "$REPAIR_BRANCH"
@@ -518,6 +521,8 @@ jobs:
         working-directory: factory-control
         env:
           EXPECTED_SHA: ${{ needs.repair.outputs.factory_candidate_sha }}
+          PORTFOLIO_FACTORY_TOKEN: ${{ secrets.PORTFOLIO_REPAIR_PR_TOKEN || github.token }}
+          TRUSTED_PR_SUBMITTER: ${{ secrets.PORTFOLIO_REPAIR_PR_TOKEN != '' }}
         run: |
           set -euo pipefail
           python -m software_factory.scheduler_repair_bridge verify \
@@ -535,10 +540,12 @@ jobs:
           print("url="+doc["pr_url"])
           print("pr_number="+str(doc["pr_number"]))
           print("branch="+doc["branch_name"])
+          print("trusted_submitter="+os.environ["TRUSTED_PR_SUBMITTER"])
           PY
           echo "Created governed factory repair candidate: ${{ steps.factory_pr.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Dispatch exact-head Foundation validation
+      - name: Dispatch fallback Foundation validation for GITHUB_TOKEN-authored factory PR
+        if: ${{ steps.factory_pr.outputs.trusted_submitter != 'true' }}
         env:
           REPAIR_BRANCH: ${{ steps.factory_pr.outputs.branch }}
         run: gh workflow run foundation-ci.yml --repo "$GITHUB_REPOSITORY" --ref "$REPAIR_BRANCH"
