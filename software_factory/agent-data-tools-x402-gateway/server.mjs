@@ -67,37 +67,7 @@ function paymentDocument(req,path){
 }
 function sendPaymentRequired(req,res,path,reason='payment_required'){
   const doc=paymentDocument(req,path), r=routes[path];
-  const price='
-  const u=new URL(req.url,'http://gateway.local'), target=new URL(r[0]); target.search=u.search;
-  const headers={...req.headers};
-  delete headers.host; delete headers.connection; delete headers['transfer-encoding'];
-  const upstream=https.request(target,{method:'GET',headers},up=>{
-    res.statusCode=up.statusCode||502;
-    for(const [k,v] of Object.entries(up.headers)){if(v!==undefined)res.setHeader(k,v);}
-    res.setHeader('x-x402-gateway','transparent-proxy');
-    up.pipe(res);
-  });
-  upstream.on('error',e=>send(res,502,{error:'gateway_upstream_error',detail:e.message}));
-  upstream.end();
-}
-
-http.createServer(async(req,res)=>{
-  if(!req.url)return send(res,400,{error:'missing_url'});
-  const u=new URL(req.url,'http://gateway.local');
-  if(req.method==='OPTIONS'){res.writeHead(204,{'access-control-allow-origin':'*','access-control-allow-methods':'GET,HEAD,OPTIONS','access-control-allow-headers':'PAYMENT-SIGNATURE,X-PAYMENT,Content-Type,Accept','access-control-expose-headers':'PAYMENT-REQUIRED,PAYMENT-RESPONSE,x402-settled,x402-price,x402-network,x402-asset,x402-pay-to'});return res.end();}
-  if(!['GET','HEAD'].includes(req.method||''))return send(res,405,{error:'method_not_allowed'});
-  if(u.pathname==='/healthz')return send(res,200,{ok:true,routes:Object.keys(routes).length});
-  if(u.pathname==='/openapi.json')return send(res,200,openapi(req));
-  if(u.pathname==='/.well-known/x402')return send(res,200,discovery(req));
-  if(u.pathname==='/.well-known/agent.json')return send(res,200,agent(req));
-  if(u.pathname==='/llms.txt')return send(res,200,`# Agent Data Tools x402\n\nOpenAPI: ${origin(req)}/openapi.json\nx402: ${origin(req)}/.well-known/x402\nagent.json: ${origin(req)}/.well-known/agent.json\nSkill: ${origin(req)}/skill.md\n`,'text/plain; charset=utf-8');
-  if(u.pathname==='/skill.md')return send(res,200,'# Agent Data Tools x402\n\nUse /api/vendor-intake-gate for a bounded proceed or human_review decision. Other routes return direct public-data lookups. Unpaid calls return HTTP 402; pay the quote and retry the same gateway URL with PAYMENT-SIGNATURE.','text/markdown; charset=utf-8');
-  if(u.pathname==='/'){return send(res,200,`<!doctype html><meta name="viewport" content="width=device-width"><title>Agent Data Tools x402</title><main style="max-width:800px;margin:40px auto;font:16px system-ui"><h1>Agent Data Tools x402</h1><p>Unique-host transparent gateway for eight x402 v2 paid endpoints.</p><p><a href="/openapi.json">OpenAPI</a> · <a href="/.well-known/x402">x402 discovery</a> · <a href="/.well-known/agent.json">agent.json</a></p></main>`,'text/html; charset=utf-8');}
-  if(u.pathname==='/api/treasury-average-rates')return serveTreasury(req,res,u);
-  if(routes[u.pathname])return proxy(req,res,routes[u.pathname]);
-  return send(res,404,{error:'not_found'});
-}).listen(PORT,'0.0.0.0',()=>console.log(`Agent Data Tools x402 gateway listening on ${PORT}`));
-+Number(r[1]).toFixed(3);
+  const price='$'+Number(r[1]).toFixed(3);
   const body=JSON.stringify({error:reason,...doc,price,currency:'USDC',network:NETWORK,payTo:PAY_TO},null,2);
   res.writeHead(402,{'content-type':'application/json; charset=utf-8','content-length':Buffer.byteLength(body),'cache-control':'no-store','access-control-allow-origin':'*','access-control-expose-headers':'PAYMENT-REQUIRED, PAYMENT-RESPONSE, x402-settled, x402-price, x402-network, x402-asset, x402-pay-to','PAYMENT-REQUIRED':encodePaymentHeader(doc),'x402-price':price,'x402-asset':'USDC','x402-network':NETWORK,'x402-pay-to':PAY_TO});
   res.end(body);
@@ -169,6 +139,7 @@ http.createServer(async(req,res)=>{
   if(u.pathname==='/llms.txt')return send(res,200,`# Agent Data Tools x402\n\nOpenAPI: ${origin(req)}/openapi.json\nx402: ${origin(req)}/.well-known/x402\nagent.json: ${origin(req)}/.well-known/agent.json\nSkill: ${origin(req)}/skill.md\n`,'text/plain; charset=utf-8');
   if(u.pathname==='/skill.md')return send(res,200,'# Agent Data Tools x402\n\nUse /api/vendor-intake-gate for a bounded proceed or human_review decision. Other routes return direct public-data lookups. Unpaid calls return HTTP 402; pay the quote and retry the same gateway URL with PAYMENT-SIGNATURE.','text/markdown; charset=utf-8');
   if(u.pathname==='/'){return send(res,200,`<!doctype html><meta name="viewport" content="width=device-width"><title>Agent Data Tools x402</title><main style="max-width:800px;margin:40px auto;font:16px system-ui"><h1>Agent Data Tools x402</h1><p>Unique-host transparent gateway for eight x402 v2 paid endpoints.</p><p><a href="/openapi.json">OpenAPI</a> · <a href="/.well-known/x402">x402 discovery</a> · <a href="/.well-known/agent.json">agent.json</a></p></main>`,'text/html; charset=utf-8');}
+  if(u.pathname==='/api/treasury-average-rates')return serveTreasury(req,res,u);
   if(routes[u.pathname])return proxy(req,res,routes[u.pathname]);
   return send(res,404,{error:'not_found'});
 }).listen(PORT,'0.0.0.0',()=>console.log(`Agent Data Tools x402 gateway listening on ${PORT}`));
