@@ -62,3 +62,10 @@ A separate isolated deep smoke was used during development to verify live govern
 The 402 challenge includes x402 v2 Base USDC payment requirements plus Bazaar discovery metadata. The same-origin discovery document publishes the eight route URLs, accepted payment requirements, examples, tags, and service names. The Agent402-style manifest is available at `/.well-known/agent.json`.
 
 Catalog inclusion is settlement-driven on Bazaar-style facilitators: a public route still needs a successful paid settlement that carries the discovery extension before that facilitator can catalog it. Self-funded catalog-seeding payments should be tracked separately from outside-buyer revenue.
+
+
+## Netlify free-host runtime
+
+The same gateway can run on the existing free Netlify project `agent-data-tools-x402` without changing any x402 payment terms. `netlify/functions/gateway.mjs` adapts Netlify's Web Request/Response API to the shared gateway handler, and `netlify.toml` pins Node 20 plus the functions directory.
+
+Deploy from this `x402-render-gateway` directory into the existing Netlify site. The function owns the root page, discovery surfaces, health probes, and all eight `/api/*` paid routes on one origin. Do not proxy paid routes back to AppDeploy.
