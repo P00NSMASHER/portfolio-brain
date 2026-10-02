@@ -576,20 +576,21 @@ class GitHubReader:
             if scan_complete:
                 self._event_run_artifacts.update(grouped)
             else:
-                require(ordering_proven and oldest_seen is not None,
-                        "Artifact scan incomplete at page bound; checkpoint/archive required")
                 unresolved = []
                 resolved_ids = set()
-                for run in post_overlap_runs:
-                    created_at = run.get("created_at")
-                    require(isinstance(created_at, str), "Workflow run created_at missing")
-                    started = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-                    require(started.tzinfo is not None,
-                            "Workflow run created_at requires timezone")
-                    if started > oldest_seen:
-                        resolved_ids.add(run["id"])
-                    else:
-                        unresolved.append(run)
+                if ordering_proven and oldest_seen is not None:
+                    for run in post_overlap_runs:
+                        created_at = run.get("created_at")
+                        require(isinstance(created_at, str), "Workflow run created_at missing")
+                        started = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                        require(started.tzinfo is not None,
+                                "Workflow run created_at requires timezone")
+                        if started > oldest_seen:
+                            resolved_ids.add(run["id"])
+                        else:
+                            unresolved.append(run)
+                else:
+                    unresolved = post_overlap_runs
                 self._event_run_artifacts.update(
                     {run_id: grouped[run_id] for run_id in resolved_ids}
                 )
