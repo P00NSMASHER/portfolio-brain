@@ -4,10 +4,10 @@ on:
   schedule:
     - cron: "53 * * * *"
     # Exact Step-23 soak window; real schedule events only, normal cadence remains unchanged.
-    - cron: "5 15 2 10 *"
-    - cron: "35 15 2 10 *"
-    - cron: "5 16 2 10 *"
-    - cron: "35 16 2 10 *"
+    - cron: "30 18 2 10 *"
+    - cron: "0 19 2 10 *"
+    - cron: "30 19 2 10 *"
+    - cron: "0 20 2 10 *"
   # GitHub scheduled delivery can be delayed or skipped. Recheck liveness after
   # any core producer finishes so one surviving trigger can recover overdue peers.
   workflow_run:
