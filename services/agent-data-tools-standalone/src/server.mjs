@@ -283,6 +283,25 @@ For Pennsylvania vendor intake, use /api/vendor-intake-gate for a bounded procee
 ## Safety and limits
 A vendor-gate proceed result means only that configured automated review triggers were not hit. It is not legal, sanctions, fraud, credit, or compliance approval. OFAC screening is name matching only and does not perform the 50 Percent Rule. Registry, Census, and RDAP facts do not prove ownership or control.
 `));
+app.get('/llms-full.txt', (req, res) => res.type('text/plain').send(`# Agent Data Tools x402 — full agent guide
+
+Use the lowest-cost route that satisfies the task. Every paid endpoint uses x402 v2 exact on Base USDC and returns PAYMENT-REQUIRED before input validation when unpaid.
+
+PA entity best match: /api/pa-entity-one?q=NAME — $0.001.
+PA multi-result registry search: /api/pa-business?q=NAME&limit=N — $0.005.
+Vendor intake gate: /api/vendor-intake-gate?name=NAME&address=ADDRESS&domain=DOMAIN — $0.020. Returns proceed or human_review with review triggers and evidence.
+SEC filings: /api/sec-filings?ticker=AAPL&form=10-K&limit=5 — $0.005.
+Census geocoder: /api/us-address-geocode?address=ADDRESS — $0.005.
+OFAC name screen: /api/ofac-sdn-screen?name=NAME&limit=5&minScore=85 — $0.005.
+Domain RDAP: /api/domain-rdap?domain=example.com — $0.005.
+Treasury averages: /api/treasury-average-rates?security=Total%20Marketable — $0.005.
+
+Payment behavior: verify the supplied payment credential first, perform authoritative-source work only after verification, then settle only after a successful result exists. Validation or authoritative-upstream failures are not settled. If settlement state is temporarily unresolved, retry the same payment as instructed rather than creating a new charge.
+
+Authoritative sources: Pennsylvania Department of State via data.pa.gov; SEC EDGAR; U.S. Census Bureau; U.S. Treasury OFAC; IANA plus authoritative RDAP; U.S. Treasury Fiscal Data.
+
+Limits: vendor-intake proceed is not legal/compliance/sanctions/fraud/credit approval. OFAC is name-screening only and does not implement the 50 Percent Rule. Registry, Census, and RDAP facts do not prove ownership or control.
+`));
 app.get('/robots.txt', (req, res) => res.type('text/plain').send('User-agent: *\nAllow: /\nSitemap: ' + origin(req) + '/sitemap.xml\n'));
 app.get('/sitemap.xml', (req, res) => {
   const base = origin(req);
