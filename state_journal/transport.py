@@ -365,6 +365,75 @@ class GitHubReader:
             return rows
         raise JournalError("Artifact scan incomplete at page bound; checkpoint/archive required")
 
+    def _scan_exact_named_artifacts(self, name: str, *, max_pages: int = 20) -> list[dict]:
+        """Return one complete, stability-checked exact-name artifact listing.
+
+        GitHub's repository artifact endpoint supports an exact `name` filter.
+        Because it still uses offset pagination, a final page-1 recheck is
+        required: any head drift or count change makes the scan ambiguous and
+        therefore fail closed rather than silently omitting an artifact.
+        """
+        require(
+            isinstance(name, str)
+            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,254}", name) is not None,
+            "Unsafe artifact name",
+        )
+        require(type(max_pages) is int and max_pages > 0, "Artifact page bound invalid")
+        encoded = quote(name, safe="")
+        first = self.get(f"/actions/artifacts?name={encoded}&per_page=100&page=1")
+        first_rows = first.get("artifacts")
+        total = first.get("total_count")
+        require(isinstance(first_rows, list), "Named artifact listing malformed")
+        require(type(total) is int and total >= 0, "Named artifact total count invalid")
+        pages = max(1, (total + 99) // 100)
+        require(
+            pages <= max_pages,
+            "Named artifact scan incomplete at page bound; checkpoint/archive required",
+        )
+
+        result: dict[int, dict] = {}
+
+        def retain_exact(row: dict) -> None:
+            artifact_id = row.get("id")
+            require(type(artifact_id) is int and artifact_id > 0, "Artifact listing identity missing")
+            require(row.get("name") == name, "Exact-name artifact filter returned another name")
+            created = row.get("created_at")
+            require(isinstance(created, str), "Artifact created_at missing")
+            at = datetime.fromisoformat(created.replace("Z", "+00:00"))
+            require(at.tzinfo is not None, "Artifact created_at requires timezone")
+            previous = result.get(artifact_id)
+            if previous is not None:
+                require(previous == row, "Artifact metadata changed during bounded scan")
+            else:
+                result[artifact_id] = row
+
+        for row in first_rows:
+            retain_exact(row)
+        for page in range(2, pages + 1):
+            response = self.get(f"/actions/artifacts?name={encoded}&per_page=100&page={page}")
+            rows = response.get("artifacts")
+            require(isinstance(rows, list), "Named artifact listing malformed")
+            for row in rows:
+                retain_exact(row)
+
+        # Offset pagination can shift when new artifacts arrive. Re-reading the
+        # first page proves the listing head and total stayed stable throughout
+        # this bounded scan; otherwise the result is not complete evidence.
+        stable = self.get(f"/actions/artifacts?name={encoded}&per_page=100&page=1")
+        require(
+            stable.get("total_count") == total and stable.get("artifacts") == first_rows,
+            "Named artifact listing changed during bounded scan",
+        )
+        require(
+            len(result) == total,
+            "Named artifact listing incomplete after bounded scan",
+        )
+        return sorted(
+            result.values(),
+            key=lambda row: (row["created_at"], row["id"]),
+            reverse=True,
+        )
+
     def _workflow_runs_since(self, workflow_file: str, since: str, *, max_pages: int) -> list[dict]:
         require(re.fullmatch(r"[a-z0-9-]+\.yml", workflow_file) is not None, "Unsafe workflow file")
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
@@ -549,51 +618,47 @@ class GitHubReader:
                 self._event_source_runs[run_id] = run
 
         # A cancellation/failure storm can leave dozens of terminal producer
-        # runs after the latest reducer overlap. Querying each run's artifacts
-        # separately can exhaust the fixed GitHub request budget before replay
-        # starts. For more than one artifact-list page worth of post-overlap
-        # runs, scan recent repository artifact metadata once and preserve that
-        # partial proof even when the checkpoint boundary itself lies beyond the
-        # page bound. With monotonic newest-to-oldest metadata, a run that
-        # started strictly after the oldest scanned artifact is fully covered:
-        # every artifact it could have published must already be in the scanned
-        # window. Only the older unresolved tail falls back to per-run queries.
+        # runs after the latest reducer overlap. Querying every run's artifacts
+        # separately can exhaust the fixed GitHub request budget. Repository-
+        # wide artifact ordering is not a safe substitute because GitHub's
+        # offset pages are not time-monotonic. Instead, enumerate the closed
+        # allowlist of durable state artifact names completely, with pagination
+        # stability checks, and use those artifacts only as a conservative
+        # candidate filter. A valid journal event can only be emitted after at
+        # least one mapped durable domain upload succeeds; the candidate runs
+        # are still exact-queried and event/provider validation is unchanged.
         if overlap_at is not None and len(post_overlap_runs) > max_pages:
-            overlap_raw = overlap_at.isoformat().replace("+00:00", "Z")
             post_overlap_ids = {run["id"] for run in post_overlap_runs}
-            recent_artifacts, scan_complete, ordering_proven, oldest_seen = (
-                self._scan_recent_artifacts(overlap_raw, max_pages=max_pages)
+            artifact_names = strict_load(
+                (Path(__file__).resolve().parent / "UPLOAD_ARTIFACTS.json").read_bytes()
             )
-            grouped: dict[int, list[dict]] = {run_id: [] for run_id in post_overlap_ids}
-            for row in recent_artifacts:
-                source = row.get("workflow_run", {})
-                run_id = source.get("id")
-                if run_id not in post_overlap_ids:
-                    continue
-                grouped[run_id].append(row)
-                if row.get("name", "").startswith(EVENT_PREFIX):
-                    retain(row)
-            if scan_complete:
-                self._event_run_artifacts.update(grouped)
-            else:
-                require(ordering_proven and oldest_seen is not None,
-                        "Artifact scan incomplete at page bound; checkpoint/archive required")
-                unresolved = []
-                resolved_ids = set()
-                for run in post_overlap_runs:
-                    created_at = run.get("created_at")
-                    require(isinstance(created_at, str), "Workflow run created_at missing")
-                    started = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-                    require(started.tzinfo is not None,
-                            "Workflow run created_at requires timezone")
-                    if started > oldest_seen:
-                        resolved_ids.add(run["id"])
-                    else:
-                        unresolved.append(run)
-                self._event_run_artifacts.update(
-                    {run_id: grouped[run_id] for run_id in resolved_ids}
-                )
-                crossover_runs.extend(unresolved)
+            producer_names = set(WORKFLOW_PRODUCERS.values())
+            durable_names = sorted({
+                artifact_name
+                for producer in producer_names
+                for artifact_name in artifact_names.get(producer, {}).values()
+            })
+            require(durable_names, "Durable state artifact allowlist empty")
+
+            candidate_ids: set[int] = set()
+            for artifact_name in durable_names:
+                for row in self._scan_exact_named_artifacts(
+                    artifact_name, max_pages=max_pages
+                ):
+                    source = row.get("workflow_run", {})
+                    run_id = source.get("id")
+                    if run_id in post_overlap_ids:
+                        candidate_ids.add(run_id)
+
+            for run in post_overlap_runs:
+                if run["id"] in candidate_ids:
+                    crossover_runs.append(run)
+                else:
+                    # Absence from every complete, stable exact-name durable
+                    # listing proves this terminal run could not have emitted a
+                    # valid state event. Cache the empty exact-run artifact view
+                    # so later fallback logic cannot widen discovery.
+                    self._event_run_artifacts[run["id"]] = []
         else:
             crossover_runs.extend(post_overlap_runs)
 
