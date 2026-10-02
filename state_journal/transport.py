@@ -365,18 +365,33 @@ class GitHubReader:
         return rows
 
     def list_recent_journal_artifacts(self, since: str, *, max_pages: int = 20,
-                                      explicit_run_ids: list[int] | tuple[int, ...] = ()) -> list[dict]:
+                                      explicit_run_ids: list[int] | tuple[int, ...] = (),
+                                      domains: set[str] | frozenset[str] | None = None) -> list[dict]:
         """Discover only reducer snapshots and enrolled producer events.
 
         Repository-wide artifact pagination eventually becomes unbounded because
         receipts, previews, and other unrelated artifacts accumulate. Journal
         restore instead enumerates the closed workflow allowlist, validates each
         run later through the existing provider checks, and scans events only
-        from the older of the two newest successful reducer publications.
+        from the older of the two newest successful reducer publications. A
+        production domain reader can restrict event discovery to producers
+        authorized to change that domain.
         """
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
         require(type(max_pages) is int and max_pages > 0, "Artifact page bound invalid")
+        require(
+            domains is None or (
+                isinstance(domains, (set, frozenset))
+                and bool(domains)
+                and domains <= set(DOMAINS)
+            ),
+            "Artifact domain scope invalid",
+        )
+        workflows = sorted(
+            workflow for workflow, producer in WORKFLOW_PRODUCERS.items()
+            if domains is None or bool(PRODUCERS[producer][1] & domains)
+        )
         result: dict[int, dict] = {}
 
         def retain(row: dict) -> None:
@@ -470,7 +485,7 @@ class GitHubReader:
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
-        for workflow in sorted(WORKFLOW_PRODUCERS):
+        for workflow in workflows:
             for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
                 if not (
                     run.get("head_branch") == "main"
@@ -500,7 +515,9 @@ class GitHubReader:
             require(run.get("head_branch") == "main", "Explicit recovery run is not on main")
             require(run.get("status") == "completed" and run.get("conclusion") in terminal,
                     "Explicit recovery run is not terminal")
-            source_producer(run)
+            producer = source_producer(run)
+            if domains is not None and not (PRODUCERS[producer][1] & domains):
+                continue
             for row in self._run_artifacts(run_id):
                 if row.get("name", "").startswith(EVENT_PREFIX):
                     retain(row)
