@@ -378,6 +378,7 @@ class GitHubReader:
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
         require(type(max_pages) is int and max_pages > 0, "Artifact page bound invalid")
         result: dict[int, dict] = {}
+        self._source_runs: dict[int, dict] = {}
 
         def retain(row: dict) -> None:
             artifact_id = row.get("id")
@@ -478,6 +479,7 @@ class GitHubReader:
                     and run.get("conclusion") in terminal
                 ):
                     continue
+                self._source_runs[run["id"]] = run
                 if overlap_at is not None:
                     created_at = run.get("created_at")
                     updated_at = run.get("updated_at")
@@ -500,6 +502,7 @@ class GitHubReader:
             require(run.get("head_branch") == "main", "Explicit recovery run is not on main")
             require(run.get("status") == "completed" and run.get("conclusion") in terminal,
                     "Explicit recovery run is not terminal")
+            self._source_runs[run_id] = run
             source_producer(run)
             for row in self._run_artifacts(run_id):
                 if row.get("name", "").startswith(EVENT_PREFIX):
@@ -518,7 +521,11 @@ class GitHubReader:
         match = re.fullmatch(r"portfolio-state-event-v2-([1-9][0-9]*)-([a-z0-9-]+)-([a-f0-9]{40})-([1-9][0-9]*)", meta.get("name", ""))
         require(match is not None, "Malformed event archive name")
         run_id, _, _, attempt = match.groups()
-        run = self.get(f"/actions/runs/{run_id}/attempts/{attempt}")
+        discovered_run = getattr(self, "_source_runs", {}).get(int(run_id))
+        if discovered_run is not None and discovered_run.get("run_attempt") == int(attempt):
+            run = discovered_run
+        else:
+            run = self.get(f"/actions/runs/{run_id}/attempts/{attempt}")
         jobs = self.get(f"/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100")
         raw = self.archive(meta["id"])
         event = extract_json(raw, "event.json")
