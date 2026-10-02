@@ -47,7 +47,7 @@ jobs:
           anchors=[]
           for run in reducer.get("workflow_runs",[]):
               arts=get(f"/actions/runs/{run['id']}/artifacts?per_page=100").get("artifacts",[])
-              snaps=[a for a in arts if a.get("name")=="portfolio-state-canonical" and not a.get("expired")]
+              snaps=[a for a in arts if a.get("name")=="portfolio-canonical-shadow-state" and not a.get("expired")]
               if snaps:
                   anchors.append({"run":run,"artifact":snaps[0]})
               if len(anchors)==2: break
