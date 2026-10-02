@@ -507,22 +507,38 @@ class GitHubReader:
         # runs after the latest reducer overlap. Querying each run's artifacts
         # separately can exhaust the fixed GitHub request budget before replay
         # starts. For more than one artifact-list page worth of post-overlap
-        # runs, scan recent repository artifact metadata once, then admit only
-        # artifacts whose run IDs came from the closed workflow allowlist
-        # above. Runs that started before the overlap are still queried
-        # individually because their event artifact may predate the overlap.
+        # runs, scan repository artifact metadata once and admit only artifacts
+        # from the closed workflow allowlist above. If unrelated repository
+        # history exhausts that scan's bound, query the allowlisted runs
+        # directly instead. Runs that started before the overlap are always
+        # queried individually because their event artifact may predate it.
         if overlap_at is not None and len(post_overlap_runs) > max_pages:
             overlap_raw = overlap_at.isoformat().replace("+00:00", "Z")
             post_overlap_ids = {run["id"] for run in post_overlap_runs}
             grouped: dict[int, list[dict]] = {run_id: [] for run_id in post_overlap_ids}
-            for row in self.list_recent_artifacts(overlap_raw, max_pages=max_pages):
-                source = row.get("workflow_run", {})
-                run_id = source.get("id")
-                if run_id not in post_overlap_ids:
-                    continue
-                grouped[run_id].append(row)
-                if row.get("name", "").startswith(EVENT_PREFIX):
-                    retain(row)
+            try:
+                repository_artifacts = self.list_recent_artifacts(overlap_raw, max_pages=max_pages)
+            except JournalError as exc:
+                if str(exc) != "Artifact scan incomplete at page bound; checkpoint/archive required":
+                    raise
+                for run_id in sorted(post_overlap_ids):
+                    rows = self._run_artifacts(run_id)
+                    for row in rows:
+                        if row.get("name", "").startswith(EVENT_PREFIX):
+                            source = row.get("workflow_run")
+                            require(isinstance(source, dict) and source.get("id") == run_id,
+                                    "Producer artifact source run identity mismatch")
+                            retain(row)
+                    grouped[run_id] = rows
+            else:
+                for row in repository_artifacts:
+                    source = row.get("workflow_run", {})
+                    run_id = source.get("id")
+                    if run_id not in post_overlap_ids:
+                        continue
+                    grouped[run_id].append(row)
+                    if row.get("name", "").startswith(EVENT_PREFIX):
+                        retain(row)
             self._event_run_artifacts.update(grouped)
         else:
             crossover_runs.extend(post_overlap_runs)
