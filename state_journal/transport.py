@@ -269,6 +269,7 @@ class GitHubReader:
     def __init__(self, token: str, *, max_requests: int = 100):
         self.http = BudgetedHTTP(token, max_requests=max_requests, retries=1, backoff=1)
         self.base = f"https://api.github.com/repos/{REPOSITORY}"
+        self._run_artifact_cache: dict[int, list[dict]] = {}
 
     def get(self, suffix: str) -> dict:
         require(suffix.startswith("/") and ".." not in suffix and "://" not in suffix, "Unsafe API suffix")
@@ -356,13 +357,19 @@ class GitHubReader:
 
     def _run_artifacts(self, run_id: int) -> list[dict]:
         require(type(run_id) is int and run_id > 0, "Invalid workflow run ID")
+        cache: dict[int, list[dict]] | None = getattr(self, "_run_artifact_cache", None)
+        if cache is None:
+            cache = self._run_artifact_cache = {}
+        if run_id in cache:
+            return list(cache[run_id])
         response = self.get(f"/actions/runs/{run_id}/artifacts?per_page=100")
         rows = response.get("artifacts")
         require(isinstance(rows, list), "Run artifact listing malformed")
         total = response.get("total_count")
         require(type(total) is int and total == len(rows) and total <= 100,
                 "Run artifact listing incomplete; per-run artifact bound exceeded")
-        return rows
+        cache[run_id] = rows
+        return list(rows)
 
     def list_recent_journal_artifacts(self, since: str, *, max_pages: int = 20,
                                       explicit_run_ids: list[int] | tuple[int, ...] = ()) -> list[dict]:
