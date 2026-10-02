@@ -91,14 +91,14 @@ class OperatingModeTests(unittest.TestCase):
         actual=scheduled_workflow_inventory(ROOT/".github/workflows")
         expected={name:[entry["cron"]] for name,entry in policy["approved_recurring_workflows"].items()}
         bounded_step23={
-          "portfolio-state-reducer":["32 18 2 10 *","2 19 2 10 *","32 19 2 10 *","2 20 2 10 *"],
-          "runtime-hourly-sync":["34 18 2 10 *","4 19 2 10 *","34 19 2 10 *","4 20 2 10 *"],
-          "portfolio-autonomous-scheduler":["36 18 2 10 *","6 19 2 10 *","36 19 2 10 *","6 20 2 10 *"],
-          "hunter-autonomous-cycle":["38 18 2 10 *","8 19 2 10 *","38 19 2 10 *","8 20 2 10 *"],
-          "agent-heartbeat-sweep":["40 18 2 10 *","10 19 2 10 *","40 19 2 10 *","10 20 2 10 *"],
-          "portfolio-cost-watchdog":["30 18 2 10 *","0 19 2 10 *","30 19 2 10 *","0 20 2 10 *"],
-          "portfolio-notification-cycle":["42 18 2 10 *","12 19 2 10 *","42 19 2 10 *","12 20 2 10 *"],
-          "command-center-pages":["44 18 2 10 *","14 19 2 10 *","44 19 2 10 *","14 20 2 10 *"],
+          "portfolio-state-reducer":["42 22 2 10 *","12 23 2 10 *","42 23 2 10 *","12 0 3 10 *"],
+          "runtime-hourly-sync":["44 22 2 10 *","14 23 2 10 *","44 23 2 10 *","14 0 3 10 *"],
+          "portfolio-autonomous-scheduler":["46 22 2 10 *","16 23 2 10 *","46 23 2 10 *","16 0 3 10 *"],
+          "hunter-autonomous-cycle":["48 22 2 10 *","18 23 2 10 *","48 23 2 10 *","18 0 3 10 *"],
+          "agent-heartbeat-sweep":["50 22 2 10 *","20 23 2 10 *","50 23 2 10 *","20 0 3 10 *"],
+          "portfolio-cost-watchdog":["40 22 2 10 *","10 23 2 10 *","40 23 2 10 *","10 0 3 10 *"],
+          "portfolio-notification-cycle":["52 22 2 10 *","22 23 2 10 *","52 23 2 10 *","22 0 3 10 *"],
+          "command-center-pages":["54 22 2 10 *","24 23 2 10 *","54 23 2 10 *","24 0 3 10 *"],
         }
         for name,crons in bounded_step23.items():
             expected[name].extend(crons)
