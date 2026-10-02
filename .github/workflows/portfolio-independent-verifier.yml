@@ -20,7 +20,7 @@ on:
         type: string
 
 permissions:
-  actions: read
+  actions: write
   contents: write
   pull-requests: write
 
@@ -126,8 +126,40 @@ jobs:
           MERGE_BASE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${MAIN_SHA}...${CANDIDATE_SHA}" --jq .merge_base_commit.sha)"
           if [ "$MERGE_BASE" != "$MAIN_SHA" ]; then
             gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/update-branch" -f expected_head_sha="$CANDIDATE_SHA"
-            echo "updated=true" >> "$GITHUB_OUTPUT"
-            echo "Autonomous repair branch refreshed onto current main; verification restarts on the new head." >> "$GITHUB_STEP_SUMMARY"
+            if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+              NEW_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha)"
+              test "$NEW_SHA" != "$CANDIDATE_SHA"
+              gh workflow run foundation-ci.yml --repo "$GITHUB_REPOSITORY" --ref "$CANDIDATE_BRANCH"
+              FOUNDATION_RUN_ID=""
+              for attempt in $(seq 1 120); do
+                FOUNDATION_RUN_ID="$(
+                  gh run list --repo "$GITHUB_REPOSITORY" --workflow foundation-ci.yml \
+                    --branch "$CANDIDATE_BRANCH" --event workflow_dispatch --limit 20 \
+                    --json databaseId,headSha \
+                    --jq ".[] | select(.headSha == \"$NEW_SHA\") | .databaseId" | head -n 1
+                )"
+                if [ -n "$FOUNDATION_RUN_ID" ]; then
+                  break
+                fi
+                sleep 2
+              done
+              test -n "$FOUNDATION_RUN_ID"
+              gh run watch "$FOUNDATION_RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status
+              RUN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .head_sha)"
+              RUN_BRANCH="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .head_branch)"
+              RUN_EVENT="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .event)"
+              RUN_CONCLUSION="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .conclusion)"
+              test "$RUN_SHA" = "$NEW_SHA"
+              test "$RUN_BRANCH" = "$CANDIDATE_BRANCH"
+              test "$RUN_EVENT" = "workflow_dispatch"
+              test "$RUN_CONCLUSION" = "success"
+              echo "CANDIDATE_SHA=$NEW_SHA" >> "$GITHUB_ENV"
+              echo "updated=false" >> "$GITHUB_OUTPUT"
+              echo "Autonomous repair branch refreshed and exact-head Foundation passed on the refreshed head." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "updated=true" >> "$GITHUB_OUTPUT"
+              echo "Autonomous repair branch refreshed onto current main; normal PR verification restarts on the new head." >> "$GITHUB_STEP_SUMMARY"
+            fi
           else
             echo "updated=false" >> "$GITHUB_OUTPUT"
           fi
