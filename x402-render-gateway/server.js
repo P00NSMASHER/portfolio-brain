@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { pathToFileURL } from 'node:url';
 
 const PORT = Number(process.env.PORT || 10000);
 const PAY_TO = '0x708f7b52b56eafd7fc1de65fc7752ed732914021';
@@ -1126,7 +1127,7 @@ async function handlePaid(req, res, url) {
   });
 }
 
-const server = http.createServer(async (req, res) => {
+export async function handleNodeRequest(req, res) {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, { ...CORS, 'cache-control': 'public, max-age=86400' });
     return res.end();
@@ -1150,8 +1151,11 @@ const server = http.createServer(async (req, res) => {
   } catch (error) {
     return json(res, Number(error && error.status) || 500, { error: error instanceof Error ? error.message : 'internal_error' }, { 'cache-control': 'no-store' });
   }
-});
+}
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log('Agent Data Tools x402 listening on port ' + PORT);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const server = http.createServer(handleNodeRequest);
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log('Agent Data Tools x402 listening on port ' + PORT);
+  });
+}
