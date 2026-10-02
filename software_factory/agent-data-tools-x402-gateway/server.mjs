@@ -66,7 +66,8 @@ function paymentRequirements(priceUsd){
 const nativeResourceMeta={
   '/api/treasury-average-rates':{serviceName:'Treasury Average Rates',tags:['Treasury','interest-rates','government','macro','finance']},
   '/api/us-address-geocode':{serviceName:'Census Address Geocoder',tags:['Census','geocoding','address','geography','US']},
-  '/api/domain-rdap':{serviceName:'Domain RDAP Lookup',tags:['RDAP','domain','registration','DNS','internet']}
+  '/api/domain-rdap':{serviceName:'Domain RDAP Lookup',tags:['RDAP','domain','registration','DNS','internet']},
+  '/api/sec-filings':{serviceName:'SEC Recent Filings',tags:['SEC','EDGAR','filings','finance','company-data']}
 };
 function paymentDocument(req,path){
   const r=routes[path], meta=nativeResourceMeta[path]||{serviceName:'Agent Data Tool',tags:['data']};
@@ -246,6 +247,70 @@ async function serveRdap(req,res,u){
   }catch{return send(res,503,{error:'Payment facilitator is temporarily unavailable; no result was served.'});}
 }
 
+async function secJson(url){
+  const r=await fetchWithTimeout(url,{headers:{accept:'application/json','user-agent':'agent-data-tools-x402/1.0 '+CONTACT}},10000);
+  if(!r.ok)throw new Error('sec_http_'+r.status);
+  return await r.json();
+}
+function normalizeCik(value){
+  const digits=String(value||'').replace(/\D/g,'');
+  if(!digits||digits.length>10)return null;
+  return digits.padStart(10,'0');
+}
+async function resolveTicker(ticker){
+  const map=await secJson('https://www.sec.gov/files/company_tickers.json');
+  const wanted=String(ticker||'').trim().toUpperCase();
+  for(const value of Object.values(map)){
+    if(String(value?.ticker||'').toUpperCase()===wanted)return normalizeCik(String(value?.cik_str||''));
+  }
+  return null;
+}
+async function lookupSecFilings(input){
+  let cik=input.cik?normalizeCik(input.cik):null;
+  if(!cik&&input.ticker)cik=await resolveTicker(input.ticker);
+  if(!cik)throw new Error('company_not_found');
+  const data=await secJson('https://data.sec.gov/submissions/CIK'+cik+'.json');
+  const recent=data?.filings?.recent||{}, forms=Array.isArray(recent.form)?recent.form:[];
+  const formFilter=String(input.form||'').trim().toUpperCase(), cikNoZero=String(Number.parseInt(cik,10));
+  const filings=[];
+  for(let i=0;i<forms.length&&filings.length<input.limit;i+=1){
+    const form=String(forms[i]||'');
+    if(formFilter&&form.toUpperCase()!==formFilter)continue;
+    const accessionNumber=String((recent.accessionNumber||[])[i]||''), primaryDocument=String((recent.primaryDocument||[])[i]||'');
+    const accessionCompact=accessionNumber.replace(/-/g,'');
+    filings.push({form,filingDate:(recent.filingDate||[])[i]??null,reportDate:(recent.reportDate||[])[i]??null,acceptanceDateTime:(recent.acceptanceDateTime||[])[i]??null,accessionNumber,primaryDocument,primaryDocDescription:(recent.primaryDocDescription||[])[i]??null,filingUrl:accessionCompact&&primaryDocument?'https://www.sec.gov/Archives/edgar/data/'+cikNoZero+'/'+accessionCompact+'/'+primaryDocument:null});
+  }
+  return {company:{name:data.name??null,cik,tickers:data.tickers??[],exchanges:data.exchanges??[],sic:data.sic??null,sicDescription:data.sicDescription??null},count:filings.length,filings,source:'U.S. Securities and Exchange Commission EDGAR'};
+}
+async function serveSec(req,res,u){
+  const path='/api/sec-filings';
+  const signature=req.headers['payment-signature']||req.headers['x-payment'];
+  if(!signature)return sendPaymentRequired(req,res,path);
+  let payload;
+  try{payload=decodePaymentHeader(String(signature));}catch{return sendPaymentRequired(req,res,path,'invalid_payment_header');}
+  const ticker=(u.searchParams.get('ticker')||'').trim(), cik=(u.searchParams.get('cik')||'').trim(), form=(u.searchParams.get('form')||'').trim();
+  const parsed=Number.parseInt(u.searchParams.get('limit')||'10',10), limit=Number.isFinite(parsed)?Math.max(1,Math.min(parsed,25)):10;
+  if(!ticker&&!cik)return send(res,400,{error:'Provide ticker or cik.'});
+  if(ticker.length>12)return send(res,400,{error:'ticker is too long.'});
+  if(cik&&!normalizeCik(cik))return send(res,400,{error:'cik must contain 1 to 10 digits.'});
+  if(form.length>20)return send(res,400,{error:'form is too long.'});
+  const requirements=paymentRequirements(routes[path][1]);
+  try{
+    const verified=await facilitatorPost('verify',payload,requirements);
+    if(verified.isValid!==true&&verified.success!==true)return sendPaymentRequired(req,res,path,String(verified.invalidReason||verified.errorReason||'payment_verification_failed'));
+    let result;
+    try{result=await lookupSecFilings({ticker,cik,form,limit});}catch(e){
+      if(String(e?.message||e)==='company_not_found')return send(res,404,{error:'company_not_found',paid:false});
+      return send(res,502,{error:'SEC EDGAR unavailable; payment was not settled.'});
+    }
+    const settled=await facilitatorPost('settle',payload,requirements);
+    if(settled.success!==true)return sendPaymentRequired(req,res,path,String(settled.errorReason||'payment_settlement_failed'));
+    const body=JSON.stringify({...result,paid:true},null,2);
+    res.writeHead(200,{'content-type':'application/json; charset=utf-8','content-length':Buffer.byteLength(body),'cache-control':'no-store','access-control-allow-origin':'*','access-control-expose-headers':'PAYMENT-RESPONSE, x402-settled','PAYMENT-RESPONSE':encodePaymentHeader(settled),'x402-settled':'true'});
+    res.end(body);
+  }catch{return send(res,503,{error:'Payment facilitator is temporarily unavailable; no result was served.'});}
+}
+
 function proxy(req,res,r){
   const u=new URL(req.url,'http://gateway.local'), target=new URL(r[0]); target.search=u.search;
   const headers={...req.headers};
@@ -275,6 +340,7 @@ http.createServer(async(req,res)=>{
   if(u.pathname==='/api/treasury-average-rates')return serveTreasury(req,res,u);
   if(u.pathname==='/api/us-address-geocode')return serveCensus(req,res,u);
   if(u.pathname==='/api/domain-rdap')return serveRdap(req,res,u);
+  if(u.pathname==='/api/sec-filings')return serveSec(req,res,u);
   if(routes[u.pathname])return proxy(req,res,routes[u.pathname]);
   return send(res,404,{error:'not_found'});
 }).listen(PORT,'0.0.0.0',()=>console.log(`Agent Data Tools x402 gateway listening on ${PORT}`));
