@@ -10,6 +10,8 @@ const FACILITATOR = 'https://facilitator.payai.network';
 const TREASURY_API = 'https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/avg_interest_rates';
 const IANA_RDAP_BOOTSTRAP = 'https://data.iana.org/rdap/dns.json';
 let rdapBootstrapCache = null;
+const OFAC_BASE = 'https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports';
+let ofacCache = null;
 
 const routes = {
   '/api/pa-entity-one': ['https://pa-entity-x402.floot.app/_api/pa-entity-one','0.001000','Best Pennsylvania entity match',['Pennsylvania','Business Registry','Entity Resolution'],[['q',true,{type:'string',minLength:2},'OpenAI']]],
@@ -67,7 +69,8 @@ const nativeResourceMeta={
   '/api/treasury-average-rates':{serviceName:'Treasury Average Rates',tags:['Treasury','interest-rates','government','macro','finance']},
   '/api/us-address-geocode':{serviceName:'Census Address Geocoder',tags:['Census','geocoding','address','geography','US']},
   '/api/domain-rdap':{serviceName:'Domain RDAP Lookup',tags:['RDAP','domain','registration','DNS','internet']},
-  '/api/sec-filings':{serviceName:'SEC Recent Filings',tags:['SEC','EDGAR','filings','finance','company-data']}
+  '/api/sec-filings':{serviceName:'SEC Recent Filings',tags:['SEC','EDGAR','filings','finance','company-data']},
+  '/api/ofac-sdn-screen':{serviceName:'OFAC Name Screen',tags:['OFAC','screening','compliance','name-match','risk']}
 };
 function paymentDocument(req,path){
   const r=routes[path], meta=nativeResourceMeta[path]||{serviceName:'Agent Data Tool',tags:['data']};
@@ -311,6 +314,97 @@ async function serveSec(req,res,u){
   }catch{return send(res,503,{error:'Payment facilitator is temporarily unavailable; no result was served.'});}
 }
 
+function parseCsv(text){
+  const rows=[]; let row=[], field='', quoted=false;
+  for(let i=0;i<text.length;i+=1){
+    const ch=text[i];
+    if(quoted){
+      if(ch==='"'&&text[i+1]==='"'){field+='"';i+=1;}else if(ch==='"'){quoted=false;}else{field+=ch;}
+    }else if(ch==='"'){quoted=true;}else if(ch===','){row.push(field);field='';}else if(ch==='\n'){row.push(field.replace(/\r$/,''));if(row.some(v=>v.length))rows.push(row);row=[];field='';}else{field+=ch;}
+  }
+  if(field.length||row.length){row.push(field.replace(/\r$/,''));if(row.some(v=>v.length))rows.push(row);}
+  return rows;
+}
+function cleanOfac(value){
+  if(!value||value==='-0-')return null;
+  return value.trim()||null;
+}
+async function fetchOfacFile(name){
+  const r=await fetchWithTimeout(OFAC_BASE+'/'+name,{headers:{'user-agent':'agent-data-tools-x402/1.0','accept':'text/csv,*/*'},redirect:'follow'},10000);
+  if(!r.ok)throw new Error('ofac_http_'+r.status+'_'+name);
+  return await r.text();
+}
+async function loadOfacEntries(){
+  if(ofacCache&&Date.now()-ofacCache.loadedAt<600000)return ofacCache.entries;
+  const [sdnText,altText]=await Promise.all([fetchOfacFile('SDN.CSV'),fetchOfacFile('ALT.CSV')]);
+  const map=new Map();
+  for(const cols of parseCsv(sdnText)){
+    const uid=String(cols[0]||'').trim(), name=String(cols[1]||'').trim();
+    if(!uid||!name)continue;
+    map.set(uid,{uid,name,type:cleanOfac(cols[2]),program:cleanOfac(cols[3]),title:cleanOfac(cols[4]),remarks:cleanOfac(cols[11]),aliases:[]});
+  }
+  for(const cols of parseCsv(altText)){
+    const uid=String(cols[0]||'').trim(), altName=String(cols[3]||'').trim(), entry=map.get(uid);
+    if(entry&&altName)entry.aliases.push({type:cleanOfac(cols[2]),name:altName,remarks:cleanOfac(cols[4])});
+  }
+  const entries=[...map.values()]; ofacCache={loadedAt:Date.now(),entries}; return entries;
+}
+function normalizeName(value){
+  return String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
+}
+function sortedTokens(value){return normalizeName(value).split(' ').filter(Boolean).sort().join(' ');}
+function levenshtein(a,b){
+  if(a===b)return 0;if(!a.length)return b.length;if(!b.length)return a.length;
+  const prev=Array.from({length:b.length+1},(_,i)=>i);
+  for(let i=1;i<=a.length;i+=1){const next=[i];for(let j=1;j<=b.length;j+=1){const cost=a[i-1]===b[j-1]?0:1;next[j]=Math.min(next[j-1]+1,prev[j]+1,prev[j-1]+cost);}for(let j=0;j<next.length;j+=1)prev[j]=next[j];}
+  return prev[b.length];
+}
+function jaccardTokens(a,b){
+  const aa=new Set(normalizeName(a).split(' ').filter(Boolean)), bb=new Set(normalizeName(b).split(' ').filter(Boolean));
+  if(!aa.size||!bb.size)return 0;let shared=0;for(const token of aa)if(bb.has(token))shared+=1;return shared/new Set([...aa,...bb]).size;
+}
+function scoreName(query,candidate){
+  const q=normalizeName(query), c=normalizeName(candidate);if(!q||!c)return 0;if(q===c)return 100;if(sortedTokens(q)===sortedTokens(c))return 99;
+  const contains=q.length>=5&&c.length>=5&&(q.includes(c)||c.includes(q))?94:0, maxLen=Math.max(q.length,c.length);
+  const edit=maxLen?(1-levenshtein(q,c)/maxLen)*100:0, qs=sortedTokens(q), cs=sortedTokens(c);
+  const editSorted=maxLen?(1-levenshtein(qs,cs)/Math.max(qs.length,cs.length,1))*100:0, tokens=jaccardTokens(q,c)*100;
+  return Math.max(contains,edit,editSorted,tokens);
+}
+async function screenOfacName(name,limit,minScore){
+  const entries=await loadOfacEntries(), candidates=[];
+  for(const entry of entries){
+    let bestScore=scoreName(name,entry.name), matchedOn='primary', matchedName=entry.name;
+    for(const alias of entry.aliases){const s=scoreName(name,alias.name);if(s>bestScore){bestScore=s;matchedOn='alias';matchedName=alias.name;}}
+    if(bestScore>=minScore)candidates.push({uid:entry.uid,primaryName:entry.name,type:entry.type,program:entry.program,title:entry.title,remarks:entry.remarks,matchedOn,matchedName,score:Math.round(bestScore)});
+  }
+  candidates.sort((a,b)=>Number(b.score)-Number(a.score)||String(a.primaryName).localeCompare(String(b.primaryName)));
+  return {query:name,minScore,count:Math.min(candidates.length,limit),totalCandidatesAboveThreshold:candidates.length,candidates:candidates.slice(0,limit),source:'U.S. Treasury OFAC Specially Designated Nationals (SDN) List',sourceFiles:['SDN.CSV','ALT.CSV'],reviewRequired:true,limitations:['Candidate-name screening only; a match is not a legal determination.','A no-match is not a sanctions clearance.','This service does not implement OFAC 50 Percent Rule ownership analysis.','Review identifiers, addresses, dates of birth, program tags, and other OFAC data before acting.']};
+}
+async function serveOfac(req,res,u){
+  const path='/api/ofac-sdn-screen';
+  const signature=req.headers['payment-signature']||req.headers['x-payment'];
+  if(!signature)return sendPaymentRequired(req,res,path);
+  let payload;
+  try{payload=decodePaymentHeader(String(signature));}catch{return sendPaymentRequired(req,res,path,'invalid_payment_header');}
+  const name=(u.searchParams.get('name')||'').trim();
+  const rawLimit=Number.parseInt(u.searchParams.get('limit')||'5',10), rawScore=Number.parseInt(u.searchParams.get('minScore')||'85',10);
+  const limit=Number.isFinite(rawLimit)?Math.max(1,Math.min(rawLimit,10)):5, minScore=Number.isFinite(rawScore)?Math.max(70,Math.min(rawScore,100)):85;
+  if(name.length<2)return send(res,400,{error:'name must contain at least 2 characters.'});
+  if(name.length>160)return send(res,400,{error:'name must be 160 characters or fewer.'});
+  const requirements=paymentRequirements(routes[path][1]);
+  try{
+    const verified=await facilitatorPost('verify',payload,requirements);
+    if(verified.isValid!==true&&verified.success!==true)return sendPaymentRequired(req,res,path,String(verified.invalidReason||verified.errorReason||'payment_verification_failed'));
+    let result;
+    try{result=await screenOfacName(name,limit,minScore);}catch{return send(res,502,{error:'OFAC SDN source unavailable; payment was not settled.'});}
+    const settled=await facilitatorPost('settle',payload,requirements);
+    if(settled.success!==true)return sendPaymentRequired(req,res,path,String(settled.errorReason||'payment_settlement_failed'));
+    const body=JSON.stringify({...result,paid:true},null,2);
+    res.writeHead(200,{'content-type':'application/json; charset=utf-8','content-length':Buffer.byteLength(body),'cache-control':'no-store','access-control-allow-origin':'*','access-control-expose-headers':'PAYMENT-RESPONSE, x402-settled','PAYMENT-RESPONSE':encodePaymentHeader(settled),'x402-settled':'true'});
+    res.end(body);
+  }catch{return send(res,503,{error:'Payment facilitator is temporarily unavailable; no result was served.'});}
+}
+
 function proxy(req,res,r){
   const u=new URL(req.url,'http://gateway.local'), target=new URL(r[0]); target.search=u.search;
   const headers={...req.headers};
@@ -341,6 +435,7 @@ http.createServer(async(req,res)=>{
   if(u.pathname==='/api/us-address-geocode')return serveCensus(req,res,u);
   if(u.pathname==='/api/domain-rdap')return serveRdap(req,res,u);
   if(u.pathname==='/api/sec-filings')return serveSec(req,res,u);
+  if(u.pathname==='/api/ofac-sdn-screen')return serveOfac(req,res,u);
   if(routes[u.pathname])return proxy(req,res,routes[u.pathname]);
   return send(res,404,{error:'not_found'});
 }).listen(PORT,'0.0.0.0',()=>console.log(`Agent Data Tools x402 gateway listening on ${PORT}`));
