@@ -8,6 +8,8 @@ const NETWORK = 'eip155:8453';
 const CONTACT = 'jayp19386@gmail.com';
 const FACILITATOR = 'https://facilitator.payai.network';
 const TREASURY_API = 'https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/avg_interest_rates';
+const IANA_RDAP_BOOTSTRAP = 'https://data.iana.org/rdap/dns.json';
+let rdapBootstrapCache = null;
 
 const routes = {
   '/api/pa-entity-one': ['https://pa-entity-x402.floot.app/_api/pa-entity-one','0.001000','Best Pennsylvania entity match',['Pennsylvania','Business Registry','Entity Resolution'],[['q',true,{type:'string',minLength:2},'OpenAI']]],
@@ -63,7 +65,8 @@ function paymentRequirements(priceUsd){
 }
 const nativeResourceMeta={
   '/api/treasury-average-rates':{serviceName:'Treasury Average Rates',tags:['Treasury','interest-rates','government','macro','finance']},
-  '/api/us-address-geocode':{serviceName:'Census Address Geocoder',tags:['Census','geocoding','address','geography','US']}
+  '/api/us-address-geocode':{serviceName:'Census Address Geocoder',tags:['Census','geocoding','address','geography','US']},
+  '/api/domain-rdap':{serviceName:'Domain RDAP Lookup',tags:['RDAP','domain','registration','DNS','internet']}
 };
 function paymentDocument(req,path){
   const r=routes[path], meta=nativeResourceMeta[path]||{serviceName:'Agent Data Tool',tags:['data']};
@@ -169,6 +172,80 @@ async function serveCensus(req,res,u){
   }catch{return send(res,503,{error:'Payment facilitator is temporarily unavailable; no result was served.'});}
 }
 
+function normalizeDomain(raw){
+  let value=String(raw||'').trim().toLowerCase();
+  if(value.endsWith('.'))value=value.slice(0,-1);
+  if(value.length<3||value.length>253||!/^[a-z0-9.-]+$/.test(value))return null;
+  const labels=value.split('.');
+  if(labels.length<2)return null;
+  for(const label of labels){if(!label||label.length>63||label.startsWith('-')||label.endsWith('-'))return null;}
+  return value;
+}
+async function rdapBootstrap(){
+  if(rdapBootstrapCache&&Date.now()-rdapBootstrapCache.loadedAt<3600000)return rdapBootstrapCache.data;
+  const r=await fetchWithTimeout(IANA_RDAP_BOOTSTRAP,{headers:{accept:'application/json','user-agent':'agent-data-tools-x402/1.0'}},10000);
+  if(!r.ok)throw new Error('iana_bootstrap_http_'+r.status);
+  const data=await r.json();
+  rdapBootstrapCache={loadedAt:Date.now(),data};
+  return data;
+}
+function findRdapBase(data,tld){
+  for(const service of data.services||[]){
+    const tlds=service[0]||[], urls=service[1]||[];
+    if(tlds.some(value=>String(value).toLowerCase()===tld.toLowerCase())&&urls.length)return urls[0];
+  }
+  return null;
+}
+function vcardName(entity){
+  const card=entity&&entity.vcardArray;
+  if(!Array.isArray(card)||!Array.isArray(card[1]))return null;
+  for(const item of card[1]){if(Array.isArray(item)&&item[0]==='fn')return String(item[3]||'')||null;}
+  return null;
+}
+function eventMap(events){
+  const out={};
+  if(!Array.isArray(events))return out;
+  for(const item of events){
+    const action=String(item?.eventAction||'').toLowerCase().replace(/[^a-z0-9]+(.)/g,(_m,ch)=>ch.toUpperCase());
+    const date=String(item?.eventDate||'');
+    if(action&&date&&!out[action])out[action]=date;
+  }
+  return out;
+}
+async function lookupRdap(domain){
+  const tld=domain.split('.').pop()||'', registry=await rdapBootstrap(), base=findRdapBase(registry,tld);
+  if(!base)return {domain,registered:null,error:'no_rdap_bootstrap_service',source:'IANA RDAP Bootstrap Service Registry'};
+  const u=base.replace(/\/+$/,'')+'/domain/'+encodeURIComponent(domain);
+  const r=await fetchWithTimeout(u,{headers:{accept:'application/rdap+json, application/json','user-agent':'agent-data-tools-x402/1.0'},redirect:'follow'},10000);
+  if(r.status===404)return {domain,registered:false,authoritativeRdap:base,source:'Authoritative RDAP server discovered via IANA bootstrap'};
+  if(!r.ok)throw new Error('rdap_http_'+r.status);
+  const data=await r.json();
+  const registrar=Array.isArray(data.entities)?data.entities.find(entity=>Array.isArray(entity.roles)&&entity.roles.map(role=>String(role).toLowerCase()).includes('registrar')):undefined;
+  const nameservers=Array.isArray(data.nameservers)?data.nameservers.map(ns=>String(ns.ldhName||ns.unicodeName||'')).filter(Boolean):[];
+  return {domain,registered:true,handle:data.handle??null,unicodeName:data.unicodeName??null,status:Array.isArray(data.status)?data.status:[],registrar:registrar?{name:vcardName(registrar),handle:registrar.handle??null}:null,events:eventMap(data.events),nameservers,secureDns:data.secureDNS?{delegationSigned:data.secureDNS.delegationSigned??null}:null,authoritativeRdap:base,source:'Authoritative RDAP server discovered via IANA bootstrap'};
+}
+async function serveRdap(req,res,u){
+  const path='/api/domain-rdap';
+  const signature=req.headers['payment-signature']||req.headers['x-payment'];
+  if(!signature)return sendPaymentRequired(req,res,path);
+  let payload;
+  try{payload=decodePaymentHeader(String(signature));}catch{return sendPaymentRequired(req,res,path,'invalid_payment_header');}
+  const domain=normalizeDomain(u.searchParams.get('domain')||'');
+  if(!domain)return send(res,400,{error:'domain must be a valid ASCII or punycode domain name.'});
+  const requirements=paymentRequirements(routes[path][1]);
+  try{
+    const verified=await facilitatorPost('verify',payload,requirements);
+    if(verified.isValid!==true&&verified.success!==true)return sendPaymentRequired(req,res,path,String(verified.invalidReason||verified.errorReason||'payment_verification_failed'));
+    let result;
+    try{result=await lookupRdap(domain);}catch{return send(res,502,{error:'IANA or authoritative RDAP service unavailable; payment was not settled.'});}
+    const settled=await facilitatorPost('settle',payload,requirements);
+    if(settled.success!==true)return sendPaymentRequired(req,res,path,String(settled.errorReason||'payment_settlement_failed'));
+    const body=JSON.stringify({...result,paid:true},null,2);
+    res.writeHead(200,{'content-type':'application/json; charset=utf-8','content-length':Buffer.byteLength(body),'cache-control':'no-store','access-control-allow-origin':'*','access-control-expose-headers':'PAYMENT-RESPONSE, x402-settled','PAYMENT-RESPONSE':encodePaymentHeader(settled),'x402-settled':'true'});
+    res.end(body);
+  }catch{return send(res,503,{error:'Payment facilitator is temporarily unavailable; no result was served.'});}
+}
+
 function proxy(req,res,r){
   const u=new URL(req.url,'http://gateway.local'), target=new URL(r[0]); target.search=u.search;
   const headers={...req.headers};
@@ -197,6 +274,7 @@ http.createServer(async(req,res)=>{
   if(u.pathname==='/'){return send(res,200,`<!doctype html><meta name="viewport" content="width=device-width"><title>Agent Data Tools x402</title><main style="max-width:800px;margin:40px auto;font:16px system-ui"><h1>Agent Data Tools x402</h1><p>Unique-host transparent gateway for eight x402 v2 paid endpoints.</p><p><a href="/openapi.json">OpenAPI</a> · <a href="/.well-known/x402">x402 discovery</a> · <a href="/.well-known/agent.json">agent.json</a></p></main>`,'text/html; charset=utf-8');}
   if(u.pathname==='/api/treasury-average-rates')return serveTreasury(req,res,u);
   if(u.pathname==='/api/us-address-geocode')return serveCensus(req,res,u);
+  if(u.pathname==='/api/domain-rdap')return serveRdap(req,res,u);
   if(routes[u.pathname])return proxy(req,res,routes[u.pathname]);
   return send(res,404,{error:'not_found'});
 }).listen(PORT,'0.0.0.0',()=>console.log(`Agent Data Tools x402 gateway listening on ${PORT}`));

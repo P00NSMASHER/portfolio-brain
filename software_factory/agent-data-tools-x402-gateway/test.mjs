@@ -68,6 +68,21 @@ try{
   });
   assert.equal(badCensus.status,400);
 
+  const rdap=await fetch(base+'/api/domain-rdap?domain=example.com');
+  assert.equal(rdap.status,402);
+  const rdapHeader=rdap.headers.get('payment-required');
+  assert.ok(rdapHeader,'native RDAP route should emit PAYMENT-REQUIRED');
+  const rdapDoc=JSON.parse(Buffer.from(rdapHeader,'base64').toString('utf8'));
+  assert.equal(rdapDoc.resource.url.endsWith('/api/domain-rdap'),true);
+  assert.equal(rdapDoc.accepts[0].amount,'5000');
+  assert.equal(rdapDoc.accepts[0].extra.name,'USD Coin');
+  assert.equal(rdapDoc.resource.serviceName,'Domain RDAP Lookup');
+
+  const badRdap=await fetch(base+'/api/domain-rdap?domain=bad_domain',{
+    headers:{'PAYMENT-SIGNATURE':Buffer.from(JSON.stringify({x402Version:2}),'utf8').toString('base64')}
+  });
+  assert.equal(badRdap.status,400);
+
   for(const path of ['/api/pa-entity-one?q=OpenAI','/api/pa-business?q=OpenAI&limit=1']){
     const r=await fetch(base+path,{redirect:'manual'});
     assert.equal(r.status,402,path+' should return 402 unpaid');
