@@ -44,7 +44,12 @@ def latest_snapshot_artifact(artifacts: list[dict], *, current_run: str) -> dict
 
 def _restore_snapshot_artifact(reader: GitHubReader, artifact: dict) -> dict:
     source = artifact.get("workflow_run", {})
-    run = reader.get(f"/actions/runs/{source['id']}")
+    cached_run = getattr(reader, "snapshot_source_run", None)
+    run = cached_run(artifact["id"]) if callable(cached_run) else None
+    if run is not None:
+        require(run.get("id") == source.get("id"), "Snapshot source run identity mismatch")
+    else:
+        run = reader.get(f"/actions/runs/{source['id']}")
     require(run.get("path") == ".github/workflows/portfolio-state-reducer.yml", "Snapshot did not come from sole reducer workflow")
     require(run.get("head_branch") == "main" and run.get("head_sha") == source.get("head_sha"), "Snapshot source SHA/branch mismatch")
     require(run.get("status") == "completed" and run.get("conclusion") == "success", "Snapshot producer did not succeed")
