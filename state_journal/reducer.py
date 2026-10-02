@@ -59,7 +59,7 @@ def _replay_heartbeat_merge(base_state: dict, batches: dict[str, dict]) -> dict:
                 raise Conflict("Ambiguous equal-time heartbeat updates for one agent")
             latest[slot] = core_hash
     merged = deepcopy(base_state)
-    for key in sorted(batches, key=lambda k: (_timestamp(batches[k]["at"]), k)):
+    for key in sorted(batches, key=lambda k: (_timestamp(batches[k]["at"]), canonical(batches[k]))):
         merged = replay_heartbeat_batch(merged, batches[key])
     return merged
 
