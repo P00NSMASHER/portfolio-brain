@@ -354,6 +354,42 @@ class GitHubReader:
                 )
         raise JournalError("Workflow run scan incomplete at page bound; checkpoint/archive required")
 
+    def _producer_workflow_runs_since(self, since: str, *, max_pages: int) -> list[dict]:
+        boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
+        require(boundary.tzinfo is not None, "Workflow boundary requires timezone")
+        allowed_paths = {f".github/workflows/{name}.yml" for name in WORKFLOW_PRODUCERS}
+        encoded = quote(f">={since}", safe="")
+        result = {}
+        for page in range(1, max_pages + 1):
+            response = self.get(
+                f"/actions/runs?branch=main&created={encoded}&per_page=100&page={page}"
+            )
+            rows = response.get("workflow_runs")
+            require(isinstance(rows, list), "Workflow run listing malformed")
+            for row in rows:
+                if row.get("path") not in allowed_paths:
+                    continue
+                run_id = row.get("id")
+                require(type(run_id) is int and run_id > 0, "Workflow run identity missing")
+                created = row.get("created_at")
+                require(isinstance(created, str), "Workflow run created_at missing")
+                at = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                require(at.tzinfo is not None, "Workflow run created_at requires timezone")
+                if at < boundary:
+                    continue
+                previous = result.get(run_id)
+                if previous is not None:
+                    require(previous == row, "Workflow run metadata changed during bounded scan")
+                else:
+                    result[run_id] = row
+            if len(rows) < 100:
+                return sorted(
+                    result.values(),
+                    key=lambda row: (row["created_at"], row["id"]),
+                    reverse=True,
+                )
+        raise JournalError("Workflow run scan incomplete at page bound; checkpoint/archive required")
+
     def _run_artifacts(self, run_id: int) -> list[dict]:
         require(type(run_id) is int and run_id > 0, "Invalid workflow run ID")
         response = self.get(f"/actions/runs/{run_id}/artifacts?per_page=100")
@@ -365,7 +401,8 @@ class GitHubReader:
         return rows
 
     def list_recent_journal_artifacts(self, since: str, *, max_pages: int = 20,
-                                      explicit_run_ids: list[int] | tuple[int, ...] = ()) -> list[dict]:
+                                      explicit_run_ids: list[int] | tuple[int, ...] = (),
+                                      combined_run_scan: bool = False) -> list[dict]:
         """Discover only reducer snapshots and enrolled producer events.
 
         Repository-wide artifact pagination eventually becomes unbounded because
@@ -470,28 +507,37 @@ class GitHubReader:
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
-        for workflow in sorted(WORKFLOW_PRODUCERS):
-            for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
-                if not (
-                    run.get("head_branch") == "main"
-                    and run.get("status") == "completed"
-                    and run.get("conclusion") in terminal
-                ):
+        if combined_run_scan:
+            producer_runs = self._producer_workflow_runs_since(event_since, max_pages=max_pages)
+        else:
+            producer_runs = [
+                run
+                for workflow in sorted(WORKFLOW_PRODUCERS)
+                for run in self._workflow_runs_since(
+                    f"{workflow}.yml", event_since, max_pages=max_pages
+                )
+            ]
+        for run in producer_runs:
+            if not (
+                run.get("head_branch") == "main"
+                and run.get("status") == "completed"
+                and run.get("conclusion") in terminal
+            ):
+                continue
+            if overlap_at is not None:
+                created_at = run.get("created_at")
+                updated_at = run.get("updated_at")
+                require(isinstance(created_at, str), "Workflow run created_at missing")
+                require(isinstance(updated_at, str), "Workflow run updated_at missing")
+                started = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                finished = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+                require(started.tzinfo is not None and finished.tzinfo is not None,
+                        "Workflow run timestamps require timezone")
+                if started < overlap_at and finished < overlap_at:
                     continue
-                if overlap_at is not None:
-                    created_at = run.get("created_at")
-                    updated_at = run.get("updated_at")
-                    require(isinstance(created_at, str), "Workflow run created_at missing")
-                    require(isinstance(updated_at, str), "Workflow run updated_at missing")
-                    started = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-                    finished = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
-                    require(started.tzinfo is not None and finished.tzinfo is not None,
-                            "Workflow run timestamps require timezone")
-                    if started < overlap_at and finished < overlap_at:
-                        continue
-                for row in self._run_artifacts(run["id"]):
-                    if row.get("name", "").startswith(EVENT_PREFIX):
-                        retain(row)
+            for row in self._run_artifacts(run["id"]):
+                if row.get("name", "").startswith(EVENT_PREFIX):
+                    retain(row)
 
         for run_id in explicit_run_ids:
             require(type(run_id) is int and run_id > 0, "Explicit recovery run ID invalid")
