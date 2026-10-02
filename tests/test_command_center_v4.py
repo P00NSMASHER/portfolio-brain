@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from agents.heartbeat_state import heartbeat,seed_state,validate_state
 from dashboard.history_state import append_point,daily_trends,project_momentum,validate_state as validate_history
-from dashboard.command_center import build_command_center_snapshot,render_html
+from dashboard.command_center import build_command_center_snapshot,render_html,build_repair_issues
 from dashboard.publication_gate import should_publish
 from operator_console.operator_console import validate_approval_ledger
 from scheduler.autonomous_scheduler import _owner_approval
@@ -240,6 +240,22 @@ class CommandCenterV4Tests(unittest.TestCase):
             }
             for row in snapshot["repair_issues"]
         ))
+
+    def test_stale_provider_evidence_does_not_masquerade_as_current_unready_route(self):
+        snapshot=build_command_center_snapshot()
+        snapshot["model_router"]["enabled_non_tier0_route_count"]=1
+        provider=snapshot["model_router"]["provider_readiness"]
+        provider["status"]="BUDGET_BLOCKED"
+        provider["cost_gate_status"]="BLOCKED_BUDGET"
+        source=snapshot["state_sources"]["sources"]["provider"]
+
+        source["status"]="STALE"
+        stale_issues=build_repair_issues(snapshot)
+        self.assertFalse(any(row["title"]=="Model route is unverified" for row in stale_issues))
+
+        source["status"]="LIVE"
+        live_issues=build_repair_issues(snapshot)
+        self.assertTrue(any(row["title"]=="Model route is unverified" for row in live_issues))
 
     def test_engineering_first_hierarchy_keeps_history_and_upgrades_visible(self):
         snapshot=build_command_center_snapshot()
