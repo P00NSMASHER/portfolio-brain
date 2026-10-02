@@ -106,19 +106,46 @@ jobs:
               })
               return list(seen_rows.values())
 
+          def stable_workflow_runs(workflow):
+              encoded = urllib.parse.quote(f">={boundary}", safe="")
+              first = get(
+                  f"/actions/workflows/{workflow}.yml/runs?branch=main&created={encoded}&per_page=100&page=1"
+              )
+              first_rows = first.get("workflow_runs", [])
+              if not isinstance(first_rows, list):
+                  raise RuntimeError("MALFORMED_WORKFLOW_RUN_LISTING:" + workflow)
+              total = int(first.get("total_count", 0))
+              pages = math.ceil(total / 100) if total else 1
+              if reads + max(0, pages - 1) + 1 > max_reads:
+                  raise RuntimeError("WORKFLOW_RUN_LISTING_WOULD_EXCEED_READ_BUDGET:" + workflow)
+
+              seen_rows = {row["id"]: row for row in first_rows}
+              for page in range(2, pages + 1):
+                  doc = get(
+                      f"/actions/workflows/{workflow}.yml/runs?branch=main&created={encoded}&per_page=100&page={page}"
+                  )
+                  for row in doc.get("workflow_runs", []):
+                      previous = seen_rows.get(row["id"])
+                      if previous is not None and previous != row:
+                          raise RuntimeError("WORKFLOW_RUN_METADATA_CHANGED_DURING_SCAN:" + workflow)
+                      seen_rows[row["id"]] = row
+
+              stable = get(
+                  f"/actions/workflows/{workflow}.yml/runs?branch=main&created={encoded}&per_page=100&page=1"
+              )
+              if int(stable.get("total_count", -1)) != total or stable.get("workflow_runs", []) != first_rows:
+                  raise RuntimeError("WORKFLOW_RUN_LISTING_CHANGED_DURING_SCAN:" + workflow)
+              if len(seen_rows) != total:
+                  raise RuntimeError("WORKFLOW_RUN_LISTING_INCOMPLETE:" + workflow)
+              return list(seen_rows.values())
+
           durable_rows = []
           for name in durable_names:
               durable_rows.extend(stable_exact_name(name))
 
           snapshot_rows = stable_exact_name("portfolio-canonical-shadow-state")
 
-          encoded = urllib.parse.quote(f">={boundary}", safe="")
-          reducer_doc = get(
-              f"/actions/workflows/portfolio-state-reducer.yml/runs?branch=main&created={encoded}&per_page=100&page=1"
-          )
-          reducer_runs = reducer_doc.get("workflow_runs", [])
-          if int(reducer_doc.get("total_count", len(reducer_runs))) > 100:
-              raise RuntimeError("REDUCER_RUN_LIST_REQUIRES_PAGINATION")
+          reducer_runs = stable_workflow_runs("portfolio-state-reducer")
           reducer_by_id = {
               row["id"]: row for row in reducer_runs
               if row.get("head_branch") == "main"
@@ -157,12 +184,7 @@ jobs:
           post_overlap_run_ids = set()
           crossover_run_ids = set()
           for workflow in sorted(WORKFLOW_PRODUCERS):
-              doc = get(
-                  f"/actions/workflows/{workflow}.yml/runs?branch=main&created={encoded}&per_page=100&page=1"
-              )
-              rows = doc.get("workflow_runs", [])
-              if int(doc.get("total_count", len(rows))) > 100:
-                  raise RuntimeError("PRODUCER_RUN_LIST_REQUIRES_PAGINATION:" + workflow)
+              rows = stable_workflow_runs(workflow)
               for row in rows:
                   if not (
                       row.get("head_branch") == "main"
