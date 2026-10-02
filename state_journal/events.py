@@ -7,6 +7,7 @@ from copy import deepcopy
 from itertools import groupby
 
 from agents.heartbeat_state import heartbeat
+from dashboard.history_state import history_observation, replay_history_observation
 from state_journal.contracts import (
     DOMAINS, PRODUCERS, REPOSITORY, SCHEMA, EVENT_SCHEMA_ATTEMPT, MAX_BYTES,
     Conflict, JournalError, canonical, digest, event_hash, event_identity,
@@ -48,6 +49,14 @@ def make_change(domain: str, before: dict, after: dict, *, proofs: dict | None =
     require(before["state_id"] == after["state_id"], "Domain identity changed")
     require(after["sequence"] >= before["sequence"], "Domain sequence rollback")
     require(after["sequence"] > before["sequence"] or after == before, "Different state at unchanged sequence")
+    if domain == "history":
+        observation = history_observation(before, after)
+        if observation is not None:
+            result = {"domain": domain, "before_hash": digest(before), "after_hash": digest(after),
+                      "operation": "HISTORY_OBSERVATION", "observation": observation,
+                      "proofs": deepcopy(proofs or {})}
+            validate_change(result)
+            return result
     batches = heartbeat_batches(before, after) if domain == "heartbeat" else None
     result = {"domain": domain, "before": deepcopy(before), "after": deepcopy(after),
               "before_hash": digest(before), "after_hash": digest(after),
@@ -57,6 +66,19 @@ def make_change(domain: str, before: dict, after: dict, *, proofs: dict | None =
 
 
 def validate_change(change: dict) -> None:
+    if isinstance(change, dict) and change.get("operation") == "HISTORY_OBSERVATION":
+        fields(change, {"domain", "before_hash", "after_hash", "operation", "observation", "proofs"},
+               "History observation transition")
+        require(change["domain"] == "history", "History observation operation used by another domain")
+        require(all(isinstance(change[key], str) and change[key].startswith("sha256:")
+                    for key in ("before_hash", "after_hash")), "History transition hashes invalid")
+        require(change["proofs"] == {}, "Unexpected companion proofs")
+        replay_history_observation(
+            {"schema_version": "1.0.0", "state_id": "portfolio-command-center-history",
+             "sequence": 0, "updated_at": None, "points": []},
+            change["observation"],
+        )
+        return
     fields(change, {"domain", "before", "after", "before_hash", "after_hash", "operation", "batches", "proofs"}, "Transition")
     domain = change["domain"]
     validate_domain(domain, change["before"]); validate_domain(domain, change["after"])

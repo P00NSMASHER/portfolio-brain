@@ -105,7 +105,10 @@ def replay(base: dict, events: list[dict]) -> dict:
     history_ops = {}
     merge_history = bool(history_changes)
     for change in history_changes:
-        point = history_observation(change["before"], change["after"]) if change["operation"] == "COMPARE_AND_SWAP" else None
+        if change["operation"] == "HISTORY_OBSERVATION":
+            point = change["observation"]
+        else:
+            point = history_observation(change["before"], change["after"]) if change["operation"] == "COMPARE_AND_SWAP" else None
         if point is None:
             merge_history = False
             history_ops = {}
@@ -132,6 +135,7 @@ def replay(base: dict, events: list[dict]) -> dict:
 
     known_heartbeat = {digest(states["heartbeat"])} if "heartbeat" in states else set()
     known_history = {digest(states["history"])} if "history" in states else set()
+    history_states = {digest(states["history"]): deepcopy(states["history"])} if "history" in states else {}
     remaining = ordered[:]
     applied = []
     consumed = set()
@@ -162,8 +166,18 @@ def replay(base: dict, events: list[dict]) -> dict:
                 elif change["domain"] == "history" and merge_history:
                     known_history.add(change["after_hash"])
                     key = change["before_hash"], change["after_hash"]
+                    before_state = history_states.get(change["before_hash"])
+                    require(before_state is not None, "History observation predecessor state is unavailable")
+                    # Bind the compact observation to the claimed full-state hash during replay.
+                    branch_state = _replay_history_merge(before_state, {key: history_ops[key]})
+                    require(digest(branch_state) == change["after_hash"],
+                            "History observation does not reproduce its after-state hash")
+                    history_states[change["after_hash"]] = branch_state
                     accepted_history[key] = history_ops[key]
-                    known_history.add(digest(_replay_history_merge(base["states"]["history"], accepted_history)))
+                    merged_state = _replay_history_merge(base["states"]["history"], accepted_history)
+                    merged_hash = digest(merged_state)
+                    known_history.add(merged_hash)
+                    history_states[merged_hash] = merged_state
                 else:
                     key = change["domain"], change["before_hash"], change["after_hash"]
                     if key not in consumed and change["before_hash"] != change["after_hash"]:

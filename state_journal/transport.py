@@ -165,8 +165,9 @@ def validate_artifact_publication_fallback(
         state = extract_domain_state(raw, domain)
         require(digest(state) == change["after_hash"],
                 f"Durable state artifact hash does not match event for {domain}")
-        require(canonical(state) == canonical(change["after"]),
-                f"Durable state artifact payload does not match event for {domain}")
+        if change["operation"] != "HISTORY_OBSERVATION":
+            require(canonical(state) == canonical(change["after"]),
+                    f"Durable state artifact payload does not match event for {domain}")
     return job["id"]
 
 
