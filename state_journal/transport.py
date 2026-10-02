@@ -575,9 +575,7 @@ class GitHubReader:
                     retain(row)
             if scan_complete:
                 self._event_run_artifacts.update(grouped)
-            else:
-                require(ordering_proven and oldest_seen is not None,
-                        "Artifact scan incomplete at page bound; checkpoint/archive required")
+            elif ordering_proven and oldest_seen is not None:
                 unresolved = []
                 resolved_ids = set()
                 for run in post_overlap_runs:
@@ -594,6 +592,8 @@ class GitHubReader:
                     {run_id: grouped[run_id] for run_id in resolved_ids}
                 )
                 crossover_runs.extend(unresolved)
+            else:
+                crossover_runs.extend(post_overlap_runs)
         else:
             crossover_runs.extend(post_overlap_runs)
 
