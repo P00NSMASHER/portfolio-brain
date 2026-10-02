@@ -269,6 +269,17 @@ class GitHubReader:
     def __init__(self, token: str, *, max_requests: int = 100):
         self.http = BudgetedHTTP(token, max_requests=max_requests, retries=1, backoff=1)
         self.base = f"https://api.github.com/repos/{REPOSITORY}"
+        self._runs_by_id: dict[int, dict] = {}
+
+    def _remember_run(self, run: dict) -> None:
+        run_id = run.get("id")
+        require(type(run_id) is int and run_id > 0, "Workflow run identity missing")
+        cached = getattr(self, "_runs_by_id", None)
+        if cached is None:
+            cached = self._runs_by_id = {}
+        previous = cached.get(run_id)
+        require(previous is None or previous == run, "Workflow run metadata changed during bounded scan")
+        cached[run_id] = run
 
     def get(self, suffix: str) -> dict:
         require(suffix.startswith("/") and ".." not in suffix and "://" not in suffix, "Unsafe API suffix")
@@ -347,11 +358,14 @@ class GitHubReader:
                 else:
                     result[run_id] = row
             if len(rows) < 100:
-                return sorted(
+                ordered = sorted(
                     result.values(),
                     key=lambda row: (row["created_at"], row["id"]),
                     reverse=True,
                 )
+                for row in ordered:
+                    self._remember_run(row)
+                return ordered
         raise JournalError("Workflow run scan incomplete at page bound; checkpoint/archive required")
 
     def _run_artifacts(self, run_id: int) -> list[dict]:
@@ -494,6 +508,7 @@ class GitHubReader:
             require(type(run_id) is int and run_id > 0, "Explicit recovery run ID invalid")
             run = self.get(f"/actions/runs/{run_id}")
             require(run.get("id") == run_id, "Explicit recovery run identity mismatch")
+            self._remember_run(run)
             require(run.get("head_branch") == "main", "Explicit recovery run is not on main")
             require(run.get("status") == "completed" and run.get("conclusion") in terminal,
                     "Explicit recovery run is not terminal")
@@ -512,7 +527,11 @@ class GitHubReader:
         match = re.fullmatch(r"portfolio-state-event-v2-([1-9][0-9]*)-([a-z0-9-]+)-([a-f0-9]{40})-([1-9][0-9]*)", meta.get("name", ""))
         require(match is not None, "Malformed event archive name")
         run_id, _, _, attempt = match.groups()
-        run = self.get(f"/actions/runs/{run_id}/attempts/{attempt}")
+        cached_run = getattr(self, "_runs_by_id", {}).get(int(run_id))
+        if cached_run is not None and cached_run.get("run_attempt") == int(attempt):
+            run = cached_run
+        else:
+            run = self.get(f"/actions/runs/{run_id}/attempts/{attempt}")
         jobs = self.get(f"/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100")
         raw = self.archive(meta["id"])
         event = extract_json(raw, "event.json")
