@@ -325,6 +325,33 @@ def reduce_from_provider(reader: GitHubReader, *, since: str, current_run: str,
                        "projection_hash": candidate["projection"]["projection_hash"]}
 
 
+def reduce_and_verify_legacy_parity(reader: GitHubReader, *, since: str, current_run: str,
+                                    upload_steps: dict, work: Path,
+                                    explicit_checkpoint: dict | None = None,
+                                    explicit_run_ids: list[int] | tuple[int, ...] = (),
+                                    archive_manifest: dict | None = None) -> tuple[dict, dict, dict]:
+    options = {
+        "since": since,
+        "current_run": current_run,
+        "upload_steps": upload_steps,
+        "explicit_checkpoint": explicit_checkpoint,
+        "explicit_run_ids": explicit_run_ids,
+        "archive_manifest": archive_manifest,
+    }
+    state, receipt = reduce_from_provider(reader, **options)
+    try:
+        parity = verify_legacy_parity(state["projection"]["states"], work)
+    except JournalError as exc:
+        if not str(exc).startswith("LEGACY_PARITY_MISMATCH:"):
+            raise
+        # A producer can finish and publish its state artifact after discovery
+        # but before parity restoration. Refresh journal evidence once to close
+        # that race; persistent mismatches still block publication.
+        state, receipt = reduce_from_provider(reader, **options)
+        parity = verify_legacy_parity(state["projection"]["states"], work)
+    return state, receipt, parity
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=Path("state_journal/out/reducer"))
@@ -370,13 +397,14 @@ def main() -> None:
             recovery_run_ids = [*recovery_run_ids, int(trigger_run)]
         recovery_run_ids = sorted(set(recovery_run_ids))
         archive_manifest = load_active_manifest(ROOT)
-        state, receipt = reduce_from_provider(reader, since=policy["artifact_scan_start"],
-                                             current_run=os.environ.get("GITHUB_RUN_ID", ""), upload_steps=upload_steps,
-                                             explicit_checkpoint=bootstrap, explicit_run_ids=recovery_run_ids,
-                                             archive_manifest=archive_manifest)
+        state, receipt, parity = reduce_and_verify_legacy_parity(
+            reader, since=policy["artifact_scan_start"],
+            current_run=os.environ.get("GITHUB_RUN_ID", ""), upload_steps=upload_steps,
+            work=args.output_dir / "legacy-parity-work", explicit_checkpoint=bootstrap,
+            explicit_run_ids=recovery_run_ids, archive_manifest=archive_manifest,
+        )
         receipt["explicit_recovery_run_ids"] = recovery_run_ids
         validate_snapshot(state)
-        parity = verify_legacy_parity(state["projection"]["states"], args.output_dir / "legacy-parity-work")
         receipt["legacy_parity"] = parity["status"]
         receipt["legacy_domain_count"] = len(parity["domains"])
         if policy["canonical_snapshot_authorized"] is True and policy["mode"] in {"CANONICAL_READY", "CANONICAL"}:
