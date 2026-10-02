@@ -72,8 +72,13 @@ function sendPaymentRequired(req,res,path,reason='payment_required'){
   res.writeHead(402,{'content-type':'application/json; charset=utf-8','content-length':Buffer.byteLength(body),'cache-control':'no-store','access-control-allow-origin':'*','access-control-expose-headers':'PAYMENT-REQUIRED, PAYMENT-RESPONSE, x402-settled, x402-price, x402-network, x402-asset, x402-pay-to','PAYMENT-REQUIRED':encodePaymentHeader(doc),'x402-price':price,'x402-asset':'USDC','x402-network':NETWORK,'x402-pay-to':PAY_TO});
   res.end(body);
 }
+async function fetchWithTimeout(url,init={},timeoutMs=10000){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try{return await fetch(url,{...init,signal:controller.signal});}finally{clearTimeout(timer);}
+}
 async function facilitatorPost(stage,payload,requirements){
-  const r=await fetch(FACILITATOR+'/'+stage,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({x402Version:2,paymentPayload:payload,paymentRequirements:requirements})});
+  const r=await fetchWithTimeout(FACILITATOR+'/'+stage,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({x402Version:2,paymentPayload:payload,paymentRequirements:requirements})},6000);
   if(!r.ok)throw new Error('facilitator_'+stage+'_'+r.status);
   return await r.json();
 }
@@ -82,7 +87,7 @@ async function latestTreasuryRates(security){
   u.searchParams.set('fields','record_date,security_type_desc,security_desc,avg_interest_rate_amt');
   u.searchParams.set('sort','-record_date');
   u.searchParams.set('page[size]','100');
-  const r=await fetch(u,{headers:{accept:'application/json','user-agent':'agent-data-tools-x402/1.0'}});
+  const r=await fetchWithTimeout(u,{headers:{accept:'application/json','user-agent':'agent-data-tools-x402/1.0'}},10000);
   if(!r.ok)throw new Error('treasury_http_'+r.status);
   const payload=await r.json(), rows=Array.isArray(payload.data)?payload.data:[];
   if(!rows.length)throw new Error('treasury_no_data');
