@@ -269,9 +269,15 @@ class GitHubReader:
     def __init__(self, token: str, *, max_requests: int = 100):
         self.http = BudgetedHTTP(token, max_requests=max_requests, retries=1, backoff=1)
         self.base = f"https://api.github.com/repos/{REPOSITORY}"
+        self._run_cache: dict[int, dict] = {}
 
     def get(self, suffix: str) -> dict:
         require(suffix.startswith("/") and ".." not in suffix and "://" not in suffix, "Unsafe API suffix")
+        match = re.fullmatch(r"/actions/runs/([1-9][0-9]*)", suffix)
+        if match is not None:
+            cached = getattr(self, "_run_cache", {}).get(int(match.group(1)))
+            if cached is not None:
+                return cached
         return self.http.json(self.base + suffix)
 
     def archive(self, artifact_id: int) -> bytes:
@@ -346,6 +352,21 @@ class GitHubReader:
                     require(previous == row, "Workflow run metadata changed during bounded scan")
                 else:
                     result[run_id] = row
+                    if (
+                        isinstance(row.get("path"), str)
+                        and isinstance(row.get("head_branch"), str)
+                        and isinstance(row.get("head_sha"), str)
+                        and isinstance(row.get("status"), str)
+                        and isinstance(row.get("conclusion"), (str, type(None)))
+                        and isinstance(row.get("repository"), dict)
+                        and isinstance(row.get("head_repository"), dict)
+                        and isinstance(row["repository"].get("full_name"), str)
+                        and isinstance(row["head_repository"].get("full_name"), str)
+                    ):
+                        cache = getattr(self, "_run_cache", None)
+                        if cache is None:
+                            cache = self._run_cache = {}
+                        cache[run_id] = row
             if len(rows) < 100:
                 return sorted(
                     result.values(),
