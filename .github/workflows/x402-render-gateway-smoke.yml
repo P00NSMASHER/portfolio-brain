@@ -33,6 +33,45 @@ jobs:
       - name: Syntax check
         run: node --check server.js
 
+      - name: Verify Netlify function adapter
+        run: |
+          node --input-type=module <<'NODE'
+          import handler from './netlify/functions/gateway.mjs';
+
+          const base = 'https://agent-data-tools-x402.netlify.app';
+          const call = (path, init = {}) => handler(new Request(base + path, init));
+
+          const health = await call('/healthz');
+          if (health.status !== 200) throw new Error('healthz status');
+          const healthBody = await health.json();
+          if (healthBody.ok !== true || healthBody.routes !== 8) throw new Error('healthz body');
+
+          const manifest = await call('/.well-known/agent.json');
+          const manifestBody = await manifest.json();
+          if (manifest.status !== 200 || manifestBody.version !== '1.3' || manifestBody.intents?.length !== 8) {
+            throw new Error('agent manifest');
+          }
+
+          const discovery = await call('/.well-known/x402');
+          const discoveryBody = await discovery.json();
+          if (discovery.status !== 200 || discoveryBody.resources?.length !== 8) throw new Error('discovery');
+          if (!discoveryBody.resources.every((resource) =>
+            resource.resource.startsWith(base + '/api/') &&
+            resource.accepts?.[0]?.network === 'eip155:8453' &&
+            resource.accepts?.[0]?.extra?.name === 'USD Coin'
+          )) throw new Error('discovery payment metadata');
+
+          const unpaid = await call('/api/pa-entity-one?q=OpenAI');
+          const unpaidBody = await unpaid.json();
+          if (unpaid.status !== 402 || !unpaid.headers.get('payment-required')) throw new Error('402 challenge headers');
+          if (unpaidBody.accepts?.[0]?.amount !== '1000' || unpaidBody.accepts?.[0]?.extra?.version !== '2') {
+            throw new Error('402 challenge body');
+          }
+
+          const options = await call('/api/pa-entity-one?q=OpenAI', { method: 'OPTIONS' });
+          if (options.status !== 204) throw new Error('OPTIONS');
+          NODE
+
       - name: Start gateway
         run: |
           PORT=10000 node server.js > /tmp/x402-gateway.log 2>&1 &
