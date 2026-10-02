@@ -340,9 +340,6 @@ class GitHubReader:
                 if previous_page_oldest is not None and page_newest_unseen > previous_page_oldest:
                     page_envelope_proven = False
                 previous_page_oldest = page_oldest_unseen
-            elif rows:
-                # A full duplicate page proves no additional coverage.
-                page_envelope_proven = False
             # Preserve the original fail-closed boundary shortcut: a full page
             # may terminate early only when row order itself is monotonic.
             if len(rows) < 100 or (row_order_proven and crossed_boundary):
