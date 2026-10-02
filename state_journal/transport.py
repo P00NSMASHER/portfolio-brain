@@ -557,7 +557,7 @@ class GitHubReader:
         # page bound. With monotonic newest-to-oldest metadata, a run that
         # started strictly after the oldest scanned artifact is fully covered:
         # every artifact it could have published must already be in the scanned
-        # window. Only the older unresolved tail falls back to per-run queries.
+        # window. Ambiguous pagination falls back to authoritative per-run queries.
         if overlap_at is not None and len(post_overlap_runs) > max_pages:
             overlap_raw = overlap_at.isoformat().replace("+00:00", "Z")
             post_overlap_ids = {run["id"] for run in post_overlap_runs}
@@ -575,9 +575,9 @@ class GitHubReader:
                     retain(row)
             if scan_complete:
                 self._event_run_artifacts.update(grouped)
+            elif not ordering_proven or oldest_seen is None:
+                crossover_runs.extend(post_overlap_runs)
             else:
-                require(ordering_proven and oldest_seen is not None,
-                        "Artifact scan incomplete at page bound; checkpoint/archive required")
                 unresolved = []
                 resolved_ids = set()
                 for run in post_overlap_runs:
