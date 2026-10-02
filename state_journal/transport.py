@@ -366,14 +366,7 @@ class GitHubReader:
 
     def list_recent_journal_artifacts(self, since: str, *, max_pages: int = 20,
                                       explicit_run_ids: list[int] | tuple[int, ...] = ()) -> list[dict]:
-        """Discover only reducer snapshots and enrolled producer events.
-
-        Repository-wide artifact pagination eventually becomes unbounded because
-        receipts, previews, and other unrelated artifacts accumulate. Journal
-        restore instead enumerates the closed workflow allowlist, validates each
-        run later through the existing provider checks, and scans events only
-        from the older of the two newest successful reducer publications.
-        """
+        """Discover reducer snapshots and bounded events from enrolled workflows."""
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
         require(type(max_pages) is int and max_pages > 0, "Artifact page bound invalid")
@@ -454,24 +447,19 @@ class GitHubReader:
                 if len(snapshot_runs) == 2:
                     break
 
-        # Producer run discovery stays anchored to the reviewed
-        # journal/checkpoint boundary so an in-flight run that started before
-        # recent reducer snapshots cannot disappear. Artifact retrieval is
-        # narrower: once two successful reducer snapshots exist, a terminal
-        # producer run that both started and finished before the older reducer
-        # started is already covered by that predecessor snapshot and does not
-        # need another per-run artifact request. Runs that started earlier but
-        # remained active into the overlap window are still inspected.
-        event_since = since
+        terminal = {"success", "failure", "cancelled", "timed_out"}
         overlap_at = None
         if len(snapshot_runs) == 2:
             overlap = min(snapshot_runs[0][0]["created_at"], snapshot_runs[1][0]["created_at"])
             overlap_at = datetime.fromisoformat(overlap.replace("Z", "+00:00"))
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 
-        terminal = {"success", "failure", "cancelled", "timed_out"}
+        # Keep discovery scoped to enrolled producer workflows. When their
+        # eligible run count is high, use the bounded repository artifact scan
+        # instead of issuing a separate artifact request for every run.
+        producer_runs: dict[int, dict] = {}
         for workflow in sorted(WORKFLOW_PRODUCERS):
-            for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
+            for run in self._workflow_runs_since(f"{workflow}.yml", since, max_pages=max_pages):
                 if not (
                     run.get("head_branch") == "main"
                     and run.get("status") == "completed"
@@ -489,7 +477,24 @@ class GitHubReader:
                             "Workflow run timestamps require timezone")
                     if started < overlap_at and finished < overlap_at:
                         continue
-                for row in self._run_artifacts(run["id"]):
+                producer_runs[run["id"]] = run
+
+        http = getattr(self, "http", None)
+        request_budget = getattr(http, "max_requests", 100)
+        requests_used = getattr(http, "requests", len(WORKFLOW_PRODUCERS) + 3)
+        per_run_request_limit = max(0, request_budget - requests_used - 2)
+        if len(producer_runs) > per_run_request_limit:
+            eligible_run_ids = set(producer_runs)
+            for row in self.list_recent_artifacts(since, max_pages=max_pages):
+                if not row.get("name", "").startswith(EVENT_PREFIX):
+                    continue
+                source_run = row.get("workflow_run")
+                run_id = source_run.get("id") if isinstance(source_run, dict) else None
+                if type(run_id) is int and run_id in eligible_run_ids:
+                    retain(row)
+        else:
+            for run_id in producer_runs:
+                for row in self._run_artifacts(run_id):
                     if row.get("name", "").startswith(EVENT_PREFIX):
                         retain(row)
 
