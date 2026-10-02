@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "purpose": "Collect exact-main Step 23 scheduled soak evidence after PR #526 final wake/schedule merge; never mix prior-main evidence.",
+  "exact_main_sha": "0d445ed84406da4c668fb01eb4d584a01ff93f38",
+  "soak_start": "2026-10-02T21:59:56Z",
+  "required_successes_per_workflow": 3,
+  "required_workflows": [
+    "portfolio-state-reducer",
+    "runtime-hourly-sync",
+    "portfolio-autonomous-scheduler",
+    "hunter-autonomous-cycle",
+    "agent-heartbeat-sweep",
+    "portfolio-cost-watchdog",
+    "portfolio-notification-cycle",
+    "command-center-pages"
+  ],
+  "required_handler_types": [
+    "REPAIR",
+    "TEST",
+    "VERIFICATION"
+  ],
+  "poll_seconds": 45,
+  "max_resets": 5
+}
