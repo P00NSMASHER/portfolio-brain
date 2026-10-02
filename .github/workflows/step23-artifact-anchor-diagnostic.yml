@@ -43,7 +43,7 @@ jobs:
               with urllib.request.urlopen(req,timeout=30) as r:
                   return json.load(r)
 
-          reducer=get("/actions/workflows/portfolio-state-reducer.yml/runs?branch=main&status=success&per_page=20")
+          reducer=get("/actions/workflows/portfolio-state-reducer.yml/runs?branch=main&per_page=100")
           anchors=[]
           for run in reducer.get("workflow_runs",[]):
               arts=get(f"/actions/runs/{run['id']}/artifacts?per_page=100").get("artifacts",[])
