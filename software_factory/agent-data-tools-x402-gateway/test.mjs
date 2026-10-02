@@ -32,7 +32,7 @@ try{
   assert.equal(agent.version,'1.3');
   assert.equal(agent.intents.length,8);
 
-  for(const path of ['/api/pa-entity-one?q=OpenAI','/api/sec-filings?ticker=AAPL&limit=1']){
+  for(const path of ['/api/pa-entity-one?q=OpenAI','/api/pa-business?q=OpenAI&limit=1']){
     const r=await fetch(base+path,{redirect:'manual'});
     assert.equal(r.status,402,path+' should return 402 unpaid');
     assert.ok(r.headers.get('payment-required'),path+' should preserve PAYMENT-REQUIRED');
