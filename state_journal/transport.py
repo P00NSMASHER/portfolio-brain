@@ -395,6 +395,7 @@ class GitHubReader:
         reducer_runs = self._workflow_runs_since(
             "portfolio-state-reducer.yml", since, max_pages=max_pages
         )
+        self._snapshot_source_runs: dict[int, dict] = {}
         snapshot_runs: list[tuple[dict, dict]] = []
         for run in reducer_runs:
             if not (
@@ -447,6 +448,8 @@ class GitHubReader:
             require(len(snapshots) <= 1, "Reducer published multiple canonical snapshots in one run")
             if snapshots:
                 retain(snapshots[0])
+                if snapshots[0].get("workflow_run", {}).get("id") == run.get("id"):
+                    self._snapshot_source_runs[snapshots[0]["id"]] = run
                 snapshot_runs.append((run, snapshots[0]))
                 if len(snapshot_runs) == 2:
                     break
@@ -507,6 +510,9 @@ class GitHubReader:
             key=lambda row: (row["created_at"], row["id"]),
             reverse=True,
         )
+
+    def snapshot_source_run(self, artifact_id: int) -> dict | None:
+        return getattr(self, "_snapshot_source_runs", {}).get(artifact_id)
 
     def event(self, meta: dict, upload_steps: dict) -> tuple[dict, dict]:
         match = re.fullmatch(r"portfolio-state-event-v2-([1-9][0-9]*)-([a-z0-9-]+)-([a-f0-9]{40})-([1-9][0-9]*)", meta.get("name", ""))
