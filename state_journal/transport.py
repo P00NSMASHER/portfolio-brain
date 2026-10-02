@@ -25,6 +25,7 @@ EVENT_PREFIX = "portfolio-state-event-v2-"
 SNAPSHOT_ARTIFACT = "portfolio-canonical-shadow-state"
 EMIT_STEP = "Capture immutable state transition event"
 UPLOAD_STEP = "Upload immutable state transition event"
+SCOPED_ARTIFACT_BATCH_THRESHOLD = 48
 
 
 def extract_json(raw: bytes, member: str) -> dict:
@@ -470,6 +471,7 @@ class GitHubReader:
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
+        producer_runs: list[dict] = []
         for workflow in sorted(WORKFLOW_PRODUCERS):
             for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
                 if not (
@@ -489,6 +491,24 @@ class GitHubReader:
                             "Workflow run timestamps require timezone")
                     if started < overlap_at and finished < overlap_at:
                         continue
+                producer_runs.append(run)
+
+        if len(producer_runs) >= SCOPED_ARTIFACT_BATCH_THRESHOLD:
+            # Per-run lookups can exhaust the read budget when many producers
+            # were active in the overlap window. Use the existing bounded,
+            # newest-first artifact scan in that case, then retain only events
+            # attached to runs admitted by the closed workflow allowlist.
+            eligible_run_ids = {run["id"] for run in producer_runs}
+            for row in self.list_recent_artifacts(since, max_pages=max_pages):
+                if not row.get("name", "").startswith(EVENT_PREFIX):
+                    continue
+                source = row.get("workflow_run")
+                require(isinstance(source, dict) and type(source.get("id")) is int,
+                        "Event artifact source run identity missing")
+                if source["id"] in eligible_run_ids:
+                    retain(row)
+        else:
+            for run in producer_runs:
                 for row in self._run_artifacts(run["id"]):
                     if row.get("name", "").startswith(EVENT_PREFIX):
                         retain(row)
