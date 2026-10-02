@@ -470,6 +470,7 @@ class GitHubReader:
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
+        admissible_events = {"push", "schedule", "workflow_dispatch", "repository_dispatch", "workflow_run"}
         for workflow in sorted(WORKFLOW_PRODUCERS):
             for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
                 if not (
@@ -477,6 +478,8 @@ class GitHubReader:
                     and run.get("status") == "completed"
                     and run.get("conclusion") in terminal
                 ):
+                    continue
+                if run.get("event") is not None and run["event"] not in admissible_events:
                     continue
                 if overlap_at is not None:
                     created_at = run.get("created_at")
