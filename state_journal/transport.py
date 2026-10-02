@@ -470,6 +470,10 @@ class GitHubReader:
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
+        self._event_source_runs: dict[int, dict] = {}
+        self._event_run_artifacts: dict[int, list[dict]] = {}
+        post_overlap_runs: list[dict] = []
+        crossover_runs: list[dict] = []
         for workflow in sorted(WORKFLOW_PRODUCERS):
             for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
                 if not (
@@ -478,6 +482,8 @@ class GitHubReader:
                     and run.get("conclusion") in terminal
                 ):
                     continue
+                run_id = run.get("id")
+                require(type(run_id) is int and run_id > 0, "Workflow run identity missing")
                 if overlap_at is not None:
                     created_at = run.get("created_at")
                     updated_at = run.get("updated_at")
@@ -489,9 +495,44 @@ class GitHubReader:
                             "Workflow run timestamps require timezone")
                     if started < overlap_at and finished < overlap_at:
                         continue
-                for row in self._run_artifacts(run["id"]):
-                    if row.get("name", "").startswith(EVENT_PREFIX):
-                        retain(row)
+                    if started < overlap_at:
+                        crossover_runs.append(run)
+                    else:
+                        post_overlap_runs.append(run)
+                else:
+                    crossover_runs.append(run)
+                self._event_source_runs[run_id] = run
+
+        # A cancellation/failure storm can leave dozens of terminal producer
+        # runs after the latest reducer overlap. Querying each run's artifacts
+        # separately can exhaust the fixed GitHub request budget before replay
+        # starts. For more than one artifact-list page worth of post-overlap
+        # runs, scan recent repository artifact metadata once, then admit only
+        # artifacts whose run IDs came from the closed workflow allowlist
+        # above. Runs that started before the overlap are still queried
+        # individually because their event artifact may predate the overlap.
+        if overlap_at is not None and len(post_overlap_runs) > max_pages:
+            overlap_raw = overlap_at.isoformat().replace("+00:00", "Z")
+            post_overlap_ids = {run["id"] for run in post_overlap_runs}
+            grouped: dict[int, list[dict]] = {run_id: [] for run_id in post_overlap_ids}
+            for row in self.list_recent_artifacts(overlap_raw, max_pages=max_pages):
+                source = row.get("workflow_run", {})
+                run_id = source.get("id")
+                if run_id not in post_overlap_ids:
+                    continue
+                grouped[run_id].append(row)
+                if row.get("name", "").startswith(EVENT_PREFIX):
+                    retain(row)
+            self._event_run_artifacts.update(grouped)
+        else:
+            crossover_runs.extend(post_overlap_runs)
+
+        for run in crossover_runs:
+            rows = self._run_artifacts(run["id"])
+            self._event_run_artifacts[run["id"]] = rows
+            for row in rows:
+                if row.get("name", "").startswith(EVENT_PREFIX):
+                    retain(row)
 
         for run_id in explicit_run_ids:
             require(type(run_id) is int and run_id > 0, "Explicit recovery run ID invalid")
@@ -514,11 +555,24 @@ class GitHubReader:
     def snapshot_source_run(self, artifact_id: int) -> dict | None:
         return getattr(self, "_snapshot_source_runs", {}).get(artifact_id)
 
+    def event_source_run(self, run_id: int, attempt: int) -> dict | None:
+        run = getattr(self, "_event_source_runs", {}).get(run_id)
+        if run is None or run.get("run_attempt") != attempt:
+            return None
+        return run
+
+    def event_run_artifacts(self, run_id: int) -> list[dict] | None:
+        return getattr(self, "_event_run_artifacts", {}).get(run_id)
+
     def event(self, meta: dict, upload_steps: dict) -> tuple[dict, dict]:
         match = re.fullmatch(r"portfolio-state-event-v2-([1-9][0-9]*)-([a-z0-9-]+)-([a-f0-9]{40})-([1-9][0-9]*)", meta.get("name", ""))
         require(match is not None, "Malformed event archive name")
         run_id, _, _, attempt = match.groups()
-        run = self.get(f"/actions/runs/{run_id}/attempts/{attempt}")
+        run_id_int = int(run_id)
+        attempt_int = int(attempt)
+        run = self.event_source_run(run_id_int, attempt_int)
+        if run is None:
+            run = self.get(f"/actions/runs/{run_id}/attempts/{attempt}")
         jobs = self.get(f"/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100")
         raw = self.archive(meta["id"])
         event = extract_json(raw, "event.json")
@@ -550,7 +604,9 @@ class GitHubReader:
         if not fallback_needed:
             return validate_provider_event(meta, run, jobs, raw, upload_steps)
 
-        run_artifacts = self._run_artifacts(int(run_id))
+        run_artifacts = self.event_run_artifacts(run_id_int)
+        if run_artifacts is None:
+            run_artifacts = self._run_artifacts(run_id_int)
         artifact_names = strict_load(
             (Path(__file__).resolve().parent / "UPLOAD_ARTIFACTS.json").read_bytes()
         )
