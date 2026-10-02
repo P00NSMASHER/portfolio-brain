@@ -266,6 +266,50 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(len(updated["work_items"]),64)
         self.assertEqual(next_receipt["compacted_terminal_work"],[])
 
+    def test_explicitly_retired_sku_work_is_terminally_reconciled(self):
+        state,receipt=schedule_cycle(load_state(),build_context(),at="2026-09-25T20:40:00Z")
+        template=copy.deepcopy(receipt["selected_work"][0])
+        state["work_items"]=[];state["completed_fingerprints"]=[]
+
+        retired_queued=copy.deepcopy(template)
+        retired_queued["scheduler_work_id"]="SWORK-RETIRED-002"
+        retired_queued["source_ref"]="SKU-002"
+        retired_queued["fingerprint"]="sha256:retired-sku-002"
+        retired_queued["state"]="QUEUED"
+
+        retired_active=copy.deepcopy(template)
+        retired_active["scheduler_work_id"]="SWORK-RETIRED-003"
+        retired_active["source_ref"]="SKU-003"
+        retired_active["fingerprint"]="sha256:retired-sku-003"
+        retired_active["state"]="ACTIVE"
+        retired_active["lease_owner"]="legacy-tester"
+        retired_active["lease_expires_at"]=1.0
+
+        unrelated=copy.deepcopy(template)
+        unrelated["scheduler_work_id"]="SWORK-ACTIVE-REPAIR"
+        unrelated["source_ref"]="RTASK-STILL-ACTIVE"
+        unrelated["fingerprint"]="sha256:active-repair"
+        unrelated["state"]="QUEUED"
+
+        state["work_items"]=[retired_queued,retired_active,unrelated]
+        updated,next_receipt=schedule_cycle(
+            state,build_context(),at="2026-09-25T21:40:00Z",max_new_items=0
+        )
+        by_source={work["source_ref"]:work for work in updated["work_items"]}
+        self.assertEqual(by_source["SKU-002"]["state"],"CANCELLED")
+        self.assertEqual(by_source["SKU-003"]["state"],"CANCELLED")
+        self.assertIsNone(by_source["SKU-003"]["lease_owner"])
+        self.assertIsNone(by_source["SKU-003"]["lease_expires_at"])
+        self.assertEqual(by_source["RTASK-STILL-ACTIVE"]["state"],"QUEUED")
+        self.assertEqual(
+            next_receipt["retired_work_cancelled"],
+            ["SWORK-RETIRED-002","SWORK-RETIRED-003"],
+        )
+        self.assertIn("sha256:retired-sku-002",updated["completed_fingerprints"])
+        self.assertIn("sha256:retired-sku-003",updated["completed_fingerprints"])
+        self.assertNotIn("sha256:active-repair",updated["completed_fingerprints"])
+        self.assertEqual(next_receipt["stale_lease_holds"],[])
+
     def test_kill_switch_environment_disables_cycle(self):
         with patch.dict(os.environ,{"PORTFOLIO_SCHEDULER_DISABLED":"true"}):
             state,r=schedule_cycle(load_state(),build_context(),at="2026-09-25T20:40:00Z")
