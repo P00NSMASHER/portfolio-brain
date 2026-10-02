@@ -368,11 +368,14 @@ class GitHubReader:
                                       explicit_run_ids: list[int] | tuple[int, ...] = ()) -> list[dict]:
         """Discover only reducer snapshots and enrolled producer events.
 
-        Repository-wide artifact pagination eventually becomes unbounded because
-        receipts, previews, and other unrelated artifacts accumulate. Journal
-        restore instead enumerates the closed workflow allowlist, validates each
-        run later through the existing provider checks, and scans events only
-        from the older of the two newest successful reducer publications.
+        Full repository-wide artifact pagination eventually becomes unbounded
+        because receipts, previews, and other unrelated artifacts accumulate.
+        Journal restore enumerates the closed workflow allowlist, validates each
+        run later through the existing provider checks, and limits event
+        discovery to the older of the two newest successful reducer publications.
+        When both snapshots exist, recent artifact metadata is fetched in one
+        bounded overlap-window scan; only producer runs spanning the overlap need
+        a per-run artifact lookup.
         """
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
@@ -457,12 +460,12 @@ class GitHubReader:
         # Producer run discovery stays anchored to the reviewed
         # journal/checkpoint boundary so an in-flight run that started before
         # recent reducer snapshots cannot disappear. Artifact retrieval is
-        # narrower: once two successful reducer snapshots exist, a terminal
-        # producer run that both started and finished before the older reducer
-        # started is already covered by that predecessor snapshot and does not
-        # need another per-run artifact request. Runs that started earlier but
-        # remained active into the overlap window are still inspected.
+        # narrower: once two successful reducer snapshots exist, runs completed
+        # before the older reducer started are covered by that predecessor.
+        # Runs that started earlier but remained active into the overlap window
+        # still get exact per-run artifact inspection.
         event_since = since
+        overlap = since
         overlap_at = None
         if len(snapshot_runs) == 2:
             overlap = min(snapshot_runs[0][0]["created_at"], snapshot_runs[1][0]["created_at"])
@@ -470,6 +473,9 @@ class GitHubReader:
             require(overlap_at.tzinfo is not None, "Reducer overlap boundary requires timezone")
 
         terminal = {"success", "failure", "cancelled", "timed_out"}
+        bulk_artifact_scan = overlap_at is not None and getattr(self, "http", None) is not None
+        eligible_run_id_strings: set[str] = set()
+        overlapping_run_ids: set[int] = set()
         for workflow in sorted(WORKFLOW_PRODUCERS):
             for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
                 if not (
@@ -489,7 +495,27 @@ class GitHubReader:
                             "Workflow run timestamps require timezone")
                     if started < overlap_at and finished < overlap_at:
                         continue
+                    if bulk_artifact_scan:
+                        if started < overlap_at:
+                            overlapping_run_ids.add(run["id"])
+                        else:
+                            eligible_run_id_strings.add(str(run["id"]))
+                        continue
                 for row in self._run_artifacts(run["id"]):
+                    if row.get("name", "").startswith(EVENT_PREFIX):
+                        retain(row)
+
+        if bulk_artifact_scan:
+            for row in self.list_recent_artifacts(overlap, max_pages=max_pages):
+                if (
+                    row.get("name", "").startswith(EVENT_PREFIX)
+                    and str((row.get("workflow_run") or {}).get("id")) in eligible_run_id_strings
+                ):
+                    retain(row)
+            # A producer that started before the reducer overlap can publish its
+            # event artifact before the global scan boundary while still running.
+            for run_id in overlapping_run_ids:
+                for row in self._run_artifacts(run_id):
                     if row.get("name", "").startswith(EVENT_PREFIX):
                         retain(row)
 
