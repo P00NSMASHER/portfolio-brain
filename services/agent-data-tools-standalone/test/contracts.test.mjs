@@ -18,7 +18,7 @@ test.after(async () => {
 });
 
 test('discovery surfaces stay free', async () => {
-  for (const path of ['/.well-known/x402', '/openapi.json', '/.well-known/agent.json', '/skill.md', '/llms.txt', '/robots.txt', '/sitemap.xml']) {
+  for (const path of ['/.well-known/x402', '/openapi.json', '/.well-known/agent.json', '/skill.md', '/llms.txt', '/llms-full.txt', '/favicon.svg', '/robots.txt', '/sitemap.xml']) {
     const res = await fetch(base + path);
     assert.equal(res.status, 200, path + ' should be public');
   }
@@ -30,6 +30,7 @@ test('all paid routes challenge before input validation', async () => {
     assert.equal(res.status, 402, path + ' should challenge without payment');
     const encoded = res.headers.get('payment-required');
     assert.ok(encoded, path + ' missing PAYMENT-REQUIRED');
+    assert.equal(res.headers.get('cache-control'), 'no-store', path + ' 402 must not be cached');
     const doc = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
     assert.equal(doc.x402Version, 2);
     assert.equal(doc.resource.url, base + path);
