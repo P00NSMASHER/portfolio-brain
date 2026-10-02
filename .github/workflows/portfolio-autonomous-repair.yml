@@ -415,11 +415,41 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Dispatch exact-head foundation validation for workflow-failure repair
+      - name: Validate and hand off workflow-failure repair
         if: ${{ steps.dedupe.outputs.duplicate != 'true' && steps.prepare.outputs.source_kind == 'WORKFLOW_FAILURE' }}
         env:
           REPAIR_BRANCH: ${{ steps.prepare.outputs.branch }}
-        run: gh workflow run foundation-ci.yml --repo "$GITHUB_REPOSITORY" --ref "$REPAIR_BRANCH"
+        run: |
+          set -euo pipefail
+          CANDIDATE_SHA="$(git rev-parse HEAD)"
+          gh workflow run foundation-ci.yml --repo "$GITHUB_REPOSITORY" --ref "$REPAIR_BRANCH"
+          FOUNDATION_RUN_ID=""
+          for attempt in $(seq 1 120); do
+            FOUNDATION_RUN_ID="$(
+              gh run list --repo "$GITHUB_REPOSITORY" --workflow foundation-ci.yml \
+                --branch "$REPAIR_BRANCH" --event workflow_dispatch --limit 20 \
+                --json databaseId,headSha \
+                --jq ".[] | select(.headSha == \"$CANDIDATE_SHA\") | .databaseId" | head -n 1
+            )"
+            if [ -n "$FOUNDATION_RUN_ID" ]; then
+              break
+            fi
+            sleep 2
+          done
+          test -n "$FOUNDATION_RUN_ID"
+          gh run watch "$FOUNDATION_RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status
+          RUN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .head_sha)"
+          RUN_BRANCH="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .head_branch)"
+          RUN_EVENT="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .event)"
+          RUN_CONCLUSION="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .conclusion)"
+          test "$RUN_SHA" = "$CANDIDATE_SHA"
+          test "$RUN_BRANCH" = "$REPAIR_BRANCH"
+          test "$RUN_EVENT" = "workflow_dispatch"
+          test "$RUN_CONCLUSION" = "success"
+          gh workflow run portfolio-independent-verifier.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            -f candidate_sha="$CANDIDATE_SHA" \
+            -f candidate_branch="$REPAIR_BRANCH" \
+            -f foundation_run_id="$FOUNDATION_RUN_ID"
 
       - name: Preserve sanitized repair evidence
         if: ${{ always() && steps.dedupe.outputs.duplicate != 'true' && hashFiles('repair/out/diff_validation.json') != '' }}
@@ -538,10 +568,40 @@ jobs:
           PY
           echo "Created governed factory repair candidate: ${{ steps.factory_pr.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Dispatch exact-head Foundation validation
+      - name: Validate and hand off governed factory repair
         env:
           REPAIR_BRANCH: ${{ steps.factory_pr.outputs.branch }}
-        run: gh workflow run foundation-ci.yml --repo "$GITHUB_REPOSITORY" --ref "$REPAIR_BRANCH"
+          CANDIDATE_SHA: ${{ needs.repair.outputs.factory_candidate_sha }}
+        run: |
+          set -euo pipefail
+          gh workflow run foundation-ci.yml --repo "$GITHUB_REPOSITORY" --ref "$REPAIR_BRANCH"
+          FOUNDATION_RUN_ID=""
+          for attempt in $(seq 1 120); do
+            FOUNDATION_RUN_ID="$(
+              gh run list --repo "$GITHUB_REPOSITORY" --workflow foundation-ci.yml \
+                --branch "$REPAIR_BRANCH" --event workflow_dispatch --limit 20 \
+                --json databaseId,headSha \
+                --jq ".[] | select(.headSha == \"$CANDIDATE_SHA\") | .databaseId" | head -n 1
+            )"
+            if [ -n "$FOUNDATION_RUN_ID" ]; then
+              break
+            fi
+            sleep 2
+          done
+          test -n "$FOUNDATION_RUN_ID"
+          gh run watch "$FOUNDATION_RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status
+          RUN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .head_sha)"
+          RUN_BRANCH="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .head_branch)"
+          RUN_EVENT="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .event)"
+          RUN_CONCLUSION="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" --jq .conclusion)"
+          test "$RUN_SHA" = "$CANDIDATE_SHA"
+          test "$RUN_BRANCH" = "$REPAIR_BRANCH"
+          test "$RUN_EVENT" = "workflow_dispatch"
+          test "$RUN_CONCLUSION" = "success"
+          gh workflow run portfolio-independent-verifier.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            -f candidate_sha="$CANDIDATE_SHA" \
+            -f candidate_branch="$REPAIR_BRANCH" \
+            -f foundation_run_id="$FOUNDATION_RUN_ID"
 
       - name: Preserve independent factory evidence
         if: ${{ always() }}
