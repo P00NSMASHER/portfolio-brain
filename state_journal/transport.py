@@ -514,16 +514,23 @@ class GitHubReader:
         if overlap_at is not None and len(post_overlap_runs) > max_pages:
             overlap_raw = overlap_at.isoformat().replace("+00:00", "Z")
             post_overlap_ids = {run["id"] for run in post_overlap_runs}
-            grouped: dict[int, list[dict]] = {run_id: [] for run_id in post_overlap_ids}
-            for row in self.list_recent_artifacts(overlap_raw, max_pages=max_pages):
-                source = row.get("workflow_run", {})
-                run_id = source.get("id")
-                if run_id not in post_overlap_ids:
-                    continue
-                grouped[run_id].append(row)
-                if row.get("name", "").startswith(EVENT_PREFIX):
-                    retain(row)
-            self._event_run_artifacts.update(grouped)
+            try:
+                recent_artifacts = self.list_recent_artifacts(overlap_raw, max_pages=max_pages)
+            except JournalError as exc:
+                if str(exc) != "Artifact scan incomplete at page bound; checkpoint/archive required":
+                    raise
+                crossover_runs.extend(post_overlap_runs)
+            else:
+                grouped: dict[int, list[dict]] = {run_id: [] for run_id in post_overlap_ids}
+                for row in recent_artifacts:
+                    source = row.get("workflow_run", {})
+                    run_id = source.get("id")
+                    if run_id not in post_overlap_ids:
+                        continue
+                    grouped[run_id].append(row)
+                    if row.get("name", "").startswith(EVENT_PREFIX):
+                        retain(row)
+                self._event_run_artifacts.update(grouped)
         else:
             crossover_runs.extend(post_overlap_runs)
 
