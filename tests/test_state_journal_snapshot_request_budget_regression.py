@@ -41,7 +41,10 @@ def artifact(artifact_id, name, created_at, run_id):
 
 class SnapshotRequestBudgetRegressionTests(unittest.TestCase):
     def test_snapshot_restore_reuses_discovered_run_metadata_within_request_budget(self):
-        producers = {f"producer-{index:02d}": "test" for index in range(47)}
+        # High workflow-run volume is intentionally preserved, but only runs
+        # with an allowlisted durable state artifact are eligible for an exact
+        # event-artifact query.
+        producers = {f"producer-{index:02d}": "runtime-worker" for index in range(47)}
         runs = {
             201: workflow_run(201, "2026-09-29T21:00:00Z"),
             202: workflow_run(202, "2026-09-29T22:00:00Z"),
@@ -51,7 +54,6 @@ class SnapshotRequestBudgetRegressionTests(unittest.TestCase):
             202: artifact(10, SNAPSHOT_ARTIFACT, "2026-09-29T22:01:00Z", 202),
         }
         producer_runs = {}
-        event_artifacts = {}
         for index, workflow in enumerate(producers):
             run_id = 1000 + index
             producer_runs[workflow] = {
@@ -63,10 +65,26 @@ class SnapshotRequestBudgetRegressionTests(unittest.TestCase):
                 "status": "completed",
                 "conclusion": "success",
             }
-            event_artifacts[run_id] = artifact(
-                2000 + index, f"portfolio-state-event-v2-{run_id}-test-{'b' * 40}-1",
-                "2026-09-29T21:31:00Z", run_id,
+
+        candidate_ids = {1000, 1001}
+        durable_artifacts = {
+            run_id: artifact(
+                3000 + run_id,
+                "portfolio-runtime-state",
+                "2026-09-29T21:30:30Z",
+                run_id,
             )
+            for run_id in candidate_ids
+        }
+        event_artifacts = {
+            run_id: artifact(
+                2000 + run_id,
+                f"portfolio-state-event-v2-{run_id}-runtime-worker-{'b' * 40}-1",
+                "2026-09-29T21:31:00Z",
+                run_id,
+            )
+            for run_id in candidate_ids
+        }
 
         reader = object.__new__(GitHubReader)
         request_count = 0
@@ -88,8 +106,16 @@ class SnapshotRequestBudgetRegressionTests(unittest.TestCase):
                 return {"total_count": 1, "artifacts": [snapshot_rows[202]]}
             if suffix == "/actions/runs/201/artifacts?per_page=100":
                 return {"total_count": 1, "artifacts": [snapshot_rows[201]]}
-            if suffix.startswith("/actions/artifacts?per_page=100&page=1"):
-                rows = list(event_artifacts.values())
+            if suffix.startswith("/actions/artifacts?name="):
+                if "portfolio-runtime-state" in suffix:
+                    rows = list(durable_artifacts.values())
+                    return {"total_count": len(rows), "artifacts": rows}
+                return {"total_count": 0, "artifacts": []}
+            if suffix.startswith("/actions/runs/") and suffix.endswith("/artifacts?per_page=100"):
+                run_id = int(suffix.split("/")[3])
+                if run_id not in candidate_ids:
+                    raise AssertionError("non-candidate run should not be exact-queried")
+                rows = [durable_artifacts[run_id], event_artifacts[run_id]]
                 return {"total_count": len(rows), "artifacts": rows}
             raise AssertionError(f"Unexpected API request: {suffix}")
 
@@ -110,10 +136,11 @@ class SnapshotRequestBudgetRegressionTests(unittest.TestCase):
 
         self.assertEqual(restored, {"sequence": 2})
         # 1 reducer listing + 2 snapshot artifact listings + 47 producer
-        # listings + 1 batched repository artifact listing + 2 snapshot
-        # downloads. The same shape previously consumed 99 requests before
-        # replay and failed in production as run volume increased.
-        self.assertEqual(request_count, 53)
+        # listings + 6 exact-name durable listing reads (three names, each
+        # stability-rechecked) + 2 exact candidate-run listings + 2 snapshot
+        # downloads = 60. High run volume therefore remains below 100 without
+        # trusting repository-wide artifact ordering.
+        self.assertEqual(request_count, 60)
 
 
 if __name__ == "__main__":
