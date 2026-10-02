@@ -396,6 +396,7 @@ class GitHubReader:
             "portfolio-state-reducer.yml", since, max_pages=max_pages
         )
         self._snapshot_source_runs: dict[int, dict] = {}
+        self._event_source_runs: dict[tuple[int, int], dict] = {}
         snapshot_runs: list[tuple[dict, dict]] = []
         for run in reducer_runs:
             if not (
@@ -472,6 +473,9 @@ class GitHubReader:
         terminal = {"success", "failure", "cancelled", "timed_out"}
         for workflow in sorted(WORKFLOW_PRODUCERS):
             for run in self._workflow_runs_since(f"{workflow}.yml", event_since, max_pages=max_pages):
+                attempt = run.get("run_attempt")
+                if type(attempt) is int and attempt > 0:
+                    self._event_source_runs[(run["id"], attempt)] = run
                 if not (
                     run.get("head_branch") == "main"
                     and run.get("status") == "completed"
@@ -518,7 +522,9 @@ class GitHubReader:
         match = re.fullmatch(r"portfolio-state-event-v2-([1-9][0-9]*)-([a-z0-9-]+)-([a-f0-9]{40})-([1-9][0-9]*)", meta.get("name", ""))
         require(match is not None, "Malformed event archive name")
         run_id, _, _, attempt = match.groups()
-        run = self.get(f"/actions/runs/{run_id}/attempts/{attempt}")
+        run = getattr(self, "_event_source_runs", {}).get((int(run_id), int(attempt)))
+        if run is None:
+            run = self.get(f"/actions/runs/{run_id}/attempts/{attempt}")
         jobs = self.get(f"/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100")
         raw = self.archive(meta["id"])
         event = extract_json(raw, "event.json")
