@@ -135,7 +135,7 @@ jobs:
           PY
 
       - name: Estimate safe exact-fallback request budget
-        run: python diagnostics/step23_request_budget_diagnostic.py
+        run: PYTHONPATH=. python diagnostics/step23_request_budget_diagnostic.py
 
       - name: Upload diagnostic
         uses: actions/upload-artifact@v4
