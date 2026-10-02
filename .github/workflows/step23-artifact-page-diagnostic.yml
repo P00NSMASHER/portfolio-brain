@@ -1,0 +1,28 @@
+name: step23-artifact-page-diagnostic
+
+on:
+  push:
+    branches: ["diagnostic/step23-artifact-pages-b48e"]
+    paths:
+      - ".github/workflows/step23-artifact-page-diagnostic.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Inspect bounded artifact pages
+        run: python acceptance/step23_artifact_page_diagnose.py
