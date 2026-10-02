@@ -44,6 +44,14 @@ try{
   assert.equal(treasuryDoc.accepts[0].extra.name,'USD Coin');
   assert.equal(treasuryDoc.accepts[0].extra.version,'2');
 
+  const badPayment=await fetch(base+'/api/treasury-average-rates',{
+    headers:{'PAYMENT-SIGNATURE':'not-base64-json'}
+  });
+  assert.equal(badPayment.status,402);
+  assert.ok(badPayment.headers.get('payment-required'));
+  const badBody=await badPayment.json();
+  assert.equal(badBody.error,'invalid_payment_header');
+
   for(const path of ['/api/pa-entity-one?q=OpenAI','/api/pa-business?q=OpenAI&limit=1']){
     const r=await fetch(base+path,{redirect:'manual'});
     assert.equal(r.status,402,path+' should return 402 unpaid');
