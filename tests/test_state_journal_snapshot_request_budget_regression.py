@@ -84,12 +84,12 @@ class SnapshotRequestBudgetRegressionTests(unittest.TestCase):
             if suffix.startswith("/actions/workflows/"):
                 workflow = suffix.split("/actions/workflows/", 1)[1].split(".yml/runs?", 1)[0]
                 return {"workflow_runs": [producer_runs[workflow]]}
-            if suffix.startswith("/actions/runs/") and suffix.endswith("/artifacts?per_page=100"):
-                run_id = int(suffix.split("/actions/runs/", 1)[1].split("/", 1)[0])
-                if run_id in snapshot_rows:
-                    rows = [snapshot_rows[run_id]]
-                else:
-                    rows = [event_artifacts[run_id]]
+            if suffix == "/actions/runs/202/artifacts?per_page=100":
+                return {"total_count": 1, "artifacts": [snapshot_rows[202]]}
+            if suffix == "/actions/runs/201/artifacts?per_page=100":
+                return {"total_count": 1, "artifacts": [snapshot_rows[201]]}
+            if suffix.startswith("/actions/artifacts?per_page=100&page=1"):
+                rows = list(event_artifacts.values())
                 return {"total_count": len(rows), "artifacts": rows}
             raise AssertionError(f"Unexpected API request: {suffix}")
 
@@ -109,7 +109,11 @@ class SnapshotRequestBudgetRegressionTests(unittest.TestCase):
             restored = restore_snapshot(reader, artifacts, current_run="999")
 
         self.assertEqual(restored, {"sequence": 2})
-        self.assertEqual(request_count, 99)
+        # 1 reducer listing + 2 snapshot artifact listings + 47 producer
+        # listings + 1 batched repository artifact listing + 2 snapshot
+        # downloads. The same shape previously consumed 99 requests before
+        # replay and failed in production as run volume increased.
+        self.assertEqual(request_count, 53)
 
 
 if __name__ == "__main__":
