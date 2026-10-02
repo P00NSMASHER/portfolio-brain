@@ -14,6 +14,13 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CACHE = ROOT / "state_journal/live/canonical_restore_cache.json"
 
 
+def _recent_artifacts(reader: GitHubReader, since: str, *, max_pages: int) -> list[dict]:
+    journal_reader = getattr(reader, "list_recent_journal_artifacts", None)
+    if journal_reader is None:
+        return reader.list_recent_artifacts(since, max_pages=max_pages)
+    return journal_reader(since, max_pages=max_pages, combined_run_scan=True)
+
+
 def _cache_payload(state: dict, snapshot_meta: dict, *, current_run: str, waited_for_reducer: bool) -> dict:
     require(isinstance(current_run, str) and current_run, "Canonical cache requires run identity")
     meta = {
@@ -95,8 +102,8 @@ def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, curren
                 continue
             seen_reducers.add(reducer_run["id"])
             fresh = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
-            artifacts = getattr(fresh, "list_recent_journal_artifacts", fresh.list_recent_artifacts)(
-                policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]
+            artifacts = _recent_artifacts(
+                fresh, policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]
             )
             state = restore_snapshot(fresh, artifacts, current_run=current_run)
             known = _known_event_artifact_ids(state) if state is not None else set()
@@ -137,8 +144,8 @@ def restore_domain(domain: str, output: Path, metadata_output: Path | None = Non
         token = os.environ.get("GITHUB_TOKEN", "")
         require(bool(token), "GITHUB_TOKEN required for canonical restore")
         reader = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
-        artifacts = getattr(reader, "list_recent_journal_artifacts", reader.list_recent_artifacts)(
-            policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]
+        artifacts = _recent_artifacts(
+            reader, policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]
         )
         state = restore_snapshot(reader, artifacts, current_run=current_run)
         require(state is not None, "CANONICAL_SNAPSHOT_REQUIRED")
