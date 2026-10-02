@@ -1,0 +1,157 @@
+name: step23-artifact-coverage-diagnostic
+
+on:
+  push:
+    branches:
+      - diagnostic/step23-artifact-coverage-20261002
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Inspect bounded artifact coverage
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          from datetime import datetime
+          from state_journal.contracts import WORKFLOW_PRODUCERS
+          from state_journal.transport import SNAPSHOT_ARTIFACT, EVENT_PREFIX
+
+          repo=os.environ["REPOSITORY"]
+          token=os.environ["GH_TOKEN"]
+          root=f"https://api.github.com/repos/{repo}"
+          def get(path):
+              req=urllib.request.Request(root+path,headers={
+                  "Authorization":f"Bearer {token}",
+                  "Accept":"application/vnd.github+json",
+                  "X-GitHub-Api-Version":"2022-11-28",
+                  "User-Agent":"step23-artifact-diagnostic",
+              })
+              with urllib.request.urlopen(req,timeout=30) as r:
+                  return json.load(r)
+
+          policy=json.load(open("state_journal/POLICY.json"))
+          since=policy["artifact_scan_start"]
+          boundary=datetime.fromisoformat(since.replace("Z","+00:00"))
+          reducer=get("/actions/workflows/portfolio-state-reducer.yml/runs?branch=main&per_page=100")["workflow_runs"]
+          anchors=[]
+          reducer_artifact_requests=0
+          for run in reducer:
+              if run.get("status")!="completed" or run.get("conclusion")!="success":
+                  continue
+              arts=get(f"/actions/runs/{run['id']}/artifacts?per_page=100")["artifacts"]
+              reducer_artifact_requests+=1
+              snaps=[a for a in arts if a.get("name")==SNAPSHOT_ARTIFACT and not a.get("expired")]
+              if snaps:
+                  anchors.append((run,snaps[0]))
+              if len(anchors)==2: break
+          overlap=None
+          if len(anchors)==2:
+              overlap=min(datetime.fromisoformat(x[0]["created_at"].replace("Z","+00:00")) for x in anchors)
+
+          terminal={"success","failure","cancelled","timed_out"}
+          runs=[]
+          workflow_requests=0
+          for wf in sorted(WORKFLOW_PRODUCERS):
+              data=get(f"/actions/workflows/{wf}.yml/runs?branch=main&per_page=100")
+              workflow_requests+=1
+              for run in data.get("workflow_runs",[]):
+                  created=datetime.fromisoformat(run["created_at"].replace("Z","+00:00"))
+                  if created < boundary: continue
+                  if run.get("status")!="completed" or run.get("conclusion") not in terminal: continue
+                  if overlap is not None:
+                      finished=datetime.fromisoformat(run["updated_at"].replace("Z","+00:00"))
+                      if created < overlap and finished < overlap: continue
+                  runs.append(run)
+
+          pages=[]
+          artifacts=[]
+          for page in range(1,21):
+              rows=get(f"/actions/artifacts?per_page=100&page={page}").get("artifacts",[])
+              pages.append(rows)
+              artifacts.extend(rows)
+              if len(rows)<100: break
+
+          page_stats=[]
+          page_envelope=True
+          prev_oldest=None
+          row_monotonic=True
+          prev=None
+          for i,rows in enumerate(pages,1):
+              times=[datetime.fromisoformat(a["created_at"].replace("Z","+00:00")) for a in rows]
+              for t in times:
+                  if prev is not None and t>prev: row_monotonic=False
+                  prev=t
+              newest=max(times) if times else None
+              oldest=min(times) if times else None
+              if prev_oldest is not None and newest is not None and newest>prev_oldest:
+                  page_envelope=False
+              if oldest is not None: prev_oldest=oldest
+              page_stats.append({
+                  "page":i,"count":len(rows),
+                  "newest":newest.isoformat() if newest else None,
+                  "oldest":oldest.isoformat() if oldest else None,
+              })
+
+          by_run={}
+          for a in artifacts:
+              rid=(a.get("workflow_run") or {}).get("id")
+              if rid is not None: by_run.setdefault(rid,[]).append(a)
+          post=[]; crossover=[]
+          for run in runs:
+              created=datetime.fromisoformat(run["created_at"].replace("Z","+00:00"))
+              if overlap is not None and created<overlap: crossover.append(run)
+              else: post.append(run)
+          def row_summary(group):
+              out=[]
+              for run in group:
+                  arts=by_run.get(run["id"],[])
+                  out.append({
+                      "id":run["id"],"workflow":run.get("name"),
+                      "conclusion":run.get("conclusion"),
+                      "created_at":run.get("created_at"),
+                      "updated_at":run.get("updated_at"),
+                      "seen_any":bool(arts),
+                      "seen_event":any(str(a.get("name","")).startswith(EVENT_PREFIX) for a in arts),
+                      "seen_count":len(arts),
+                  })
+              return out
+          post_rows=row_summary(post); cross_rows=row_summary(crossover)
+          result={
+              "head_sha":os.environ.get("GITHUB_SHA"),
+              "artifact_scan_start":since,
+              "anchors":[{"run_id":r["id"],"created_at":r["created_at"],"artifact_id":a["id"]} for r,a in anchors],
+              "overlap_at":overlap.isoformat() if overlap else None,
+              "request_baseline":{"reducer_artifact_requests":reducer_artifact_requests,"workflow_run_requests":workflow_requests,"artifact_pages":len(pages)},
+              "producer_runs":{"total":len(runs),"post_overlap":len(post),"crossover":len(crossover)},
+              "post_overlap_seen_any":sum(x["seen_any"] for x in post_rows),
+              "post_overlap_seen_event":sum(x["seen_event"] for x in post_rows),
+              "post_overlap_unseen_any":sum(not x["seen_any"] for x in post_rows),
+              "conclusions":{c:sum(r.get("conclusion")==c for r in runs) for c in sorted(terminal)},
+              "row_monotonic":row_monotonic,
+              "page_envelope_monotonic":page_envelope,
+              "page_stats":page_stats,
+              "post_runs":post_rows,
+              "crossover_runs":cross_rows,
+          }
+          print(json.dumps(result,sort_keys=True,indent=2))
+          open("step23-artifact-coverage.json","w").write(json.dumps(result,sort_keys=True,indent=2)+"\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: step23-artifact-coverage-${{ github.run_id }}
+          path: step23-artifact-coverage.json
+          if-no-files-found: error
+          retention-days: 7
