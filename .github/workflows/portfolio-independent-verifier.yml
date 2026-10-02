@@ -4,6 +4,20 @@ on:
   workflow_run:
     workflows: ["foundation-ci"]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: "Exact autonomous repair candidate SHA"
+        required: true
+        type: string
+      candidate_branch:
+        description: "Exact autonomous repair candidate branch"
+        required: true
+        type: string
+      foundation_run_id:
+        description: "Successful exact-head foundation-ci workflow_dispatch run ID"
+        required: true
+        type: string
 
 permissions:
   actions: read
@@ -11,23 +25,60 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: portfolio-independent-verifier-${{ github.event.workflow_run.head_sha }}
+  group: portfolio-independent-verifier-${{ github.event.workflow_run.head_sha || inputs.candidate_sha || github.run_id }}
   cancel-in-progress: false
 
 jobs:
   verify:
     if: >-
       ${{
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.head_branch != 'main' &&
-        (github.event.workflow_run.event == 'pull_request' || github.event.workflow_run.event == 'workflow_dispatch')
+        (
+          github.event_name == 'workflow_run' &&
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_branch != 'main' &&
+          (github.event.workflow_run.event == 'pull_request' || github.event.workflow_run.event == 'workflow_dispatch')
+        ) ||
+        github.event_name == 'workflow_dispatch'
       }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      CANDIDATE_SHA: ${{ github.event.workflow_run.head_sha }}
-      CANDIDATE_BRANCH: ${{ github.event.workflow_run.head_branch }}
+      CANDIDATE_SHA: ${{ github.event.workflow_run.head_sha || inputs.candidate_sha }}
+      CANDIDATE_BRANCH: ${{ github.event.workflow_run.head_branch || inputs.candidate_branch }}
+      FOUNDATION_RUN_ID: ${{ github.event.workflow_run.id || inputs.foundation_run_id }}
     steps:
+      - name: Bind explicit verifier dispatch to successful exact-head Foundation
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$FOUNDATION_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          case "$CANDIDATE_BRANCH" in
+            factory/auto-repair-*) ;;
+            *) echo "Explicit verifier dispatch is limited to autonomous repair branches" >&2; exit 1 ;;
+          esac
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FOUNDATION_RUN_ID}" > "$RUNNER_TEMP/foundation-run.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          run=json.loads((Path(os.environ["RUNNER_TEMP"])/"foundation-run.json").read_text(encoding="utf-8"))
+          expected_sha=os.environ["CANDIDATE_SHA"]
+          expected_branch=os.environ["CANDIDATE_BRANCH"]
+          expected_repo=os.environ["GITHUB_REPOSITORY"]
+          checks={
+              "repository": run.get("repository",{}).get("full_name") == expected_repo,
+              "workflow": run.get("name") == "foundation-ci" and run.get("path") == ".github/workflows/foundation-ci.yml",
+              "event": run.get("event") == "workflow_dispatch",
+              "status": run.get("status") == "completed" and run.get("conclusion") == "success",
+              "head": run.get("head_sha") == expected_sha and run.get("head_branch") == expected_branch,
+          }
+          failed=[name for name,ok in checks.items() if not ok]
+          if failed:
+              raise SystemExit("foundation dispatch evidence mismatch: "+",".join(failed))
+          PY
+
       - name: Resolve exact same-repository pull request
         id: pr
         env:
@@ -177,7 +228,7 @@ jobs:
         if: ${{ always() && steps.refresh.outputs.updated != 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: portfolio-independent-verifier-${{ github.event.workflow_run.head_sha }}
+          name: portfolio-independent-verifier-${{ env.CANDIDATE_SHA }}
           path: |
             verifier-results/full.txt
             verifier-results/phase1.txt
