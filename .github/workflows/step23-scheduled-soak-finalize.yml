@@ -1,12 +1,14 @@
 name: step23-scheduled-soak-finalize
 # Observer generation: 73c395a.
-# Observer selector generation: exact-artifact-v2.
+# Observer selector generation: exact-artifact-v2. Final exact-main bind: 73c395a.
 
 on:
   push:
     branches: ["acceptance/step23-soak-73c395-20261002"]
     paths:
       - ".github/workflows/step23-scheduled-soak-finalize.yml"
+      - "acceptance/STEP23_SOAK.json"
+      - "acceptance/step23_live_collect.py"
 
 permissions:
   actions: read
