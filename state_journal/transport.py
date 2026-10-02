@@ -396,6 +396,7 @@ class GitHubReader:
             "portfolio-state-reducer.yml", since, max_pages=max_pages
         )
         self._snapshot_source_runs: dict[int, dict] = {}
+        self._producer_source_runs: dict[tuple[int, int], dict] = {}
         snapshot_runs: list[tuple[dict, dict]] = []
         for run in reducer_runs:
             if not (
@@ -478,6 +479,9 @@ class GitHubReader:
                     and run.get("conclusion") in terminal
                 ):
                     continue
+                attempt = run.get("run_attempt")
+                if type(attempt) is int and attempt > 0:
+                    self._producer_source_runs[(run["id"], attempt)] = run
                 if overlap_at is not None:
                     created_at = run.get("created_at")
                     updated_at = run.get("updated_at")
@@ -518,7 +522,25 @@ class GitHubReader:
         match = re.fullmatch(r"portfolio-state-event-v2-([1-9][0-9]*)-([a-z0-9-]+)-([a-f0-9]{40})-([1-9][0-9]*)", meta.get("name", ""))
         require(match is not None, "Malformed event archive name")
         run_id, _, _, attempt = match.groups()
-        run = self.get(f"/actions/runs/{run_id}/attempts/{attempt}")
+        cached_run = getattr(self, "_producer_source_runs", {}).get((int(run_id), int(attempt)))
+        required_run_fields = {
+            "id", "run_attempt", "head_sha", "head_branch", "event", "repository",
+            "head_repository", "status", "conclusion", "path", "workflow_id",
+        }
+        if (
+            cached_run is not None
+            and required_run_fields <= cached_run.keys()
+            and cached_run.get("id") == int(run_id)
+            and cached_run.get("run_attempt") == int(attempt)
+            and all(isinstance(cached_run.get(key), dict) for key in ("repository", "head_repository"))
+            and all(
+                {"full_name", "id"} <= cached_run[key].keys()
+                for key in ("repository", "head_repository")
+            )
+        ):
+            run = cached_run
+        else:
+            run = self.get(f"/actions/runs/{run_id}/attempts/{attempt}")
         jobs = self.get(f"/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100")
         raw = self.archive(meta["id"])
         event = extract_json(raw, "event.json")
