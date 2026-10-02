@@ -243,9 +243,10 @@ function validateTreasury(query) {
 
 app.get('/', (req, res) => {
   const base = origin(req);
-  res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent Data Tools x402</title></head><body style="font-family:system-ui;max-width:860px;margin:48px auto;padding:0 20px"><h1>Agent Data Tools x402</h1><p>Eight pay-per-call agent tools backed by authoritative public data. Prices: $0.001-$0.020 USDC on Base.</p><p>Discovery: <a href="/openapi.json">OpenAPI</a> · <a href="/.well-known/x402">x402</a> · <a href="/.well-known/agent.json">agent.json</a> · <a href="/skill.md">skill.md</a></p><p>Paid routes verify before fetching and settle only after a successful result exists.</p><code>${base}</code></body></html>`);
+  res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><title>Agent Data Tools x402</title></head><body style="font-family:system-ui;max-width:860px;margin:48px auto;padding:0 20px"><h1>Agent Data Tools x402</h1><p>Eight pay-per-call agent tools backed by authoritative public data. Prices: $0.001-$0.020 USDC on Base.</p><p>Discovery: <a href="/openapi.json">OpenAPI</a> · <a href="/.well-known/x402">x402</a> · <a href="/.well-known/agent.json">agent.json</a> · <a href="/skill.md">skill.md</a></p><p>Paid routes verify before fetching and settle only after a successful result exists.</p><code>${base}</code></body></html>`);
 });
 
+app.get('/favicon.svg', (req, res) => res.type('image/svg+xml').send('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="%23111"/><text x="32" y="42" text-anchor="middle" font-size="28" font-family="system-ui,sans-serif" fill="white">402</text></svg>'));
 app.get('/api/health', (req, res) => res.json({ ok: true, service: 'Agent Data Tools x402', paidRoutes: Object.keys(ROUTES).length }));
 app.get('/api/payment-info', (req, res) => res.json({
   asset: PAYMENT.USDC,
