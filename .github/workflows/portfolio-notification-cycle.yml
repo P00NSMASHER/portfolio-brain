@@ -10,6 +10,7 @@ on:
     - cron: "47 15 2 10 *"
     - cron: "17 16 2 10 *"
     - cron: "47 16 2 10 *"
+    - cron: "17 17 2 10 *"
   repository_dispatch:
     types: ["portfolio_notify"]
   workflow_dispatch:
