@@ -279,12 +279,21 @@ class GitHubReader:
         # Existing transport strips authorization on cross-host artifact redirects.
         return self.http.bytes(f"{self.base}/actions/artifacts/{artifact_id}/zip")
 
-    def list_recent_artifacts(self, since: str, *, max_pages: int = 20) -> list[dict]:
+    def _scan_recent_artifacts(self, since: str, *, max_pages: int = 20) -> tuple[list[dict], bool, bool, datetime | None]:
+        """Return bounded artifact metadata plus whether the requested boundary was fully proven.
+
+        A page-bounded scan can still prove the absence of artifacts for runs
+        that started strictly after the oldest monotonically scanned artifact.
+        Callers may use that partial proof to avoid re-querying every recent run,
+        while an unordered partial scan remains unusable and fails closed.
+        """
         boundary = datetime.fromisoformat(since.replace("Z", "+00:00"))
         require(boundary.tzinfo is not None, "Artifact boundary requires timezone")
         result = {}
         previous_created = None
+        oldest_seen = None
         ordering_proven = True
+        complete = False
         for page in range(1, max_pages + 1):
             response = self.get(f"/actions/artifacts?per_page=100&page={page}")
             rows = response.get("artifacts")
@@ -300,6 +309,8 @@ class GitHubReader:
                 if previous_created is not None and at > previous_created:
                     ordering_proven = False
                 previous_created = at
+                if oldest_seen is None or at < oldest_seen:
+                    oldest_seen = at
                 if at < boundary:
                     crossed_boundary = True
                 previous = result.get(artifact_id)
@@ -307,17 +318,24 @@ class GitHubReader:
                     require(previous == row, "Artifact metadata changed during bounded scan")
                 else:
                     result[artifact_id] = row
-            # Repository artifact history can be much larger than the journal
-            # window. Stop once the fetched pagination has remained monotonic
-            # newest-to-oldest and has crossed the explicit checkpoint boundary.
-            # Any observed ordering reversal disables this optimization, so an
-            # ambiguous listing still fails closed at max_pages.
             if len(rows) < 100 or (ordering_proven and crossed_boundary):
-                selected = [
-                    row for row in result.values()
-                    if datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")) >= boundary
-                ]
-                return sorted(selected, key=lambda row: (row["created_at"], row["id"]), reverse=True)
+                complete = True
+                break
+        selected = [
+            row for row in result.values()
+            if datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")) >= boundary
+        ]
+        return (
+            sorted(selected, key=lambda row: (row["created_at"], row["id"]), reverse=True),
+            complete,
+            ordering_proven,
+            oldest_seen,
+        )
+
+    def list_recent_artifacts(self, since: str, *, max_pages: int = 20) -> list[dict]:
+        rows, complete, _, _ = self._scan_recent_artifacts(since, max_pages=max_pages)
+        if complete:
+            return rows
         raise JournalError("Artifact scan incomplete at page bound; checkpoint/archive required")
 
     def _workflow_runs_since(self, workflow_file: str, since: str, *, max_pages: int) -> list[dict]:
@@ -507,30 +525,48 @@ class GitHubReader:
         # runs after the latest reducer overlap. Querying each run's artifacts
         # separately can exhaust the fixed GitHub request budget before replay
         # starts. For more than one artifact-list page worth of post-overlap
-        # runs, scan recent repository artifact metadata once, then admit only
-        # artifacts whose run IDs came from the closed workflow allowlist
-        # above. Runs that started before the overlap are still queried
-        # individually because their event artifact may predate the overlap.
+        # runs, scan recent repository artifact metadata once and preserve that
+        # partial proof even when the checkpoint boundary itself lies beyond the
+        # page bound. With monotonic newest-to-oldest metadata, a run that
+        # started strictly after the oldest scanned artifact is fully covered:
+        # every artifact it could have published must already be in the scanned
+        # window. Only the older unresolved tail falls back to per-run queries.
         if overlap_at is not None and len(post_overlap_runs) > max_pages:
             overlap_raw = overlap_at.isoformat().replace("+00:00", "Z")
             post_overlap_ids = {run["id"] for run in post_overlap_runs}
-            try:
-                recent_artifacts = self.list_recent_artifacts(overlap_raw, max_pages=max_pages)
-            except JournalError as exc:
-                if str(exc) != "Artifact scan incomplete at page bound; checkpoint/archive required":
-                    raise
-                crossover_runs.extend(post_overlap_runs)
-            else:
-                grouped: dict[int, list[dict]] = {run_id: [] for run_id in post_overlap_ids}
-                for row in recent_artifacts:
-                    source = row.get("workflow_run", {})
-                    run_id = source.get("id")
-                    if run_id not in post_overlap_ids:
-                        continue
-                    grouped[run_id].append(row)
-                    if row.get("name", "").startswith(EVENT_PREFIX):
-                        retain(row)
+            recent_artifacts, scan_complete, ordering_proven, oldest_seen = (
+                self._scan_recent_artifacts(overlap_raw, max_pages=max_pages)
+            )
+            grouped: dict[int, list[dict]] = {run_id: [] for run_id in post_overlap_ids}
+            for row in recent_artifacts:
+                source = row.get("workflow_run", {})
+                run_id = source.get("id")
+                if run_id not in post_overlap_ids:
+                    continue
+                grouped[run_id].append(row)
+                if row.get("name", "").startswith(EVENT_PREFIX):
+                    retain(row)
+            if scan_complete:
                 self._event_run_artifacts.update(grouped)
+            else:
+                require(ordering_proven and oldest_seen is not None,
+                        "Artifact scan incomplete at page bound; checkpoint/archive required")
+                unresolved = []
+                resolved_ids = set()
+                for run in post_overlap_runs:
+                    created_at = run.get("created_at")
+                    require(isinstance(created_at, str), "Workflow run created_at missing")
+                    started = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                    require(started.tzinfo is not None,
+                            "Workflow run created_at requires timezone")
+                    if started > oldest_seen:
+                        resolved_ids.add(run["id"])
+                    else:
+                        unresolved.append(run)
+                self._event_run_artifacts.update(
+                    {run_id: grouped[run_id] for run_id in resolved_ids}
+                )
+                crossover_runs.extend(unresolved)
         else:
             crossover_runs.extend(post_overlap_runs)
 
