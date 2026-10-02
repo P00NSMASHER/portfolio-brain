@@ -565,8 +565,12 @@ class GitHubReader:
                     retain(row)
             if scan_complete:
                 self._event_run_artifacts.update(grouped)
+            elif not ordering_proven:
+                # An ambiguous global scan cannot establish coverage for any
+                # run, so recover through exact per-run artifact listings.
+                crossover_runs.extend(post_overlap_runs)
             else:
-                require(ordering_proven and oldest_seen is not None,
+                require(oldest_seen is not None,
                         "Artifact scan incomplete at page bound; checkpoint/archive required")
                 unresolved = []
                 resolved_ids = set()
