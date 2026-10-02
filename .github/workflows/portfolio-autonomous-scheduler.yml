@@ -49,13 +49,13 @@ jobs:
           --job-id schedule
           --estimated-minutes 5
       - name: Execute exact Step 23 required handlers
-        if: ${{ steps.workload.outputs.allowed == 'true' && github.event_name == 'schedule' && (github.event.schedule == '36 18 2 10 *' || github.event.schedule == '6 19 2 10 *' || github.event.schedule == '36 19 2 10 *' || github.event.schedule == '6 20 2 10 *') }}
+        if: ${{ steps.workload.outputs.allowed == 'true' && github.event_name == 'schedule' && (github.event.schedule == '16 22 2 10 *' || github.event.schedule == '46 22 2 10 *' || github.event.schedule == '16 23 2 10 *' || github.event.schedule == '46 23 2 10 *') }}
         run: >-
           python -m scheduler.step8_acceptance
           --source-ref RTASK-4730DF8216170D0353B7
           --output scheduler/out/step23_handler_acceptance.json
       - name: Upload exact Step 23 handler evidence
-        if: ${{ steps.workload.outputs.allowed == 'true' && github.event_name == 'schedule' && (github.event.schedule == '36 18 2 10 *' || github.event.schedule == '6 19 2 10 *' || github.event.schedule == '36 19 2 10 *' || github.event.schedule == '6 20 2 10 *') }}
+        if: ${{ steps.workload.outputs.allowed == 'true' && github.event_name == 'schedule' && (github.event.schedule == '16 22 2 10 *' || github.event.schedule == '46 22 2 10 *' || github.event.schedule == '16 23 2 10 *' || github.event.schedule == '46 23 2 10 *') }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-step23-handler-acceptance
