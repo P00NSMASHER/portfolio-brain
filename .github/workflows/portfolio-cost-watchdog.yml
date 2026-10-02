@@ -8,6 +8,7 @@ on:
     - cron: "35 15 2 10 *"
     - cron: "5 16 2 10 *"
     - cron: "35 16 2 10 *"
+    - cron: "5 17 2 10 *"
   # GitHub scheduled delivery can be delayed or skipped. Recheck liveness after
   # any core producer finishes so one surviving trigger can recover overdue peers.
   workflow_run:
