@@ -9,6 +9,7 @@ on:
     - cron: "43 15 2 10 *"
     - cron: "13 16 2 10 *"
     - cron: "43 16 2 10 *"
+    - cron: "13 17 2 10 *"
   push:
     branches: ["main"]
     paths:
