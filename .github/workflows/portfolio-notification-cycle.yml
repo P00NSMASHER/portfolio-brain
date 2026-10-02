@@ -6,10 +6,10 @@ on:
     - cron: "7 */6 * * *"
     # Bounded Step-23 final-acceptance soak windows for 2026-10-02 UTC.
     # These are real schedule events; they do not replace or weaken the normal cadence.
-    - cron: "52 22 2 10 *"
-    - cron: "22 23 2 10 *"
+    - cron: "37 22 2 10 *"
+    - cron: "2 23 2 10 *"
+    - cron: "27 23 2 10 *"
     - cron: "52 23 2 10 *"
-    - cron: "22 0 3 10 *"
   repository_dispatch:
     types: ["portfolio_notify"]
   workflow_dispatch:
