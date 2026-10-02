@@ -69,6 +69,7 @@ def _pending_events(state: dict, artifacts: list[dict], *, archived_ids: set[int
 
 
 def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, current_run: str,
+                        domain: str | None = None,
                         archived_ids: set[int] | None = None,
                         timeout_seconds: int = 300, poll_seconds: float = 5.0,
                         clock=time.monotonic, sleep=time.sleep) -> tuple[GitHubReader, dict, list[dict]]:
@@ -95,9 +96,21 @@ def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, curren
                 continue
             seen_reducers.add(reducer_run["id"])
             fresh = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
-            artifacts = getattr(fresh, "list_recent_journal_artifacts", fresh.list_recent_artifacts)(
-                policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]
-            )
+            journal_reader = getattr(fresh, "list_recent_journal_artifacts", None)
+            if journal_reader is not None:
+                if domain is None:
+                    artifacts = journal_reader(
+                        policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]
+                    )
+                else:
+                    artifacts = journal_reader(
+                        policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"],
+                        domains={domain},
+                    )
+            else:
+                artifacts = fresh.list_recent_artifacts(
+                    policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]
+                )
             state = restore_snapshot(fresh, artifacts, current_run=current_run)
             known = _known_event_artifact_ids(state) if state is not None else set()
             known.update(archived_ids or set())
@@ -137,9 +150,16 @@ def restore_domain(domain: str, output: Path, metadata_output: Path | None = Non
         token = os.environ.get("GITHUB_TOKEN", "")
         require(bool(token), "GITHUB_TOKEN required for canonical restore")
         reader = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
-        artifacts = getattr(reader, "list_recent_journal_artifacts", reader.list_recent_artifacts)(
-            policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]
-        )
+        journal_reader = getattr(reader, "list_recent_journal_artifacts", None)
+        if journal_reader is not None:
+            artifacts = journal_reader(
+                policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"],
+                domains={domain},
+            )
+        else:
+            artifacts = reader.list_recent_artifacts(
+                policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]
+            )
         state = restore_snapshot(reader, artifacts, current_run=current_run)
         require(state is not None, "CANONICAL_SNAPSHOT_REQUIRED")
         require(state["mode"] == "CANONICAL" and state["production_authority"] is True,
@@ -150,7 +170,8 @@ def restore_domain(domain: str, output: Path, metadata_output: Path | None = Non
         waited_for_reducer = bool(pending)
         if pending:
             reader, state, artifacts = _wait_for_reduction(
-                token, policy, pending, current_run=current_run, archived_ids=archive_ids
+                token, policy, pending, current_run=current_run, domain=domain,
+                archived_ids=archive_ids
             )
             require(state["mode"] == "CANONICAL" and state["production_authority"] is True,
                     "Reducer catch-up snapshot is not production-authoritative")
