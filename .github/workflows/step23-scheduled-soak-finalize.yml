@@ -1,0 +1,118 @@
+name: step23-scheduled-soak-finalize
+# Observer generation: 73c395a.
+# Observer selector generation: exact-artifact-v2.
+
+on:
+  push:
+    branches: ["acceptance/step23-soak-73c395a-20261002"]
+    paths:
+      - ".github/workflows/step23-scheduled-soak-finalize.yml"
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: portfolio-step23-scheduled-soak-edcdfa-v1
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 270
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Require exact protected soak main
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          cfg=json.load(open("acceptance/STEP23_SOAK.json",encoding="utf-8"))
+          req=urllib.request.Request(
+              "https://api.github.com/repos/"+os.environ["GITHUB_REPOSITORY"]+"/branches/main",
+              headers={
+                  "Authorization":"Bearer "+os.environ["GITHUB_TOKEN"],
+                  "Accept":"application/vnd.github+json",
+                  "X-GitHub-Api-Version":"2022-11-28",
+                  "User-Agent":"portfolio-step23-soak/1.0",
+              },
+          )
+          with urllib.request.urlopen(req,timeout=30) as r:
+              current=json.load(r)["commit"]["sha"]
+          if current!=cfg["exact_main_sha"]:
+              raise SystemExit("STEP23_MAIN_MOVED: expected "+cfg["exact_main_sha"]+" observed "+current)
+          print("exact protected soak main:", current)
+          PY
+
+      - name: Wait for collector branch Foundation and hosted verifier
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, time, urllib.request
+          repo=os.environ["GITHUB_REPOSITORY"]; token=os.environ["GITHUB_TOKEN"]; head=os.environ["GITHUB_SHA"]
+          deadline=time.monotonic()+1500
+          def get(path):
+              req=urllib.request.Request(
+                  "https://api.github.com/repos/"+repo+path,
+                  headers={
+                      "Authorization":"Bearer "+token,
+                      "Accept":"application/vnd.github+json",
+                      "X-GitHub-Api-Version":"2022-11-28",
+                      "User-Agent":"portfolio-step23-soak/1.0",
+                  },
+              )
+              with urllib.request.urlopen(req,timeout=30) as r: return json.load(r)
+          while time.monotonic()<deadline:
+              checks=get("/commits/"+head+"/check-runs?per_page=100").get("check_runs",[])
+              foundation=[
+                  x for x in checks if x.get("name")=="validate"
+                  and x.get("app",{}).get("id")==15368
+                  and x.get("head_sha")==head and x.get("status")=="completed"
+              ]
+              hosted=[
+                  x for x in checks if x.get("name")=="portfolio-phase1-gate"
+                  and x.get("app",{}).get("id")==5121826
+                  and x.get("head_sha")==head and x.get("status")=="completed"
+              ]
+              if foundation and foundation[-1].get("conclusion")!="success":
+                  raise SystemExit("STEP23_COLLECTOR_FOUNDATION_FAILED")
+              if hosted and hosted[-1].get("conclusion")!="success":
+                  raise SystemExit("STEP23_COLLECTOR_HOSTED_VERIFIER_FAILED")
+              if any(x.get("conclusion")=="success" for x in foundation) and any(x.get("conclusion")=="success" for x in hosted):
+                  print(json.dumps({"foundation":"PASS","hosted_verifier":"PASS","head":head},sort_keys=True))
+                  break
+              time.sleep(10)
+          else:
+              raise SystemExit("STEP23_COLLECTOR_TRUST_ANCHOR_TIMEOUT")
+          PY
+
+      - name: Collect and validate exact scheduled soak
+        run: >-
+          python -m acceptance.step23_live_collect
+          --config acceptance/STEP23_SOAK.json
+          --timeout-seconds 15000
+          --output-meta acceptance/out/step23_soak_meta.json
+          --output-receipt acceptance/out/step23_final_receipt.json
+
+      - name: Upload tamper-evident Step 23 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-step23-final-${{ github.run_id }}
+          path: |
+            acceptance/STEP23_SOAK.json
+            acceptance/out/step23_soak_meta.json
+            acceptance/out/step23_final_receipt.json
+          if-no-files-found: error
+          retention-days: 30
