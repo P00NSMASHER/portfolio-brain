@@ -98,6 +98,21 @@ try{
   });
   assert.equal(badSec.status,400);
 
+  const ofac=await fetch(base+'/api/ofac-sdn-screen?name=VLADIMIR%20PUTIN&limit=3&minScore=85');
+  assert.equal(ofac.status,402);
+  const ofacHeader=ofac.headers.get('payment-required');
+  assert.ok(ofacHeader,'native OFAC route should emit PAYMENT-REQUIRED');
+  const ofacDoc=JSON.parse(Buffer.from(ofacHeader,'base64').toString('utf8'));
+  assert.equal(ofacDoc.resource.url.endsWith('/api/ofac-sdn-screen'),true);
+  assert.equal(ofacDoc.accepts[0].amount,'5000');
+  assert.equal(ofacDoc.accepts[0].extra.name,'USD Coin');
+  assert.equal(ofacDoc.resource.serviceName,'OFAC Name Screen');
+
+  const badOfac=await fetch(base+'/api/ofac-sdn-screen?name=x',{
+    headers:{'PAYMENT-SIGNATURE':Buffer.from(JSON.stringify({x402Version:2}),'utf8').toString('base64')}
+  });
+  assert.equal(badOfac.status,400);
+
   for(const path of ['/api/pa-entity-one?q=OpenAI','/api/pa-business?q=OpenAI&limit=1']){
     const r=await fetch(base+path,{redirect:'manual'});
     assert.equal(r.status,402,path+' should return 402 unpaid');
