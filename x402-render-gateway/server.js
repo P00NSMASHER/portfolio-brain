@@ -189,7 +189,8 @@ function paymentDocument(req, path, cfg) {
       description: cfg.description,
       mimeType: 'application/json',
       serviceName: cfg.serviceName,
-      tags: cfg.tags
+      tags: cfg.tags,
+      iconUrl: baseUrl(req) + '/icon.svg'
     },
     accepts: [requirements(cfg)],
     extensions: bazaarExtension(cfg)
@@ -1019,19 +1020,61 @@ function discovery(req) {
   return {
     x402Version: 2,
     name: 'Agent Data Tools x402',
-    description: 'Eight pay-per-call agent tools backed by authoritative public data.',
+    description: 'Eight same-origin pay-per-call agent tools backed by authoritative public data, including a composed Pennsylvania vendor-intake decision gate.',
     network: NETWORK,
     asset: 'USDC',
+    assetContract: USDC,
     payTo: PAY_TO,
+    openapi: base + '/openapi.json',
+    agentManifest: base + '/.well-known/agent.json',
     resources: Object.entries(ROUTES).map(([path, cfg]) => ({
       resource: base + path,
       method: 'GET',
       price: cfg.price,
+      serviceName: cfg.serviceName,
       description: cfg.description,
       tags: cfg.tags,
+      iconUrl: base + '/icon.svg',
+      accepts: [requirements(cfg)],
+      extensions: bazaarExtension(cfg),
+      inputExample: cfg.inputExample,
       inputSchema: { type: 'object', additionalProperties: true }
     }))
   };
+}
+
+function agentDocument(req) {
+  const base = baseUrl(req);
+  return {
+    version: '1.3',
+    origin: new URL(base).host,
+    display_name: 'Agent Data Tools x402',
+    description: 'Eight same-origin pay-per-call x402 tools for Pennsylvania entity and vendor intake, SEC filings, Census geocoding, OFAC name screening, RDAP, and Treasury rates.',
+    payout_address: PAY_TO,
+    payments: {
+      x402: {
+        networks: [{
+          network: 'base',
+          caip2: NETWORK,
+          asset: 'USDC',
+          contract: USDC
+        }]
+      }
+    },
+    intents: Object.entries(ROUTES).map(([path, cfg]) => ({
+      name: path.slice(5).replaceAll('-', '_'),
+      description: cfg.description,
+      endpoint: path,
+      method: 'GET',
+      tags: cfg.tags,
+      input_example: cfg.inputExample,
+      price: { amount: Number(cfg.usd), currency: 'USDC' }
+    }))
+  };
+}
+
+function iconSvg() {
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" rx="28" fill="#111827"/><path d="M24 64h80" stroke="#fff" stroke-width="10" stroke-linecap="round"/><path d="M64 24v80" stroke="#fff" stroke-width="10" stroke-linecap="round"/><text x="64" y="73" text-anchor="middle" font-family="system-ui,sans-serif" font-size="22" font-weight="700" fill="#111827">402</text></svg>';
 }
 
 async function handlePaid(req, res, url) {
@@ -1092,13 +1135,15 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', baseUrl(req));
   try {
     if (ROUTES[url.pathname]) return await handlePaid(req, res, url);
-    if (url.pathname === '/health') return json(res, 200, { ok: true, service: 'Agent Data Tools x402' }, { 'cache-control': 'no-store' });
+    if (url.pathname === '/health' || url.pathname === '/healthz') return json(res, 200, { ok: true, service: 'Agent Data Tools x402', routes: Object.keys(ROUTES).length }, { 'cache-control': 'no-store' });
     if (url.pathname === '/openapi.json') return json(res, 200, openApi(req), { 'cache-control': 'public, max-age=300' });
     if (url.pathname === '/.well-known/x402') return json(res, 200, discovery(req), { 'cache-control': 'public, max-age=300' });
-    if (url.pathname === '/llms.txt') return text(res, 200, '# Agent Data Tools x402\n\nEight paid endpoints on one origin. Prices: $0.001-$0.020 USDC on Base.\nOpenAPI: /openapi.json\nx402 discovery: /.well-known/x402\nSkill guide: /skill.md\n\nTools: PA Vendor Intake Gate, PA Entity Best Match, PA Registry Search, SEC Recent Filings, Census Address Geocoder, OFAC SDN Name Screen, Domain RDAP, Treasury Average Interest Rates.\n', 'text/plain; charset=utf-8', { 'cache-control': 'public, max-age=300' });
+    if (url.pathname === '/.well-known/agent.json') return json(res, 200, agentDocument(req), { 'cache-control': 'public, max-age=300' });
+    if (url.pathname === '/icon.svg') return text(res, 200, iconSvg(), 'image/svg+xml; charset=utf-8', { 'cache-control': 'public, max-age=86400' });
+    if (url.pathname === '/llms.txt') return text(res, 200, '# Agent Data Tools x402\n\nEight paid endpoints on one origin. Prices: $0.001-$0.020 USDC on Base.\nOpenAPI: /openapi.json\nx402 discovery: /.well-known/x402\nAgent manifest: /.well-known/agent.json\nSkill guide: /skill.md\n\nTools: PA Vendor Intake Gate, PA Entity Best Match, PA Registry Search, SEC Recent Filings, Census Address Geocoder, OFAC SDN Name Screen, Domain RDAP, Treasury Average Interest Rates.\n', 'text/plain; charset=utf-8', { 'cache-control': 'public, max-age=300' });
     if (url.pathname === '/skill.md') return text(res, 200, '# Agent Data Tools x402\n\n## Use\nUse /api/vendor-intake-gate for a bounded Pennsylvania vendor intake decision with evidence. Use the lower-cost routes for direct source facts. Unpaid calls return HTTP 402 with PAYMENT-REQUIRED; after payment, retry with PAYMENT-SIGNATURE.\n\n## Prices\n- PA best match: $0.001\n- PA registry search: $0.005\n- Vendor intake gate: $0.020\n- SEC, Census, OFAC, RDAP, Treasury: $0.005 each\n\n## Limits\nThe vendor gate is a workflow signal, not legal/compliance approval. OFAC results are review candidates only and do not implement the 50 Percent Rule. Registry/address/RDAP facts do not prove ownership or control.\n', 'text/markdown; charset=utf-8', { 'cache-control': 'public, max-age=300' });
     if (url.pathname === '/') {
-      const body = '<!doctype html><html><head><meta charset="utf-8"><title>Agent Data Tools x402</title><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><main style="font:16px system-ui;max-width:760px;margin:48px auto;padding:0 18px"><h1>Agent Data Tools x402</h1><p>Eight pay-per-call agent tools backed by authoritative public data.</p><ul><li>PA Entity Best Match — $0.001</li><li>PA Registry Search — $0.005</li><li>PA Vendor Intake Gate — $0.020</li><li>SEC Recent Filings — $0.005</li><li>Census Address Geocoder — $0.005</li><li>OFAC SDN Name Screen — $0.005</li><li>Domain RDAP — $0.005</li><li>Treasury Average Rates — $0.005</li></ul><p><a href="/openapi.json">OpenAPI</a> · <a href="/.well-known/x402">x402 discovery</a> · <a href="/skill.md">skill guide</a></p></main></body></html>';
+      const body = '<!doctype html><html><head><meta charset="utf-8"><title>Agent Data Tools x402</title><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><main style="font:16px system-ui;max-width:760px;margin:48px auto;padding:0 18px"><h1>Agent Data Tools x402</h1><p>Eight pay-per-call agent tools backed by authoritative public data.</p><ul><li>PA Entity Best Match — $0.001</li><li>PA Registry Search — $0.005</li><li>PA Vendor Intake Gate — $0.020</li><li>SEC Recent Filings — $0.005</li><li>Census Address Geocoder — $0.005</li><li>OFAC SDN Name Screen — $0.005</li><li>Domain RDAP — $0.005</li><li>Treasury Average Rates — $0.005</li></ul><p><a href="/openapi.json">OpenAPI</a> · <a href="/.well-known/x402">x402 discovery</a> · <a href="/.well-known/agent.json">agent manifest</a> · <a href="/skill.md">skill guide</a></p></main></body></html>';
       return text(res, 200, body, 'text/html; charset=utf-8', { 'cache-control': 'public, max-age=300' });
     }
     return json(res, 404, { error: 'not_found' });
