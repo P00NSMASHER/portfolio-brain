@@ -351,6 +351,20 @@ class WorkflowLivenessTests(unittest.TestCase):
         self.assertEqual(len(result["dispatches"]),2)
 
 
+    def test_checkpoint_recovery_suppresses_liveness_fanout(self):
+        dispatched=[]
+        result=recover_overdue(
+          None,[],
+          dispatch=lambda workflow,branch:dispatched.append((workflow,branch)),
+          at=AT,
+          persistence_incident_open=True,
+        )
+        self.assertEqual(result["status"],"PERSISTENCE_RECOVERY_IN_PROGRESS")
+        self.assertTrue(result["persistence_incident_open"])
+        self.assertEqual(result["dispatches"],[])
+        self.assertEqual(dispatched,[])
+        self.assertTrue(all(not row["dispatch_required"] for row in result["targets"]))
+
     def test_nonpaid_recovery_does_not_require_canonical_cost_state(self):
         dispatched=[]
         result=recover_overdue(
@@ -447,6 +461,10 @@ class WorkflowLivenessTests(unittest.TestCase):
         self.assertIn("portfolio-workflow-liveness",workflow)
         self.assertIn("actions: write",workflow)
         self.assertIn("contents: read",workflow)
+        self.assertIn("pull-requests: read",workflow)
+        self.assertIn("Detect active checkpoint recovery incident",workflow)
+        self.assertIn("factory/checkpoint-archive-",workflow)
+        self.assertIn("--persistence-incident-open",workflow)
         self.assertNotIn("contents: write",workflow)
         self.assertIn("workflow_run:",workflow)
         for producer in ("portfolio-autonomous-scheduler","runtime-hourly-sync","agent-heartbeat-sweep","hunter-autonomous-cycle","portfolio-notification-cycle"):
