@@ -189,7 +189,7 @@ class ArchiveLifecycleTests(unittest.TestCase):
         self.assertIn("gh pr create", candidate)
         self.assertNotIn("gh pr merge", candidate)
         self.assertNotIn("git push origin main", candidate)
-        self.assertIn("actions: read", candidate)
+        self.assertIn("actions: write", candidate)
         self.assertIn("contents: write", candidate)
         self.assertIn("pull-requests: write", candidate)
         self.assertIn("workflow_run:", candidate)
@@ -197,6 +197,7 @@ class ArchiveLifecycleTests(unittest.TestCase):
         self.assertIn("Journal capacity exceeded; do not drop evidence", candidate)
         self.assertIn("receipt.get(\"reason_type\") == \"JournalError\"", candidate)
         self.assertIn('BRANCH="factory/checkpoint-archive-${GITHUB_RUN_ID}"', candidate)
+        self.assertIn('gh workflow run foundation-ci.yml --ref "$BRANCH"', candidate)
         self.assertNotIn('BRANCH="checkpoint/archive-${GITHUB_RUN_ID}"', candidate)
 
 
