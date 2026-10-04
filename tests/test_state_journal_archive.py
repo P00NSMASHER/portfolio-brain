@@ -198,6 +198,10 @@ class ArchiveLifecycleTests(unittest.TestCase):
         self.assertIn("receipt.get(\"reason_type\") == \"JournalError\"", candidate)
         self.assertIn('BRANCH="factory/checkpoint-archive-${GITHUB_RUN_ID}"', candidate)
         self.assertIn('gh workflow run foundation-ci.yml --ref "$BRANCH"', candidate)
+        self.assertIn("Ensure existing checkpoint candidate enters Foundation verification", candidate)
+        self.assertIn("headRefOid", candidate)
+        self.assertIn("needs_foundation=", candidate)
+        self.assertIn('gh workflow run foundation-ci.yml --ref "$CHECKPOINT_BRANCH"', candidate)
         self.assertNotIn('BRANCH="checkpoint/archive-${GITHUB_RUN_ID}"', candidate)
 
 
