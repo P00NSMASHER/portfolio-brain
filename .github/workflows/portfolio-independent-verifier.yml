@@ -55,51 +55,17 @@ jobs:
           pr=matches[0]
           print("number="+str(pr["number"]))
           body=pr.get("body") or ""
-          actor=pr.get("user",{}).get("login")
-          repair_autonomous=(
+          autonomous=(
               branch.startswith("factory/auto-repair-")
               and "AUTO_REPAIR_FINGERPRINT:" in body
-              and actor=="github-actions[bot]"
+              and pr.get("user",{}).get("login")=="github-actions[bot]"
           )
-          files=json.loads(subprocess.check_output([
-              "gh","api",f"repos/{os.environ['GITHUB_REPOSITORY']}/pulls/{pr['number']}/files",
-              "-f","per_page=100","--method","GET"
-          ],text=True))
-          paths=[row.get("filename","") for row in files]
-          checkpoint_paths_ok=(
-              bool(paths)
-              and all(
-                  path in {
-                      "state_journal/ARCHIVE_MANIFEST.json",
-                      "state_journal/CHECKPOINT.json.gz",
-                      "state_journal/POLICY.json",
-                  }
-                  or (
-                      path.startswith("state_journal/archive/")
-                      and (path.endswith(".json.gz") or path.endswith(".manifest.json"))
-                  )
-                  for path in paths
-              )
-          )
-          checkpoint_autonomous=(
-              branch.startswith("factory/checkpoint-archive-")
-              and body.startswith("Automated durable checkpoint/archive candidate.")
-              and actor=="github-actions[bot]"
-              and checkpoint_paths_ok
-          )
-          autonomous=repair_autonomous or checkpoint_autonomous
           print("autonomous="+("true" if autonomous else "false"))
-          print("refreshable="+("true" if repair_autonomous else "false"))
-          print("candidate_kind="+(
-              "AUTO_REPAIR" if repair_autonomous else
-              "CHECKPOINT_ARCHIVE" if checkpoint_autonomous else
-              "MANUAL"
-          ))
           PY
 
       - name: Refresh autonomous repair branch onto current main when stale
         id: refresh
-        if: ${{ steps.pr.outputs.refreshable == 'true' }}
+        if: ${{ steps.pr.outputs.autonomous == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
@@ -182,7 +148,7 @@ jobs:
           --phase1-exit-file verifier-results/phase1.exit
           --operating-exit-file verifier-results/operating.exit
 
-      - name: Merge verified autonomous candidate through branch protection
+      - name: Merge verified autonomous repair through branch protection
         if: ${{ steps.refresh.outputs.updated != 'true' && steps.pr.outputs.autonomous == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -199,7 +165,7 @@ jobs:
           if doc.get("merged") is not True:
               raise SystemExit("GitHub merge API returned without merged=true")
           PY
-              echo "Protected autonomous candidate merged after exact-head Foundation + portfolio-phase1-gate." >> "$GITHUB_STEP_SUMMARY"
+              echo "Protected autonomous repair merged after exact-head Foundation + portfolio-phase1-gate." >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
             sleep 5
