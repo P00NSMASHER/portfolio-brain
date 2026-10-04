@@ -89,8 +89,34 @@ jobs:
               output.write(f"checkpoint_required={'true' if required else 'false'}\n")
           PY
 
-      - name: Generate validated checkpoint/archive candidate
+      - name: Detect existing checkpoint recovery candidate
         if: ${{ steps.trigger.outputs.checkpoint_required == 'true' }}
+        id: incident
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          import subprocess
+
+          raw = subprocess.check_output(
+              ["gh", "pr", "list", "--state", "open", "--limit", "100", "--json", "number,headRefName"],
+              text=True,
+              env=os.environ,
+          )
+          matches = [
+              row for row in json.loads(raw)
+              if str(row.get("headRefName", "")).startswith("factory/checkpoint-archive-")
+          ]
+          print("active=" + ("true" if matches else "false"))
+          if matches:
+              print("pr_number=" + str(sorted(matches, key=lambda row: row["number"])[0]["number"]))
+          PY
+
+      - name: Generate validated checkpoint/archive candidate
+        if: ${{ steps.trigger.outputs.checkpoint_required == 'true' && steps.incident.outputs.active != 'true' }}
         id: generate
         run: |
           set -euo pipefail
@@ -122,7 +148,7 @@ jobs:
           gh pr create             --base main             --head "$BRANCH"             --title "Archive canonical journal checkpoint sequence ${SEQUENCE}"             --body "Automated durable checkpoint/archive candidate. The full canonical snapshot and immutable lineage manifest are committed to protected Git history; CHECKPOINT.json.gz contains the exact archived projection. Merge only through required Foundation + portfolio-phase1-gate checks."
 
       - name: Preserve checkpoint candidate receipt
-        if: ${{ always() && steps.trigger.outputs.checkpoint_required == 'true' }}
+        if: ${{ always() && steps.trigger.outputs.checkpoint_required == 'true' && steps.incident.outputs.active != 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-state-checkpoint-candidate-${{ github.run_id }}
