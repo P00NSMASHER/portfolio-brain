@@ -137,6 +137,31 @@ class IndependentVerifierTests(unittest.TestCase):
         self.assertNotIn("git push origin main",text.lower())
         self.assertNotIn("--admin",text.lower())
 
+    def test_checkpoint_recovery_has_explicit_verifier_dispatch_fallback(self):
+        verifier=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text()
+        checkpoint=(ROOT/".github/workflows/portfolio-state-checkpoint-candidate.yml").read_text()
+        self.assertIn("workflow_dispatch:",verifier)
+        self.assertIn("candidate_sha:",verifier)
+        self.assertIn("candidate_branch:",verifier)
+        self.assertIn("github.event_name == 'workflow_dispatch'",verifier)
+        self.assertIn(
+            "github.event.workflow_run.head_sha || inputs.candidate_sha",
+            verifier,
+        )
+        self.assertIn(
+            "github.event.workflow_run.head_branch || inputs.candidate_branch",
+            verifier,
+        )
+        foundation=checkpoint.index("Dispatch Foundation verification when needed")
+        independent=checkpoint.index("Dispatch independent verification when Foundation is ready")
+        wait=checkpoint.index("Wait for trusted exact-head verification")
+        self.assertLess(foundation,independent)
+        self.assertLess(independent,wait)
+        self.assertIn("portfolio-independent-verifier.yml --ref main",checkpoint)
+        self.assertIn('-f candidate_sha="$CHECKPOINT_SHA"',checkpoint)
+        self.assertIn('-f candidate_branch="$CHECKPOINT_BRANCH"',checkpoint)
+        self.assertIn('foundation.get("conclusion")=="success"',checkpoint)
+
     def test_hosted_verifier_copy_preserves_isolation_without_privileged_ownership_copy(self):
         text=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text()
         self.assertNotIn("cp -a /src /work",text)

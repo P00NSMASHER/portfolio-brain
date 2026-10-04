@@ -249,6 +249,55 @@ jobs:
             gh workflow run foundation-ci.yml --ref "$CHECKPOINT_BRANCH"
           fi
 
+      - name: Dispatch independent verification when Foundation is ready
+        if: ${{ steps.trigger.outputs.checkpoint_required == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECKPOINT_BRANCH: ${{ steps.candidate.outputs.branch }}
+          CHECKPOINT_SHA: ${{ steps.candidate.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            RESULT="$(python - <<'PY'
+          import json, os, subprocess
+          rows=json.loads(subprocess.check_output([
+              "gh","api",f"repos/{os.environ['GITHUB_REPOSITORY']}/commits/{os.environ['CHECKPOINT_SHA']}/check-runs"
+          ], text=True, env=os.environ)).get("check_runs", [])
+          def latest(name, app_id):
+              found=[r for r in rows if r.get("name")==name and r.get("app",{}).get("id")==app_id]
+              found.sort(key=lambda r:r.get("id",0))
+              return found[-1] if found else None
+          foundation=latest("validate",15368)
+          independent=latest("portfolio-phase1-gate",5121826)
+          if independent:
+              if independent.get("status")=="completed" and independent.get("conclusion")!="success":
+                  print("FAILED")
+              else:
+                  print("PRESENT")
+          elif foundation and foundation.get("status")=="completed":
+              print("READY" if foundation.get("conclusion")=="success" else "FAILED")
+          else:
+              print("WAIT")
+          PY
+            )"
+            if [ "$RESULT" = "PRESENT" ]; then
+              exit 0
+            fi
+            if [ "$RESULT" = "FAILED" ]; then
+              echo "Trusted candidate verification failed." >&2
+              exit 1
+            fi
+            if [ "$RESULT" = "READY" ]; then
+              gh workflow run portfolio-independent-verifier.yml --ref main \
+                -f candidate_sha="$CHECKPOINT_SHA" \
+                -f candidate_branch="$CHECKPOINT_BRANCH"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Timed out waiting for exact-head Foundation verification." >&2
+          exit 1
+
       - name: Wait for trusted exact-head verification
         if: ${{ steps.trigger.outputs.checkpoint_required == 'true' }}
         env:
