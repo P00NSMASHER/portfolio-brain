@@ -111,12 +111,33 @@ jobs:
               row for row in json.loads(raw)
               if str(row.get("headRefName", "")).startswith("factory/checkpoint-archive-")
           ]
-          print("active=" + ("true" if matches else "false"))
+          if len(matches) > 1:
+              raise SystemExit(f"multiple open checkpoint recovery candidates: {len(matches)}")
+          active = False
           if matches:
-              candidate = sorted(matches, key=lambda row: row["number"])[0]
-              print("pr_number=" + str(candidate["number"]))
-              print("branch=" + candidate["headRefName"])
-              print("head_sha=" + candidate["headRefOid"])
+              candidate = matches[0]
+              main_sha = subprocess.check_output(
+                  ["gh", "api", f"repos/{os.environ['GITHUB_REPOSITORY']}/branches/main", "--jq", ".commit.sha"],
+                  text=True,
+                  env=os.environ,
+              ).strip()
+              compare = json.loads(subprocess.check_output(
+                  ["gh", "api", f"repos/{os.environ['GITHUB_REPOSITORY']}/compare/{main_sha}...{candidate['headRefOid']}"],
+                  text=True,
+                  env=os.environ,
+              ))
+              if compare.get("merge_base_commit", {}).get("sha") != main_sha:
+                  subprocess.check_call(
+                      ["gh", "pr", "close", str(candidate["number"])],
+                      env=os.environ,
+                  )
+                  print("stale_retired=true")
+              else:
+                  active = True
+                  print("pr_number=" + str(candidate["number"]))
+                  print("branch=" + candidate["headRefName"])
+                  print("head_sha=" + candidate["headRefOid"])
+          print("active=" + ("true" if active else "false"))
           PY
       - name: Generate validated checkpoint/archive candidate
         if: ${{ steps.trigger.outputs.checkpoint_required == 'true' && steps.incident.outputs.active != 'true' }}
