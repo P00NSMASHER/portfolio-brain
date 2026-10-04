@@ -145,7 +145,10 @@ jobs:
           print(json.load(open("state_journal/ARCHIVE_MANIFEST.json"))["archived_sequence"])
           PY
           )"
-          gh pr create             --base main             --head "$BRANCH"             --title "Archive canonical journal checkpoint sequence ${SEQUENCE}"             --body "Automated durable checkpoint/archive candidate. The full canonical snapshot and immutable lineage manifest are committed to protected Git history; CHECKPOINT.json.gz contains the exact archived projection. Merge only through required Foundation + portfolio-phase1-gate checks."
+          gh pr create             --base main             --head "$BRANCH"             --title "Archive canonical journal checkpoint sequence ${SEQUENCE}"             --body "Automated durable checkpoint/archive candidate.
+CHECKPOINT_ARCHIVE_CANDIDATE:true
+CHECKPOINT_ARCHIVE_SEQUENCE:${SEQUENCE}
+The full canonical snapshot and immutable lineage manifest are committed to protected Git history; CHECKPOINT.json.gz contains the exact archived projection. Protected integration requires Foundation + portfolio-phase1-gate and never bypasses repository rules."
 
       - name: Preserve checkpoint candidate receipt
         if: ${{ always() && steps.trigger.outputs.checkpoint_required == 'true' && steps.incident.outputs.active != 'true' }}
