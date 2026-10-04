@@ -3,10 +3,10 @@ name: hunter-autonomous-cycle
 on:
   schedule:
     - cron: "47 */6 * * *"
-    # Three date-bounded Step-23 waves for 2026-10-04 UTC; normal cadence is unchanged.
-    - cron: "31 22 4 10 *"
-    - cron: "1 23 4 10 *"
+    # Three date-bounded Step-23 recovery waves for 2026-10-04/05 UTC; normal cadence is unchanged.
     - cron: "31 23 4 10 *"
+    - cron: "1 0 5 10 *"
+    - cron: "31 0 5 10 *"
   push:
     branches: ["main"]
     paths:
