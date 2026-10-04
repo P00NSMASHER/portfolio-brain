@@ -44,7 +44,8 @@
       "REPAIR",
       "TEST",
       "VERIFICATION"
-    ]
+    ],
+    "max_soak_duration_seconds": 10800
   },
   "step24_controls": [
     "verifier_trust_anchors",

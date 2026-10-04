@@ -216,22 +216,22 @@ def validate_operating_mode():
     # approved steady-state cadence. They exist solely to collect the three
     # genuine event=schedule cycles required by final acceptance on one SHA.
     step23_bounded_crons={
-      "portfolio-state-reducer":["12 22 2 10 *","42 22 2 10 *","12 23 2 10 *","42 23 2 10 *"],
-      "runtime-hourly-sync":["14 22 2 10 *","44 22 2 10 *","14 23 2 10 *","44 23 2 10 *"],
-      "portfolio-autonomous-scheduler":["16 22 2 10 *","46 22 2 10 *","16 23 2 10 *","46 23 2 10 *"],
-      "hunter-autonomous-cycle":["18 22 2 10 *","48 22 2 10 *","18 23 2 10 *","48 23 2 10 *"],
-      "agent-heartbeat-sweep":["20 22 2 10 *","50 22 2 10 *","20 23 2 10 *","50 23 2 10 *"],
-      "portfolio-cost-watchdog":["10 22 2 10 *","40 22 2 10 *","10 23 2 10 *","40 23 2 10 *"],
-      "portfolio-notification-cycle":["22 22 2 10 *","52 22 2 10 *","22 23 2 10 *","52 23 2 10 *"],
-      "command-center-pages":["24 22 2 10 *","54 22 2 10 *","24 23 2 10 *","54 23 2 10 *"],
+      "portfolio-state-reducer":["25 22 4 10 *","55 22 4 10 *","25 23 4 10 *"],
+      "runtime-hourly-sync":["27 22 4 10 *","57 22 4 10 *","27 23 4 10 *"],
+      "portfolio-autonomous-scheduler":["29 22 4 10 *","59 22 4 10 *","29 23 4 10 *"],
+      "hunter-autonomous-cycle":["31 22 4 10 *","1 23 4 10 *","31 23 4 10 *"],
+      "agent-heartbeat-sweep":["33 22 4 10 *","3 23 4 10 *","33 23 4 10 *"],
+      "portfolio-cost-watchdog":["35 22 4 10 *","5 23 4 10 *","35 23 4 10 *"],
+      "portfolio-notification-cycle":["37 22 4 10 *","7 23 4 10 *","37 23 4 10 *"],
+      "command-center-pages":["39 22 4 10 *","9 23 4 10 *","39 23 4 10 *"],
     }
     req(set(step23_bounded_crons)=={
       "portfolio-state-reducer","runtime-hourly-sync","portfolio-autonomous-scheduler",
       "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
       "portfolio-notification-cycle","command-center-pages",
     },"Step 23 bounded schedule scope changed")
-    req(all(cron.split()[2:4]==["2","10"] for rows in step23_bounded_crons.values() for cron in rows),
-        "Step 23 bounded schedules are not date-scoped to 2026-10-02 UTC")
+    req(all(cron.split()[2:4]==["4","10"] for rows in step23_bounded_crons.values() for cron in rows),
+        "Step 23 bounded schedules are not date-scoped to 2026-10-04 UTC")
     workflow_dir=ROOT/".github/workflows"
     actual=scheduled_workflow_inventory(workflow_dir)
     req(set(actual)==set(expected),"scheduled workflow inventory differs from approved operating policy")

@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -263,6 +263,12 @@ def validate_step23(receipt: dict[str, Any]) -> None:
     policy = _load_policy()
     _common(receipt, step=23)
     cfg = policy["step23"]
+    window_start = _timestamp(receipt.get("soak_window_start"), "Step 23.soak_window_start")
+    window_deadline = _timestamp(receipt.get("soak_deadline"), "Step 23.soak_deadline")
+    _require(window_deadline == window_start + timedelta(seconds=cfg["max_soak_duration_seconds"]),
+             "Step 23 soak deadline does not match the three-hour policy")
+    _require(_timestamp(receipt.get("generated_at"), "Step 23.generated_at") <= window_deadline,
+             "Step 23 receipt was generated after the soak deadline")
     _require(receipt.get("run_classification_policy") == "EXPLICIT", "Step 23 run classification is not explicit")
     _require(receipt.get("hash_traceability_pass") is True, "Step 23 hash traceability failed")
     _require(receipt.get("dashboard_fresh") is True, "Step 23 dashboard is stale")
@@ -290,6 +296,8 @@ def validate_step23(receipt: dict[str, Any]) -> None:
         created_at = _timestamp(row.get("created_at"), f"Step 23 {workflow}.created_at")
         completed_at = _timestamp(row.get("completed_at"), f"Step 23 {workflow}.completed_at")
         _require(completed_at >= created_at, f"Step 23 {workflow} completed before it was created")
+        _require(created_at >= window_start and completed_at <= window_deadline,
+                 f"Step 23 {workflow} run falls outside the three-hour soak window")
         _require(type(row.get("run_id")) is int and row["run_id"] > 0, f"Step 23 {workflow} run_id invalid")
         _require(row["run_id"] not in seen_run_ids, f"Step 23 duplicate workflow run id: {row['run_id']}")
         seen_run_ids.add(row["run_id"])

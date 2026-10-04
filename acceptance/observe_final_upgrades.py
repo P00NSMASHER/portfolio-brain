@@ -26,6 +26,7 @@ def observe() -> None:
         "required_workflows": policy["required_workflows"],
         "required_handler_types": policy["required_handler_types"],
         "required_successes_per_workflow": policy["min_successful_scheduled_cycles_per_workflow"],
+        "max_soak_duration_seconds": policy["max_soak_duration_seconds"],
         "poll_seconds": 1,
         "max_resets": 5,
     }
