@@ -211,6 +211,9 @@ class ArchiveLifecycleTests(unittest.TestCase):
         self.assertIn("Merge verified checkpoint candidate through branch protection", candidate)
         self.assertIn('-f sha="$CHECKPOINT_SHA"', candidate)
         self.assertIn("checkpoint candidate escaped protected path allowlist", candidate)
+        self.assertIn('pr_detail.get("user")', candidate)
+        self.assertIn('"github-actions[bot]"', candidate)
+        self.assertNotIn('pr.get("author")', candidate)
         self.assertNotIn('BRANCH="checkpoint/archive-${GITHUB_RUN_ID}"', candidate)
 
 
