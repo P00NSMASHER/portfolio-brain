@@ -74,9 +74,9 @@ class ScheduledSoakObserverTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             cfg = root / "config.json"
-            cfg.write_text(json.dumps({"exact_main_sha": "a"*40, "soak_start": "2026-10-04T00:00:00Z",
+            cfg.write_text(json.dumps({"exact_main_sha": "a"*40, "soak_start": collector.iso_now(),
                 "required_workflows": ["portfolio-state-reducer"], "required_handler_types": ["REPAIR"],
-                "required_successes_per_workflow": 3}))
+                "required_successes_per_workflow": 3, "max_soak_duration_seconds": 10800}))
             meta, receipt = root / "meta.json", root / "receipt.json"
             argv = ["collect", "--config", str(cfg), "--output-meta", str(meta),
                     "--output-receipt", str(receipt), "--once"]

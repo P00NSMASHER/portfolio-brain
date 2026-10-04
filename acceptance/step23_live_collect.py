@@ -9,7 +9,7 @@ import json
 import os
 import time
 import zipfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -244,9 +244,14 @@ def main() -> None:
     poll = int(cfg.get("poll_seconds", 45))
     max_resets = int(cfg.get("max_resets", 5))
     effective_start = parse_time(cfg["soak_start"])
+    window_start = effective_start
+    window_deadline = window_start + timedelta(seconds=int(cfg["max_soak_duration_seconds"]))
+    remaining_window = (window_deadline - datetime.now(timezone.utc)).total_seconds()
+    if remaining_window <= 0:
+        raise RuntimeError("STEP23_SOAK_WINDOW_EXPIRED")
     token = os.environ["GITHUB_TOKEN"]
     gh = GH(os.environ["GITHUB_REPOSITORY"], token)
-    deadline = time.monotonic() + args.timeout_seconds
+    deadline = time.monotonic() + min(args.timeout_seconds, remaining_window)
     resets: list[dict[str, Any]] = []
     artifact_cache: dict[tuple[str, int], tuple[dict[str, Any], bytes]] = {}
 
@@ -557,10 +562,14 @@ def main() -> None:
                     "hunter_substantive_work_count": len(hunter_evidence),
                     "hunter_substantive_work_evidence": hunter_evidence,
                     "soak_start": effective_start.isoformat().replace("+00:00", "Z"),
+                    "soak_window_start": window_start.isoformat().replace("+00:00", "Z"),
+                    "soak_deadline": window_deadline.isoformat().replace("+00:00", "Z"),
                     "soak_resets": resets,
                     "generated_at": iso_now(),
                 }
             )
+            if datetime.now(timezone.utc) > window_deadline:
+                raise RuntimeError("STEP23_SOAK_WINDOW_EXPIRED")
             validate_step23(receipt)
             meta = {
                 "schema_version": "1.0.0",
