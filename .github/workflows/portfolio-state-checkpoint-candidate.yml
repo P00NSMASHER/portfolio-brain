@@ -8,6 +8,10 @@ on:
     branches: ["main"]
     paths:
       - "state_journal/TRIGGER_CHECKPOINT_ARCHIVE"
+  workflow_run:
+    workflows:
+      - portfolio-state-reducer
+    types: [completed]
 
 permissions:
   actions: read
@@ -20,6 +24,14 @@ concurrency:
 
 jobs:
   checkpoint:
+    if: >-
+      ${{
+        github.event_name != 'workflow_run' ||
+        (
+          github.event.workflow_run.conclusion == 'failure' &&
+          github.event.workflow_run.head_branch == 'main'
+        )
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -34,7 +46,51 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Download triggering reducer blocking receipt
+        if: ${{ github.event_name == 'workflow_run' }}
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: portfolio-state-reducer-receipt-${{ github.event.workflow_run.id }}-*
+          path: state_journal/out/triggering-reducer
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Classify checkpoint trigger
+        id: trigger
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          required = os.environ["EVENT_NAME"] != "workflow_run"
+          if not required:
+              expected_reason = "Journal capacity exceeded; do not drop evidence"
+              receipts = sorted(Path("state_journal/out/triggering-reducer").rglob("receipt.json"))
+              for path in receipts:
+                  try:
+                      receipt = json.loads(path.read_text())
+                  except (OSError, json.JSONDecodeError):
+                      continue
+                  if (
+                      receipt.get("status") == "BLOCKED"
+                      and receipt.get("reason_type") == "JournalError"
+                      and receipt.get("reason") == expected_reason
+                  ):
+                      required = True
+                      break
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"checkpoint_required={'true' if required else 'false'}\n")
+          PY
+
       - name: Generate validated checkpoint/archive candidate
+        if: ${{ steps.trigger.outputs.checkpoint_required == 'true' }}
         id: generate
         run: |
           set -euo pipefail
@@ -66,7 +122,7 @@ jobs:
           gh pr create             --base main             --head "$BRANCH"             --title "Archive canonical journal checkpoint sequence ${SEQUENCE}"             --body "Automated durable checkpoint/archive candidate. The full canonical snapshot and immutable lineage manifest are committed to protected Git history; CHECKPOINT.json.gz contains the exact archived projection. Merge only through required Foundation + portfolio-phase1-gate checks."
 
       - name: Preserve checkpoint candidate receipt
-        if: ${{ always() }}
+        if: ${{ always() && steps.trigger.outputs.checkpoint_required == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-state-checkpoint-candidate-${{ github.run_id }}
