@@ -14,7 +14,7 @@ on:
     types: [completed]
 
 permissions:
-  actions: read
+  actions: write
   contents: write
   pull-requests: write
 
@@ -146,6 +146,7 @@ jobs:
           PY
           )"
           gh pr create             --base main             --head "$BRANCH"             --title "Archive canonical journal checkpoint sequence ${SEQUENCE}"             --body "Automated durable checkpoint/archive candidate. The full canonical snapshot and immutable lineage manifest are committed to protected Git history; CHECKPOINT.json.gz contains the exact archived projection. Merge only through required Foundation + portfolio-phase1-gate checks."
+          gh workflow run foundation-ci.yml --ref "$BRANCH"
 
       - name: Preserve checkpoint candidate receipt
         if: ${{ always() && steps.trigger.outputs.checkpoint_required == 'true' && steps.incident.outputs.active != 'true' }}
