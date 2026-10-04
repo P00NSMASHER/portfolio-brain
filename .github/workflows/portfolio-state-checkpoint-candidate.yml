@@ -187,7 +187,7 @@ jobs:
           repo = os.environ["GITHUB_REPOSITORY"]
           pulls = json.loads(subprocess.check_output([
               "gh","pr","list","--state","open","--limit","100",
-              "--json","number,headRefName,headRefOid,baseRefName,author,body"
+              "--json","number,headRefName,headRefOid,baseRefName,body"
           ], text=True, env=os.environ))
           matches = [p for p in pulls if str(p.get("headRefName","")).startswith("factory/checkpoint-archive-")]
           if len(matches) != 1:
@@ -195,7 +195,10 @@ jobs:
           pr = matches[0]
           if pr.get("baseRefName") != "main":
               raise SystemExit("checkpoint candidate base is not main")
-          if (pr.get("author") or {}).get("login") != "github-actions[bot]":
+          pr_detail = json.loads(subprocess.check_output([
+              "gh","api",f"repos/{repo}/pulls/{pr['number']}"
+          ], text=True, env=os.environ))
+          if (pr_detail.get("user") or {}).get("login") != "github-actions[bot]":
               raise SystemExit("checkpoint candidate is not bot-authored")
           body = pr.get("body") or ""
           if not body.startswith("Automated durable checkpoint/archive candidate."):
