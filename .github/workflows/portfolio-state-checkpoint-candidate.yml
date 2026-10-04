@@ -321,3 +321,40 @@ jobs:
           path: state_journal/out/checkpoint_archive_receipt.json
           if-no-files-found: error
           retention-days: 30
+
+  acceptance-progress:
+    # Observe existing schedules; no new cadence, model calls, or mutations.
+    if: >-
+      ${{
+        github.event_name == 'schedule' ||
+        (github.event_name == 'workflow_run' &&
+         github.event.workflow_run.head_branch == 'main' &&
+         github.event.workflow_run.event == 'schedule')
+      }}
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      pull-requests: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Observe exact-main final upgrade evidence
+        run: python -m acceptance.observe_final_upgrades
+      - name: Preserve progress and blocking evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-final-upgrade-progress-${{ github.run_id }}
+          path: acceptance/out/
+          if-no-files-found: error
+          retention-days: 30
