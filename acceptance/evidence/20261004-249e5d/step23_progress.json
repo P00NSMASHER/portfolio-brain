@@ -1,0 +1,20 @@
+{
+  "acceptance_complete": false,
+  "configured_soak_start": "2026-10-04T21:11:04Z",
+  "counts": {
+    "agent-heartbeat-sweep": 0,
+    "command-center-pages": 0,
+    "hunter-autonomous-cycle": 0,
+    "portfolio-autonomous-scheduler": 0,
+    "portfolio-cost-watchdog": 0,
+    "portfolio-notification-cycle": 0,
+    "portfolio-state-reducer": 0,
+    "runtime-hourly-sync": 0
+  },
+  "effective_soak_start": "2026-10-04T21:11:04+00:00",
+  "exact_main_sha": "249e5d893fcb4359d465c5894ab9444675730045",
+  "generated_at": "2026-10-04T21:12:59Z",
+  "resets": [],
+  "schema_version": "1.0.0",
+  "status": "WAITING_FOR_SCHEDULED_CYCLES"
+}

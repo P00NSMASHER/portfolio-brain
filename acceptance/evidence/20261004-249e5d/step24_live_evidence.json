@@ -1,0 +1,100 @@
+{
+  "observed_main_sha": "249e5d893fcb4359d465c5894ab9444675730045",
+  "ruleset": {
+    "id": 24182301,
+    "name": "portfolio-main-protection",
+    "target": "branch",
+    "source_type": "Repository",
+    "source": "P00NSMASHER/portfolio-brain",
+    "enforcement": "active",
+    "conditions": {
+      "ref_name": {
+        "exclude": [],
+        "include": [
+          "refs/heads/main"
+        ]
+      }
+    },
+    "rules": [
+      {
+        "type": "deletion"
+      },
+      {
+        "type": "non_fast_forward"
+      },
+      {
+        "type": "pull_request",
+        "parameters": {
+          "required_approving_review_count": 0,
+          "dismiss_stale_reviews_on_push": false,
+          "required_reviewers": [],
+          "require_code_owner_review": false,
+          "require_last_push_approval": false,
+          "required_review_thread_resolution": true,
+          "require_extra_approval_for_unattributed_changes": false,
+          "allowed_merge_methods": [
+            "merge",
+            "squash",
+            "rebase"
+          ]
+        }
+      },
+      {
+        "type": "required_status_checks",
+        "parameters": {
+          "strict_required_status_checks_policy": true,
+          "do_not_enforce_on_create": false,
+          "required_status_checks": [
+            {
+              "context": "validate",
+              "integration_id": 15368
+            },
+            {
+              "context": "portfolio-phase1-gate",
+              "integration_id": 5121826
+            }
+          ]
+        }
+      }
+    ],
+    "node_id": "RRS_lACqUmVwb3NpdG9yec5St1jdzgFw_h0",
+    "created_at": "2026-09-29T09:17:14.956-04:00",
+    "updated_at": "2026-09-29T09:24:08.706-04:00",
+    "bypass_actors": [],
+    "current_user_can_bypass": "never",
+    "_links": {
+      "self": {
+        "href": "https://api.github.com/repos/P00NSMASHER/portfolio-brain/rulesets/24182301"
+      },
+      "html": {
+        "href": "https://github.com/P00NSMASHER/portfolio-brain/rules/24182301"
+      }
+    }
+  },
+  "verifier_app": {
+    "id": 5121826,
+    "slug": "portfolio-brain-522",
+    "permissions": {
+      "actions": "read",
+      "checks": "write",
+      "contents": "read",
+      "metadata": "read",
+      "pull_requests": "read"
+    },
+    "events": [],
+    "source_head_sha": "0541489f07c4773fae32811e022385efe78e7730",
+    "source_merge_sha": "249e5d893fcb4359d465c5894ab9444675730045",
+    "source_check_run_id": 111532264737,
+    "source_pr_number": 536,
+    "source_check_name": "portfolio-phase1-gate",
+    "source_check_conclusion": "success"
+  },
+  "artifact_probe": {
+    "run_id": 37235132428,
+    "artifact_id": 11315113003,
+    "head_sha": "249e5d893fcb4359d465c5894ab9444675730045",
+    "provider_digest": "sha256:fbb32f01e31c19a27050a749cdc0e756ace7e2e8d6aac8df14e6a309bed3989e",
+    "downloaded_zip_digest": "sha256:fbb32f01e31c19a27050a749cdc0e756ace7e2e8d6aac8df14e6a309bed3989e",
+    "expired": false
+  }
+}

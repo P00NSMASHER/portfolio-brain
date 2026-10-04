@@ -1,0 +1,192 @@
+{
+  "authority_granted": false,
+  "covered_domains": [
+    "ADAPTER_WRITE_AUTHORITY",
+    "ARTIFACT_TAMPER_RESISTANCE",
+    "AUTOMERGE_SCOPE",
+    "BRANCH_PROTECTION",
+    "CANDIDATE_NETWORK_ISOLATION",
+    "PR_HEAD_AND_FORK_RESTRICTIONS",
+    "REPO_006_ACCESS",
+    "SANITIZED_PUBLIC_PERSISTENCE",
+    "SECRET_HANDLING",
+    "VERIFIER_APP_SCOPES",
+    "VERIFIER_TRUST_ANCHORS",
+    "WORKFLOW_PERMISSIONS"
+  ],
+  "evidence_upgraded": false,
+  "finding_counts": {
+    "CRITICAL": 0,
+    "HIGH": 0,
+    "LOW": 0,
+    "MEDIUM": 0,
+    "UNKNOWN": 0
+  },
+  "findings": [],
+  "live_evidence_present": true,
+  "observed": {
+    "live": {
+      "artifact_exact_run_head_digest_traceable": true,
+      "branch_protection_exact_checks_no_bypass": true,
+      "exact_main_identity": true,
+      "expected_main_sha": "249e5d893fcb4359d465c5894ab9444675730045",
+      "observed_main_sha": "249e5d893fcb4359d465c5894ab9444675730045",
+      "ruleset_covers_main": true,
+      "ruleset_id": 24182301,
+      "verifier_app_events": [],
+      "verifier_app_scope_exact": true,
+      "verifier_app_slug": "portfolio-brain-522",
+      "verifier_app_source_binding": true,
+      "verifier_app_source_check_run_id": 111532264737,
+      "verifier_app_source_head_sha": "0541489f07c4773fae32811e022385efe78e7730",
+      "verifier_app_source_merge_sha": "249e5d893fcb4359d465c5894ab9444675730045",
+      "verifier_app_source_pr_number": 536
+    },
+    "required_domain_coverage": {
+      "covered": [
+        "ADAPTER_WRITE_AUTHORITY",
+        "ARTIFACT_TAMPER_RESISTANCE",
+        "AUTOMERGE_SCOPE",
+        "BRANCH_PROTECTION",
+        "CANDIDATE_NETWORK_ISOLATION",
+        "PR_HEAD_AND_FORK_RESTRICTIONS",
+        "REPO_006_ACCESS",
+        "SANITIZED_PUBLIC_PERSISTENCE",
+        "SECRET_HANDLING",
+        "VERIFIER_APP_SCOPES",
+        "VERIFIER_TRUST_ANCHORS",
+        "WORKFLOW_PERMISSIONS"
+      ],
+      "missing": [],
+      "required": [
+        "VERIFIER_TRUST_ANCHORS",
+        "VERIFIER_APP_SCOPES",
+        "WORKFLOW_PERMISSIONS",
+        "PR_HEAD_AND_FORK_RESTRICTIONS",
+        "CANDIDATE_NETWORK_ISOLATION",
+        "SECRET_HANDLING",
+        "ARTIFACT_TAMPER_RESISTANCE",
+        "BRANCH_PROTECTION",
+        "AUTOMERGE_SCOPE",
+        "ADAPTER_WRITE_AUTHORITY",
+        "SANITIZED_PUBLIC_PERSISTENCE",
+        "REPO_006_ACCESS"
+      ]
+    },
+    "static": {
+      "candidate_checkout_credentials_disabled": true,
+      "candidate_network_isolation": true,
+      "chatgpt_gmail_customer_email_gateway_present": true,
+      "chatgpt_gmail_customer_email_policy_bounded": true,
+      "governance_authority_matrix_fail_closed": true,
+      "governance_boundaries_present": true,
+      "governance_canonical_action_schema": true,
+      "governance_email_policy_bounded": true,
+      "governance_no_inherited_authority": true,
+      "governance_project_caps_bounded": true,
+      "registry_persistence_sanitized_or_reference_only": true,
+      "repair_generation_authority_bounded": true,
+      "repo006_access_fail_closed": true,
+      "repo006_binding": {
+        "blocker_id": "BLK-001",
+        "full_name": "P00NSMASHER/permitplate-state",
+        "integration_status": "BLOCKED",
+        "repository_id": "REPO-006"
+      },
+      "same_repo_head_restriction": true,
+      "software_factory_merge_command_present": false,
+      "trusted_merge_scope_bounded_to_autonomous_repairs": true,
+      "verifier_secret_minted_after_candidate": true,
+      "verifier_trust_anchors": true,
+      "workflow_permissions": {
+        ".github/workflows/portfolio-autonomous-repair.yml": {
+          "exact": true,
+          "expected": {
+            "actions": "write",
+            "contents": "write",
+            "copilot-requests": "write",
+            "pull-requests": "write"
+          },
+          "job_level_overrides": [
+            {
+              "actions": "write",
+              "contents": "read",
+              "pull-requests": "write"
+            }
+          ],
+          "job_level_overrides_bounded": true,
+          "observed": {
+            "actions": "write",
+            "contents": "write",
+            "copilot-requests": "write",
+            "pull-requests": "write"
+          }
+        },
+        ".github/workflows/portfolio-autonomous-scheduler.yml": {
+          "exact": true,
+          "expected": {
+            "actions": "write",
+            "contents": "read",
+            "pull-requests": "read"
+          },
+          "job_level_overrides": [],
+          "job_level_overrides_bounded": true,
+          "observed": {
+            "actions": "write",
+            "contents": "read",
+            "pull-requests": "read"
+          }
+        },
+        ".github/workflows/portfolio-independent-verifier.yml": {
+          "exact": true,
+          "expected": {
+            "actions": "read",
+            "contents": "write",
+            "pull-requests": "write"
+          },
+          "job_level_overrides": [],
+          "job_level_overrides_bounded": true,
+          "observed": {
+            "actions": "read",
+            "contents": "write",
+            "pull-requests": "write"
+          }
+        },
+        ".github/workflows/portfolio-state-reducer.yml": {
+          "exact": true,
+          "expected": {
+            "actions": "read",
+            "contents": "read"
+          },
+          "job_level_overrides": [],
+          "job_level_overrides_bounded": true,
+          "observed": {
+            "actions": "read",
+            "contents": "read"
+          }
+        },
+        ".github/workflows/software-factory-candidate.yml": {
+          "exact": true,
+          "expected": {
+            "actions": "read",
+            "contents": "write",
+            "pull-requests": "write"
+          },
+          "job_level_overrides": [],
+          "job_level_overrides_bounded": true,
+          "observed": {
+            "actions": "read",
+            "contents": "write",
+            "pull-requests": "write"
+          }
+        }
+      },
+      "workflow_permissions_exact": true
+    }
+  },
+  "review_hash": "sha256:41107e82438d4b6490e9013587e3a88a417586fdaf0ae78c32e6e0508131137d",
+  "review_id": "portfolio-step24-least-privilege-v1",
+  "schema_version": "1.0.0",
+  "status": "READY_FOR_INDEPENDENT_SIGNOFF",
+  "step24_complete": false
+}
