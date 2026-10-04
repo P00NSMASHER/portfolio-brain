@@ -15,6 +15,7 @@ on:
 
 permissions:
   actions: write
+  checks: read
   contents: write
   pull-requests: write
 
@@ -115,29 +116,8 @@ jobs:
               candidate = sorted(matches, key=lambda row: row["number"])[0]
               print("pr_number=" + str(candidate["number"]))
               print("branch=" + candidate["headRefName"])
-              checks = json.loads(subprocess.check_output([
-                  "gh","api",
-                  f"repos/{os.environ['GITHUB_REPOSITORY']}/commits/{candidate['headRefOid']}/check-runs"
-              ], text=True, env=os.environ)).get("check_runs", [])
-              foundation_in_flight_or_green = any(
-                  row.get("name") == "validate"
-                  and row.get("app", {}).get("id") == 15368
-                  and (
-                      row.get("status") != "completed"
-                      or row.get("conclusion") == "success"
-                  )
-                  for row in checks
-              )
-              print("needs_foundation=" + ("false" if foundation_in_flight_or_green else "true"))
+              print("head_sha=" + candidate["headRefOid"])
           PY
-
-      - name: Ensure existing checkpoint candidate enters Foundation verification
-        if: ${{ steps.incident.outputs.active == 'true' && steps.incident.outputs.needs_foundation == 'true' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          CHECKPOINT_BRANCH: ${{ steps.incident.outputs.branch }}
-        run: gh workflow run foundation-ci.yml --ref "$CHECKPOINT_BRANCH"
-
       - name: Generate validated checkpoint/archive candidate
         if: ${{ steps.trigger.outputs.checkpoint_required == 'true' && steps.incident.outputs.active != 'true' }}
         id: generate
@@ -169,8 +149,146 @@ jobs:
           PY
           )"
           gh pr create             --base main             --head "$BRANCH"             --title "Archive canonical journal checkpoint sequence ${SEQUENCE}"             --body "Automated durable checkpoint/archive candidate. The full canonical snapshot and immutable lineage manifest are committed to protected Git history; CHECKPOINT.json.gz contains the exact archived projection. Merge only through required Foundation + portfolio-phase1-gate checks."
-          gh workflow run foundation-ci.yml --ref "$BRANCH"
+          echo "Checkpoint PR opened; trusted verification is dispatched by the finalizer."
 
+      - name: Resolve and validate active checkpoint candidate
+        if: ${{ steps.trigger.outputs.checkpoint_required == 'true' }}
+        id: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          import subprocess
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          pulls = json.loads(subprocess.check_output([
+              "gh","pr","list","--state","open","--limit","100",
+              "--json","number,headRefName,headRefOid,baseRefName,author,body"
+          ], text=True, env=os.environ))
+          matches = [p for p in pulls if str(p.get("headRefName","")).startswith("factory/checkpoint-archive-")]
+          if len(matches) != 1:
+              raise SystemExit(f"expected exactly one open checkpoint candidate, found {len(matches)}")
+          pr = matches[0]
+          if pr.get("baseRefName") != "main":
+              raise SystemExit("checkpoint candidate base is not main")
+          if (pr.get("author") or {}).get("login") != "github-actions[bot]":
+              raise SystemExit("checkpoint candidate is not bot-authored")
+          body = pr.get("body") or ""
+          if not body.startswith("Automated durable checkpoint/archive candidate."):
+              raise SystemExit("checkpoint candidate body marker missing")
+          files = json.loads(subprocess.check_output([
+              "gh","api",f"repos/{repo}/pulls/{pr['number']}/files","-f","per_page=100","--method","GET"
+          ], text=True, env=os.environ))
+          if not files or len(files) >= 100:
+              raise SystemExit("checkpoint candidate file listing missing or exceeded bound")
+          exact = {
+              "state_journal/ARCHIVE_MANIFEST.json",
+              "state_journal/CHECKPOINT.json.gz",
+              "state_journal/POLICY.json",
+          }
+          for row in files:
+              path = row.get("filename","")
+              status = row.get("status")
+              archive = path.startswith("state_journal/archive/") and (
+                  path.endswith(".json.gz") or path.endswith(".manifest.json")
+              )
+              if status not in {"added","modified"} or not (path in exact or archive):
+                  raise SystemExit("checkpoint candidate escaped protected path allowlist: " + path)
+          print("pr_number=" + str(pr["number"]))
+          print("branch=" + pr["headRefName"])
+          print("head_sha=" + pr["headRefOid"])
+          PY
+
+      - name: Dispatch Foundation verification when needed
+        if: ${{ steps.trigger.outputs.checkpoint_required == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECKPOINT_BRANCH: ${{ steps.candidate.outputs.branch }}
+          CHECKPOINT_SHA: ${{ steps.candidate.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          NEEDS="$(python - <<'PY'
+          import json, os, subprocess
+          rows=json.loads(subprocess.check_output([
+              "gh","api",f"repos/{os.environ['GITHUB_REPOSITORY']}/commits/{os.environ['CHECKPOINT_SHA']}/check-runs"
+          ], text=True, env=os.environ)).get("check_runs", [])
+          trusted=[r for r in rows if r.get("name")=="validate" and r.get("app",{}).get("id")==15368]
+          trusted.sort(key=lambda r:r.get("id",0))
+          latest=trusted[-1] if trusted else None
+          print("false" if latest and (latest.get("status")!="completed" or latest.get("conclusion")=="success") else "true")
+          PY
+          )"
+          if [ "$NEEDS" = "true" ]; then
+            gh workflow run foundation-ci.yml --ref "$CHECKPOINT_BRANCH"
+          fi
+
+      - name: Wait for trusted exact-head verification
+        if: ${{ steps.trigger.outputs.checkpoint_required == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECKPOINT_SHA: ${{ steps.candidate.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            RESULT="$(python - <<'PY'
+          import json, os, subprocess
+          rows=json.loads(subprocess.check_output([
+              "gh","api",f"repos/{os.environ['GITHUB_REPOSITORY']}/commits/{os.environ['CHECKPOINT_SHA']}/check-runs"
+          ], text=True, env=os.environ)).get("check_runs", [])
+          def latest(name, app_id):
+              found=[r for r in rows if r.get("name")==name and r.get("app",{}).get("id")==app_id]
+              found.sort(key=lambda r:r.get("id",0))
+              return found[-1] if found else None
+          foundation=latest("validate",15368)
+          independent=latest("portfolio-phase1-gate",5121826)
+          for row in (foundation, independent):
+              if row and row.get("status")=="completed" and row.get("conclusion") != "success":
+                  print("FAILED")
+                  raise SystemExit(0)
+          if foundation and independent and all(
+              row.get("status")=="completed" and row.get("conclusion")=="success"
+              for row in (foundation, independent)
+          ):
+              print("PASS")
+          else:
+              print("WAIT")
+          PY
+            )"
+            if [ "$RESULT" = "PASS" ]; then
+              exit 0
+            fi
+            if [ "$RESULT" = "FAILED" ]; then
+              echo "Trusted checkpoint verification failed." >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "Timed out waiting for trusted checkpoint verification." >&2
+          exit 1
+
+      - name: Merge verified checkpoint candidate through branch protection
+        if: ${{ steps.trigger.outputs.checkpoint_required == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.candidate.outputs.pr_number }}
+          CHECKPOINT_SHA: ${{ steps.candidate.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)"
+          MERGE_BASE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${MAIN_SHA}...${CHECKPOINT_SHA}" --jq .merge_base_commit.sha)"
+          test "$MERGE_BASE" = "$MAIN_SHA"
+          gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" \
+            -f merge_method=merge \
+            -f sha="$CHECKPOINT_SHA" > state_journal/out/checkpoint_merge.json
+          python - <<'PY'
+          import json
+          doc=json.load(open("state_journal/out/checkpoint_merge.json"))
+          if doc.get("merged") is not True:
+              raise SystemExit("checkpoint protected merge did not complete")
+          PY
       - name: Preserve checkpoint candidate receipt
         if: ${{ always() && steps.trigger.outputs.checkpoint_required == 'true' && steps.incident.outputs.active != 'true' }}
         uses: actions/upload-artifact@v4
