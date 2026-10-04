@@ -11,6 +11,7 @@ on:
   workflow_run:
     workflows:
       - portfolio-state-reducer
+      - foundation-ci
     types: [completed]
 
 permissions:
@@ -29,6 +30,7 @@ jobs:
       ${{
         github.event_name != 'workflow_run' ||
         (
+          github.event.workflow_run.name == 'portfolio-state-reducer' &&
           github.event.workflow_run.conclusion == 'failure' &&
           github.event.workflow_run.head_branch == 'main'
         )
@@ -329,7 +331,9 @@ jobs:
         github.event_name == 'schedule' ||
         (github.event_name == 'workflow_run' &&
          github.event.workflow_run.head_branch == 'main' &&
-         github.event.workflow_run.event == 'schedule')
+         (github.event.workflow_run.event == 'schedule' ||
+          (github.event.workflow_run.name == 'foundation-ci' &&
+           github.event.workflow_run.conclusion == 'success')))
       }}
     permissions:
       actions: read
