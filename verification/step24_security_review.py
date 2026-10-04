@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import re
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
@@ -624,7 +625,12 @@ def live_review(evidence: dict[str, Any], expected_main_sha: str) -> dict[str, A
             isinstance(includes, list)
             and isinstance(excludes, list)
             and "refs/heads/main" in includes
-            and "refs/heads/main" not in excludes
+            and all(
+                isinstance(pattern, str)
+                and pattern not in {"~ALL", "~DEFAULT_BRANCH"}
+                and not fnmatchcase("refs/heads/main", pattern)
+                for pattern in excludes
+            )
         )
         rules_ok = (
             ruleset.get("enforcement") == "active"
