@@ -71,11 +71,16 @@ class OperatingModeTests(unittest.TestCase):
         self.assertEqual(policy["foundation_check"],{"name":"validate","integration_id":15368})
         self.assertEqual(policy["independent_check"],{"name":"portfolio-phase1-gate","integration_id":5121826})
 
-    def test_independent_verifier_is_workflow_run_only_and_credential_isolated(self):
+    def test_independent_verifier_has_bounded_recovery_dispatch_and_credential_isolation(self):
         verifier=ROOT/".github/workflows/portfolio-independent-verifier.yml"
         triggers=workflow_top_level_triggers(verifier)
-        self.assertEqual(triggers,{"workflow_run"})
+        self.assertEqual(triggers,{"workflow_run","workflow_dispatch"})
         text=verifier.read_text().lower()
+        self.assertIn("candidate_sha:",text)
+        self.assertIn("candidate_branch:",text)
+        self.assertIn("github.event_name == 'workflow_dispatch'",text)
+        self.assertIn("github.event.workflow_run.head_sha || inputs.candidate_sha",text)
+        self.assertIn("github.event.workflow_run.head_branch || inputs.candidate_branch",text)
         self.assertIn("actions/create-github-app-token@v2",text)
         self.assertIn("secrets.portfolio_verifier_private_key",text)
         self.assertIn("docker run --rm --network none --cap-drop=all --security-opt=no-new-privileges",text)

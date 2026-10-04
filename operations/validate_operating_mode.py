@@ -351,12 +351,18 @@ def validate_operating_mode():
         "scheduler repair dispatch duplicated outside the leased handler")
     verifier=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text().lower()
     verifier_triggers=workflow_top_level_triggers(ROOT/".github/workflows/portfolio-independent-verifier.yml")
-    req(verifier_triggers=={"workflow_run"},"independent verifier must be workflow_run-only")
+    req(verifier_triggers=={"workflow_run","workflow_dispatch"},
+        "independent verifier trigger class invalid")
     req("actions: read" in verifier and "contents: write" in verifier and "pull-requests: write" in verifier,
         "independent verifier/integrator permissions missing")
     req("actions: write" not in verifier and "issues: write" not in verifier,
         "independent verifier gained unrelated mutation authority")
     for marker in (
+        "candidate_sha:",
+        "candidate_branch:",
+        "github.event_name == 'workflow_dispatch'",
+        "github.event.workflow_run.head_sha || inputs.candidate_sha",
+        "github.event.workflow_run.head_branch || inputs.candidate_branch",
         'branch.startswith("factory/auto-repair-")',
         '"auto_repair_fingerprint:" in body',
         'pr.get("user",{}).get("login")=="github-actions[bot]"',
@@ -366,6 +372,18 @@ def validate_operating_mode():
         "steps.pr.outputs.autonomous == 'true'",
     ):
         req(marker in verifier,f"protected autonomous integration control missing: {marker}")
+    checkpoint=(ROOT/".github/workflows/portfolio-state-checkpoint-candidate.yml").read_text().lower()
+    req(checkpoint.index("dispatch foundation verification when needed")
+        < checkpoint.index("dispatch independent verification when foundation is ready")
+        < checkpoint.index("wait for trusted exact-head verification"),
+        "checkpoint verification dispatch order invalid")
+    for marker in (
+        "portfolio-independent-verifier.yml --ref main",
+        '-f candidate_sha="$checkpoint_sha"',
+        '-f candidate_branch="$checkpoint_branch"',
+        'foundation.get("conclusion")=="success"',
+    ):
+        req(marker in checkpoint,f"checkpoint independent-verifier handoff missing: {marker}")
     verifier_source=(ROOT/"verification/independent_verifier.py").read_text()
     for anchor in (
         '".github/workflows/portfolio-independent-verifier.yml"',
