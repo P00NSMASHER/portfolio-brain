@@ -102,7 +102,7 @@ jobs:
           import subprocess
 
           raw = subprocess.check_output(
-              ["gh", "pr", "list", "--state", "open", "--limit", "100", "--json", "number,headRefName"],
+              ["gh", "pr", "list", "--state", "open", "--limit", "100", "--json", "number,headRefName,headRefOid"],
               text=True,
               env=os.environ,
           )
@@ -112,8 +112,31 @@ jobs:
           ]
           print("active=" + ("true" if matches else "false"))
           if matches:
-              print("pr_number=" + str(sorted(matches, key=lambda row: row["number"])[0]["number"]))
+              candidate = sorted(matches, key=lambda row: row["number"])[0]
+              print("pr_number=" + str(candidate["number"]))
+              print("branch=" + candidate["headRefName"])
+              checks = json.loads(subprocess.check_output([
+                  "gh","api",
+                  f"repos/{os.environ['GITHUB_REPOSITORY']}/commits/{candidate['headRefOid']}/check-runs"
+              ], text=True, env=os.environ)).get("check_runs", [])
+              foundation_in_flight_or_green = any(
+                  row.get("name") == "validate"
+                  and row.get("app", {}).get("id") == 15368
+                  and (
+                      row.get("status") != "completed"
+                      or row.get("conclusion") == "success"
+                  )
+                  for row in checks
+              )
+              print("needs_foundation=" + ("false" if foundation_in_flight_or_green else "true"))
           PY
+
+      - name: Ensure existing checkpoint candidate enters Foundation verification
+        if: ${{ steps.incident.outputs.active == 'true' && steps.incident.outputs.needs_foundation == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECKPOINT_BRANCH: ${{ steps.incident.outputs.branch }}
+        run: gh workflow run foundation-ci.yml --ref "$CHECKPOINT_BRANCH"
 
       - name: Generate validated checkpoint/archive candidate
         if: ${{ steps.trigger.outputs.checkpoint_required == 'true' && steps.incident.outputs.active != 'true' }}
