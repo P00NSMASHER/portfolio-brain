@@ -192,6 +192,12 @@ class ArchiveLifecycleTests(unittest.TestCase):
         self.assertIn("actions: read", candidate)
         self.assertIn("contents: write", candidate)
         self.assertIn("pull-requests: write", candidate)
+        self.assertIn("workflow_run:", candidate)
+        self.assertIn("- portfolio-state-reducer", candidate)
+        self.assertIn("Journal capacity exceeded; do not drop evidence", candidate)
+        self.assertIn("receipt.get(\"reason_type\") == \"JournalError\"", candidate)
+        self.assertIn('BRANCH="factory/checkpoint-archive-${GITHUB_RUN_ID}"', candidate)
+        self.assertNotIn('BRANCH="checkpoint/archive-${GITHUB_RUN_ID}"', candidate)
 
 
 if __name__ == "__main__":
