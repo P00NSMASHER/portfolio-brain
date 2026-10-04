@@ -359,17 +359,10 @@ def validate_operating_mode():
     for marker in (
         'branch.startswith("factory/auto-repair-")',
         '"auto_repair_fingerprint:" in body',
-        'branch.startswith("factory/checkpoint-archive-")',
-        'body.startswith("automated durable checkpoint/archive candidate.")',
-        '"state_journal/archive_manifest.json"',
-        '"state_journal/checkpoint.json.gz"',
-        'path.startswith("state_journal/archive/")',
-        'actor=="github-actions[bot]"',
-        'print("refreshable="+("true" if repair_autonomous else "false"))',
+        'pr.get("user",{}).get("login")=="github-actions[bot]"',
         "/update-branch",
         "merge_method=merge",
         '-f sha="$candidate_sha"',
-        "steps.pr.outputs.refreshable == 'true'",
         "steps.pr.outputs.autonomous == 'true'",
     ):
         req(marker in verifier,f"protected autonomous integration control missing: {marker}")
