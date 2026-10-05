@@ -4,7 +4,9 @@ on:
   schedule:
     - cron: "53 * * * *"
     # Dense date-bounded Step-23 recovery cadence for the one-hour 2026-10-05 UTC soak; normal cadence is unchanged.
-    - cron: "9,19,29,39 20 5 10 *"
+    - cron: "11 20 5 10 *"
+    - cron: "25 20 5 10 *"
+    - cron: "39 20 5 10 *"
   # GitHub scheduled delivery can be delayed or skipped. Recheck liveness after
   # any core producer finishes so one surviving trigger can recover overdue peers.
   workflow_run:
