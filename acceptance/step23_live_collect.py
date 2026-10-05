@@ -153,8 +153,20 @@ def scheduled_runs(gh: GH, workflows: set[str], exact_sha: str, start: datetime)
             break
     else:
         raise RuntimeError("scheduled run listing incomplete at page bound")
-    if gh.get(path + "&page=1").get("workflow_runs") != first_page:
-        raise RuntimeError("scheduled run listing changed during pagination")
+    def stable_identity(row: dict[str, Any]) -> tuple[Any, ...]:
+        return (
+            row.get("id"), row.get("created_at"), row.get("name"), row.get("head_sha"),
+            row.get("head_branch"), row.get("event"), row.get("workflow_id"),
+            row.get("path"), row.get("run_attempt", 1),
+        )
+
+    refreshed = gh.get(path + "&page=1").get("workflow_runs")
+    if not isinstance(refreshed, list):
+        raise RuntimeError("scheduled run listing malformed on refresh")
+    if tuple(stable_identity(row) for row in refreshed) != tuple(stable_identity(row) for row in first_page):
+        raise RuntimeError("scheduled run membership changed during pagination")
+    freshest = {row["id"]: row for row in refreshed if type(row.get("id")) is int}
+    rows = [freshest.get(row["id"], row) for row in rows]
     out = {name: [] for name in workflows}
     for row in rows:
         name = row.get("name")
