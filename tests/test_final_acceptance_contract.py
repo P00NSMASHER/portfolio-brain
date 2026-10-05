@@ -421,10 +421,10 @@ class FinalAcceptanceContractTests(unittest.TestCase):
         with self.assertRaisesRegex(FinalAcceptanceError, "another workflow"):
             validate_step23(bind_receipt(receipt))
 
-    def test_step23_rejects_run_completed_after_three_hour_deadline(self):
+    def test_step23_rejects_run_completed_after_one_hour_deadline(self):
         receipt = step23()
         receipt["runs"][0]["completed_at"] = "2026-09-30T16:00:01Z"
-        with self.assertRaisesRegex(FinalAcceptanceError, "outside the three-hour soak window"):
+        with self.assertRaisesRegex(FinalAcceptanceError, "outside the configured soak window"):
             validate_step23(bind_receipt(receipt))
 
     def test_step23_rejects_run_from_other_main(self):
