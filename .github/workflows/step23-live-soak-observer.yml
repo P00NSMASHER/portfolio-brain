@@ -14,7 +14,7 @@ on:
     types: [completed]
   schedule:
     # Fallback only. Primary observation is event-driven after every required workflow.
-    - cron: "0,5,10,15,20,25,30,35,40,45,50,55 19 5 10 *"
+    - cron: "0,11,21,31,43,49,53,56 20 5 10 *"
   workflow_dispatch:
 
 permissions:
@@ -72,7 +72,7 @@ jobs:
           import json, os
           config = {
               "exact_main_sha": os.environ["SOAK_SHA"],
-              "soak_start": "2026-10-05T19:00:00Z",
+              "soak_start": "2026-10-05T20:00:00Z",
               "required_workflows": [
                   "portfolio-state-reducer",
                   "runtime-hourly-sync",
