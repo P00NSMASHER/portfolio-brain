@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: step23-live-soak-observer-${{ github.event.workflow_run.head_sha || github.sha }}
+  group: step23-live-soak-observer
   cancel-in-progress: false
 
 jobs:
@@ -36,24 +36,16 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ github.token }}
     steps:
+      - name: Check out current protected main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
       - name: Resolve exact soak head
         id: soak
         shell: bash
-        env:
-          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
-          FALLBACK_SHA: ${{ github.sha }}
-        run: |
-          if [ -n "$WORKFLOW_RUN_SHA" ]; then
-            echo "sha=$WORKFLOW_RUN_SHA" >> "$GITHUB_OUTPUT"
-          else
-            echo "sha=$FALLBACK_SHA" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Check out the exact soak head
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ steps.soak.outputs.sha }}
-          persist-credentials: false
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Python
         uses: actions/setup-python@v5
