@@ -4,7 +4,10 @@ on:
   schedule:
     - cron: "47 */6 * * *"
     # Dense date-bounded Step-23 recovery cadence for the one-hour 2026-10-05 UTC soak; normal cadence is unchanged.
-    - cron: "4,14,24,34 20 5 10 *"
+    - cron: "14 20 5 10 *"
+    - cron: "26 20 5 10 *"
+    - cron: "38 20 5 10 *"
+    - cron: "50 20 5 10 *"
   push:
     branches: ["main"]
     paths:
