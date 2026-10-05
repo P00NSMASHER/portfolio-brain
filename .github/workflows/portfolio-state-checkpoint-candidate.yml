@@ -2,7 +2,7 @@ name: portfolio-state-checkpoint-candidate
 
 on:
   schedule:
-    - cron: "19 4 * * 0"
+    - cron: "19 * * * *"
   workflow_dispatch:
   push:
     branches: ["main"]
@@ -73,6 +73,7 @@ jobs:
           from pathlib import Path
 
           required = os.environ["EVENT_NAME"] != "workflow_run"
+          force = False
           if not required:
               expected_reason = "Journal capacity exceeded; do not drop evidence"
               receipts = sorted(Path("state_journal/out/triggering-reducer").rglob("receipt.json"))
@@ -87,10 +88,12 @@ jobs:
                       and receipt.get("reason") == expected_reason
                   ):
                       required = True
+                      force = True
                       break
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"checkpoint_required={'true' if required else 'false'}\n")
+              output.write(f"checkpoint_force={'true' if force else 'false'}\n")
           PY
 
       - name: Detect existing checkpoint recovery candidate
@@ -145,9 +148,15 @@ jobs:
       - name: Generate validated checkpoint/archive candidate
         if: ${{ steps.trigger.outputs.checkpoint_required == 'true' && steps.incident.outputs.active != 'true' }}
         id: generate
+        env:
+          CHECKPOINT_FORCE: ${{ steps.trigger.outputs.checkpoint_force }}
         run: |
           set -euo pipefail
-          python -m state_journal.checkpoint_archive             --output state_journal/out/checkpoint_archive_receipt.json
+          if [ "$CHECKPOINT_FORCE" = "true" ]; then
+            python -m state_journal.checkpoint_archive --force --output state_journal/out/checkpoint_archive_receipt.json
+          else
+            python -m state_journal.checkpoint_archive --output state_journal/out/checkpoint_archive_receipt.json
+          fi
           if git diff --quiet -- state_journal; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else

@@ -13,6 +13,7 @@ from state_journal.archive import (
 )
 from state_journal.github_reducer import reduce_from_provider
 from state_journal.production_reader import _pending_events
+from state_journal.checkpoint_archive import archive_due
 from state_journal.reducer import checkpoint, make_snapshot, set_authority
 
 
@@ -61,6 +62,35 @@ class ArchiveLifecycleTests(unittest.TestCase):
             (root / "state_journal/CHECKPOINT.json.gz").write_bytes(checkpoint_raw)
             loaded = load_active_manifest(root)
             self.assertEqual(loaded["manifest_hash"], manifest["manifest_hash"])
+
+    def test_archive_high_water_precedes_hard_event_and_byte_limits(self):
+        self.assertFalse(archive_due(69, 699, max_events=100, max_bytes=1000))
+        self.assertTrue(archive_due(70, 1, max_events=100, max_bytes=1000))
+        self.assertTrue(archive_due(0, 700, max_events=100, max_bytes=1000))
+
+    def test_repeated_rollovers_keep_a_hash_pinned_archive_chain(self):
+        first, _archive1, compacted1, _checkpoint1, _path1 = self.build(sequence=12)
+        next_state = set_authority(make_snapshot(
+            compacted1, [], sequence=first["checkpoint_sequence"], evidence={}
+        ), mode="CANONICAL", production_authority=True)
+        second, _archive2, compacted2, _checkpoint2, _path2 = build_rollover(
+            next_state,
+            source_reducer_run_id=902,
+            source_artifact_id=903,
+            source_head_sha="c" * 40,
+            source_artifact_digest="sha256:" + "d" * 64,
+            source_artifact_created_at="2026-09-30T14:17:34Z",
+            previous_manifest=first,
+        )
+        validate_manifest(
+            second, root=None, archived_state=next_state, checkpoint_doc=compacted2,
+            previous_manifest=first,
+        )
+        self.assertEqual(second["previous_manifest_hash"], first["manifest_hash"])
+        self.assertEqual(second["previous_manifest_path"], first["manifest_path"])
+        self.assertEqual(second["previous_checkpoint_hash"], first["new_checkpoint_hash"])
+        self.assertEqual(second["archived_checkpoint_hash"], first["new_checkpoint_hash"])
+        self.assertEqual(compacted2["states"], compacted1["states"])
 
     def test_public_archive_rejects_credential_like_material(self):
         for raw in (
@@ -184,8 +214,10 @@ class ArchiveLifecycleTests(unittest.TestCase):
         reducer = (root / ".github/workflows/portfolio-state-reducer.yml").read_text()
         candidate = (root / ".github/workflows/portfolio-state-checkpoint-candidate.yml").read_text()
         self.assertIn('cron: "11 4 * * *"', reducer)
-        self.assertIn('cron: "19 4 * * 0"', candidate)
+        self.assertIn('cron: "19 * * * *"', candidate)
         self.assertIn("python -m state_journal.checkpoint_archive", candidate)
+        self.assertIn("--force", candidate)
+        self.assertIn("checkpoint_force", candidate)
         self.assertIn("gh pr create", candidate)
         self.assertNotIn("gh pr merge", candidate)
         self.assertNotIn("git push origin main", candidate)
