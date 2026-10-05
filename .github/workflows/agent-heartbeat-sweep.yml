@@ -22,7 +22,8 @@ jobs:
       cancel-in-progress: false
       queue: max
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    # Five-minute canonical catch-up + two-minute work + one-minute finalization.
+    timeout-minutes: 8
     env:
       GITHUB_TOKEN: ${{ github.token }}
     steps:
@@ -37,7 +38,7 @@ jobs:
           python -m workload_control.workload_gate preflight
           --workflow-id agent-heartbeat-sweep
           --job-id heartbeat
-          --estimated-minutes 2
+          --estimated-minutes 8
       - name: Restore canonical agent heartbeat state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m state_journal.production_reader --domain heartbeat --output agents/live/agent_heartbeat_state.json

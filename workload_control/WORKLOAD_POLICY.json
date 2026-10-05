@@ -21,13 +21,13 @@
       "coalesce_pending": true
     },
     "agent-heartbeat-sweep::heartbeat": {
-      "max_minutes_per_job": 2,
+      "max_minutes_per_job": 8,
       "concurrency_group": "portfolio-heartbeat",
       "scheduled_cadence": "event_driven",
       "coalesce_pending": true
     },
     "portfolio-notification-cycle::notify": {
-      "max_minutes_per_job": 2,
+      "max_minutes_per_job": 8,
       "concurrency_group": "portfolio-notification",
       "scheduled_cadence": "service_defined",
       "coalesce_pending": true
