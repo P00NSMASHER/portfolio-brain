@@ -45,7 +45,26 @@ jobs:
       - name: Resolve exact soak head
         id: soak
         shell: bash
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        run: |
+          set -euo pipefail
+          MAIN_SHA="$(git rev-parse HEAD)"
+          ANCHOR_REF="refs/heads/step23-soak-anchor-20261005-2000"
+          ANCHOR_SHA="$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" "$ANCHOR_REF" | awk '{print $1}')"
+          START="$(date -u -d '2026-10-05T20:00:00Z' +%s)"
+          NOW="$(date -u +%s)"
+          if [ -z "$ANCHOR_SHA" ]; then
+            if [ "$NOW" -lt "$START" ]; then
+              echo "sha=$MAIN_SHA" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error title=Step 23 anchor missing::Exact-head anchor was not created before the soak."
+            exit 1
+          fi
+          if [ "$MAIN_SHA" != "$ANCHOR_SHA" ]; then
+            echo "::error title=Step 23 main moved::Expected $ANCHOR_SHA but main is $MAIN_SHA"
+            exit 1
+          fi
+          echo "sha=$ANCHOR_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Set up Python
         uses: actions/setup-python@v5

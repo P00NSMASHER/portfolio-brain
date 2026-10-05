@@ -12,6 +12,7 @@ import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from acceptance.final_acceptance import bind_receipt, validate_step23
 from runtime.artifact_state import BudgetedHTTP
@@ -128,46 +129,38 @@ def pending_event_count(token: str) -> int:
 
 
 def scheduled_runs(gh: GH, workflows: set[str], exact_sha: str, start: datetime) -> dict[str, list[dict[str, Any]]]:
-    path = "/actions/runs?branch=main&event=schedule&per_page=100"
-    rows = []
-    seen = set()
-    first_page = None
+    # A Step-23 window is intentionally small. Query only that bounded window so
+    # one API page is a stable snapshot; do not re-read page 1 while new runs are
+    # arriving, which previously turned normal progress into pagination drift.
+    start_iso = start.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    created_filter = quote(f">={start_iso}", safe="")
+    doc = gh.get(f"/actions/runs?branch=main&event=schedule&created={created_filter}&per_page=100")
+    rows = doc.get("workflow_runs")
+    if not isinstance(rows, list):
+        raise RuntimeError("scheduled run listing malformed")
+    total = doc.get("total_count", len(rows))
+    if type(total) is not int or total < len(rows):
+        raise RuntimeError("scheduled run listing total invalid")
+    if total > 100:
+        raise RuntimeError("scheduled run listing exceeds bounded one-page cap")
+
+    seen: set[int] = set()
     previous_time = None
-    for page in range(1, 21):
-        doc = gh.get(path + f"&page={page}")
-        batch = doc.get("workflow_runs")
-        if not isinstance(batch, list):
-            raise RuntimeError("scheduled run listing malformed")
-        if page == 1:
-            first_page = batch
-        for row in batch:
-            created = parse_time(row["created_at"])
-            if row["id"] in seen or (previous_time is not None and created > previous_time):
-                raise RuntimeError("scheduled run pagination drift")
-            previous_time = created
-            seen.add(row["id"])
-            rows.append(row)
-        if not batch and len(rows) >= 1000:
-            raise RuntimeError("scheduled run listing reached provider result cap")
-        if len(batch) < 100 or (batch and parse_time(batch[-1]["created_at"]) < start):
-            break
-    else:
-        raise RuntimeError("scheduled run listing incomplete at page bound")
-    if gh.get(path + "&page=1").get("workflow_runs") != first_page:
-        raise RuntimeError("scheduled run listing changed during pagination")
     out = {name: [] for name in workflows}
     for row in rows:
-        name = row.get("name")
-        if name not in workflows or row.get("head_sha") != exact_sha:
-            continue
         created = parse_time(row["created_at"])
-        if created < start:
+        run_id = int(row["id"])
+        if run_id in seen or (previous_time is not None and created > previous_time):
+            raise RuntimeError("scheduled run snapshot ordering invalid")
+        previous_time = created
+        seen.add(run_id)
+        name = row.get("name")
+        if name not in workflows or row.get("head_sha") != exact_sha or created < start:
             continue
         out[name].append(row)
     for name in out:
         out[name].sort(key=lambda r: (parse_time(r["created_at"]), int(r["id"])))
     return out
-
 
 def evidence_window(rows: list[dict], minimum: int, workflow: str) -> list[dict]:
     # Scan every raw run for failures before selecting a bounded receipt set.
@@ -205,7 +198,7 @@ def cancellation_is_coalesced(row: dict[str, Any], successors: list[dict[str, An
     return later[0] if later else None
 
 
-def find_real_reset(grouped: dict[str, list[dict[str, Any]]]) -> tuple[datetime, str] | None:
+def find_real_resets(grouped: dict[str, list[dict[str, Any]]]) -> list[tuple[datetime, str]]:
     failures: list[tuple[datetime, str]] = []
     for workflow, rows in grouped.items():
         for row in rows:
@@ -224,8 +217,12 @@ def find_real_reset(grouped: dict[str, list[dict[str, Any]]]) -> tuple[datetime,
                     f"{workflow} run {row['id']} conclusion={conclusion}",
                 )
             )
-    return max(failures, key=lambda x: x[0]) if failures else None
+    return sorted(failures, key=lambda item: item[0])
 
+
+def find_real_reset(grouped: dict[str, list[dict[str, Any]]]) -> tuple[datetime, str] | None:
+    failures = find_real_resets(grouped)
+    return failures[-1] if failures else None
 
 def main() -> None:
     ap = argparse.ArgumentParser()
@@ -283,21 +280,28 @@ def main() -> None:
         while time.monotonic() < deadline:
             assert_main()
             grouped = scheduled_runs(gh, workflows, exact_sha, effective_start)
-            reset = find_real_reset(grouped)
-            if reset is not None:
-                reset_at, reason = reset
-                resets.append(
-                    {
-                        "previous_start": effective_start.isoformat().replace("+00:00", "Z"),
-                        "reset_at": reset_at.isoformat().replace("+00:00", "Z"),
-                        "reason": reason,
-                    }
-                )
+            reset_events = find_real_resets(grouped)
+            if reset_events:
+                previous_start = effective_start
+                for reset_at, reason in reset_events:
+                    resets.append(
+                        {
+                            "previous_start": previous_start.isoformat().replace("+00:00", "Z"),
+                            "reset_at": reset_at.isoformat().replace("+00:00", "Z"),
+                            "reason": reason,
+                        }
+                    )
+                    previous_start = reset_at
                 if len(resets) > max_resets:
                     raise RuntimeError("STEP23_MAX_RESETS_EXCEEDED")
-                effective_start = reset_at
+                effective_start = reset_events[-1][0]
                 pending_start = pending_event_count(token)
-                print(json.dumps({"status": "SOAK_RESET", "reason": reason, "new_start": resets[-1]["reset_at"]}))
+                print(json.dumps({
+                    "status": "SOAK_RESET",
+                    "reason": reset_events[-1][1],
+                    "new_start": effective_start.isoformat().replace("+00:00", "Z"),
+                    "reset_count": len(resets),
+                }))
                 continue
 
             success_counts = {
