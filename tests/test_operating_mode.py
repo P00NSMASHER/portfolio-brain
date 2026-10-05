@@ -125,7 +125,7 @@ class OperatingModeTests(unittest.TestCase):
         self.assertIn("--once",observer_text)
         self.assertIn('"max_soak_duration_seconds": 3600',observer_text)
         reducer=(ROOT/".github/workflows/portfolio-state-reducer.yml").read_text()
-        self.assertIn("cancel-in-progress: ${{ github.event_name == 'schedule' }}",reducer)
+        self.assertIn("cancel-in-progress: false",reducer)
 
     def test_learning_crons_avoid_known_hourly_writer_collisions(self):
         policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())["approved_recurring_workflows"]
