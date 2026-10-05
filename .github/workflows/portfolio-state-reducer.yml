@@ -38,10 +38,7 @@ permissions:
 
 concurrency:
   group: portfolio-state-reducer
-  # Scheduled Step-23 samples preempt reactive reducer work so evidence cannot
-  # starve behind workflow_run traffic. Reactive runs never preempt a scheduled
-  # sample, preserving one reducer writer at a time.
-  cancel-in-progress: ${{ github.event_name == 'schedule' }}
+  cancel-in-progress: false
   queue: max
 
 jobs:
