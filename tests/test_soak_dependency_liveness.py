@@ -99,8 +99,8 @@ class SoakDependencyLivenessTests(unittest.TestCase):
         self.assertIn("cancel-in-progress: false", text)
         self.assertIn("queue: max", text)
         self.assertNotIn("group: portfolio-state-writer-v1", text)
-        for minute in (9, 21, 33, 45):
-            self.assertIn(f'cron: "{minute} 22 5 10 *"', text)
+        self.assertIn('cron: "11 4 * * *"', text)
+        self.assertNotIn(' 5 10 *', text)
 
     def test_notifications_restore_canonical_cost_before_evaluation(self):
         text = (ROOT / ".github/workflows/portfolio-notification-cycle.yml").read_text()

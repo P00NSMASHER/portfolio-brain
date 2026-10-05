@@ -1,0 +1,84 @@
+name: portfolio-schedule-delivery
+on:
+  schedule:
+    - cron: "7/10 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/portfolio-schedule-delivery.yml
+      - operations/schedule_delivery.py
+      - operations/STEP23_CONTROL.json
+      - operations/SCHEDULE_DELIVERY_POLICY.json
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: portfolio-schedule-delivery
+  cancel-in-progress: false
+jobs:
+  inspect:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Record actual event before any application dependency
+        env:
+          ACTUAL_EVENT: ${{ github.event_name }}
+          ACTUAL_SHA: ${{ github.sha }}
+        run: printf 'Native transport probe event=%s sha=%s at=%s\n' "$ACTUAL_EVENT" "$ACTUAL_SHA" "$(date -u +%FT%TZ)"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Distinguish missing events from queued runners and runtime failure
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python -m operations.schedule_delivery
+      - name: Preserve transport evidence, not a soak receipt
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-schedule-delivery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: operations/out/schedule_delivery.json
+          if-no-files-found: error
+          retention-days: 14
+  recover:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: inspect
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    concurrency:
+      group: portfolio-cost-watchdog
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cancel only retired auditor and repair only confirmed disabled registrations
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python -m operations.schedule_delivery --repair --output operations/out/registration_recovery.json
+      - name: Bootstrap existing bounded non-paid liveness path independently of cron
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python -m operations.workflow_liveness --without-cost-state --output operations/out/delivery_bootstrap.json
+      - name: Preserve actual recovery outcomes
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-schedule-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: operations/out/
+          if-no-files-found: error
+          retention-days: 14

@@ -1,128 +1,14 @@
 name: step23-live-soak-observer
-
 on:
-  workflow_run:
-    workflows:
-      - portfolio-state-reducer
-      - runtime-hourly-sync
-      - portfolio-autonomous-scheduler
-      - hunter-autonomous-cycle
-      - agent-heartbeat-sweep
-      - portfolio-cost-watchdog
-      - portfolio-notification-cycle
-      - command-center-pages
-    types: [completed]
-  schedule:
-    # Fallback only. Primary observation is event-driven after every required workflow.
-    - cron: "5 22 5 10 *"
-    - cron: "15 22 5 10 *"
-    - cron: "25 22 5 10 *"
-    - cron: "35 22 5 10 *"
-    - cron: "45 22 5 10 *"
-    - cron: "55 22 5 10 *"
   workflow_dispatch:
-
 permissions:
-  actions: read
   contents: read
-
-concurrency:
-  group: step23-live-soak-observer
-  cancel-in-progress: false
-
 jobs:
-  observe:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == 'main' }}
+  retired:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      actions: read
-      contents: read
-    env:
-      GITHUB_TOKEN: ${{ github.token }}
+    timeout-minutes: 1
     steps:
-      - name: Check out current protected main
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          persist-credentials: false
-
-      - name: Resolve exact soak head
-        id: soak
-        shell: bash
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Enable only the 2026 recovery window
-        id: window
-        shell: bash
+      - name: Refuse the abandoned window
         run: |
-          if [ "$(date -u +%F)" = "2026-10-05" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "This one-time Step 23 observer is outside its 2026 recovery date; skipping." >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Bind the one-hour soak to exact main
-        if: ${{ steps.window.outputs.enabled == 'true' }}
-        env:
-          SOAK_SHA: ${{ steps.soak.outputs.sha }}
-        run: |
-          python - <<'PY'
-          import json, os
-          config = {
-              "exact_main_sha": os.environ["SOAK_SHA"],
-              "soak_start": "2026-10-05T22:00:00Z",
-              "required_workflows": [
-                  "portfolio-state-reducer",
-                  "runtime-hourly-sync",
-                  "portfolio-autonomous-scheduler",
-                  "hunter-autonomous-cycle",
-                  "agent-heartbeat-sweep",
-                  "portfolio-cost-watchdog",
-                  "portfolio-notification-cycle",
-                  "command-center-pages",
-              ],
-              "required_handler_types": ["REPAIR", "TEST", "VERIFICATION"],
-              "required_successes_per_workflow": 3,
-              "max_soak_duration_seconds": 3600,
-              "poll_seconds": 60,
-              "max_resets": 5,
-          }
-          with open("step23-soak-config.json", "w", encoding="utf-8") as f:
-              json.dump(config, f, indent=2)
-              f.write("\n")
-          PY
-
-      - name: Run strict Step 23 point observation
-        if: ${{ steps.window.outputs.enabled == 'true' }}
-        run: >-
-          python -m acceptance.step23_live_collect
-          --config step23-soak-config.json
-          --output-meta step23-soak-progress.json
-          --output-receipt step23-soak-receipt.json
-          --timeout-seconds 300
-          --once
-
-      - name: Upload Step 23 progress
-        if: ${{ always() && steps.window.outputs.enabled == 'true' && hashFiles('step23-soak-progress.json') != '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: portfolio-step23-progress-${{ github.run_id }}
-          path: step23-soak-progress.json
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Upload validated Step 23 soak receipt
-        if: ${{ success() && steps.window.outputs.enabled == 'true' && hashFiles('step23-soak-receipt.json') != '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: portfolio-step23-soak-${{ github.run_id }}
-          path: step23-soak-receipt.json
-          if-no-files-found: error
-          retention-days: 30
+          echo '::error::STEP23_ABANDONED_BY_OWNER. No replacement window is armed.'
+          exit 1

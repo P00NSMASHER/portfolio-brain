@@ -3,11 +3,6 @@ name: portfolio-state-reducer
 on:
   schedule:
     - cron: "11 4 * * *"
-    # Dense date-bounded Step-23 recovery cadence for the one-hour 2026-10-05 UTC soak; normal cadence is unchanged.
-    - cron: "9 22 5 10 *"
-    - cron: "21 22 5 10 *"
-    - cron: "33 22 5 10 *"
-    - cron: "45 22 5 10 *"
   push:
     branches: ["main"]
     paths:
@@ -46,8 +41,6 @@ concurrency:
 
 jobs:
   reduce:
-    # Keep reactive reduction live: production readers wait for fresh snapshots,
-    # and the last scheduled producer can finish after the last reducer cron.
     # Sole canonical writer: independent reducer lane lets it catch up while a
     # serialized producer waits at the stale-state barrier.
     runs-on: ubuntu-latest
