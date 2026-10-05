@@ -305,8 +305,24 @@ jobs:
           echo "Timed out waiting for trusted checkpoint verification." >&2
           exit 1
 
-      - name: Merge verified checkpoint candidate through branch protection
+      - name: Hold checkpoint merge during Step 23 exact-head soak
+        id: step23_merge_guard
         if: ${{ steps.trigger.outputs.checkpoint_required == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          NOW="$(date -u +%s)"
+          START="$(date -u -d '2026-10-05T19:00:00Z' +%s)"
+          END="$(date -u -d '2026-10-05T20:00:00Z' +%s)"
+          if [ "$NOW" -ge "$START" ] && [ "$NOW" -lt "$END" ]; then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "Checkpoint candidate verified; protected-main merge deferred until the Step 23 exact-head soak ends." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge verified checkpoint candidate through branch protection
+        if: ${{ steps.trigger.outputs.checkpoint_required == 'true' && steps.step23_merge_guard.outputs.allowed == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.candidate.outputs.pr_number }}
