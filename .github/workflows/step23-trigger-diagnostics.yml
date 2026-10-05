@@ -1,0 +1,97 @@
+name: step23-trigger-diagnostics
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/step23-trigger-diagnostics.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  diagnose:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'fix/step23-trigger-diagnosis-') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the audited source without credentials
+        uses: actions/checkout@v4
+        with:
+          ref: dee7398e7a2dcd97af966491238f5dbd6cf23c9e
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Inspect workflow registration and actual schedule delivery
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request, urllib.error
+          from datetime import datetime, timezone
+          from pathlib import Path
+          repo = os.environ['GITHUB_REPOSITORY']
+          base = 'https://api.github.com/repos/' + repo
+          requests = 0
+          def get(path):
+              global requests
+              requests += 1
+              if requests > 40:
+                  raise RuntimeError('diagnostic request budget exhausted')
+              request = urllib.request.Request(base + path, headers={
+                  'Authorization': 'Bearer ' + os.environ['GITHUB_TOKEN'],
+                  'Accept': 'application/vnd.github+json',
+                  'X-GitHub-Api-Version': '2022-11-28',
+                  'User-Agent': 'portfolio-soak-read-only-diagnostics/1.0',
+              })
+              try:
+                  with urllib.request.urlopen(request, timeout=15) as response:
+                      return json.load(response)
+              except urllib.error.HTTPError as exc:
+                  return {'http_status': exc.code, 'path': path}
+          required = {'portfolio-state-reducer','runtime-hourly-sync','portfolio-autonomous-scheduler',
+              'hunter-autonomous-cycle','agent-heartbeat-sweep','portfolio-cost-watchdog',
+              'portfolio-notification-cycle','command-center-pages','step23-live-soak-observer'}
+          document = {'observed_at': datetime.now(timezone.utc).isoformat(), 'repository': repo,
+              'main_sha': get('/branches/main').get('commit',{}).get('sha'),
+              'read_only': True, 'workflows': [], 'errors': []}
+          found = []
+          for page in range(1,4):
+              listing = get('/actions/workflows?per_page=100&page=' + str(page))
+              if 'workflows' not in listing:
+                  document['errors'].append(listing)
+                  break
+              found.extend(listing['workflows'])
+              if len(listing['workflows']) < 100:
+                  break
+          for workflow in found:
+              if workflow['name'] not in required:
+                  continue
+              row = {key: workflow.get(key) for key in ('id','name','path','state','created_at','updated_at')}
+              history = get('/actions/workflows/' + str(workflow['id']) + '/runs?event=schedule&per_page=12')
+              row['scheduled_runs'] = [{key: run.get(key) for key in
+                  ('id','event','head_sha','created_at','run_started_at','updated_at','status','conclusion','html_url')}
+                  for run in history.get('workflow_runs',[])]
+              row['history_error'] = history.get('http_status')
+              source = Path(workflow['path'])
+              row['source_crons'] = [line.strip() for line in source.read_text().splitlines() if 'cron:' in line] if source.is_file() else []
+              document['workflows'].append(row)
+          document['missing_workflows'] = sorted(required - {row['name'] for row in document['workflows']})
+          document['requests_used'] = requests
+          Path('step23-trigger-diagnostics.json').write_text(json.dumps(document, indent=2) + '\n')
+          print(json.dumps(document, indent=2))
+          PY
+      - name: Archive the exact public source for offline regression testing
+        run: git archive --format=tar HEAD | gzip > step23-audited-source.tar.gz
+      - name: Preserve diagnostics and exact source
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: step23-trigger-diagnostics-${{ github.run_id }}
+          path: |
+            step23-trigger-diagnostics.json
+            step23-audited-source.tar.gz
+          if-no-files-found: error
+          retention-days: 7
