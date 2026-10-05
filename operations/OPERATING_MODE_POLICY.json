@@ -49,7 +49,7 @@
       "purpose": "daily canonical snapshot refresh from validated durable checkpoint/archive lineage"
     },
     "portfolio-state-checkpoint-candidate": {
-      "cron": "19 4 * * 0",
+      "cron": "19 * * * *",
       "purpose": "weekly protected candidate for durable canonical checkpoint/archive compaction"
     },
     "verified-feedback-bootstrap": {
