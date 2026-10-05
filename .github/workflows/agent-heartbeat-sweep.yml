@@ -3,10 +3,8 @@ name: agent-heartbeat-sweep
 on:
   schedule:
     - cron: "29 */2 * * *"
-    # Three date-bounded Step-23 recovery waves for 2026-10-04/05 UTC; normal cadence is unchanged.
-    - cron: "33 23 4 10 *"
-    - cron: "3 0 5 10 *"
-    - cron: "33 0 5 10 *"
+    # Redundant date-bounded Step-23 recovery cadence for 2026-10-05 UTC; normal cadence is unchanged.
+    - cron: "4-49/15 4-5 5 10 *"
   workflow_dispatch:
 
 permissions:

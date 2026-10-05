@@ -91,14 +91,14 @@ class OperatingModeTests(unittest.TestCase):
         actual=scheduled_workflow_inventory(ROOT/".github/workflows")
         expected={name:[entry["cron"]] for name,entry in policy["approved_recurring_workflows"].items()}
         bounded_step23={
-          "portfolio-state-reducer":["25 23 4 10 *","55 23 4 10 *","25 0 5 10 *"],
-          "runtime-hourly-sync":["27 23 4 10 *","57 23 4 10 *","27 0 5 10 *"],
-          "portfolio-autonomous-scheduler":["29 23 4 10 *","59 23 4 10 *","29 0 5 10 *"],
-          "hunter-autonomous-cycle":["31 23 4 10 *","1 0 5 10 *","31 0 5 10 *"],
-          "agent-heartbeat-sweep":["33 23 4 10 *","3 0 5 10 *","33 0 5 10 *"],
-          "portfolio-cost-watchdog":["35 23 4 10 *","5 0 5 10 *","35 0 5 10 *"],
-          "portfolio-notification-cycle":["37 23 4 10 *","7 0 5 10 *","37 0 5 10 *"],
-          "command-center-pages":["39 23 4 10 *","9 0 5 10 *","39 0 5 10 *"],
+          "portfolio-state-reducer":["0-45/15 4-5 5 10 *"],
+          "runtime-hourly-sync":["1-46/15 4-5 5 10 *"],
+          "portfolio-autonomous-scheduler":["2-47/15 4-5 5 10 *"],
+          "hunter-autonomous-cycle":["3-48/15 4-5 5 10 *"],
+          "agent-heartbeat-sweep":["4-49/15 4-5 5 10 *"],
+          "portfolio-cost-watchdog":["5-50/15 4-5 5 10 *"],
+          "portfolio-notification-cycle":["6-51/15 4-5 5 10 *"],
+          "command-center-pages":["7-52/15 4-5 5 10 *"],
         }
         for name,crons in bounded_step23.items():
             expected[name].extend(crons)
@@ -108,7 +108,7 @@ class OperatingModeTests(unittest.TestCase):
           "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
           "portfolio-notification-cycle","command-center-pages",
         })
-        self.assertTrue(all(cron.split()[2:4] in (["4","10"],["5","10"]) for rows in bounded_step23.values() for cron in rows))
+        self.assertTrue(all(cron.split()[2:4] == ["5","10"] for rows in bounded_step23.values() for cron in rows))
 
     def test_learning_crons_avoid_known_hourly_writer_collisions(self):
         policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())["approved_recurring_workflows"]
