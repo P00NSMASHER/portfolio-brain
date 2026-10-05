@@ -4,7 +4,10 @@ on:
   schedule:
     - cron: "17 * * * *"
     # Dense date-bounded Step-23 recovery cadence for the one-hour 2026-10-05 UTC soak; normal cadence is unchanged.
-    - cron: "2,12,22,32 20 5 10 *"
+    - cron: "10 20 5 10 *"
+    - cron: "22 20 5 10 *"
+    - cron: "34 20 5 10 *"
+    - cron: "46 20 5 10 *"
   # Do not wait for best-effort cron after runtime/adapter repairs land on main.
   # This remains the same governed OBSERVE-only sync job and does not widen authority.
   push:
