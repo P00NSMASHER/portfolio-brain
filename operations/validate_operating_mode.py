@@ -217,8 +217,10 @@ def validate_operating_mode():
     delivery=load("operations/SCHEDULE_DELIVERY_POLICY.json")
     req(delivery == {
         "schema_version":"1.0.0", "workflow":"portfolio-schedule-delivery",
-        "cron":"7/10 * * * *", "purpose":"DELIVERY_DIAGNOSTICS_ONLY",
+        "cron":"6,11,16,21,26,31,36,41,46,51,56 * * * *",
+        "purpose":"DELIVERY_DIAGNOSTICS_ONLY",
         "max_api_requests":80, "timeout_seconds":15, "new_soak_start":None,
+        "registration_refresh_on_main_push":True,
     }, "schedule delivery monitor policy changed")
     workflow_dir=ROOT/".github/workflows"
     actual=scheduled_workflow_inventory(workflow_dir)
