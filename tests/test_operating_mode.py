@@ -91,14 +91,14 @@ class OperatingModeTests(unittest.TestCase):
         actual=scheduled_workflow_inventory(ROOT/".github/workflows")
         expected={name:[entry["cron"]] for name,entry in policy["approved_recurring_workflows"].items()}
         bounded_step23={
-          "portfolio-state-reducer":["0-45/15 7-9 5 10 *"],
-          "runtime-hourly-sync":["1-46/15 7-9 5 10 *"],
-          "portfolio-autonomous-scheduler":["2-47/15 7-9 5 10 *"],
-          "hunter-autonomous-cycle":["3-48/15 7-9 5 10 *"],
-          "agent-heartbeat-sweep":["4-49/15 7-9 5 10 *"],
-          "portfolio-cost-watchdog":["5-50/15 7-9 5 10 *"],
-          "portfolio-notification-cycle":["6-51/15 7-9 5 10 *"],
-          "command-center-pages":["7-52/15 7-9 5 10 *"],
+          "portfolio-state-reducer":["0-15/15 8-9 5 10 *"],
+          "runtime-hourly-sync":["1-16/15 8-9 5 10 *"],
+          "portfolio-autonomous-scheduler":["2-17/15 8-9 5 10 *"],
+          "hunter-autonomous-cycle":["3-18/15 8-9 5 10 *"],
+          "agent-heartbeat-sweep":["4-19/15 8-9 5 10 *"],
+          "portfolio-cost-watchdog":["5-20/15 8-9 5 10 *"],
+          "portfolio-notification-cycle":["6-21/15 8-9 5 10 *"],
+          "command-center-pages":["7-22/15 8-9 5 10 *"],
         }
         for name,crons in bounded_step23.items():
             expected[name].extend(crons)
