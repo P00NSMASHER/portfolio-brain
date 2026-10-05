@@ -1,9 +1,10 @@
 {
   "schema_version": "1.0.0",
   "workflow": "portfolio-schedule-delivery",
-  "cron": "7/10 * * * *",
+  "cron": "6,11,16,21,26,31,36,41,46,51,56 * * * *",
   "purpose": "DELIVERY_DIAGNOSTICS_ONLY",
   "max_api_requests": 80,
   "timeout_seconds": 15,
-  "new_soak_start": null
+  "new_soak_start": null,
+  "registration_refresh_on_main_push": true
 }
