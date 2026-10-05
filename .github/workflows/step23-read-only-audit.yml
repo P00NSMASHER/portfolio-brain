@@ -1,0 +1,54 @@
+name: step23-read-only-audit
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/step23-read-only-audit.yml
+      - acceptance/step23_audit_overlay.py
+      - acceptance/soak_observation.py
+      - tests/test_soak_observation.py
+      - tests/test_step23_audit_overlay.py
+permissions:
+  actions: read
+  contents: read
+concurrency:
+  group: step23-read-only-audit-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: false
+jobs:
+  audit:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'audit/step23-exact-main-20261005' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Checkout exact observer candidate without stored credentials
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: observer
+          persist-credentials: false
+      - name: Checkout frozen soak source without stored credentials
+        uses: actions/checkout@v4
+        with:
+          ref: ca2ae77fa0314777bbc8591e3b2507b2effa43b5
+          path: audited-main
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Independently gate and audit the existing one-hour window
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          AUDIT_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: >-
+          python observer/acceptance/step23_audit_overlay.py
+          --root audited-main
+          --observer-root observer
+          --output audit-output
+      - name: Preserve audited receipt or explicit failure
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-step23-read-only-audit-${{ github.run_id }}
+          path: audit-output/
+          if-no-files-found: error
+          retention-days: 30
