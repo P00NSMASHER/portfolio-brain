@@ -46,11 +46,8 @@ concurrency:
 
 jobs:
   reduce:
-    if: >-
-      ${{
-        github.event_name != 'workflow_run' ||
-        !startsWith(github.event.workflow_run.created_at, '2026-10-05T22:')
-      }}
+    # Keep reactive reduction live: production readers wait for fresh snapshots,
+    # and the last scheduled producer can finish after the last reducer cron.
     # Sole canonical writer: independent reducer lane lets it catch up while a
     # serialized producer waits at the stale-state barrier.
     runs-on: ubuntu-latest

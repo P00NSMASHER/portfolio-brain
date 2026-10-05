@@ -79,7 +79,10 @@ def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, curren
     seen_reducers: set[int] = set()
     poller = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
     while clock() < deadline:
-        runs = poller.get("/actions/runs?branch=main&event=workflow_run&per_page=50").get("workflow_runs", [])
+        # Any genuine reducer completion can unblock the production reader.
+        # Scheduled evidence still has its separate, strict acceptance gate.
+        # Snapshot validation and pending-artifact coverage remain mandatory.
+        runs = poller.get("/actions/runs?branch=main&per_page=50").get("workflow_runs", [])
         require(isinstance(runs, list), "Reducer run listing malformed")
         successes = [
             row for row in runs
