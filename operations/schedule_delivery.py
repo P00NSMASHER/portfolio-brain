@@ -52,7 +52,7 @@ class API:
         require(self.requests < 80, "DELIVERY_API_BUDGET_EXHAUSTED")
         # Write destinations are a closed set, not caller-supplied URLs.
         if method == "PUT":
-            require(re.fullmatch(r"/actions/workflows/[0-9]+/enable", path) is not None, "WRITE_NOT_ALLOWED")
+            require(re.fullmatch(r"/actions/workflows/[0-9]+/(?:enable|disable)", path) is not None, "WRITE_NOT_ALLOWED")
         if method == "POST":
             require(path == f"/actions/runs/{RETIRED_RUN}/cancel", "WRITE_NOT_ALLOWED")
         self.requests += 1
@@ -153,6 +153,25 @@ def repair(api: API, workflows: dict[str, dict], sha: str, env: dict[str, str]) 
             continue
         require(wf.get("name") == name and wf.get("path") == f".github/workflows/{name}.yml",
                 "REPAIR_TARGET_IDENTITY_MISMATCH")
+        if name == PROBE and wf.get("state") == "active":
+            history = api.call(f"/actions/workflows/{wf['id']}/runs?event=schedule&branch=main&per_page=1")
+            require(isinstance(history, dict) and isinstance(history.get("workflow_runs"), list),
+                    "PROBE_RUN_HISTORY_MALFORMED")
+            if not history["workflow_runs"]:
+                require(api.call("/branches/main")["commit"]["sha"] == sha, "MAIN_MOVED")
+                api.call(f"/actions/workflows/{wf['id']}/disable", "PUT")
+                disabled = api.call(f"/actions/workflows/{wf['id']}")
+                require(disabled.get("id") == wf["id"] and disabled.get("path") == wf["path"]
+                        and disabled.get("name") == name and disabled.get("state") == "disabled_manually",
+                        "PROBE_DISABLE_NOT_CONFIRMED")
+                api.call(f"/actions/workflows/{wf['id']}/enable", "PUT")
+                confirmed = api.call(f"/actions/workflows/{wf['id']}")
+                require(confirmed.get("id") == wf["id"] and confirmed.get("path") == wf["path"]
+                        and confirmed.get("name") == name and confirmed.get("state") == "active",
+                        "PROBE_REENABLE_NOT_CONFIRMED")
+                actions.append({"workflow": name,
+                                "action": "REGISTRATION_REFRESHED_DELIVERY_UNPROVEN"})
+                continue
         if wf.get("state") not in REPAIRABLE:
             actions.append({"workflow": name, "action": "LEFT_UNCHANGED", "state": wf.get("state")})
             continue
