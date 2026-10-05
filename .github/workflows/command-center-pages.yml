@@ -22,7 +22,10 @@ on:
   schedule:
     - cron: "37 * * * *"
     # Dense date-bounded Step-23 recovery cadence for the one-hour 2026-10-05 UTC soak; normal cadence is unchanged.
-    - cron: "8,16,24,32,40,48,56 19 5 10 *"
+    - cron: "20 22 5 10 *"
+    - cron: "32 22 5 10 *"
+    - cron: "44 22 5 10 *"
+    - cron: "56 22 5 10 *"
   # Core producers already trigger the watchdog. Publish after its receipt
   # instead of publishing both before and after the same verification cycle.
   # All completions (including failure) remain visible; cron is the fallback.
@@ -46,6 +49,11 @@ concurrency:
 
 jobs:
   publish:
+    if: >-
+      ${{
+        github.event_name != 'workflow_run' ||
+        !startsWith(github.event.workflow_run.created_at, '2026-10-05T22:')
+      }}
     # Serialize the complete restore -> mutate -> upload transaction.
     concurrency:
       group: portfolio-state-writer-v1
