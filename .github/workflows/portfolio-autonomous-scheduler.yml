@@ -4,7 +4,22 @@ on:
   schedule:
     - cron: "23 * * * *"
     # Dense date-bounded Step-23 recovery cadence for the one-hour 2026-10-05 UTC soak; normal cadence is unchanged.
-    - cron: "3,11,19,27,35,43,51,59 19 5 10 *"
+    - cron: "3 21 5 10 *"
+    - cron: "18 21 5 10 *"
+    - cron: "33 21 5 10 *"
+    - cron: "48 21 5 10 *"
+    - cron: "3 22 5 10 *"
+    - cron: "18 22 5 10 *"
+    - cron: "33 22 5 10 *"
+    - cron: "48 22 5 10 *"
+    - cron: "3 23 5 10 *"
+    - cron: "18 23 5 10 *"
+    - cron: "33 23 5 10 *"
+    - cron: "48 23 5 10 *"
+    - cron: "3 0 6 10 *"
+    - cron: "18 0 6 10 *"
+    - cron: "33 0 6 10 *"
+    - cron: "48 0 6 10 *"
   repository_dispatch:
     types: ["portfolio_schedule"]
   workflow_dispatch:
@@ -46,13 +61,13 @@ jobs:
           --job-id schedule
           --estimated-minutes 5
       - name: Execute exact Step 23 required handlers
-        if: ${{ steps.workload.outputs.allowed == 'true' && github.event_name == 'schedule' && (github.event.schedule == '3,11,19,27,35,43,51,59 19 5 10 *') }}
+        if: ${{ steps.workload.outputs.allowed == 'true' && github.event_name == 'schedule' && (github.event.schedule != '23 * * * *') }}
         run: >-
           python -m scheduler.step8_acceptance
           --source-ref RTASK-4730DF8216170D0353B7
           --output scheduler/out/step23_handler_acceptance.json
       - name: Upload exact Step 23 handler evidence
-        if: ${{ steps.workload.outputs.allowed == 'true' && github.event_name == 'schedule' && (github.event.schedule == '3,11,19,27,35,43,51,59 19 5 10 *') }}
+        if: ${{ steps.workload.outputs.allowed == 'true' && github.event_name == 'schedule' && (github.event.schedule != '23 * * * *') }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-step23-handler-acceptance

@@ -4,7 +4,22 @@ on:
   schedule:
     - cron: "11 4 * * *"
     # Dense date-bounded Step-23 recovery cadence for the one-hour 2026-10-05 UTC soak; normal cadence is unchanged.
-    - cron: "1,9,17,25,33,41,49,57 19 5 10 *"
+    - cron: "4 21 5 10 *"
+    - cron: "19 21 5 10 *"
+    - cron: "34 21 5 10 *"
+    - cron: "49 21 5 10 *"
+    - cron: "4 22 5 10 *"
+    - cron: "19 22 5 10 *"
+    - cron: "34 22 5 10 *"
+    - cron: "49 22 5 10 *"
+    - cron: "4 23 5 10 *"
+    - cron: "19 23 5 10 *"
+    - cron: "34 23 5 10 *"
+    - cron: "49 23 5 10 *"
+    - cron: "4 0 6 10 *"
+    - cron: "19 0 6 10 *"
+    - cron: "34 0 6 10 *"
+    - cron: "49 0 6 10 *"
   push:
     branches: ["main"]
     paths:
@@ -43,6 +58,16 @@ concurrency:
 
 jobs:
   reduce:
+    if: >-
+      ${{
+        github.event_name != 'workflow_run' ||
+        (
+          !startsWith(github.event.workflow_run.created_at, '2026-10-05T21:') &&
+          !startsWith(github.event.workflow_run.created_at, '2026-10-05T22:') &&
+          !startsWith(github.event.workflow_run.created_at, '2026-10-05T23:') &&
+          !startsWith(github.event.workflow_run.created_at, '2026-10-06T00:')
+        )
+      }}
     # Sole canonical writer: independent reducer lane lets it catch up while a
     # serialized producer waits at the stale-state barrier.
     runs-on: ubuntu-latest

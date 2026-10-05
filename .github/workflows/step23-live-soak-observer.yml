@@ -14,7 +14,30 @@ on:
     types: [completed]
   schedule:
     # Fallback only. Primary observation is event-driven after every required workflow.
-    - cron: "0,5,10,15,20,25,30,35,40,45,50,55 19 5 10 *"
+    - cron: "0 21 5 10 *"
+    - cron: "12 21 5 10 *"
+    - cron: "27 21 5 10 *"
+    - cron: "42 21 5 10 *"
+    - cron: "55 21 5 10 *"
+    - cron: "58 21 5 10 *"
+    - cron: "0 22 5 10 *"
+    - cron: "12 22 5 10 *"
+    - cron: "27 22 5 10 *"
+    - cron: "42 22 5 10 *"
+    - cron: "55 22 5 10 *"
+    - cron: "58 22 5 10 *"
+    - cron: "0 23 5 10 *"
+    - cron: "12 23 5 10 *"
+    - cron: "27 23 5 10 *"
+    - cron: "42 23 5 10 *"
+    - cron: "55 23 5 10 *"
+    - cron: "58 23 5 10 *"
+    - cron: "0 0 6 10 *"
+    - cron: "12 0 6 10 *"
+    - cron: "27 0 6 10 *"
+    - cron: "42 0 6 10 *"
+    - cron: "55 0 6 10 *"
+    - cron: "58 0 6 10 *"
   workflow_dispatch:
 
 permissions:
@@ -69,10 +92,28 @@ jobs:
           SOAK_SHA: ${{ steps.soak.outputs.sha }}
         run: |
           python - <<'PY'
-          import json, os
+          import json, os, subprocess
+          from datetime import datetime, timedelta, timezone
+
+          commit_raw = subprocess.check_output(
+              ["git", "show", "-s", "--format=%cI", "HEAD"], text=True
+          ).strip()
+          commit_time = datetime.fromisoformat(commit_raw).astimezone(timezone.utc)
+          candidate = (commit_time + timedelta(minutes=10)).replace(second=0, microsecond=0)
+          rounded_minute = ((candidate.minute + 14) // 15) * 15
+          if rounded_minute >= 60:
+              soak_dt = candidate.replace(minute=0) + timedelta(hours=1)
+          else:
+              soak_dt = candidate.replace(minute=rounded_minute)
+          earliest = datetime(2026, 10, 5, 21, 0, tzinfo=timezone.utc)
+          latest = datetime(2026, 10, 6, 0, 0, tzinfo=timezone.utc)
+          if not (earliest <= soak_dt <= latest):
+              raise SystemExit(f"self-start soak outside bounded recovery horizon: {soak_dt.isoformat()}")
+          soak_start = soak_dt.isoformat().replace("+00:00", "Z")
+
           config = {
               "exact_main_sha": os.environ["SOAK_SHA"],
-              "soak_start": "2026-10-05T19:00:00Z",
+              "soak_start": soak_start,
               "required_workflows": [
                   "portfolio-state-reducer",
                   "runtime-hourly-sync",

@@ -5,7 +5,22 @@ on:
   schedule:
     - cron: "7 */6 * * *"
     # Dense date-bounded Step-23 recovery cadence for the one-hour 2026-10-05 UTC soak; normal cadence is unchanged.
-    - cron: "7,15,23,31,39,47,55 19 5 10 *"
+    - cron: "9 21 5 10 *"
+    - cron: "24 21 5 10 *"
+    - cron: "39 21 5 10 *"
+    - cron: "54 21 5 10 *"
+    - cron: "9 22 5 10 *"
+    - cron: "24 22 5 10 *"
+    - cron: "39 22 5 10 *"
+    - cron: "54 22 5 10 *"
+    - cron: "9 23 5 10 *"
+    - cron: "24 23 5 10 *"
+    - cron: "39 23 5 10 *"
+    - cron: "54 23 5 10 *"
+    - cron: "9 0 6 10 *"
+    - cron: "24 0 6 10 *"
+    - cron: "39 0 6 10 *"
+    - cron: "54 0 6 10 *"
   repository_dispatch:
     types: ["portfolio_notify"]
   workflow_dispatch:
