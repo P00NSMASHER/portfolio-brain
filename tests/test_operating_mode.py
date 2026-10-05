@@ -123,6 +123,7 @@ class OperatingModeTests(unittest.TestCase):
         ):
             self.assertIn(f"- {name}",observer_text)
         self.assertIn("--once",observer_text)
+        self.assertIn("python -m acceptance.step23_live_collect",observer_text)
         self.assertIn('"max_soak_duration_seconds": 3600',observer_text)
         reducer=(ROOT/".github/workflows/portfolio-state-reducer.yml").read_text()
         self.assertIn("cancel-in-progress: false",reducer)
