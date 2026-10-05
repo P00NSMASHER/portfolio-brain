@@ -75,6 +75,23 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn(('/actions/workflows/31/enable', 'PUT'), api.calls)
         self.assertEqual(result[1]['action'], 'REGISTRATION_REENABLED_DELIVERY_UNPROVEN')
 
+    def test_active_probe_without_native_history_gets_one_registration_refresh(self):
+        probe = dict(id=99, name=d.PROBE, path=f'.github/workflows/{d.PROBE}.yml', state='active')
+        disabled = {**probe, 'state': 'disabled_manually'}
+        api = API(HEAD, OLD, {'workflow_runs': []}, HEAD, {}, disabled, {}, probe)
+        result = d.repair(api, {d.PROBE: probe}, SHA, ENV)
+        self.assertIn(('/actions/workflows/99/disable', 'PUT'), api.calls)
+        self.assertIn(('/actions/workflows/99/enable', 'PUT'), api.calls)
+        self.assertEqual(result[-1]['action'], 'REGISTRATION_REFRESHED_DELIVERY_UNPROVEN')
+
+    def test_active_probe_with_native_history_is_not_refreshed(self):
+        probe = dict(id=99, name=d.PROBE, path=f'.github/workflows/{d.PROBE}.yml', state='active')
+        api = API(HEAD, OLD, {'workflow_runs': [{**RUN, 'workflow_id': 99,
+                   'name': d.PROBE, 'path': probe['path']} ]})
+        result = d.repair(api, {d.PROBE: probe}, SHA, ENV)
+        self.assertTrue(all(method == 'GET' for _, method in api.calls))
+        self.assertEqual(result[-1]['action'], 'LEFT_UNCHANGED')
+
     def test_enable_failure_or_missing_confirmation_fails_closed(self):
         for last in (PermissionError(), {**WF, 'state': 'disabled_manually'}):
             api = API(HEAD, OLD, HEAD, {}, last)
@@ -120,6 +137,8 @@ class DeliveryTests(unittest.TestCase):
         self.assertNotIn('actions: write', before)
         self.assertIn("github.event_name == 'push'", recovery)
         self.assertIn('--without-cost-state', recovery)
+        probe = (ROOT/'.github/workflows/portfolio-schedule-delivery.yml').read_text()
+        self.assertIn('cron: "6,11,16,21,26,31,36,41,46,51,56 * * * *"', probe)
         observer = (ROOT/'.github/workflows/step23-live-soak-observer.yml').read_text()
         self.assertNotIn('schedule:', observer)
         self.assertNotIn('step23_live_collect', observer)
