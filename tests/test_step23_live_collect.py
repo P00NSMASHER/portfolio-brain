@@ -31,6 +31,12 @@ class FakeGH:
 
 
 class ScheduledSoakObserverTests(unittest.TestCase):
+    def test_live_observer_uses_a_finite_budget_for_polling_and_traceable_artifacts(self):
+        from unittest.mock import Mock
+        with patch.object(collector, "BudgetedHTTP", Mock()) as http:
+            collector.GH("owner/repo", "token")
+        http.assert_called_once_with("token", max_requests=200, retries=0, backoff=0)
+
     def test_failure_on_second_page_is_not_hidden_by_newer_successes(self):
         at = datetime(2026, 10, 4, tzinfo=timezone.utc)
         first = [run_row(200-i, at-timedelta(minutes=i)) for i in range(100)]
