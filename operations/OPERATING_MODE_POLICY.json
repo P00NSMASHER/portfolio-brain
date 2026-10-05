@@ -50,7 +50,7 @@
     },
     "portfolio-state-checkpoint-candidate": {
       "cron": "19 * * * *",
-      "purpose": "weekly protected candidate for durable canonical checkpoint/archive compaction"
+      "purpose": "hourly high-water evaluation for protected durable canonical checkpoint/archive compaction"
     },
     "verified-feedback-bootstrap": {
       "cron": "17 * * * *",
