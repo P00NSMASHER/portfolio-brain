@@ -5,7 +5,7 @@ on:
   schedule:
     - cron: "7 */6 * * *"
     # Redundant date-bounded Step-23 recovery cadence for 2026-10-05 UTC; normal cadence is unchanged.
-    - cron: "6-21/15 8-9 5 10 *"
+    - cron: "6-51/15 6-7 5 10 *"
   repository_dispatch:
     types: ["portfolio_notify"]
   workflow_dispatch:
