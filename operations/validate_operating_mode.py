@@ -216,14 +216,14 @@ def validate_operating_mode():
     # approved steady-state cadence. They exist solely to collect the three
     # genuine event=schedule cycles required by final acceptance on one SHA.
     step23_bounded_crons={
-      "portfolio-state-reducer":["0-45/15 6-7 5 10 *"],
-      "runtime-hourly-sync":["1-46/15 6-7 5 10 *"],
-      "portfolio-autonomous-scheduler":["2-47/15 6-7 5 10 *"],
-      "hunter-autonomous-cycle":["3-48/15 6-7 5 10 *"],
-      "agent-heartbeat-sweep":["4-49/15 6-7 5 10 *"],
-      "portfolio-cost-watchdog":["5-50/15 6-7 5 10 *"],
-      "portfolio-notification-cycle":["6-51/15 6-7 5 10 *"],
-      "command-center-pages":["7-52/15 6-7 5 10 *"],
+      "portfolio-state-reducer":["0-45/15 15-16 5 10 *"],
+      "runtime-hourly-sync":["1-46/15 15-16 5 10 *"],
+      "portfolio-autonomous-scheduler":["2-47/15 15-16 5 10 *"],
+      "hunter-autonomous-cycle":["3-48/15 15-16 5 10 *"],
+      "agent-heartbeat-sweep":["4-49/15 15-16 5 10 *"],
+      "portfolio-cost-watchdog":["5-50/15 15-16 5 10 *"],
+      "portfolio-notification-cycle":["6-51/15 15-16 5 10 *"],
+      "command-center-pages":["7-52/15 15-16 5 10 *"],
     }
     req(set(step23_bounded_crons)=={
       "portfolio-state-reducer","runtime-hourly-sync","portfolio-autonomous-scheduler",
