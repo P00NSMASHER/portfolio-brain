@@ -212,35 +212,24 @@ def validate_operating_mode():
     req(expected["portfolio-state-reducer"].split()[0] != expected["portfolio-state-checkpoint-candidate"].split()[0],
         "checkpoint candidate must not collide with daily reducer refresh")
     req(set(p["approved_recurring_workflows"])==set(expected),"approved recurring workflow set changed")
-    # Exact, date-bounded Step-23 soak windows. These do not replace the
-    # approved steady-state cadence. They exist solely to collect the three
-    # genuine event=schedule cycles required by final acceptance on one SHA.
-    step23_bounded_crons={
-      "portfolio-state-reducer":["9 22 5 10 *","21 22 5 10 *","33 22 5 10 *","45 22 5 10 *"],
-      "runtime-hourly-sync":["10 22 5 10 *","22 22 5 10 *","34 22 5 10 *","46 22 5 10 *"],
-      "portfolio-autonomous-scheduler":["12 22 5 10 *","24 22 5 10 *","36 22 5 10 *","48 22 5 10 *"],
-      "hunter-autonomous-cycle":["14 22 5 10 *","26 22 5 10 *","38 22 5 10 *","50 22 5 10 *"],
-      "agent-heartbeat-sweep":["16 22 5 10 *","28 22 5 10 *","40 22 5 10 *","52 22 5 10 *"],
-      "portfolio-cost-watchdog":["11 22 5 10 *","23 22 5 10 *","35 22 5 10 *","47 22 5 10 *"],
-      "portfolio-notification-cycle":["18 22 5 10 *","30 22 5 10 *","42 22 5 10 *","54 22 5 10 *"],
-      "command-center-pages":["20 22 5 10 *","32 22 5 10 *","44 22 5 10 *","56 22 5 10 *"],
-      "step23-live-soak-observer":["5 22 5 10 *","15 22 5 10 *","25 22 5 10 *","35 22 5 10 *","45 22 5 10 *","55 22 5 10 *"],
-    }
-    req(set(step23_bounded_crons)=={
-      "portfolio-state-reducer","runtime-hourly-sync","portfolio-autonomous-scheduler",
-      "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
-      "portfolio-notification-cycle","command-center-pages","step23-live-soak-observer",
-    },"Step 23 bounded schedule scope changed")
-    req(all(cron.split()[2:4] == ["5","10"] for rows in step23_bounded_crons.values() for cron in rows),
-        "Step 23 bounded schedules are not date-scoped to 2026-10-05 UTC")
+    # The abandoned fixed-hour soak has no active schedules. A separate tiny
+    # transport monitor does no portfolio work and cannot certify acceptance.
+    delivery=load("operations/SCHEDULE_DELIVERY_POLICY.json")
+    req(delivery == {
+        "schema_version":"1.0.0", "workflow":"portfolio-schedule-delivery",
+        "cron":"7/10 * * * *", "purpose":"DELIVERY_DIAGNOSTICS_ONLY",
+        "max_api_requests":80, "timeout_seconds":15, "new_soak_start":None,
+    }, "schedule delivery monitor policy changed")
     workflow_dir=ROOT/".github/workflows"
     actual=scheduled_workflow_inventory(workflow_dir)
-    req(set(actual)==set(expected)|{"step23-live-soak-observer"},"scheduled workflow inventory differs from approved operating policy")
+    req(set(actual)==set(expected)|{delivery["workflow"]},
+        "scheduled workflow inventory differs from approved operating policy")
     for name,cron in expected.items():
-        approved=[cron,*step23_bounded_crons.get(name,[])]
-        req(actual[name]==approved,f"{name} cron mismatch")
-    req(actual["step23-live-soak-observer"]==step23_bounded_crons["step23-live-soak-observer"],
-        "Step 23 live soak observer fallback cron mismatch")
+        req(actual[name]==[cron],f"{name} cron mismatch")
+    req(actual[delivery["workflow"]]==[delivery["cron"]],"delivery probe cron mismatch")
+    control=load("operations/STEP23_CONTROL.json")
+    req(control.get("status")=="ABANDONED" and control.get("next_soak_start") is None,
+        "a replacement soak needs explicit reviewed arming")
     workload=load("workload_control/WORKLOAD_POLICY.json")
     req(workload["mode"]=="GITHUB_NATIVE_WORKLOAD_CONTROL","workload control mode changed")
     workload_workflows={

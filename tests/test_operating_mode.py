@@ -90,44 +90,20 @@ class OperatingModeTests(unittest.TestCase):
         policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
         actual=scheduled_workflow_inventory(ROOT/".github/workflows")
         expected={name:[entry["cron"]] for name,entry in policy["approved_recurring_workflows"].items()}
-        bounded_step23={
-          "portfolio-state-reducer":["9 22 5 10 *","21 22 5 10 *","33 22 5 10 *","45 22 5 10 *"],
-          "runtime-hourly-sync":["10 22 5 10 *","22 22 5 10 *","34 22 5 10 *","46 22 5 10 *"],
-          "portfolio-autonomous-scheduler":["12 22 5 10 *","24 22 5 10 *","36 22 5 10 *","48 22 5 10 *"],
-          "hunter-autonomous-cycle":["14 22 5 10 *","26 22 5 10 *","38 22 5 10 *","50 22 5 10 *"],
-          "agent-heartbeat-sweep":["16 22 5 10 *","28 22 5 10 *","40 22 5 10 *","52 22 5 10 *"],
-          "portfolio-cost-watchdog":["11 22 5 10 *","23 22 5 10 *","35 22 5 10 *","47 22 5 10 *"],
-          "portfolio-notification-cycle":["18 22 5 10 *","30 22 5 10 *","42 22 5 10 *","54 22 5 10 *"],
-          "command-center-pages":["20 22 5 10 *","32 22 5 10 *","44 22 5 10 *","56 22 5 10 *"],
-          "step23-live-soak-observer":["5 22 5 10 *","15 22 5 10 *","25 22 5 10 *","35 22 5 10 *","45 22 5 10 *","55 22 5 10 *"],
-        }
-        for name,crons in bounded_step23.items():
-            expected.setdefault(name,[]).extend(crons)
+        expected["portfolio-schedule-delivery"]=["7/10 * * * *"]
         self.assertEqual(actual,expected)
-        self.assertEqual(set(bounded_step23),{
-          "portfolio-state-reducer","runtime-hourly-sync","portfolio-autonomous-scheduler",
-          "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
-          "portfolio-notification-cycle","command-center-pages","step23-live-soak-observer",
-        })
-        self.assertTrue(all(cron.split()[2:4] == ["5","10"] for rows in bounded_step23.values() for cron in rows))
-
-    def test_step23_observer_is_event_driven_and_reducer_prioritizes_scheduled_samples(self):
+        control=json.loads((ROOT/"operations/STEP23_CONTROL.json").read_text())
+        self.assertEqual(control["status"],"ABANDONED")
+        self.assertIsNone(control["next_soak_start"])
         observer=ROOT/".github/workflows/step23-live-soak-observer.yml"
-        triggers=workflow_top_level_triggers(observer)
-        self.assertEqual(triggers,{"workflow_run","schedule","workflow_dispatch"})
-        observer_text=observer.read_text()
-        for name in (
-            "portfolio-state-reducer","runtime-hourly-sync","portfolio-autonomous-scheduler",
-            "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
-            "portfolio-notification-cycle","command-center-pages",
-        ):
-            self.assertIn(f"- {name}",observer_text)
-        self.assertIn("--once",observer_text)
-        self.assertIn("python -m acceptance.step23_live_collect",observer_text)
-        self.assertIn("ref: main",observer_text)
-        self.assertIn("git rev-parse HEAD",observer_text)
-        self.assertNotIn("github.event.workflow_run.head_sha",observer_text)
-        self.assertIn('"max_soak_duration_seconds": 3600',observer_text)
+        self.assertEqual(workflow_top_level_triggers(observer),{"workflow_dispatch"})
+        self.assertIsNone(workflow_schedule_crons(observer))
+        self.assertNotIn("acceptance.step23_live_collect",observer.read_text())
+        monitor=(ROOT/".github/workflows/portfolio-schedule-delivery.yml").read_text()
+        self.assertIn("actions: read",monitor)
+        self.assertIn("github.event_name == 'push'",monitor)
+        self.assertIn("--repair",monitor)
+        self.assertIn("--without-cost-state",monitor)
         reducer=(ROOT/".github/workflows/portfolio-state-reducer.yml").read_text()
         self.assertIn("cancel-in-progress: false",reducer)
 

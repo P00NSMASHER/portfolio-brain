@@ -1,0 +1,9 @@
+{
+  "schema_version": "1.0.0",
+  "workflow": "portfolio-schedule-delivery",
+  "cron": "7/10 * * * *",
+  "purpose": "DELIVERY_DIAGNOSTICS_ONLY",
+  "max_api_requests": 80,
+  "timeout_seconds": 15,
+  "new_soak_start": null
+}
