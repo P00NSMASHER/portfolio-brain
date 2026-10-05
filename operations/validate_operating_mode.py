@@ -216,15 +216,15 @@ def validate_operating_mode():
     # approved steady-state cadence. They exist solely to collect the three
     # genuine event=schedule cycles required by final acceptance on one SHA.
     step23_bounded_crons={
-      "portfolio-state-reducer":["0-45/15 15-16 5 10 *"],
-      "runtime-hourly-sync":["1-46/15 15-16 5 10 *"],
-      "portfolio-autonomous-scheduler":["2-47/15 15-16 5 10 *"],
-      "hunter-autonomous-cycle":["3-48/15 15-16 5 10 *"],
-      "agent-heartbeat-sweep":["4-49/15 15-16 5 10 *"],
-      "portfolio-cost-watchdog":["5-50/15 15-16 5 10 *"],
-      "portfolio-notification-cycle":["6-51/15 15-16 5 10 *"],
-      "command-center-pages":["7-52/15 15-16 5 10 *"],
-      "step23-live-soak-observer":["0 15 5 10 *"],
+      "portfolio-state-reducer":["1-55/6 18 5 10 *"],
+      "runtime-hourly-sync":["2-56/6 18 5 10 *"],
+      "portfolio-autonomous-scheduler":["3-57/6 18 5 10 *"],
+      "hunter-autonomous-cycle":["4-58/6 18 5 10 *"],
+      "agent-heartbeat-sweep":["5-59/6 18 5 10 *"],
+      "portfolio-cost-watchdog":["6-54/6 18 5 10 *"],
+      "portfolio-notification-cycle":["7-55/6 18 5 10 *"],
+      "command-center-pages":["8-56/6 18 5 10 *"],
+      "step23-live-soak-observer":["0-50/10 18 5 10 *"],
     }
     req(set(step23_bounded_crons)=={
       "portfolio-state-reducer","runtime-hourly-sync","portfolio-autonomous-scheduler",
@@ -240,7 +240,7 @@ def validate_operating_mode():
         approved=[cron,*step23_bounded_crons.get(name,[])]
         req(actual[name]==approved,f"{name} cron mismatch")
     req(actual["step23-live-soak-observer"]==step23_bounded_crons["step23-live-soak-observer"],
-        "Step 23 live soak observer cron mismatch")
+        "Step 23 live soak observer fallback cron mismatch")
     workload=load("workload_control/WORKLOAD_POLICY.json")
     req(workload["mode"]=="GITHUB_NATIVE_WORKLOAD_CONTROL","workload control mode changed")
     workload_workflows={

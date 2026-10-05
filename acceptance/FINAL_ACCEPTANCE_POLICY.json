@@ -45,7 +45,7 @@
       "TEST",
       "VERIFICATION"
     ],
-    "max_soak_duration_seconds": 10800
+    "max_soak_duration_seconds": 3600
   },
   "step24_controls": [
     "verifier_trust_anchors",

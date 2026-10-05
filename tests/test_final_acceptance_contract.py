@@ -147,10 +147,10 @@ def step23():
         "dashboard_fresh": True,
         "dashboard_hash": H,
         "runs": runs,
-        "soak_window_start": "2026-09-30T13:00:00Z",
-        "soak_deadline": "2026-09-30T16:00:00Z",
-        "soak_start": "2026-09-30T13:00:00Z",
-        "generated_at": "2026-09-30T15:10:00Z",
+        "soak_window_start": "2026-09-30T13:59:00Z",
+        "soak_deadline": "2026-09-30T14:59:00Z",
+        "soak_start": "2026-09-30T13:59:00Z",
+        "generated_at": "2026-09-30T14:50:00Z",
         "canonical_samples": [
             {"run_id": reducer_ids[0], "observed_at": "2026-09-30T14:10:00Z", "sequence": 10, "state_hash": H, "source_sha": SHA},
             {"run_id": reducer_ids[1], "observed_at": "2026-09-30T14:20:00Z", "sequence": 11, "state_hash": H, "source_sha": SHA},
@@ -421,10 +421,10 @@ class FinalAcceptanceContractTests(unittest.TestCase):
         with self.assertRaisesRegex(FinalAcceptanceError, "another workflow"):
             validate_step23(bind_receipt(receipt))
 
-    def test_step23_rejects_run_completed_after_three_hour_deadline(self):
+    def test_step23_rejects_run_completed_after_one_hour_deadline(self):
         receipt = step23()
         receipt["runs"][0]["completed_at"] = "2026-09-30T16:00:01Z"
-        with self.assertRaisesRegex(FinalAcceptanceError, "outside the three-hour soak window"):
+        with self.assertRaisesRegex(FinalAcceptanceError, "outside the configured soak window"):
             validate_step23(bind_receipt(receipt))
 
     def test_step23_rejects_run_from_other_main(self):

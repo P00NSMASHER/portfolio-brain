@@ -91,15 +91,15 @@ class OperatingModeTests(unittest.TestCase):
         actual=scheduled_workflow_inventory(ROOT/".github/workflows")
         expected={name:[entry["cron"]] for name,entry in policy["approved_recurring_workflows"].items()}
         bounded_step23={
-          "portfolio-state-reducer":["0-45/15 15-16 5 10 *"],
-          "runtime-hourly-sync":["1-46/15 15-16 5 10 *"],
-          "portfolio-autonomous-scheduler":["2-47/15 15-16 5 10 *"],
-          "hunter-autonomous-cycle":["3-48/15 15-16 5 10 *"],
-          "agent-heartbeat-sweep":["4-49/15 15-16 5 10 *"],
-          "portfolio-cost-watchdog":["5-50/15 15-16 5 10 *"],
-          "portfolio-notification-cycle":["6-51/15 15-16 5 10 *"],
-          "command-center-pages":["7-52/15 15-16 5 10 *"],
-          "step23-live-soak-observer":["0 15 5 10 *"],
+          "portfolio-state-reducer":["1-55/6 18 5 10 *"],
+          "runtime-hourly-sync":["2-56/6 18 5 10 *"],
+          "portfolio-autonomous-scheduler":["3-57/6 18 5 10 *"],
+          "hunter-autonomous-cycle":["4-58/6 18 5 10 *"],
+          "agent-heartbeat-sweep":["5-59/6 18 5 10 *"],
+          "portfolio-cost-watchdog":["6-54/6 18 5 10 *"],
+          "portfolio-notification-cycle":["7-55/6 18 5 10 *"],
+          "command-center-pages":["8-56/6 18 5 10 *"],
+          "step23-live-soak-observer":["0-50/10 18 5 10 *"],
         }
         for name,crons in bounded_step23.items():
             expected.setdefault(name,[]).extend(crons)
@@ -110,6 +110,22 @@ class OperatingModeTests(unittest.TestCase):
           "portfolio-notification-cycle","command-center-pages","step23-live-soak-observer",
         })
         self.assertTrue(all(cron.split()[2:4] == ["5","10"] for rows in bounded_step23.values() for cron in rows))
+
+    def test_step23_observer_is_event_driven_and_reducer_prioritizes_scheduled_samples(self):
+        observer=ROOT/".github/workflows/step23-live-soak-observer.yml"
+        triggers=workflow_top_level_triggers(observer)
+        self.assertEqual(triggers,{"workflow_run","schedule","workflow_dispatch"})
+        observer_text=observer.read_text()
+        for name in (
+            "portfolio-state-reducer","runtime-hourly-sync","portfolio-autonomous-scheduler",
+            "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
+            "portfolio-notification-cycle","command-center-pages",
+        ):
+            self.assertIn(f"- {name}",observer_text)
+        self.assertIn("--once",observer_text)
+        self.assertIn('"max_soak_duration_seconds": 3600',observer_text)
+        reducer=(ROOT/".github/workflows/portfolio-state-reducer.yml").read_text()
+        self.assertIn("cancel-in-progress: false",reducer)
 
     def test_learning_crons_avoid_known_hourly_writer_collisions(self):
         policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())["approved_recurring_workflows"]

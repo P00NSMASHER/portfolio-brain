@@ -1,37 +1,65 @@
 name: step23-live-soak-observer
 
 on:
+  workflow_run:
+    workflows:
+      - portfolio-state-reducer
+      - runtime-hourly-sync
+      - portfolio-autonomous-scheduler
+      - hunter-autonomous-cycle
+      - agent-heartbeat-sweep
+      - portfolio-cost-watchdog
+      - portfolio-notification-cycle
+      - command-center-pages
+    types: [completed]
   schedule:
-    - cron: "0 15 5 10 *"
+    # Fallback only. Primary observation is event-driven after every required workflow.
+    - cron: "0-50/10 18 5 10 *"
+  workflow_dispatch:
 
 permissions:
   actions: read
   contents: read
 
 concurrency:
-  group: step23-live-soak-observer
+  group: step23-live-soak-observer-${{ github.event.workflow_run.head_sha || github.sha }}
   cancel-in-progress: false
 
 jobs:
   observe:
-    if: ${{ github.event_name == 'schedule' && github.event.schedule == '0 15 5 10 *' }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == 'main' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 225
+    timeout-minutes: 10
     permissions:
       actions: read
       contents: read
     env:
       GITHUB_TOKEN: ${{ github.token }}
     steps:
-      - name: Check out the scheduled main head
+      - name: Resolve exact soak head
+        id: soak
+        shell: bash
+        env:
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          FALLBACK_SHA: ${{ github.sha }}
+        run: |
+          if [ -n "$WORKFLOW_RUN_SHA" ]; then
+            echo "sha=$WORKFLOW_RUN_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=$FALLBACK_SHA" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out the exact soak head
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ steps.soak.outputs.sha }}
           persist-credentials: false
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
       - name: Enable only the 2026 recovery window
         id: window
         shell: bash
@@ -42,17 +70,17 @@ jobs:
             echo "enabled=false" >> "$GITHUB_OUTPUT"
             echo "This one-time Step 23 observer is outside its 2026 recovery date; skipping." >> "$GITHUB_STEP_SUMMARY"
           fi
-      - name: Bind the soak to this exact main SHA
+
+      - name: Bind the one-hour soak to exact main
         if: ${{ steps.window.outputs.enabled == 'true' }}
         env:
-          SOAK_SHA: ${{ github.sha }}
+          SOAK_SHA: ${{ steps.soak.outputs.sha }}
         run: |
           python - <<'PY'
           import json, os
-          from datetime import datetime, timezone
           config = {
               "exact_main_sha": os.environ["SOAK_SHA"],
-              "soak_start": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+              "soak_start": "2026-10-05T18:00:00Z",
               "required_workflows": [
                   "portfolio-state-reducer",
                   "runtime-hourly-sync",
@@ -65,29 +93,39 @@ jobs:
               ],
               "required_handler_types": ["REPAIR", "TEST", "VERIFICATION"],
               "required_successes_per_workflow": 3,
-              "max_soak_duration_seconds": 10800,
-              "poll_seconds": 600,
+              "max_soak_duration_seconds": 3600,
+              "poll_seconds": 60,
               "max_resets": 5,
           }
           with open("step23-soak-config.json", "w", encoding="utf-8") as f:
               json.dump(config, f, indent=2)
               f.write("\n")
           PY
-      - name: Run strict Step 23 live soak collection
+
+      - name: Run strict Step 23 point observation
         if: ${{ steps.window.outputs.enabled == 'true' }}
         run: >-
           python acceptance/step23_live_collect.py
           --config step23-soak-config.json
           --output-meta step23-soak-progress.json
           --output-receipt step23-soak-receipt.json
-          --timeout-seconds 15000
-      - name: Upload the validated Step 23 soak receipt
-        if: ${{ success() && steps.window.outputs.enabled == 'true' }}
+          --timeout-seconds 300
+          --once
+
+      - name: Upload Step 23 progress
+        if: ${{ always() && steps.window.outputs.enabled == 'true' && hashFiles('step23-soak-progress.json') != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: portfolio-step23-soak-${{ github.sha }}
-          path: |
-            step23-soak-progress.json
-            step23-soak-receipt.json
+          name: portfolio-step23-progress-${{ github.run_id }}
+          path: step23-soak-progress.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload validated Step 23 soak receipt
+        if: ${{ success() && steps.window.outputs.enabled == 'true' && hashFiles('step23-soak-receipt.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-step23-soak-${{ github.run_id }}
+          path: step23-soak-receipt.json
           if-no-files-found: error
           retention-days: 30

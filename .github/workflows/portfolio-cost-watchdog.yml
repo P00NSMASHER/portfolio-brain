@@ -3,8 +3,8 @@ name: portfolio-cost-watchdog
 on:
   schedule:
     - cron: "53 * * * *"
-    # Redundant date-bounded Step-23 recovery cadence for 2026-10-05 UTC; normal cadence is unchanged.
-    - cron: "5-50/15 15-16 5 10 *"
+    # Dense date-bounded Step-23 recovery cadence for the one-hour 2026-10-05 UTC soak; normal cadence is unchanged.
+    - cron: "6-54/6 18 5 10 *"
   # GitHub scheduled delivery can be delayed or skipped. Recheck liveness after
   # any core producer finishes so one surviving trigger can recover overdue peers.
   workflow_run:
