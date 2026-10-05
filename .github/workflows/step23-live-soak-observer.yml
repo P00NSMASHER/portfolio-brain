@@ -105,7 +105,7 @@ jobs:
       - name: Run strict Step 23 point observation
         if: ${{ steps.window.outputs.enabled == 'true' }}
         run: >-
-          python acceptance/step23_live_collect.py
+          python -m acceptance.step23_live_collect
           --config step23-soak-config.json
           --output-meta step23-soak-progress.json
           --output-receipt step23-soak-receipt.json
