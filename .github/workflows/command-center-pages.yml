@@ -21,10 +21,8 @@ on:
       - ".github/workflows/command-center-pages.yml"
   schedule:
     - cron: "37 * * * *"
-    # Three date-bounded Step-23 recovery waves for 2026-10-04/05 UTC; normal cadence is unchanged.
-    - cron: "39 23 4 10 *"
-    - cron: "9 0 5 10 *"
-    - cron: "39 0 5 10 *"
+    # Redundant date-bounded Step-23 recovery cadence for 2026-10-05 UTC; normal cadence is unchanged.
+    - cron: "7-52/15 4-5 5 10 *"
   # Core producers already trigger the watchdog. Publish after its receipt
   # instead of publishing both before and after the same verification cycle.
   # All completions (including failure) remain visible; cron is the fallback.
