@@ -147,9 +147,9 @@ def step23():
         "dashboard_fresh": True,
         "dashboard_hash": H,
         "runs": runs,
-        "soak_window_start": "2026-09-30T14:00:00Z",
-        "soak_deadline": "2026-09-30T15:00:00Z",
-        "soak_start": "2026-09-30T14:00:00Z",
+        "soak_window_start": "2026-09-30T13:59:00Z",
+        "soak_deadline": "2026-09-30T14:59:00Z",
+        "soak_start": "2026-09-30T13:59:00Z",
         "generated_at": "2026-09-30T14:50:00Z",
         "canonical_samples": [
             {"run_id": reducer_ids[0], "observed_at": "2026-09-30T14:10:00Z", "sequence": 10, "state_hash": H, "source_sha": SHA},
