@@ -14,7 +14,12 @@ on:
     types: [completed]
   schedule:
     # Fallback only. Primary observation is event-driven after every required workflow.
-    - cron: "0,11,21,31,43,49,53,56 20 5 10 *"
+    - cron: "5 20 5 10 *"
+    - cron: "15 20 5 10 *"
+    - cron: "25 20 5 10 *"
+    - cron: "35 20 5 10 *"
+    - cron: "45 20 5 10 *"
+    - cron: "55 20 5 10 *"
   workflow_dispatch:
 
 permissions:
