@@ -1,0 +1,93 @@
+name: step23-live-soak-observer
+
+on:
+  schedule:
+    - cron: "0 15 5 10 *"
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: step23-live-soak-observer
+  cancel-in-progress: false
+
+jobs:
+  observe:
+    if: ${{ github.event_name == 'schedule' && github.event.schedule == '0 15 5 10 *' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 225
+    permissions:
+      actions: read
+      contents: read
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out the scheduled main head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Enable only the 2026 recovery window
+        id: window
+        shell: bash
+        run: |
+          if [ "$(date -u +%F)" = "2026-10-05" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "This one-time Step 23 observer is outside its 2026 recovery date; skipping." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Bind the soak to this exact main SHA
+        if: ${{ steps.window.outputs.enabled == 'true' }}
+        env:
+          SOAK_SHA: ${{ github.sha }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          config = {
+              "exact_main_sha": os.environ["SOAK_SHA"],
+              "soak_start": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+              "required_workflows": [
+                  "portfolio-state-reducer",
+                  "runtime-hourly-sync",
+                  "portfolio-autonomous-scheduler",
+                  "hunter-autonomous-cycle",
+                  "agent-heartbeat-sweep",
+                  "portfolio-cost-watchdog",
+                  "portfolio-notification-cycle",
+                  "command-center-pages",
+              ],
+              "required_handler_types": ["REPAIR", "TEST", "VERIFICATION"],
+              "required_successes_per_workflow": 3,
+              "max_soak_duration_seconds": 10800,
+              "poll_seconds": 600,
+              "max_resets": 5,
+          }
+          with open("step23-soak-config.json", "w", encoding="utf-8") as f:
+              json.dump(config, f, indent=2)
+              f.write("\n")
+          PY
+      - name: Run strict Step 23 live soak collection
+        if: ${{ steps.window.outputs.enabled == 'true' }}
+        run: >-
+          python acceptance/step23_live_collect.py
+          --config step23-soak-config.json
+          --output-meta step23-soak-progress.json
+          --output-receipt step23-soak-receipt.json
+          --timeout-seconds 15000
+      - name: Upload the validated Step 23 soak receipt
+        if: ${{ success() && steps.window.outputs.enabled == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-step23-soak-${{ github.sha }}
+          path: |
+            step23-soak-progress.json
+            step23-soak-receipt.json
+          if-no-files-found: error
+          retention-days: 30

@@ -99,14 +99,15 @@ class OperatingModeTests(unittest.TestCase):
           "portfolio-cost-watchdog":["5-50/15 15-16 5 10 *"],
           "portfolio-notification-cycle":["6-51/15 15-16 5 10 *"],
           "command-center-pages":["7-52/15 15-16 5 10 *"],
+          "step23-live-soak-observer":["0 15 5 10 *"],
         }
         for name,crons in bounded_step23.items():
-            expected[name].extend(crons)
+            expected.setdefault(name,[]).extend(crons)
         self.assertEqual(actual,expected)
         self.assertEqual(set(bounded_step23),{
           "portfolio-state-reducer","runtime-hourly-sync","portfolio-autonomous-scheduler",
           "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
-          "portfolio-notification-cycle","command-center-pages",
+          "portfolio-notification-cycle","command-center-pages","step23-live-soak-observer",
         })
         self.assertTrue(all(cron.split()[2:4] == ["5","10"] for rows in bounded_step23.values() for cron in rows))
 

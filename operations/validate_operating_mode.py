@@ -224,20 +224,23 @@ def validate_operating_mode():
       "portfolio-cost-watchdog":["5-50/15 15-16 5 10 *"],
       "portfolio-notification-cycle":["6-51/15 15-16 5 10 *"],
       "command-center-pages":["7-52/15 15-16 5 10 *"],
+      "step23-live-soak-observer":["0 15 5 10 *"],
     }
     req(set(step23_bounded_crons)=={
       "portfolio-state-reducer","runtime-hourly-sync","portfolio-autonomous-scheduler",
       "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
-      "portfolio-notification-cycle","command-center-pages",
+      "portfolio-notification-cycle","command-center-pages","step23-live-soak-observer",
     },"Step 23 bounded schedule scope changed")
     req(all(cron.split()[2:4] == ["5","10"] for rows in step23_bounded_crons.values() for cron in rows),
         "Step 23 bounded schedules are not date-scoped to 2026-10-05 UTC")
     workflow_dir=ROOT/".github/workflows"
     actual=scheduled_workflow_inventory(workflow_dir)
-    req(set(actual)==set(expected),"scheduled workflow inventory differs from approved operating policy")
+    req(set(actual)==set(expected)|{"step23-live-soak-observer"},"scheduled workflow inventory differs from approved operating policy")
     for name,cron in expected.items():
         approved=[cron,*step23_bounded_crons.get(name,[])]
         req(actual[name]==approved,f"{name} cron mismatch")
+    req(actual["step23-live-soak-observer"]==step23_bounded_crons["step23-live-soak-observer"],
+        "Step 23 live soak observer cron mismatch")
     workload=load("workload_control/WORKLOAD_POLICY.json")
     req(workload["mode"]=="GITHUB_NATIVE_WORKLOAD_CONTROL","workload control mode changed")
     workload_workflows={

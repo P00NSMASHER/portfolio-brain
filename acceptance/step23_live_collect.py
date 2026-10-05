@@ -48,7 +48,7 @@ class GH:
         self.repo = repo
         self.base = "https://api.github.com/repos/" + repo
         self.token = token
-        self.http = BudgetedHTTP(token, max_requests=100, retries=0, backoff=0)
+        self.http = BudgetedHTTP(token, max_requests=200, retries=0, backoff=0)
 
     def get(self, path: str) -> Any:
         if not path.startswith("/") or "://" in path or ".." in path.split("/"):
