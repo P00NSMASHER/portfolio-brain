@@ -71,7 +71,8 @@ class ScheduleClockTests(unittest.TestCase):
  def test_trusted_schedule_source_dispatches_due_only(self):
   api=API();result=execute(api,POLICY,SOURCE,MAIN)
   requested=[x["workflow"] for x in result["actions"] if x["action"]=="DISPATCH_REQUESTED"]
-  self.assertEqual(requested,[])\n  self.assertEqual([x["workflow"] for x in result["actions"] if x["action"]=="DISPATCH_BOUND"],["hourly","two"])
+  self.assertEqual(requested,[])
+  self.assertEqual([x["workflow"] for x in result["actions"] if x["action"]=="DISPATCH_BOUND"],["hourly","two"])
   self.assertFalse(result["authority_granted"])
  def test_bound_dispatch_requires_exact_bot_current_main_run(self):
   target={"name":"hourly","file":"hourly.yml","cadence":"HOURLY"}
