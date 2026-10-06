@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime, timedelta, timezone
-from acceptance.step23_delivery_qualification import REQUIRED, derive_qualification
+from acceptance.step23_delivery_qualification import REQUIRED, derive_qualification, derive_fixed_arm
 
 SHA="a"*40
 BASE=datetime(2026,10,6,0,0,tzinfo=timezone.utc)
@@ -64,5 +64,20 @@ class QualificationTests(unittest.TestCase):
         result=derive_qualification(rows,SHA,BASE,END,start_delay_minutes=30)
         self.assertFalse(result["qualified"])
         self.assertEqual(result["status"],"QUALIFICATION_TOO_LATE")
+
+    def test_owner_fixed_arm_preserves_strict_one_hour_window(self):
+        start=datetime(2026,10,6,3,0,tzinfo=timezone.utc)
+        result=derive_fixed_arm(SHA,BASE,start,END)
+        self.assertTrue(result["qualified"])
+        self.assertEqual(result["status"],"QUALIFIED_FIXED")
+        self.assertEqual(result["soak_start"],"2026-10-06T03:00:00Z")
+        self.assertEqual(result["soak_deadline"],"2026-10-06T04:00:00Z")
+        self.assertEqual(result["selected"],{})
+
+    def test_owner_fixed_arm_rejects_early_or_nonquarter_start(self):
+        with self.assertRaisesRegex(RuntimeError,"BEFORE_REGISTRATION"):
+            derive_fixed_arm(SHA,BASE+timedelta(minutes=10),BASE+timedelta(minutes=5),END)
+        with self.assertRaisesRegex(RuntimeError,"NOT_QUARTER_HOUR"):
+            derive_fixed_arm(SHA,BASE,BASE+timedelta(minutes=7),END)
 
 if __name__=="__main__": unittest.main()

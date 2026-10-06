@@ -73,10 +73,15 @@ jobs:
           import json
           import os
           import subprocess
+          from datetime import datetime, timezone
           from pathlib import Path
 
           suppress = False
           reason = "REPAIR_ELIGIBLE"
+          now = datetime.now(timezone.utc)
+          if datetime(2026,10,6,3,0,tzinfo=timezone.utc) <= now < datetime(2026,10,6,4,0,tzinfo=timezone.utc):
+              suppress = True
+              reason = "STEP23_FIXED_SOAK_MAIN_FREEZE"
           if os.environ["EVENT_NAME"] == "workflow_run":
               conclusion = os.environ.get("SOURCE_CONCLUSION", "")
               workflow = os.environ.get("SOURCE_WORKFLOW", "")
