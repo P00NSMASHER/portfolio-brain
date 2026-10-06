@@ -66,7 +66,7 @@ def reducer_liveness_wake(api:API,main_sha:str)->dict:
     relying on a second-hop workflow_run after that dispatched work is not a
     durable wake path. The clock therefore performs one bounded, idempotent
     reducer wake whenever exact-main producer completion is newer than the latest
-    successful exact-main reducer start. Production readers still fail closed and
+    successful exact-main reducer completion. Production readers still fail closed and
     independently verify that the resulting snapshot covers every pending event.
     """
     reducer_doc=api.call(f"/actions/workflows/{REDUCER_WORKFLOW_FILE}/runs?branch=main&per_page=20")
@@ -81,9 +81,9 @@ def reducer_liveness_wake(api:API,main_sha:str)->dict:
                and type(row.get("id")) is int]
     if successes:
         for row in successes:
-            req(isinstance(row.get("created_at"),str),"reducer creation timestamp invalid")
-        latest=max(successes,key=lambda row:parse_time(row["created_at"]))
-        boundary=parse_time(latest["created_at"])
+            req(isinstance(row.get("updated_at"),str),"reducer completion timestamp invalid")
+        latest=max(successes,key=lambda row:parse_time(row["updated_at"]))
+        boundary=parse_time(latest["updated_at"])
         latest_reducer_run_id=latest["id"]
     else:
         boundary=None
@@ -178,6 +178,10 @@ def execute(api:API,policy:dict,source_run:dict,main_sha:str,current_run_id:int|
     reducer_wake=reducer_liveness_wake(api,main_sha)
     actions=[]
     for target in policy["target_workflows"]:
+        if target["file"]==REDUCER_WORKFLOW_FILE and reducer_wake["action"] in {"REDUCER_WAKE_REQUESTED","REDUCER_ACTIVE"}:
+            actions.append({"workflow":target["name"],"action":"REDUCER_ALREADY_WOKEN_OR_ACTIVE",
+                            "wake_action":reducer_wake["action"]})
+            continue
         if not due(target["cadence"],at):
             actions.append({"workflow":target["name"],"action":"NOT_DUE","cadence":target["cadence"]})
             continue
