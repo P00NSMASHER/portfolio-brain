@@ -20,13 +20,8 @@ on:
       - "action_engine/**"
       - ".github/workflows/command-center-pages.yml"
   schedule:
-    - cron: "37 * * * *"
-    # Step 23 2x8 two-hour acceptance window.
-    - cron: "38 7 6 10 *"
-    - cron: "8 8 6 10 *"
-    - cron: "38 8 6 10 *"
-    - cron: "8 9 6 10 *"
-    - cron: "28 9 6 10 *"
+    # One-shot scheduler re-registration canary; remove after proof.
+    - cron: "27 12 6 10 *"
   workflow_run:
     workflows:
       - "portfolio-cost-watchdog"
