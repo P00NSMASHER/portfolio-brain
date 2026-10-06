@@ -14,6 +14,10 @@ from pathlib import Path
 from typing import Any
 
 from acceptance.final_acceptance import bind_receipt, validate_step23
+from acceptance.soak_observation import (
+    ObservationChanged, scheduled_runs as stable_scheduled_runs,
+    reset_history, final_census_unchanged, write_failure_progress,
+)
 from runtime.artifact_state import BudgetedHTTP
 from state_journal.archive import archived_artifact_ids, load_active_manifest
 from state_journal.contracts import strict_load
@@ -128,58 +132,8 @@ def pending_event_count(token: str) -> int:
 
 
 def scheduled_runs(gh: GH, workflows: set[str], exact_sha: str, start: datetime) -> dict[str, list[dict[str, Any]]]:
-    path = "/actions/runs?branch=main&event=schedule&per_page=100"
-    rows = []
-    seen = set()
-    first_page = None
-    previous_time = None
-    for page in range(1, 21):
-        doc = gh.get(path + f"&page={page}")
-        batch = doc.get("workflow_runs")
-        if not isinstance(batch, list):
-            raise RuntimeError("scheduled run listing malformed")
-        if page == 1:
-            first_page = batch
-        for row in batch:
-            created = parse_time(row["created_at"])
-            if row["id"] in seen or (previous_time is not None and created > previous_time):
-                raise RuntimeError("scheduled run pagination drift")
-            previous_time = created
-            seen.add(row["id"])
-            rows.append(row)
-        if not batch and len(rows) >= 1000:
-            raise RuntimeError("scheduled run listing reached provider result cap")
-        if len(batch) < 100 or (batch and parse_time(batch[-1]["created_at"]) < start):
-            break
-    else:
-        raise RuntimeError("scheduled run listing incomplete at page bound")
-    def stable_identity(row: dict[str, Any]) -> tuple[Any, ...]:
-        return (
-            row.get("id"), row.get("created_at"), row.get("name"), row.get("head_sha"),
-            row.get("head_branch"), row.get("event"), row.get("workflow_id"),
-            row.get("path"), row.get("run_attempt", 1),
-        )
-
-    refreshed = gh.get(path + "&page=1").get("workflow_runs")
-    if not isinstance(refreshed, list):
-        raise RuntimeError("scheduled run listing malformed on refresh")
-    if tuple(stable_identity(row) for row in refreshed) != tuple(stable_identity(row) for row in first_page):
-        raise RuntimeError("scheduled run membership changed during pagination")
-    freshest = {row["id"]: row for row in refreshed if type(row.get("id")) is int}
-    rows = [freshest.get(row["id"], row) for row in rows]
-    out = {name: [] for name in workflows}
-    for row in rows:
-        name = row.get("name")
-        if name not in workflows or row.get("head_sha") != exact_sha:
-            continue
-        created = parse_time(row["created_at"])
-        if created < start:
-            continue
-        out[name].append(row)
-    for name in out:
-        out[name].sort(key=lambda r: (parse_time(r["created_at"]), int(r["id"])))
-    return out
-
+    # Membership races produce a pending observation. Status progress is normal.
+    return stable_scheduled_runs(gh, workflows, exact_sha, start, max_attempts=1)
 
 def evidence_window(rows: list[dict], minimum: int, workflow: str) -> list[dict]:
     # Scan every raw run for failures before selecting a bounded receipt set.
@@ -247,6 +201,7 @@ def main() -> None:
     ap.add_argument("--timeout-seconds", type=int, default=15000)
     ap.add_argument("--once", action="store_true")
     args = ap.parse_args()
+    args.output_receipt.unlink(missing_ok=True)
 
     cfg = json.loads(args.config.read_text(encoding="utf-8"))
     exact_sha = cfg["exact_main_sha"]
@@ -294,23 +249,24 @@ def main() -> None:
     try:
         while time.monotonic() < deadline:
             assert_main()
-            grouped = scheduled_runs(gh, workflows, exact_sha, effective_start)
-            reset = find_real_reset(grouped)
-            if reset is not None:
-                reset_at, reason = reset
-                resets.append(
-                    {
-                        "previous_start": effective_start.isoformat().replace("+00:00", "Z"),
-                        "reset_at": reset_at.isoformat().replace("+00:00", "Z"),
-                        "reason": reason,
-                    }
-                )
-                if len(resets) > max_resets:
-                    raise RuntimeError("STEP23_MAX_RESETS_EXCEEDED")
-                effective_start = reset_at
-                pending_start = pending_event_count(token)
-                print(json.dumps({"status": "SOAK_RESET", "reason": reason, "new_start": resets[-1]["reset_at"]}))
+            try:
+                all_grouped = scheduled_runs(gh, workflows, exact_sha, window_start)
+            except ObservationChanged as exc:
+                waiting({"status": "WAITING_FOR_STABLE_RUN_LIST", "reason": str(exc)})
                 continue
+            observed_resets, observed_start = reset_history(
+                all_grouped, window_start, max_resets, cancellation_is_coalesced,
+            )
+            if observed_resets != resets:
+                resets = observed_resets
+                effective_start = observed_start
+                pending_start = pending_event_count(token)
+                print(json.dumps({"status": "SOAK_RESET", "reset_count": len(resets),
+                                  "new_start": effective_start.isoformat()}))
+            grouped = {
+                name: [row for row in rows if parse_time(row["created_at"]) >= effective_start]
+                for name, rows in all_grouped.items()
+            }
 
             success_counts = {
                 name: sum(
@@ -555,6 +511,15 @@ def main() -> None:
                 continue
 
             assert_main()
+            try:
+                final_grouped = scheduled_runs(gh, workflows, exact_sha, window_start)
+            except ObservationChanged as exc:
+                waiting({"status": "WAITING_FOR_STABLE_FINAL_CENSUS", "reason": str(exc)})
+                continue
+            if not final_census_unchanged(all_grouped, final_grouped):
+                waiting({"status": "WAITING_FOR_STABLE_FINAL_CENSUS"})
+                continue
+            assert_main()
             receipt = bind_receipt(
                 {
                     "schema_version": "1.0.0",
@@ -614,4 +579,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:
+        import sys
+        write_failure_progress(sys.argv[1:], exc)
+        raise

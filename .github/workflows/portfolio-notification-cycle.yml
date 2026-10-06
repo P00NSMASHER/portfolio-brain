@@ -4,6 +4,23 @@ name: portfolio-notification-cycle
 on:
   schedule:
     - cron: "7 */6 * * *"
+    # Temporary Step 23 native-delivery qualification cadence; remove after acceptance closes.
+    - cron: "8 0 6 10 *"
+    - cron: "24 0 6 10 *"
+    - cron: "39 0 6 10 *"
+    - cron: "54 0 6 10 *"
+    - cron: "8 1 6 10 *"
+    - cron: "24 1 6 10 *"
+    - cron: "39 1 6 10 *"
+    - cron: "54 1 6 10 *"
+    - cron: "8 2 6 10 *"
+    - cron: "24 2 6 10 *"
+    - cron: "39 2 6 10 *"
+    - cron: "54 2 6 10 *"
+    - cron: "8 3 6 10 *"
+    - cron: "24 3 6 10 *"
+    - cron: "39 3 6 10 *"
+    - cron: "54 3 6 10 *"
   repository_dispatch:
     types: ["portfolio_notify"]
   workflow_dispatch:

@@ -1,14 +1,161 @@
 name: step23-live-soak-observer
 on:
+  workflow_run:
+    workflows:
+      - portfolio-state-reducer
+      - runtime-hourly-sync
+      - portfolio-autonomous-scheduler
+      - hunter-autonomous-cycle
+      - agent-heartbeat-sweep
+      - portfolio-cost-watchdog
+      - portfolio-notification-cycle
+      - command-center-pages
+    types: [completed]
+    branches: [main]
+  schedule:
+    - cron: "14 0 6 10 *"
+    - cron: "29 0 6 10 *"
+    - cron: "44 0 6 10 *"
+    - cron: "14 1 6 10 *"
+    - cron: "29 1 6 10 *"
+    - cron: "44 1 6 10 *"
+    - cron: "14 2 6 10 *"
+    - cron: "29 2 6 10 *"
+    - cron: "44 2 6 10 *"
+    - cron: "14 3 6 10 *"
+    - cron: "29 3 6 10 *"
+    - cron: "44 3 6 10 *"
   workflow_dispatch:
+
 permissions:
+  actions: read
   contents: read
+
+concurrency:
+  group: step23-live-soak-observer
+  cancel-in-progress: false
+
 jobs:
-  retired:
+  observe:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == 'main' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 1
+    timeout-minutes: 10
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
     steps:
-      - name: Refuse the abandoned window
+      - name: Check out current protected main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve exact main
+        id: main
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Require demonstrated native delivery before arming
+        id: qualify
+        env:
+          EXACT_SHA: ${{ steps.main.outputs.sha }}
+        run: >-
+          python -m acceptance.step23_delivery_qualification
+          --exact-sha "$EXACT_SHA"
+          --output step23-delivery-qualification.json
+
+      - name: Build immutable one-hour soak config
+        if: ${{ steps.qualify.outputs.qualified == 'true' }}
+        env:
+          SOAK_SHA: ${{ steps.main.outputs.sha }}
+          SOAK_START: ${{ steps.qualify.outputs.soak_start }}
         run: |
-          echo '::error::STEP23_ABANDONED_BY_OWNER. No replacement window is armed.'
-          exit 1
+          python - <<'PY'
+          import json, os
+          config={
+            "exact_main_sha":os.environ["SOAK_SHA"],
+            "soak_start":os.environ["SOAK_START"],
+            "required_workflows":[
+              "portfolio-state-reducer","runtime-hourly-sync","portfolio-autonomous-scheduler",
+              "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
+              "portfolio-notification-cycle","command-center-pages",
+            ],
+            "required_handler_types":["REPAIR","TEST","VERIFICATION"],
+            "required_successes_per_workflow":3,
+            "max_soak_duration_seconds":3600,
+            "poll_seconds":60,
+            "max_resets":5,
+          }
+          open("step23-soak-config.json","w",encoding="utf-8").write(json.dumps(config,indent=2)+"\n")
+          PY
+
+      - name: Check whether qualified start has arrived
+        if: ${{ steps.qualify.outputs.qualified == 'true' }}
+        id: clock
+        env:
+          SOAK_START: ${{ steps.qualify.outputs.soak_start }}
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import os
+          from datetime import datetime, timezone, timedelta
+          start=datetime.fromisoformat(os.environ["SOAK_START"].replace("Z","+00:00"))
+          now=datetime.now(timezone.utc)
+          print("started="+("true" if start <= now < start+timedelta(hours=1) else "false"))
+          print("expired="+("true" if now >= start+timedelta(hours=1) else "false"))
+          PY
+
+      - name: Run strict point observation
+        if: ${{ steps.qualify.outputs.qualified == 'true' && steps.clock.outputs.started == 'true' }}
+        run: >-
+          python -m acceptance.step23_live_collect
+          --config step23-soak-config.json
+          --output-meta step23-soak-progress.json
+          --output-receipt step23-soak-receipt.json
+          --timeout-seconds 300
+          --once
+
+      - name: Record qualified wait or expired window
+        if: ${{ steps.qualify.outputs.qualified == 'true' && steps.clock.outputs.started != 'true' }}
+        env:
+          SOAK_START: ${{ steps.qualify.outputs.soak_start }}
+          EXPIRED: ${{ steps.clock.outputs.expired }}
+          SOAK_SHA: ${{ steps.main.outputs.sha }}
+        run: |
+          python - <<'PY'
+          import json, os
+          status="QUALIFIED_WAITING_FOR_START" if os.environ["EXPIRED"]!="true" else "QUALIFIED_WINDOW_EXPIRED"
+          open("step23-soak-progress.json","w").write(json.dumps({
+            "schema_version":"1.0.0","status":status,"exact_main_sha":os.environ["SOAK_SHA"],
+            "configured_soak_start":os.environ["SOAK_START"],"acceptance_complete":False,
+          },indent=2)+"\n")
+          PY
+
+      - name: Upload delivery qualification
+        if: ${{ always() && hashFiles('step23-delivery-qualification.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-step23-delivery-qualification-${{ github.run_id }}
+          path: step23-delivery-qualification.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Step 23 progress
+        if: ${{ always() && hashFiles('step23-soak-progress.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-step23-progress-${{ github.run_id }}
+          path: step23-soak-progress.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload validated Step 23 receipt
+        if: ${{ success() && hashFiles('step23-soak-receipt.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-step23-soak-${{ github.run_id }}
+          path: step23-soak-receipt.json
+          if-no-files-found: error
+          retention-days: 30
