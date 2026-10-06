@@ -248,4 +248,246 @@ def validate_operating_mode():
     req(control.get("status")=="CANARY_REQUIRED" and control.get("next_soak_start") is None
         and control.get("acceptance_complete") is False,
         "Step 23 must remain disarmed until scheduler canary passes")
+    workload=load("workload_control/WORKLOAD_POLICY.json")
+    req(workload["mode"]=="GITHUB_NATIVE_WORKLOAD_CONTROL","workload control mode changed")
+    workload_workflows={
+      "hunter-autonomous-cycle":("hunt","portfolio-hunter-cycle"),
+      "portfolio-autonomous-scheduler":("schedule","portfolio-scheduler"),
+      "portfolio-notification-cycle":("notify","portfolio-notification"),
+      "command-center-pages":("publish","portfolio-reporting-pages"),
+      "agent-heartbeat-sweep":("heartbeat","portfolio-heartbeat"),
+    }
+    for name,(job_id,group) in workload_workflows.items():
+        body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
+        req("workload_control.workload_gate preflight" in body,f"{name} is not workload controlled")
+        req("cost_governor.workflow_gate" not in body,f"{name} is still coupled to paid cost governance")
+        req(f"group: {group}" in body,f"{name} independent concurrency lane missing")
+        req("steps.workload.outputs.allowed != 'true'" in body,f"{name} lacks blocked-work reporting")
+        req("exit 1" in body,f"{name} can still report green after workload admission blocks")
+        scope=f"{name}::{job_id}"
+        req(scope in workload["services"],f"{name} workload policy entry missing")
+        req(workload["services"][scope]["concurrency_group"]==group,f"{name} workload policy lane drifted")
+    for name in ["portfolio-autonomous-scheduler","agent-heartbeat-sweep"]:
+        triggers=workflow_top_level_triggers(ROOT/".github/workflows"/f"{name}.yml")
+        req("push" not in triggers,f"{name} must not fan out on push")
 
+    worker=(ROOT/".github/workflows/runtime-worker.yml").read_text().lower()
+    req("portfolio-cost-governed-autonomy" in worker and "cost_governor.workflow_gate preflight" in worker,
+        "runtime worker lost serialized paid-wrapper governance")
+    req("workload_control.workload_gate preflight" in worker,
+        "runtime worker lost non-paid workload admission")
+    req("format('portfolio-runtime-{0}', inputs.mode)" in worker,
+        "runtime worker lost mode-specific non-paid concurrency")
+    for mode in ("observe","sync"):
+        scope=f"runtime-worker::runtime-{mode}"
+        req(scope in workload["services"],f"runtime {mode} workload policy entry missing")
+        req(workload["services"][scope]["concurrency_group"]==f"portfolio-runtime-{mode}",
+            f"runtime {mode} workload lane drifted")
+    req("steps.admission.outputs.allowed != 'true'" in worker and "exit 1" in worker,
+        "runtime worker can still report green after mode-specific admission blocks")
+
+    proof=(ROOT/".github/workflows/model-value-proof.yml").read_text().lower()
+    req("portfolio-cost-governed-autonomy" in proof and "cost_governor.workflow_gate preflight" in proof,
+        "model value proof lost paid cost governance")
+    req("steps.cost.outputs.allowed != 'true'" in proof and "exit 1" in proof,
+        "model value proof can still report green after paid admission blocks")
+
+    factory=(ROOT/".github/workflows/software-factory-candidate.yml").read_text().lower()
+    req("workflow_call" in factory and "schedule:" not in factory,"software factory unexpectedly recurring")
+    req("workload_control.workload_gate preflight" in factory,"software factory is not workload controlled")
+    req("cost_governor.workflow_gate" not in factory,"software factory is still coupled to paid cost governance")
+    req("run: exit 3" in factory,"software factory must fail closed when workload admission is denied")
+    repair_policy=load("repair/AUTONOMOUS_REPAIR_POLICY.json")
+    req(repair_policy["schema_version"]=="1.0.0" and repair_policy["repair_id"]=="portfolio-autonomous-repair-v1",
+        "autonomous repair policy identity mismatch")
+    req(repair_policy["enabled"] is True and repair_policy["interactive_chatgpt_dependency"] is False,
+        "autonomous repair lost GitHub-hosted independence")
+    req(repair_policy["merge_authority"] is False and repair_policy["deployment_authority"] is False
+        and repair_policy["default_branch_write_authority"] is False,
+        "autonomous repair authority widened")
+    req(1<=repair_policy["max_scheduler_dispatches_per_cycle"]<=2
+        and 1<=repair_policy["max_changed_files"]<=20
+        and 1<=repair_policy["max_changed_lines"]<=5000,
+        "autonomous repair bounds widened")
+    req(repair_policy["foundation_check"]=={"name":"validate","integration_id":15368},
+        "autonomous repair foundation check binding changed")
+    req(repair_policy["independent_check"]=={"name":"portfolio-phase1-gate","integration_id":5121826},
+        "autonomous repair independent check binding changed")
+    integration=repair_policy.get("protected_integration",{})
+    req(integration.get("enabled") is True and integration.get("integrator")=="portfolio-independent-verifier",
+        "protected autonomous integration disabled or reassigned")
+    req(integration.get("eligible_branch_prefix")=="factory/auto-repair-"
+        and integration.get("required_pr_body_marker")=="AUTO_REPAIR_FINGERPRINT:"
+        and integration.get("required_pr_actor")=="github-actions[bot]",
+        "autonomous merge eligibility widened")
+    req(integration.get("refresh_stale_branch_onto_main") is True
+        and integration.get("merge_method")=="merge"
+        and integration.get("merge_api_respects_ruleset") is True
+        and integration.get("bypass_authority") is False,
+        "protected integration semantics weakened")
+    req(integration.get("required_checks")==[
+          {"name":"validate","integration_id":15368},
+          {"name":"portfolio-phase1-gate","integration_id":5121826},
+        ],"protected integration required checks changed")
+    req(set(p["event_driven_workflows"])=={
+          "runtime-event-observe","portfolio-autonomous-repair","portfolio-independent-verifier"
+        },"event-driven workflow inventory changed")
+    repair_workflow=(ROOT/".github/workflows/portfolio-autonomous-repair.yml").read_text().lower()
+    repair_triggers=workflow_top_level_triggers(ROOT/".github/workflows/portfolio-autonomous-repair.yml")
+    req({"workflow_run","workflow_dispatch"}<=repair_triggers and "schedule" not in repair_triggers,
+        "autonomous repair trigger class invalid")
+    for permission in ("actions: write","contents: write","pull-requests: write","copilot-requests: write"):
+        req(permission in repair_workflow,f"autonomous repair permission missing: {permission}")
+    for marker in (
+        "python -m repair.autonomous_repair validate-diff",
+        "python -m operations.validate_operating_mode",
+        'python -m unittest discover -s tests -p "test_*.py" -v',
+        "gh workflow run foundation-ci.yml",
+        "--no-ask-user",
+        "--available-tools='view,grep,glob,edit,create,apply_patch'",
+    ):
+        req(marker in repair_workflow,f"autonomous repair control missing: {marker}")
+    for forbidden in ("gh pr merge","/merges","git push origin main","--allow-tool='shell","--allow-all","--yolo"):
+        req(forbidden not in repair_workflow,f"autonomous repair contains prohibited integration action: {forbidden}")
+    scheduler_repair=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text().lower()
+    req("actions: write" in scheduler_repair and "contents: read" in scheduler_repair
+        and "contents: write" not in scheduler_repair and "pull-requests: read" in scheduler_repair,
+        "scheduler repair dispatch permissions invalid")
+    scheduler_executor=(ROOT/"scheduler/work_executor.py").read_text().lower()
+    req("dispatch_requests(" in scheduler_executor
+        and 'workflow_file="portfolio-autonomous-repair.yml"' in scheduler_executor,
+        "scheduler repair dispatch path missing")
+    req("repair.autonomous_repair dispatch" not in scheduler_repair,
+        "scheduler repair dispatch duplicated outside the leased handler")
+    verifier=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text().lower()
+    verifier_triggers=workflow_top_level_triggers(ROOT/".github/workflows/portfolio-independent-verifier.yml")
+    req(verifier_triggers=={"workflow_run"},"independent verifier must be workflow_run-only")
+    req("actions: read" in verifier and "contents: write" in verifier and "pull-requests: write" in verifier,
+        "independent verifier/integrator permissions missing")
+    req("actions: write" not in verifier and "issues: write" not in verifier,
+        "independent verifier gained unrelated mutation authority")
+    for marker in (
+        'branch.startswith("factory/auto-repair-")',
+        '"auto_repair_fingerprint:" in body',
+        'pr.get("user",{}).get("login")=="github-actions[bot]"',
+        "/update-branch",
+        "merge_method=merge",
+        '-f sha="$candidate_sha"',
+        "steps.pr.outputs.autonomous == 'true'",
+    ):
+        req(marker in verifier,f"protected autonomous integration control missing: {marker}")
+    verifier_source=(ROOT/"verification/independent_verifier.py").read_text()
+    for anchor in (
+        '".github/workflows/portfolio-independent-verifier.yml"',
+        '"verification/independent_verifier.py"',
+        "candidate modifies immutable verifier trust anchor",
+        "MAX_COMPARE_FILES = 300",
+        "_current_main_changed_files(compare)",
+        "current-main compare file listing hit verifier bound",
+    ):
+        req(anchor in verifier_source,f"independent verifier trust-anchor control missing: {anchor}")
+    for marker in (
+        "actions/create-github-app-token@v2",
+        'app-id: "5121826"',
+        "secrets.portfolio_verifier_private_key",
+        "docker run --rm --network none --cap-drop=all --security-opt=no-new-privileges",
+        "ref: main",
+        "path: verifier-control",
+        "verification/independent_verifier.py",
+        "persist-credentials: false",
+    ):
+        req(marker in verifier,f"independent verifier isolation control missing: {marker}")
+    req(verifier.index("run candidate regressions in network-disabled containers")
+        < verifier.index("mint short-lived independent verifier app token"),
+        "verifier App token exists before candidate execution stops")
+    req(verifier.index("checkout trusted verifier controls from main")
+        < verifier.index("mint short-lived independent verifier app token"),
+        "trusted verifier controls are not loaded before token minting")
+    event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text().lower()
+    req("push:" in event and 'branches: ["main"]' in event,"main push observer missing")
+    req('"operations/command_center_refresh_request.json"' in event,"trigger-only command-center refresh still creates redundant runtime work")
+    watchdog=(ROOT/".github/workflows/portfolio-cost-watchdog.yml").read_text().lower()
+    req("actions: write" in watchdog and "contents: read" in watchdog and "contents: write" not in watchdog,"watchdog permissions invalid")
+    watchdog_triggers=workflow_top_level_triggers(ROOT/".github/workflows/portfolio-cost-watchdog.yml")
+    req({"schedule","workflow_run","push","workflow_dispatch"}<=watchdog_triggers,"watchdog independent recovery triggers incomplete")
+    for producer in ("portfolio-autonomous-scheduler","runtime-hourly-sync","agent-heartbeat-sweep","hunter-autonomous-cycle","portfolio-notification-cycle"):
+        req(f'- "{producer}"' in watchdog,f"watchdog liveness recovery anchor missing: {producer}")
+    req("types: [completed]" in watchdog and 'branches: ["main"]' in watchdog,"watchdog liveness recovery anchors drifted")
+    runtime_sync=(ROOT/".github/workflows/runtime-hourly-sync.yml").read_text().lower()
+    req("push:" in runtime_sync and 'branches: ["main"]' in runtime_sync and '"adapters/**"' in runtime_sync and '"runtime/**"' in runtime_sync,"runtime repair wakeup trigger missing")
+    req('"operations/trigger_workflow_liveness"' in watchdog,"watchdog explicit liveness trigger path missing")
+    req("paths:" in watchdog,"watchdog push trigger must remain path-scoped")
+    req("operations.workflow_liveness" in watchdog and "portfolio-workflow-liveness" in watchdog,"watchdog core-workflow recovery missing")
+    liveness=load("operations/WORKFLOW_LIVENESS_POLICY.json")
+    req(liveness["schema_version"]=="1.0.0" and liveness["liveness_id"]=="portfolio-core-workflow-liveness-v1","workflow liveness policy identity mismatch")
+    req(liveness["authority_class"]=="NONE" and liveness["dispatch_authority_effect"]=="NONE","workflow liveness recovery widened authority")
+    req(liveness["hard_stop_behavior"]=="NONPAID_RECOVERY_CONTINUES","workflow liveness paid/non-paid separation drifted")
+    req(any(row["admission_domain"]=="WORKLOAD" for row in liveness["targets"]),"workflow liveness lacks non-paid workload recovery")
+    req(all(row["admission_domain"]=="WORKLOAD" for row in liveness["targets"]),"core workflow liveness must remain non-paid workload recovery")
+    req(1<=liveness["max_dispatches_per_cycle"]<=2 and 1<=liveness["max_history_pages"]<=5,"workflow liveness recovery bounds invalid")
+    recovery_names={row["workflow_name"] for row in liveness["targets"]}
+    req(recovery_names<=set(expected),"workflow liveness recovery target is not an approved recurring workflow")
+    for target in liveness["targets"]:
+        path=ROOT/".github/workflows"/target["workflow_file"]
+        req(path.exists(),f"workflow liveness target file missing: {target['workflow_file']}")
+        req("workflow_dispatch" in workflow_top_level_triggers(path),f"workflow liveness target not dispatchable: {target['workflow_name']}")
+    foundation=(ROOT/".github/workflows/foundation-ci.yml").read_text().lower()
+    req('branches: ["main", "step*-*"]' in foundation,"foundation CI main trigger missing")
+
+    req(p["durable_state_artifacts"]=={
+      "runtime":"portfolio-runtime-state","hunter":"portfolio-hunter-state",
+      "scheduler":"portfolio-scheduler-state","cost":"portfolio-cost-governor-state",
+      "notifications":"portfolio-notification-state","agents":"portfolio-agent-heartbeat-state"
+    },"durable artifact names changed")
+
+    kill_files={
+      "runtime":"runtime/KILL_SWITCH.json","hunter":"hunting/KILL_SWITCH.json",
+      "scheduler":"scheduler/KILL_SWITCH.json","cost":"cost_governor/COST_KILL_SWITCH.json",
+      "notifications":"notifications/KILL_SWITCH.json"
+    }
+    for name,path in kill_files.items():
+        data=load(path);key="spend_disabled" if name=="cost" else "disabled"
+        req(data.get(key) is False,f"checked-in {name} kill switch unexpectedly active")
+
+    gmail=p.get("external_connector_gateways",{}).get("gmail",{})
+    req(gmail.get("provider")=="CHATGPT_GMAIL_CONNECTOR" and gmail.get("account_ref")=="PRIMARY_GMAIL_CONNECTOR","Gmail connector gateway binding missing")
+    req(gmail.get("execution_task_id")=="6ab377c25df08191a6e2aa1537d9d2ef","Gmail gateway executor task mismatch")
+    req(gmail.get("planner_task_id")=="6ab377be3184819186a3075f37a530b8","Gmail gateway planner task mismatch")
+    req(load("action_engine/KILL_SWITCH.json").get("disabled") is False,"checked-in Gmail action kill switch unexpectedly active")
+    req(not (ROOT/".github/workflows/portfolio-action-worker.yml").exists(),"obsolete SMTP action worker still present")
+    gateway_status=s.get("connector_gateways",{}).get("gmail",{})
+    ledger=load("action_engine/GMAIL_GATEWAY_LEDGER.json")
+    validate_gmail_gateway_status(gmail,gateway_status,ledger)
+    boundaries=set(p["permanent_authority_boundaries"])
+    for b in [
+      "PAYMENT_CASH_MOVEMENT_REQUIRES_HUMAN_APPROVAL",
+      "LIVE_MARKET_TRADING_AND_BROKERAGE_EXECUTION_PROHIBITED",
+      "DEPLOYMENT_NOT_GRANTED_TO_AUTONOMOUS_SCHEDULER",
+      "MERGE_REQUIRES_PROTECTED_PR_AND_INDEPENDENT_VERIFIER",
+      "CHILD_FACING_CONSEQUENTIAL_CHANGES_REQUIRE_APPROVAL"
+    ]:req(b in boundaries,f"authority boundary missing: {b}")
+
+    fallback=validate_reasoning_fallback()
+    return {
+      "approved_recurring_workflows":len(expected),
+      "workflow_liveness_recovery_targets":len(liveness["targets"]),
+      "workflow_liveness_max_dispatches":liveness["max_dispatches_per_cycle"],
+      "truthful_blocked_workflows":len(workload_workflows)+2,
+      "workload_controlled_services":len(workload["services"]),
+      "durable_state_artifacts":len(p["durable_state_artifacts"]),
+      "gmail_gateway_account_ref":gmail["account_ref"],
+      "gmail_gateway_status":gateway_status["status"],
+      "enabled_nonzero_models":len(enabled_nonzero),
+      "step23_unresolved":step23["unresolved_findings"],
+      "step24_authority_violations":step24["authority_violations"],
+      "step24_paid_cost_usd":step24["paid_cost_usd"],
+      "interactive_chatgpt_runtime_dependency":False,
+      "reasoning_fallback_provider":fallback["provider"],
+      "reasoning_fallback_authority_granted":fallback["authority_granted"],
+      "reasoning_fallback_evidence_upgraded":fallback["evidence_upgraded"],
+      "release_status":s["status"],
+      "promoted_main_sha":s["promoted_main_sha"]
+    }
+
+if __name__=="__main__":
+    print("portfolio-brain Step 25 operating mode: PASS",json.dumps(validate_operating_mode(),sort_keys=True))
