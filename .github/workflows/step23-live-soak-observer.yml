@@ -12,12 +12,6 @@ on:
       - command-center-pages
     types: [completed]
     branches: [main]
-  schedule:
-    - cron: "45 7 6 10 *"
-    - cron: "15 8 6 10 *"
-    - cron: "45 8 6 10 *"
-    - cron: "15 9 6 10 *"
-    - cron: "29 9 6 10 *"
   workflow_dispatch:
 
 permissions:
