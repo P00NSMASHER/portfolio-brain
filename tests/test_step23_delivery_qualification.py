@@ -60,7 +60,7 @@ class QualificationTests(unittest.TestCase):
         self.assertEqual(start.minute%15,0)
 
     def test_late_qualification_refuses_to_start_in_incomplete_horizon(self):
-        rows=self.all_rows(base_minute=240)
+        rows=self.all_rows(base_minute=480)
         result=derive_qualification(rows,SHA,BASE,END,start_delay_minutes=30)
         self.assertFalse(result["qualified"])
         self.assertEqual(result["status"],"QUALIFICATION_TOO_LATE")
