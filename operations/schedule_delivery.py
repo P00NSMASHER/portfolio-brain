@@ -8,6 +8,7 @@ import argparse
 import json
 import os
 import re
+import time
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -52,7 +53,7 @@ class API:
         require(self.requests < 80, "DELIVERY_API_BUDGET_EXHAUSTED")
         # Write destinations are a closed set, not caller-supplied URLs.
         if method == "PUT":
-            require(re.fullmatch(r"/actions/workflows/[0-9]+/enable", path) is not None, "WRITE_NOT_ALLOWED")
+            require(re.fullmatch(r"/actions/workflows/[0-9]+/(?:enable|disable)", path) is not None, "WRITE_NOT_ALLOWED")
         if method == "POST":
             require(path == f"/actions/runs/{RETIRED_RUN}/cancel", "WRITE_NOT_ALLOWED")
         self.requests += 1
@@ -166,9 +167,59 @@ def repair(api: API, workflows: dict[str, dict], sha: str, env: dict[str, str]) 
     return actions
 
 
+def force_reregister(api: API, workflows: dict[str, dict], sha: str, env: dict[str, str],
+                     control: dict[str, Any], *, sleep=time.sleep) -> list[dict]:
+    """Force GitHub to rebuild schedule registrations without granting workload authority."""
+    require(env.get("GITHUB_EVENT_NAME") == "push" and env.get("GITHUB_REF") == "refs/heads/main",
+            "FORCE_REREGISTRATION_REQUIRES_PROTECTED_MAIN_PUSH")
+    require(env.get("GITHUB_REPOSITORY") == REPO and env.get("GITHUB_SHA") == sha,
+            "FORCE_REREGISTRATION_CONTEXT_MISMATCH")
+    require(control.get("status") == "CANARY_REQUIRED"
+            and control.get("reason") == "FORCE_SCHEDULER_REGISTRATION_RESET",
+            "FORCE_REREGISTRATION_NOT_OWNER_ARMED")
+    require(api.call("/branches/main")["commit"]["sha"] == sha, "MAIN_MOVED")
+    require(set(CORE) <= set(workflows), "CORE_WORKFLOW_REGISTRATION_MISSING")
+    targets = []
+    for name in CORE:
+        wf = workflows[name]
+        require(wf.get("name") == name and wf.get("path") == f".github/workflows/{name}.yml",
+                "FORCE_REREGISTRATION_TARGET_IDENTITY_MISMATCH")
+        require(wf.get("state") == "active", f"FORCE_REREGISTRATION_TARGET_NOT_ACTIVE:{name}")
+        targets.append((name, wf["id"], wf["path"]))
+    actions = []
+    # Disable the complete cohort first. A cohort-wide down/up edge is more
+    # likely to rebuild GitHub's scheduler registrations than rapid per-item toggles.
+    for name, workflow_id, path in targets:
+        api.call(f"/actions/workflows/{workflow_id}/disable", "PUT")
+        disabled = api.call(f"/actions/workflows/{workflow_id}")
+        require(disabled.get("id") == workflow_id and disabled.get("path") == path
+                and disabled.get("name") == name and disabled.get("state") == "disabled_manually",
+                f"WORKFLOW_DISABLE_NOT_CONFIRMED:{name}")
+        actions.append({"workflow": name, "workflow_id": workflow_id, "action": "DISABLED_CONFIRMED"})
+    sleep(15)
+    require(api.call("/branches/main")["commit"]["sha"] == sha, "MAIN_MOVED")
+    for name, workflow_id, path in targets:
+        api.call(f"/actions/workflows/{workflow_id}/enable", "PUT")
+        enabled = api.call(f"/actions/workflows/{workflow_id}")
+        require(enabled.get("id") == workflow_id and enabled.get("path") == path
+                and enabled.get("name") == name and enabled.get("state") == "active",
+                f"WORKFLOW_ENABLE_NOT_CONFIRMED:{name}")
+        actions.append({"workflow": name, "workflow_id": workflow_id, "action": "ENABLED_CONFIRMED"})
+    sleep(15)
+    require(api.call("/branches/main")["commit"]["sha"] == sha, "MAIN_MOVED")
+    final = registry(api)
+    for name, workflow_id, path in targets:
+        wf = final.get(name)
+        require(wf is not None and wf.get("id") == workflow_id and wf.get("path") == path
+                and wf.get("state") == "active",
+                f"FINAL_WORKFLOW_REGISTRATION_NOT_ACTIVE:{name}")
+    return actions
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--repair", action="store_true")
+    ap.add_argument("--force-reregister", action="store_true")
     ap.add_argument("--output", type=Path, default=Path("operations/out/schedule_delivery.json"))
     args = ap.parse_args()
     now = datetime.now(timezone.utc)
@@ -197,7 +248,12 @@ def main() -> None:
                       probe_is_native_schedule=own["event"] == "schedule")
         workflows = registry(api)
         if args.repair:
-            report["actions"] = repair(api, workflows, sha, dict(os.environ))
+            report["actions"].extend(repair(api, workflows, sha, dict(os.environ)))
+            workflows = registry(api)
+        if args.force_reregister:
+            report["actions"].extend(force_reregister(
+                api, workflows, sha, dict(os.environ), control
+            ))
             workflows = registry(api)
         summaries = []
         for name in (*CORE, PROBE):

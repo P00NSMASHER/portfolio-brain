@@ -69,6 +69,39 @@ class DeliveryTests(unittest.TestCase):
         d.repair(api, {d.CORE[0]: WF}, SHA, ENV)
         self.assertTrue(all(method == 'GET' for _, method in api.calls))
 
+    def test_force_reregister_cycles_all_active_targets_and_reconfirms(self):
+        workflows = {
+            name: dict(id=100+i, name=name, path=f'.github/workflows/{name}.yml', state='active')
+            for i,name in enumerate(d.CORE)
+        }
+        responses=[HEAD]
+        for name in d.CORE:
+            wf=workflows[name]
+            responses += [{}, {**wf, 'state':'disabled_manually'}]
+        responses += [HEAD]
+        for name in d.CORE:
+            wf=workflows[name]
+            responses += [{}, wf]
+        responses += [HEAD, {'workflows': list(workflows.values())}]
+        api=API(*responses)
+        actions=d.force_reregister(
+            api, workflows, SHA, ENV,
+            {'status':'CANARY_REQUIRED','reason':'FORCE_SCHEDULER_REGISTRATION_RESET'},
+            sleep=lambda _:None,
+        )
+        self.assertEqual(len(actions),16)
+        self.assertEqual(sum(method=='PUT' and path.endswith('/disable') for path,method in api.calls),8)
+        self.assertEqual(sum(method=='PUT' and path.endswith('/enable') for path,method in api.calls),8)
+
+    def test_force_reregister_is_owner_armed_and_protected_main_only(self):
+        workflows={name:dict(id=100+i,name=name,path=f'.github/workflows/{name}.yml',state='active')
+                   for i,name in enumerate(d.CORE)}
+        with self.assertRaisesRegex(RuntimeError,'OWNER_ARMED'):
+            d.force_reregister(API(),workflows,SHA,ENV,{'status':'CANARY_REQUIRED','reason':'wrong'},sleep=lambda _:None)
+        with self.assertRaisesRegex(RuntimeError,'PROTECTED_MAIN_PUSH'):
+            d.force_reregister(API(),workflows,SHA,{**ENV,'GITHUB_EVENT_NAME':'workflow_dispatch'},
+                               {'status':'CANARY_REQUIRED','reason':'FORCE_SCHEDULER_REGISTRATION_RESET'},sleep=lambda _:None)
+
     def test_enable_acknowledgement_is_not_delivery(self):
         api = API(HEAD, OLD, HEAD, {}, WF)
         result = d.repair(api, {d.CORE[0]: {**WF, 'state': 'disabled_inactivity'}}, SHA, ENV)
