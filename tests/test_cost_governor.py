@@ -169,10 +169,10 @@ class CostGovernorTests(unittest.TestCase):
     def test_nonpaid_workflows_use_independent_workload_controls(self):
         expected = {
             "agent-heartbeat-sweep.yml": ("agent-heartbeat-sweep", "heartbeat", "portfolio-heartbeat", 8),
-            "command-center-pages.yml": ("command-center-pages", "publish", "portfolio-reporting-pages", 5),
+            "command-center-pages.yml": ("command-center-pages", "publish", "portfolio-reporting-pages", 10),
             "continuous-learning-bootstrap.yml": ("continuous-learning-bootstrap", "bootstrap", "portfolio-learning-bootstrap", 2),
-            "hunter-autonomous-cycle.yml": ("hunter-autonomous-cycle", "hunt", "portfolio-hunter-cycle", 5),
-            "portfolio-autonomous-scheduler.yml": ("portfolio-autonomous-scheduler", "schedule", "portfolio-scheduler", 5),
+            "hunter-autonomous-cycle.yml": ("hunter-autonomous-cycle", "hunt", "portfolio-hunter-cycle", 10),
+            "portfolio-autonomous-scheduler.yml": ("portfolio-autonomous-scheduler", "schedule", "portfolio-scheduler", 12),
             "portfolio-notification-cycle.yml": ("portfolio-notification-cycle", "notify", "portfolio-notification", 8),
             "software-factory-candidate.yml": ("software-factory-candidate", "execute-candidate-action", "portfolio-software-factory", 5),
             "verified-feedback-bootstrap.yml": ("verified-feedback-bootstrap", "feedback", "portfolio-feedback-bootstrap", 2),
@@ -210,7 +210,7 @@ class CostGovernorTests(unittest.TestCase):
             decision=evaluate_workload(
                 workflow_id="runtime-worker",
                 job_id=job,
-                estimated_minutes=5,
+                estimated_minutes=10,
             )
             self.assertEqual(decision["status"],"WORKLOAD_ALLOWED")
             self.assertEqual(

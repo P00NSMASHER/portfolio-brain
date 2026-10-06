@@ -33,7 +33,7 @@ jobs:
       cancel-in-progress: false
       queue: max
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       PORTFOLIO_RUNTIME_DISABLED: ${{ vars.PORTFOLIO_RUNTIME_DISABLED }}
       PORTFOLIO_SPEND_DISABLED: ${{ vars.PORTFOLIO_SPEND_DISABLED }}
@@ -55,7 +55,7 @@ jobs:
           python -m workload_control.workload_gate preflight
           --workflow-id runtime-worker
           --job-id "runtime-${RUNTIME_MODE}"
-          --estimated-minutes 5
+          --estimated-minutes 10
 
       - name: Restore canonical cost-governor state
         if: ${{ inputs.mode == 'daily' || inputs.mode == 'weekly' }}

@@ -3,19 +3,19 @@
   "mode": "GITHUB_NATIVE_WORKLOAD_CONTROL",
   "services": {
     "command-center-pages::publish": {
-      "max_minutes_per_job": 5,
+      "max_minutes_per_job": 10,
       "concurrency_group": "portfolio-reporting-pages",
       "scheduled_cadence": "hourly",
       "coalesce_pending": true
     },
     "hunter-autonomous-cycle::hunt": {
-      "max_minutes_per_job": 5,
+      "max_minutes_per_job": 10,
       "concurrency_group": "portfolio-hunter-cycle",
       "scheduled_cadence": "every_6_hours",
       "coalesce_pending": true
     },
     "portfolio-autonomous-scheduler::schedule": {
-      "max_minutes_per_job": 5,
+      "max_minutes_per_job": 12,
       "concurrency_group": "portfolio-scheduler",
       "scheduled_cadence": "hourly",
       "coalesce_pending": true
@@ -57,13 +57,13 @@
       "coalesce_pending": true
     },
     "runtime-worker::runtime-observe": {
-      "max_minutes_per_job": 5,
+      "max_minutes_per_job": 10,
       "concurrency_group": "portfolio-runtime-observe",
       "scheduled_cadence": "event_driven",
       "coalesce_pending": true
     },
     "runtime-worker::runtime-sync": {
-      "max_minutes_per_job": 5,
+      "max_minutes_per_job": 10,
       "concurrency_group": "portfolio-runtime-sync",
       "scheduled_cadence": "hourly_plus_event_driven",
       "coalesce_pending": true

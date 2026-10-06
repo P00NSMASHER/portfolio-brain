@@ -20,6 +20,11 @@ on:
     - cron: "22 3 6 10 *"
     - cron: "38 3 6 10 *"
     - cron: "52 3 6 10 *"
+    - cron: "6 4 6 10 *"
+    - cron: "15 4 6 10 *"
+    - cron: "24 4 6 10 *"
+    - cron: "33 4 6 10 *"
+    - cron: "42 4 6 10 *"
   workflow_dispatch:
 
 permissions:

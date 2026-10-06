@@ -20,6 +20,11 @@ on:
     - cron: "19 3 6 10 *"
     - cron: "34 3 6 10 *"
     - cron: "49 3 6 10 *"
+    - cron: "3 4 6 10 *"
+    - cron: "12 4 6 10 *"
+    - cron: "21 4 6 10 *"
+    - cron: "30 4 6 10 *"
+    - cron: "39 4 6 10 *"
   # GitHub scheduled delivery can be delayed or skipped. Recheck liveness after
   # any core producer finishes so one surviving trigger can recover overdue peers.
   workflow_run:
@@ -50,7 +55,7 @@ concurrency:
 jobs:
   enforce:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 8
     env:
       PORTFOLIO_SPEND_DISABLED: ${{ vars.PORTFOLIO_SPEND_DISABLED }}
       GITHUB_TOKEN: ${{ github.token }}
