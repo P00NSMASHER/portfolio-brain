@@ -110,9 +110,9 @@ class DeliveryTests(unittest.TestCase):
     def test_fixed_arm_control_and_workflow_boundaries(self):
         control = json.loads((ROOT/'operations/STEP23_CONTROL.json').read_text())
         window = json.loads((ROOT/'operations/STEP23_DELIVERY_WINDOW.json').read_text())
-        self.assertEqual(control['status'], 'ARMED_FIXED')
-        self.assertEqual(control['next_soak_start'], '2026-10-06T07:30:00Z')
-        self.assertEqual(control['qualification_method'], 'OWNER_FIXED_2X8_TWO_HOUR_EXACT_MAIN')
+        self.assertEqual(control['status'], 'CANARY_REQUIRED')
+        self.assertIsNone(control['next_soak_start'])
+        self.assertFalse(control['acceptance_complete'])
         for name in d.CORE:
             text = (ROOT/f'.github/workflows/{name}.yml').read_text()
             for cron in window['temporary_crons'][name]:
@@ -126,7 +126,7 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn("github.event_name == 'push'", recovery)
         self.assertIn('--without-cost-state', recovery)
         observer = (ROOT/'.github/workflows/step23-live-soak-observer.yml').read_text()
-        self.assertIn('schedule:', observer)
+        self.assertNotIn('  schedule:', observer)
         self.assertIn('workflow_run:', observer)
         self.assertIn('step23_delivery_qualification', observer)
         self.assertIn('step23_live_collect', observer)

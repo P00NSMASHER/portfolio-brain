@@ -4,12 +4,8 @@ name: portfolio-notification-cycle
 on:
   schedule:
     - cron: "7 */6 * * *"
-    # Step 23 2x8 two-hour acceptance window.
-    - cron: "37 7 6 10 *"
-    - cron: "7 8 6 10 *"
-    - cron: "37 8 6 10 *"
-    - cron: "7 9 6 10 *"
-    - cron: "27 9 6 10 *"
+    # One-shot scheduler re-registration canary; remove after proof.
+    - cron: "51 13 6 10 *"
   repository_dispatch:
     types: ["portfolio_notify"]
   workflow_dispatch:

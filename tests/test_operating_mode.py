@@ -93,19 +93,12 @@ class OperatingModeTests(unittest.TestCase):
         expected={name:[entry["cron"],*window["temporary_crons"].get(name,[])]
                   for name,entry in policy["approved_recurring_workflows"].items()}
         expected["portfolio-schedule-delivery"]=["7,17,27,37,47,57 * * * *"]
-        expected["step23-live-soak-observer"]=window["observer_crons"]
         self.assertEqual(actual,expected)
         control=json.loads((ROOT/"operations/STEP23_CONTROL.json").read_text())
-        self.assertEqual(control["status"],"ARMED_FIXED")
-        self.assertEqual(control["next_soak_start"],"2026-10-06T07:30:00Z")
-        self.assertEqual(control["qualification_method"],"OWNER_FIXED_2X8_TWO_HOUR_EXACT_MAIN")
-        observer=ROOT/".github/workflows/step23-live-soak-observer.yml"
-        self.assertEqual(workflow_top_level_triggers(observer),{"workflow_run","schedule","workflow_dispatch"})
-        self.assertEqual(workflow_schedule_crons(observer),window["observer_crons"])
-        observer_text=observer.read_text()
-        self.assertIn("acceptance.step23_delivery_qualification",observer_text)
-        self.assertIn("acceptance.step23_live_collect",observer_text)
-        self.assertIn('"required_successes_per_workflow":2',observer_text)
+        self.assertEqual(control["status"],"CANARY_REQUIRED")
+        self.assertIsNone(control["next_soak_start"])
+        self.assertFalse(control["acceptance_complete"])
+        self.assertNotIn("step23-live-soak-observer",actual)
         monitor=(ROOT/".github/workflows/portfolio-schedule-delivery.yml").read_text()
         self.assertIn("actions: read",monitor)
         self.assertIn("workflow_run:",monitor)

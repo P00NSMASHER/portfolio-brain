@@ -3,12 +3,8 @@ name: portfolio-autonomous-scheduler
 on:
   schedule:
     - cron: "23 * * * *"
-    # Step 23 2x8 two-hour acceptance window.
-    - cron: "34 7 6 10 *"
-    - cron: "4 8 6 10 *"
-    - cron: "34 8 6 10 *"
-    - cron: "4 9 6 10 *"
-    - cron: "24 9 6 10 *"
+    # One-shot scheduler re-registration canary; remove after proof.
+    - cron: "47 13 6 10 *"
   repository_dispatch:
     types: ["portfolio_schedule"]
   workflow_dispatch:

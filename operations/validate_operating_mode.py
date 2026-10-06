@@ -222,45 +222,32 @@ def validate_operating_mode():
         "max_api_requests":80, "timeout_seconds":15, "new_soak_start":None,
     }, "schedule delivery monitor policy changed")
     window=load("operations/STEP23_DELIVERY_WINDOW.json")
-    req(window["schema_version"]=="1.0.0" and window["status"]=="ARMED_FIXED",
-        "Step 23 delivery window identity changed")
     required_temp={
       "portfolio-state-reducer","runtime-hourly-sync","portfolio-autonomous-scheduler",
       "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
       "portfolio-notification-cycle","command-center-pages",
     }
-    req(set(window["temporary_crons"])==required_temp,"Step 23 temporary workflow set changed")
-    req(window["qualification_horizon_start"]=="2026-10-06T07:00:00Z"
-        and window["qualification_horizon_end"]=="2026-10-06T10:00:00Z",
-        "Step 23 qualification horizon changed")
-    req(window["registration_delay_minutes"]==5 and window["start_delay_minutes"]==30
-        and window["start_round_minutes"]==15 and window["required_successes_per_workflow"]==2
-        and window["max_soak_duration_seconds"]==7200,
-        "Step 23 qualification contract weakened")
-    req(all(len(crons)==5 for crons in window["temporary_crons"].values())
-        and len(window["observer_crons"])==5,
-        "Step 23 temporary cadence count changed")
-    req(all(cron.split()[2:4]==["6","10"] for crons in window["temporary_crons"].values() for cron in crons)
-        and all(cron.split()[2:4]==["6","10"] for cron in window["observer_crons"]),
-        "Step 23 temporary cadence escaped the bounded UTC date")
+    req(window["schema_version"]=="1.0.0" and window["status"]=="CANARY_REQUIRED",
+        "Step 23 canary identity changed")
+    req(set(window["temporary_crons"])==required_temp,"Step 23 canary workflow set changed")
+    req(window["qualification_horizon_start"]=="2026-10-06T13:40:00Z"
+        and window["qualification_horizon_end"]=="2026-10-06T14:10:00Z",
+        "Step 23 canary horizon changed")
+    req(window["required_successes_per_workflow"]==1 and window["max_soak_duration_seconds"]==0,
+        "Step 23 canary must prove delivery only")
+    req(all(len(crons)==1 for crons in window["temporary_crons"].values())
+        and window["observer_crons"]==[], "Step 23 canary cadence changed")
     workflow_dir=ROOT/".github/workflows"
     actual=scheduled_workflow_inventory(workflow_dir)
-    req(set(actual)==set(expected)|{delivery["workflow"],"step23-live-soak-observer"},
-        "scheduled workflow inventory differs from approved operating policy")
+    req(set(actual)==set(expected)|{delivery["workflow"]},
+        "scheduled workflow inventory differs from approved canary policy")
     for name,cron in expected.items():
         req(actual[name]==[cron,*window["temporary_crons"].get(name,[])],f"{name} cron mismatch")
     req(actual[delivery["workflow"]]==[delivery["cron"]],"delivery probe cron mismatch")
-    req(actual["step23-live-soak-observer"]==window["observer_crons"],
-        "Step 23 observer fallback cron mismatch")
     control=load("operations/STEP23_CONTROL.json")
-    req(control.get("status")=="ARMED_FIXED"
-        and control.get("next_soak_start")=="2026-10-06T07:30:00Z"
-        and control.get("qualification_method")=="OWNER_FIXED_2X8_TWO_HOUR_EXACT_MAIN"
-        and control.get("registration_delay_minutes")==window["registration_delay_minutes"]
-        and control.get("start_delay_minutes")==window["start_delay_minutes"]
-        and control.get("qualification_horizon_start")==window["qualification_horizon_start"]
-        and control.get("qualification_horizon_end")==window["qualification_horizon_end"],
-        "Step 23 fixed-arm control changed")
+    req(control.get("status")=="CANARY_REQUIRED" and control.get("next_soak_start") is None
+        and control.get("acceptance_complete") is False,
+        "Step 23 must remain disarmed until scheduler canary passes")
     workload=load("workload_control/WORKLOAD_POLICY.json")
     req(workload["mode"]=="GITHUB_NATIVE_WORKLOAD_CONTROL","workload control mode changed")
     workload_workflows={

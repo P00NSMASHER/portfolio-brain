@@ -3,12 +3,8 @@ name: agent-heartbeat-sweep
 on:
   schedule:
     - cron: "29 */2 * * *"
-    # Step 23 2x8 two-hour acceptance window.
-    - cron: "36 7 6 10 *"
-    - cron: "6 8 6 10 *"
-    - cron: "36 8 6 10 *"
-    - cron: "6 9 6 10 *"
-    - cron: "26 9 6 10 *"
+    # One-shot scheduler re-registration canary; remove after proof.
+    - cron: "49 13 6 10 *"
   workflow_dispatch:
 
 permissions:
