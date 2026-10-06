@@ -198,7 +198,7 @@ def validate_cost_governor():
         decision = evaluate_workload(
             workflow_id="runtime-worker",
             job_id=job_id,
-            estimated_minutes=10,
+            estimated_minutes=15,
         )
         req(decision["status"] == "WORKLOAD_ALLOWED",
             f"{job_id} workload admission failed")

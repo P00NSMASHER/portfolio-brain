@@ -34,7 +34,7 @@
       "project_ids": [
         "PRJ-000"
       ],
-      "estimated_minutes": 10,
+      "estimated_minutes": 15,
       "authority_class": "OBSERVE",
       "max_start_age_minutes": 100,
       "priority": 2,

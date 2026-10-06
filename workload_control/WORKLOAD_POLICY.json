@@ -57,13 +57,13 @@
       "coalesce_pending": true
     },
     "runtime-worker::runtime-observe": {
-      "max_minutes_per_job": 10,
+      "max_minutes_per_job": 15,
       "concurrency_group": "portfolio-runtime-observe",
       "scheduled_cadence": "event_driven",
       "coalesce_pending": true
     },
     "runtime-worker::runtime-sync": {
-      "max_minutes_per_job": 10,
+      "max_minutes_per_job": 15,
       "concurrency_group": "portfolio-runtime-sync",
       "scheduled_cadence": "hourly_plus_event_driven",
       "coalesce_pending": true

@@ -33,7 +33,11 @@ jobs:
       cancel-in-progress: false
       queue: max
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Non-paid modes allow 300s canonical catch-up + 240s core work + 45s
+    # provider restore + 126s forwarding + 80s health reads, leaving 109s for
+    # scans/setup/finalization. Missing reducer delivery still fails closed.
+    # Paid modes retain their existing five-minute reservation and hard limit.
+    timeout-minutes: ${{ (inputs.mode == 'observe' || inputs.mode == 'sync') && 15 || 5 }}
     env:
       PORTFOLIO_RUNTIME_DISABLED: ${{ vars.PORTFOLIO_RUNTIME_DISABLED }}
       PORTFOLIO_SPEND_DISABLED: ${{ vars.PORTFOLIO_SPEND_DISABLED }}
@@ -55,7 +59,7 @@ jobs:
           python -m workload_control.workload_gate preflight
           --workflow-id runtime-worker
           --job-id "runtime-${RUNTIME_MODE}"
-          --estimated-minutes 10
+          --estimated-minutes 15
 
       - name: Restore canonical cost-governor state
         if: ${{ inputs.mode == 'daily' || inputs.mode == 'weekly' }}

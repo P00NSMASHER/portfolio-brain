@@ -102,8 +102,13 @@ class WorkflowLivenessTests(unittest.TestCase):
             validate_policy(p)
 
         p=load_policy()
-        p["targets"][0]["estimated_minutes"]=6
+        p["targets"][0]["estimated_minutes"]+=1
         with self.assertRaisesRegex(WorkflowLivenessError,"target estimate invalid"):
+            validate_policy(p)
+
+        p=load_policy()
+        p["targets"][0]["estimated_minutes"]-=1
+        with self.assertRaisesRegex(WorkflowLivenessError,"admission drifted from target"):
             validate_policy(p)
 
     def test_overdue_scheduler_is_recovered_without_touching_recent_targets(self):
