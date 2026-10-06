@@ -54,14 +54,23 @@ def due(cadence:str,at:datetime)->bool:
     if cadence=="DAILY_04_UTC": return at.hour==4
     raise ClockError("unknown cadence")
 
-def source_identity(policy:dict,run:dict)->dict:
+def source_identity(policy:dict,run:dict,main_sha:str,current_run_id:int|None=None)->dict:
     matches=[row for row in policy["source_workflows"]
              if row["name"]==run.get("name") and row["path"]==run.get("path")]
     req(len(matches)==1,"untrusted schedule clock source")
     req(run.get("event") in matches[0]["events"],"clock source is not native schedule")
     req(run.get("head_branch")=="main","clock source not on main")
-    req(run.get("status")=="completed","clock source not terminal")
+    req(run.get("head_sha")==main_sha,"clock source is not exact current main")
     req(type(run.get("id")) is int,"clock source id invalid")
+    inflight_self=(
+        current_run_id is not None
+        and run["id"]==current_run_id
+        and run.get("name")=="portfolio-schedule-delivery"
+        and run.get("event")=="schedule"
+        and run.get("status") in {"queued","in_progress","pending","waiting","requested"}
+    )
+    req(run.get("status")=="completed" or inflight_self,
+        "clock source is neither completed carrier nor authenticated in-flight self schedule")
     return matches[0]
 
 def recent_runs(api:API,target:dict,at:datetime,main_sha:str,minutes:int)->list[dict]:
@@ -79,8 +88,8 @@ def recent_runs(api:API,target:dict,at:datetime,main_sha:str,minutes:int)->list[
                     and parse_time(row["created_at"])>=cutoff)
     return rows
 
-def execute(api:API,policy:dict,source_run:dict,main_sha:str)->dict:
-    source=source_identity(policy,source_run)
+def execute(api:API,policy:dict,source_run:dict,main_sha:str,current_run_id:int|None=None)->dict:
+    source=source_identity(policy,source_run,main_sha,current_run_id=current_run_id)
     at=parse_time(source_run["created_at"])
     actions=[]
     for target in policy["target_workflows"]:
@@ -116,7 +125,10 @@ def main()->int:
     api=API(os.environ["GITHUB_TOKEN"],policy["max_api_requests"])
     main_sha=api.call("/branches/main")["commit"]["sha"]
     source=api.call(f"/actions/runs/{args.source_run_id}")
-    result=execute(api,policy,source,main_sha)
+    current_run_id=int(os.environ["GITHUB_RUN_ID"])
+    req(current_run_id==args.source_run_id or source.get("status")=="completed",
+        "non-current carrier source must already be completed")
+    result=execute(api,policy,source,main_sha,current_run_id=current_run_id)
     req(api.call("/branches/main")["commit"]["sha"]==main_sha,"main moved during clock tick")
     result["api_requests"]=api.requests
     args.output.parent.mkdir(parents=True,exist_ok=True)

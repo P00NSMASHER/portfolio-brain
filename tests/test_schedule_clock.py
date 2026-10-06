@@ -34,9 +34,21 @@ class ScheduleClockTests(unittest.TestCase):
       {"name":"portfolio-schedule-delivery","path":".github/workflows/portfolio-schedule-delivery.yml","events":["schedule"]},
       *POLICY["source_workflows"],
   ]}
-  result=execute(API(),p,own,MAIN)
+  result=execute(API(),p,own,MAIN,current_run_id=1)
   self.assertEqual(result["source_workflow"],"portfolio-schedule-delivery")
   self.assertEqual(result["source_event"],"schedule")
+ def test_self_schedule_accepts_authenticated_inflight_current_run(self):
+  own={**SOURCE,"name":"portfolio-schedule-delivery","path":".github/workflows/portfolio-schedule-delivery.yml",
+       "status":"in_progress"}
+  p={**POLICY,"source_workflows":[
+      {"name":"portfolio-schedule-delivery","path":".github/workflows/portfolio-schedule-delivery.yml","events":["schedule"]},
+      *POLICY["source_workflows"],
+  ]}
+  result=execute(API(),p,own,MAIN,current_run_id=1)
+  self.assertEqual(result["source_workflow"],"portfolio-schedule-delivery")
+ def test_stale_main_source_is_rejected(self):
+  with self.assertRaisesRegex(ClockError,"exact current main"):
+   execute(API(),POLICY,{**SOURCE,"head_sha":"b"*40},MAIN)
  def test_cadence(self):
   at=datetime(2026,10,6,16,17,tzinfo=timezone.utc)
   self.assertTrue(due("HOURLY",at));self.assertTrue(due("EVERY_2_HOURS",at))
