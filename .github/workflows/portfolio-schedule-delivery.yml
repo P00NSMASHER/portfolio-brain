@@ -12,6 +12,10 @@ on:
       - portfolio-cost-watchdog
       - portfolio-notification-cycle
       - command-center-pages
+      - verified-feedback-bootstrap
+      - portfolio-state-checkpoint-candidate
+      - runtime-daily-learning
+      - runtime-weekly-synthesis
     types: [completed]
     branches: [main]
   push:
@@ -58,6 +62,49 @@ jobs:
           path: operations/out/schedule_delivery.json
           if-no-files-found: error
           retention-days: 14
+  clock:
+    if: >-
+      ${{
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.event == 'schedule' &&
+        (
+          github.event.workflow_run.name == 'verified-feedback-bootstrap' ||
+          github.event.workflow_run.name == 'portfolio-state-checkpoint-candidate' ||
+          github.event.workflow_run.name == 'runtime-daily-learning' ||
+          github.event.workflow_run.name == 'runtime-weekly-synthesis'
+        )
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    concurrency:
+      group: portfolio-redundant-schedule-clock
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Convert trusted native schedule tick into bounded due dispatches
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python -m operations.schedule_clock
+          --source-run-id "${{ github.event.workflow_run.id }}"
+          --output operations/out/schedule_clock_receipt.json
+      - name: Preserve schedule clock receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-schedule-clock-${{ github.run_id }}-${{ github.run_attempt }}
+          path: operations/out/schedule_clock_receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
   recover:
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     needs: inspect
