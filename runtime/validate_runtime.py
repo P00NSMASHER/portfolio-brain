@@ -54,7 +54,7 @@ def validate_runtime()->dict:
     ]
     texts={n:(ROOT/n).read_text() for n in names}
     worker=texts[names[0]]
-    for required in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_RUNTIME_DISABLED",
+    for required in ["contents: read","actions: read","timeout-minutes: 10","PORTFOLIO_RUNTIME_DISABLED",
                      "PORTFOLIO_MODEL_API_KEY","runtime.model_analysis","actions/upload-artifact@v4","retention-days: 30",
                      "cancel-in-progress: false",
                      "workload_control.workload_gate preflight","format('portfolio-runtime-{0}', inputs.mode)",
