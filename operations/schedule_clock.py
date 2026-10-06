@@ -100,8 +100,8 @@ def daemon_identity(api:API,run_id:int,attempt:int,main_sha:str,tick_epoch:int)-
     req(run.get("status") in {"queued","in_progress","pending","waiting","requested"},
         "clock daemon is not an active parent generation")
     now=int(time.time())
-    req(tick_epoch%600==0 and abs(now-tick_epoch)<=180,
-        "clock daemon tick is not a current ten-minute boundary")
+    req(tick_epoch%600==0 and tick_epoch<=now+120 and now-tick_epoch<=1200,
+        "clock daemon tick is not a recent aligned ten-minute boundary")
     return run
 
 def execute(api:API,policy:dict,source_run:dict,main_sha:str,current_run_id:int|None=None,

@@ -62,6 +62,8 @@ class ScheduleClockTests(unittest.TestCase):
   self.assertEqual(row["id"],88)
   with self.assertRaisesRegex(ClockError,"exact current main"):
    daemon_identity(DaemonAPI(),88,2,"b"*40,tick)
+  with self.assertRaisesRegex(ClockError,"recent aligned"):
+   daemon_identity(DaemonAPI(),88,2,MAIN,tick-1800)
  def test_cadence(self):
   at=datetime(2026,10,6,16,17,tzinfo=timezone.utc)
   self.assertTrue(due("HOURLY",at));self.assertTrue(due("EVERY_2_HOURS",at))
