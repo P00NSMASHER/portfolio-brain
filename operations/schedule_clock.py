@@ -104,6 +104,31 @@ def daemon_identity(api:API,run_id:int,attempt:int,main_sha:str,tick_epoch:int)-
         "clock daemon tick is not a recent aligned ten-minute boundary")
     return run
 
+
+def bind_dispatched_run(api:API,target:dict,main_sha:str,prior_ids:set[int],requested_at:datetime)->dict:
+    encoded=urllib.parse.quote(target["file"],safe="")
+    for attempt in range(5):
+        doc=api.call(f"/actions/workflows/{encoded}/runs?event=workflow_dispatch&branch=main&per_page=20")
+        batch=doc.get("workflow_runs",[])
+        req(isinstance(batch,list),"clock dispatch run listing malformed")
+        candidates=[]
+        for row in batch:
+            if type(row.get("id")) is not int or row["id"] in prior_ids:
+                continue
+            actor=(row.get("actor") or {}).get("login")
+            triggering=(row.get("triggering_actor") or {}).get("login")
+            if (row.get("name")==target["name"] and row.get("head_branch")=="main"
+                    and row.get("head_sha")==main_sha and row.get("event")=="workflow_dispatch"
+                    and actor=="github-actions[bot]" and triggering=="github-actions[bot]"
+                    and parse_time(row.get("created_at"))>=requested_at-timedelta(seconds=5)):
+                candidates.append(row)
+        if len(candidates)==1:
+            return candidates[0]
+        req(len(candidates)<=1,f"ambiguous clock dispatch binding for {target['name']}")
+        if attempt<4:
+            time.sleep(2)
+    raise ClockError(f"clock dispatch run did not materialize for {target['name']}")
+
 def execute(api:API,policy:dict,source_run:dict,main_sha:str,current_run_id:int|None=None,
             at_override:datetime|None=None,source_label:str|None=None)->dict:
     source=source_identity(policy,source_run,main_sha,current_run_id=current_run_id)
@@ -118,9 +143,17 @@ def execute(api:API,policy:dict,source_run:dict,main_sha:str,current_run_id:int|
             actions.append({"workflow":target["name"],"action":"ALREADY_RAN_IN_SLOT",
                             "evidence_run_ids":sorted({row["id"] for row in recent})})
             continue
+        prior_ids={row["id"] for row in recent if type(row.get("id")) is int}
+        requested_at=datetime.now(timezone.utc)
         api.call(f"/actions/workflows/{target['file']}/dispatches","POST",{"ref":"main"})
-        actions.append({"workflow":target["name"],"action":"DISPATCH_REQUESTED"})
-        if sum(1 for row in actions if row["action"]=="DISPATCH_REQUESTED")>=policy["max_dispatches_per_tick"]:
+        bound=bind_dispatched_run(api,target,main_sha,prior_ids,requested_at)
+        actions.append({
+            "workflow":target["name"],"action":"DISPATCH_BOUND",
+            "target_run_id":bound["id"],"target_created_at":bound["created_at"],
+            "target_event":"workflow_dispatch","target_head_sha":main_sha,
+            "target_actor":"github-actions[bot]",
+        })
+        if sum(1 for row in actions if row["action"]=="DISPATCH_BOUND")>=policy["max_dispatches_per_tick"]:
             break
     return {
         "schema_version":"1.0.0","clock_id":policy["clock_id"],"status":"PASS",

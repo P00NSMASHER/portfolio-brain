@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime,timezone
-from operations.schedule_clock import ClockError,daemon_identity,due,execute
+from operations.schedule_clock import ClockError,bind_dispatched_run,daemon_identity,due,execute
 
 MAIN="a"*40
 SOURCE={"id":1,"name":"verified-feedback-bootstrap","path":".github/workflows/verified-feedback-bootstrap.yml",
@@ -71,8 +71,14 @@ class ScheduleClockTests(unittest.TestCase):
  def test_trusted_schedule_source_dispatches_due_only(self):
   api=API();result=execute(api,POLICY,SOURCE,MAIN)
   requested=[x["workflow"] for x in result["actions"] if x["action"]=="DISPATCH_REQUESTED"]
-  self.assertEqual(requested,["hourly","two"])
+  self.assertEqual(requested,[])\n  self.assertEqual([x["workflow"] for x in result["actions"] if x["action"]=="DISPATCH_BOUND"],["hourly","two"])
   self.assertFalse(result["authority_granted"])
+ def test_bound_dispatch_requires_exact_bot_current_main_run(self):
+  target={"name":"hourly","file":"hourly.yml","cadence":"HOURLY"}
+  api=API();api.dispatched.add("hourly.yml")
+  row=bind_dispatched_run(api,target,MAIN,set(),datetime(2026,10,6,16,17,tzinfo=timezone.utc))
+  self.assertEqual(row["head_sha"],MAIN)
+  self.assertEqual(row["actor"]["login"],"github-actions[bot]")
  def test_recent_schedule_or_dispatch_dedupes(self):
   recent={("hourly.yml","schedule"):[{"id":9,"head_branch":"main","head_sha":MAIN,"created_at":"2026-10-06T16:10:00Z"}]}
   api=API(recent);result=execute(api,POLICY,SOURCE,MAIN)
