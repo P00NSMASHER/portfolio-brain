@@ -3,9 +3,9 @@ import unittest
 from datetime import datetime,timedelta,timezone
 from acceptance.step23_delivery_qualification import REQUIRED,pin_requested_start
 
-START=datetime(2026,10,6,0,30,tzinfo=timezone.utc)
+START=datetime(2026,10,6,3,0,tzinfo=timezone.utc)
 HORIZON=datetime(2026,10,6,4,tzinfo=timezone.utc)
-REQUEST='2026-10-06T00:30:00Z'
+REQUEST='2026-10-06T03:00:00Z'
 
 def result():
     return dict(status='QUALIFIED',qualified=True,exact_main_sha='a'*40,
@@ -19,7 +19,7 @@ class FixedStartTests(unittest.TestCase):
         got=pin_requested_start(result(),REQUEST,HORIZON,START)
         self.assertTrue(got['qualified'])
         self.assertEqual(got['soak_start'],REQUEST)
-        self.assertEqual(got['soak_deadline'],'2026-10-06T01:30:00Z')
+        self.assertEqual(got['soak_deadline'],'2026-10-06T04:00:00Z')
         self.assertFalse(got['acceptance_complete'])
     def test_missing_readiness_blocks_not_reschedules(self):
         value=result();value['selected'].pop(next(iter(REQUIRED)))
