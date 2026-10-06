@@ -230,8 +230,8 @@ def validate_operating_mode():
     req(window["schema_version"]=="1.0.0" and window["status"]=="CANARY_REQUIRED",
         "Step 23 canary identity changed")
     req(set(window["temporary_crons"])==required_temp,"Step 23 canary workflow set changed")
-    req(window["qualification_horizon_start"]=="2026-10-06T12:30:00Z"
-        and window["qualification_horizon_end"]=="2026-10-06T13:00:00Z",
+    req(window["qualification_horizon_start"]=="2026-10-06T12:15:00Z"
+        and window["qualification_horizon_end"]=="2026-10-06T12:45:00Z",
         "Step 23 canary horizon changed")
     req(window["required_successes_per_workflow"]==1 and window["max_soak_duration_seconds"]==0,
         "Step 23 canary must prove delivery only")

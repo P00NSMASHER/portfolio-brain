@@ -22,7 +22,7 @@ on:
   schedule:
     - cron: "37 * * * *"
     # One-shot scheduler re-registration canary; remove after proof.
-    - cron: "42 12 6 10 *"
+    - cron: "27 12 6 10 *"
   workflow_run:
     workflows:
       - "portfolio-cost-watchdog"

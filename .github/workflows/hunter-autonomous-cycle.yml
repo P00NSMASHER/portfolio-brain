@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: "47 */6 * * *"
     # One-shot scheduler re-registration canary; remove after proof.
-    - cron: "38 12 6 10 *"
+    - cron: "23 12 6 10 *"
   push:
     branches: ["main"]
     paths:

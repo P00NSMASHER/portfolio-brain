@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: "29 */2 * * *"
     # One-shot scheduler re-registration canary; remove after proof.
-    - cron: "39 12 6 10 *"
+    - cron: "24 12 6 10 *"
   workflow_dispatch:
 
 permissions:
