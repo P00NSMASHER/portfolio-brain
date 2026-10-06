@@ -126,7 +126,7 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn("github.event_name == 'push'", recovery)
         self.assertIn('--without-cost-state', recovery)
         observer = (ROOT/'.github/workflows/step23-live-soak-observer.yml').read_text()
-        self.assertIn('schedule:', observer)
+        self.assertNotIn('  schedule:', observer)
         self.assertIn('workflow_run:', observer)
         self.assertIn('step23_delivery_qualification', observer)
         self.assertIn('step23_live_collect', observer)
