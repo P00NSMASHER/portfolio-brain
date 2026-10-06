@@ -149,7 +149,8 @@ def main()->None:
     result=derive_qualification(
         collect_runs(api,baseline),args.exact_sha,baseline,parse_time(control["qualification_horizon_end"]),
         start_delay_minutes=int(control["start_delay_minutes"]))
-    result=pin_requested_start(result,control.get("next_soak_start"),
+    # A requested clock is planning data, not an already-qualified next start.
+    result=pin_requested_start(result,control.get("requested_soak_start"),
                               parse_time(control["qualification_horizon_end"]),datetime.now(timezone.utc))
     req(api.get("/branches/main").get("commit",{}).get("sha")==args.exact_sha,"MAIN_MOVED")
     result.update(schema_version="1.0.0",api_requests=api.requests,acceptance_complete=False)
