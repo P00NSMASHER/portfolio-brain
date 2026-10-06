@@ -82,8 +82,7 @@ jobs:
             "poll_seconds":60,
             "max_resets":5,
           }
-          open("step23-soak-config.json","w",encoding="utf-8").write(json.dumps(config,indent=2)+"
-")
+          open("step23-soak-config.json","w",encoding="utf-8").write(json.dumps(config,indent=2)+"\\n")
           PY
 
       - name: Check whether qualified start has arrived
@@ -124,8 +123,7 @@ jobs:
           open("step23-soak-progress.json","w").write(json.dumps({
             "schema_version":"1.0.0","status":status,"exact_main_sha":os.environ["SOAK_SHA"],
             "configured_soak_start":os.environ["SOAK_START"],"acceptance_complete":False,
-          },indent=2)+"
-")
+          },indent=2)+"\\n")
           PY
 
       - name: Upload delivery qualification
