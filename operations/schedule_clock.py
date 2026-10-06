@@ -10,9 +10,14 @@ from datetime import datetime,timedelta,timezone
 from pathlib import Path
 from typing import Any
 
+from state_journal.contracts import WORKFLOW_PRODUCERS
+
 ROOT=Path(__file__).resolve().parents[1]
 REPO="P00NSMASHER/portfolio-brain"
 POLICY_PATH=ROOT/"operations/SCHEDULE_CLOCK_POLICY.json"
+REDUCER_WORKFLOW_FILE="portfolio-state-reducer.yml"
+TERMINAL_CONCLUSIONS={"success","failure","cancelled","timed_out"}
+ACTIVE_RUN_STATUSES={"queued","in_progress","pending","waiting","requested"}
 
 class ClockError(RuntimeError): pass
 def req(ok:bool,msg:str)->None:
@@ -46,6 +51,68 @@ class API:
             body=response.read(2_000_001)
         req(len(body)<=2_000_000,"clock provider response too large")
         return json.loads(body) if body else {}
+
+
+def _exact_main_runs(doc:dict,main_sha:str,label:str)->list[dict]:
+    rows=doc.get("workflow_runs",[])
+    req(isinstance(rows,list),f"{label} run listing malformed")
+    return [row for row in rows
+            if row.get("head_branch")=="main" and row.get("head_sha")==main_sha]
+
+def reducer_liveness_wake(api:API,main_sha:str)->dict:
+    """Explicitly wake the reducer when token-dispatched producers outpace canonical state.
+
+    workflow_dispatch is intentionally allowed for GITHUB_TOKEN-created work, but
+    relying on a second-hop workflow_run after that dispatched work is not a
+    durable wake path. The clock therefore performs one bounded, idempotent
+    reducer wake whenever exact-main producer completion is newer than the latest
+    successful exact-main reducer start. Production readers still fail closed and
+    independently verify that the resulting snapshot covers every pending event.
+    """
+    reducer_doc=api.call(f"/actions/workflows/{REDUCER_WORKFLOW_FILE}/runs?branch=main&per_page=20")
+    reducers=_exact_main_runs(reducer_doc,main_sha,"reducer")
+    active=[row for row in reducers if row.get("status") in ACTIVE_RUN_STATUSES and type(row.get("id")) is int]
+    if active:
+        return {"action":"REDUCER_ACTIVE","evidence_run_ids":sorted(row["id"] for row in active)}
+
+    successes=[row for row in reducers
+               if row.get("status")=="completed"
+               and row.get("conclusion")=="success"
+               and type(row.get("id")) is int]
+    if successes:
+        for row in successes:
+            req(isinstance(row.get("created_at"),str),"reducer creation timestamp invalid")
+        latest=max(successes,key=lambda row:parse_time(row["created_at"]))
+        boundary=parse_time(latest["created_at"])
+        latest_reducer_run_id=latest["id"]
+    else:
+        boundary=None
+        latest_reducer_run_id=None
+
+    stale=[]
+    for workflow in sorted(WORKFLOW_PRODUCERS):
+        doc=api.call(f"/actions/workflows/{workflow}.yml/runs?branch=main&per_page=5")
+        rows=_exact_main_runs(doc,main_sha,f"{workflow} producer")
+        for row in rows:
+            if row.get("status")!="completed" or row.get("conclusion") not in TERMINAL_CONCLUSIONS:
+                continue
+            updated=row.get("updated_at")
+            req(isinstance(updated,str),"producer completion timestamp invalid")
+            if boundary is None or parse_time(updated)>boundary:
+                req(type(row.get("id")) is int,"producer run identity invalid")
+                stale.append(row["id"])
+                break
+
+    if not stale and latest_reducer_run_id is not None:
+        return {"action":"REDUCER_CURRENT","latest_reducer_run_id":latest_reducer_run_id}
+
+    api.call(f"/actions/workflows/{REDUCER_WORKFLOW_FILE}/dispatches","POST",{"ref":"main"})
+    return {
+        "action":"REDUCER_WAKE_REQUESTED",
+        "reason":"NO_SUCCESSFUL_EXACT_MAIN_REDUCER" if latest_reducer_run_id is None else "PRODUCER_NEWER_THAN_LATEST_REDUCER",
+        "latest_reducer_run_id":latest_reducer_run_id,
+        "producer_run_ids":sorted(stale),
+    }
 
 def due(cadence:str,at:datetime)->bool:
     if cadence=="HOURLY": return True
@@ -108,6 +175,7 @@ def execute(api:API,policy:dict,source_run:dict,main_sha:str,current_run_id:int|
             at_override:datetime|None=None,source_label:str|None=None)->dict:
     source=source_identity(policy,source_run,main_sha,current_run_id=current_run_id)
     at=at_override or parse_time(source_run["created_at"])
+    reducer_wake=reducer_liveness_wake(api,main_sha)
     actions=[]
     for target in policy["target_workflows"]:
         if not due(target["cadence"],at):
@@ -129,6 +197,7 @@ def execute(api:API,policy:dict,source_run:dict,main_sha:str,current_run_id:int|
         "source_event":source_run["event"],"source_head_sha":source_run.get("head_sha"),
         "source_created_at":source_run["created_at"],"tick_at":at.isoformat().replace("+00:00","Z"),
         "main_sha":main_sha,
+        "reducer_wake":reducer_wake,
         "actions":actions,"api_requests":api.requests,
     }
 
