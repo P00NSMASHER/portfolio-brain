@@ -34,11 +34,17 @@ def _parse_provider_time(value: object) -> datetime | None:
     return parsed.astimezone(timezone.utc) if parsed.tzinfo is not None else None
 
 
-def _exact_consumer(run: dict, main_sha: str) -> bool:
+def _workflow_stem(run: dict) -> str | None:
     path = run.get("path")
     if not isinstance(path, str) or not path.startswith(".github/workflows/") or not path.endswith(".yml"):
+        return None
+    return Path(path).stem
+
+
+def _exact_consumer(run: dict, main_sha: str) -> bool:
+    stem = _workflow_stem(run)
+    if stem is None:
         return False
-    stem = Path(path).stem
     return (
         stem in CANONICAL_CONSUMERS
         and run.get("name") == stem
@@ -46,6 +52,20 @@ def _exact_consumer(run: dict, main_sha: str) -> bool:
         and run.get("head_sha") == main_sha
         and run.get("status") in ACTIVE_STATUSES
         and type(run.get("id")) is int
+    )
+
+
+def _exact_successful_producer(run: dict, main_sha: str) -> bool:
+    stem = _workflow_stem(run)
+    return (
+        stem in WORKFLOW_PRODUCERS
+        and run.get("name") == stem
+        and run.get("head_branch") == "main"
+        and run.get("head_sha") == main_sha
+        and run.get("status") == "completed"
+        and run.get("conclusion") == "success"
+        and type(run.get("id")) is int
+        and _parse_provider_time(run.get("updated_at")) is not None
     )
 
 
@@ -84,37 +104,50 @@ def execute(api: API, main_sha: str, *, at: datetime | None = None) -> dict:
     req(isinstance(rows, list), "reducer-wake run listing malformed")
 
     consumers = [row for row in rows if _exact_consumer(row, main_sha)]
+    producers = [row for row in rows if _exact_successful_producer(row, main_sha)]
     reducers = [row for row in rows if _exact_reducer(row, main_sha)]
-    action = "NO_ACTIVE_CANONICAL_CONSUMER"
+    action = "NO_PENDING_REDUCER_WORK"
     evidence: list[int] = []
 
-    if consumers:
-        active_reducers = [row for row in reducers if row.get("status") in ACTIVE_STATUSES]
-        if active_reducers:
-            action = "REDUCER_ALREADY_ACTIVE"
-            evidence = sorted(row["id"] for row in active_reducers)
+    active_reducers = [row for row in reducers if row.get("status") in ACTIVE_STATUSES]
+    successful_reducers = []
+    for row in reducers:
+        updated = _parse_provider_time(row.get("updated_at"))
+        if (
+            row.get("status") == "completed"
+            and row.get("conclusion") == "success"
+            and updated is not None
+        ):
+            successful_reducers.append((updated, row))
+    latest_reducer_at = max((updated for updated, _ in successful_reducers), default=None)
+    unreduced_producers = [
+        row for row in producers
+        if latest_reducer_at is None or _parse_provider_time(row.get("updated_at")) > latest_reducer_at
+    ]
+
+    if active_reducers:
+        action = "REDUCER_ALREADY_ACTIVE"
+        evidence = sorted(row["id"] for row in active_reducers)
+    elif unreduced_producers:
+        api.call(
+            f"/actions/workflows/{REDUCER_FILE}/dispatches",
+            "POST",
+            {"ref": "main"},
+        )
+        action = "REDUCER_WAKE_REQUESTED_FOR_COMPLETED_PRODUCER"
+    elif consumers:
+        cutoff = now - timedelta(seconds=RECENT_REDUCER_SECONDS)
+        recent_successes = [row for updated, row in successful_reducers if updated >= cutoff]
+        if recent_successes:
+            action = "RECENT_REDUCER_SUCCESS"
+            evidence = sorted(row["id"] for row in recent_successes)
         else:
-            cutoff = now - timedelta(seconds=RECENT_REDUCER_SECONDS)
-            recent_successes = []
-            for row in reducers:
-                updated = _parse_provider_time(row.get("updated_at"))
-                if (
-                    row.get("status") == "completed"
-                    and row.get("conclusion") == "success"
-                    and updated is not None
-                    and updated >= cutoff
-                ):
-                    recent_successes.append(row)
-            if recent_successes:
-                action = "RECENT_REDUCER_SUCCESS"
-                evidence = sorted(row["id"] for row in recent_successes)
-            else:
-                api.call(
-                    f"/actions/workflows/{REDUCER_FILE}/dispatches",
-                    "POST",
-                    {"ref": "main"},
-                )
-                action = "REDUCER_WAKE_REQUESTED"
+            api.call(
+                f"/actions/workflows/{REDUCER_FILE}/dispatches",
+                "POST",
+                {"ref": "main"},
+            )
+            action = "REDUCER_WAKE_REQUESTED_FOR_ACTIVE_CONSUMER"
 
     return {
         "schema_version": "1.0.0",
@@ -125,6 +158,7 @@ def execute(api: API, main_sha: str, *, at: datetime | None = None) -> dict:
         "checked_at": now.isoformat().replace("+00:00", "Z"),
         "action": action,
         "active_consumer_run_ids": sorted(row["id"] for row in consumers),
+        "unreduced_producer_run_ids": sorted(row["id"] for row in unreduced_producers),
         "reducer_evidence_run_ids": evidence,
         "api_requests": api.requests,
     }
