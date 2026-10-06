@@ -230,8 +230,8 @@ def validate_operating_mode():
     req(window["schema_version"]=="1.0.0" and window["status"]=="CANARY_REQUIRED",
         "Step 23 canary identity changed")
     req(set(window["temporary_crons"])==required_temp,"Step 23 canary workflow set changed")
-    req(window["qualification_horizon_start"]=="2026-10-06T13:40:00Z"
-        and window["qualification_horizon_end"]=="2026-10-06T14:10:00Z",
+    req(window["qualification_horizon_start"]=="2026-10-06T15:25:00Z"
+        and window["qualification_horizon_end"]=="2026-10-06T16:15:00Z",
         "Step 23 canary horizon changed")
     req(window["required_successes_per_workflow"]==1 and window["max_soak_duration_seconds"]==0,
         "Step 23 canary must prove delivery only")
@@ -244,6 +244,20 @@ def validate_operating_mode():
     for name,cron in expected.items():
         req(actual[name]==[cron,*window["temporary_crons"].get(name,[])],f"{name} cron mismatch")
     req(actual[delivery["workflow"]]==[delivery["cron"]],"delivery probe cron mismatch")
+    schedule_delivery_source=(ROOT/"operations/schedule_delivery.py").read_text()
+    delivery_workflow=(ROOT/".github/workflows/portfolio-schedule-delivery.yml").read_text()
+    req("--force-reregister-active" in delivery_workflow,
+        "scheduler canary no longer forces active registration refresh")
+    req("/disable" in schedule_delivery_source and "WORKFLOW_DISABLE_NOT_CONFIRMED" in schedule_delivery_source
+        and "WORKFLOW_REENABLE_NOT_CONFIRMED" in schedule_delivery_source,
+        "forced scheduler re-registration controls missing")
+    for name,crons in window["temporary_crons"].items():
+        body=(ROOT/".github/workflows"/f"{name}.yml").read_text()
+        cron=crons[0]
+        req("Prove native schedule delivery only" in body and f"github.event.schedule == '{cron}'" in body,
+            f"{name} read-only schedule canary missing")
+        req(f"github.event.schedule != '{cron}'" in body,
+            f"{name} operational job is not suppressed for canary")
     control=load("operations/STEP23_CONTROL.json")
     req(control.get("status")=="CANARY_REQUIRED" and control.get("next_soak_start") is None
         and control.get("acceptance_complete") is False,

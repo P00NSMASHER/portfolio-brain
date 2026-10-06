@@ -4,12 +4,12 @@
   "retired_window_start": "2026-10-06T04:00:00Z",
   "retired_window_end": "2026-10-06T05:00:00Z",
   "retired_main_sha": "475b7edac7c9d988624fae4832b0bedccc125219",
-  "reason": "CLEAN_SCHEDULER_REREGISTRATION_BEFORE_STEP23",
+  "reason": "FORCED_WORKFLOW_DISABLE_ENABLE_REREGISTRATION_CANARY",
   "next_soak_start": null,
-  "qualification_method": "OWNER_FIXED_2X8_TWO_HOUR_EXACT_MAIN",
+  "qualification_method": "FORCED_ACTIONS_API_REREGISTRATION_CANARY",
   "registration_delay_minutes": 5,
   "start_delay_minutes": 30,
-  "qualification_horizon_start": "2026-10-06T07:00:00Z",
-  "qualification_horizon_end": "2026-10-06T10:00:00Z",
+  "qualification_horizon_start": "2026-10-06T15:25:00Z",
+  "qualification_horizon_end": "2026-10-06T16:15:00Z",
   "acceptance_complete": false
 }

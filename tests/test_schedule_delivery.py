@@ -69,6 +69,22 @@ class DeliveryTests(unittest.TestCase):
         d.repair(api, {d.CORE[0]: WF}, SHA, ENV)
         self.assertTrue(all(method == 'GET' for _, method in api.calls))
 
+    def test_forced_active_reregistration_is_explicit_and_verified(self):
+        disabled={**WF, 'state':'disabled_manually'}
+        enabled={**WF, 'state':'active'}
+        api=API(HEAD, OLD, HEAD, {}, disabled, HEAD, {}, enabled)
+        result=d.repair(api,{d.CORE[0]:WF},SHA,ENV,force_reregister_active=True)
+        self.assertIn(('/actions/workflows/31/disable','PUT'),api.calls)
+        self.assertIn(('/actions/workflows/31/enable','PUT'),api.calls)
+        action=next(row for row in result if row.get('workflow')==d.CORE[0])
+        self.assertEqual(action['action'],'REGISTRATION_DISABLED_REENABLED_DELIVERY_UNPROVEN')
+        self.assertEqual(action['final_state'],'active')
+
+    def test_forced_reregistration_fails_closed_without_disable_confirmation(self):
+        api=API(HEAD,OLD,HEAD,{}, {**WF,'state':'active'})
+        with self.assertRaisesRegex(RuntimeError,'WORKFLOW_DISABLE_NOT_CONFIRMED'):
+            d.repair(api,{d.CORE[0]:WF},SHA,ENV,force_reregister_active=True)
+
     def test_enable_acknowledgement_is_not_delivery(self):
         api = API(HEAD, OLD, HEAD, {}, WF)
         result = d.repair(api, {d.CORE[0]: {**WF, 'state': 'disabled_inactivity'}}, SHA, ENV)

@@ -52,7 +52,7 @@ class API:
         require(self.requests < 80, "DELIVERY_API_BUDGET_EXHAUSTED")
         # Write destinations are a closed set, not caller-supplied URLs.
         if method == "PUT":
-            require(re.fullmatch(r"/actions/workflows/[0-9]+/enable", path) is not None, "WRITE_NOT_ALLOWED")
+            require(re.fullmatch(r"/actions/workflows/[0-9]+/(?:enable|disable)", path) is not None, "WRITE_NOT_ALLOWED")
         if method == "POST":
             require(path == f"/actions/runs/{RETIRED_RUN}/cancel", "WRITE_NOT_ALLOWED")
         self.requests += 1
@@ -127,7 +127,7 @@ def summarize(name: str, workflow: dict | None, runs: list[dict], sha: str, now:
     return {**result, "stage": "NATIVE_COMPLETION_OBSERVED", "native_success_on_revision": True}
 
 
-def repair(api: API, workflows: dict[str, dict], sha: str, env: dict[str, str]) -> list[dict]:
+def repair(api: API, workflows: dict[str, dict], sha: str, env: dict[str, str], *, force_reregister_active: bool = False) -> list[dict]:
     require(env.get("GITHUB_EVENT_NAME") == "push" and env.get("GITHUB_REF") == "refs/heads/main",
             "REGISTRATION_REPAIR_REQUIRES_PROTECTED_MAIN_PUSH")
     require(env.get("GITHUB_REPOSITORY") == REPO and env.get("GITHUB_SHA") == sha,
@@ -153,8 +153,27 @@ def repair(api: API, workflows: dict[str, dict], sha: str, env: dict[str, str]) 
             continue
         require(wf.get("name") == name and wf.get("path") == f".github/workflows/{name}.yml",
                 "REPAIR_TARGET_IDENTITY_MISMATCH")
-        if wf.get("state") not in REPAIRABLE:
-            actions.append({"workflow": name, "action": "LEFT_UNCHANGED", "state": wf.get("state")})
+        state = wf.get("state")
+        if force_reregister_active and state == "active":
+            require(api.call("/branches/main")["commit"]["sha"] == sha, "MAIN_MOVED")
+            api.call(f"/actions/workflows/{wf['id']}/disable", "PUT")
+            disabled = api.call(f"/actions/workflows/{wf['id']}")
+            require(disabled.get("id") == wf["id"] and disabled.get("path") == wf["path"]
+                    and disabled.get("name") == name and disabled.get("state") == "disabled_manually",
+                    "WORKFLOW_DISABLE_NOT_CONFIRMED")
+            require(api.call("/branches/main")["commit"]["sha"] == sha, "MAIN_MOVED")
+            api.call(f"/actions/workflows/{wf['id']}/enable", "PUT")
+            confirmed = api.call(f"/actions/workflows/{wf['id']}")
+            require(confirmed.get("id") == wf["id"] and confirmed.get("path") == wf["path"]
+                    and confirmed.get("name") == name and confirmed.get("state") == "active",
+                    "WORKFLOW_REENABLE_NOT_CONFIRMED")
+            actions.append({"workflow": name, "workflow_id": wf["id"],
+                            "action": "REGISTRATION_DISABLED_REENABLED_DELIVERY_UNPROVEN",
+                            "before_state": state, "disabled_state": disabled.get("state"),
+                            "final_state": confirmed.get("state")})
+            continue
+        if state not in REPAIRABLE:
+            actions.append({"workflow": name, "action": "LEFT_UNCHANGED", "state": state})
             continue
         require(api.call("/branches/main")["commit"]["sha"] == sha, "MAIN_MOVED")
         api.call(f"/actions/workflows/{wf['id']}/enable", "PUT")
@@ -169,6 +188,7 @@ def repair(api: API, workflows: dict[str, dict], sha: str, env: dict[str, str]) 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--repair", action="store_true")
+    ap.add_argument("--force-reregister-active", action="store_true")
     ap.add_argument("--output", type=Path, default=Path("operations/out/schedule_delivery.json"))
     args = ap.parse_args()
     now = datetime.now(timezone.utc)
@@ -196,8 +216,11 @@ def main() -> None:
         report.update(main_sha=sha, observer_run_id=int(run_id), observer_event=own["event"],
                       probe_is_native_schedule=own["event"] == "schedule")
         workflows = registry(api)
+        if args.force_reregister_active:
+            require(args.repair, "FORCE_REREGISTER_REQUIRES_REPAIR")
         if args.repair:
-            report["actions"] = repair(api, workflows, sha, dict(os.environ))
+            report["actions"] = repair(api, workflows, sha, dict(os.environ),
+                                       force_reregister_active=args.force_reregister_active)
             workflows = registry(api)
         summaries = []
         for name in (*CORE, PROBE):

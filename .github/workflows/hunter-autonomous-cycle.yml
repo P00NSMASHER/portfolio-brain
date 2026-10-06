@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: "47 */6 * * *"
     # One-shot scheduler re-registration canary; remove after proof.
-    - cron: "48 13 6 10 *"
+    - cron: "33 15 6 10 *"
   push:
     branches: ["main"]
     paths:
@@ -23,13 +23,34 @@ concurrency:
   queue: max
 
 jobs:
+  schedule_canary:
+    if: ${{ github.event_name == 'schedule' && github.event.schedule == '33 15 6 10 *' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Prove native schedule delivery only
+        env:
+          EXPECTED_WORKFLOW: hunter-autonomous-cycle
+          EXPECTED_CRON: "33 15 6 10 *"
+          ACTUAL_CRON: ${{ github.event.schedule }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "schedule"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$ACTUAL_CRON" = "$EXPECTED_CRON"
+          test "$GITHUB_WORKFLOW" = "$EXPECTED_WORKFLOW"
+          printf 'READ_ONLY_SCHEDULE_CANARY workflow=%s run=%s sha=%s cron=%s\n' "$GITHUB_WORKFLOW" "$GITHUB_RUN_ID" "$GITHUB_SHA" "$ACTUAL_CRON"
+
   hunt:
     # Serialize the complete restore -> mutate -> upload transaction.
     concurrency:
       group: portfolio-state-writer-v1
       cancel-in-progress: false
       queue: max
-    if: ${{ vars.PORTFOLIO_HUNTER_DISABLED != 'true' }}
+    if: ${{ vars.PORTFOLIO_HUNTER_DISABLED != 'true' && (github.event_name != 'schedule' || github.event.schedule != '33 15 6 10 *') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
