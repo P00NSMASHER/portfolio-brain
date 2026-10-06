@@ -212,8 +212,8 @@ def validate_operating_mode():
     req(expected["portfolio-state-reducer"].split()[0] != expected["portfolio-state-checkpoint-candidate"].split()[0],
         "checkpoint candidate must not collide with daily reducer refresh")
     req(set(p["approved_recurring_workflows"])==set(expected),"approved recurring workflow set changed")
-    # Step 23 is owner-armed for the hardened exact-main window at 04:00-05:00 UTC.
-    # The strict collector still requires three genuine scheduled successes per
+    # Step 23 is owner-armed for the 2x8 two-hour exact-main window at 07:30-09:30 UTC.
+    # The strict collector still requires two genuine scheduled successes per
     # required workflow; manual/dispatch work never substitutes for schedule evidence.
     delivery=load("operations/SCHEDULE_DELIVERY_POLICY.json")
     req(delivery == {
@@ -230,15 +230,15 @@ def validate_operating_mode():
       "portfolio-notification-cycle","command-center-pages",
     }
     req(set(window["temporary_crons"])==required_temp,"Step 23 temporary workflow set changed")
-    req(window["qualification_horizon_start"]=="2026-10-06T00:00:00Z"
-        and window["qualification_horizon_end"]=="2026-10-06T05:00:00Z",
+    req(window["qualification_horizon_start"]=="2026-10-06T07:00:00Z"
+        and window["qualification_horizon_end"]=="2026-10-06T10:00:00Z",
         "Step 23 qualification horizon changed")
     req(window["registration_delay_minutes"]==5 and window["start_delay_minutes"]==30
-        and window["start_round_minutes"]==15 and window["required_successes_per_workflow"]==3
-        and window["max_soak_duration_seconds"]==3600,
+        and window["start_round_minutes"]==15 and window["required_successes_per_workflow"]==2
+        and window["max_soak_duration_seconds"]==7200,
         "Step 23 qualification contract weakened")
-    req(all(len(crons)==21 for crons in window["temporary_crons"].values())
-        and len(window["observer_crons"])==18,
+    req(all(len(crons)==26 for crons in window["temporary_crons"].values())
+        and len(window["observer_crons"])==23,
         "Step 23 temporary cadence count changed")
     req(all(cron.split()[2:4]==["6","10"] for crons in window["temporary_crons"].values() for cron in crons)
         and all(cron.split()[2:4]==["6","10"] for cron in window["observer_crons"]),
@@ -254,8 +254,8 @@ def validate_operating_mode():
         "Step 23 observer fallback cron mismatch")
     control=load("operations/STEP23_CONTROL.json")
     req(control.get("status")=="ARMED_FIXED"
-        and control.get("next_soak_start")=="2026-10-06T04:00:00Z"
-        and control.get("qualification_method")=="OWNER_FIXED_EXACT_MAIN_AFTER_CANONICAL_TIMEOUT_HARDENING"
+        and control.get("next_soak_start")=="2026-10-06T07:30:00Z"
+        and control.get("qualification_method")=="OWNER_FIXED_2X8_TWO_HOUR_EXACT_MAIN"
         and control.get("registration_delay_minutes")==window["registration_delay_minutes"]
         and control.get("start_delay_minutes")==window["start_delay_minutes"]
         and control.get("qualification_horizon_start")==window["qualification_horizon_start"]
