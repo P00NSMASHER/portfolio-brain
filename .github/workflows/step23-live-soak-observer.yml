@@ -30,7 +30,13 @@ on:
     - cron: "27 4 6 10 *"
     - cron: "36 4 6 10 *"
     - cron: "45 4 6 10 *"
-    - cron: "54 4 6 10 *"\n    # Step 23 2x8 two-hour observer points.\n    - cron: "45 7 6 10 *"\n    - cron: "15 8 6 10 *"\n    - cron: "45 8 6 10 *"\n    - cron: "15 9 6 10 *"\n    - cron: "29 9 6 10 *"
+    - cron: "54 4 6 10 *"
+    # Step 23 2x8 two-hour observer points.
+    - cron: "45 7 6 10 *"
+    - cron: "15 8 6 10 *"
+    - cron: "45 8 6 10 *"
+    - cron: "15 9 6 10 *"
+    - cron: "29 9 6 10 *"
   workflow_dispatch:
 
 permissions:
@@ -95,7 +101,8 @@ jobs:
             "poll_seconds":60,
             "max_resets":5,
           }
-          open("step23-soak-config.json","w",encoding="utf-8").write(json.dumps(config,indent=2)+"\n")
+          open("step23-soak-config.json","w",encoding="utf-8").write(json.dumps(config,indent=2)+"
+")
           PY
 
       - name: Check whether qualified start has arrived
@@ -136,7 +143,8 @@ jobs:
           open("step23-soak-progress.json","w").write(json.dumps({
             "schema_version":"1.0.0","status":status,"exact_main_sha":os.environ["SOAK_SHA"],
             "configured_soak_start":os.environ["SOAK_START"],"acceptance_complete":False,
-          },indent=2)+"\n")
+          },indent=2)+"
+")
           PY
 
       - name: Upload delivery qualification
