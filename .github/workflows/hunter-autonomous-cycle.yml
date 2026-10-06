@@ -29,7 +29,6 @@ jobs:
       contents: read
       actions: read
     runs-on: ubuntu-latest
-    timeout-minutes: 2
     steps:
       - name: Prove native scheduled delivery without portfolio work
         shell: bash
