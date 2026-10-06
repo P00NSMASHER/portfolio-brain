@@ -5,7 +5,7 @@ The clock grants no portfolio authority. It only invokes existing workflow_dispa
 entrypoints, whose normal workload/cost/kill-switch/concurrency gates remain authoritative.
 """
 from __future__ import annotations
-import argparse,json,os,re,urllib.parse,urllib.request
+import argparse,json,os,re,time,urllib.parse,urllib.request
 from datetime import datetime,timedelta,timezone
 from pathlib import Path
 from typing import Any
@@ -88,9 +88,26 @@ def recent_runs(api:API,target:dict,at:datetime,main_sha:str,minutes:int)->list[
                     and parse_time(row["created_at"])>=cutoff)
     return rows
 
-def execute(api:API,policy:dict,source_run:dict,main_sha:str,current_run_id:int|None=None)->dict:
+def daemon_identity(api:API,run_id:int,attempt:int,main_sha:str,tick_epoch:int)->dict:
+    run=api.call(f"/actions/runs/{run_id}")
+    req(run.get("name")=="portfolio-schedule-clock-daemon"
+        and run.get("path")==".github/workflows/portfolio-schedule-clock-daemon.yml",
+        "untrusted clock daemon source")
+    req(run.get("event") in {"push","workflow_dispatch"} and run.get("head_branch")=="main",
+        "clock daemon source event/ref invalid")
+    req(run.get("head_sha")==main_sha,"clock daemon is not exact current main")
+    req(run.get("run_attempt")==attempt,"clock daemon attempt mismatch")
+    req(run.get("status") in {"queued","in_progress","pending","waiting","requested"},
+        "clock daemon is not an active parent generation")
+    now=int(time.time())
+    req(tick_epoch%600==0 and abs(now-tick_epoch)<=180,
+        "clock daemon tick is not a current ten-minute boundary")
+    return run
+
+def execute(api:API,policy:dict,source_run:dict,main_sha:str,current_run_id:int|None=None,
+            at_override:datetime|None=None,source_label:str|None=None)->dict:
     source=source_identity(policy,source_run,main_sha,current_run_id=current_run_id)
-    at=parse_time(source_run["created_at"])
+    at=at_override or parse_time(source_run["created_at"])
     actions=[]
     for target in policy["target_workflows"]:
         if not due(target["cadence"],at):
@@ -108,15 +125,20 @@ def execute(api:API,policy:dict,source_run:dict,main_sha:str,current_run_id:int|
     return {
         "schema_version":"1.0.0","clock_id":policy["clock_id"],"status":"PASS",
         "authority_granted":False,"dispatch_authority_effect":"NONE",
-        "source_run_id":source_run["id"],"source_workflow":source["name"],
+        "source_run_id":source_run["id"],"source_workflow":source_label or source["name"],
         "source_event":source_run["event"],"source_head_sha":source_run.get("head_sha"),
-        "source_created_at":source_run["created_at"],"main_sha":main_sha,
+        "source_created_at":source_run["created_at"],"tick_at":at.isoformat().replace("+00:00","Z"),
+        "main_sha":main_sha,
         "actions":actions,"api_requests":api.requests,
     }
 
 def main()->int:
     ap=argparse.ArgumentParser()
-    ap.add_argument("--source-run-id",required=True,type=int)
+    source=ap.add_mutually_exclusive_group(required=True)
+    source.add_argument("--source-run-id",type=int)
+    source.add_argument("--daemon-run-id",type=int)
+    ap.add_argument("--daemon-run-attempt",type=int)
+    ap.add_argument("--tick-epoch",type=int)
     ap.add_argument("--output",type=Path,default=Path("operations/out/schedule_clock_receipt.json"))
     args=ap.parse_args()
     policy=load_policy()
@@ -124,11 +146,29 @@ def main()->int:
         "clock authority widened")
     api=API(os.environ["GITHUB_TOKEN"],policy["max_api_requests"])
     main_sha=api.call("/branches/main")["commit"]["sha"]
-    source=api.call(f"/actions/runs/{args.source_run_id}")
     current_run_id=int(os.environ["GITHUB_RUN_ID"])
-    req(current_run_id==args.source_run_id or source.get("status")=="completed",
-        "non-current carrier source must already be completed")
-    result=execute(api,policy,source,main_sha,current_run_id=current_run_id)
+    if args.daemon_run_id is not None:
+        req(type(args.daemon_run_attempt) is int and type(args.tick_epoch) is int,
+            "daemon clock inputs incomplete")
+        daemon=daemon_identity(api,args.daemon_run_id,args.daemon_run_attempt,main_sha,args.tick_epoch)
+        synthetic={
+            "id":daemon["id"],"name":"portfolio-schedule-delivery",
+            "path":".github/workflows/portfolio-schedule-delivery.yml",
+            "event":"schedule","head_branch":"main","head_sha":main_sha,
+            "status":"completed","created_at":datetime.fromtimestamp(args.tick_epoch,timezone.utc).isoformat().replace("+00:00","Z"),
+        }
+        result=execute(
+            api,policy,synthetic,main_sha,
+            at_override=datetime.fromtimestamp(args.tick_epoch,timezone.utc),
+            source_label="portfolio-schedule-clock-daemon",
+        )
+        result["daemon_run_id"]=args.daemon_run_id
+        result["daemon_run_attempt"]=args.daemon_run_attempt
+    else:
+        source_run=api.call(f"/actions/runs/{args.source_run_id}")
+        req(current_run_id==args.source_run_id or source_run.get("status")=="completed",
+            "non-current carrier source must already be completed")
+        result=execute(api,policy,source_run,main_sha,current_run_id=current_run_id)
     req(api.call("/branches/main")["commit"]["sha"]==main_sha,"main moved during clock tick")
     result["api_requests"]=api.requests
     args.output.parent.mkdir(parents=True,exist_ok=True)

@@ -1,0 +1,67 @@
+name: portfolio-schedule-clock-daemon
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/portfolio-schedule-clock-daemon.yml"
+      - ".github/workflows/portfolio-schedule-clock-tick.yml"
+      - "operations/schedule_clock.py"
+      - "operations/SCHEDULE_CLOCK_POLICY.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: portfolio-schedule-clock-daemon
+  cancel-in-progress: false
+
+jobs:
+  daemon:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Queue one successor before entering the clock loop
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run portfolio-schedule-clock-daemon.yml --ref main
+          echo "Queued successor generation before clock loop." >> "$GITHUB_STEP_SUMMARY"
+      - name: Emit authenticated ten-minute clock ticks while this remains exact main
+        shell: bash
+        run: |
+          set -euo pipefail
+          END=$(( $(date -u +%s) + 19800 ))
+          while [ "$(date -u +%s)" -lt "$END" ]; do
+            CURRENT="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)"
+            if [ "$CURRENT" != "$GITHUB_SHA" ]; then
+              echo "Main moved to $CURRENT; yielding to queued current-main daemon." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            NOW="$(date -u +%s)"
+            NEXT=$(( ((NOW / 600) + 1) * 600 ))
+            SLEEP=$(( NEXT - NOW ))
+            if [ "$SLEEP" -lt 5 ]; then SLEEP=5; fi
+            sleep "$SLEEP"
+            CURRENT="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)"
+            if [ "$CURRENT" != "$GITHUB_SHA" ]; then
+              echo "Main moved during wait; yielding to queued current-main daemon." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            TICK="$(date -u +%s)"
+            TICK=$(( (TICK / 600) * 600 ))
+            gh workflow run portfolio-schedule-clock-tick.yml --ref main \
+              -f daemon_run_id="$GITHUB_RUN_ID" \
+              -f daemon_run_attempt="$GITHUB_RUN_ATTEMPT" \
+              -f tick_epoch="$TICK"
+            printf 'tick requested daemon=%s tick_epoch=%s at=%s\n' "$GITHUB_RUN_ID" "$TICK" "$(date -u +%FT%TZ)"
+            sleep 5
+          done

@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime,timezone
-from operations.schedule_clock import ClockError,due,execute
+from operations.schedule_clock import ClockError,daemon_identity,due,execute
 
 MAIN="a"*40
 SOURCE={"id":1,"name":"verified-feedback-bootstrap","path":".github/workflows/verified-feedback-bootstrap.yml",
@@ -49,6 +49,19 @@ class ScheduleClockTests(unittest.TestCase):
  def test_stale_main_source_is_rejected(self):
   with self.assertRaisesRegex(ClockError,"exact current main"):
    execute(API(),POLICY,{**SOURCE,"head_sha":"b"*40},MAIN)
+ def test_daemon_identity_requires_exact_main_active_parent_and_current_boundary(self):
+  class DaemonAPI:
+   def call(self,path,method="GET",payload=None):
+    return {"id":88,"name":"portfolio-schedule-clock-daemon",
+            "path":".github/workflows/portfolio-schedule-clock-daemon.yml",
+            "event":"workflow_dispatch","head_branch":"main","head_sha":MAIN,
+            "run_attempt":2,"status":"in_progress"}
+  import time
+  tick=(int(time.time())//600)*600
+  row=daemon_identity(DaemonAPI(),88,2,MAIN,tick)
+  self.assertEqual(row["id"],88)
+  with self.assertRaisesRegex(ClockError,"exact current main"):
+   daemon_identity(DaemonAPI(),88,2,"b"*40,tick)
  def test_cadence(self):
   at=datetime(2026,10,6,16,17,tzinfo=timezone.utc)
   self.assertTrue(due("HOURLY",at));self.assertTrue(due("EVERY_2_HOURS",at))
