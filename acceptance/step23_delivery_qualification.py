@@ -2,8 +2,7 @@
 
 A new soak is not armed until every required workflow has completed at least one
 native event=schedule run successfully on the same exact main SHA after that
-revision had time to register. The resulting start is deterministic from those
-first successes, so later observer runs cannot move the clock.
+revision had time to register. An owner-requested start never silently slides.
 """
 from __future__ import annotations
 import argparse, json, os, re, urllib.request
@@ -77,6 +76,34 @@ def derive_qualification(runs:list[dict[str,Any]], exact_sha:str, baseline:datet
             "soak_deadline":(start+timedelta(hours=1)).isoformat().replace("+00:00","Z"),
             "selected":selected}
 
+def pin_requested_start(result:dict[str,Any], requested:str|None,
+                        horizon_end:datetime, now:datetime)->dict[str,Any]:
+    """Honor the fixed clock without inventing readiness or moving the window."""
+    if requested is None:
+        return result
+    start=parse_time(requested)
+    end=start+timedelta(hours=1)
+    req(end<=horizon_end,"REQUESTED_START_OUTSIDE_HORIZON")
+    req(now.tzinfo is not None,"TIMESTAMP_NAIVE")
+    fixed={**result,"requested_soak_start":requested,
+           "requested_soak_deadline":end.isoformat().replace("+00:00","Z"),
+           "qualified":False,"acceptance_complete":False}
+    for key in ("soak_start","soak_deadline","candidate_start"):
+        fixed.pop(key,None)
+    selected=fixed.get("selected",{})
+    complete=set(selected)==set(REQUIRED) and not fixed.get("missing_workflows")
+    ready=complete and all(parse_time(row["completed_at"])<=start for row in selected.values())
+    if parse_time(fixed["baseline"])>start:
+        fixed["status"]="REQUESTED_START_BLOCKED_REGISTRATION"
+    elif not ready:
+        fixed["status"]="PREQUALIFYING_FIXED_START" if now<start else "REQUESTED_START_BLOCKED"
+    elif now>=end:
+        fixed["status"]="REQUESTED_WINDOW_EXPIRED"
+    else:
+        fixed.update(status="QUALIFIED",qualified=True,soak_start=requested,
+                     soak_deadline=end.isoformat().replace("+00:00","Z"))
+    return fixed
+
 class API:
     def __init__(self,repo:str,token:str): self.repo=repo; self.token=token; self.requests=0
     def get(self,path:str)->Any:
@@ -122,6 +149,9 @@ def main()->None:
     result=derive_qualification(
         collect_runs(api,baseline),args.exact_sha,baseline,parse_time(control["qualification_horizon_end"]),
         start_delay_minutes=int(control["start_delay_minutes"]))
+    # A requested clock is planning data, not an already-qualified next start.
+    result=pin_requested_start(result,control.get("requested_soak_start"),
+                              parse_time(control["qualification_horizon_end"]),datetime.now(timezone.utc))
     req(api.get("/branches/main").get("commit",{}).get("sha")==args.exact_sha,"MAIN_MOVED")
     result.update(schema_version="1.0.0",api_requests=api.requests,acceptance_complete=False)
     args.output.parent.mkdir(parents=True,exist_ok=True)
