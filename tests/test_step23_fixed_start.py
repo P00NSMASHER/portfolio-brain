@@ -9,10 +9,10 @@ REQUEST='2026-10-06T03:00:00Z'
 
 def result():
     return dict(status='QUALIFIED',qualified=True,exact_main_sha='a'*40,
-                baseline='2026-10-06T00:20:00Z',missing_workflows=[],
-                soak_start='2026-10-06T01:15:00Z',soak_deadline='2026-10-06T02:15:00Z',
-                selected={name:dict(run_id=i+1,created_at='2026-10-06T00:23:00Z',
-                          completed_at='2026-10-06T00:25:00Z') for i,name in enumerate(REQUIRED)})
+                baseline='2026-10-06T02:40:00Z',missing_workflows=[],
+                soak_start='2026-10-06T03:30:00Z',soak_deadline='2026-10-06T04:30:00Z',
+                selected={name:dict(run_id=i+1,created_at='2026-10-06T02:45:00Z',
+                          completed_at='2026-10-06T02:50:00Z') for i,name in enumerate(REQUIRED)})
 
 class FixedStartTests(unittest.TestCase):
     def test_fixed_start_and_deadline(self):
@@ -28,10 +28,10 @@ class FixedStartTests(unittest.TestCase):
             self.assertEqual(got['status'],'REQUESTED_START_BLOCKED')
             self.assertFalse(got['qualified']);self.assertNotIn('soak_start',got)
     def test_readiness_after_start_cannot_backdate(self):
-        value=result();value['selected'][next(iter(REQUIRED))]['completed_at']='2026-10-06T00:31:00Z'
+        value=result();value['selected'][next(iter(REQUIRED))]['completed_at']='2026-10-06T03:01:00Z'
         self.assertFalse(pin_requested_start(value,REQUEST,HORIZON,START+timedelta(minutes=2))['qualified'])
     def test_registration_buffer_remains_required(self):
-        value=result();value['baseline']='2026-10-06T00:32:00Z'
+        value=result();value['baseline']='2026-10-06T03:02:00Z'
         self.assertEqual(pin_requested_start(value,REQUEST,HORIZON,START)['status'],'REQUESTED_START_BLOCKED_REGISTRATION')
     def test_before_start_shows_prequalification(self):
         value=result();value['selected']={};value['missing_workflows']=list(REQUIRED)
