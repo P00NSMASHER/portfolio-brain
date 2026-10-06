@@ -18,14 +18,24 @@ POLICY={
  "dedupe_window_minutes":55,"max_dispatches_per_tick":8,"max_api_requests":60,
 }
 class API:
- def __init__(self,recent=None):
-  self.recent=recent or {};self.calls=[];self.requests=0
+ def __init__(self,recent=None,reducer_runs=None,producer_runs=None):
+  self.recent=recent or {}
+  self.reducer_runs=reducer_runs if reducer_runs is not None else [{
+    "id":700,"head_branch":"main","head_sha":MAIN,"status":"completed","conclusion":"success",
+    "created_at":"2026-10-06T16:16:00Z","updated_at":"2026-10-06T16:16:30Z",
+  }]
+  self.producer_runs=producer_runs or {}
+  self.calls=[];self.requests=0
  def call(self,path,method="GET",payload=None):
   self.calls.append((path,method,payload));self.requests+=1
   if method=="POST": return {}
   name=path.split("/actions/workflows/",1)[1].split("/runs?",1)[0]
-  event=path.split("event=",1)[1].split("&",1)[0]
-  return {"workflow_runs":self.recent.get((name,event),[])}
+  if name=="portfolio-state-reducer.yml" and "event=" not in path:
+   return {"workflow_runs":self.reducer_runs}
+  if "event=" in path:
+   event=path.split("event=",1)[1].split("&",1)[0]
+   return {"workflow_runs":self.recent.get((name,event),[])}
+  return {"workflow_runs":self.producer_runs.get(name,[])}
 
 class ScheduleClockTests(unittest.TestCase):
  def test_self_schedule_source_is_trusted(self):
@@ -79,6 +89,40 @@ class ScheduleClockTests(unittest.TestCase):
   row=next(x for x in result["actions"] if x["workflow"]=="hourly")
   self.assertEqual(row["action"],"ALREADY_RAN_IN_SLOT")
   self.assertEqual(row["evidence_run_ids"],[9])
+ def test_clock_wakes_reducer_when_producer_is_newer(self):
+  reducers=[{
+    "id":700,"head_branch":"main","head_sha":MAIN,"status":"completed","conclusion":"success",
+    "created_at":"2026-10-06T16:00:00Z","updated_at":"2026-10-06T16:00:30Z",
+  }]
+  producers={"runtime-hourly-sync.yml":[{
+    "id":44,"head_branch":"main","head_sha":MAIN,"status":"completed","conclusion":"success",
+    "updated_at":"2026-10-06T16:05:00Z",
+  }]}
+  api=API(reducer_runs=reducers,producer_runs=producers)
+  result=execute(api,POLICY,SOURCE,MAIN)
+  self.assertEqual(result["reducer_wake"]["action"],"REDUCER_WAKE_REQUESTED")
+  self.assertEqual(result["reducer_wake"]["reason"],"PRODUCER_NEWER_THAN_LATEST_REDUCER")
+  self.assertEqual(result["reducer_wake"]["producer_run_ids"],[44])
+  self.assertIn(
+    ("/actions/workflows/portfolio-state-reducer.yml/dispatches","POST",{"ref":"main"}),
+    api.calls,
+  )
+ def test_active_reducer_prevents_duplicate_wake(self):
+  reducers=[{
+    "id":701,"head_branch":"main","head_sha":MAIN,"status":"in_progress","conclusion":None,
+    "created_at":"2026-10-06T16:16:00Z","updated_at":"2026-10-06T16:16:30Z",
+  }]
+  api=API(reducer_runs=reducers)
+  result=execute(api,POLICY,SOURCE,MAIN)
+  self.assertEqual(result["reducer_wake"]["action"],"REDUCER_ACTIVE")
+  self.assertEqual(result["reducer_wake"]["evidence_run_ids"],[701])
+  self.assertNotIn(
+    ("/actions/workflows/portfolio-state-reducer.yml/dispatches","POST",{"ref":"main"}),
+    api.calls,
+  )
+ def test_current_reducer_needs_no_wake(self):
+  result=execute(API(),POLICY,SOURCE,MAIN)
+  self.assertEqual(result["reducer_wake"]["action"],"REDUCER_CURRENT")
  def test_wrong_source_event_fails_closed(self):
   with self.assertRaisesRegex(ClockError,"native schedule"):
    execute(API(),POLICY,{**SOURCE,"event":"workflow_dispatch"},MAIN)
