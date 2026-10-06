@@ -77,6 +77,18 @@ def derive_qualification(runs:list[dict[str,Any]], exact_sha:str, baseline:datet
             "soak_deadline":(start+timedelta(hours=1)).isoformat().replace("+00:00","Z"),
             "selected":selected}
 
+def derive_fixed_arm(exact_sha:str, baseline:datetime, start:datetime, horizon_end:datetime)->dict[str,Any]:
+    req(re.fullmatch(r"[0-9a-f]{40}",exact_sha) is not None,"INVALID_EXACT_SHA")
+    start=start.astimezone(timezone.utc)
+    req(start>=baseline,"FIXED_START_BEFORE_REGISTRATION")
+    req(start.second==0 and start.microsecond==0 and start.minute%15==0,"FIXED_START_NOT_QUARTER_HOUR")
+    req(start+timedelta(hours=1)<=horizon_end,"FIXED_START_OUTSIDE_HORIZON")
+    return {"status":"QUALIFIED_FIXED","qualified":True,"missing_workflows":[],
+            "exact_main_sha":exact_sha,"baseline":baseline.isoformat().replace("+00:00","Z"),
+            "soak_start":start.isoformat().replace("+00:00","Z"),
+            "soak_deadline":(start+timedelta(hours=1)).isoformat().replace("+00:00","Z"),
+            "selected":{}}
+
 class API:
     def __init__(self,repo:str,token:str): self.repo=repo; self.token=token; self.requests=0
     def get(self,path:str)->Any:
@@ -110,7 +122,7 @@ def main()->None:
     ap.add_argument("--output",type=Path,required=True)
     args=ap.parse_args()
     control=json.loads(CONTROL.read_text())
-    req(control.get("status")=="PREQUALIFYING","STEP23_NOT_PREQUALIFYING")
+    req(control.get("status") in {"PREQUALIFYING","ARMED_FIXED"},"STEP23_NOT_ARMABLE")
     repo=os.environ["GITHUB_REPOSITORY"]; token=os.environ["GITHUB_TOKEN"]
     api=API(repo,token)
     main=api.get("/branches/main")
@@ -119,9 +131,14 @@ def main()->None:
     commit_time=parse_time(commit["commit"]["committer"]["date"])
     baseline=max(commit_time+timedelta(minutes=int(control["registration_delay_minutes"])),
                  parse_time(control["qualification_horizon_start"]))
-    result=derive_qualification(
-        collect_runs(api,baseline),args.exact_sha,baseline,parse_time(control["qualification_horizon_end"]),
-        start_delay_minutes=int(control["start_delay_minutes"]))
+    horizon_end=parse_time(control["qualification_horizon_end"])
+    if control["status"]=="ARMED_FIXED":
+        result=derive_fixed_arm(args.exact_sha,baseline,parse_time(control["next_soak_start"]),horizon_end)
+        result["qualification_method"]=control["qualification_method"]
+    else:
+        result=derive_qualification(
+            collect_runs(api,baseline),args.exact_sha,baseline,horizon_end,
+            start_delay_minutes=int(control["start_delay_minutes"]))
     req(api.get("/branches/main").get("commit",{}).get("sha")==args.exact_sha,"MAIN_MOVED")
     result.update(schema_version="1.0.0",api_requests=api.requests,acceptance_complete=False)
     args.output.parent.mkdir(parents=True,exist_ok=True)

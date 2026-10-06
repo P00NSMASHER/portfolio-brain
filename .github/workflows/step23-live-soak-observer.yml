@@ -58,7 +58,7 @@ jobs:
         shell: bash
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Require demonstrated native delivery before arming
+      - name: Resolve Step 23 arm state
         id: qualify
         env:
           EXACT_SHA: ${{ steps.main.outputs.sha }}
