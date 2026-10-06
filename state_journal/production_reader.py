@@ -1,6 +1,7 @@
 """Restore production state exclusively from the reducer-owned canonical snapshot."""
 from __future__ import annotations
 import argparse, os, time
+from datetime import datetime
 from pathlib import Path
 
 from runtime.artifact_restore import _atomic_write
@@ -68,18 +69,33 @@ def _pending_events(state: dict, artifacts: list[dict], *, archived_ids: set[int
     ]
 
 
+def _provider_time(value: object) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else None
+
+
 def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, current_run: str,
                         archived_ids: set[int] | None = None,
                         timeout_seconds: int = 300, poll_seconds: float = 5.0,
                         clock=time.monotonic, sleep=time.sleep) -> tuple[GitHubReader, dict, list[dict]]:
     require(pending, "Pending-event wait requires at least one event")
-    latest_event_time = max(str(row.get("created_at") or "") for row in pending)
+    event_times = [_provider_time(row.get("created_at")) for row in pending]
+    require(all(at is not None for at in event_times), "Pending-event creation time missing or invalid")
+    latest_event_time = max(event_times)
     pending_ids = {row["id"] for row in pending}
     deadline = clock() + timeout_seconds
     seen_reducers: set[int] = set()
     poller = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
     while clock() < deadline:
         # Any genuine reducer completion can unblock the production reader.
+        # A queued reducer may be created before events it later incorporates.
+        # Its completion/update time bounds relevance; verified snapshot coverage
+        # remains the proof that every pending event was actually reduced.
         # Scheduled evidence still has its separate, strict acceptance gate.
         # Snapshot validation and pending-artifact coverage remain mandatory.
         runs = poller.get("/actions/runs?branch=main&per_page=50").get("workflow_runs", [])
@@ -90,7 +106,8 @@ def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, curren
             and row.get("head_branch") == "main"
             and row.get("status") == "completed"
             and row.get("conclusion") == "success"
-            and str(row.get("created_at") or "") >= latest_event_time
+            and (completed_at := _provider_time(row.get("updated_at"))) is not None
+            and completed_at >= latest_event_time
             and type(row.get("id")) is int
         ]
         for reducer_run in sorted(successes, key=lambda row: row["id"]):

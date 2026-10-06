@@ -159,11 +159,11 @@ def validate_cost_governor():
             req(fragment in body, f"{name} paid cost integration missing: {fragment}")
 
     nonpaid_workflows = {
-        "portfolio-autonomous-scheduler": ("schedule", "portfolio-scheduler", 5),
-        "hunter-autonomous-cycle": ("hunt", "portfolio-hunter-cycle", 5),
-        "command-center-pages": ("publish", "portfolio-reporting-pages", 5),
-        "agent-heartbeat-sweep": ("heartbeat", "portfolio-heartbeat", 2),
-        "portfolio-notification-cycle": ("notify", "portfolio-notification", 2),
+        "portfolio-autonomous-scheduler": ("schedule", "portfolio-scheduler", 12),
+        "hunter-autonomous-cycle": ("hunt", "portfolio-hunter-cycle", 10),
+        "command-center-pages": ("publish", "portfolio-reporting-pages", 10),
+        "agent-heartbeat-sweep": ("heartbeat", "portfolio-heartbeat", 8),
+        "portfolio-notification-cycle": ("notify", "portfolio-notification", 8),
         "software-factory-candidate": ("execute-candidate-action", "portfolio-software-factory", 5),
         "verified-feedback-bootstrap": ("feedback", "portfolio-feedback-bootstrap", 2),
         "continuous-learning-bootstrap": ("bootstrap", "portfolio-learning-bootstrap", 2),
@@ -198,7 +198,7 @@ def validate_cost_governor():
         decision = evaluate_workload(
             workflow_id="runtime-worker",
             job_id=job_id,
-            estimated_minutes=5,
+            estimated_minutes=15,
         )
         req(decision["status"] == "WORKLOAD_ALLOWED",
             f"{job_id} workload admission failed")

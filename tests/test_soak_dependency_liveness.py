@@ -20,16 +20,23 @@ class Clock:
 
 
 class SoakDependencyLivenessTests(unittest.TestCase):
-    def exercise(self, *, event="schedule", covered=True, snapshot=True, archived=False, **changes):
+    def exercise(self, *, event="schedule", covered=True, snapshot=True, archived=False,
+                 pending=None, known_ids=None, **changes):
         run = {
             "id": 501, "name": "portfolio-state-reducer", "head_branch": "main",
             "event": event, "status": "completed", "conclusion": "success",
             "created_at": "2026-10-05T22:10:00Z",
+            "updated_at": "2026-10-05T22:11:00Z",
         }
         run.update(changes)
+        if pending is None:
+            pending = [{"id": 91, "created_at": "2026-10-05T22:09:00Z"}]
+        if known_ids is None:
+            known_ids = {91} if covered else set()
         state = {"evidence": {"runtime": [
-            {"kind": "GITHUB_ACTIONS", "artifact_id": 91}
-        ] if covered else []}}
+            {"kind": "GITHUB_ACTIONS", "artifact_id": artifact_id}
+            for artifact_id in sorted(known_ids)
+        ]}}
         fake = Mock()
         fake.get.side_effect = lambda path: {
             "workflow_runs": [] if "event=workflow_run" in path and event != "workflow_run" else [run]
@@ -42,8 +49,7 @@ class SoakDependencyLivenessTests(unittest.TestCase):
             reader, "restore_snapshot", return_value=state if snapshot else None
         ):
             result = reader._wait_for_reduction(
-                "test-token", policy,
-                [{"id": 91, "created_at": "2026-10-05T22:09:00Z"}],
+                "test-token", policy, pending,
                 current_run="900", archived_ids={91} if archived else set(),
                 timeout_seconds=2, poll_seconds=1, clock=clock.now, sleep=clock.sleep,
             )
@@ -86,9 +92,68 @@ class SoakDependencyLivenessTests(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "STALE_CANONICAL_STATE_REDUCTION_TIMEOUT"):
             self.exercise(name="other-workflow")
 
-    def test_reducer_older_than_pending_event_is_rejected(self):
+    def test_queued_reducer_created_before_pending_event_can_unblock(self):
+        result, _ = self.exercise(
+            created_at="2026-10-05T22:08:00Z",
+            updated_at="2026-10-05T22:10:00Z",
+        )
+        self.assertEqual(result[1]["evidence"]["runtime"][0]["artifact_id"], 91)
+
+    def test_queued_reducer_still_requires_every_pending_artifact(self):
+        pending = [
+            {"id": 91, "created_at": "2026-10-05T22:09:00Z"},
+            {"id": 92, "created_at": "2026-10-05T22:09:30Z"},
+        ]
         with self.assertRaisesRegex(Exception, "STALE_CANONICAL_STATE_REDUCTION_TIMEOUT"):
-            self.exercise(created_at="2026-10-05T22:08:00Z")
+            self.exercise(
+                created_at="2026-10-05T22:08:00Z", pending=pending, known_ids={91},
+            )
+        result, _ = self.exercise(
+            created_at="2026-10-05T22:08:00Z", pending=pending, known_ids={91, 92},
+        )
+        self.assertEqual(len(result[1]["evidence"]["runtime"]), 2)
+
+    def test_reducer_completed_before_latest_pending_event_is_rejected(self):
+        pending = [
+            {"id": 91, "created_at": "2026-10-05T22:09:00Z"},
+            {"id": 92, "created_at": "2026-10-05T22:09:30Z"},
+        ]
+        with self.assertRaisesRegex(Exception, "STALE_CANONICAL_STATE_REDUCTION_TIMEOUT"):
+            self.exercise(
+                created_at="2026-10-05T22:08:00Z",
+                updated_at="2026-10-05T22:09:15Z",
+                pending=pending, known_ids={91, 92},
+            )
+
+    def test_reducer_without_completion_time_is_rejected(self):
+        for value in (None, "", "not-a-timestamp", "2026-10-05T22:11:00", 123):
+            with self.subTest(updated_at=value), self.assertRaisesRegex(
+                Exception, "STALE_CANONICAL_STATE_REDUCTION_TIMEOUT"
+            ):
+                self.exercise(updated_at=value)
+
+    def test_completion_at_event_timestamp_can_unblock_with_coverage(self):
+        result, _ = self.exercise(
+            created_at="2026-10-05T22:08:00Z", updated_at="2026-10-05T22:09:00Z",
+        )
+        self.assertIsNotNone(result[1])
+
+    def test_completion_offsets_are_compared_as_instants(self):
+        result, _ = self.exercise(
+            created_at="2026-10-05T22:08:00Z", updated_at="2026-10-05T18:10:00-04:00",
+        )
+        self.assertIsNotNone(result[1])
+        with self.assertRaisesRegex(Exception, "STALE_CANONICAL_STATE_REDUCTION_TIMEOUT"):
+            self.exercise(
+                created_at="2026-10-05T22:07:00Z", updated_at="2026-10-05T23:08:00+01:00",
+            )
+
+    def test_pending_event_without_valid_time_is_rejected(self):
+        for value in (None, "not-a-timestamp", "2026-10-05T22:09:00"):
+            with self.subTest(created_at=value), self.assertRaisesRegex(
+                Exception, "Pending-event creation time missing or invalid"
+            ):
+                self.exercise(pending=[{"id": 91, "created_at": value}])
 
     def test_reactive_reducer_is_not_suppressed_during_soak(self):
         text = (ROOT / ".github/workflows/portfolio-state-reducer.yml").read_text()

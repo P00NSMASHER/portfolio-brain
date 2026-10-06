@@ -126,6 +126,7 @@ class CanonicalProductionReaderTests(unittest.TestCase):
                     "id": 900, "name": "portfolio-state-reducer", "head_branch": "main",
                     "status": "completed", "conclusion": "success",
                     "created_at": "2026-09-29T18:43:11Z",
+                    "updated_at": "2026-09-29T18:43:12Z",
                 }]}
         class FreshReader:
             def list_recent_artifacts(self, *args, **kwargs):

@@ -4,7 +4,7 @@ from acceptance.step23_delivery_qualification import REQUIRED, derive_qualificat
 
 SHA="a"*40
 BASE=datetime(2026,10,6,0,0,tzinfo=timezone.utc)
-END=datetime(2026,10,6,4,0,tzinfo=timezone.utc)
+END=datetime(2026,10,6,5,0,tzinfo=timezone.utc)
 
 def row(name,i,minute=1,**changes):
     created=BASE+timedelta(minutes=minute)
@@ -60,18 +60,18 @@ class QualificationTests(unittest.TestCase):
         self.assertEqual(start.minute%15,0)
 
     def test_late_qualification_refuses_to_start_in_incomplete_horizon(self):
-        rows=self.all_rows(base_minute=180)
+        rows=self.all_rows(base_minute=240)
         result=derive_qualification(rows,SHA,BASE,END,start_delay_minutes=30)
         self.assertFalse(result["qualified"])
         self.assertEqual(result["status"],"QUALIFICATION_TOO_LATE")
 
     def test_owner_fixed_arm_preserves_strict_one_hour_window(self):
-        start=datetime(2026,10,6,3,0,tzinfo=timezone.utc)
+        start=datetime(2026,10,6,4,0,tzinfo=timezone.utc)
         result=derive_fixed_arm(SHA,BASE,start,END)
         self.assertTrue(result["qualified"])
         self.assertEqual(result["status"],"QUALIFIED_FIXED")
-        self.assertEqual(result["soak_start"],"2026-10-06T03:00:00Z")
-        self.assertEqual(result["soak_deadline"],"2026-10-06T04:00:00Z")
+        self.assertEqual(result["soak_start"],"2026-10-06T04:00:00Z")
+        self.assertEqual(result["soak_deadline"],"2026-10-06T05:00:00Z")
         self.assertEqual(result["selected"],{})
 
     def test_owner_fixed_arm_rejects_early_or_nonquarter_start(self):

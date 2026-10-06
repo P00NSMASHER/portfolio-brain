@@ -244,7 +244,7 @@ def validate_hunter():
     signal_source=(ROOT/"hunting/signal_router.py").read_text()
     req('"github_supply_creates_demand":False' in signal_source and '"commercial_build_authorized_by_supply_only":False' in signal_source,"Hunter signal router weakened supply/demand boundary")
     wf=(ROOT/".github/workflows/hunter-autonomous-cycle.yml").read_text()
-    for s in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_HUNTER_DISABLED","47 */6 * * *","cancel-in-progress: false","actions/upload-artifact@v4","python -m hunting.calibration --output hunting/out/calibration_report.json",".github/triggers/hunter-autonomous-now.txt"]:
+    for s in ["contents: read","actions: read","timeout-minutes: 10","PORTFOLIO_HUNTER_DISABLED","47 */6 * * *","cancel-in-progress: false","actions/upload-artifact@v4","python -m hunting.calibration --output hunting/out/calibration_report.json",".github/triggers/hunter-autonomous-now.txt"]:
         req(s in wf,f"Hunter workflow missing {s}")
     req(wf.index("concurrency:",wf.index("hunt:"))>wf.index("hunt:"),"Hunter shared-state mutex must cover the writer job")
     req("portfolio-hunter-proposal-state" in wf and "hunting/out/hunter_proposal_state.json" in wf,"Hunter workflow does not persist proposal inbox")

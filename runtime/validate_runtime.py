@@ -1,14 +1,46 @@
 #!/usr/bin/env python3
 """Static + machine-readable conformance validator for Step 8 runtime."""
 from __future__ import annotations
-import json,re
+import inspect,json,re
 from pathlib import Path
+from state_journal.production_reader import _wait_for_reduction
 
 ROOT=Path(__file__).resolve().parents[1]
 class RuntimeValidationError(ValueError): pass
 def req(ok,msg):
     if not ok: raise RuntimeValidationError(msg)
 def load(p): return json.loads((ROOT/p).read_text())
+
+def validate_workflow_budgets(worker: str, budgets: dict, workload: dict, cost: dict)->dict:
+    """Catch-up and core work need separate time without widening paid admission."""
+    timeouts=re.findall(
+        r"(?m)^    timeout-minutes: \$\{\{ \(inputs\.mode == 'observe' \|\| inputs\.mode == 'sync'\) && ([0-9]+) \|\| ([0-9]+) \}\}$",
+        worker,
+    )
+    req(len(timeouts)==1,"runtime timeout must isolate sync/observe from paid and unsupported modes")
+    nonpaid,paid=map(int,timeouts[0])
+    req(nonpaid==15 and paid==5,"runtime timeout must remain finite: non-paid 15, paid 5 minutes")
+    wait=inspect.signature(_wait_for_reduction).parameters['timeout_seconds'].default
+    # Current forwarding permits six 20s reads plus two retry sequences (126s);
+    # ABVM health permits two authenticated reads with public fallbacks (80s).
+    # Retain at least one minute for scans/setup/local projection/uploads. This
+    # is headroom, not a promise that network worst cases or missing reducers fit.
+    operational_allowance_seconds=6*20+2*(1+2)+2*2*20+60
+    required_seconds=wait+budgets['max_runtime_seconds']+budgets['max_state_restore_seconds']+operational_allowance_seconds
+    req(nonpaid*60>=required_seconds,"canonical catch-up, core work and finalization exceed runtime budget")
+    steps=re.split(r"(?m)^      - ",worker)[1:]
+    for module,guard,minutes,modes,policy in (
+        ('workload_control.workload_gate',"inputs.mode == 'observe' || inputs.mode == 'sync'",nonpaid,('observe','sync'),workload['services']),
+        ('cost_governor.workflow_gate',"inputs.mode == 'daily' || inputs.mode == 'weekly'",paid,('daily','weekly'),cost['workflow_job_ceilings']),
+    ):
+        admission=[step for step in steps if f'python -m {module} preflight' in step]
+        req(len(admission)==1,f"runtime {module} preflight missing or ambiguous")
+        step=admission[0]
+        req(re.findall(r"(?m)^        if: (.+)$",step)==['${{ '+guard+' }}'],f"runtime {module} mode boundary changed")
+        req(re.findall(r'--estimated-minutes ([0-9]+)',step)==[str(minutes)],f"runtime {module} estimate differs from job timeout")
+        for mode in modes:
+            req(policy[f'runtime-worker::runtime-{mode}']['max_minutes_per_job']==minutes,f"runtime {mode} policy differs from job timeout")
+    return {'nonpaid_runtime_timeout_minutes':nonpaid,'paid_runtime_timeout_minutes':paid}
 
 def validate_runtime()->dict:
     p=load("runtime/RUNTIME_POLICY.json"); k=load("runtime/KILL_SWITCH.json")
@@ -54,7 +86,8 @@ def validate_runtime()->dict:
     ]
     texts={n:(ROOT/n).read_text() for n in names}
     worker=texts[names[0]]
-    for required in ["contents: read","actions: read","timeout-minutes: 5","PORTFOLIO_RUNTIME_DISABLED",
+    runtime_budgets=validate_workflow_budgets(worker,b,load('workload_control/WORKLOAD_POLICY.json'),load('cost_governor/COST_GOVERNOR_POLICY.json'))
+    for required in ["contents: read","actions: read","PORTFOLIO_RUNTIME_DISABLED",
                      "PORTFOLIO_MODEL_API_KEY","runtime.model_analysis","actions/upload-artifact@v4","retention-days: 30",
                      "cancel-in-progress: false",
                      "workload_control.workload_gate preflight","format('portfolio-runtime-{0}', inputs.mode)",
@@ -99,7 +132,7 @@ def validate_runtime()->dict:
             "downstream_writes":0,"external_actions":0,
             "runtime_receipt_integrity":True,"runtime_artifact_companion_binding":True,
             "push_observation_coalescing":False,"runtime_state_writers_serialized":True,"mode_isolated_cost_budgets":True,
-            "max_api_requests":b["max_api_requests_per_cycle"],"max_runtime_seconds":b["max_runtime_seconds"]}
+            "max_api_requests":b["max_api_requests_per_cycle"],"max_runtime_seconds":b["max_runtime_seconds"],**runtime_budgets}
 
 if __name__=="__main__":
     print("portfolio-brain Step 8 runtime: PASS",json.dumps(validate_runtime(),sort_keys=True))

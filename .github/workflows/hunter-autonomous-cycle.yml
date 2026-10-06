@@ -20,6 +20,11 @@ on:
     - cron: "21 3 6 10 *"
     - cron: "36 3 6 10 *"
     - cron: "51 3 6 10 *"
+    - cron: "5 4 6 10 *"
+    - cron: "14 4 6 10 *"
+    - cron: "23 4 6 10 *"
+    - cron: "32 4 6 10 *"
+    - cron: "41 4 6 10 *"
   push:
     branches: ["main"]
     paths:
@@ -46,7 +51,7 @@ jobs:
       queue: max
     if: ${{ vars.PORTFOLIO_HUNTER_DISABLED != 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       PORTFOLIO_HUNTER_DISABLED: ${{ vars.PORTFOLIO_HUNTER_DISABLED }}
       PORTFOLIO_GITHUB_TOKEN: ${{ github.token }}
@@ -62,7 +67,7 @@ jobs:
           python -m workload_control.workload_gate preflight
           --workflow-id hunter-autonomous-cycle
           --job-id hunt
-          --estimated-minutes 5
+          --estimated-minutes 10
       - name: Restore canonical Hunter state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m state_journal.production_reader --domain hunter --output hunting/live/hunter_state.json

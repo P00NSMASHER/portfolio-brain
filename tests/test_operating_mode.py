@@ -97,8 +97,8 @@ class OperatingModeTests(unittest.TestCase):
         self.assertEqual(actual,expected)
         control=json.loads((ROOT/"operations/STEP23_CONTROL.json").read_text())
         self.assertEqual(control["status"],"ARMED_FIXED")
-        self.assertEqual(control["next_soak_start"],"2026-10-06T03:00:00Z")
-        self.assertEqual(control["qualification_method"],"OWNER_FIXED_EXACT_MAIN_AFTER_DELIVERY_REPAIR")
+        self.assertEqual(control["next_soak_start"],"2026-10-06T04:00:00Z")
+        self.assertEqual(control["qualification_method"],"OWNER_FIXED_EXACT_MAIN_AFTER_CANONICAL_TIMEOUT_HARDENING")
         observer=ROOT/".github/workflows/step23-live-soak-observer.yml"
         self.assertEqual(workflow_top_level_triggers(observer),{"workflow_run","schedule","workflow_dispatch"})
         self.assertEqual(workflow_schedule_crons(observer),window["observer_crons"])

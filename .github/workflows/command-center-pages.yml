@@ -38,6 +38,11 @@ on:
     - cron: "25 3 6 10 *"
     - cron: "40 3 6 10 *"
     - cron: "55 3 6 10 *"
+    - cron: "8 4 6 10 *"
+    - cron: "17 4 6 10 *"
+    - cron: "26 4 6 10 *"
+    - cron: "35 4 6 10 *"
+    - cron: "44 4 6 10 *"
   # Core producers already trigger the watchdog. Publish after its receipt
   # instead of publishing both before and after the same verification cycle.
   # All completions (including failure) remain visible; cron is the fallback.
@@ -67,7 +72,7 @@ jobs:
       cancel-in-progress: false
       queue: max
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -84,7 +89,7 @@ jobs:
           python -m workload_control.workload_gate preflight
           --workflow-id command-center-pages
           --job-id publish
-          --estimated-minutes 5
+          --estimated-minutes 10
       - name: Stamp publication provenance
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         shell: bash
