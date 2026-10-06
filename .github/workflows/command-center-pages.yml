@@ -20,6 +20,7 @@ on:
       - "action_engine/**"
       - ".github/workflows/command-center-pages.yml"
   schedule:
+    - cron: "37 * * * *"
     # One-shot scheduler re-registration canary; remove after proof.
     - cron: "27 12 6 10 *"
   workflow_run:

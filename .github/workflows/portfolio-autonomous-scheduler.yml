@@ -2,6 +2,7 @@ name: portfolio-autonomous-scheduler
 
 on:
   schedule:
+    - cron: "23 * * * *"
     # One-shot scheduler re-registration canary; remove after proof.
     - cron: "22 12 6 10 *"
   repository_dispatch:

@@ -2,6 +2,7 @@ name: portfolio-cost-watchdog
 
 on:
   schedule:
+    - cron: "53 * * * *"
     # One-shot scheduler re-registration canary; remove after proof.
     - cron: "25 12 6 10 *"
   workflow_run:

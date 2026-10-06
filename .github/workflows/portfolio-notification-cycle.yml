@@ -3,6 +3,7 @@ name: portfolio-notification-cycle
 
 on:
   schedule:
+    - cron: "7 */6 * * *"
     # One-shot scheduler re-registration canary; remove after proof.
     - cron: "26 12 6 10 *"
   repository_dispatch:

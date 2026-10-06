@@ -2,6 +2,7 @@ name: hunter-autonomous-cycle
 
 on:
   schedule:
+    - cron: "47 */6 * * *"
     # One-shot scheduler re-registration canary; remove after proof.
     - cron: "23 12 6 10 *"
   push:
