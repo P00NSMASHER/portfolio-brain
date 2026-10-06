@@ -27,6 +27,12 @@ on:
     - cron: "38 4 6 10 *"
   # Do not wait for best-effort cron after runtime/adapter repairs land on main.
   # This remains the same governed OBSERVE-only sync job and does not widen authority.
+    # Step 23 2x8 two-hour acceptance window: 07:30-09:30 UTC.
+    - cron: "32 7 6 10 *"
+    - cron: "2 8 6 10 *"
+    - cron: "32 8 6 10 *"
+    - cron: "2 9 6 10 *"
+    - cron: "22 9 6 10 *"
   push:
     branches: ["main"]
     paths:

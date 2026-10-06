@@ -46,6 +46,12 @@ on:
   # Core producers already trigger the watchdog. Publish after its receipt
   # instead of publishing both before and after the same verification cycle.
   # All completions (including failure) remain visible; cron is the fallback.
+    # Step 23 2x8 two-hour acceptance window: 07:30-09:30 UTC.
+    - cron: "38 7 6 10 *"
+    - cron: "8 8 6 10 *"
+    - cron: "38 8 6 10 *"
+    - cron: "8 9 6 10 *"
+    - cron: "28 9 6 10 *"
   workflow_run:
     workflows:
       - "portfolio-cost-watchdog"

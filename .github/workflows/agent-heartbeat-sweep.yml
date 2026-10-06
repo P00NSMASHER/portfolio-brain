@@ -25,6 +25,12 @@ on:
     - cron: "24 4 6 10 *"
     - cron: "33 4 6 10 *"
     - cron: "42 4 6 10 *"
+    # Step 23 2x8 two-hour acceptance window: 07:30-09:30 UTC.
+    - cron: "36 7 6 10 *"
+    - cron: "6 8 6 10 *"
+    - cron: "36 8 6 10 *"
+    - cron: "6 9 6 10 *"
+    - cron: "26 9 6 10 *"
   workflow_dispatch:
 
 permissions:

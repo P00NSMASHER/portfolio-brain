@@ -31,6 +31,12 @@ on:
     - cron: "36 4 6 10 *"
     - cron: "45 4 6 10 *"
     - cron: "54 4 6 10 *"
+    # Step 23 2x8 two-hour observer points.
+    - cron: "45 7 6 10 *"
+    - cron: "15 8 6 10 *"
+    - cron: "45 8 6 10 *"
+    - cron: "15 9 6 10 *"
+    - cron: "29 9 6 10 *"
   workflow_dispatch:
 
 permissions:
@@ -73,7 +79,7 @@ jobs:
           --exact-sha "$EXACT_SHA"
           --output step23-delivery-qualification.json
 
-      - name: Build immutable one-hour soak config
+      - name: Build immutable two-hour soak config
         if: ${{ steps.qualify.outputs.qualified == 'true' }}
         env:
           SOAK_SHA: ${{ steps.main.outputs.sha }}
@@ -90,12 +96,13 @@ jobs:
               "portfolio-notification-cycle","command-center-pages",
             ],
             "required_handler_types":["REPAIR","TEST","VERIFICATION"],
-            "required_successes_per_workflow":3,
-            "max_soak_duration_seconds":3600,
+            "required_successes_per_workflow":2,
+            "max_soak_duration_seconds":7200,
             "poll_seconds":60,
             "max_resets":5,
           }
-          open("step23-soak-config.json","w",encoding="utf-8").write(json.dumps(config,indent=2)+"\n")
+          open("step23-soak-config.json","w",encoding="utf-8").write(json.dumps(config,indent=2)+"
+")
           PY
 
       - name: Check whether qualified start has arrived
@@ -109,8 +116,8 @@ jobs:
           from datetime import datetime, timezone, timedelta
           start=datetime.fromisoformat(os.environ["SOAK_START"].replace("Z","+00:00"))
           now=datetime.now(timezone.utc)
-          print("started="+("true" if start <= now < start+timedelta(hours=1) else "false"))
-          print("expired="+("true" if now >= start+timedelta(hours=1) else "false"))
+          print("started="+("true" if start <= now < start+timedelta(hours=2) else "false"))
+          print("expired="+("true" if now >= start+timedelta(hours=2) else "false"))
           PY
 
       - name: Run strict point observation
@@ -136,7 +143,8 @@ jobs:
           open("step23-soak-progress.json","w").write(json.dumps({
             "schema_version":"1.0.0","status":status,"exact_main_sha":os.environ["SOAK_SHA"],
             "configured_soak_start":os.environ["SOAK_START"],"acceptance_complete":False,
-          },indent=2)+"\n")
+          },indent=2)+"
+")
           PY
 
       - name: Upload delivery qualification

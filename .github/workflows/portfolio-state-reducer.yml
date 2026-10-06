@@ -25,6 +25,12 @@ on:
     - cron: "19 4 6 10 *"
     - cron: "28 4 6 10 *"
     - cron: "37 4 6 10 *"
+    # Step 23 2x8 two-hour acceptance window: 07:30-09:30 UTC.
+    - cron: "31 7 6 10 *"
+    - cron: "1 8 6 10 *"
+    - cron: "31 8 6 10 *"
+    - cron: "1 9 6 10 *"
+    - cron: "21 9 6 10 *"
   push:
     branches: ["main"]
     paths:

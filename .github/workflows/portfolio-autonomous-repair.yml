@@ -79,7 +79,7 @@ jobs:
           suppress = False
           reason = "REPAIR_ELIGIBLE"
           now = datetime.now(timezone.utc)
-          if datetime(2026,10,6,3,20,tzinfo=timezone.utc) <= now < datetime(2026,10,6,5,0,tzinfo=timezone.utc):
+          if datetime(2026,10,6,3,20,tzinfo=timezone.utc) <= now < datetime(2026,10,6,9,30,tzinfo=timezone.utc):
               suppress = True
               reason = "STEP23_FIXED_SOAK_MAIN_FREEZE"
           if os.environ["EVENT_NAME"] == "workflow_run":
