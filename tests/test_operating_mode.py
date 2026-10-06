@@ -104,7 +104,7 @@ class OperatingModeTests(unittest.TestCase):
         self.assertIn("workflow_run:",monitor)
         self.assertIn("github.event_name == 'push'",monitor)
         self.assertIn("--repair",monitor)
-        self.assertIn("--without-cost-state",monitor)
+        self.assertIn("CANARY_REQUIRED: liveness dispatch intentionally suppressed",monitor)
         reducer=(ROOT/".github/workflows/portfolio-state-reducer.yml").read_text()
         self.assertIn("cancel-in-progress: false",reducer)
 

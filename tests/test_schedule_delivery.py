@@ -140,7 +140,7 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn('workflow_run:', before)
         self.assertIn('7,17,27,37,47,57 * * * *', before)
         self.assertIn("github.event_name == 'push'", recovery)
-        self.assertIn('--without-cost-state', recovery)
+        self.assertIn('CANARY_REQUIRED: liveness dispatch intentionally suppressed', recovery)
         observer = (ROOT/'.github/workflows/step23-live-soak-observer.yml').read_text()
         self.assertNotIn('  schedule:', observer)
         self.assertIn('workflow_run:', observer)
