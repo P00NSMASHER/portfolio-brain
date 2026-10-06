@@ -168,12 +168,12 @@ class CostGovernorTests(unittest.TestCase):
 
     def test_nonpaid_workflows_use_independent_workload_controls(self):
         expected = {
-            "agent-heartbeat-sweep.yml": ("agent-heartbeat-sweep", "heartbeat", "portfolio-heartbeat", 2),
+            "agent-heartbeat-sweep.yml": ("agent-heartbeat-sweep", "heartbeat", "portfolio-heartbeat", 8),
             "command-center-pages.yml": ("command-center-pages", "publish", "portfolio-reporting-pages", 5),
             "continuous-learning-bootstrap.yml": ("continuous-learning-bootstrap", "bootstrap", "portfolio-learning-bootstrap", 2),
             "hunter-autonomous-cycle.yml": ("hunter-autonomous-cycle", "hunt", "portfolio-hunter-cycle", 5),
             "portfolio-autonomous-scheduler.yml": ("portfolio-autonomous-scheduler", "schedule", "portfolio-scheduler", 5),
-            "portfolio-notification-cycle.yml": ("portfolio-notification-cycle", "notify", "portfolio-notification", 2),
+            "portfolio-notification-cycle.yml": ("portfolio-notification-cycle", "notify", "portfolio-notification", 8),
             "software-factory-candidate.yml": ("software-factory-candidate", "execute-candidate-action", "portfolio-software-factory", 5),
             "verified-feedback-bootstrap.yml": ("verified-feedback-bootstrap", "feedback", "portfolio-feedback-bootstrap", 2),
         }

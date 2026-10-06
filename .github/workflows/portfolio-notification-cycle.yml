@@ -43,7 +43,8 @@ jobs:
       queue: max
     if: ${{ vars.PORTFOLIO_NOTIFICATION_DISABLED != 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    # Five-minute canonical catch-up + two-minute work + one-minute finalization.
+    timeout-minutes: 8
     env:
       PORTFOLIO_NOTIFICATION_DISABLED: ${{ vars.PORTFOLIO_NOTIFICATION_DISABLED }}
       GITHUB_TOKEN: ${{ github.token }}
@@ -58,7 +59,7 @@ jobs:
           python -m workload_control.workload_gate preflight
           --workflow-id portfolio-notification-cycle
           --job-id notify
-          --estimated-minutes 2
+          --estimated-minutes 8
       - name: Restore canonical notification state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m state_journal.production_reader --domain notifications --output notifications/live/notification_state.json

@@ -29,6 +29,10 @@ def validate_notifications():
     req("portfolio-notification-cycle::notify" in wp["services"],"notification workflow missing from workload controls")
     cfg=wp["services"]["portfolio-notification-cycle::notify"]
     req(cfg["concurrency_group"]=="portfolio-notification","notification concurrency lane drifted")
-    req(cfg["max_minutes_per_job"]==2,"notification workload timeout drifted")
+    # Canonical catch-up is bounded at five minutes, with two minutes of work
+    # and one minute for setup/finalization. All three wall-clock limits agree.
+    req(cfg["max_minutes_per_job"]==8,"notification workload timeout drifted")
+    req("\n    timeout-minutes: 8\n" in wf,"notification wall-clock timeout mismatch")
+    req("--estimated-minutes 8\n" in wf,"notification admission timeout mismatch")
     return {"current_signals":first["signal_count"],"current_emitted":1,"current_active":1,"dedup_suppressed_next_cycle":1,"delivery_channels":2,"authority":"NONE"}
 if __name__=="__main__":print("portfolio-brain Step 22 notifications: PASS",json.dumps(validate_notifications(),sort_keys=True))
