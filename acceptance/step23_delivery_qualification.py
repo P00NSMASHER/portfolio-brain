@@ -66,7 +66,7 @@ def derive_qualification(runs:list[dict[str,Any]], exact_sha:str, baseline:datet
                 "selected":selected}
     completed=max(parse_time(v["completed_at"]) for v in selected.values())
     start=ceil_quarter(completed+timedelta(minutes=start_delay_minutes))
-    if start+timedelta(hours=1)>horizon_end:
+    if start+timedelta(hours=2)>horizon_end:
         return {"status":"QUALIFICATION_TOO_LATE","qualified":False,"missing_workflows":[],
                 "exact_main_sha":exact_sha,"baseline":baseline.isoformat().replace("+00:00","Z"),
                 "selected":selected,"candidate_start":start.isoformat().replace("+00:00","Z")}
@@ -74,7 +74,7 @@ def derive_qualification(runs:list[dict[str,Any]], exact_sha:str, baseline:datet
             "exact_main_sha":exact_sha,"baseline":baseline.isoformat().replace("+00:00","Z"),
             "qualification_completed_at":completed.isoformat().replace("+00:00","Z"),
             "soak_start":start.isoformat().replace("+00:00","Z"),
-            "soak_deadline":(start+timedelta(hours=1)).isoformat().replace("+00:00","Z"),
+            "soak_deadline":(start+timedelta(hours=2)).isoformat().replace("+00:00","Z"),
             "selected":selected}
 
 def derive_fixed_arm(exact_sha:str, baseline:datetime, start:datetime, horizon_end:datetime)->dict[str,Any]:
@@ -86,7 +86,7 @@ def derive_fixed_arm(exact_sha:str, baseline:datetime, start:datetime, horizon_e
     return {"status":"QUALIFIED_FIXED","qualified":True,"missing_workflows":[],
             "exact_main_sha":exact_sha,"baseline":baseline.isoformat().replace("+00:00","Z"),
             "soak_start":start.isoformat().replace("+00:00","Z"),
-            "soak_deadline":(start+timedelta(hours=1)).isoformat().replace("+00:00","Z"),
+            "soak_deadline":(start+timedelta(hours=2)).isoformat().replace("+00:00","Z"),
             "selected":{}}
 
 class API:

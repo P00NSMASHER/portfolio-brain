@@ -26,6 +26,12 @@ on:
     - cron: "25 4 6 10 *"
     - cron: "34 4 6 10 *"
     - cron: "43 4 6 10 *"
+    # Step 23 2x8 two-hour acceptance window: 07:30-09:30 UTC.
+    - cron: "37 7 6 10 *"
+    - cron: "7 8 6 10 *"
+    - cron: "37 8 6 10 *"
+    - cron: "7 9 6 10 *"
+    - cron: "27 9 6 10 *"
   repository_dispatch:
     types: ["portfolio_notify"]
   workflow_dispatch:
