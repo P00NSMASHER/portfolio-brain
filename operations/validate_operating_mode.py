@@ -212,9 +212,9 @@ def validate_operating_mode():
     req(expected["portfolio-state-reducer"].split()[0] != expected["portfolio-state-checkpoint-candidate"].split()[0],
         "checkpoint candidate must not collide with daily reducer refresh")
     req(set(p["approved_recurring_workflows"])==set(expected),"approved recurring workflow set changed")
-    # Step 23 no longer trusts a promised wall-clock. Temporary native schedules
-    # first qualify delivery on every required workflow; the observer derives one
-    # deterministic one-hour start from those exact-main successes.
+    # Step 23 is owner-armed for the repaired exact-main window at 03:00-04:00 UTC.
+    # The strict collector still requires three genuine scheduled successes per
+    # required workflow; manual/dispatch work never substitutes for schedule evidence.
     delivery=load("operations/SCHEDULE_DELIVERY_POLICY.json")
     req(delivery == {
         "schema_version":"1.0.0", "workflow":"portfolio-schedule-delivery",
@@ -222,7 +222,7 @@ def validate_operating_mode():
         "max_api_requests":80, "timeout_seconds":15, "new_soak_start":None,
     }, "schedule delivery monitor policy changed")
     window=load("operations/STEP23_DELIVERY_WINDOW.json")
-    req(window["schema_version"]=="1.0.0" and window["status"]=="PREQUALIFYING",
+    req(window["schema_version"]=="1.0.0" and window["status"]=="ARMED_FIXED",
         "Step 23 delivery window identity changed")
     required_temp={
       "portfolio-state-reducer","runtime-hourly-sync","portfolio-autonomous-scheduler",
@@ -253,13 +253,14 @@ def validate_operating_mode():
     req(actual["step23-live-soak-observer"]==window["observer_crons"],
         "Step 23 observer fallback cron mismatch")
     control=load("operations/STEP23_CONTROL.json")
-    req(control.get("status")=="PREQUALIFYING" and control.get("next_soak_start") is None
-        and control.get("qualification_method")=="AUTO_AFTER_NATIVE_SUCCESS_ALL_REQUIRED_EXACT_MAIN"
+    req(control.get("status")=="ARMED_FIXED"
+        and control.get("next_soak_start")=="2026-10-06T03:00:00Z"
+        and control.get("qualification_method")=="OWNER_FIXED_EXACT_MAIN_AFTER_DELIVERY_REPAIR"
         and control.get("registration_delay_minutes")==window["registration_delay_minutes"]
         and control.get("start_delay_minutes")==window["start_delay_minutes"]
         and control.get("qualification_horizon_start")==window["qualification_horizon_start"]
         and control.get("qualification_horizon_end")==window["qualification_horizon_end"],
-        "Step 23 prequalification control changed")
+        "Step 23 fixed-arm control changed")
     workload=load("workload_control/WORKLOAD_POLICY.json")
     req(workload["mode"]=="GITHUB_NATIVE_WORKLOAD_CONTROL","workload control mode changed")
     workload_workflows={
