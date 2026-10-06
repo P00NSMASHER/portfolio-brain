@@ -3,29 +3,7 @@ name: agent-heartbeat-sweep
 on:
   schedule:
     - cron: "29 */2 * * *"
-    # Temporary Step 23 native-delivery qualification cadence; remove after acceptance closes.
-    - cron: "6 0 6 10 *"
-    - cron: "22 0 6 10 *"
-    - cron: "38 0 6 10 *"
-    - cron: "52 0 6 10 *"
-    - cron: "6 1 6 10 *"
-    - cron: "22 1 6 10 *"
-    - cron: "38 1 6 10 *"
-    - cron: "52 1 6 10 *"
-    - cron: "6 2 6 10 *"
-    - cron: "22 2 6 10 *"
-    - cron: "38 2 6 10 *"
-    - cron: "52 2 6 10 *"
-    - cron: "6 3 6 10 *"
-    - cron: "22 3 6 10 *"
-    - cron: "38 3 6 10 *"
-    - cron: "52 3 6 10 *"
-    - cron: "6 4 6 10 *"
-    - cron: "15 4 6 10 *"
-    - cron: "24 4 6 10 *"
-    - cron: "33 4 6 10 *"
-    - cron: "42 4 6 10 *"
-    # Step 23 2x8 two-hour acceptance window: 07:30-09:30 UTC.
+    # Step 23 2x8 two-hour acceptance window.
     - cron: "36 7 6 10 *"
     - cron: "6 8 6 10 *"
     - cron: "36 8 6 10 *"

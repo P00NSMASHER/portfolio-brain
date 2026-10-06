@@ -3,31 +3,7 @@ name: portfolio-cost-watchdog
 on:
   schedule:
     - cron: "53 * * * *"
-    # Temporary Step 23 native-delivery qualification cadence; remove after acceptance closes.
-    - cron: "3 0 6 10 *"
-    - cron: "19 0 6 10 *"
-    - cron: "34 0 6 10 *"
-    - cron: "49 0 6 10 *"
-    - cron: "3 1 6 10 *"
-    - cron: "19 1 6 10 *"
-    - cron: "34 1 6 10 *"
-    - cron: "49 1 6 10 *"
-    - cron: "3 2 6 10 *"
-    - cron: "19 2 6 10 *"
-    - cron: "34 2 6 10 *"
-    - cron: "49 2 6 10 *"
-    - cron: "3 3 6 10 *"
-    - cron: "19 3 6 10 *"
-    - cron: "34 3 6 10 *"
-    - cron: "49 3 6 10 *"
-    - cron: "3 4 6 10 *"
-    - cron: "12 4 6 10 *"
-    - cron: "21 4 6 10 *"
-    - cron: "30 4 6 10 *"
-    - cron: "39 4 6 10 *"
-  # GitHub scheduled delivery can be delayed or skipped. Recheck liveness after
-  # any core producer finishes so one surviving trigger can recover overdue peers.
-    # Step 23 2x8 two-hour acceptance window: 07:30-09:30 UTC.
+    # Step 23 2x8 two-hour acceptance window.
     - cron: "33 7 6 10 *"
     - cron: "3 8 6 10 *"
     - cron: "33 8 6 10 *"

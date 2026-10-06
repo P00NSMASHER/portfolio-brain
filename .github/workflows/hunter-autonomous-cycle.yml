@@ -3,29 +3,7 @@ name: hunter-autonomous-cycle
 on:
   schedule:
     - cron: "47 */6 * * *"
-    # Temporary Step 23 native-delivery qualification cadence; remove after acceptance closes.
-    - cron: "5 0 6 10 *"
-    - cron: "21 0 6 10 *"
-    - cron: "36 0 6 10 *"
-    - cron: "51 0 6 10 *"
-    - cron: "5 1 6 10 *"
-    - cron: "21 1 6 10 *"
-    - cron: "36 1 6 10 *"
-    - cron: "51 1 6 10 *"
-    - cron: "5 2 6 10 *"
-    - cron: "21 2 6 10 *"
-    - cron: "36 2 6 10 *"
-    - cron: "51 2 6 10 *"
-    - cron: "5 3 6 10 *"
-    - cron: "21 3 6 10 *"
-    - cron: "36 3 6 10 *"
-    - cron: "51 3 6 10 *"
-    - cron: "5 4 6 10 *"
-    - cron: "14 4 6 10 *"
-    - cron: "23 4 6 10 *"
-    - cron: "32 4 6 10 *"
-    - cron: "41 4 6 10 *"
-    # Step 23 2x8 two-hour acceptance window: 07:30-09:30 UTC.
+    # Step 23 2x8 two-hour acceptance window.
     - cron: "35 7 6 10 *"
     - cron: "5 8 6 10 *"
     - cron: "35 8 6 10 *"

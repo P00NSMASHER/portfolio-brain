@@ -3,29 +3,7 @@ name: portfolio-autonomous-scheduler
 on:
   schedule:
     - cron: "23 * * * *"
-    # Temporary Step 23 native-delivery qualification cadence; remove after acceptance closes.
-    - cron: "4 0 6 10 *"
-    - cron: "20 0 6 10 *"
-    - cron: "35 0 6 10 *"
-    - cron: "50 0 6 10 *"
-    - cron: "4 1 6 10 *"
-    - cron: "20 1 6 10 *"
-    - cron: "35 1 6 10 *"
-    - cron: "50 1 6 10 *"
-    - cron: "4 2 6 10 *"
-    - cron: "20 2 6 10 *"
-    - cron: "35 2 6 10 *"
-    - cron: "50 2 6 10 *"
-    - cron: "4 3 6 10 *"
-    - cron: "20 3 6 10 *"
-    - cron: "35 3 6 10 *"
-    - cron: "50 3 6 10 *"
-    - cron: "4 4 6 10 *"
-    - cron: "13 4 6 10 *"
-    - cron: "22 4 6 10 *"
-    - cron: "31 4 6 10 *"
-    - cron: "40 4 6 10 *"
-    # Step 23 2x8 two-hour acceptance window: 07:30-09:30 UTC.
+    # Step 23 2x8 two-hour acceptance window.
     - cron: "34 7 6 10 *"
     - cron: "4 8 6 10 *"
     - cron: "34 8 6 10 *"

@@ -13,25 +13,6 @@ on:
     types: [completed]
     branches: [main]
   schedule:
-    - cron: "14 0 6 10 *"
-    - cron: "29 0 6 10 *"
-    - cron: "44 0 6 10 *"
-    - cron: "14 1 6 10 *"
-    - cron: "29 1 6 10 *"
-    - cron: "44 1 6 10 *"
-    - cron: "14 2 6 10 *"
-    - cron: "29 2 6 10 *"
-    - cron: "44 2 6 10 *"
-    - cron: "14 3 6 10 *"
-    - cron: "29 3 6 10 *"
-    - cron: "44 3 6 10 *"
-    - cron: "9 4 6 10 *"
-    - cron: "18 4 6 10 *"
-    - cron: "27 4 6 10 *"
-    - cron: "36 4 6 10 *"
-    - cron: "45 4 6 10 *"
-    - cron: "54 4 6 10 *"
-    # Step 23 2x8 two-hour observer points.
     - cron: "45 7 6 10 *"
     - cron: "15 8 6 10 *"
     - cron: "45 8 6 10 *"

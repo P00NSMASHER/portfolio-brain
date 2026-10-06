@@ -237,8 +237,8 @@ def validate_operating_mode():
         and window["start_round_minutes"]==15 and window["required_successes_per_workflow"]==2
         and window["max_soak_duration_seconds"]==7200,
         "Step 23 qualification contract weakened")
-    req(all(len(crons)==26 for crons in window["temporary_crons"].values())
-        and len(window["observer_crons"])==23,
+    req(all(len(crons)==5 for crons in window["temporary_crons"].values())
+        and len(window["observer_crons"])==5,
         "Step 23 temporary cadence count changed")
     req(all(cron.split()[2:4]==["6","10"] for crons in window["temporary_crons"].values() for cron in crons)
         and all(cron.split()[2:4]==["6","10"] for cron in window["observer_crons"]),
