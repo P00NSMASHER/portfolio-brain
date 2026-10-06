@@ -123,6 +123,33 @@ class ScheduleClockTests(unittest.TestCase):
  def test_current_reducer_needs_no_wake(self):
   result=execute(API(),POLICY,SOURCE,MAIN)
   self.assertEqual(result["reducer_wake"]["action"],"REDUCER_CURRENT")
+ def test_producer_completed_before_reducer_completion_is_covered(self):
+  reducers=[{
+    "id":700,"head_branch":"main","head_sha":MAIN,"status":"completed","conclusion":"success",
+    "created_at":"2026-10-06T16:00:00Z","updated_at":"2026-10-06T16:10:00Z",
+  }]
+  producers={"runtime-hourly-sync.yml":[{
+    "id":44,"head_branch":"main","head_sha":MAIN,"status":"completed","conclusion":"success",
+    "updated_at":"2026-10-06T16:05:00Z",
+  }]}
+  result=execute(API(reducer_runs=reducers,producer_runs=producers),POLICY,SOURCE,MAIN)
+  self.assertEqual(result["reducer_wake"]["action"],"REDUCER_CURRENT")
+ def test_daily_reducer_target_dedupes_explicit_liveness_wake(self):
+  reducers=[{
+    "id":700,"head_branch":"main","head_sha":MAIN,"status":"completed","conclusion":"success",
+    "created_at":"2026-10-06T03:50:00Z","updated_at":"2026-10-06T03:51:00Z",
+  }]
+  producers={"runtime-hourly-sync.yml":[{
+    "id":44,"head_branch":"main","head_sha":MAIN,"status":"completed","conclusion":"success",
+    "updated_at":"2026-10-06T04:05:00Z",
+  }]}
+  source={**SOURCE,"created_at":"2026-10-06T04:17:00Z"}
+  api=API(reducer_runs=reducers,producer_runs=producers)
+  result=execute(api,POLICY,source,MAIN)
+  daily=next(x for x in result["actions"] if x["workflow"]=="daily")
+  self.assertEqual(daily["action"],"REDUCER_ALREADY_WOKEN_OR_ACTIVE")
+  reducer_posts=[call for call in api.calls if call[0]=="/actions/workflows/portfolio-state-reducer.yml/dispatches" and call[1]=="POST"]
+  self.assertEqual(len(reducer_posts),1)
  def test_wrong_source_event_fails_closed(self):
   with self.assertRaisesRegex(ClockError,"native schedule"):
    execute(API(),POLICY,{**SOURCE,"event":"workflow_dispatch"},MAIN)
