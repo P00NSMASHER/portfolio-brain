@@ -5,11 +5,11 @@
   "retired_window_end": "2026-10-06T04:00:00Z",
   "retired_main_sha": "e61e6078c3204fc4e224d5cda29b322b82c10fb3",
   "reason": "RUNTIME_CANONICAL_RESTORE_TIMEOUT",
-  "next_soak_start": "2026-10-06T04:00:00Z",
+  "next_soak_start": "2026-10-06T04:15:00Z",
   "qualification_method": "OWNER_FIXED_EXACT_MAIN_AFTER_CANONICAL_TIMEOUT_HARDENING",
   "registration_delay_minutes": 5,
   "start_delay_minutes": 30,
   "qualification_horizon_start": "2026-10-06T00:00:00Z",
-  "qualification_horizon_end": "2026-10-06T05:00:00Z",
+  "qualification_horizon_end": "2026-10-06T05:15:00Z",
   "acceptance_complete": false
 }

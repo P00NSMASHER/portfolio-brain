@@ -111,7 +111,7 @@ class DeliveryTests(unittest.TestCase):
         control = json.loads((ROOT/'operations/STEP23_CONTROL.json').read_text())
         window = json.loads((ROOT/'operations/STEP23_DELIVERY_WINDOW.json').read_text())
         self.assertEqual(control['status'], 'ARMED_FIXED')
-        self.assertEqual(control['next_soak_start'], '2026-10-06T04:00:00Z')
+        self.assertEqual(control['next_soak_start'], '2026-10-06T04:15:00Z')
         self.assertEqual(control['qualification_method'], 'OWNER_FIXED_EXACT_MAIN_AFTER_CANONICAL_TIMEOUT_HARDENING')
         for name in d.CORE:
             text = (ROOT/f'.github/workflows/{name}.yml').read_text()

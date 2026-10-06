@@ -20,11 +20,11 @@ on:
     - cron: "19 3 6 10 *"
     - cron: "34 3 6 10 *"
     - cron: "49 3 6 10 *"
-    - cron: "3 4 6 10 *"
-    - cron: "12 4 6 10 *"
-    - cron: "21 4 6 10 *"
-    - cron: "30 4 6 10 *"
-    - cron: "39 4 6 10 *"
+    - cron: "20 4 6 10 *"
+    - cron: "29 4 6 10 *"
+    - cron: "38 4 6 10 *"
+    - cron: "47 4 6 10 *"
+    - cron: "56 4 6 10 *"
   # GitHub scheduled delivery can be delayed or skipped. Recheck liveness after
   # any core producer finishes so one surviving trigger can recover overdue peers.
   workflow_run:

@@ -20,11 +20,11 @@ on:
     - cron: "18 3 6 10 *"
     - cron: "33 3 6 10 *"
     - cron: "48 3 6 10 *"
-    - cron: "2 4 6 10 *"
-    - cron: "11 4 6 10 *"
-    - cron: "20 4 6 10 *"
-    - cron: "29 4 6 10 *"
-    - cron: "38 4 6 10 *"
+    - cron: "19 4 6 10 *"
+    - cron: "28 4 6 10 *"
+    - cron: "37 4 6 10 *"
+    - cron: "46 4 6 10 *"
+    - cron: "55 4 6 10 *"
   # Do not wait for best-effort cron after runtime/adapter repairs land on main.
   # This remains the same governed OBSERVE-only sync job and does not widen authority.
   push:

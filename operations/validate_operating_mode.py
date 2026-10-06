@@ -212,7 +212,7 @@ def validate_operating_mode():
     req(expected["portfolio-state-reducer"].split()[0] != expected["portfolio-state-checkpoint-candidate"].split()[0],
         "checkpoint candidate must not collide with daily reducer refresh")
     req(set(p["approved_recurring_workflows"])==set(expected),"approved recurring workflow set changed")
-    # Step 23 is owner-armed for the hardened exact-main window at 04:00-05:00 UTC.
+    # Step 23 is owner-armed for the hardened exact-main window at 04:15-05:15 UTC.
     # The strict collector still requires three genuine scheduled successes per
     # required workflow; manual/dispatch work never substitutes for schedule evidence.
     delivery=load("operations/SCHEDULE_DELIVERY_POLICY.json")
@@ -231,7 +231,7 @@ def validate_operating_mode():
     }
     req(set(window["temporary_crons"])==required_temp,"Step 23 temporary workflow set changed")
     req(window["qualification_horizon_start"]=="2026-10-06T00:00:00Z"
-        and window["qualification_horizon_end"]=="2026-10-06T05:00:00Z",
+        and window["qualification_horizon_end"]=="2026-10-06T05:15:00Z",
         "Step 23 qualification horizon changed")
     req(window["registration_delay_minutes"]==5 and window["start_delay_minutes"]==30
         and window["start_round_minutes"]==15 and window["required_successes_per_workflow"]==3
@@ -254,7 +254,7 @@ def validate_operating_mode():
         "Step 23 observer fallback cron mismatch")
     control=load("operations/STEP23_CONTROL.json")
     req(control.get("status")=="ARMED_FIXED"
-        and control.get("next_soak_start")=="2026-10-06T04:00:00Z"
+        and control.get("next_soak_start")=="2026-10-06T04:15:00Z"
         and control.get("qualification_method")=="OWNER_FIXED_EXACT_MAIN_AFTER_CANONICAL_TIMEOUT_HARDENING"
         and control.get("registration_delay_minutes")==window["registration_delay_minutes"]
         and control.get("start_delay_minutes")==window["start_delay_minutes"]
