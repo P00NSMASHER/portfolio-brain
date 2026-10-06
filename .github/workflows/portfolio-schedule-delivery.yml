@@ -82,6 +82,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python -m operations.schedule_delivery --repair --output operations/out/registration_recovery.json
+      - name: Force clean scheduler registration reset for the eight Step 23 workflows
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python -m operations.schedule_delivery
+          --force-reregister
+          --output operations/out/forced_scheduler_reregistration.json
       - name: Bootstrap existing bounded non-paid liveness path independently of cron
         env:
           GITHUB_TOKEN: ${{ github.token }}

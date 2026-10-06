@@ -3,8 +3,7 @@ name: runtime-hourly-sync
 on:
   schedule:
     - cron: "17 * * * *"
-    # One-shot scheduler re-registration canary; remove after proof.
-    - cron: "46 13 6 10 *"
+    # One-shot scheduler re-registration canary; read-only job only.\n    - cron: "31 16 6 10 *"
   push:
     branches: ["main"]
     paths:
@@ -19,7 +18,25 @@ permissions:
   actions: read
 
 jobs:
+  scheduler_canary:
+    if: ${{ github.event_name == 'schedule' && github.event.schedule == '31 16 6 10 *' }}
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Prove native scheduled delivery without portfolio work
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "schedule"
+          test "$GITHUB_REF" = "refs/heads/main"
+          printf 'scheduler_canary workflow=runtime-hourly-sync event=%s sha=%s schedule=%s\n' \
+            "$GITHUB_EVENT_NAME" "$GITHUB_SHA" '31 16 6 10 *'
+
   sync:
+    if: ${{ (github.event_name != 'schedule' || github.event.schedule != '31 16 6 10 *') }}
     uses: ./.github/workflows/runtime-worker.yml
     with:
       mode: sync

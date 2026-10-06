@@ -3,8 +3,7 @@ name: portfolio-state-reducer
 on:
   schedule:
     - cron: "11 4 * * *"
-    # One-shot scheduler re-registration canary; remove after proof.
-    - cron: "45 13 6 10 *"
+    # One-shot scheduler re-registration canary; read-only job only.\n    - cron: "30 16 6 10 *"
   push:
     branches: ["main"]
     paths:
@@ -42,7 +41,25 @@ concurrency:
   queue: max
 
 jobs:
+  scheduler_canary:
+    if: ${{ github.event_name == 'schedule' && github.event.schedule == '30 16 6 10 *' }}
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Prove native scheduled delivery without portfolio work
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "schedule"
+          test "$GITHUB_REF" = "refs/heads/main"
+          printf 'scheduler_canary workflow=portfolio-state-reducer event=%s sha=%s schedule=%s\n' \
+            "$GITHUB_EVENT_NAME" "$GITHUB_SHA" '30 16 6 10 *'
+
   reduce:
+    if: ${{ (github.event_name != 'schedule' || github.event.schedule != '30 16 6 10 *') }}
     # Sole canonical writer: independent reducer lane lets it catch up while a
     # serialized producer waits at the stale-state barrier.
     runs-on: ubuntu-latest
