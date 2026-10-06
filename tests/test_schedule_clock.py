@@ -28,6 +28,15 @@ class API:
   return {"workflow_runs":self.recent.get((name,event),[])}
 
 class ScheduleClockTests(unittest.TestCase):
+ def test_self_schedule_source_is_trusted(self):
+  own={**SOURCE,"name":"portfolio-schedule-delivery","path":".github/workflows/portfolio-schedule-delivery.yml"}
+  p={**POLICY,"source_workflows":[
+      {"name":"portfolio-schedule-delivery","path":".github/workflows/portfolio-schedule-delivery.yml","events":["schedule"]},
+      *POLICY["source_workflows"],
+  ]}
+  result=execute(API(),p,own,MAIN)
+  self.assertEqual(result["source_workflow"],"portfolio-schedule-delivery")
+  self.assertEqual(result["source_event"],"schedule")
  def test_cadence(self):
   at=datetime(2026,10,6,16,17,tzinfo=timezone.utc)
   self.assertTrue(due("HOURLY",at));self.assertTrue(due("EVERY_2_HOURS",at))

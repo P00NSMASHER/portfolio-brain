@@ -65,14 +65,17 @@ jobs:
   clock:
     if: >-
       ${{
-        github.event_name == 'workflow_run' &&
-        github.event.workflow_run.head_branch == 'main' &&
-        github.event.workflow_run.event == 'schedule' &&
+        github.event_name == 'schedule' ||
         (
-          github.event.workflow_run.name == 'verified-feedback-bootstrap' ||
-          github.event.workflow_run.name == 'portfolio-state-checkpoint-candidate' ||
-          github.event.workflow_run.name == 'runtime-daily-learning' ||
-          github.event.workflow_run.name == 'runtime-weekly-synthesis'
+          github.event_name == 'workflow_run' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.event == 'schedule' &&
+          (
+            github.event.workflow_run.name == 'verified-feedback-bootstrap' ||
+            github.event.workflow_run.name == 'portfolio-state-checkpoint-candidate' ||
+            github.event.workflow_run.name == 'runtime-daily-learning' ||
+            github.event.workflow_run.name == 'runtime-weekly-synthesis'
+          )
         )
       }}
     runs-on: ubuntu-latest
@@ -95,7 +98,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: >-
           python -m operations.schedule_clock
-          --source-run-id "${{ github.event.workflow_run.id }}"
+          --source-run-id "${{ github.event_name == 'schedule' && github.run_id || github.event.workflow_run.id }}"
           --output operations/out/schedule_clock_receipt.json
       - name: Preserve schedule clock receipt
         uses: actions/upload-artifact@v4
