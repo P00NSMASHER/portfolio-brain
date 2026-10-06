@@ -100,7 +100,9 @@ class SoakDependencyLivenessTests(unittest.TestCase):
         self.assertIn("queue: max", text)
         self.assertNotIn("group: portfolio-state-writer-v1", text)
         self.assertIn('cron: "11 4 * * *"', text)
-        self.assertNotIn(' 5 10 *', text)
+        window = __import__("json").loads((ROOT / "operations/STEP23_DELIVERY_WINDOW.json").read_text())
+        for cron in window["temporary_crons"]["portfolio-state-reducer"]:
+            self.assertIn(f'cron: "{cron}"', text)
 
     def test_notifications_restore_canonical_cost_before_evaluation(self):
         text = (ROOT / ".github/workflows/portfolio-notification-cycle.yml").read_text()

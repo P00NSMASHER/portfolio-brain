@@ -107,23 +107,29 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(d.registry(API({'workflows': []})), {})
         self.assertEqual(d.registry(API({'workflows': [WF]}))[d.CORE[0]]['id'], 31)
 
-    def test_abandoned_control_and_all_workflow_boundaries(self):
+    def test_prequalifying_control_and_workflow_boundaries(self):
         control = json.loads((ROOT/'operations/STEP23_CONTROL.json').read_text())
-        self.assertEqual(control['status'], 'ABANDONED')
+        window = json.loads((ROOT/'operations/STEP23_DELIVERY_WINDOW.json').read_text())
+        self.assertEqual(control['status'], 'PREQUALIFYING')
         self.assertIsNone(control['next_soak_start'])
+        self.assertEqual(control['qualification_method'], 'AUTO_AFTER_NATIVE_SUCCESS_ALL_REQUIRED_EXACT_MAIN')
         for name in d.CORE:
             text = (ROOT/f'.github/workflows/{name}.yml').read_text()
-            self.assertFalse(any(' 5 10 *' in line for line in text.splitlines() if 'cron:' in line))
+            for cron in window['temporary_crons'][name]:
+                self.assertIn(f'cron: "{cron}"', text)
         for name in ('portfolio-state-reducer', 'portfolio-cost-watchdog', 'command-center-pages', 'portfolio-autonomous-repair'):
             self.assertNotIn('!startsWith(github.event.workflow_run.created_at', (ROOT/f'.github/workflows/{name}.yml').read_text())
         before, recovery = (ROOT/'.github/workflows/portfolio-schedule-delivery.yml').read_text().split('  recover:', 1)
         self.assertNotIn('actions: write', before)
+        self.assertIn('workflow_run:', before)
+        self.assertIn('7,17,27,37,47,57 * * * *', before)
         self.assertIn("github.event_name == 'push'", recovery)
         self.assertIn('--without-cost-state', recovery)
         observer = (ROOT/'.github/workflows/step23-live-soak-observer.yml').read_text()
-        self.assertNotIn('schedule:', observer)
-        self.assertNotIn('step23_live_collect', observer)
-        self.assertIn('exit 1', observer)
+        self.assertIn('schedule:', observer)
+        self.assertIn('workflow_run:', observer)
+        self.assertIn('step23_delivery_qualification', observer)
+        self.assertIn('step23_live_collect', observer)
 
 if __name__ == '__main__':
     unittest.main()

@@ -10,7 +10,7 @@ from acceptance import step23_live_collect as collector
 
 def run_row(i, created, conclusion="success"):
     return {"id": i, "name": "portfolio-state-reducer", "head_sha": "a" * 40,
-            "event": "schedule", "status": "completed", "conclusion": conclusion,
+            "event": "schedule", "head_branch": "main", "status": "completed", "conclusion": conclusion,
             "created_at": created.isoformat(), "updated_at": created.isoformat()}
 
 

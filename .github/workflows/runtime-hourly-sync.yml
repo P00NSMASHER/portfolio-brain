@@ -3,6 +3,23 @@ name: runtime-hourly-sync
 on:
   schedule:
     - cron: "17 * * * *"
+    # Temporary Step 23 native-delivery qualification cadence; remove after acceptance closes.
+    - cron: "2 0 6 10 *"
+    - cron: "18 0 6 10 *"
+    - cron: "33 0 6 10 *"
+    - cron: "48 0 6 10 *"
+    - cron: "2 1 6 10 *"
+    - cron: "18 1 6 10 *"
+    - cron: "33 1 6 10 *"
+    - cron: "48 1 6 10 *"
+    - cron: "2 2 6 10 *"
+    - cron: "18 2 6 10 *"
+    - cron: "33 2 6 10 *"
+    - cron: "48 2 6 10 *"
+    - cron: "2 3 6 10 *"
+    - cron: "18 3 6 10 *"
+    - cron: "33 3 6 10 *"
+    - cron: "48 3 6 10 *"
   # Do not wait for best-effort cron after runtime/adapter repairs land on main.
   # This remains the same governed OBSERVE-only sync job and does not widen authority.
   push:
