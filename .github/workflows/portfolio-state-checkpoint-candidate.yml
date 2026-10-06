@@ -238,7 +238,7 @@ jobs:
           print("head_sha=" + pr["headRefOid"])
           PY
 
-      - name: Dispatch Foundation verification when needed
+      - name: Dispatch Foundation verification when independent gate is still missing
         if: ${{ steps.trigger.outputs.checkpoint_required == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -247,14 +247,36 @@ jobs:
         run: |
           set -euo pipefail
           NEEDS="$(python - <<'PY'
-          import json, os, subprocess
-          rows=json.loads(subprocess.check_output([
-              "gh","api",f"repos/{os.environ['GITHUB_REPOSITORY']}/commits/{os.environ['CHECKPOINT_SHA']}/check-runs"
+          import json, os, subprocess, urllib.parse
+          repo=os.environ["GITHUB_REPOSITORY"]
+          sha=os.environ["CHECKPOINT_SHA"]
+          branch=os.environ["CHECKPOINT_BRANCH"]
+          checks=json.loads(subprocess.check_output([
+              "gh","api",f"repos/{repo}/commits/{sha}/check-runs"
           ], text=True, env=os.environ)).get("check_runs", [])
-          trusted=[r for r in rows if r.get("name")=="validate" and r.get("app",{}).get("id")==15368]
-          trusted.sort(key=lambda r:r.get("id",0))
-          latest=trusted[-1] if trusted else None
-          print("false" if latest and (latest.get("status")!="completed" or latest.get("conclusion")=="success") else "true")
+          independent=[
+              row for row in checks
+              if row.get("name")=="portfolio-phase1-gate"
+              and row.get("app",{}).get("id")==5121826
+          ]
+          independent.sort(key=lambda row: row.get("id",0))
+          latest_independent=independent[-1] if independent else None
+          if latest_independent and latest_independent.get("status")=="completed" and latest_independent.get("conclusion")=="success":
+              print("false")
+              raise SystemExit(0)
+          encoded=urllib.parse.quote(branch,safe="")
+          runs=json.loads(subprocess.check_output([
+              "gh","api",
+              f"repos/{repo}/actions/workflows/foundation-ci.yml/runs?branch={encoded}&event=workflow_dispatch&per_page=20"
+          ], text=True, env=os.environ)).get("workflow_runs", [])
+          active=any(
+              row.get("head_sha")==sha
+              and row.get("head_branch")==branch
+              and row.get("event")=="workflow_dispatch"
+              and row.get("status")!="completed"
+              for row in runs
+          )
+          print("false" if active else "true")
           PY
           )"
           if [ "$NEEDS" = "true" ]; then
