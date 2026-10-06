@@ -158,14 +158,16 @@ class SoakDependencyLivenessTests(unittest.TestCase):
     def test_reactive_reducer_is_not_suppressed_during_soak(self):
         text = (ROOT / ".github/workflows/portfolio-state-reducer.yml").read_text()
         header = text.split("  reduce:\n", 1)[1].split("    runs-on:", 1)[0]
-        self.assertNotIn("if:", header)
+        window = __import__("json").loads((ROOT / "operations/STEP23_DELIVERY_WINDOW.json").read_text())
+        canary = window["temporary_crons"]["portfolio-state-reducer"][0]
+        self.assertIn("github.event_name != 'schedule'", header)
+        self.assertIn(f"github.event.schedule != '{canary}'", header)
         self.assertIn("workflow_run:", text)
         self.assertIn("group: portfolio-state-reducer", text)
         self.assertIn("cancel-in-progress: false", text)
         self.assertIn("queue: max", text)
         self.assertNotIn("group: portfolio-state-writer-v1", text)
         self.assertIn('cron: "11 4 * * *"', text)
-        window = __import__("json").loads((ROOT / "operations/STEP23_DELIVERY_WINDOW.json").read_text())
         for cron in window["temporary_crons"]["portfolio-state-reducer"]:
             self.assertIn(f'cron: "{cron}"', text)
 
