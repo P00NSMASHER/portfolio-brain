@@ -3,7 +3,8 @@ name: portfolio-autonomous-scheduler
 on:
   schedule:
     - cron: "23 * * * *"
-    # One-shot scheduler re-registration canary; read-only job only.\n    - cron: "32 16 6 10 *"
+    # One-shot scheduler re-registration canary; read-only job only.
+    - cron: "32 16 6 10 *"
   repository_dispatch:
     types: ["portfolio_schedule"]
   workflow_dispatch:

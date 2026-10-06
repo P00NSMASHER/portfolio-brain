@@ -3,7 +3,8 @@ name: portfolio-state-reducer
 on:
   schedule:
     - cron: "11 4 * * *"
-    # One-shot scheduler re-registration canary; read-only job only.\n    - cron: "30 16 6 10 *"
+    # One-shot scheduler re-registration canary; read-only job only.
+    - cron: "30 16 6 10 *"
   push:
     branches: ["main"]
     paths:

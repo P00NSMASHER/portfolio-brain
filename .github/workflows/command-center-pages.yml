@@ -21,7 +21,8 @@ on:
       - ".github/workflows/command-center-pages.yml"
   schedule:
     - cron: "37 * * * *"
-    # One-shot scheduler re-registration canary; read-only job only.\n    - cron: "37 16 6 10 *"
+    # One-shot scheduler re-registration canary; read-only job only.
+    - cron: "37 16 6 10 *"
   workflow_run:
     workflows:
       - "portfolio-cost-watchdog"
