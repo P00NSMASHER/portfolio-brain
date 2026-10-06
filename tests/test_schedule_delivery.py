@@ -107,12 +107,12 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(d.registry(API({'workflows': []})), {})
         self.assertEqual(d.registry(API({'workflows': [WF]}))[d.CORE[0]]['id'], 31)
 
-    def test_prequalifying_control_and_workflow_boundaries(self):
+    def test_fixed_arm_control_and_workflow_boundaries(self):
         control = json.loads((ROOT/'operations/STEP23_CONTROL.json').read_text())
         window = json.loads((ROOT/'operations/STEP23_DELIVERY_WINDOW.json').read_text())
-        self.assertEqual(control['status'], 'PREQUALIFYING')
-        self.assertIsNone(control['next_soak_start'])
-        self.assertEqual(control['qualification_method'], 'AUTO_AFTER_NATIVE_SUCCESS_ALL_REQUIRED_EXACT_MAIN')
+        self.assertEqual(control['status'], 'ARMED_FIXED')
+        self.assertEqual(control['next_soak_start'], '2026-10-06T03:00:00Z')
+        self.assertEqual(control['qualification_method'], 'OWNER_FIXED_EXACT_MAIN_AFTER_DELIVERY_REPAIR')
         for name in d.CORE:
             text = (ROOT/f'.github/workflows/{name}.yml').read_text()
             for cron in window['temporary_crons'][name]:
