@@ -172,9 +172,10 @@ def main() -> None:
     ap.add_argument("--output", type=Path, default=Path("operations/out/schedule_delivery.json"))
     args = ap.parse_args()
     now = datetime.now(timezone.utc)
+    control=json.loads((ROOT/"operations"/"STEP23_CONTROL.json").read_text(encoding="utf-8"))
     report = {"schema_version": "1.0.0", "observed_at": now.isoformat(),
-              "soak_status": "ABANDONED", "next_soak_start": None, "acceptance_complete": False,
-              "authority_granted": False, "actions": []}
+              "soak_status": control.get("status"), "next_soak_start": control.get("next_soak_start"),
+              "acceptance_complete": False, "authority_granted": False, "actions": []}
     try:
         require(os.environ.get("GITHUB_REPOSITORY") == REPO, "WRONG_REPOSITORY")
         require(os.environ.get("GITHUB_REF") == "refs/heads/main", "NOT_MAIN")

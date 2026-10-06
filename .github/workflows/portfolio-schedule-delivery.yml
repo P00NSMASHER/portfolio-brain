@@ -1,7 +1,19 @@
 name: portfolio-schedule-delivery
 on:
   schedule:
-    - cron: "7/10 * * * *"
+    - cron: "7,17,27,37,47,57 * * * *"
+  workflow_run:
+    workflows:
+      - portfolio-state-reducer
+      - runtime-hourly-sync
+      - portfolio-autonomous-scheduler
+      - hunter-autonomous-cycle
+      - agent-heartbeat-sweep
+      - portfolio-cost-watchdog
+      - portfolio-notification-cycle
+      - command-center-pages
+    types: [completed]
+    branches: [main]
   push:
     branches: [main]
     paths:
@@ -18,7 +30,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   inspect:
-    if: ${{ github.ref == 'refs/heads/main' }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == 'main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
@@ -29,7 +41,7 @@ jobs:
         run: printf 'Native transport probe event=%s sha=%s at=%s\n' "$ACTUAL_EVENT" "$ACTUAL_SHA" "$(date -u +%FT%TZ)"
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: main
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:

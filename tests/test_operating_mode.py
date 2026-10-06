@@ -88,19 +88,27 @@ class OperatingModeTests(unittest.TestCase):
 
     def test_active_schedule_inventory_matches_operating_policy(self):
         policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
+        window=json.loads((ROOT/"operations/STEP23_DELIVERY_WINDOW.json").read_text())
         actual=scheduled_workflow_inventory(ROOT/".github/workflows")
-        expected={name:[entry["cron"]] for name,entry in policy["approved_recurring_workflows"].items()}
-        expected["portfolio-schedule-delivery"]=["7/10 * * * *"]
+        expected={name:[entry["cron"],*window["temporary_crons"].get(name,[])]
+                  for name,entry in policy["approved_recurring_workflows"].items()}
+        expected["portfolio-schedule-delivery"]=["7,17,27,37,47,57 * * * *"]
+        expected["step23-live-soak-observer"]=window["observer_crons"]
         self.assertEqual(actual,expected)
         control=json.loads((ROOT/"operations/STEP23_CONTROL.json").read_text())
-        self.assertEqual(control["status"],"ABANDONED")
+        self.assertEqual(control["status"],"PREQUALIFYING")
         self.assertIsNone(control["next_soak_start"])
+        self.assertEqual(control["qualification_method"],"AUTO_AFTER_NATIVE_SUCCESS_ALL_REQUIRED_EXACT_MAIN")
         observer=ROOT/".github/workflows/step23-live-soak-observer.yml"
-        self.assertEqual(workflow_top_level_triggers(observer),{"workflow_dispatch"})
-        self.assertIsNone(workflow_schedule_crons(observer))
-        self.assertNotIn("acceptance.step23_live_collect",observer.read_text())
+        self.assertEqual(workflow_top_level_triggers(observer),{"workflow_run","schedule","workflow_dispatch"})
+        self.assertEqual(workflow_schedule_crons(observer),window["observer_crons"])
+        observer_text=observer.read_text()
+        self.assertIn("acceptance.step23_delivery_qualification",observer_text)
+        self.assertIn("acceptance.step23_live_collect",observer_text)
+        self.assertIn('"required_successes_per_workflow":3',observer_text)
         monitor=(ROOT/".github/workflows/portfolio-schedule-delivery.yml").read_text()
         self.assertIn("actions: read",monitor)
+        self.assertIn("workflow_run:",monitor)
         self.assertIn("github.event_name == 'push'",monitor)
         self.assertIn("--repair",monitor)
         self.assertIn("--without-cost-state",monitor)
