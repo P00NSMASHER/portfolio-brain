@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
   "status": "CANARY_REQUIRED",
-  "qualification_horizon_start": "2026-10-06T12:15:00Z",
-  "qualification_horizon_end": "2026-10-06T12:45:00Z",
+  "qualification_horizon_start": "2026-10-06T13:40:00Z",
+  "qualification_horizon_end": "2026-10-06T14:10:00Z",
   "registration_delay_minutes": 5,
   "start_delay_minutes": 30,
   "start_round_minutes": 15,
@@ -10,28 +10,28 @@
   "max_soak_duration_seconds": 0,
   "temporary_crons": {
     "portfolio-state-reducer": [
-      "20 12 6 10 *"
+      "45 13 6 10 *"
     ],
     "runtime-hourly-sync": [
-      "21 12 6 10 *"
+      "46 13 6 10 *"
     ],
     "portfolio-autonomous-scheduler": [
-      "22 12 6 10 *"
+      "47 13 6 10 *"
     ],
     "hunter-autonomous-cycle": [
-      "23 12 6 10 *"
+      "48 13 6 10 *"
     ],
     "agent-heartbeat-sweep": [
-      "24 12 6 10 *"
+      "49 13 6 10 *"
     ],
     "portfolio-cost-watchdog": [
-      "25 12 6 10 *"
+      "50 13 6 10 *"
     ],
     "portfolio-notification-cycle": [
-      "26 12 6 10 *"
+      "51 13 6 10 *"
     ],
     "command-center-pages": [
-      "27 12 6 10 *"
+      "52 13 6 10 *"
     ]
   },
   "observer_crons": []
