@@ -109,8 +109,9 @@ def step23():
     p = _load_policy()
     runs = []
     run_id = 100
+    minimum=p["step23"]["min_successful_scheduled_cycles_per_workflow"]
     for workflow in p["step23"]["required_workflows"]:
-        for _ in range(3):
+        for _ in range(minimum):
             runs.append({
                 "workflow": workflow,
                 "event": "schedule",
@@ -148,7 +149,7 @@ def step23():
         "dashboard_hash": H,
         "runs": runs,
         "soak_window_start": "2026-09-30T13:59:00Z",
-        "soak_deadline": "2026-09-30T14:59:00Z",
+        "soak_deadline": "2026-09-30T15:59:00Z",
         "soak_start": "2026-09-30T13:59:00Z",
         "generated_at": "2026-09-30T14:50:00Z",
         "canonical_samples": [
@@ -347,7 +348,7 @@ class FinalAcceptanceContractTests(unittest.TestCase):
         with self.assertRaisesRegex(FinalAcceptanceError, "sequence regressed"):
             validate_step23(receipt)
 
-    def test_step23_accepts_classified_coalescing_but_still_requires_three_successes(self):
+    def test_step23_accepts_classified_coalescing_but_still_requires_two_successes(self):
         receipt = step23()
         receipt["runs"].append({
             "workflow": "portfolio-state-reducer",
@@ -421,7 +422,7 @@ class FinalAcceptanceContractTests(unittest.TestCase):
         with self.assertRaisesRegex(FinalAcceptanceError, "another workflow"):
             validate_step23(bind_receipt(receipt))
 
-    def test_step23_rejects_run_completed_after_one_hour_deadline(self):
+    def test_step23_rejects_run_completed_after_two_hour_deadline(self):
         receipt = step23()
         receipt["runs"][0]["completed_at"] = "2026-09-30T16:00:01Z"
         with self.assertRaisesRegex(FinalAcceptanceError, "outside the configured soak window"):
