@@ -213,3 +213,18 @@ class CheckPaginationTests(unittest.TestCase):
     return {'total_count':101,'check_runs':rows[:1] if 'page=2' in path else rows}
    return {'full_name':REPOSITORY,'private':False,'default_branch':'main','open_issues_count':3}
   with self.assertRaises(BrainError):GitHub(transport=transport).observe(REPOSITORY)
+
+class RuntimeAuthorizationTests(unittest.TestCase):
+ def test_public_reads_use_existing_token_but_still_reject_private_content(self):
+  with patch.dict('os.environ',{'GITHUB_TOKEN':'existing-test-token'}):
+   api=GitHub(transport=lambda _: {'full_name':'example/private','private':True,'default_branch':'main'})
+   self.assertEqual(api.token,'existing-test-token');self.assertFalse(api.private)
+   with self.assertRaises(BrainError):api.observe('example/private')
+ def test_deleted_acknowledged_tail_is_not_silently_accepted(self):
+  with tempfile.TemporaryDirectory() as directory:
+   store=Store(Path(directory)/'state.sqlite',visibility='PUBLIC')
+   try:
+    store.submit([event('repository',REPOSITORY,payload(),SHA,now=utcnow())]);store.drain()
+    store.db.execute('DELETE FROM ledger');store.db.execute('DELETE FROM events')
+    with self.assertRaises(BrainError):store.report(SHA)
+   finally:store.close()
