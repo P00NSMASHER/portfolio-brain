@@ -40,7 +40,8 @@ def ceil_quarter(value:datetime)->datetime:
     return value
 
 def derive_qualification(runs:list[dict[str,Any]], exact_sha:str, baseline:datetime,
-                         horizon_end:datetime, *, start_delay_minutes:int=30)->dict[str,Any]:
+                         horizon_end:datetime, *, start_delay_minutes:int=30,
+                         soak_duration_seconds:int=7200)->dict[str,Any]:
     req(re.fullmatch(r"[0-9a-f]{40}",exact_sha) is not None,"INVALID_EXACT_SHA")
     selected={}
     for name,path in REQUIRED.items():
@@ -66,7 +67,7 @@ def derive_qualification(runs:list[dict[str,Any]], exact_sha:str, baseline:datet
                 "selected":selected}
     completed=max(parse_time(v["completed_at"]) for v in selected.values())
     start=ceil_quarter(completed+timedelta(minutes=start_delay_minutes))
-    if start+timedelta(hours=2)>horizon_end:
+    if start+timedelta(seconds=soak_duration_seconds)>horizon_end:
         return {"status":"QUALIFICATION_TOO_LATE","qualified":False,"missing_workflows":[],
                 "exact_main_sha":exact_sha,"baseline":baseline.isoformat().replace("+00:00","Z"),
                 "selected":selected,"candidate_start":start.isoformat().replace("+00:00","Z")}
@@ -74,19 +75,20 @@ def derive_qualification(runs:list[dict[str,Any]], exact_sha:str, baseline:datet
             "exact_main_sha":exact_sha,"baseline":baseline.isoformat().replace("+00:00","Z"),
             "qualification_completed_at":completed.isoformat().replace("+00:00","Z"),
             "soak_start":start.isoformat().replace("+00:00","Z"),
-            "soak_deadline":(start+timedelta(hours=2)).isoformat().replace("+00:00","Z"),
+            "soak_deadline":(start+timedelta(seconds=soak_duration_seconds)).isoformat().replace("+00:00","Z"),
             "selected":selected}
 
-def derive_fixed_arm(exact_sha:str, baseline:datetime, start:datetime, horizon_end:datetime)->dict[str,Any]:
+def derive_fixed_arm(exact_sha:str, baseline:datetime, start:datetime, horizon_end:datetime,
+                     *, soak_duration_seconds:int=7200)->dict[str,Any]:
     req(re.fullmatch(r"[0-9a-f]{40}",exact_sha) is not None,"INVALID_EXACT_SHA")
     start=start.astimezone(timezone.utc)
     req(start>=baseline,"FIXED_START_BEFORE_REGISTRATION")
     req(start.second==0 and start.microsecond==0 and start.minute%15==0,"FIXED_START_NOT_QUARTER_HOUR")
-    req(start+timedelta(hours=1)<=horizon_end,"FIXED_START_OUTSIDE_HORIZON")
+    req(start+timedelta(seconds=soak_duration_seconds)<=horizon_end,"FIXED_START_OUTSIDE_HORIZON")
     return {"status":"QUALIFIED_FIXED","qualified":True,"missing_workflows":[],
             "exact_main_sha":exact_sha,"baseline":baseline.isoformat().replace("+00:00","Z"),
             "soak_start":start.isoformat().replace("+00:00","Z"),
-            "soak_deadline":(start+timedelta(hours=2)).isoformat().replace("+00:00","Z"),
+            "soak_deadline":(start+timedelta(seconds=soak_duration_seconds)).isoformat().replace("+00:00","Z"),
             "selected":{}}
 
 class API:
@@ -133,12 +135,15 @@ def main()->None:
                  parse_time(control["qualification_horizon_start"]))
     horizon_end=parse_time(control["qualification_horizon_end"])
     if control["status"]=="ARMED_FIXED":
-        result=derive_fixed_arm(args.exact_sha,baseline,parse_time(control["next_soak_start"]),horizon_end)
+        result=derive_fixed_arm(
+            args.exact_sha,baseline,parse_time(control["next_soak_start"]),horizon_end,
+            soak_duration_seconds=int(control["max_soak_duration_seconds"]))
         result["qualification_method"]=control["qualification_method"]
     else:
         result=derive_qualification(
             collect_runs(api,baseline),args.exact_sha,baseline,horizon_end,
-            start_delay_minutes=int(control["start_delay_minutes"]))
+            start_delay_minutes=int(control["start_delay_minutes"]),
+            soak_duration_seconds=int(control["max_soak_duration_seconds"]))
     req(api.get("/branches/main").get("commit",{}).get("sha")==args.exact_sha,"MAIN_MOVED")
     result.update(schema_version="1.0.0",api_requests=api.requests,acceptance_complete=False)
     args.output.parent.mkdir(parents=True,exist_ok=True)
