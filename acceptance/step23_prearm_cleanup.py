@@ -1,4 +1,5 @@
 """Remove non-counting pre-arm workflow runs whose title captured credential material."""
+# Retrigger marker: post-checkpoint exact-main pre-arm verification, 2026-10-07.
 from __future__ import annotations
 
 import argparse
