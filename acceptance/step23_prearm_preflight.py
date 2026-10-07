@@ -157,17 +157,26 @@ def dispatch(
     }
 
 
+def build_drain_correlation(prefix: str, round_number: int, correlation_seed: str) -> str:
+    req(isinstance(prefix, str) and prefix, "pre-arm drain prefix invalid")
+    req(type(round_number) is int and round_number >= 1, "pre-arm drain round invalid")
+    req(isinstance(correlation_seed, str) and correlation_seed.isdigit(),
+        "pre-arm correlation seed must be a non-secret GitHub run id")
+    return f"prearm-{prefix}-drain-{round_number}-{correlation_seed}"
+
+
 def drain(
     api: API,
     *,
     exact_sha: str,
     prefix: str,
-    token: str,
+    github_token: str,
+    correlation_seed: str,
     drains: list[dict[str, Any]],
     max_rounds: int = 4,
 ) -> int:
     for round_number in range(1, max_rounds + 1):
-        correlation = f"prearm-{prefix}-drain-{round_number}-{token}"
+        correlation = build_drain_correlation(prefix, round_number, correlation_seed)
         drains.append(dispatch(
             api,
             workflow=REDUCER[0],
@@ -175,7 +184,7 @@ def drain(
             exact_sha=exact_sha,
             correlation=correlation,
         ))
-        pending = pending_event_count(token)
+        pending = pending_event_count(github_token)
         if pending == 0:
             return 0
     raise RuntimeError(f"canonical pending events did not drain after {max_rounds} reducer rounds")
@@ -189,8 +198,9 @@ def main() -> None:
 
     repo = os.environ.get("GITHUB_REPOSITORY", "")
     token = os.environ.get("GITHUB_TOKEN", "")
-    orchestrator = os.environ.get("GITHUB_RUN_ID", "local")
+    orchestrator = os.environ.get("GITHUB_RUN_ID", "")
     req(repo and token, "GitHub context required for pre-arm preflight")
+    req(orchestrator.isdigit(), "GitHub run identity required for non-secret pre-arm correlation")
     req(len(args.exact_sha) == 40, "exact main SHA malformed")
 
     api = API(repo, token)
@@ -199,7 +209,10 @@ def main() -> None:
     reducer_drains: list[dict[str, Any]] = []
 
     # Establish a clean canonical baseline before any non-counting producer run.
-    drain(api, exact_sha=args.exact_sha, prefix="initial", token=token, drains=reducer_drains)
+    drain(
+        api, exact_sha=args.exact_sha, prefix="initial",
+        github_token=token, correlation_seed=orchestrator, drains=reducer_drains,
+    )
 
     for index, (workflow, filename) in enumerate(TARGETS, start=1):
         correlation = f"prearm-{orchestrator}-{index}-{workflow}"
@@ -216,7 +229,8 @@ def main() -> None:
             api,
             exact_sha=args.exact_sha,
             prefix=f"{index}-{workflow}",
-            token=token,
+            github_token=token,
+            correlation_seed=orchestrator,
             drains=reducer_drains,
         )
 
