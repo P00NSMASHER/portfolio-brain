@@ -38,7 +38,7 @@ on:
 
 permissions:
   contents: read
-  actions: read
+  actions: write
 
 concurrency:
   group: portfolio-state-reducer
@@ -88,3 +88,31 @@ jobs:
             state_journal/out/reducer/legacy_parity.json
           if-no-files-found: error
           retention-days: 30
+      - name: Trigger protected checkpoint recovery on journal capacity block
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          path = Path("state_journal/out/reducer/receipt.json")
+          if not path.exists():
+              print("No reducer receipt; capacity recovery not dispatched")
+              raise SystemExit(0)
+          receipt = json.loads(path.read_text())
+          if not (
+              receipt.get("status") == "BLOCKED"
+              and receipt.get("reason_type") == "JournalError"
+              and receipt.get("reason") == "Journal capacity exceeded; do not drop evidence"
+          ):
+              print("Reducer failure is not a journal-capacity block; recovery not dispatched")
+              raise SystemExit(0)
+          subprocess.check_call([
+              "gh", "workflow", "run", "portfolio-state-checkpoint-candidate.yml",
+              "--ref", "main", "-f", "force=true",
+          ])
+          print("Dispatched forced protected checkpoint/archive recovery")
+          PY
