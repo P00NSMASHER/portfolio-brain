@@ -12,6 +12,11 @@ from brain.core import BrainError, require, timestamp, digest
 
 REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
+TEST_SOURCE_PATH = re.compile(r"(?:^|/)(?:tests?|__tests__)(?:/|[_.])|(?:^|/)[^/]+(?:_test|\.test|\.spec)\.(?:py|ts|js|lua|rs|go)$", re.I)
+
+
+def is_test_source_path(path):
+    return isinstance(path, str) and TEST_SOURCE_PATH.search(path) is not None
 
 def number(value, name, minimum=Decimal('0')):
     require(type(value) in {str, int, float}, name+" must be numeric")
@@ -148,7 +153,7 @@ def build_report(events, *, now, max_age):
     stale=[e["key"] for e in current if e["kind"] in {"repository","holdings"} and (timestamp(now)-timestamp(e["observed_at"])).total_seconds()>max_age]
     stale_quotes=[e["key"] for e in current if e["kind"]=="holdings" and any((timestamp(now)-timestamp(q["observed_at"])).total_seconds()>max_age for q in e["payload"]["quotes"].values())]
     repos=[{"key":e["key"],"observed_at":e["observed_at"],"data_kind":e["data_kind"],**e["payload"]} for e in current if e["kind"]=="repository"]
-    candidates=sorted([{"key":e["key"],"observed_at":e["observed_at"],"data_kind":e["data_kind"],"reuse_score":reuse_score(e["payload"]),"utility_evidence":"STRUCTURAL_ONLY_NOT_EXECUTED",**e["payload"]} for e in current if e["kind"]=="candidate"],key=lambda x:(-x["reuse_score"],x["key"]))
+    candidates=sorted([{"key":e["key"],"observed_at":e["observed_at"],"data_kind":e["data_kind"],"reuse_score":reuse_score(e["payload"]),"utility_evidence":"STRUCTURAL_ONLY_NOT_EXECUTED",**e["payload"]} for e in current if e["kind"]=="candidate" and not is_test_source_path(e["payload"].get("path"))],key=lambda x:(-x["reuse_score"],x["key"]))
     feedback=[e["payload"] for e in current if e["kind"]=="feedback"]
     feedback_by_key={x["candidate_key"]:x for x in feedback}
     for candidate in candidates:
