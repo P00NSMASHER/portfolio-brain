@@ -17,6 +17,7 @@ from state_journal.contracts import (
 )
 from state_journal.reducer import make_snapshot, validate_snapshot, validate_checkpoint, advance, set_authority
 from state_journal.legacy_parity import verify as verify_legacy_parity
+from state_journal.provider_quarantine import reducer_run_is_quarantined
 from state_journal.transport import EVENT_PREFIX, SNAPSHOT_ARTIFACT, GitHubReader, artifact_digest, extract_json
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def snapshot_candidates(artifacts: list[dict], *, current_run: str) -> list[dict]:
     candidates = [a for a in artifacts if a.get("name") == SNAPSHOT_ARTIFACT
                   and a.get("workflow_run", {}).get("head_branch") == "main"
+                  and not reducer_run_is_quarantined(a.get("workflow_run", {}).get("id"))
                   and str(a.get("workflow_run", {}).get("id")) != current_run]
     if not candidates:
         return []
