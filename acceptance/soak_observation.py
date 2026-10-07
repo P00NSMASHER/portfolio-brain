@@ -31,26 +31,28 @@ def parse_time(value: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
-def _rows(doc: Any) -> list[dict[str, Any]]:
+def _rows(doc: Any, expected_event: str) -> list[dict[str, Any]]:
+    if expected_event not in {"schedule", "workflow_dispatch"}:
+        raise ValueError("unsupported observed event")
     if not isinstance(doc, dict) or not isinstance(doc.get("workflow_runs"), list):
-        raise RuntimeError("scheduled run listing malformed")
+        raise RuntimeError("transport run listing malformed")
     rows = doc["workflow_runs"]
     for row in rows:
         if not isinstance(row, dict) or type(row.get("id")) is not int or row["id"] <= 0:
-            raise RuntimeError("scheduled run identity malformed")
+            raise RuntimeError("transport run identity malformed")
         parse_time(row.get("created_at"))
         if not isinstance(row.get("name"), str) or not row["name"]:
-            raise RuntimeError("scheduled workflow name malformed")
+            raise RuntimeError("transport workflow name malformed")
         if not isinstance(row.get("head_sha"), str):
-            raise RuntimeError("scheduled run source identity malformed")
-        if row.get("head_branch") != "main" or row.get("event") != "schedule":
-            raise RuntimeError("provider returned a non-main or non-scheduled run")
+            raise RuntimeError("transport run source identity malformed")
+        if row.get("head_branch") != "main" or row.get("event") != expected_event:
+            raise RuntimeError("provider returned a wrong-branch or wrong-event run")
         if type(row.get("run_attempt", 1)) is not int or row.get("run_attempt", 1) < 1:
-            raise RuntimeError("scheduled run attempt malformed")
+            raise RuntimeError("transport run attempt malformed")
         if row.get("status") not in {"queued", "in_progress", "completed", "waiting", "requested", "pending"}:
-            raise RuntimeError("scheduled run status malformed")
+            raise RuntimeError("transport run status malformed")
         if row["status"] == "completed" and not isinstance(row.get("conclusion"), str):
-            raise RuntimeError("completed scheduled run has no conclusion")
+            raise RuntimeError("completed transport run has no conclusion")
     return rows
 
 
@@ -63,19 +65,15 @@ def _identity(row: dict[str, Any]) -> tuple:
     )
 
 
-def scheduled_runs(
-    gh: ReadAPI, workflows: set[str], exact_sha: str, start: datetime,
+def _runs_for_event(
+    gh: ReadAPI, workflows: set[str], exact_sha: str, start: datetime, event: str,
     *, max_pages: int = 20, max_attempts: int = 3,
 ) -> dict[str, list[dict[str, Any]]]:
-    """Return an exact-head schedule census; retry membership races only.
-
-    A run completing between two reads is normal. Its new status is consumed.
-    Added/deleted/reordered runs or changed run attempts trigger a bounded
-    retry, never a fabricated empty result or an unbounded polling loop.
-    """
-    if start.tzinfo is None or not 1 <= max_pages <= 20 or not 1 <= max_attempts <= 3:
+    """Return one stable exact-head event census with bounded race retries."""
+    if (start.tzinfo is None or event not in {"schedule", "workflow_dispatch"}
+            or not 1 <= max_pages <= 20 or not 1 <= max_attempts <= 3):
         raise ValueError("invalid bounded observation parameters")
-    path = "/actions/runs?branch=main&event=schedule&per_page=100"
+    path=f"/actions/runs?branch=main&event={event}&per_page=100"
     for attempt in range(max_attempts):
         rows: list[dict[str, Any]] = []
         first_page: list[dict[str, Any]] = []
@@ -83,27 +81,26 @@ def scheduled_runs(
         previous_time: datetime | None = None
         try:
             for page in range(1, max_pages + 1):
-                batch = _rows(gh.get(path + f"&page={page}"))
+                batch = _rows(gh.get(path + f"&page={page}"), event)
                 if page == 1:
                     first_page = batch
                 for row in batch:
                     created = parse_time(row["created_at"])
                     if row["id"] in seen or (previous_time is not None and created > previous_time):
-                        raise ObservationChanged("scheduled run pagination membership drift")
+                        raise ObservationChanged(f"{event} run pagination membership drift")
                     previous_time = created
                     seen.add(row["id"])
                     rows.append(row)
                 if not batch and len(rows) >= 1000:
-                    raise RuntimeError("scheduled run listing reached provider result cap")
+                    raise RuntimeError(f"{event} run listing reached provider result cap")
                 if len(batch) < 100 or (batch and parse_time(batch[-1]["created_at"]) < start):
                     break
             else:
-                raise RuntimeError("scheduled run listing incomplete at page bound")
+                raise RuntimeError(f"{event} run listing incomplete at page bound")
 
-            refreshed = _rows(gh.get(path + "&page=1"))
+            refreshed = _rows(gh.get(path + "&page=1"), event)
             if tuple(map(_identity, refreshed)) != tuple(map(_identity, first_page)):
-                raise ObservationChanged("scheduled run list membership changed during pagination")
-            # Preserve the refresh's real status instead of stale first-read values.
+                raise ObservationChanged(f"{event} run list membership changed during pagination")
             freshest = {row["id"]: row for row in refreshed}
             rows = [freshest.get(row["id"], row) for row in rows]
             out: dict[str, list[dict[str, Any]]] = {name: [] for name in workflows}
@@ -118,6 +115,45 @@ def scheduled_runs(
             if attempt == max_attempts - 1:
                 raise
     raise AssertionError("unreachable")
+
+
+def scheduled_runs(
+    gh: ReadAPI, workflows: set[str], exact_sha: str, start: datetime,
+    *, max_pages: int = 20, max_attempts: int = 3,
+) -> dict[str, list[dict[str, Any]]]:
+    """Backward-compatible strict native schedule census."""
+    return _runs_for_event(
+        gh,workflows,exact_sha,start,"schedule",
+        max_pages=max_pages,max_attempts=max_attempts,
+    )
+
+
+def transport_runs(
+    gh: ReadAPI, workflows: set[str], exact_sha: str, start: datetime,
+    *, max_pages: int = 20, max_attempts: int = 3,
+) -> dict[str, list[dict[str, Any]]]:
+    """Return native schedule plus workflow_dispatch candidates.
+
+    This helper does not decide whether a workflow_dispatch is trustworthy.
+    Step 23 must separately bind every counted dispatch to a validated
+    redundant-clock receipt.
+    """
+    out: dict[str, list[dict[str, Any]]] = {name: [] for name in workflows}
+    seen: set[int] = set()
+    for event in ("schedule","workflow_dispatch"):
+        grouped=_runs_for_event(
+            gh,workflows,exact_sha,start,event,
+            max_pages=max_pages,max_attempts=max_attempts,
+        )
+        for name,rows in grouped.items():
+            for row in rows:
+                if row["id"] in seen:
+                    raise RuntimeError("duplicate transport run across event censuses")
+                seen.add(row["id"])
+                out[name].append(row)
+    for value in out.values():
+        value.sort(key=lambda row: (parse_time(row["created_at"]), row["id"]))
+    return out
 
 
 def reset_history(
