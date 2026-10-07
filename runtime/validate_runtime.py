@@ -14,12 +14,12 @@ def load(p): return json.loads((ROOT/p).read_text())
 def validate_workflow_budgets(worker: str, budgets: dict, workload: dict, cost: dict)->dict:
     """Catch-up and core work need separate time without widening paid admission."""
     timeouts=re.findall(
-        r"(?m)^    timeout-minutes: \$\{\{ \(inputs\.mode == 'observe' \|\| inputs\.mode == 'sync'\) && ([0-9]+) \|\| ([0-9]+) \}\}$",
+        r"(?m)^    timeout-minutes: \\$\\{\\{ inputs\\.prearm_id != '' && ([0-9]+) \\|\\| \\(\\(inputs\\.mode == 'observe' \\|\\| inputs\\.mode == 'sync'\\) && ([0-9]+) \\|\\| ([0-9]+)\\) \\$\\}\\}$",
         worker,
     )
-    req(len(timeouts)==1,"runtime timeout must isolate sync/observe from paid and unsupported modes")
-    nonpaid,paid=map(int,timeouts[0])
-    req(nonpaid==15 and paid==5,"runtime timeout must remain finite: non-paid 15, paid 5 minutes")
+    req(len(timeouts)==1,"runtime timeout must isolate pre-arm, sync/observe from paid and unsupported modes")
+    prearm,nonpaid,paid=map(int,timeouts[0])
+    req(prearm==25 and nonpaid==15 and paid==5,"runtime timeout must remain finite: pre-arm 25, non-paid 15, paid 5 minutes")
     wait=inspect.signature(_wait_for_reduction).parameters['timeout_seconds'].default
     # Current forwarding permits six 20s reads plus two retry sequences (126s);
     # ABVM health permits two authenticated reads with public fallbacks (80s).
