@@ -41,6 +41,16 @@ class Step23WaitReducerBarrierTests(unittest.TestCase):
         self.assertIn('"STEADY_STATE"',main_source)
         self.assertIn('expected_event="workflow_run"',main_source)
 
+    def test_in_progress_barrier_does_not_mark_live_writer_as_explicit_recovery(self):
+        from pathlib import Path
+        root=Path(__file__).resolve().parents[1]
+        reducer=(root/".github/workflows/portfolio-state-reducer.yml").read_text()
+        self.assertIn(
+            "TRIGGER_WORKFLOW_RUN_ID: ${{ github.event_name == 'workflow_run' && github.event.action == 'completed' && github.event.workflow_run.id || '' }}",
+            reducer,
+        )
+        self.assertIn("types: [in_progress, completed]",reducer)
+
 
 if __name__=="__main__":
     unittest.main()
