@@ -212,9 +212,9 @@ def validate_operating_mode():
     req(expected["portfolio-state-reducer"].split()[0] != expected["portfolio-state-checkpoint-candidate"].split()[0],
         "checkpoint candidate must not collide with daily reducer refresh")
     req(set(p["approved_recurring_workflows"])==set(expected),"approved recurring workflow set changed")
-    # Step 23 is owner-armed for the 2x8 two-hour exact-main window at 07:30-09:30 UTC.
-    # The strict collector still requires two genuine scheduled successes per
-    # required workflow; manual/dispatch work never substitutes for schedule evidence.
+    # Step 23 has one two-hour / two-success contract. The strict collector
+    # still requires genuine scheduled successes; manual/dispatch preflight
+    # work never substitutes for schedule evidence.
     delivery=load("operations/SCHEDULE_DELIVERY_POLICY.json")
     req(delivery == {
         "schema_version":"1.0.0", "workflow":"portfolio-schedule-delivery",
@@ -230,11 +230,11 @@ def validate_operating_mode():
     req(window["schema_version"]=="1.0.0" and window["status"]=="CANARY_REQUIRED",
         "Step 23 canary identity changed")
     req(set(window["temporary_crons"])==required_temp,"Step 23 canary workflow set changed")
-    req(window["qualification_horizon_start"]=="2026-10-06T16:20:00Z"
-        and window["qualification_horizon_end"]=="2026-10-06T16:50:00Z",
-        "Step 23 canary horizon changed")
-    req(window["required_successes_per_workflow"]==1 and window["max_soak_duration_seconds"]==0,
-        "Step 23 canary must prove delivery only")
+    req(ISO_Z.fullmatch(window["qualification_horizon_start"] or "") is not None
+        and ISO_Z.fullmatch(window["qualification_horizon_end"] or "") is not None,
+        "Step 23 qualification horizon invalid")
+    req(window["required_successes_per_workflow"]==2 and window["max_soak_duration_seconds"]==7200,
+        "Step 23 two-hour acceptance contract drifted")
     req(all(len(crons)==1 for crons in window["temporary_crons"].values())
         and window["observer_crons"]==[], "Step 23 canary cadence changed")
     workflow_dir=ROOT/".github/workflows"
@@ -248,6 +248,13 @@ def validate_operating_mode():
     req(control.get("status")=="CANARY_REQUIRED" and control.get("next_soak_start") is None
         and control.get("acceptance_complete") is False,
         "Step 23 must remain disarmed until scheduler canary passes")
+    req(control.get("required_successes_per_workflow")==window["required_successes_per_workflow"]
+        and control.get("max_soak_duration_seconds")==window["max_soak_duration_seconds"],
+        "Step 23 control/window acceptance contract drifted")
+    final_step23=load("acceptance/FINAL_ACCEPTANCE_POLICY.json")["step23"]
+    req(final_step23["min_successful_scheduled_cycles_per_workflow"]==window["required_successes_per_workflow"]
+        and final_step23["max_soak_duration_seconds"]==window["max_soak_duration_seconds"],
+        "Step 23 final/window acceptance contract drifted")
     workload=load("workload_control/WORKLOAD_POLICY.json")
     req(workload["mode"]=="GITHUB_NATIVE_WORKLOAD_CONTROL","workload control mode changed")
     workload_workflows={
@@ -330,8 +337,12 @@ def validate_operating_mode():
           {"name":"portfolio-phase1-gate","integration_id":5121826},
         ],"protected integration required checks changed")
     req(set(p["event_driven_workflows"])=={
-          "runtime-event-observe","portfolio-autonomous-repair","portfolio-independent-verifier"
+          "runtime-event-observe","portfolio-autonomous-repair","portfolio-independent-verifier",
+          "step23-prearm-preflight"
         },"event-driven workflow inventory changed")
+    preflight_triggers=workflow_top_level_triggers(ROOT/".github/workflows/step23-prearm-preflight.yml")
+    req(preflight_triggers=={"push","workflow_dispatch"},
+        "Step 23 pre-arm preflight trigger class invalid")
     repair_workflow=(ROOT/".github/workflows/portfolio-autonomous-repair.yml").read_text().lower()
     repair_triggers=workflow_top_level_triggers(ROOT/".github/workflows/portfolio-autonomous-repair.yml")
     req({"workflow_run","workflow_dispatch"}<=repair_triggers and "schedule" not in repair_triggers,
