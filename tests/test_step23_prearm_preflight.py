@@ -31,11 +31,14 @@ class Step23PrearmPreflightTests(unittest.TestCase):
         self.assertIn("predrain",source)
         self.assertGreaterEqual(source.count("drain("),3)
 
-    def test_hunter_and_command_center_wait_for_barrier_inside_writer_jobs(self):
+    def test_all_step23_state_writers_wait_for_barrier_inside_writer_jobs(self):
         from pathlib import Path
         root=Path(__file__).resolve().parents[1]
         for filename,target in (
+            ("portfolio-autonomous-scheduler.yml","portfolio-autonomous-scheduler"),
             ("hunter-autonomous-cycle.yml","hunter-autonomous-cycle"),
+            ("agent-heartbeat-sweep.yml","agent-heartbeat-sweep"),
+            ("portfolio-notification-cycle.yml","portfolio-notification-cycle"),
             ("command-center-pages.yml","command-center-pages"),
         ):
             with self.subTest(filename=filename):
@@ -48,6 +51,23 @@ class Step23PrearmPreflightTests(unittest.TestCase):
                 self.assertIn("inputs.prearm_id != ''",text)
                 self.assertIn("actions: read",text)
                 self.assertNotIn("actions: write",text)
+
+    def test_runtime_sync_forwards_and_waits_for_prearm_barrier(self):
+        from pathlib import Path
+        root=Path(__file__).resolve().parents[1]
+        hourly=(root/".github/workflows/runtime-hourly-sync.yml").read_text()
+        worker=(root/".github/workflows/runtime-worker.yml").read_text()
+        self.assertIn("prearm_id: ${{ inputs.prearm_id }}",hourly)
+        self.assertIn("Wait for pre-arm reducer barrier after writer-lane acquisition",worker)
+        self.assertIn("--target runtime-hourly-sync",worker)
+        self.assertIn("inputs.prearm_id != ''",worker)
+
+    def test_queue_wait_does_not_consume_execution_timeout(self):
+        source=inspect.getsource(preflight.wait_for_correlated_run)
+        self.assertIn("queue_timeout",source)
+        self.assertIn("execution_timeout",source)
+        self.assertIn("execution_deadline = None",source)
+        self.assertIn("execution_deadline = now + execution_timeout",source)
 
     def test_writer_serialization_and_reducer_independence_are_explicit(self):
         from pathlib import Path
