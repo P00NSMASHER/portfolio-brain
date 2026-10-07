@@ -1,4 +1,5 @@
 name: runtime-hourly-sync
+run-name: ${{ inputs.prearm_id || github.workflow }}
 
 on:
   schedule:
@@ -11,6 +12,12 @@ on:
       - ".github/workflows/runtime-hourly-sync.yml"
       - ".github/workflows/runtime-worker.yml"
   workflow_dispatch:
+    inputs:
+      prearm_id:
+        description: "Pre-arm correlation token; does not grant acceptance credit"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
