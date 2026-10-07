@@ -1,0 +1,75 @@
+name: step23-prearm-validation
+
+on:
+  workflow_run:
+    workflows:
+      - portfolio-schedule-delivery
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+  pull-requests: read
+
+concurrency:
+  group: step23-prearm-validation
+  cancel-in-progress: false
+
+jobs:
+  prearm:
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main'
+        )
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      EXACT_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - name: Check out exact pre-arm main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_SHA }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate static pre-arm contract before any workload dispatch
+        run: >-
+          python -m acceptance.step23_prearm_doctor
+          --phase prearm
+          --mode static
+          --output acceptance/out/step23-prearm-static.json
+
+      - name: Run all eight workloads as non-counting exact-main preflight
+        run: >-
+          python -m acceptance.step23_prearm_preflight
+          --exact-sha "$EXACT_SHA"
+          --output acceptance/out/step23-prearm-workloads.json
+
+      - name: Validate live workflow registration and clean canonical state
+        run: >-
+          python -m acceptance.step23_prearm_doctor
+          --phase prearm
+          --mode live
+          --exact-sha "$EXACT_SHA"
+          --output acceptance/out/step23-prearm-live.json
+
+      - name: Preserve pre-arm evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-step23-prearm-${{ github.run_id }}-${{ github.run_attempt }}
+          path: acceptance/out/step23-prearm-*.json
+          if-no-files-found: error
+          retention-days: 30

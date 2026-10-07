@@ -1,10 +1,9 @@
 name: portfolio-cost-watchdog
+run-name: ${{ inputs.prearm_id || github.workflow }}
 
 on:
   schedule:
     - cron: "53 * * * *"
-    # One-shot scheduler re-registration canary; read-only job only.
-    - cron: "35 16 6 10 *"
   workflow_run:
     workflows:
       - "portfolio-autonomous-scheduler"
@@ -19,6 +18,12 @@ on:
     paths:
       - "operations/TRIGGER_WORKFLOW_LIVENESS"
   workflow_dispatch:
+    inputs:
+      prearm_id:
+        description: "Pre-arm correlation token; does not grant acceptance credit"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -31,24 +36,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  scheduler_canary:
-    if: ${{ github.event_name == 'schedule' && github.event.schedule == '35 16 6 10 *' }}
-    permissions:
-      contents: read
-      actions: read
-    runs-on: ubuntu-latest
-    steps:
-      - name: Prove native scheduled delivery without portfolio work
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$GITHUB_EVENT_NAME" = "schedule"
-          test "$GITHUB_REF" = "refs/heads/main"
-          printf 'scheduler_canary workflow=portfolio-cost-watchdog event=%s sha=%s schedule=%s\n' \
-            "$GITHUB_EVENT_NAME" "$GITHUB_SHA" '35 16 6 10 *'
-
   enforce:
-    if: ${{ (github.event_name != 'schedule' || github.event.schedule != '35 16 6 10 *') }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:

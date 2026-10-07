@@ -1,11 +1,16 @@
 name: agent-heartbeat-sweep
+run-name: ${{ inputs.prearm_id || github.workflow }}
 
 on:
   schedule:
     - cron: "29 */2 * * *"
-    # One-shot scheduler re-registration canary; read-only job only.
-    - cron: "34 16 6 10 *"
   workflow_dispatch:
+    inputs:
+      prearm_id:
+        description: "Pre-arm correlation token; does not grant acceptance credit"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -17,24 +22,7 @@ concurrency:
   queue: max
 
 jobs:
-  scheduler_canary:
-    if: ${{ github.event_name == 'schedule' && github.event.schedule == '34 16 6 10 *' }}
-    permissions:
-      contents: read
-      actions: read
-    runs-on: ubuntu-latest
-    steps:
-      - name: Prove native scheduled delivery without portfolio work
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$GITHUB_EVENT_NAME" = "schedule"
-          test "$GITHUB_REF" = "refs/heads/main"
-          printf 'scheduler_canary workflow=agent-heartbeat-sweep event=%s sha=%s schedule=%s\n' \
-            "$GITHUB_EVENT_NAME" "$GITHUB_SHA" '34 16 6 10 *'
-
   heartbeat:
-    if: ${{ (github.event_name != 'schedule' || github.event.schedule != '34 16 6 10 *') }}
     # Serialize the complete restore -> mutate -> upload transaction.
     concurrency:
       group: portfolio-state-writer-v1
