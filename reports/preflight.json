@@ -1,0 +1,19 @@
+{
+  "checked_at": "2026-10-07T22:04:07.080246Z",
+  "live_sources": "NOT_TESTED",
+  "mandatory_workloads": {
+    "adversarial_regressions": "PASS",
+    "code_retrieval": "PASS",
+    "experiment_correctness": "PASS",
+    "replay": "PASS",
+    "reporting": "PASS",
+    "state_integrity": "PASS"
+  },
+  "phase": "EXACT_SHA_PREFLIGHT",
+  "production_accepted": false,
+  "schema_version": 2,
+  "soak_started": false,
+  "source_sha": "a0161341d823f9e8ed320c2cfb48b98184a5c4b7",
+  "status": "PASS",
+  "workflow_delivery": "NOT_TESTED"
+}

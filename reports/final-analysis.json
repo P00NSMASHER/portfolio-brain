@@ -1,0 +1,352 @@
+{
+  "business_opportunities": [
+    {
+      "candidate_key": "Jacob-Met/workflow-checks:freight_packets/freightpkt/invoice_match.py",
+      "customer_demand": "UNVERIFIED",
+      "hours_saved": "UNMEASURED",
+      "hypothesis": "Evaluate this implementation and its tests against the project's requirements before reimplementation.",
+      "next_experiment": "Run project-specific correctness and adversarial tests in an isolated environment after source review.",
+      "revenue": "UNAVAILABLE",
+      "source_ref": "https://github.com/Jacob-Met/workflow-checks/blob/58d18344b1ba81e704a22096d05ead2f5d5cdddd/freight_packets/freightpkt/invoice_match.py",
+      "target": "freight-recovery"
+    },
+    {
+      "candidate_key": "kaylogistics421-jpg/LOAD-MASR:api.test.js",
+      "customer_demand": "UNVERIFIED",
+      "hours_saved": "UNMEASURED",
+      "hypothesis": "Evaluate this implementation and its tests against the project's requirements before reimplementation.",
+      "next_experiment": "Run project-specific correctness and adversarial tests in an isolated environment after source review.",
+      "revenue": "UNAVAILABLE",
+      "source_ref": "https://github.com/kaylogistics421-jpg/LOAD-MASR/blob/747b8f341b7a888e2160cbe454728424d5560b2f/api.test.js",
+      "target": "freight-recovery"
+    }
+  ],
+  "canonical_hash": "4c18250a69b7d96d86b0c9972de39e35791ec34423f2a78145139c029cb9e414",
+  "evidence_basis": "OBSERVATIONS_AND_EXPLICITLY_LABELLED_EXPERIMENTS",
+  "generated_at": "2026-10-07T22:04:15.547311Z",
+  "holdings": [],
+  "learning": {
+    "autonomous_code_execution": false,
+    "events": 7,
+    "experiments": [
+      {
+        "baseline_operations": 57877,
+        "candidate_operations": 1000,
+        "cases": 1000,
+        "dataset_kind": "SIMULATED",
+        "duplicate_cases": 885,
+        "equal_outputs": true,
+        "experiment": "invoice-dedup-index-v1",
+        "near_duplicates": 2,
+        "scope": "Exact tuple duplicate detection; operation counts only; does not prove freight overpayment, production speed, revenue, or engineering time savings.",
+        "source_ref": "brain/experiments.py:invoice-dedup-index-v1"
+      }
+    ],
+    "facts": 7,
+    "outcomes": [],
+    "prediction_confidence": null,
+    "verified_revenue": null
+  },
+  "pending_events": 0,
+  "repositories": [
+    {
+      "checks": [
+        {
+          "conclusion": null,
+          "head_sha": "a0161341d823f9e8ed320c2cfb48b98184a5c4b7",
+          "name": "monitor",
+          "status": "in_progress",
+          "url": "https://github.com/P00NSMASHER/portfolio-brain/actions/runs/37693707713/job/113039946493"
+        },
+        {
+          "conclusion": null,
+          "head_sha": "a0161341d823f9e8ed320c2cfb48b98184a5c4b7",
+          "name": "validate",
+          "status": "in_progress",
+          "url": "https://github.com/P00NSMASHER/portfolio-brain/actions/runs/37693707584/job/113039946274"
+        }
+      ],
+      "data_kind": "ACTUAL",
+      "default_branch": "main",
+      "head_sha": "a0161341d823f9e8ed320c2cfb48b98184a5c4b7",
+      "key": "P00NSMASHER/portfolio-brain",
+      "observed_at": "2026-10-07T22:04:08.459534Z",
+      "open_issues": 38,
+      "repository": "P00NSMASHER/portfolio-brain",
+      "source_ref": "https://github.com/P00NSMASHER/portfolio-brain/commit/a0161341d823f9e8ed320c2cfb48b98184a5c4b7"
+    },
+    {
+      "checks": [
+        {
+          "conclusion": "success",
+          "head_sha": "6f7710512e6ac2f86e8cb12ad233a08980cf0220",
+          "name": "Reconcile G1 swarm state",
+          "status": "completed",
+          "url": "https://github.com/P00NSMASHER/trading-platform/actions/runs/37671153592/job/112962944338"
+        },
+        {
+          "conclusion": "success",
+          "head_sha": "6f7710512e6ac2f86e8cb12ad233a08980cf0220",
+          "name": "report-build-status",
+          "status": "completed",
+          "url": "https://github.com/P00NSMASHER/trading-platform/actions/runs/37656055605/job/112911508017"
+        },
+        {
+          "conclusion": "success",
+          "head_sha": "6f7710512e6ac2f86e8cb12ad233a08980cf0220",
+          "name": "deploy",
+          "status": "completed",
+          "url": "https://github.com/P00NSMASHER/trading-platform/actions/runs/37656055605/job/112911507779"
+        },
+        {
+          "conclusion": "success",
+          "head_sha": "6f7710512e6ac2f86e8cb12ad233a08980cf0220",
+          "name": "Reconcile G1 swarm state",
+          "status": "completed",
+          "url": "https://github.com/P00NSMASHER/trading-platform/actions/runs/37656072792/job/112911336665"
+        },
+        {
+          "conclusion": "success",
+          "head_sha": "6f7710512e6ac2f86e8cb12ad233a08980cf0220",
+          "name": "build",
+          "status": "completed",
+          "url": "https://github.com/P00NSMASHER/trading-platform/actions/runs/37656055605/job/112911146211"
+        }
+      ],
+      "data_kind": "ACTUAL",
+      "default_branch": "main",
+      "head_sha": "6f7710512e6ac2f86e8cb12ad233a08980cf0220",
+      "key": "P00NSMASHER/trading-platform",
+      "observed_at": "2026-10-07T22:04:09.797765Z",
+      "open_issues": 18,
+      "repository": "P00NSMASHER/trading-platform",
+      "source_ref": "https://github.com/P00NSMASHER/trading-platform/commit/6f7710512e6ac2f86e8cb12ad233a08980cf0220"
+    },
+    {
+      "checks": [
+        {
+          "conclusion": null,
+          "head_sha": "d33a42edaa55101eb02743d4969bd065058ebcf1",
+          "name": "build operational health dashboard",
+          "status": "in_progress",
+          "url": "https://github.com/P00NSMASHER/abvmschoolstarworld/actions/runs/37693697684/job/113039912221"
+        },
+        {
+          "conclusion": "success",
+          "head_sha": "d33a42edaa55101eb02743d4969bd065058ebcf1",
+          "name": "verify current teacher data",
+          "status": "completed",
+          "url": "https://github.com/P00NSMASHER/abvmschoolstarworld/actions/runs/37693678804/job/113039847432"
+        },
+        {
+          "conclusion": null,
+          "head_sha": "d33a42edaa55101eb02743d4969bd065058ebcf1",
+          "name": "deploy reviewed notice update through Pages workflow / deploy",
+          "status": "in_progress",
+          "url": "https://github.com/P00NSMASHER/abvmschoolstarworld/actions/runs/37693495975/job/113039319115"
+        },
+        {
+          "conclusion": null,
+          "head_sha": "d33a42edaa55101eb02743d4969bd065058ebcf1",
+          "name": "refresh",
+          "status": "in_progress",
+          "url": "https://github.com/P00NSMASHER/abvmschoolstarworld/actions/runs/37693496374/job/113039240853"
+        },
+        {
+          "conclusion": "success",
+          "head_sha": "d33a42edaa55101eb02743d4969bd065058ebcf1",
+          "name": "integrate",
+          "status": "completed",
+          "url": "https://github.com/P00NSMASHER/abvmschoolstarworld/actions/runs/37693495975/job/113039239113"
+        },
+        {
+          "conclusion": null,
+          "head_sha": "d33a42edaa55101eb02743d4969bd065058ebcf1",
+          "name": "qa",
+          "status": "in_progress",
+          "url": "https://github.com/P00NSMASHER/abvmschoolstarworld/actions/runs/37693495540/job/113039238216"
+        },
+        {
+          "conclusion": "cancelled",
+          "head_sha": "d33a42edaa55101eb02743d4969bd065058ebcf1",
+          "name": "deploy",
+          "status": "completed",
+          "url": "https://github.com/P00NSMASHER/abvmschoolstarworld/actions/runs/37693495539/job/113039238089"
+        }
+      ],
+      "data_kind": "ACTUAL",
+      "default_branch": "main",
+      "head_sha": "d33a42edaa55101eb02743d4969bd065058ebcf1",
+      "key": "P00NSMASHER/abvmschoolstarworld",
+      "observed_at": "2026-10-07T22:04:11.107865Z",
+      "open_issues": 4,
+      "repository": "P00NSMASHER/abvmschoolstarworld",
+      "source_ref": "https://github.com/P00NSMASHER/abvmschoolstarworld/commit/d33a42edaa55101eb02743d4969bd065058ebcf1"
+    },
+    {
+      "checks": [
+        {
+          "conclusion": "success",
+          "head_sha": "b695264f8e179d363fdcd1e6e2986255a24488f4",
+          "name": "deploy",
+          "status": "completed",
+          "url": "https://github.com/P00NSMASHER/github-value-hunt-ledger/actions/runs/37692636628/job/113036455507"
+        },
+        {
+          "conclusion": "success",
+          "head_sha": "b695264f8e179d363fdcd1e6e2986255a24488f4",
+          "name": "release-gate",
+          "status": "completed",
+          "url": "https://github.com/P00NSMASHER/github-value-hunt-ledger/actions/runs/37692636641/job/113036448985"
+        },
+        {
+          "conclusion": "success",
+          "head_sha": "b695264f8e179d363fdcd1e6e2986255a24488f4",
+          "name": "recoveryworks",
+          "status": "completed",
+          "url": "https://github.com/P00NSMASHER/github-value-hunt-ledger/actions/runs/37692636641/job/113036367928"
+        },
+        {
+          "conclusion": "success",
+          "head_sha": "b695264f8e179d363fdcd1e6e2986255a24488f4",
+          "name": "freight",
+          "status": "completed",
+          "url": "https://github.com/P00NSMASHER/github-value-hunt-ledger/actions/runs/37692636641/job/113036367888"
+        },
+        {
+          "conclusion": "success",
+          "head_sha": "b695264f8e179d363fdcd1e6e2986255a24488f4",
+          "name": "ai-business-os",
+          "status": "completed",
+          "url": "https://github.com/P00NSMASHER/github-value-hunt-ledger/actions/runs/37692636641/job/113036367727"
+        },
+        {
+          "conclusion": "success",
+          "head_sha": "b695264f8e179d363fdcd1e6e2986255a24488f4",
+          "name": "verify",
+          "status": "completed",
+          "url": "https://github.com/P00NSMASHER/github-value-hunt-ledger/actions/runs/37692636628/job/113036367506"
+        },
+        {
+          "conclusion": "success",
+          "head_sha": "b695264f8e179d363fdcd1e6e2986255a24488f4",
+          "name": "technology-intelligence",
+          "status": "completed",
+          "url": "https://github.com/P00NSMASHER/github-value-hunt-ledger/actions/runs/37692636641/job/113036367412"
+        },
+        {
+          "conclusion": "success",
+          "head_sha": "b695264f8e179d363fdcd1e6e2986255a24488f4",
+          "name": "methodology",
+          "status": "completed",
+          "url": "https://github.com/P00NSMASHER/github-value-hunt-ledger/actions/runs/37692636528/job/113036366306"
+        },
+        {
+          "conclusion": "success",
+          "head_sha": "b695264f8e179d363fdcd1e6e2986255a24488f4",
+          "name": "contracts",
+          "status": "completed",
+          "url": "https://github.com/P00NSMASHER/github-value-hunt-ledger/actions/runs/37692636507/job/113036366221"
+        },
+        {
+          "conclusion": "success",
+          "head_sha": "b695264f8e179d363fdcd1e6e2986255a24488f4",
+          "name": "recoveryworks",
+          "status": "completed",
+          "url": "https://github.com/P00NSMASHER/github-value-hunt-ledger/actions/runs/37692636546/job/113036366216"
+        }
+      ],
+      "data_kind": "ACTUAL",
+      "default_branch": "main",
+      "head_sha": "b695264f8e179d363fdcd1e6e2986255a24488f4",
+      "key": "P00NSMASHER/github-value-hunt-ledger",
+      "observed_at": "2026-10-07T22:04:12.458097Z",
+      "open_issues": 9,
+      "repository": "P00NSMASHER/github-value-hunt-ledger",
+      "source_ref": "https://github.com/P00NSMASHER/github-value-hunt-ledger/commit/b695264f8e179d363fdcd1e6e2986255a24488f4"
+    }
+  ],
+  "reuse_candidates": [
+    {
+      "blob_sha": "584bb09b92335a350d9880f55b786baba1960941",
+      "bytes": 5285,
+      "code_sha256": "37a9e0801de948c3b558ca7c9846b3d0eb76ec062703ee3e5132df273ff569ab",
+      "data_kind": "ACTUAL",
+      "feedback": null,
+      "freshness": "CURRENT",
+      "head_sha": "58d18344b1ba81e704a22096d05ead2f5d5cdddd",
+      "key": "Jacob-Met/workflow-checks:freight_packets/freightpkt/invoice_match.py",
+      "license": "MIT",
+      "matched_terms": [
+        "invoice",
+        "duplicate"
+      ],
+      "observed_at": "2026-10-07T22:04:15.443827Z",
+      "path": "freight_packets/freightpkt/invoice_match.py",
+      "query": "freight invoice audit",
+      "repository": "Jacob-Met/workflow-checks",
+      "reuse_score": 6,
+      "source_ref": "https://github.com/Jacob-Met/workflow-checks/blob/58d18344b1ba81e704a22096d05ead2f5d5cdddd/freight_packets/freightpkt/invoice_match.py",
+      "target": "freight-recovery",
+      "test_paths": [
+        ".github/workflows/tests.yml",
+        "freight_packets/tests/conftest.py",
+        "freight_packets/tests/test_fines.py",
+        "freight_packets/tests/test_freight.py",
+        "freight_packets/tests/test_freight_hardening.py",
+        "pt_auth/tests/conftest.py",
+        "pt_auth/tests/test_ptauth.py",
+        "pt_auth/tests/test_ptauth_hardening.py",
+        "utility_watch/tests/test_uwatch.py"
+      ],
+      "utility_evidence": "STRUCTURAL_ONLY_NOT_EXECUTED"
+    },
+    {
+      "blob_sha": "bd98e95a7a4528916a34117d23ffd92f6f11bd89",
+      "bytes": 12379,
+      "code_sha256": "957c36dc406860e39735e4700ede40dd11fdc36176db87af67994dd131197baf",
+      "data_kind": "ACTUAL",
+      "feedback": null,
+      "freshness": "CURRENT",
+      "head_sha": "747b8f341b7a888e2160cbe454728424d5560b2f",
+      "key": "kaylogistics421-jpg/LOAD-MASR:api.test.js",
+      "license": "UNKNOWN",
+      "matched_terms": [
+        "invoice",
+        "duplicate"
+      ],
+      "observed_at": "2026-10-07T22:04:15.443754Z",
+      "path": "api.test.js",
+      "query": "freight invoice audit",
+      "repository": "kaylogistics421-jpg/LOAD-MASR",
+      "reuse_score": 6,
+      "source_ref": "https://github.com/kaylogistics421-jpg/LOAD-MASR/blob/747b8f341b7a888e2160cbe454728424d5560b2f/api.test.js",
+      "target": "freight-recovery",
+      "test_paths": [
+        "api.test.js",
+        "test_admin_control_api.js",
+        "test_admin_control_ui_e2e.js",
+        "test_admin_ui_e2e.js",
+        "test_backend_e2e.js",
+        "test_backend_e2e2.js",
+        "test_cargo_manual_e2e.js",
+        "test_carrier_ops_ui_e2e.js",
+        "test_carrier_shipments_api.js",
+        "test_carrier_wizard_backend.js"
+      ],
+      "utility_evidence": "STRUCTURAL_ONLY_NOT_EXECUTED"
+    }
+  ],
+  "schema_version": 2,
+  "scope": "READ_ONLY_BUSINESS_PORTFOLIO_INTELLIGENCE",
+  "semantic_timestamps": [
+    "2026-10-07T22:04:08.459534Z",
+    "2026-10-07T22:04:09.797765Z",
+    "2026-10-07T22:04:11.107865Z",
+    "2026-10-07T22:04:12.458097Z"
+  ],
+  "source_sha": "a0161341d823f9e8ed320c2cfb48b98184a5c4b7",
+  "stale_sources": [],
+  "state_sequence": 7,
+  "status": "PASS"
+}

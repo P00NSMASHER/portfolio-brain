@@ -1,6 +1,0 @@
-controlled-proof-v1
-purpose=live-public-github-exact-revision-retention-proof
-minimum_retained=3
-minimum_distinct_strategies=2
-authority=OBSERVE
-run=2-isolated-proof-workflow
