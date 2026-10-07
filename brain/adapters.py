@@ -72,8 +72,18 @@ class GitHub:
     def observe(self, repository):
         meta,branch,sha=self.repository(repository)
         checks=self.get(f'/repos/{repository}/commits/{sha}/check-runs?per_page=100')
-        require(type(checks.get("total_count")) is int and type(checks.get("check_runs")) is list and checks["total_count"]==len(checks["check_runs"]) and checks["total_count"]<=100, "CHECK_COVERAGE_TRUNCATED: cannot claim complete head checks")
-        rows=[{"name":x["name"],"status":x["status"],"conclusion":x.get("conclusion"),"head_sha":x["head_sha"],"url":x["html_url"]} for x in checks.get("check_runs",[])]
+        total=checks.get('total_count')
+        require(type(total) is int and 0<=total<=500 and type(checks.get('check_runs')) is list, 'CHECK_COVERAGE_UNAVAILABLE: malformed or over bounded500 history')
+        items=list(checks['check_runs'])
+        require(len(items)==min(total,100), 'CHECK_COVERAGE_TRUNCATED: incomplete first page')
+        for page in range(2,(total+99)//100+1):
+            batch=self.get(f'/repos/{repository}/commits/{sha}/check-runs?per_page=100&page={page}')
+            require(batch.get('total_count')==total and type(batch.get('check_runs')) is list, 'CHECK_COVERAGE_CHANGED: do not claim complete changing history')
+            items.extend(batch['check_runs'])
+        require(len(items)==total,'CHECK_COVERAGE_TRUNCATED: incomplete delivery')
+        if total>100:
+            require(all(type(x.get('id')) is int for x in items) and len({x['id'] for x in items})==total, 'CHECK_COVERAGE_AMBIGUOUS: duplicate/missing paginated identities')
+        rows=[{"name":x["name"],"status":x["status"],"conclusion":x.get("conclusion"),"head_sha":x["head_sha"],"url":x["html_url"]} for x in items]
         return {"repository":repository,"head_sha":sha,"default_branch":branch,"checks":rows,"open_issues":meta["open_issues_count"],"source_ref":f'https://github.com/{repository}/commit/{sha}'}, meta["private"]
 
     def discover(self, target, *, repository=None):

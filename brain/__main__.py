@@ -198,7 +198,7 @@ def main(argv=None):
     except (BrainError,KeyError,TypeError,UnicodeError,json.JSONDecodeError) as exc:
         if store:
             store.attempt(args.command,"FAIL",type(exc).__name__,source_sha=locals().get("sha"))
-        write_report({"status":"FAIL","error_class":type(exc).__name__,"error":str(exc)[:500],"operation":args.command,"soak_completed":False},args.output)
+        write_report({"status":"FAIL","error_class":type(exc).__name__,"error":str(exc)[:500],"operation":args.command,"soak_completed":False},Path(args.output)/"failure")
         print(f'{type(exc).__name__}: {str(exc)[:500]}',file=sys.stderr)
         return 1
     finally:

@@ -194,3 +194,22 @@ class UpgradeEndToEndTests(unittest.TestCase):
     store.submit([item]);store.submit([item]);store.drain();report=store.report(SHA)
     self.assertEqual(store.pending(),0);self.assertEqual(report['state_sequence'],index+1)
     self.assertEqual(store.read_report(SHA)['canonical_hash'],report['canonical_hash']);store.close()
+
+class CheckPaginationTests(unittest.TestCase):
+ def test_175_checks_complete_in_two_pages_with_verified_unique_ids(self):
+  def transport(path):
+   if '/branches/' in path:return {'commit':{'sha':SHA}}
+   if '/check-runs?' in path:
+    rows=[{'id':i,'name':'validate','status':'completed','conclusion':'success','head_sha':SHA,'html_url':f'https://github.com/{REPOSITORY}/runs/{i}'} for i in range(175)]
+    return {'total_count':175,'check_runs':rows[100:] if 'page=2' in path else rows[:100]}
+   return {'full_name':REPOSITORY,'private':False,'default_branch':'main','open_issues_count':3}
+  api=GitHub(transport=transport);p,_=api.observe(REPOSITORY);validate_payload('repository',p,NOW)
+  self.assertEqual(len(p['checks']),175);self.assertEqual(api.requests,4)
+ def test_paginated_duplicates_cannot_claim_complete_delivery(self):
+  def transport(path):
+   if '/branches/' in path:return {'commit':{'sha':SHA}}
+   if '/check-runs?' in path:
+    rows=[{'id':i,'name':'validate','status':'completed','conclusion':'success','head_sha':SHA,'html_url':f'https://github.com/{REPOSITORY}/runs/{i}'} for i in range(100)]
+    return {'total_count':101,'check_runs':rows[:1] if 'page=2' in path else rows}
+   return {'full_name':REPOSITORY,'private':False,'default_branch':'main','open_issues_count':3}
+  with self.assertRaises(BrainError):GitHub(transport=transport).observe(REPOSITORY)

@@ -37,7 +37,7 @@ def validate_payload(kind, p, observed_at):
         fields(p, {"repository","head_sha","default_branch","checks","open_issues","source_ref"})
         text(p["default_branch"], 100)
         require(type(p["open_issues"]) is int and p["open_issues"] >= 0, "issue count invalid")
-        require(type(p["checks"]) is list and len(p["checks"]) <= 100, "checks invalid")
+        require(type(p["checks"]) is list and len(p["checks"]) <= 500, "checks invalid")
         for check in p["checks"]:
             fields(check, {"name","status","conclusion","head_sha","url"})
             text(check["name"], 200)
