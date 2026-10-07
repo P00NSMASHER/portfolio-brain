@@ -86,6 +86,22 @@ class ProductTests(unittest.TestCase):
   api=GitHub(transport=transport);found=api.discover(policy()['research_targets'][0]);self.assertEqual(found[0][0]['license'],'GPL-3.0')
   self.assertIn('invoice',found[0][0]['matched_terms']);self.assertEqual(found[0][0]['test_paths'],['tests/test_invoice.py'])
   meta['license']=None;self.assertEqual(GitHub(transport=transport).discover(policy()['research_targets'][0])[0][0]['license'],'UNKNOWN')
+ def test_discovery_never_promotes_a_test_file_as_reusable_implementation(self):
+  implementation=b'def audit_invoice(rows):\n    return rows  # duplicate freight invoice\n'
+  test_body=b'test("invoice duplicate", () => expect(true).toBe(true))\n'
+  implementation_blob=hashlib.sha1(b'blob '+str(len(implementation)).encode()+b'\0'+implementation).hexdigest()
+  test_blob=hashlib.sha1(b'blob '+str(len(test_body)).encode()+b'\0'+test_body).hexdigest()
+  meta={'full_name':'example/audit','private':False,'default_branch':'main','license':{'spdx_id':'MIT'}}
+  def transport(path):
+   if path.startswith('/search/'):return {'incomplete_results':False,'items':[meta]}
+   if '/branches/' in path:return {'commit':{'sha':SHA}}
+   if '/trees/' in path:return {'truncated':False,'tree':[{'type':'blob','path':'api.test.js','sha':test_blob,'size':len(test_body)},{'type':'blob','path':'src/invoice.py','sha':implementation_blob,'size':len(implementation)}]}
+   if path.endswith('/'+implementation_blob):return {'encoding':'base64','sha':implementation_blob,'content':base64.b64encode(implementation).decode()}
+   raise AssertionError(path)
+  candidate=GitHub(transport=transport).discover(policy()['research_targets'][0])[0][0]
+  self.assertEqual(candidate['path'],'src/invoice.py')
+  self.assertEqual(candidate['test_paths'],['api.test.js'])
+
  def test_malformed_or_mismatched_blob_rejected(self):
   api=GitHub(transport=lambda _: {'full_name':'example/repo','private':True,'default_branch':'main'})
   with self.assertRaises(BrainError):api.observe('example/repo')

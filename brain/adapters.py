@@ -19,6 +19,8 @@ from pathlib import Path
 from brain.core import require, BrainError, digest, utcnow
 from brain.intelligence import REPO
 
+TEST_SOURCE_PATH = re.compile(r"(?:^|/)(?:tests?|__tests__)(?:/|[_.])|(?:^|/)[^/]+(?:_test|\.test|\.spec)\.(?:py|ts|js|lua|rs|go)$", re.I)
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         raise BrainError("REDIRECT_REFUSED: source identity must remain api.github.com")
@@ -105,7 +107,7 @@ class GitHub:
             tree=self.get(f'/repos/{name}/git/trees/{sha}?recursive=1')
             require(tree.get("truncated") is False, "SOURCE_TREE_TRUNCATED")
             rows=tree.get("tree",[])
-            paths=[r for r in rows if r.get("type")=="blob" and 0<r.get("size",0)<=100000 and r["path"].endswith((".py",".ts",".js",".lua",".rs",".go")) and not re.search(r"(^|/)(vendor|node_modules|dist|test[s]?)(/|[_.])",r["path"],re.I)]
+            paths=[r for r in rows if r.get("type")=="blob" and 0<r.get("size",0)<=100000 and r["path"].endswith((".py",".ts",".js",".lua",".rs",".go")) and not re.search(r"(^|/)(vendor|node_modules|dist)(/|[_.])",r["path"],re.I) and not TEST_SOURCE_PATH.search(r["path"])]
             terms=target["terms"]
             paths.sort(key=lambda r:(-sum(t in r["path"].lower() for t in terms),r["path"]))
             if not paths:
@@ -116,7 +118,7 @@ class GitHub:
             raw=base64.b64decode(blob["content"],validate=False)
             require(len(raw)==row["size"] and hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()==row["sha"], "SOURCE_CONTENT_HASH_MISMATCH")
             body=raw.decode("utf-8",errors="strict")
-            test_paths=[r["path"] for r in rows if r.get("type")=="blob" and re.search(r"(^|/)(test[s]?|__tests__)(/|[_.])|(_test|\.test|\.spec)\.",r["path"],re.I)][:10]
+            test_paths=[r["path"] for r in rows if r.get("type")=="blob" and TEST_SOURCE_PATH.search(r["path"])][:10]
             license=(meta.get("license") or {}).get("spdx_id") or "UNKNOWN"
             found.append(({"repository":name,"head_sha":sha,"path":row["path"],"blob_sha":row["sha"],"code_sha256":hashlib.sha256(raw).hexdigest(),"bytes":len(raw),"test_paths":test_paths,"license":license,"source_ref":f'https://github.com/{name}/blob/{sha}/{row["path"]}',"target":target["project"],"query":target["query"],"matched_terms":[term for term in terms if term in body.lower()]},meta["private"]))
         return found
