@@ -25,29 +25,13 @@ concurrency:
   queue: max
 
 jobs:
-  scheduler_canary:
-    if: ${{ github.event_name == 'schedule' && github.event.schedule == '36 16 6 10 *' }}
-    permissions:
-      contents: read
-      actions: read
-    runs-on: ubuntu-latest
-    steps:
-      - name: Prove native scheduled delivery without portfolio work
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$GITHUB_EVENT_NAME" = "schedule"
-          test "$GITHUB_REF" = "refs/heads/main"
-          printf 'scheduler_canary workflow=portfolio-notification-cycle event=%s sha=%s schedule=%s\n' \
-            "$GITHUB_EVENT_NAME" "$GITHUB_SHA" '36 16 6 10 *'
-
   notify:
     # Serialize the complete restore -> mutate -> upload transaction.
     concurrency:
       group: portfolio-state-writer-v1
       cancel-in-progress: false
       queue: max
-    if: ${{ vars.PORTFOLIO_NOTIFICATION_DISABLED != 'true' && (github.event_name != 'schedule' || github.event.schedule != '36 16 6 10 *') }}
+    if: ${{ vars.PORTFOLIO_NOTIFICATION_DISABLED != 'true' }}
     runs-on: ubuntu-latest
     # Five-minute canonical catch-up + two-minute work + one-minute finalization.
     timeout-minutes: 8
