@@ -62,17 +62,20 @@ jobs:
         run: |
           python - <<'PY'
           import json, os
+          policy=json.load(open("acceptance/FINAL_ACCEPTANCE_POLICY.json",encoding="utf-8"))["step23"]
+          control=json.load(open("operations/STEP23_CONTROL.json",encoding="utf-8"))
+          window=json.load(open("operations/STEP23_DELIVERY_WINDOW.json",encoding="utf-8"))
+          if policy["max_soak_duration_seconds"] != control["max_soak_duration_seconds"] or policy["max_soak_duration_seconds"] != window["max_soak_duration_seconds"]:
+              raise SystemExit("Step 23 soak duration contract drifted")
+          if policy["min_successful_scheduled_cycles_per_workflow"] != control["required_successes_per_workflow"] or policy["min_successful_scheduled_cycles_per_workflow"] != window["required_successes_per_workflow"]:
+              raise SystemExit("Step 23 required-success contract drifted")
           config={
             "exact_main_sha":os.environ["SOAK_SHA"],
             "soak_start":os.environ["SOAK_START"],
-            "required_workflows":[
-              "portfolio-state-reducer","runtime-hourly-sync","portfolio-autonomous-scheduler",
-              "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
-              "portfolio-notification-cycle","command-center-pages",
-            ],
-            "required_handler_types":["REPAIR","TEST","VERIFICATION"],
-            "required_successes_per_workflow":2,
-            "max_soak_duration_seconds":7200,
+            "required_workflows":policy["required_workflows"],
+            "required_handler_types":policy["required_handler_types"],
+            "required_successes_per_workflow":policy["min_successful_scheduled_cycles_per_workflow"],
+            "max_soak_duration_seconds":policy["max_soak_duration_seconds"],
             "poll_seconds":60,
             "max_resets":5,
           }
@@ -86,12 +89,13 @@ jobs:
           SOAK_START: ${{ steps.qualify.outputs.soak_start }}
         run: |
           python - <<'PY' >> "$GITHUB_OUTPUT"
-          import os
+          import json, os
           from datetime import datetime, timezone, timedelta
           start=datetime.fromisoformat(os.environ["SOAK_START"].replace("Z","+00:00"))
+          duration=timedelta(seconds=int(json.load(open("acceptance/FINAL_ACCEPTANCE_POLICY.json",encoding="utf-8"))["step23"]["max_soak_duration_seconds"]))
           now=datetime.now(timezone.utc)
-          print("started="+("true" if start <= now < start+timedelta(hours=2) else "false"))
-          print("expired="+("true" if now >= start+timedelta(hours=2) else "false"))
+          print("started="+("true" if start <= now < start+duration else "false"))
+          print("expired="+("true" if now >= start+duration else "false"))
           PY
 
       - name: Run strict point observation
