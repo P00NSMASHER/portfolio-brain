@@ -1,0 +1,244 @@
+"""Run a non-counting exact-main preflight of all eight Step 23 workloads."""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import time
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from acceptance.step23_live_collect import pending_event_count
+
+TARGETS = [
+    ("portfolio-state-reducer", "portfolio-state-reducer.yml"),
+    ("runtime-hourly-sync", "runtime-hourly-sync.yml"),
+    ("portfolio-autonomous-scheduler", "portfolio-autonomous-scheduler.yml"),
+    ("hunter-autonomous-cycle", "hunter-autonomous-cycle.yml"),
+    ("agent-heartbeat-sweep", "agent-heartbeat-sweep.yml"),
+    ("portfolio-cost-watchdog", "portfolio-cost-watchdog.yml"),
+    ("portfolio-notification-cycle", "portfolio-notification-cycle.yml"),
+    ("command-center-pages", "command-center-pages.yml"),
+]
+REDUCER = ("portfolio-state-reducer", "portfolio-state-reducer.yml")
+
+
+def req(ok: bool, message: str) -> None:
+    if not ok:
+        raise RuntimeError(message)
+
+
+def iso_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+class API:
+    def __init__(self, repo: str, token: str):
+        self.repo = repo
+        self.token = token
+        self.requests = 0
+
+    def request(self, path: str, *, method: str = "GET", payload: dict[str, Any] | None = None) -> tuple[int, bytes]:
+        req(path.startswith("/") and "://" not in path and ".." not in path, "unsafe GitHub API path")
+        self.requests += 1
+        req(self.requests <= 1200, "pre-arm preflight API budget exhausted")
+        body = None if payload is None else json.dumps(payload).encode()
+        request = urllib.request.Request(
+            "https://api.github.com/repos/" + self.repo + path,
+            data=body,
+            method=method,
+            headers={
+                "Authorization": "Bearer " + self.token,
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "Content-Type": "application/json",
+                "User-Agent": "portfolio-step23-prearm-preflight/1.0",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            raw = response.read(5_000_001)
+            status = response.status
+        req(len(raw) <= 5_000_000, "provider response too large")
+        return status, raw
+
+    def get(self, path: str) -> Any:
+        status, raw = self.request(path)
+        req(status == 200, f"unexpected GitHub GET status {status}")
+        return json.loads(raw)
+
+    def post(self, path: str, payload: dict[str, Any]) -> None:
+        status, _ = self.request(path, method="POST", payload=payload)
+        req(status == 204, f"unexpected GitHub dispatch status {status}")
+
+
+def assert_main(api: API, exact_sha: str) -> None:
+    observed = api.get("/branches/main").get("commit", {}).get("sha")
+    req(observed == exact_sha, f"PREARM_MAIN_MOVED expected={exact_sha} observed={observed}")
+
+
+def wait_for_correlated_run(
+    api: API,
+    *,
+    filename: str,
+    exact_sha: str,
+    correlation: str,
+    discovery_timeout: int = 180,
+    completion_timeout: int = 1200,
+) -> dict[str, Any]:
+    encoded = urllib.parse.quote(filename, safe="")
+    deadline = time.monotonic() + discovery_timeout
+    selected = None
+    while time.monotonic() < deadline:
+        runs = api.get(
+            f"/actions/workflows/{encoded}/runs?event=workflow_dispatch&branch=main&per_page=50"
+        ).get("workflow_runs", [])
+        req(isinstance(runs, list), "workflow run listing malformed")
+        matches = [
+            row for row in runs
+            if row.get("event") == "workflow_dispatch"
+            and row.get("head_branch") == "main"
+            and row.get("head_sha") == exact_sha
+            and row.get("display_title") == correlation
+            and type(row.get("id")) is int
+        ]
+        if len(matches) == 1:
+            selected = matches[0]
+            break
+        req(len(matches) <= 1, f"ambiguous correlated pre-arm run for {filename}")
+        time.sleep(3)
+    req(selected is not None, f"timed out locating correlated pre-arm run for {filename}")
+
+    run_id = int(selected["id"])
+    deadline = time.monotonic() + completion_timeout
+    while time.monotonic() < deadline:
+        row = api.get(f"/actions/runs/{run_id}")
+        if row.get("status") == "completed":
+            req(row.get("conclusion") == "success",
+                f"{filename} pre-arm run {run_id} concluded {row.get('conclusion')}")
+            req(row.get("head_sha") == exact_sha and row.get("event") == "workflow_dispatch",
+                f"{filename} pre-arm run identity drifted")
+            return row
+        time.sleep(5)
+    raise RuntimeError(f"timed out waiting for {filename} pre-arm run {run_id}")
+
+
+def dispatch(
+    api: API,
+    *,
+    workflow: str,
+    filename: str,
+    exact_sha: str,
+    correlation: str,
+) -> dict[str, Any]:
+    assert_main(api, exact_sha)
+    encoded = urllib.parse.quote(filename, safe="")
+    api.post(
+        f"/actions/workflows/{encoded}/dispatches",
+        {"ref": "main", "inputs": {"prearm_id": correlation}},
+    )
+    row = wait_for_correlated_run(
+        api, filename=filename, exact_sha=exact_sha, correlation=correlation
+    )
+    assert_main(api, exact_sha)
+    return {
+        "workflow": workflow,
+        "filename": filename,
+        "run_id": row["id"],
+        "event": row["event"],
+        "head_sha": row["head_sha"],
+        "conclusion": row["conclusion"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "correlation": correlation,
+        "acceptance_credit": False,
+    }
+
+
+def drain(
+    api: API,
+    *,
+    exact_sha: str,
+    prefix: str,
+    token: str,
+    drains: list[dict[str, Any]],
+    max_rounds: int = 4,
+) -> int:
+    for round_number in range(1, max_rounds + 1):
+        correlation = f"prearm-{prefix}-drain-{round_number}-{token}"
+        drains.append(dispatch(
+            api,
+            workflow=REDUCER[0],
+            filename=REDUCER[1],
+            exact_sha=exact_sha,
+            correlation=correlation,
+        ))
+        pending = pending_event_count(token)
+        if pending == 0:
+            return 0
+    raise RuntimeError(f"canonical pending events did not drain after {max_rounds} reducer rounds")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--exact-sha", required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    token = os.environ.get("GITHUB_TOKEN", "")
+    orchestrator = os.environ.get("GITHUB_RUN_ID", "local")
+    req(repo and token, "GitHub context required for pre-arm preflight")
+    req(len(args.exact_sha) == 40, "exact main SHA malformed")
+
+    api = API(repo, token)
+    assert_main(api, args.exact_sha)
+    target_runs: list[dict[str, Any]] = []
+    reducer_drains: list[dict[str, Any]] = []
+
+    # Establish a clean canonical baseline before any non-counting producer run.
+    drain(api, exact_sha=args.exact_sha, prefix="initial", token=token, drains=reducer_drains)
+
+    for index, (workflow, filename) in enumerate(TARGETS, start=1):
+        correlation = f"prearm-{orchestrator}-{index}-{workflow}"
+        target_runs.append(dispatch(
+            api,
+            workflow=workflow,
+            filename=filename,
+            exact_sha=args.exact_sha,
+            correlation=correlation,
+        ))
+        # Every producer may publish an immutable event. Reduce it before the
+        # next consumer so stale-state waits cannot cascade through preflight.
+        drain(
+            api,
+            exact_sha=args.exact_sha,
+            prefix=f"{index}-{workflow}",
+            token=token,
+            drains=reducer_drains,
+        )
+
+    pending_final = pending_event_count(token)
+    req(pending_final == 0, f"pre-arm ended with {pending_final} pending events")
+    assert_main(api, args.exact_sha)
+
+    result = {
+        "schema_version": "1.0.0",
+        "status": "PASS",
+        "exact_main_sha": args.exact_sha,
+        "generated_at": iso_now(),
+        "acceptance_credit": False,
+        "target_runs": target_runs,
+        "reducer_drains": reducer_drains,
+        "pending_events_final": pending_final,
+        "api_requests": api.requests,
+    }
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(json.dumps(result, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()
