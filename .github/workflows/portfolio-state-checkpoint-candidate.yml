@@ -28,12 +28,11 @@ permissions:
   contents: write
   pull-requests: write
 
-concurrency:
-  group: portfolio-state-checkpoint-candidate
-  cancel-in-progress: false
-
 jobs:
   checkpoint:
+    concurrency:
+      group: portfolio-state-checkpoint-candidate
+      cancel-in-progress: false
     if: >-
       ${{
         github.event_name != 'workflow_run' ||

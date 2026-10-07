@@ -266,6 +266,12 @@ class ArchiveLifecycleTests(unittest.TestCase):
         self.assertIn("- portfolio-state-reducer", candidate)
         self.assertIn("Journal capacity exceeded; do not drop evidence", candidate)
         self.assertIn("receipt.get(\"reason_type\") == \"JournalError\"", candidate)
+        workflow_header = candidate.split("jobs:", 1)[0]
+        checkpoint_job = candidate.split("  checkpoint:", 1)[1].split("  acceptance-progress:", 1)[0]
+        progress_job = candidate.split("  acceptance-progress:", 1)[1]
+        self.assertNotIn("group: portfolio-state-checkpoint-candidate", workflow_header)
+        self.assertIn("group: portfolio-state-checkpoint-candidate", checkpoint_job)
+        self.assertNotIn("group: portfolio-state-checkpoint-candidate", progress_job)
         self.assertIn('BRANCH="factory/checkpoint-archive-${GITHUB_RUN_ID}"', candidate)
         self.assertIn("headRefOid", candidate)
         self.assertIn('gh workflow run foundation-ci.yml --ref "$CHECKPOINT_BRANCH"', candidate)
