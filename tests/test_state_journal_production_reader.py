@@ -142,6 +142,55 @@ class CanonicalProductionReaderTests(unittest.TestCase):
         self.assertEqual(state, fresh)
         self.assertEqual(artifacts[-1]["id"], 12)
 
+    def test_later_rerun_attempt_of_same_reducer_run_can_unblock_pending_event(self):
+        pending = {
+            "id": 12,
+            "name": EVENT_PREFIX + "123-runtime-worker-" + "b" * 40 + "-1",
+            "expired": False,
+            "created_at": "2026-09-29T18:43:10Z",
+            "workflow_run": {"id": 123, "head_branch": "main", "head_sha": "b" * 40},
+        }
+        stale = canonical_snapshot()
+        fresh = canonical_snapshot()
+        fresh["evidence"] = {"event": [{"kind": "GITHUB_ACTIONS", "artifact_id": 12}]}
+        class PollReader:
+            def __init__(self):
+                self.calls = 0
+            def get(self, _suffix):
+                self.calls += 1
+                attempt = 2 if self.calls == 1 else 3
+                updated = "2026-09-29T18:43:12Z" if attempt == 2 else "2026-09-29T18:43:14Z"
+                return {"workflow_runs": [{
+                    "id": 900,
+                    "run_attempt": attempt,
+                    "name": "portfolio-state-reducer",
+                    "head_branch": "main",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "created_at": "2026-09-29T18:43:00Z",
+                    "updated_at": updated,
+                }]}
+        class FreshReader:
+            def list_recent_artifacts(self, *args, **kwargs):
+                return [snapshot_meta(), pending]
+        policy = json.loads((ROOT / "state_journal/POLICY.json").read_text())
+        clock_values = iter([0.0, 0.0, 0.1, 2.0])
+        with patch(
+            "state_journal.production_reader.GitHubReader",
+            side_effect=[PollReader(), FreshReader(), FreshReader()],
+        ), patch(
+            "state_journal.production_reader.restore_snapshot",
+            side_effect=[stale, fresh],
+        ):
+            reader, state, artifacts = _wait_for_reduction(
+                "token", policy, [pending], current_run="999",
+                timeout_seconds=1, poll_seconds=0,
+                clock=lambda: next(clock_values), sleep=lambda _: None,
+            )
+        self.assertIsInstance(reader, FreshReader)
+        self.assertEqual(state, fresh)
+        self.assertEqual(artifacts[-1]["id"], 12)
+
     def test_pending_event_timeout_fails_closed(self):
         pending = {
             "id": 12, "name": EVENT_PREFIX + "123-runtime-worker-" + "b" * 40 + "-1",
