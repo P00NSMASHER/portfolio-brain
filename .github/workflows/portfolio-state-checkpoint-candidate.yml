@@ -185,7 +185,7 @@ jobs:
           echo "Checkpoint PR opened; trusted verification is dispatched by the finalizer."
 
       - name: Resolve and validate active checkpoint candidate
-        if: ${{ steps.trigger.outputs.checkpoint_required == 'true' }}
+        if: ${{ steps.trigger.outputs.checkpoint_required == 'true' && (steps.incident.outputs.active == 'true' || steps.generate.outputs.changed == 'true') }}
         id: candidate
         env:
           GH_TOKEN: ${{ github.token }}
@@ -239,7 +239,7 @@ jobs:
           PY
 
       - name: Dispatch Foundation verification when independent gate is still missing
-        if: ${{ steps.trigger.outputs.checkpoint_required == 'true' }}
+        if: ${{ steps.trigger.outputs.checkpoint_required == 'true' && steps.candidate.outputs.head_sha != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           CHECKPOINT_BRANCH: ${{ steps.candidate.outputs.branch }}
@@ -284,7 +284,7 @@ jobs:
           fi
 
       - name: Wait for trusted exact-head verification
-        if: ${{ steps.trigger.outputs.checkpoint_required == 'true' }}
+        if: ${{ steps.trigger.outputs.checkpoint_required == 'true' && steps.candidate.outputs.head_sha != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           CHECKPOINT_SHA: ${{ steps.candidate.outputs.head_sha }}
@@ -329,7 +329,7 @@ jobs:
 
       - name: Hold checkpoint merge during Step 23 exact-head soak
         id: step23_merge_guard
-        if: ${{ steps.trigger.outputs.checkpoint_required == 'true' }}
+        if: ${{ steps.trigger.outputs.checkpoint_required == 'true' && steps.candidate.outputs.head_sha != '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -344,7 +344,7 @@ jobs:
           fi
 
       - name: Merge verified checkpoint candidate through branch protection
-        if: ${{ steps.trigger.outputs.checkpoint_required == 'true' && steps.step23_merge_guard.outputs.allowed == 'true' }}
+        if: ${{ steps.trigger.outputs.checkpoint_required == 'true' && steps.candidate.outputs.head_sha != '' && steps.step23_merge_guard.outputs.allowed == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.candidate.outputs.pr_number }}
