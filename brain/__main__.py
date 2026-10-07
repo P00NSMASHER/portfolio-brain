@@ -50,6 +50,8 @@ def monitor(store, sha, output, *, api=None, repositories=None):
         report["status"]="FAIL"
     write_report(report,output)
     store.attempt("monitor","FAIL" if errors else "PASS", "SOURCE_FAILURE" if errors else None,source_sha=sha,details={"repositories":repositories})
+    if errors:
+        print(json.dumps({"source_errors":errors},sort_keys=True),file=sys.stderr)
     require(not errors, "MONITOR_INCOMPLETE: see sanitized operation errors; useful observations retained")
     return report
 

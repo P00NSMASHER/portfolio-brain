@@ -128,6 +128,9 @@ class Store:
     def _verified_events(self, *, include_pending=False):
         require(self.db.execute("PRAGMA quick_check").fetchone()[0] == "ok", "STATE_CORRUPT: SQLite check failed")
         rows = self.db.execute("SELECT e.*,l.prev_hash,l.chain_hash FROM events e LEFT JOIN ledger l USING(seq) ORDER BY seq").fetchall()
+        watermark=self.db.execute("SELECT seq FROM sqlite_sequence WHERE name='events'").fetchone()
+        maximum=rows[-1]['seq'] if rows else 0
+        require((watermark[0] if watermark else 0)==maximum, 'EVENT_LOSS: committed inbox tail missing')
         previous, seq, events = "0"*64, 0, []
         pending_seen=False
         require(self.db.execute("SELECT count(*) FROM ledger").fetchone()[0] == sum(row["status"]=="APPLIED" for row in rows), "STATE_CORRUPT: orphan ledger entry")

@@ -1,6 +1,7 @@
 """Bounded GitHub GET-only discovery. Content is data, never instructions.
 
-Public scheduled state never uses authorization to obtain private content.
+Public scheduled reads may use the existing workflow token, but reject private
+repository metadata before inspecting or persisting content.
 Private discovery is explicit, locally persisted, token-accessible only, and has
 no publication path. License classifications are preserved without filtering.
 """
@@ -25,7 +26,7 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 class GitHub:
     def __init__(self, *, private=False, transport=None):
         self.private=private
-        self.token=os.environ.get("GITHUB_TOKEN", "") if private else ""
+        self.token=os.environ.get("GITHUB_TOKEN", "")
         require(not private or self.token, "PRIVATE_ACCESS_UNAVAILABLE: explicit existing GITHUB_TOKEN required")
         self.transport=transport
         self.requests=0
