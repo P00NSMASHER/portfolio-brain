@@ -178,6 +178,8 @@ def drain(
     max_rounds: int = 4,
 ) -> int:
     req(correlation_seed.isdigit(), "pre-arm correlation seed must be numeric")
+    if pending_event_count(github_token) == 0:
+        return 0
     for round_number in range(1, max_rounds + 1):
         correlation = f"prearm-{correlation_seed}-{prefix}-drain-{round_number}"
         drains.append(dispatch(
