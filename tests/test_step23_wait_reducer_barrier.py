@@ -83,14 +83,37 @@ class Step23WaitReducerBarrierTests(unittest.TestCase):
             12,
         )
 
-    def test_fresh_reducer_wrong_head_fails_closed(self):
+    def test_baseline_ignores_prior_main_success_and_records_exact_current_main(self):
         exact="a"*40
-        wrong={
+        prior={
             "id":13,"run_attempt":1,"status":"completed","conclusion":"success",
             "head_branch":"main","head_sha":"b"*40,"updated_at":"2026-10-07T16:03:00Z",
         }
-        with self.assertRaisesRegex(RuntimeError,"identity drifted"):
-            barrier.fresh_reducer_success([wrong],exact,set())
+        current={
+            "id":14,"run_attempt":1,"status":"completed","conclusion":"success",
+            "head_branch":"main","head_sha":exact,"updated_at":"2026-10-07T16:04:00Z",
+        }
+        self.assertEqual(
+            barrier.reducer_success_keys([prior,current],exact),
+            {(14,1,"2026-10-07T16:04:00Z")},
+        )
+
+    def test_new_wrong_head_success_cannot_satisfy_fallback(self):
+        exact="a"*40
+        wrong={
+            "id":15,"run_attempt":1,"status":"completed","conclusion":"success",
+            "head_branch":"main","head_sha":"b"*40,"updated_at":"2026-10-07T16:05:00Z",
+        }
+        self.assertIsNone(barrier.fresh_reducer_success([wrong],exact,set()))
+
+    def test_exact_main_success_with_malformed_identity_fails_closed(self):
+        exact="a"*40
+        malformed={
+            "id":"16","run_attempt":1,"status":"completed","conclusion":"success",
+            "head_branch":"main","head_sha":exact,"updated_at":"2026-10-07T16:06:00Z",
+        }
+        with self.assertRaisesRegex(RuntimeError,"run identity malformed"):
+            barrier.fresh_reducer_success([malformed],exact,set())
 
     def test_prearm_never_uses_fresh_reducer_fallback(self):
         source=inspect.getsource(barrier.main).replace(" ","")
