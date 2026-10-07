@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from acceptance.step23_prearm_cleanup import _cancel_and_wait, leaked_title, stale_non_schedule_blocker
+from acceptance.step23_prearm_cleanup import (\n    StuckAfterForceCancel, _cancel_and_wait, _delete_stuck_stale,\n    leaked_title, purge, stale_non_schedule_blocker,\n)
 
 
 class PrearmCleanupTests(unittest.TestCase):
@@ -67,6 +67,90 @@ class PrearmCleanupTests(unittest.TestCase):
             api.posts,
             ["/actions/runs/19/cancel","/actions/runs/19/force-cancel"],
         )
+
+    def test_force_cancel_zombie_can_be_deleted_only_with_zero_jobs(self):
+        exact="a"*40
+        row={
+            "id":19,"head_branch":"main","head_sha":"b"*40,
+            "path":".github/workflows/portfolio-state-reducer.yml",
+            "status":"queued","event":"workflow_run",
+        }
+        class API:
+            def __init__(self):
+                self.deleted=[]
+                self.request_reads=0
+            def get(self,path):
+                if path=="/actions/runs/19":
+                    return dict(row)
+                if path=="/actions/runs/19/jobs?per_page=100":
+                    return {"total_count":0,"jobs":[]}
+                raise AssertionError(path)
+            def delete(self,path):
+                self.deleted.append(path)
+                return 204
+            def request(self,path,method="GET"):
+                self.request_reads+=1
+                return 404,b""
+        api=API()
+        _delete_stuck_stale(api,row,exact)
+        self.assertEqual(api.deleted,["/actions/runs/19"])
+        self.assertEqual(api.request_reads,1)
+
+    def test_zombie_with_jobs_still_fails_closed(self):
+        exact="a"*40
+        row={
+            "id":20,"head_branch":"main","head_sha":"b"*40,
+            "path":".github/workflows/portfolio-state-reducer.yml",
+            "status":"queued","event":"workflow_run",
+        }
+        class API:
+            def get(self,path):
+                if path=="/actions/runs/20":
+                    return dict(row)
+                if path=="/actions/runs/20/jobs?per_page=100":
+                    return {"total_count":1,"jobs":[{"id":99}]}
+                raise AssertionError(path)
+            def delete(self,path):
+                raise AssertionError("delete must not run")
+        with self.assertRaisesRegex(RuntimeError,"has jobs and cannot be deleted"):
+            _delete_stuck_stale(API(),row,exact)
+
+    def test_purge_tombstones_only_stale_non_schedule_zombie(self):
+        exact="a"*40
+        zombie={
+            "id":21,"head_branch":"main","head_sha":"b"*40,
+            "path":".github/workflows/portfolio-state-reducer.yml",
+            "status":"queued","event":"workflow_run",
+            "display_title":"portfolio-state-reducer",
+        }
+        scheduled={**zombie,"id":22,"event":"schedule"}
+        class API:
+            def __init__(self):
+                self.requests=0
+                self.deleted=[]
+            def get(self,path):
+                if path=="/branches/main":
+                    return {"commit":{"sha":exact}}
+                if path=="/actions/runs?branch=main&per_page=100&page=1":
+                    return {"workflow_runs":[zombie,scheduled]}
+                if path=="/actions/runs/21":
+                    return dict(zombie)
+                if path=="/actions/runs/21/jobs?per_page=100":
+                    return {"total_count":0,"jobs":[]}
+                raise AssertionError(path)
+            def delete(self,path):
+                self.deleted.append(path)
+                return 204
+            def request(self,path,method="GET"):
+                return 404,b""
+        api=API()
+        with patch("acceptance.step23_prearm_cleanup._cancel_and_wait",
+                   side_effect=StuckAfterForceCancel("still queued")):
+            result=purge(api,exact_sha=exact)
+        self.assertEqual(result["deleted_stale_run_ids"],[21])
+        self.assertEqual(result["deleted_stale_count"],1)
+        self.assertEqual(result["cancelled_stale_run_ids"],[])
+        self.assertEqual(api.deleted,["/actions/runs/21"])
 
     def test_only_superseded_non_scheduled_writer_runs_are_stale_blockers(self):
         exact="a"*40
