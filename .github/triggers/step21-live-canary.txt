@@ -1,0 +1,4 @@
+STEP21_LIVE_CANARY_ENTRY
+purpose=bounded exact-main discovery/hunt -> proposal -> scheduler -> governed repair dispatch
+completion_claim=false
+authority_granted=false
