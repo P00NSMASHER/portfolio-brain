@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -27,6 +28,7 @@ TARGETS = [
 REDUCER = ("portfolio-state-reducer", "portfolio-state-reducer.yml")
 LIVE_BARRIER_TARGETS = {"runtime-hourly-sync", "portfolio-autonomous-scheduler", "hunter-autonomous-cycle", "agent-heartbeat-sweep", "portfolio-notification-cycle", "command-center-pages"}
 CORRELATION = re.compile(r"^prearm-[0-9]+-[a-z0-9-]+$")
+TRANSIENT_DISPATCH_STATUSES = {500, 502, 503, 504}
 
 
 def req(ok: bool, message: str) -> None:
@@ -61,9 +63,13 @@ class API:
                 "User-Agent": "portfolio-step23-prearm-preflight/1.0",
             },
         )
-        with urllib.request.urlopen(request, timeout=30) as response:
-            raw = response.read(5_000_001)
-            status = response.status
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                raw = response.read(5_000_001)
+                status = response.status
+        except urllib.error.HTTPError as exc:
+            raw = exc.read(5_000_001)
+            status = exc.code
         req(len(raw) <= 5_000_000, "provider response too large")
         return status, raw
 
@@ -72,9 +78,9 @@ class API:
         req(status == 200, f"unexpected GitHub GET status {status}")
         return json.loads(raw)
 
-    def post(self, path: str, payload: dict[str, Any]) -> None:
+    def post(self, path: str, payload: dict[str, Any]) -> int:
         status, _ = self.request(path, method="POST", payload=payload)
-        req(status == 204, f"unexpected GitHub dispatch status {status}")
+        return status
 
 
 def assert_main(api: API, exact_sha: str) -> None:
@@ -165,10 +171,51 @@ def dispatch(
     req(CORRELATION.fullmatch(correlation) is not None, "unsafe pre-arm correlation id")
     assert_main(api, exact_sha)
     encoded = urllib.parse.quote(filename, safe="")
-    api.post(
-        f"/actions/workflows/{encoded}/dispatches",
-        {"ref": "main", "inputs": {"prearm_id": correlation}},
+    payload = {"ref": "main", "inputs": {"prearm_id": correlation}}
+    dispatch_attempts = 0
+    transient_statuses: list[int] = []
+    dispatched = False
+    for attempt in range(1, 4):
+        dispatch_attempts = attempt
+        status = api.post(f"/actions/workflows/{encoded}/dispatches", payload)
+        if status == 204:
+            dispatched = True
+            break
+        req(
+            status in TRANSIENT_DISPATCH_STATUSES,
+            f"unexpected GitHub dispatch status {status}",
+        )
+        transient_statuses.append(status)
+
+        # A provider 5xx does not prove the dispatch was rejected. Observe the
+        # correlation before retrying so a successful-but-500 response cannot
+        # silently create duplicate workloads. Any duplicate remains blocking.
+        for _ in range(10):
+            runs = api.get(
+                f"/actions/workflows/{encoded}/runs?event=workflow_dispatch&branch=main&per_page=50"
+            ).get("workflow_runs", [])
+            req(isinstance(runs, list), "workflow run listing malformed")
+            matches = [
+                candidate for candidate in runs
+                if candidate.get("event") == "workflow_dispatch"
+                and candidate.get("head_branch") == "main"
+                and candidate.get("head_sha") == exact_sha
+                and candidate.get("display_title") == correlation
+                and type(candidate.get("id")) is int
+            ]
+            req(len(matches) <= 1, f"ambiguous correlated pre-arm run for {filename}")
+            if matches:
+                dispatched = True
+                break
+            time.sleep(3)
+        if dispatched:
+            break
+    req(
+        dispatched,
+        f"GitHub dispatch transient failure persisted after {dispatch_attempts} attempts: "
+        f"{transient_statuses}",
     )
+
     row = wait_for_correlated_run(
         api, filename=filename, exact_sha=exact_sha, correlation=correlation,
         on_started=on_started,
@@ -184,6 +231,8 @@ def dispatch(
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
         "correlation": correlation,
+        "dispatch_attempts": dispatch_attempts,
+        "dispatch_transient_statuses": transient_statuses,
         "acceptance_credit": False,
     }
 
