@@ -13,6 +13,7 @@ from typing import Any
 import re
 
 from acceptance.step23_live_collect import pending_event_count
+from acceptance.step23_prearm_cleanup import BLOCKER_PATHS
 
 TARGETS = [
     ("portfolio-state-reducer", "portfolio-state-reducer.yml"),
@@ -79,6 +80,39 @@ class API:
 def assert_main(api: API, exact_sha: str) -> None:
     observed = api.get("/branches/main").get("commit", {}).get("sha")
     req(observed == exact_sha, f"PREARM_MAIN_MOVED expected={exact_sha} observed={observed}")
+
+
+def active_writer_blockers(api: API, exact_sha: str) -> list[dict[str, Any]]:
+    doc=api.get("/actions/runs?branch=main&per_page=100")
+    rows=doc.get("workflow_runs",[])
+    req(isinstance(rows,list),"workflow run listing malformed")
+    return [
+        row for row in rows
+        if row.get("path") in BLOCKER_PATHS
+        and row.get("status")!="completed"
+        and row.get("head_branch")=="main"
+        and row.get("head_sha")==exact_sha
+        and type(row.get("id")) is int
+    ]
+
+
+def wait_for_quiescence(
+    api: API,
+    exact_sha: str,
+    *,
+    timeout_seconds: int = 900,
+    poll_seconds: float = 5.0,
+    clock=time.monotonic,
+    sleep=time.sleep,
+) -> None:
+    deadline=clock()+timeout_seconds
+    while clock()<deadline:
+        assert_main(api,exact_sha)
+        blockers=active_writer_blockers(api,exact_sha)
+        if not blockers:
+            return
+        sleep(poll_seconds)
+    raise RuntimeError("timed out waiting for current-main writer quiescence")
 
 
 def wait_for_correlated_run(
@@ -203,6 +237,10 @@ def main() -> None:
     target_runs: list[dict[str, Any]] = []
     reducer_drains: list[dict[str, Any]] = []
 
+    # Let post-merge/current-main writers settle before entering the controlled
+    # preflight. Stale prior-main blockers are canceled by the cleanup step.
+    wait_for_quiescence(api,args.exact_sha)
+
     # Establish a clean canonical baseline before any non-counting producer run.
     drain(
         api, exact_sha=args.exact_sha, prefix="initial", github_token=token,
@@ -210,6 +248,7 @@ def main() -> None:
     )
 
     for index, (workflow, filename) in enumerate(TARGETS, start=1):
+        wait_for_quiescence(api,args.exact_sha)
         correlation = f"prearm-{orchestrator}-{index}-{workflow}"
         target_runs.append(dispatch(
             api,
