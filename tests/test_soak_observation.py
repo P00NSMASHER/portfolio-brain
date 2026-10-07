@@ -4,7 +4,7 @@ import copy
 import unittest
 from datetime import datetime, timedelta, timezone
 from acceptance.soak_observation import (
-    ObservationChanged, scheduled_runs, reset_history,
+    ObservationChanged, scheduled_runs, transport_runs, reset_history,
     final_census_unchanged, parse_time,
 )
 
@@ -100,12 +100,19 @@ class ScheduleObservationTests(unittest.TestCase):
 
     def test_dispatch_never_masquerades_as_schedule(self):
         r = row(); r["event"] = "workflow_dispatch"
-        with self.assertRaisesRegex(RuntimeError, "non-scheduled"):
+        with self.assertRaisesRegex(RuntimeError, "wrong-branch or wrong-event"):
             scheduled_runs(FakeAPI([r]), {NAME}, SHA, START)
+
+    def test_transport_runs_keeps_schedule_and_dispatch_distinct(self):
+        scheduled=row(1)
+        dispatched=row(2,minute=2); dispatched["event"]="workflow_dispatch"
+        api=FakeAPI([scheduled],[scheduled],[dispatched],[dispatched])
+        got=transport_runs(api,{NAME},SHA,START)
+        self.assertEqual([(r["id"],r["event"]) for r in got[NAME]],[(1,"schedule"),(2,"workflow_dispatch")])
 
     def test_non_main_never_counts(self):
         r = row(); r["head_branch"] = "feature"
-        with self.assertRaisesRegex(RuntimeError, "non-main"):
+        with self.assertRaisesRegex(RuntimeError, "wrong-branch or wrong-event"):
             scheduled_runs(FakeAPI([r]), {NAME}, SHA, START)
 
     def test_malformed_provider_data_is_not_empty_success(self):
