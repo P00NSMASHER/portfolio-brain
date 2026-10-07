@@ -86,7 +86,7 @@ class ProductTests(unittest.TestCase):
   api=GitHub(transport=transport);found=api.discover(policy()['research_targets'][0]);self.assertEqual(found[0][0]['license'],'GPL-3.0')
   self.assertIn('invoice',found[0][0]['matched_terms']);self.assertEqual(found[0][0]['test_paths'],['tests/test_invoice.py'])
   meta['license']=None;self.assertEqual(GitHub(transport=transport).discover(policy()['research_targets'][0])[0][0]['license'],'UNKNOWN')
- def test_discovery_never_promotes_a_test_file_as_reusable_implementation(self):
+ def test_discovery_never_promotes_tests_and_credits_only_related_test_paths(self):
   implementation=b'def audit_invoice(rows):\n    return rows  # duplicate freight invoice\n'
   test_body=b'test("invoice duplicate", () => expect(true).toBe(true))\n'
   implementation_blob=hashlib.sha1(b'blob '+str(len(implementation)).encode()+b'\0'+implementation).hexdigest()
@@ -95,12 +95,16 @@ class ProductTests(unittest.TestCase):
   def transport(path):
    if path.startswith('/search/'):return {'incomplete_results':False,'items':[meta]}
    if '/branches/' in path:return {'commit':{'sha':SHA}}
-   if '/trees/' in path:return {'truncated':False,'tree':[{'type':'blob','path':'api.test.js','sha':test_blob,'size':len(test_body)},{'type':'blob','path':'src/invoice.py','sha':implementation_blob,'size':len(implementation)}]}
+   if '/trees/' in path:return {'truncated':False,'tree':[
+    {'type':'blob','path':'api.test.js','sha':test_blob,'size':len(test_body)},
+    {'type':'blob','path':'tests/test_invoice.py','sha':test_blob,'size':len(test_body)},
+    {'type':'blob','path':'src/invoice.py','sha':implementation_blob,'size':len(implementation)}
+   ]}
    if path.endswith('/'+implementation_blob):return {'encoding':'base64','sha':implementation_blob,'content':base64.b64encode(implementation).decode()}
    raise AssertionError(path)
   candidate=GitHub(transport=transport).discover(policy()['research_targets'][0])[0][0]
   self.assertEqual(candidate['path'],'src/invoice.py')
-  self.assertEqual(candidate['test_paths'],['api.test.js'])
+  self.assertEqual(candidate['test_paths'],['tests/test_invoice.py'])
 
  def test_report_does_not_recommend_historical_test_file_candidates(self):
   self.seed()
