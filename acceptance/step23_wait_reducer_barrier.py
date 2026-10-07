@@ -72,11 +72,13 @@ def assert_main(api: API,exact_sha: str)->None:
 
 
 def reducer_success_key(row: dict[str,Any],exact_sha: str)->tuple[int,int,str]|None:
-    """Return immutable completion identity for a valid exact-main success."""
+    """Return completion identity only for a valid success on this exact main."""
     if row.get("status")!="completed" or row.get("conclusion")!="success":
         return None
-    req(row.get("head_branch")=="main" and row.get("head_sha")==exact_sha,
-        "fresh reducer success identity drifted")
+    # Historical reducer successes from earlier main SHAs are normal provider
+    # history, not malformed candidates for this exact-main barrier.
+    if row.get("head_branch")!="main" or row.get("head_sha")!=exact_sha:
+        return None
     run_id=row.get("id")
     attempt=row.get("run_attempt",1)
     updated=row.get("updated_at")
