@@ -18,6 +18,13 @@ class Step23PrearmPreflightTests(unittest.TestCase):
         self.assertNotIn("{github_token}",source)
         self.assertNotIn("{token}",source)
 
+    def test_clean_drain_returns_before_dispatching_reducer(self):
+        source=inspect.getsource(preflight.drain)
+        self.assertLess(
+            source.index("if pending_event_count(github_token) == 0:"),
+            source.index("for round_number in range"),
+        )
+
     def test_preflight_uses_reducer_barriers_not_global_writer_silence(self):
         source=inspect.getsource(preflight.main)
         self.assertNotIn("wait_for_quiescence",source)
