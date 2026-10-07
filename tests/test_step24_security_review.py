@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 #!/usr/bin/env python3
 import unittest
 from pathlib import Path
@@ -131,7 +132,7 @@ class Step24SecurityReviewTests(unittest.TestCase):
         }])
 
     def test_static_review_blocks_job_level_permission_widening(self):
-        target = ROOT / ".github" / "workflows" / "portfolio-autonomous-repair.yml"
+        target = legacy_workflow_path(ROOT / ".github" / "workflows" / "portfolio-autonomous-repair.yml")
         original_read_text = Path.read_text
 
         def drifted_read_text(path, *args, **kwargs):
@@ -151,7 +152,7 @@ class Step24SecurityReviewTests(unittest.TestCase):
         self.assertIn("WORKFLOW_PERMISSION_SCOPE_DRIFT", {x["code"] for x in result["findings"]})
 
     def test_static_review_blocks_sensitive_workflow_permission_drift(self):
-        target = ROOT / ".github" / "workflows" / "portfolio-autonomous-scheduler.yml"
+        target = legacy_workflow_path(ROOT / ".github" / "workflows" / "portfolio-autonomous-scheduler.yml")
         original_read_text = Path.read_text
 
         def drifted_read_text(path, *args, **kwargs):

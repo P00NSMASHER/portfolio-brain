@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import copy
 import os
 import unittest
@@ -48,7 +49,7 @@ class CostGovernorTests(unittest.TestCase):
         paid_workflows = ["model-value-proof.yml", "runtime-worker.yml"]
         for filename in paid_workflows:
             with self.subTest(workflow=filename):
-                workflow = (ROOT / ".github/workflows" / filename).read_text()
+                workflow = (legacy_workflow_path(ROOT / ".github/workflows" / filename)).read_text()
                 self.assertIn("portfolio-cost-governed-autonomy", workflow)
                 self.assertIn("cost_governor.workflow_gate preflight", workflow)
                 self.assertIn("cost_governor.workflow_gate finalize", workflow)
@@ -65,13 +66,13 @@ class CostGovernorTests(unittest.TestCase):
         ]
         for filename in nonpaid_workflows:
             with self.subTest(workflow=filename):
-                workflow = (ROOT / ".github/workflows" / filename).read_text()
+                workflow = (legacy_workflow_path(ROOT / ".github/workflows" / filename)).read_text()
                 self.assertIn("workload_control.workload_gate preflight", workflow)
                 self.assertNotIn("cost_governor.workflow_gate preflight", workflow)
                 self.assertNotIn("cost_governor.workflow_gate finalize", workflow)
 
     def test_watchdog_polling_is_hourly_not_quarter_hourly(self):
-        workflow = (ROOT / ".github/workflows/portfolio-cost-watchdog.yml").read_text()
+        workflow = (legacy_workflow_path(ROOT / ".github/workflows/portfolio-cost-watchdog.yml")).read_text()
         self.assertIn('cron: "53 * * * *"',workflow)
         self.assertNotIn('cron: "*/15 * * * *"',workflow)
         self.assertIn("actions: write",workflow)
@@ -147,7 +148,7 @@ class CostGovernorTests(unittest.TestCase):
 
 
     def test_event_observe_ignores_dashboard_test_operator_and_one_shot_trigger_churn(self):
-        workflow=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/runtime-event-observe.yml")).read_text()
         self.assertIn("group: runtime-event-observe-${{ github.event_name }}-${{ github.ref }}",workflow)
         self.assertIn("cancel-in-progress: false",workflow)
         self.assertIn("queue: max",workflow)
@@ -181,7 +182,7 @@ class CostGovernorTests(unittest.TestCase):
         for filename, values in expected.items():
             workflow_id, job_id, group, minutes = values
             with self.subTest(workflow=filename):
-                workflow = (ROOT / ".github/workflows" / filename).read_text()
+                workflow = (legacy_workflow_path(ROOT / ".github/workflows" / filename)).read_text()
                 self.assertIn(f"group: {group}", workflow)
                 self.assertIn("cancel-in-progress: false", workflow)
                 self.assertIn("workload_control.workload_gate preflight", workflow)
@@ -201,7 +202,7 @@ class CostGovernorTests(unittest.TestCase):
 
 
     def test_runtime_sync_and_observe_are_nonpaid_workload_lanes(self):
-        workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text()
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/runtime-worker.yml")).read_text()
         self.assertIn("workload_control.workload_gate preflight",workflow)
         self.assertIn("format('portfolio-runtime-{0}', inputs.mode)",workflow)
         wp=workload_policy()
@@ -225,7 +226,7 @@ class CostGovernorTests(unittest.TestCase):
 
 
     def test_model_value_proof_remains_paid_cost_governed_and_bounded(self):
-        workflow=(ROOT/".github/workflows/model-value-proof.yml").read_text()
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/model-value-proof.yml")).read_text()
         self.assertIn("portfolio-cost-governed-autonomy",workflow)
         self.assertIn("cost_governor.workflow_gate preflight",workflow)
         self.assertIn("cost_governor.workflow_gate finalize",workflow)
@@ -241,7 +242,7 @@ class CostGovernorTests(unittest.TestCase):
 
 
     def test_verified_feedback_bootstrap_is_workload_controlled_and_model_free(self):
-        workflow=(ROOT/".github/workflows/verified-feedback-bootstrap.yml").read_text()
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/verified-feedback-bootstrap.yml")).read_text()
         self.assertIn("group: portfolio-feedback-bootstrap",workflow)
         self.assertIn("workload_control.workload_gate preflight",workflow)
         self.assertNotIn("cost_governor.workflow_gate",workflow)
@@ -255,7 +256,7 @@ class CostGovernorTests(unittest.TestCase):
 
 
     def test_continuous_learning_bootstrap_is_workload_controlled_and_model_free(self):
-        workflow=(ROOT/".github/workflows/continuous-learning-bootstrap.yml").read_text()
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/continuous-learning-bootstrap.yml")).read_text()
         self.assertIn("group: portfolio-learning-bootstrap",workflow)
         self.assertIn("workload_control.workload_gate preflight",workflow)
         self.assertNotIn("cost_governor.workflow_gate",workflow)
@@ -269,7 +270,7 @@ class CostGovernorTests(unittest.TestCase):
 
 
     def test_command_center_hourly_refresh_is_independent_from_paid_spend(self):
-        workflow = (ROOT / ".github/workflows/command-center-pages.yml").read_text()
+        workflow = (legacy_workflow_path(ROOT / ".github/workflows/command-center-pages.yml")).read_text()
         self.assertIn('cron: "37 * * * *"',workflow)
         self.assertIn("workflow_dispatch:",workflow)
         self.assertIn("\n  push:",workflow)

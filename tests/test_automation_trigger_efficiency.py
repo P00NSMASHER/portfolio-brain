@@ -1,4 +1,5 @@
 """Regression coverage for existing event routing, not new runtime capabilities."""
+from legacy.workflow_archive import legacy_workflow_path
 import fnmatch
 import re
 import unittest
@@ -15,7 +16,7 @@ CORE = {
 
 
 def workflow(name):
-    return (ROOT / '.github/workflows' / (name + '.yml')).read_text()
+    return (legacy_workflow_path(ROOT / '.github/workflows' / (name + '.yml'))).read_text()
 
 
 def block(text, key):

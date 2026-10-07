@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import copy
 import json
 import tempfile
@@ -130,7 +131,7 @@ class AgentHeartbeatStateTests(unittest.TestCase):
             validate_state(poisoned)
 
     def test_health_check_workflow_is_governed_and_recurring(self):
-        body=(ROOT/".github/workflows/agent-heartbeat-sweep.yml").read_text()
+        body=(legacy_workflow_path(ROOT/".github/workflows/agent-heartbeat-sweep.yml")).read_text()
         self.assertIn('cron: "29 */2 * * *"',body)
         self.assertIn("--all-registered",body)
         self.assertIn("--activity-kind HEALTH_CHECK",body)
@@ -148,13 +149,13 @@ class AgentHeartbeatStateTests(unittest.TestCase):
             ".github/workflows/software-factory-candidate.yml":"--agent-id AGT-ENGINEER",
         }
         for path,marker in required.items():
-            body=(ROOT/path).read_text()
+            body=legacy_workflow_path(ROOT/path).read_text()
             self.assertIn("python -m state_journal.production_reader --domain heartbeat",body,path)
             self.assertIn("python -m agents.heartbeat_state",body,path)
             self.assertIn(marker,body,path)
             self.assertIn("name: portfolio-agent-heartbeat-state",body,path)
             self.assertIn("path: agents/out/agent_heartbeat_state.json",body,path)
-        scheduler=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text()
+        scheduler=(legacy_workflow_path(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml")).read_text()
         self.assertNotIn("--selected-work scheduler/out/scheduled_work.json",scheduler)
 
 

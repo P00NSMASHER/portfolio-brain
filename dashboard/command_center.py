@@ -7,6 +7,7 @@ state, contacts customers, spends money, deploys, merges, or invokes external
 services.
 """
 from __future__ import annotations
+from legacy.workflow_archive import legacy_workflow_path
 
 import argparse
 import hashlib
@@ -442,7 +443,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
             }
         )
 
-    workflows = sorted(p.name for p in (ROOT / ".github" / "workflows").glob("*.yml") if p.name != "operator-console.yml")
+    workflows = sorted(p.name for p in (legacy_workflow_path(ROOT / ".github" / "workflows")).glob("*.yml") if p.name != "operator-console.yml")
     kill_switches = [
         _kill_switch("Runtime", "runtime/KILL_SWITCH.json"),
         _kill_switch("Scheduler", "scheduler/KILL_SWITCH.json"),

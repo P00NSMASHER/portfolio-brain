@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import unittest
 from pathlib import Path
 
@@ -17,7 +18,7 @@ def queue():
 class RepoScoutIntakeTests(unittest.TestCase):
     def test_scout_state_uses_dedicated_artifact_family(self):
         self.assertEqual(ARTIFACT_NAME,"portfolio-repo-scout-intake-state")
-        workflow=(ROOT/".github/workflows/hunter-autonomous-cycle.yml").read_text()
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/hunter-autonomous-cycle.yml")).read_text()
         self.assertIn("name: portfolio-repo-scout-intake-state",workflow)
         self.assertIn("path: hunting/out/repo_scout_intake_state.json",workflow)
 

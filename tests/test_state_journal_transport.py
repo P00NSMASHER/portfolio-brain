@@ -1,4 +1,5 @@
 """Provider-bound source admission and real emitter integration tests."""
+from legacy.workflow_archive import legacy_workflow_path
 import copy
 import gzip
 import hashlib
@@ -251,7 +252,7 @@ class StateJournalTransportTests(unittest.TestCase):
 
     def test_live_shadow_instrumentation_keeps_legacy_authoritative(self):
         for producer in PRODUCERS:
-            text=(ROOT/'.github/workflows'/f'{producer}.yml').read_text()
+            text=(legacy_workflow_path(ROOT/'.github/workflows'/f'{producer}.yml')).read_text()
             self.assertNotIn('PORTFOLIO_STATE_JOURNAL_ENABLED',text)
             self.assertIn('if: ${{ always() }}',text)
             self.assertIn('overwrite: false',text)
@@ -262,10 +263,10 @@ class StateJournalTransportTests(unittest.TestCase):
 
     def test_only_reducer_can_publish_canonical_journal(self):
         publishers=[]
-        for p in (ROOT/'.github/workflows').glob('*.yml'):
+        for p in (legacy_workflow_path(ROOT/'.github/workflows')).glob('*.yml'):
             if 'name: portfolio-canonical-shadow-state' in p.read_text():publishers.append(p.name)
         self.assertEqual(publishers,['portfolio-state-reducer.yml'])
-        text=(ROOT/'.github/workflows/portfolio-state-reducer.yml').read_text()
+        text=(legacy_workflow_path(ROOT/'.github/workflows/portfolio-state-reducer.yml')).read_text()
         self.assertIn('group: portfolio-state-reducer',text)
         self.assertNotIn('group: portfolio-state-writer-v1',text)
         self.assertIn('cancel-in-progress: false',text)
@@ -279,7 +280,7 @@ class StateJournalTransportTests(unittest.TestCase):
         self.assertEqual(smoke_dispatch.TARGETS,(
             'hunter-autonomous-cycle.yml','portfolio-autonomous-scheduler.yml',
             'runtime-hourly-sync.yml','agent-heartbeat-sweep.yml'))
-        workflow=(ROOT/'.github/workflows/step2-shadow-smoke.yml').read_text()
+        workflow=(legacy_workflow_path(ROOT/'.github/workflows/step2-shadow-smoke.yml')).read_text()
         self.assertIn('actions: write',workflow)
         self.assertIn('contents: read',workflow)
         self.assertNotIn('contents: write',workflow)
@@ -287,7 +288,7 @@ class StateJournalTransportTests(unittest.TestCase):
         self.assertIn('python -m state_journal.smoke_dispatch',workflow)
         self.assertIn('timeout-minutes: 40',workflow)
         for name in ('portfolio-autonomous-scheduler.yml','agent-heartbeat-sweep.yml'):
-            text=(ROOT/'.github/workflows'/name).read_text()
+            text=(legacy_workflow_path(ROOT/'.github/workflows'/name)).read_text()
             self.assertNotIn('\n  push:',text)
 
     def test_smoke_dispatch_requires_exact_merged_sha(self):

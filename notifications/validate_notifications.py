@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
+from legacy.workflow_archive import legacy_workflow_path
 import json
 from pathlib import Path
 from notifications.notification_engine import load_state,notification_cycle,policy,validate_policy
@@ -20,7 +21,7 @@ def validate_notifications():
     state,second=notification_cycle(state,at="2026-09-25T23:40:00Z")
     req(second["emitted_alerts"]==[] and len(second["suppressed_fingerprints"])==1,"duplicate/cooldown suppression failed")
     req(all(r["status"]=="ACTIVE" for r in state["alert_records"]),"current alerts unexpectedly resolved")
-    wf=(ROOT/".github/workflows/portfolio-notification-cycle.yml").read_text().lower()
+    wf=(legacy_workflow_path(ROOT/".github/workflows/portfolio-notification-cycle.yml")).read_text().lower()
     for text in ["7 */6 * * *","portfolio-notification","workload_control.workload_gate preflight","notifications.artifact_state","notifications.notification_engine","notifications.github_sink","portfolio_notification_disabled"]:
         req(text in wf,f"notification workflow missing {text}")
     for forbidden in ["contents: write","issues: write","pull-requests: write","deployments: write","id-token: write","curl ","webhook","slack","sms","smtp"]:

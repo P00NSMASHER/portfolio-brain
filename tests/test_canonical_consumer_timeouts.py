@@ -1,4 +1,5 @@
 """Canonical catch-up must fit inside every required consumer's wall-clock budget."""
+from legacy.workflow_archive import legacy_workflow_path
 import ast
 import copy
 import inspect
@@ -49,7 +50,7 @@ class ConsumerTimeoutTests(unittest.TestCase):
         policy = workload_gate.load_policy()
         for name, (job, expected, work_minutes) in SERVICES.items():
             with self.subTest(name=name):
-                text = (ROOT / f".github/workflows/{name}.yml").read_text()
+                text = (legacy_workflow_path(ROOT / f".github/workflows/{name}.yml")).read_text()
                 assert_budget(
                     text,
                     policy["services"][f"{name}::{job}"]["max_minutes_per_job"],
@@ -64,13 +65,13 @@ class ConsumerTimeoutTests(unittest.TestCase):
 
     def test_watchdog_can_finish_canonical_restore_and_recovery_work(self):
         wait = inspect.signature(_wait_for_reduction).parameters["timeout_seconds"].default
-        text = (ROOT / ".github/workflows/portfolio-cost-watchdog.yml").read_text()
+        text = (legacy_workflow_path(ROOT / ".github/workflows/portfolio-cost-watchdog.yml")).read_text()
         self.assertEqual(timeout_minutes(text), 8)
         self.assertGreaterEqual(8 * 60, wait + 2 * 60 + 60)
         self.assertIn("python -m state_journal.production_reader --domain cost", text)
 
     def test_reducer_does_not_consume_canonical_reader_and_keeps_independent_bound(self):
-        text = (ROOT / ".github/workflows/portfolio-state-reducer.yml").read_text()
+        text = (legacy_workflow_path(ROOT / ".github/workflows/portfolio-state-reducer.yml")).read_text()
         self.assertNotIn("state_journal.production_reader", text)
         self.assertEqual(timeout_minutes(text), 5)
         self.assertIn("group: portfolio-state-reducer", text)
@@ -90,7 +91,7 @@ class ConsumerTimeoutTests(unittest.TestCase):
 
 class RuntimeConsumerTimeoutTests(unittest.TestCase):
     def setUp(self):
-        self.worker = (ROOT/'.github/workflows/runtime-worker.yml').read_text()
+        self.worker = (legacy_workflow_path(ROOT/'.github/workflows/runtime-worker.yml')).read_text()
         self.budgets = json.loads((ROOT/'runtime/RUNTIME_POLICY.json').read_text())['budgets']
         self.workload = workload_gate.load_policy()
         self.cost = json.loads((ROOT/'cost_governor/COST_GOVERNOR_POLICY.json').read_text())

@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import json
 import os
 import tempfile
@@ -50,7 +51,10 @@ class CanonicalProductionReaderTests(unittest.TestCase):
         state = canonical_snapshot()
         fake = FakeReader(artifacts)
         with tempfile.TemporaryDirectory() as td, \
-             patch.dict(os.environ, {"GITHUB_TOKEN": "token", "GITHUB_RUN_ID": "999"}, clear=False), \
+             patch.dict(os.environ, {
+                 "GITHUB_TOKEN": "token", "GITHUB_RUN_ID": "999",
+                 "PORTFOLIO_CANONICAL_CACHE": str(Path(td) / "canonical-cache.json"),
+             }, clear=False), \
              patch("state_journal.production_reader.GitHubReader", return_value=fake), \
              patch("state_journal.production_reader.restore_snapshot", return_value=state):
             output = Path(td) / "heartbeat.json"
@@ -220,12 +224,12 @@ class CanonicalProductionReaderTests(unittest.TestCase):
         ]
         for name in names:
             with self.subTest(workflow=name):
-                text = (ROOT / ".github/workflows" / name).read_text()
+                text = (legacy_workflow_path(ROOT / ".github/workflows" / name)).read_text()
                 self.assertIn("state_journal.production_reader", text)
 
     def test_reducer_remains_only_canonical_snapshot_publisher(self):
         publishers = []
-        for workflow in (ROOT / ".github/workflows").glob("*.yml"):
+        for workflow in (legacy_workflow_path(ROOT / ".github/workflows")).glob("*.yml"):
             if "name: portfolio-canonical-shadow-state" in workflow.read_text():
                 publishers.append(workflow.name)
         self.assertEqual(publishers, ["portfolio-state-reducer.yml"])

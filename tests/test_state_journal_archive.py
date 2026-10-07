@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import json
 import tempfile
 import unittest
@@ -242,8 +243,8 @@ class ArchiveLifecycleTests(unittest.TestCase):
 
     def test_checkpoint_candidate_and_reducer_are_recurring_but_protected(self):
         root = Path(__file__).resolve().parents[1]
-        reducer = (root / ".github/workflows/portfolio-state-reducer.yml").read_text()
-        candidate = (root / ".github/workflows/portfolio-state-checkpoint-candidate.yml").read_text()
+        reducer = (legacy_workflow_path(root / ".github/workflows/portfolio-state-reducer.yml")).read_text()
+        candidate = (legacy_workflow_path(root / ".github/workflows/portfolio-state-checkpoint-candidate.yml")).read_text()
         self.assertIn('cron: "11 4 * * *"', reducer)
         self.assertIn('cron: "19 * * * *"', candidate)
         self.assertIn("actions: read", reducer)

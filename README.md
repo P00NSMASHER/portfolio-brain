@@ -1,41 +1,62 @@
 # Portfolio Brain
 
-Autonomous portfolio intelligence control plane for PRJ-000.
+A small, autonomous business-portfolio intelligence engine. It observes projects,
+finds reusable implementations, keeps evidence-backed memory, runs bounded
+experiments, and produces engineering and business research reports.
 
-**Historical baseline: OPERATIONAL.** The original Steps 0–25 build reached its operating baseline. The September 30 automation-audit remediation tracked in issue #210 is a separate acceptance track and is not implied complete by that historical status. Ordinary core operation runs through GitHub automation and durable machine-readable state; interactive ChatGPT and external connectors are not required runtime dependencies. Current configuration-derived architecture is recorded in `docs/CURRENT_SYSTEM_STATUS.md`.
+The active implementation is **`brain/`**. The former workflow control plane is
+retired. Its code and historical evidence remain available for recovery and offline
+regression testing; they do not establish current operational readiness. Historical
+issue #210 is a separate acceptance track and is not marked complete by this rebuild.
 
-## Operating mode
+## What it does
 
-Portfolio Brain can autonomously:
+- Monitors four registered public project repositories at exact revisions.
+- Rotates business-focused searches across freight recovery, agent products, and school tools.
+- Inspects actual source blobs and test paths, preserving source hashes and license classifications. No license type filters discovery.
+- Ranks reusable code from transparent structural evidence, stores observations and outcomes, and produces experiment plans and commercial hypotheses.
+- Runs a reviewed invoice-deduplication experiment with positive and adversarial simulated cases, comparing correctness and operation counts.
+- Refreshes its reusable-code knowledge through at most one evidence-qualified protected PR per week. The existing independently credentialed verifier may merge eligible bot proposals only after required checks.
+- Automatically drains acknowledged interrupted work on restart. Failed source reads never advance source observations; other sources continue.
+- Also supports explicitly supplied USD long-only holdings, validated prices, exposure/concentration calculations, and fixed-holdings historical scenarios. No vendor subscription or brokerage integration is included.
 
-- observe registered repositories through bounded read-only adapters;
-- rebuild deterministic learning, uncertainty, experiment and allocation state;
-- run bounded public Hunter searches;
-- select evidence-gated work with duplicate/lease suppression;
-- enforce cost, retry and kill-switch limits; and
-- produce deduplicated evidence-gated notifications.
+It does **not** claim inspected third-party code is production-ready, estimate fictitious engineering savings, verify revenue without evidence, execute discovered code, send customer messages, place trades, deploy downstream projects, or spend money. Discovering code regardless of license is not a claim of independent rights verification.
 
-Paid model execution is enabled for governed OpenAI Luna, Terra, and Sol routes. The checked-in portfolio ceiling is $10, 40 model calls, and 80 API calls per UTC day; PRJ-000 has a $5 project ceiling. Individual calls still require an eligible route, a credential, a pre-execution reservation, and a valid usage receipt. A successful workflow run alone does not establish that useful work occurred.
+## Run
 
-## Permanent authority boundaries
+Python 3.12; no third-party runtime packages or paid model calls.
 
-Autonomous operation allows only narrowly bounded customer email through the action-engine policy. Education-product validation is limited to verified adult stakeholders and cannot contact minors, collect child data, or make consequential child-facing changes. Payment/cash movement, live trading or brokerage execution, deployment, secret changes, and unapproved consequential child-facing changes remain human-gated or prohibited. Merge authority is not human-gated: it is allowed only through the protected pull-request path after exact-head `validate` and the independent verifier App check both succeed, with no bypass.
+```bash
+python -m brain preflight --output brain-local/preflight --expected-sha "$(git rev-parse HEAD)"
+python -m brain init --db brain-local/state.sqlite --output brain-local/bootstrap
+python -m brain monitor --db brain-local/state.sqlite --output brain-local/monitor
+python -m brain research --db brain-local/state.sqlite --output brain-local/research
+python -m brain experiment --db brain-local/state.sqlite --output brain-local/experiment
+python -m brain doctor --db brain-local/state.sqlite --output brain-local/doctor
+python -m brain evolve --db brain-local/state.sqlite --output brain-local/upgrade
+```
 
-Because this repository is currently public, persistent state remains sanitized-only. Private customer/operational payloads, credentials, secrets and sensitive evidence bodies are not stored here.
+The sole recurring GitHub workflow runs hourly and persists **nonsecret public
+observations only** on `brain-state-v2`. GitHub scheduling is not a guarantee of
+continuous availability. `python -m brain service --db brain-local/state.sqlite
+--output brain-local/service` is the noninteractive continuous-process entry point
+for an existing host; an example service-manager configuration is documented.
+No external continuous host has been provisioned by this rebuild.
 
-## Evidence
+Private repository discovery uses an existing authorized `GITHUB_TOKEN` with
+`--private --repository owner/repository`, in private local state only. The public
+scheduled engine deliberately cannot publish private repository content. An
+inaccessible repository remains unavailable; no credential or access changes occur.
 
-- `PORTFOLIO_BUILD_STATE.json` — durable Steps 0–25 build/operating record.
-- `operations/OPERATING_MODE_POLICY.json` — approved autonomous operating mode.
-- `operations/OPERATING_MODE_STATUS.json` — post-promotion verification evidence.
-- `hostile/ATTACK_MATRIX.json` — Step 23 adversarial threat coverage.
-- `canary/CANARY_CONTRACT.md` — Step 24 no-prompt canary contract.
-- `.github/workflows/foundation-ci.yml` — deterministic full-chain validation.
+## Evidence and recovery
 
-## Owner-requested license workflow preference
+[Architecture, contracts, and honest acceptance matrix](docs/rebuild/ARCHITECTURE.md)
 
-`hunting/LICENSE_ADMISSION_POLICY.json` is the admission authority for **Brain-only license workflow decisions**. In `ADVISORY_OWNER_ASSUMED` mode, missing, copyleft, restricted, or custom license classifications do not block Hunter proposals, transfer planning, or shadow-challenger admission. Dedicated Hunter license-text fetches are skipped. The basis is recorded as `OPERATOR_ASSUMED`, not independently VERIFIED.
+[Recovery and unattended operation](docs/rebuild/OPERATIONS.md)
 
-Source classifications, copyright notices, hashes, license text, and historical rights states are not rewritten. A legacy `UNKNOWN_REQUIRES_REVIEW` source state describes evidence, not the current license-admission setting. This preference does not verify third-party permission, change downstream repositories, allow unauthorized access, or bypass budget, security, source-integrity, independent-verification, factory, action, deployment, or promotion controls.
+[Legacy inventory and forensic evidence](docs/rebuild/FORENSICS.md)
 
-`ENFORCE` remains available by explicitly changing both `mode` and `license_based_blocking`; unknown or inconsistent settings fail validation. Deterministic synthetic controls run with `python -m hunting.validate_license_admission`.
+Reports include HTML, Markdown, and machine-readable JSON. `PASS` from deterministic
+preflight is not production acceptance. Live delivery and exact-main pre-arm must
+also pass. A lengthy soak requires explicit authorization; none is started by these
+commands or schedules.

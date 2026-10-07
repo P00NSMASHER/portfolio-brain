@@ -1,4 +1,5 @@
 """Recovery may not discard independent learning or unproved observations."""
+from legacy.workflow_archive import legacy_workflow_path
 import copy
 import unittest
 from pathlib import Path
@@ -48,7 +49,7 @@ class RuntimeResumeSafetyTests(unittest.TestCase):
         self.assertEqual(winner, before)
 
     def test_all_runtime_modes_share_the_same_job_mutex_and_keep_paid_lock(self):
-        text = (ROOT/'.github/workflows/runtime-worker.yml').read_text()
+        text = (legacy_workflow_path(ROOT/'.github/workflows/runtime-worker.yml')).read_text()
         job = text.split('  runtime:\n', 1)[1].split('    steps:', 1)[0]
         self.assertIn('group: portfolio-state-writer-v1', job)
         self.assertIn('queue: max', job)
@@ -58,7 +59,7 @@ class RuntimeResumeSafetyTests(unittest.TestCase):
         self.assertIn("'portfolio-cost-governed-autonomy'", text.split('jobs:', 1)[0])
 
     def test_outer_event_caller_cannot_cancel_an_active_state_writer(self):
-        text = (ROOT/'.github/workflows/runtime-event-observe.yml').read_text()
+        text = (legacy_workflow_path(ROOT/'.github/workflows/runtime-event-observe.yml')).read_text()
         self.assertIn('cancel-in-progress: false', text)
         self.assertIn('queue: max', text)
         self.assertNotIn('cancel-in-progress: ${{', text)

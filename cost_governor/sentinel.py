@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Read-only resource/cost sentinel for Portfolio Brain."""
 from __future__ import annotations
+from legacy.workflow_archive import legacy_workflow_path
 
 import json
 import re
@@ -263,7 +264,7 @@ def build_sentinel_snapshot(
     )
     email_limit = action_policy["allowed_actions"]["CUSTOMER_EMAIL"]["max_per_utc_day"]
 
-    watchdog_text = (ROOT / ".github/workflows/portfolio-cost-watchdog.yml").read_text()
+    watchdog_text = (legacy_workflow_path(ROOT / ".github/workflows/portfolio-cost-watchdog.yml")).read_text()
     cron_match = re.search(r'cron:\s*"([^"]+)"', watchdog_text)
     timeout_match = re.search(r'timeout-minutes:\s*(\d+)', watchdog_text)
     cron = cron_match.group(1) if cron_match else None

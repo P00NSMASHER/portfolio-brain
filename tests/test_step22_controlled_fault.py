@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import base64
 import json
 import unittest
@@ -52,7 +53,7 @@ class Step22ControlledFaultTests(unittest.TestCase):
                 build_plan(sha, at="2026-09-30T20:30:00Z")
 
     def test_workflow_has_no_merge_or_default_branch_write_authority(self):
-        text = (ROOT / ".github" / "workflows" / "step22-controlled-repair-acceptance.yml").read_text()
+        text = (legacy_workflow_path(ROOT / ".github" / "workflows" / "step22-controlled-repair-acceptance.yml")).read_text()
         self.assertIn("actions: write", text)
         self.assertIn("contents: read", text)
         self.assertIn("pull-requests: read", text)

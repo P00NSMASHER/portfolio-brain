@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import json
 import subprocess
 import tempfile
@@ -233,7 +234,7 @@ class AutonomousRepairTests(unittest.TestCase):
         self.assertTrue(policy["require_test_change"])
 
     def test_workflow_is_event_driven_guarded_and_has_no_merge_command(self):
-        text = (ROOT / ".github/workflows/portfolio-autonomous-repair.yml").read_text()
+        text = (legacy_workflow_path(ROOT / ".github/workflows/portfolio-autonomous-repair.yml")).read_text()
         lower = text.lower()
         self.assertIn("workflow_run:", text)
         self.assertIn("workflow_dispatch:", text)

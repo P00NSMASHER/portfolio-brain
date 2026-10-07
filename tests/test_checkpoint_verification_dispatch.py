@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import unittest
 from pathlib import Path
 
@@ -5,7 +6,7 @@ ROOT=Path(__file__).resolve().parents[1]
 
 class CheckpointVerificationDispatchTests(unittest.TestCase):
     def test_checkpoint_finalizer_retries_trusted_dispatch_until_independent_gate_exists(self):
-        text=(ROOT/".github/workflows/portfolio-state-checkpoint-candidate.yml").read_text()
+        text=(legacy_workflow_path(ROOT/".github/workflows/portfolio-state-checkpoint-candidate.yml")).read_text()
         self.assertIn("Dispatch Foundation verification when independent gate is still missing",text)
         self.assertIn('"portfolio-phase1-gate"',text)
         self.assertIn('row.get("app",{}).get("id")==5121826',text)
@@ -16,7 +17,7 @@ class CheckpointVerificationDispatchTests(unittest.TestCase):
         self.assertIn('gh workflow run foundation-ci.yml --ref "$CHECKPOINT_BRANCH"',text)
 
     def test_legitimate_checkpoint_noop_does_not_require_candidate_pr(self):
-        text=(ROOT/".github/workflows/portfolio-state-checkpoint-candidate.yml").read_text()
+        text=(legacy_workflow_path(ROOT/".github/workflows/portfolio-state-checkpoint-candidate.yml")).read_text()
         self.assertIn(
             "steps.incident.outputs.active == 'true' || steps.generate.outputs.changed == 'true'",
             text,

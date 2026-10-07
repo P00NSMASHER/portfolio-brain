@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import unittest
 from unittest.mock import patch
 
@@ -191,7 +192,7 @@ class PrearmCleanupTests(unittest.TestCase):
         from pathlib import Path
 
         root=Path(__file__).resolve().parents[1]
-        self.assertFalse((root/".github/workflows/step23-admin-zombie-cleanup.yml").exists())
+        self.assertFalse((legacy_workflow_path(root/".github/workflows/step23-admin-zombie-cleanup.yml")).exists())
 
 
 if __name__=="__main__":

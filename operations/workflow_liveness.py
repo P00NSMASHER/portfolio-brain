@@ -6,6 +6,7 @@ workflow_dispatch for an overdue core workflow; the target workflow must still
 pass its own cost, authority, kill-switch, and concurrency gates.
 """
 from __future__ import annotations
+from legacy.workflow_archive import legacy_workflow_path
 
 import argparse
 import hashlib
@@ -107,12 +108,12 @@ def validate_policy(p:dict[str,Any])->None:
         req(isinstance(target["proof_member"],str) and target["proof_member"].endswith(".json") and "/" not in target["proof_member"],"workflow liveness proof member invalid")
         req(target["proof_kind"] in PROOF_KINDS,"workflow liveness proof kind invalid")
 
-        workflow_path=ROOT/".github"/"workflows"/target["workflow_file"]
+        workflow_path=legacy_workflow_path(ROOT/".github"/"workflows"/target["workflow_file"])
         req(workflow_path.exists(),"workflow liveness target file missing")
         workflow_body=workflow_path.read_text(encoding="utf-8")
         reusable_marker="uses: ./.github/workflows/runtime-worker.yml"
         if reusable_marker in workflow_body:
-            workflow_body+="\n"+(ROOT/".github"/"workflows"/"runtime-worker.yml").read_text(encoding="utf-8")
+            workflow_body+="\n"+(legacy_workflow_path(ROOT/".github"/"workflows"/"runtime-worker.yml")).read_text(encoding="utf-8")
         req(f'name: {target["proof_artifact_name"]}' in workflow_body,"workflow liveness proof artifact is not produced by target")
 
         if target["admission_domain"]=="WORKLOAD":

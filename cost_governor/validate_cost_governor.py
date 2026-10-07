@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
+from legacy.workflow_archive import legacy_workflow_path
 
 import json
 from pathlib import Path
@@ -144,8 +145,8 @@ def validate_cost_governor():
         "paid hard stop incorrectly blocked non-paid wrapper work")
 
     paid_workflows = {
-        "runtime-worker": ROOT / ".github/workflows/runtime-worker.yml",
-        "model-value-proof": ROOT / ".github/workflows/model-value-proof.yml",
+        "runtime-worker": legacy_workflow_path(ROOT / ".github/workflows/runtime-worker.yml"),
+        "model-value-proof": legacy_workflow_path(ROOT / ".github/workflows/model-value-proof.yml"),
     }
     for name, workflow_path in paid_workflows.items():
         body = workflow_path.read_text(encoding="utf-8").lower()
@@ -169,7 +170,7 @@ def validate_cost_governor():
         "continuous-learning-bootstrap": ("bootstrap", "portfolio-learning-bootstrap", 2),
     }
     for workflow_id, (job_id, group, minutes) in nonpaid_workflows.items():
-        body = (ROOT / ".github/workflows" / f"{workflow_id}.yml").read_text(encoding="utf-8")
+        body = (legacy_workflow_path(ROOT / ".github/workflows" / f"{workflow_id}.yml")).read_text(encoding="utf-8")
         req("workload_control.workload_gate preflight" in body,
             f"{workflow_id} missing workload admission")
         req("cost_governor.workflow_gate" not in body,
@@ -229,7 +230,7 @@ def validate_cost_governor():
         req(cfg["max_minutes_per_job"] > 0, f"{key} per-job timeout missing")
 
     command_center = nonpaid_workflows["command-center-pages"]
-    command_body = (ROOT / ".github/workflows/command-center-pages.yml").read_text(encoding="utf-8").lower()
+    command_body = (legacy_workflow_path(ROOT / ".github/workflows/command-center-pages.yml")).read_text(encoding="utf-8").lower()
     req('cron: "37 * * * *"' in command_body, "hourly command-center refresh schedule missing")
     req("portfolio_spend_disabled" not in command_body,
         "command-center publication is still coupled to spend kill switch")
@@ -244,14 +245,14 @@ def validate_cost_governor():
     req("portfolio_model_api_key" in value_proof, "model value proof credential binding missing")
     req("value_proof.end_to_end" in value_proof, "model value proof finalization missing")
 
-    feedback = (ROOT / ".github/workflows/verified-feedback-bootstrap.yml").read_text(encoding="utf-8").lower()
-    learning = (ROOT / ".github/workflows/continuous-learning-bootstrap.yml").read_text(encoding="utf-8").lower()
+    feedback = (legacy_workflow_path(ROOT / ".github/workflows/verified-feedback-bootstrap.yml")).read_text(encoding="utf-8").lower()
+    learning = (legacy_workflow_path(ROOT / ".github/workflows/continuous-learning-bootstrap.yml")).read_text(encoding="utf-8").lower()
     for name, body in (("verified feedback", feedback), ("continuous learning", learning)):
         req("portfolio_model_api_key" not in body, f"{name} unexpectedly binds model credentials")
         req("python -m value_proof.model_task" not in body and "python -m value_proof.verifier" not in body,
             f"{name} unexpectedly executes paid model calls")
 
-    watchdog = (ROOT / ".github/workflows/portfolio-cost-watchdog.yml").read_text(encoding="utf-8").lower()
+    watchdog = (legacy_workflow_path(ROOT / ".github/workflows/portfolio-cost-watchdog.yml")).read_text(encoding="utf-8").lower()
     req("actions: write" in watchdog and "contents: read" in watchdog and "contents: write" not in watchdog,
         "watchdog permissions invalid")
     req("cost_governor.cancel_managed_jobs" in watchdog, "watchdog cancellation helper missing")

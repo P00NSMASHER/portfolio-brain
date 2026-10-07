@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "active_runtime": "brain",
+  "state_branch": "brain-state-v2",
+  "cron": "17 * * * *",
+  "max_requests_per_operation": 24,
+  "request_timeout_seconds": 10,
+  "max_transient_retries": 1,
+  "max_source_age_seconds": 172800,
+  "paid_calls": 0,
+  "downstream_write_authority": false,
+  "trading_authority": false,
+  "external_message_authority": false,
+  "discovered_code_execution": false,
+  "license_discovery_filter": false,
+  "public_state_accepts_private_inputs": false,
+  "self_upgrade_scope": "EVIDENCE_RANKING_AND_RECOVERY_WITH_PROTECTED_CODE_PR_PATH",
+  "repositories": ["P00NSMASHER/portfolio-brain", "P00NSMASHER/trading-platform", "P00NSMASHER/abvmschoolstarworld", "P00NSMASHER/github-value-hunt-ledger"],
+  "research_targets": [
+    {"project": "freight-recovery", "query": "freight invoice audit", "terms": ["invoice", "freight", "duplicate", "audit"]},
+    {"project": "agent-products", "query": "x402 python", "terms": ["payment", "x402", "verify", "settle"]},
+    {"project": "school-tools", "query": "spaced repetition typescript", "terms": ["quiz", "review", "schedule", "study"]}
+  ]
+}
