@@ -273,6 +273,83 @@ def validate_step23(receipt: dict[str, Any]) -> None:
     _require(receipt.get("run_classification_policy") == "EXPLICIT", "Step 23 run classification is not explicit")
     _require(receipt.get("hash_traceability_pass") is True, "Step 23 hash traceability failed")
     _require(receipt.get("dashboard_fresh") is True, "Step 23 dashboard is stale")
+    _require(receipt.get("transport_mode") == cfg["transport_mode"], "Step 23 transport mode drifted")
+
+    required_workflows=set(cfg["required_workflows"])
+    minimums=cfg.get("min_successful_cycles_by_workflow")
+    _require(isinstance(minimums,dict) and set(minimums)==required_workflows,
+             "Step 23 per-workflow success policy invalid")
+    _require(all(type(v) is int and v>=1 for v in minimums.values()),
+             "Step 23 per-workflow success minimum invalid")
+
+    clock_receipts=receipt.get("clock_receipts")
+    _require(isinstance(clock_receipts,list) and clock_receipts,
+             "Step 23 clock receipt evidence missing")
+    clock_by_id:dict[int,dict[str,Any]]={}
+    target_to_clock:dict[int,tuple[str,int]]={}
+    for clock in clock_receipts:
+        _require(isinstance(clock,dict),"Step 23 clock receipt row invalid")
+        clock_id=clock.get("run_id")
+        _require(type(clock_id) is int and clock_id>0 and clock_id not in clock_by_id,
+                 "Step 23 clock run identity invalid/duplicated")
+        clock_workflow=clock.get("workflow")
+        clock_event=clock.get("event")
+        _require(clock_workflow in {"portfolio-schedule-delivery","portfolio-schedule-clock-tick"},
+                 "Step 23 unexpected clock workflow")
+        if clock_workflow=="portfolio-schedule-delivery":
+            _require(clock_event=="schedule","Step 23 native clock carrier is not scheduled")
+            _require(clock.get("source_workflow")=="portfolio-schedule-delivery"
+                     and clock.get("source_event")=="schedule"
+                     and clock.get("source_run_id")==clock_id,
+                     "Step 23 native clock source identity invalid")
+        else:
+            _require(clock_event=="workflow_dispatch","Step 23 daemon clock tick transport invalid")
+            _require(clock.get("source_workflow")=="portfolio-schedule-clock-daemon"
+                     and clock.get("source_event")=="schedule"
+                     and type(clock.get("source_run_id")) is int and clock["source_run_id"]>0,
+                     "Step 23 daemon clock source identity invalid")
+        _validate_sha40(clock.get("head_sha"),"Step 23 clock.head_sha")
+        _require(clock["head_sha"]==receipt["exact_main_sha"],
+                 "Step 23 clock receipt is not bound to exact soak main")
+        _validate_sha256(clock.get("artifact_hash"),"Step 23 clock.artifact_hash")
+        _require(clock.get("authority_granted") is False
+                 and clock.get("dispatch_authority_effect")=="NONE",
+                 "Step 23 redundant clock widened portfolio authority")
+        targets=clock.get("bound_targets")
+        _require(isinstance(targets,list),"Step 23 clock bound_targets missing")
+        for target in targets:
+            _require(isinstance(target,dict),"Step 23 clock target binding invalid")
+            target_id=target.get("target_run_id")
+            target_workflow=target.get("workflow")
+            _require(target_workflow in required_workflows
+                     and type(target_id) is int and target_id>0,
+                     "Step 23 clock target identity invalid")
+            _require(target_id not in target_to_clock,
+                     "Step 23 target run is bound by multiple clock receipts")
+            target_to_clock[target_id]=(target_workflow,clock_id)
+        clock_by_id[clock_id]=clock
+
+    canary=receipt.get("native_scheduler_canary")
+    _require(isinstance(canary,dict),"Step 23 native scheduler canary missing")
+    canary_id=canary.get("run_id")
+    _require(type(canary_id) is int and canary_id in clock_by_id,
+             "Step 23 native scheduler canary clock run missing")
+    _require(canary.get("workflow")=="portfolio-schedule-delivery"
+             and canary.get("event")=="schedule",
+             "Step 23 native scheduler canary is not a genuine schedule run")
+    _validate_sha40(canary.get("head_sha"),"Step 23 native canary.head_sha")
+    _require(canary["head_sha"]==receipt["exact_main_sha"],
+             "Step 23 native scheduler canary is not exact main")
+    _validate_sha256(canary.get("artifact_hash"),"Step 23 native canary.artifact_hash")
+    _require(canary.get("clock_status")=="PASS"
+             and canary.get("authority_granted") is False
+             and canary.get("dispatch_authority_effect")=="NONE",
+             "Step 23 native scheduler canary did not prove bounded clock execution")
+    canary_clock=clock_by_id[canary_id]
+    _require(canary_clock["workflow"]=="portfolio-schedule-delivery"
+             and canary_clock["event"]=="schedule"
+             and canary_clock["artifact_hash"]==canary["artifact_hash"],
+             "Step 23 native scheduler canary does not match clock evidence")
 
     runs = receipt.get("runs")
     _require(isinstance(runs, list) and runs, "Step 23 run evidence missing")
