@@ -3,8 +3,6 @@ name: hunter-autonomous-cycle
 on:
   schedule:
     - cron: "47 */6 * * *"
-    # One-shot scheduler re-registration canary; read-only job only.
-    - cron: "33 16 6 10 *"
   push:
     branches: ["main"]
     paths:
