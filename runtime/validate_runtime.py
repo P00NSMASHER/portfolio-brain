@@ -14,7 +14,7 @@ def load(p): return json.loads((ROOT/p).read_text())
 def validate_workflow_budgets(worker: str, budgets: dict, workload: dict, cost: dict)->dict:
     """Catch-up and core work need separate time without widening paid admission."""
     timeouts=re.findall(
-        r"(?m)^    timeout-minutes: \\$\\{\\{ inputs\\.prearm_id != '' && ([0-9]+) \\|\\| \\(\\(inputs\\.mode == 'observe' \\|\\| inputs\\.mode == 'sync'\\) && ([0-9]+) \\|\\| ([0-9]+)\\) \\$\\}\\}$",
+        r"(?m)^    timeout-minutes: \$\{\{ inputs\.prearm_id != '' && ([0-9]+) \|\| \(\(inputs\.mode == 'observe' \|\| inputs\.mode == 'sync'\) && ([0-9]+) \|\| ([0-9]+)\) \}\}$",
         worker,
     )
     req(len(timeouts)==1,"runtime timeout must isolate pre-arm, sync/observe from paid and unsupported modes")
