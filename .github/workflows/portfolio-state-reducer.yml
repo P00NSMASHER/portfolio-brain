@@ -1,5 +1,5 @@
 name: portfolio-state-reducer
-run-name: ${{ inputs.prearm_id || github.workflow }}
+run-name: ${{ inputs.prearm_id || (github.event_name == 'workflow_run' && github.event.action == 'in_progress' && format('writerbarrier-{0}-{1}-{2}', github.event.workflow_run.id, github.event.workflow_run.run_attempt, github.event.workflow_run.name)) || github.workflow }}
 
 on:
   schedule:
@@ -17,13 +17,14 @@ on:
       - model-value-proof
       - operator-console
       - portfolio-autonomous-scheduler
+      - portfolio-cost-watchdog
       - portfolio-notification-cycle
       - runtime-daily-learning
       - runtime-event-observe
       - runtime-hourly-sync
       - runtime-weekly-synthesis
       - verified-feedback-bootstrap
-    types: [completed]
+    types: [in_progress, completed]
   workflow_dispatch:
     inputs:
       prearm_id:
@@ -47,6 +48,27 @@ concurrency:
 
 jobs:
   reduce:
+    if: >-
+      ${{
+        github.event_name != 'workflow_run' ||
+        github.event.action == 'completed' ||
+        (
+          github.event.action == 'in_progress' &&
+          (
+            github.event.workflow_run.name == 'runtime-hourly-sync' ||
+            github.event.workflow_run.name == 'portfolio-autonomous-scheduler' ||
+            github.event.workflow_run.name == 'hunter-autonomous-cycle' ||
+            github.event.workflow_run.name == 'agent-heartbeat-sweep' ||
+            github.event.workflow_run.name == 'portfolio-cost-watchdog' ||
+            github.event.workflow_run.name == 'portfolio-notification-cycle' ||
+            github.event.workflow_run.name == 'command-center-pages'
+          ) &&
+          !(
+            github.event.workflow_run.event == 'workflow_dispatch' &&
+            startsWith(github.event.workflow_run.display_title, 'prearm-')
+          )
+        )
+      }}
     # Sole canonical writer: independent reducer lane lets it catch up while a
     # serialized producer waits at the stale-state barrier.
     runs-on: ubuntu-latest

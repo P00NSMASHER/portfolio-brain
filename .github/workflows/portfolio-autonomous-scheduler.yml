@@ -64,8 +64,8 @@ jobs:
           path: scheduler/out/step23_handler_acceptance.json
           if-no-files-found: error
           retention-days: 30
-      - name: Wait for pre-arm reducer barrier after writer-lane acquisition
-        if: ${{ inputs.prearm_id != '' && steps.workload.outputs.allowed == 'true' }}
+      - name: Wait for reducer barrier after writer-lane acquisition
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         env:
           STEP23_PREARM_ID: ${{ inputs.prearm_id }}
         run: >-
@@ -73,8 +73,8 @@ jobs:
           --target portfolio-autonomous-scheduler
           --exact-sha "$GITHUB_SHA"
           --output acceptance/out/step23-barrier-wait-${GITHUB_RUN_ID}.json
-      - name: Preserve pre-arm reducer barrier wait evidence
-        if: ${{ inputs.prearm_id != '' && steps.workload.outputs.allowed == 'true' }}
+      - name: Preserve reducer barrier wait evidence
+        if: ${{ steps.workload.outputs.allowed == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: portfolio-step23-barrier-wait-${{ github.run_id }}

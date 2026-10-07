@@ -76,6 +76,23 @@ jobs:
           path: operations/out/workflow_liveness_pre_restore.json
           if-no-files-found: error
           retention-days: 30
+      - name: Wait for steady-state reducer barrier before canonical cost restore
+        if: ${{ inputs.prearm_id == '' }}
+        env:
+          STEP23_PREARM_ID: ""
+        run: >-
+          python -m acceptance.step23_wait_reducer_barrier
+          --target portfolio-cost-watchdog
+          --exact-sha "$GITHUB_SHA"
+          --output acceptance/out/step23-barrier-wait-${GITHUB_RUN_ID}.json
+      - name: Preserve steady-state reducer barrier wait evidence
+        if: ${{ inputs.prearm_id == '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-step23-barrier-wait-${{ github.run_id }}
+          path: acceptance/out/step23-barrier-wait-${{ github.run_id }}.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Restore canonical cost-governor state
         run: python -m state_journal.production_reader --domain cost --output cost_governor/live/cost_state.json --metadata-output cost_governor/live/cost_restore.json
       - name: Cancel only managed autonomous runs on hard stop

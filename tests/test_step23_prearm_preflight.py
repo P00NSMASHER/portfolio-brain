@@ -43,23 +43,42 @@ class Step23PrearmPreflightTests(unittest.TestCase):
         ):
             with self.subTest(filename=filename):
                 text=(root/".github/workflows"/filename).read_text()
-                barrier=text.index("Wait for pre-arm reducer barrier after writer-lane acquisition")
+                barrier=text.index("Wait for reducer barrier after writer-lane acquisition")
                 restore=text.index("Restore canonical",barrier)
                 self.assertLess(barrier,restore)
                 self.assertIn("acceptance.step23_wait_reducer_barrier",text)
                 self.assertIn(f"--target {target}",text)
-                self.assertIn("inputs.prearm_id != ''",text)
+                self.assertIn("if: ${{ steps.workload.outputs.allowed == 'true' }}",text)
                 self.assertRegex(text,r"(?m)^  actions: (?:read|write)$")
 
-    def test_runtime_sync_forwards_and_waits_for_prearm_barrier(self):
+    def test_runtime_sync_forwards_and_waits_for_barrier(self):
         from pathlib import Path
         root=Path(__file__).resolve().parents[1]
         hourly=(root/".github/workflows/runtime-hourly-sync.yml").read_text()
         worker=(root/".github/workflows/runtime-worker.yml").read_text()
         self.assertIn("prearm_id: ${{ inputs.prearm_id }}",hourly)
-        self.assertIn("Wait for pre-arm reducer barrier after writer-lane acquisition",worker)
+        self.assertIn("Wait for reducer barrier after writer-lane acquisition",worker)
         self.assertIn("--target runtime-hourly-sync",worker)
-        self.assertIn("inputs.prearm_id != ''",worker)
+        self.assertIn("if: ${{ inputs.mode == 'sync' && steps.admission.outputs.allowed == 'true' }}",worker)
+
+    def test_steady_writer_starts_trigger_correlated_reducer_barriers(self):
+        from pathlib import Path
+        root=Path(__file__).resolve().parents[1]
+        reducer=(root/".github/workflows/portfolio-state-reducer.yml").read_text()
+        self.assertIn("types: [in_progress, completed]",reducer)
+        self.assertIn("writerbarrier-{0}-{1}-{2}",reducer)
+        self.assertIn("portfolio-cost-watchdog",reducer)
+        self.assertIn("startsWith(github.event.workflow_run.display_title, 'prearm-')",reducer)
+
+    def test_cost_watchdog_waits_for_steady_barrier_before_canonical_restore(self):
+        from pathlib import Path
+        root=Path(__file__).resolve().parents[1]
+        text=(root/".github/workflows/portfolio-cost-watchdog.yml").read_text()
+        barrier=text.index("Wait for steady-state reducer barrier before canonical cost restore")
+        restore=text.index("Restore canonical cost-governor state")
+        self.assertLess(barrier,restore)
+        self.assertIn("--target portfolio-cost-watchdog",text)
+        self.assertIn("inputs.prearm_id == ''",text)
 
     def test_queue_wait_does_not_consume_execution_timeout(self):
         source=inspect.getsource(preflight.wait_for_correlated_run)
