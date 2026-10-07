@@ -1,7 +1,10 @@
 import unittest
 from unittest.mock import patch
 
-from acceptance.step23_prearm_cleanup import (\n    StuckAfterForceCancel, _cancel_and_wait, _delete_stuck_stale,\n    leaked_title, purge, stale_non_schedule_blocker,\n)
+from acceptance.step23_prearm_cleanup import (
+    StuckAfterForceCancel, _cancel_and_wait, _delete_stuck_stale,
+    leaked_title, purge, stale_non_schedule_blocker,
+)
 
 
 class PrearmCleanupTests(unittest.TestCase):
