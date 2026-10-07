@@ -53,7 +53,8 @@ class OperatingModeTests(unittest.TestCase):
     def test_event_driven_inventory_includes_autonomous_repair_without_schedule(self):
         policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
         self.assertEqual(set(policy["event_driven_workflows"]),{
-          "runtime-event-observe","portfolio-autonomous-repair","portfolio-independent-verifier"
+          "runtime-event-observe","portfolio-autonomous-repair","portfolio-independent-verifier",
+          "step23-prearm-preflight"
         })
         repair=ROOT/".github/workflows/portfolio-autonomous-repair.yml"
         triggers=workflow_top_level_triggers(repair)
@@ -98,6 +99,10 @@ class OperatingModeTests(unittest.TestCase):
         self.assertEqual(control["status"],"CANARY_REQUIRED")
         self.assertIsNone(control["next_soak_start"])
         self.assertFalse(control["acceptance_complete"])
+        self.assertEqual(control["required_successes_per_workflow"],2)
+        self.assertEqual(control["max_soak_duration_seconds"],7200)
+        self.assertEqual(window["required_successes_per_workflow"],2)
+        self.assertEqual(window["max_soak_duration_seconds"],7200)
         self.assertNotIn("step23-live-soak-observer",actual)
         monitor=(ROOT/".github/workflows/portfolio-schedule-delivery.yml").read_text()
         self.assertIn("actions: read",monitor)
