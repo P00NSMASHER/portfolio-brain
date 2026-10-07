@@ -8,6 +8,7 @@ from runtime.artifact_restore import _atomic_write
 from state_journal.archive import archived_artifact_ids, load_active_manifest
 from state_journal.contracts import DOMAINS, canonical, digest, require, strict_load, validate_domain
 from state_journal.github_reducer import latest_snapshot_artifact, restore_snapshot
+from state_journal.provider_quarantine import reducer_run_is_quarantined
 from state_journal.reducer import validate_snapshot
 from state_journal.transport import EVENT_PREFIX, SNAPSHOT_ARTIFACT, GitHubReader
 
@@ -104,6 +105,7 @@ def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, curren
             row for row in runs
             if row.get("name") == "portfolio-state-reducer"
             and row.get("head_branch") == "main"
+            and not reducer_run_is_quarantined(row.get("id"))
             and row.get("status") == "completed"
             and row.get("conclusion") == "success"
             and (completed_at := _provider_time(row.get("updated_at"))) is not None
