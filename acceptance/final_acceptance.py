@@ -362,7 +362,25 @@ def validate_step23(receipt: dict[str, Any]) -> None:
         _require(isinstance(row, dict), "Step 23 run row invalid")
         workflow = row.get("workflow")
         _require(workflow in successes, f"Step 23 unexpected workflow: {workflow}")
-        _require(row.get("event") == "schedule", f"Step 23 {workflow} evidence is not scheduled")
+        event=row.get("event")
+        _require(event in {"schedule","workflow_dispatch"}, f"Step 23 {workflow} transport event invalid")
+        binding=row.get("transport_binding")
+        _require(isinstance(binding,dict),f"Step 23 {workflow} transport binding missing")
+        if event=="schedule":
+            _require(binding.get("kind")=="NATIVE_SCHEDULE",
+                     f"Step 23 {workflow} native schedule binding invalid")
+        else:
+            _require(binding.get("kind")=="REDUNDANT_CLOCK",
+                     f"Step 23 {workflow} dispatch lacks redundant-clock binding")
+            clock_id=binding.get("clock_run_id")
+            _require(type(clock_id) is int and clock_id in clock_by_id,
+                     f"Step 23 {workflow} dispatch clock run missing")
+            _require(target_to_clock.get(row.get("run_id"))==(workflow,clock_id),
+                     f"Step 23 {workflow} dispatch is not listed in its clock receipt")
+            _require(binding.get("clock_artifact_hash")==clock_by_id[clock_id]["artifact_hash"],
+                     f"Step 23 {workflow} dispatch clock artifact hash mismatch")
+            _require(binding.get("clock_source_workflow")==clock_by_id[clock_id]["source_workflow"],
+                     f"Step 23 {workflow} dispatch clock source mismatch")
         _require(row.get("classification") in {"SUCCESS", "CANCELLED_COALESCED", "FAILURE"},
                  f"Step 23 {workflow} classification invalid")
         classification = row["classification"]
@@ -419,12 +437,15 @@ def validate_step23(receipt: dict[str, Any]) -> None:
             f"Step 23 coalesced run {row['run_id']} successor is not later by timestamp",
         )
 
-    minimum = cfg["min_successful_scheduled_cycles_per_workflow"]
     for workflow, count in successes.items():
-        _require(count >= minimum, f"Step 23 {workflow} has only {count} successful scheduled cycles")
+        minimum=minimums[workflow]
+        _require(count >= minimum,
+                 f"Step 23 {workflow} has only {count} successful accepted cycles; requires {minimum}")
 
+    reducer_minimum=minimums["portfolio-state-reducer"]
     samples = receipt.get("canonical_samples")
-    _require(isinstance(samples, list) and len(samples) >= minimum, "Step 23 canonical samples insufficient")
+    _require(isinstance(samples, list) and len(samples) >= reducer_minimum,
+             "Step 23 canonical samples insufficient")
     previous = -1
     sample_run_ids: set[int] = set()
     reducer_success_ids = successful_run_ids["portfolio-state-reducer"]
