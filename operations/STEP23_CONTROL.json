@@ -4,7 +4,7 @@
   "retired_window_start": "2026-10-06T04:00:00Z",
   "retired_window_end": "2026-10-06T05:00:00Z",
   "retired_main_sha": "475b7edac7c9d988624fae4832b0bedccc125219",
-  "reason": "PREARM_HARDENED",
+  "reason": "PREARM_HARDENED_CORRELATION_REPAIRED",
   "next_soak_start": null,
   "qualification_method": "UNARMED_PREARM_DOCTOR",
   "registration_delay_minutes": 5,
