@@ -1,0 +1,6 @@
+{
+  "authority_widened": false,
+  "reason": "INSUFFICIENT_UPGRADE_EVIDENCE: three real implementation-and-test sources required",
+  "source_sha": "e2d825d061339f4ede67e6b6e6134e025eb84cca",
+  "status": "NO_CANDIDATE"
+}

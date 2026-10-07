@@ -1,0 +1,20 @@
+{
+  "canonical_hash": "2e9fd411734f7746f0ac1a44258a5e70ba2a30a2b88f7d62121d608695ab2dd6",
+  "checked_at": "2026-10-07T23:51:19.160879Z",
+  "legacy_orphan_status": "EXTERNAL_RECORD_UNRESOLVED_NOT_READ_BY_V2",
+  "mandatory_workloads": {
+    "experiment": "PASS",
+    "monitor": "PASS",
+    "research": "PASS"
+  },
+  "pending_events": 0,
+  "production_accepted": false,
+  "schema_version": 2,
+  "scope": "INDEPENDENT_V2_STATE_ONLY",
+  "soak_started": false,
+  "source_sha": "e2d825d061339f4ede67e6b6e6134e025eb84cca",
+  "state_sequence": 35,
+  "status": "PASS",
+  "verified_canonical_state": true,
+  "workflow_delivery": "NOT_TESTED_BY_LOCAL_DOCTOR"
+}

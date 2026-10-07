@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "source_sha": "e2d825d061339f4ede67e6b6e6134e025eb84cca",
+  "state_parent": "f0f8d267c13bca0cac2d2181b4f96ba4fb5993a0",
+  "state_commit": "ca3e7890ed9e5d25dbbafc11230473db76efbfee",
+  "run_id": "37704569224",
+  "run_attempt": "1",
+  "workflow": "brain-cycle-v2",
+  "publication_verified": true,
+  "execution_boundary": "READ_ONLY_PUBLIC_METADATA",
+  "soak_completed": false
+}

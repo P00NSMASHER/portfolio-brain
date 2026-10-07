@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
-  "status": "PREPARING",
-  "source_sha": null,
+  "status": "PRE_ARM",
+  "source_sha": "e2d825d061339f4ede67e6b6e6134e025eb84cca",
   "candidate_pr": 647,
   "candidate_head": "0e48ebbb70d1997e3eca648330202e7315148b73",
   "authorization": {
@@ -11,7 +11,7 @@
   },
   "created_at": "2026-10-07T23:43:15.822Z",
   "deadline": "2026-10-08T05:45:00Z",
-  "first_scheduled_delivery_deadline": null,
+  "first_scheduled_delivery_deadline": "2026-10-08T01:51:03Z",
   "soak_started_at": null,
   "soak_completed": false,
   "minimum_duration_seconds": 7200,
@@ -33,12 +33,69 @@
     "post_soak_independent_replay": true
   },
   "known_readiness_gaps": [
-    "No brain-cycle-v2 scheduled event has yet been observed; push-triggered successes do not prove scheduling",
-    "Live knowledge upgrade merge remains not tested; failed attempt's weekly cooldown preserved",
-    "PR647 exact final-head protected checks/review must pass before integration; live upgrade remains not tested"
+    "Scheduled core delivery NOT TESTED: no schedule-triggered v2 run observed yet; cron active, push cycles are not substitute evidence",
+    "Live autonomous knowledge upgrade merge NOT TESTED; this cycle correctly returned NO_CANDIDATE under strengthened evidence criteria",
+    "Unlimited never-needs-human repair and provider availability remain unmet; core and bounded repair are implemented"
   ],
   "external_orphan": {
     "run_id": 37655516971,
     "status": "UNRESOLVED_NOT_A_V2_DEPENDENCY"
+  },
+  "merged_at": "2026-10-07T23:51:03Z",
+  "phases": {
+    "PREPARE": "PASS",
+    "EXACT_SHA_PREFLIGHT": "PASS",
+    "PRE_ARM": "BLOCKED",
+    "SOAK": "NOT TESTED",
+    "POST_SOAK_VALIDATION": "NOT TESTED"
+  },
+  "protected_checks": [
+    {
+      "name": "portfolio-phase1-gate",
+      "head": "0e48ebbb70d1997e3eca648330202e7315148b73",
+      "app": 5121826,
+      "conclusion": "success",
+      "url": "https://github.com/P00NSMASHER/portfolio-brain/runs/113075604975"
+    },
+    {
+      "name": "validate",
+      "head": "0e48ebbb70d1997e3eca648330202e7315148b73",
+      "app": 15368,
+      "conclusion": "success",
+      "url": "https://github.com/P00NSMASHER/portfolio-brain/actions/runs/37704211734/job/113074602425"
+    }
+  ],
+  "prearm_push_cycle": {
+    "run_id": 37704569224,
+    "job_id": 113075751378,
+    "artifact_id": 11518543688,
+    "artifact_sha256": "4babc4f20096f07759875ab0cc17757f5d6be75e61f5c4a450550574dd4813d4",
+    "state_commit": "ca3e7890ed9e5d25dbbafc11230473db76efbfee",
+    "state_parent": "f0f8d267c13bca0cac2d2181b4f96ba4fb5993a0",
+    "doctor": "PASS",
+    "pending_events": 0,
+    "sequence": 35,
+    "canonical_hash": "2e9fd411734f7746f0ac1a44258a5e70ba2a30a2b88f7d62121d608695ab2dd6",
+    "independent_state_replay": "PASS",
+    "trigger": "push",
+    "not_scheduling_proof": true
+  },
+  "prearm_blocker": "Real schedule-triggered core delivery not yet observed",
+  "main_foundation": {
+    "run_id": 37704569097,
+    "job_id": 113075751071,
+    "status": "PASS",
+    "tests": 1411,
+    "seconds": 37.268
+  },
+  "local_product_tests": {
+    "status": "PASS",
+    "tests": 42
+  },
+  "independent_review": {
+    "status": "PASS",
+    "source_head": "0e48ebbb70d1997e3eca648330202e7315148b73",
+    "tests": 42,
+    "seconds": 0.209
   }
 }
