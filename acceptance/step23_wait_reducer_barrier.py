@@ -1,11 +1,13 @@
 """Wait for an exact-main reducer freshness barrier before canonical reads.
 
 Pre-arm runs wait for the orchestrator-dispatched correlated reducer. Normal
-steady-state writer runs wait for the reducer automatically triggered by the
-writer workflow entering in_progress. This module is read-only: it never
-dispatches or mutates GitHub state. In both modes it requires exact-main
+steady-state writer runs prefer the reducer automatically triggered by the
+writer workflow entering in_progress. If GitHub does not deliver that specific
+workflow_run event, steady-state writers may accept another reducer completion
+that became successful after the waiter started. This module is read-only: it
+never dispatches or mutates GitHub state. In both modes it requires exact-main
 identity, reducer success, and pending_events == 0 before allowing canonical
-reads to begin.
+reads to begin. Pre-arm never uses the fallback.
 """
 from __future__ import annotations
 
@@ -69,6 +71,51 @@ def assert_main(api: API,exact_sha: str)->None:
     req(observed==exact_sha,f"BARRIER_MAIN_MOVED expected={exact_sha} observed={observed}")
 
 
+def reducer_success_key(row: dict[str,Any],exact_sha: str)->tuple[int,int,str]|None:
+    """Return completion identity only for a valid success on this exact main."""
+    if row.get("status")!="completed" or row.get("conclusion")!="success":
+        return None
+    # Historical reducer successes from earlier main SHAs are normal provider
+    # history, not malformed candidates for this exact-main barrier.
+    if row.get("head_branch")!="main" or row.get("head_sha")!=exact_sha:
+        return None
+    run_id=row.get("id")
+    attempt=row.get("run_attempt",1)
+    updated=row.get("updated_at")
+    req(type(run_id) is int and run_id>0,"fresh reducer run identity malformed")
+    req(type(attempt) is int and attempt>=1,"fresh reducer attempt malformed")
+    req(isinstance(updated,str) and bool(updated),"fresh reducer completion time malformed")
+    return (run_id,attempt,updated)
+
+
+def reducer_success_keys(rows: list[dict[str,Any]],exact_sha: str)->set[tuple[int,int,str]]:
+    keys=set()
+    for row in rows:
+        req(isinstance(row,dict),"reducer run row malformed")
+        key=reducer_success_key(row,exact_sha)
+        if key is not None:
+            keys.add(key)
+    return keys
+
+
+def fresh_reducer_success(
+    rows: list[dict[str,Any]],
+    exact_sha: str,
+    baseline: set[tuple[int,int,str]],
+)->dict[str,Any]|None:
+    """Newest exact-main reducer success not already complete at barrier entry."""
+    fresh=[]
+    for row in rows:
+        req(isinstance(row,dict),"reducer run row malformed")
+        key=reducer_success_key(row,exact_sha)
+        if key is not None and key not in baseline:
+            fresh.append((key,row))
+    if not fresh:
+        return None
+    fresh.sort(key=lambda item:(item[0][0],item[0][1],item[0][2]),reverse=True)
+    return fresh[0][1]
+
+
 def main()->None:
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target",required=True,choices=sorted(ALLOWED_TARGETS))
@@ -98,12 +145,20 @@ def main()->None:
     api=API(repo,token)
     assert_main(api,args.exact_sha)
     encoded=urllib.parse.quote(REDUCER_FILE,safe="")
+    listing_path=f"/actions/workflows/{encoded}/runs?branch=main&per_page=100"
+    initial_rows=api.get(listing_path).get("workflow_runs",[])
+    req(isinstance(initial_rows,list),"reducer barrier run listing malformed")
+    baseline_successes=(
+        reducer_success_keys(initial_rows,args.exact_sha)
+        if barrier_kind=="STEADY_STATE"
+        else set()
+    )
+
     deadline=time.monotonic()+240
     selected=None
+    fallback_used=False
     while time.monotonic()<deadline:
-        rows=api.get(
-            f"/actions/workflows/{encoded}/runs?branch=main&per_page=100"
-        ).get("workflow_runs",[])
+        rows=api.get(listing_path).get("workflow_runs",[])
         req(isinstance(rows,list),"reducer barrier run listing malformed")
         matches=[
             row for row in rows
@@ -117,8 +172,15 @@ def main()->None:
             matches.sort(key=lambda row:int(row["id"]),reverse=True)
             selected=matches[0]
             break
+        if barrier_kind=="STEADY_STATE":
+            fresh=fresh_reducer_success(rows,args.exact_sha,baseline_successes)
+            if fresh is not None and pending_event_count(token)==0:
+                selected=fresh
+                expected_event=str(fresh.get("event") or "")
+                fallback_used=True
+                break
         time.sleep(3)
-    req(selected is not None,"timed out locating reducer barrier run")
+    req(selected is not None,"timed out locating reducer barrier run or fresh reducer completion")
 
     run_id=int(selected["id"])
     deadline=time.monotonic()+420
@@ -139,13 +201,14 @@ def main()->None:
     assert_main(api,args.exact_sha)
 
     result={
-        "schema_version":"1.1.0",
+        "schema_version":"1.2.0",
         "status":"PASS",
         "target":args.target,
         "barrier_kind":barrier_kind,
+        "barrier_source":"FRESH_REDUCER_FALLBACK" if fallback_used else "CORRELATED",
         "exact_main_sha":args.exact_sha,
         "barrier_run_id":run_id,
-        "barrier_correlation":expected,
+        "barrier_correlation":selected.get("display_title"),
         "pending_events_final":0,
         "acceptance_credit":False,
         "api_requests":api.requests,
