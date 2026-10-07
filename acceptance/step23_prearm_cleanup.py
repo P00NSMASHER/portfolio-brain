@@ -1,4 +1,5 @@
 """Remove non-counting pre-arm workflow runs whose title captured credential material."""
+# Retrigger marker: reducer-liveness repair exact-main pre-arm, 2026-10-07.
 from __future__ import annotations
 
 import argparse
