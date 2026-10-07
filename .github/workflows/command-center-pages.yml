@@ -48,11 +48,6 @@ concurrency:
 
 jobs:
   publish:
-    permissions:
-      contents: read
-      actions: write
-      pages: write
-      id-token: write
     # Serialize the complete restore -> mutate -> upload transaction.
     concurrency:
       group: portfolio-state-writer-v1
@@ -77,21 +72,21 @@ jobs:
           --workflow-id command-center-pages
           --job-id publish
           --estimated-minutes 10
-      - name: Run pre-arm reducer barrier after writer-lane acquisition
+      - name: Wait for pre-arm reducer barrier after writer-lane acquisition
         if: ${{ inputs.prearm_id != '' && steps.workload.outputs.allowed == 'true' }}
         env:
           STEP23_PREARM_ID: ${{ inputs.prearm_id }}
         run: >-
-          python -m acceptance.step23_inline_reducer_barrier
+          python -m acceptance.step23_wait_reducer_barrier
           --target command-center-pages
           --exact-sha "$GITHUB_SHA"
-          --output acceptance/out/step23-inline-barrier-${GITHUB_RUN_ID}.json
-      - name: Preserve pre-arm reducer barrier evidence
+          --output acceptance/out/step23-barrier-wait-${GITHUB_RUN_ID}.json
+      - name: Preserve pre-arm reducer barrier wait evidence
         if: ${{ inputs.prearm_id != '' && steps.workload.outputs.allowed == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: portfolio-step23-inline-barrier-${{ github.run_id }}
-          path: acceptance/out/step23-inline-barrier-${{ github.run_id }}.json
+          name: portfolio-step23-barrier-wait-${{ github.run_id }}
+          path: acceptance/out/step23-barrier-wait-${{ github.run_id }}.json
           if-no-files-found: error
           retention-days: 30
       - name: Stamp publication provenance
