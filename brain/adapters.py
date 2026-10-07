@@ -19,6 +19,38 @@ from pathlib import Path
 from brain.core import require, BrainError, digest, utcnow
 from brain.intelligence import REPO, is_test_source_path
 
+_GENERIC_PATH_TOKENS = {
+    "api", "app", "code", "go", "index", "js", "lib", "library", "lua",
+    "main", "mod", "module", "py", "rs", "source", "spec", "specs", "src",
+    "test", "tests", "ts",
+}
+
+def _path_tokens(path):
+    return {
+        token for token in re.findall(r"[a-z0-9]+", path.lower())
+        if len(token) > 1 and token not in _GENERIC_PATH_TOKENS
+    }
+
+def related_test_paths(source_path, rows):
+    """Return only tests with path evidence linking them to this implementation.
+
+    Repository-wide test presence is not implementation evidence. This conservative
+    path association avoids awarding reuse-score credit for unrelated test suites.
+    """
+    source_tokens = _path_tokens(source_path)
+    if not source_tokens:
+        return []
+    related = []
+    for entry in rows:
+        path = entry.get("path")
+        if entry.get("type") != "blob" or not is_test_source_path(path):
+            continue
+        if source_tokens.intersection(_path_tokens(path)):
+            related.append(path)
+            if len(related) == 10:
+                break
+    return related
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         raise BrainError("REDIRECT_REFUSED: source identity must remain api.github.com")
@@ -116,7 +148,7 @@ class GitHub:
             raw=base64.b64decode(blob["content"],validate=False)
             require(len(raw)==row["size"] and hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()==row["sha"], "SOURCE_CONTENT_HASH_MISMATCH")
             body=raw.decode("utf-8",errors="strict")
-            test_paths=[r["path"] for r in rows if r.get("type")=="blob" and is_test_source_path(r["path"])][:10]
+            test_paths=related_test_paths(row["path"], rows)
             license=(meta.get("license") or {}).get("spdx_id") or "UNKNOWN"
             found.append(({"repository":name,"head_sha":sha,"path":row["path"],"blob_sha":row["sha"],"code_sha256":hashlib.sha256(raw).hexdigest(),"bytes":len(raw),"test_paths":test_paths,"license":license,"source_ref":f'https://github.com/{name}/blob/{sha}/{row["path"]}',"target":target["project"],"query":target["query"],"matched_terms":[term for term in terms if term in body.lower()]},meta["private"]))
         return found
