@@ -1,9 +1,16 @@
 name: agent-heartbeat-sweep
+run-name: ${{ inputs.prearm_id || github.workflow }}
 
 on:
   schedule:
     - cron: "29 */2 * * *"
   workflow_dispatch:
+    inputs:
+      prearm_id:
+        description: "Pre-arm correlation token; does not grant acceptance credit"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
