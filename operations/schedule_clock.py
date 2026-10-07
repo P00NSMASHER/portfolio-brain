@@ -176,6 +176,7 @@ def execute(api:API,policy:dict,source_run:dict,main_sha:str,current_run_id:int|
     source=source_identity(policy,source_run,main_sha,current_run_id=current_run_id)
     at=at_override or parse_time(source_run["created_at"])
     reducer_wake=reducer_liveness_wake(api,main_sha)
+    dispatch_count=1 if reducer_wake["action"]=="REDUCER_WAKE_REQUESTED" else 0
     actions=[]
     for target in policy["target_workflows"]:
         if target["file"]==REDUCER_WORKFLOW_FILE and reducer_wake["action"] in {"REDUCER_WAKE_REQUESTED","REDUCER_ACTIVE"}:
@@ -190,10 +191,12 @@ def execute(api:API,policy:dict,source_run:dict,main_sha:str,current_run_id:int|
             actions.append({"workflow":target["name"],"action":"ALREADY_RAN_IN_SLOT",
                             "evidence_run_ids":sorted({row["id"] for row in recent})})
             continue
-        api.call(f"/actions/workflows/{target['file']}/dispatches","POST",{"ref":"main"})
-        actions.append({"workflow":target["name"],"action":"DISPATCH_REQUESTED"})
-        if sum(1 for row in actions if row["action"]=="DISPATCH_REQUESTED")>=policy["max_dispatches_per_tick"]:
+        if dispatch_count>=policy["max_dispatches_per_tick"]:
+            actions.append({"workflow":target["name"],"action":"DISPATCH_BUDGET_EXHAUSTED"})
             break
+        api.call(f"/actions/workflows/{target['file']}/dispatches","POST",{"ref":"main"})
+        dispatch_count+=1
+        actions.append({"workflow":target["name"],"action":"DISPATCH_REQUESTED"})
     return {
         "schema_version":"1.0.0","clock_id":policy["clock_id"],"status":"PASS",
         "authority_granted":False,"dispatch_authority_effect":"NONE",
