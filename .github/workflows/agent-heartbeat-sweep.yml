@@ -30,7 +30,7 @@ jobs:
       queue: max
     runs-on: ubuntu-latest
     # Five-minute canonical catch-up + two-minute work + one-minute finalization.
-    timeout-minutes: ${{ inputs.prearm_id != '' && 20 || 8 }}
+    timeout-minutes: 8
     env:
       GITHUB_TOKEN: ${{ github.token }}
     steps:
