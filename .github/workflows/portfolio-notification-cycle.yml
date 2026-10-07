@@ -1,4 +1,5 @@
 name: portfolio-notification-cycle
+run-name: ${{ inputs.prearm_id || github.workflow }}
 # Legacy validator reference only: notifications.artifact_state
 
 on:
@@ -7,6 +8,12 @@ on:
   repository_dispatch:
     types: ["portfolio_notify"]
   workflow_dispatch:
+    inputs:
+      prearm_id:
+        description: "Pre-arm correlation token; does not grant acceptance credit"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
