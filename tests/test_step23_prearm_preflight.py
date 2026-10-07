@@ -18,6 +18,17 @@ class Step23PrearmPreflightTests(unittest.TestCase):
         self.assertNotIn("{github_token}",source)
         self.assertNotIn("{token}",source)
 
+    def test_passive_delivery_events_cannot_cancel_active_preflight(self):
+        from pathlib import Path
+        root=Path(__file__).resolve().parents[1]
+        text=(root/".github/workflows/step23-prearm-validation.yml").read_text()
+        self.assertIn("github.event.workflow_run.event == 'push' && 'step23-prearm-validation'",text)
+        self.assertIn("format('step23-prearm-passive-{0}', github.run_id)",text)
+        self.assertIn(
+            "cancel-in-progress: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' }}",
+            text,
+        )
+
 
 if __name__=="__main__":
     unittest.main()
