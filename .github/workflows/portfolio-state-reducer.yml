@@ -76,7 +76,7 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ github.token }}
       INITIALIZE_JOURNAL: ${{ inputs.initialize }}
-      TRIGGER_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id || '' }}
+      TRIGGER_WORKFLOW_RUN_ID: ${{ github.event.action == 'completed' && github.event.workflow_run.id || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
