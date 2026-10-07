@@ -162,12 +162,13 @@ def drain(
     *,
     exact_sha: str,
     prefix: str,
-    token: str,
+    auth_token: str,
+    correlation_seed: str,
     drains: list[dict[str, Any]],
     max_rounds: int = 4,
 ) -> int:
     for round_number in range(1, max_rounds + 1):
-        correlation = f"prearm-{prefix}-drain-{round_number}-{token}"
+        correlation = f"prearm-{correlation_seed}-{prefix}-drain-{round_number}"
         drains.append(dispatch(
             api,
             workflow=REDUCER[0],
@@ -175,7 +176,7 @@ def drain(
             exact_sha=exact_sha,
             correlation=correlation,
         ))
-        pending = pending_event_count(token)
+        pending = pending_event_count(auth_token)
         if pending == 0:
             return 0
     raise RuntimeError(f"canonical pending events did not drain after {max_rounds} reducer rounds")
@@ -199,7 +200,14 @@ def main() -> None:
     reducer_drains: list[dict[str, Any]] = []
 
     # Establish a clean canonical baseline before any non-counting producer run.
-    drain(api, exact_sha=args.exact_sha, prefix="initial", token=token, drains=reducer_drains)
+    drain(
+        api,
+        exact_sha=args.exact_sha,
+        prefix="initial",
+        auth_token=token,
+        correlation_seed=orchestrator,
+        drains=reducer_drains,
+    )
 
     for index, (workflow, filename) in enumerate(TARGETS, start=1):
         correlation = f"prearm-{orchestrator}-{index}-{workflow}"
@@ -216,7 +224,8 @@ def main() -> None:
             api,
             exact_sha=args.exact_sha,
             prefix=f"{index}-{workflow}",
-            token=token,
+            auth_token=token,
+            correlation_seed=orchestrator,
             drains=reducer_drains,
         )
 
