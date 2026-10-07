@@ -8,7 +8,7 @@ class Step23WaitReducerBarrierTests(unittest.TestCase):
     def test_only_stale_sensitive_targets_are_allowed(self):
         self.assertEqual(
             barrier.ALLOWED_TARGETS,
-            {"hunter-autonomous-cycle","command-center-pages"},
+            {"runtime-hourly-sync","portfolio-autonomous-scheduler","hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-notification-cycle","command-center-pages"},
         )
 
     def test_prearm_id_is_numeric_seeded_and_nonsecret(self):
