@@ -19,7 +19,7 @@ from typing import Any
 
 from acceptance.step23_live_collect import pending_event_count
 
-ALLOWED_TARGETS={"hunter-autonomous-cycle","command-center-pages"}
+ALLOWED_TARGETS={"runtime-hourly-sync","portfolio-autonomous-scheduler","hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-notification-cycle","command-center-pages"}
 PREARM_ID=re.compile(r"^prearm-[0-9]+-[a-z0-9-]+$")
 REDUCER_FILE="portfolio-state-reducer.yml"
 
