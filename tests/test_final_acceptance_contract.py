@@ -114,6 +114,7 @@ def step23():
             runs.append({
                 "workflow": workflow,
                 "event": "schedule",
+                "transport_binding": {"kind": "NATIVE_SCHEDULE"},
                 "classification": "SUCCESS",
                 "classification_reason": "COMPLETED_SUCCESSFULLY",
                 "conclusion": "success",
@@ -137,18 +138,48 @@ def step23():
         row["run_id"] for row in runs
         if row["workflow"] == "hunter-autonomous-cycle" and row["classification"] == "SUCCESS"
     ]
+    clock = {
+        "run_id": 50,
+        "workflow": "portfolio-schedule-delivery",
+        "event": "schedule",
+        "head_sha": SHA,
+        "artifact_hash": H,
+        "source_workflow": "portfolio-schedule-delivery",
+        "source_event": "schedule",
+        "source_run_id": 50,
+        "authority_granted": False,
+        "dispatch_authority_effect": "NONE",
+        "bound_targets": [],
+    }
+    canary = {
+        "run_id": 50,
+        "workflow": "portfolio-schedule-delivery",
+        "event": "schedule",
+        "head_sha": SHA,
+        "created_at": "2026-09-30T13:00:00Z",
+        "completed_at": "2026-09-30T13:01:00Z",
+        "artifact_id": 500,
+        "artifact_hash": H,
+        "clock_status": "PASS",
+        "authority_granted": False,
+        "dispatch_authority_effect": "NONE",
+        "reducer_wake_action": "REDUCER_CURRENT",
+    }
     return bind_receipt({
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
         "step": 23,
         "status": "PASS",
         "exact_main_sha": SHA,
+        "transport_mode": "REDUNDANT_CLOCK_V1",
+        "native_scheduler_canary": canary,
+        "clock_receipts": [clock],
         "run_classification_policy": "EXPLICIT",
         "hash_traceability_pass": True,
         "dashboard_fresh": True,
         "dashboard_hash": H,
         "runs": runs,
         "soak_window_start": "2026-09-30T13:59:00Z",
-        "soak_deadline": "2026-09-30T14:59:00Z",
+        "soak_deadline": "2026-09-30T20:59:00Z",
         "soak_start": "2026-09-30T13:59:00Z",
         "generated_at": "2026-09-30T14:50:00Z",
         "canonical_samples": [
