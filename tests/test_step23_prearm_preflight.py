@@ -18,6 +18,11 @@ class Step23PrearmPreflightTests(unittest.TestCase):
         self.assertNotIn("{github_token}",source)
         self.assertNotIn("{token}",source)
 
+    def test_quiescence_is_checked_before_each_preflight_target(self):
+        source=inspect.getsource(preflight.main)
+        self.assertGreaterEqual(source.count("wait_for_quiescence"),2)
+        self.assertIn("active_writer_blockers",inspect.getsource(preflight.wait_for_quiescence))
+
     def test_passive_delivery_events_cannot_cancel_active_preflight(self):
         from pathlib import Path
         root=Path(__file__).resolve().parents[1]
