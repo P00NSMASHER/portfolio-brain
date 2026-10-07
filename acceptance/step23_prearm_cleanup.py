@@ -97,13 +97,29 @@ class API:
         return status
 
 
-def _wait_stopped(api:API,run_id:int,label:str)->None:
-    for _ in range(30):
+def _wait_stopped(api:API,run_id:int,label:str,*,attempts:int)->bool:
+    req(1<=attempts<=30,"invalid pre-arm cleanup wait bound")
+    for _ in range(attempts):
         current=api.get(f"/actions/runs/{run_id}")
         if current.get("status")=="completed":
-            return
+            return True
         time.sleep(2)
-    raise RuntimeError(f"{label} run {run_id} did not stop")
+    return False
+
+
+def _cancel_and_wait(api:API,run_id:int,label:str)->str:
+    cancel=api.post(f"/actions/runs/{run_id}/cancel")
+    req(cancel in {202,409},f"could not cancel {label} run {run_id}: {cancel}")
+    if _wait_stopped(api,run_id,label,attempts=10):
+        return "NORMAL_CANCEL"
+
+    force=api.post(f"/actions/runs/{run_id}/force-cancel")
+    req(force in {202,409},f"could not force-cancel {label} run {run_id}: {force}")
+    req(
+        _wait_stopped(api,run_id,label,attempts=20),
+        f"{label} run {run_id} did not stop after force-cancel",
+    )
+    return "FORCE_CANCEL"
 
 
 def purge(api:API,*,exact_sha:str)->dict[str,Any]:
@@ -132,33 +148,36 @@ def purge(api:API,*,exact_sha:str)->dict[str,Any]:
 
     deleted=[]
     cancelled_stale=[]
+    force_cancelled=[]
     for row in leaked:
         run_id=int(row["id"])
         if row.get("status")!="completed":
-            cancel=api.post(f"/actions/runs/{run_id}/cancel")
-            req(cancel in {202,409},f"could not cancel leaked pre-arm run {run_id}: {cancel}")
-            _wait_stopped(api,run_id,"leaked pre-arm")
+            mode=_cancel_and_wait(api,run_id,"leaked pre-arm")
+            if mode=="FORCE_CANCEL":
+                force_cancelled.append(run_id)
         result=api.delete(f"/actions/runs/{run_id}")
         req(result==204,f"could not delete leaked pre-arm run {run_id}: {result}")
         deleted.append(run_id)
 
     for row in stale:
         run_id=int(row["id"])
-        cancel=api.post(f"/actions/runs/{run_id}/cancel")
-        req(cancel in {202,409},f"could not cancel stale pre-arm blocker {run_id}: {cancel}")
-        _wait_stopped(api,run_id,"stale pre-arm blocker")
+        mode=_cancel_and_wait(api,run_id,"stale pre-arm blocker")
+        if mode=="FORCE_CANCEL":
+            force_cancelled.append(run_id)
         cancelled_stale.append(run_id)
 
     main=api.get("/branches/main")
     req(main.get("commit",{}).get("sha")==exact_sha,"PREARM_MAIN_MOVED")
     return {
-        "schema_version":"1.1.0",
+        "schema_version":"1.2.0",
         "status":"PASS",
         "exact_main_sha":exact_sha,
         "deleted_run_ids":deleted,
         "deleted_count":len(deleted),
         "cancelled_stale_run_ids":cancelled_stale,
         "cancelled_stale_count":len(cancelled_stale),
+        "force_cancelled_run_ids":force_cancelled,
+        "force_cancelled_count":len(force_cancelled),
         "api_requests":api.requests,
     }
 
