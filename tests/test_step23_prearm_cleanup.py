@@ -145,114 +145,29 @@ class PrearmCleanupTests(unittest.TestCase):
         self.assertFalse(stale_non_schedule_blocker({**base,"path":".github/workflows/foundation-ci.yml"},exact))
 
 
-    def test_undeletable_jobless_zombie_is_accepted_only_with_later_same_workflow_success(self):
-        class API:
-            def __init__(self):
-                self.posts=[]
-                self.deletes=[]
-            def post(self,path):
-                self.posts.append(path)
-                return 202
-            def get(self,path):
-                if "/jobs?" in path:
-                    return {"total_count":0,"jobs":[]}
-                if path.startswith("/actions/workflows/77/runs?"):
-                    return {"workflow_runs":[{
-                        "id":31,
-                        "workflow_id":77,
-                        "path":".github/workflows/portfolio-state-reducer.yml",
-                        "head_branch":"main",
-                        "status":"completed",
-                        "conclusion":"success",
-                        "created_at":"2026-10-07T17:47:17Z",
-                    }]}
-                return {
-                    "id":20,
-                    "status":"queued",
-                    "workflow_id":77,
-                    "path":".github/workflows/portfolio-state-reducer.yml",
-                    "head_branch":"main",
-                    "created_at":"2026-10-07T16:54:41Z",
-                }
-            def delete(self,path):
-                self.deletes.append(path)
-                return 403
-
-        api=API()
-        with patch("acceptance.step23_prearm_cleanup.time.sleep",return_value=None):
-            mode=_cancel_and_wait(api,20,"stale pre-arm blocker")
-        self.assertEqual(mode,"PROVEN_INERT_JOBLESS_QUEUE:31")
-        self.assertEqual(api.deletes,["/actions/runs/20"])
-
-    def test_undeletable_jobless_zombie_without_later_success_remains_blocking(self):
+    def test_undeletable_jobless_zombie_remains_blocking(self):
         class API:
             def post(self,path):
                 return 202
             def get(self,path):
                 if "/jobs?" in path:
                     return {"total_count":0,"jobs":[]}
-                if path.startswith("/actions/workflows/77/runs?"):
-                    return {"workflow_runs":[{
-                        "id":19,
-                        "workflow_id":77,
-                        "path":".github/workflows/portfolio-state-reducer.yml",
-                        "head_branch":"main",
-                        "status":"completed",
-                        "conclusion":"success",
-                        "created_at":"2026-10-07T16:50:00Z",
-                    }]}
-                return {
-                    "id":20,
-                    "status":"queued",
-                    "workflow_id":77,
-                    "path":".github/workflows/portfolio-state-reducer.yml",
-                    "head_branch":"main",
-                    "created_at":"2026-10-07T16:54:41Z",
-                }
+                return {"status":"queued"}
             def delete(self,path):
                 return 403
 
         with patch("acceptance.step23_prearm_cleanup.time.sleep",return_value=None):
             with self.assertRaisesRegex(
                 RuntimeError,
-                "no later successful same-workflow run proves it inert",
+                "could not delete stale pre-arm blocker queued zombie run 20: 403",
             ):
                 _cancel_and_wait(API(),20,"stale pre-arm blocker")
 
-    def test_undeletable_jobless_zombie_wrong_workflow_success_does_not_qualify(self):
-        class API:
-            def post(self,path):
-                return 202
-            def get(self,path):
-                if "/jobs?" in path:
-                    return {"total_count":0,"jobs":[]}
-                if path.startswith("/actions/workflows/77/runs?"):
-                    return {"workflow_runs":[{
-                        "id":31,
-                        "workflow_id":77,
-                        "path":".github/workflows/runtime-hourly-sync.yml",
-                        "head_branch":"main",
-                        "status":"completed",
-                        "conclusion":"success",
-                        "created_at":"2026-10-07T17:47:17Z",
-                    }]}
-                return {
-                    "id":20,
-                    "status":"queued",
-                    "workflow_id":77,
-                    "path":".github/workflows/portfolio-state-reducer.yml",
-                    "head_branch":"main",
-                    "created_at":"2026-10-07T16:54:41Z",
-                }
-            def delete(self,path):
-                return 409
+    def test_temporary_admin_cleanup_workflow_is_absent(self):
+        from pathlib import Path
 
-        with patch("acceptance.step23_prearm_cleanup.time.sleep",return_value=None):
-            with self.assertRaisesRegex(
-                RuntimeError,
-                "no later successful same-workflow run proves it inert",
-            ):
-                _cancel_and_wait(API(),20,"stale pre-arm blocker")
+        root=Path(__file__).resolve().parents[1]
+        self.assertFalse((root/".github/workflows/step23-admin-zombie-cleanup.yml").exists())
 
 
 if __name__=="__main__":
