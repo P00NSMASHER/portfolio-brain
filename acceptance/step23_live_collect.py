@@ -15,7 +15,7 @@ from typing import Any
 
 from acceptance.final_acceptance import bind_receipt, validate_step23
 from acceptance.soak_observation import (
-    ObservationChanged, scheduled_runs as stable_scheduled_runs,
+    ObservationChanged, transport_runs as stable_transport_runs,
     reset_history, final_census_unchanged, write_failure_progress,
 )
 from runtime.artifact_state import BudgetedHTTP
@@ -37,6 +37,11 @@ EVIDENCE_ARTIFACTS = {
     "portfolio-notification-cycle": ("portfolio-notification-state",),
     "command-center-pages": ("portfolio-command-center-preview-", "portfolio-command-center-history"),
 }
+
+CLOCK_WORKFLOWS={"portfolio-schedule-delivery","portfolio-schedule-clock-tick"}
+CLOCK_TICK_WORKFLOW="portfolio-schedule-clock-tick"
+CLOCK_NATIVE_WORKFLOW="portfolio-schedule-delivery"
+
 
 
 def iso_now() -> str:
@@ -131,9 +136,174 @@ def pending_event_count(token: str) -> int:
     return len(_pending_events(state, artifacts, archived_ids=archive_ids))
 
 
-def scheduled_runs(gh: GH, workflows: set[str], exact_sha: str, start: datetime) -> dict[str, list[dict[str, Any]]]:
+def transport_runs(gh: GH, workflows: set[str], exact_sha: str, start: datetime) -> dict[str, list[dict[str, Any]]]:
     # Membership races produce a pending observation. Status progress is normal.
-    return stable_scheduled_runs(gh, workflows, exact_sha, start, max_attempts=1)
+    return stable_transport_runs(gh, workflows, exact_sha, start, max_attempts=1)
+
+
+def select_exact_artifact(
+    gh:GH,run:dict[str,Any],exact_sha:str,expected_name:str,
+) -> tuple[dict[str,Any],bytes]:
+    run_id=run.get("id")
+    if type(run_id) is not int:
+        raise RuntimeError("clock run identity invalid")
+    doc=gh.get(f"/actions/runs/{run_id}/artifacts?per_page=100")
+    if doc.get("total_count",0)>=100:
+        raise RuntimeError("clock artifact listing incomplete at page bound")
+    matches=[a for a in doc.get("artifacts",[])
+             if a.get("expired") is False and a.get("name")==expected_name]
+    if len(matches)!=1:
+        raise RuntimeError(f"clock artifact {expected_name} missing/ambiguous")
+    selected=matches[0]
+    source=selected.get("workflow_run") or {}
+    if source.get("id")!=run_id or source.get("head_sha")!=exact_sha or source.get("head_branch")!="main":
+        raise RuntimeError("clock artifact source identity mismatch")
+    digest=selected.get("digest")
+    if not (isinstance(digest,str) and digest.startswith("sha256:") and len(digest)==71):
+        raise RuntimeError("clock provider digest invalid")
+    raw=gh.bytes(f"/actions/artifacts/{selected['id']}/zip")
+    if sha256_bytes(raw)!=digest:
+        raise RuntimeError("clock artifact digest mismatch")
+    return selected,raw
+
+
+def validate_clock_run(
+    gh:GH,run:dict[str,Any],exact_sha:str,target_workflows:set[str],
+) -> tuple[dict[str,Any],dict[int,dict[str,Any]]]:
+    run_id=run.get("id")
+    attempt=run.get("run_attempt",1)
+    if type(run_id) is not int or type(attempt) is not int or attempt<1:
+        raise RuntimeError("clock run identity invalid")
+    name=run.get("name")
+    event=run.get("event")
+    if name==CLOCK_NATIVE_WORKFLOW:
+        if event!="schedule":
+            raise RuntimeError("native clock evidence is not a schedule event")
+    elif name==CLOCK_TICK_WORKFLOW:
+        if event!="workflow_dispatch":
+            raise RuntimeError("daemon clock evidence is not a workflow_dispatch event")
+    else:
+        raise RuntimeError("unexpected clock workflow")
+    meta,raw=select_exact_artifact(
+        gh,run,exact_sha,f"portfolio-schedule-clock-{run_id}-{attempt}"
+    )
+    receipt=zip_json(raw,"schedule_clock_receipt.json")
+    if receipt.get("status")!="PASS" or receipt.get("authority_granted") is not False \
+            or receipt.get("dispatch_authority_effect")!="NONE":
+        raise RuntimeError("clock receipt authority/status invalid")
+    if receipt.get("main_sha")!=exact_sha or receipt.get("source_head_sha")!=exact_sha:
+        raise RuntimeError("clock receipt exact-main identity mismatch")
+    if name==CLOCK_NATIVE_WORKFLOW:
+        if (receipt.get("source_run_id")!=run_id
+                or receipt.get("source_workflow")!=CLOCK_NATIVE_WORKFLOW
+                or receipt.get("source_event")!="schedule"):
+            raise RuntimeError("native clock receipt source identity invalid")
+    else:
+        daemon_id=receipt.get("daemon_run_id")
+        if (type(daemon_id) is not int or daemon_id<=0
+                or receipt.get("source_run_id")!=daemon_id
+                or receipt.get("source_workflow")!="portfolio-schedule-clock-daemon"
+                or receipt.get("source_event")!="schedule"):
+            raise RuntimeError("daemon clock receipt source identity invalid")
+
+    targets=[]
+    bound:dict[int,dict[str,Any]]={}
+    for action in receipt.get("actions") or []:
+        if not isinstance(action,dict) or action.get("action")!="DISPATCH_BOUND":
+            continue
+        workflow=action.get("workflow")
+        target_id=action.get("target_run_id")
+        if (workflow not in target_workflows or type(target_id) is not int
+                or action.get("target_event")!="workflow_dispatch"
+                or action.get("target_head_sha")!=exact_sha
+                or action.get("target_actor")!="github-actions[bot]"):
+            raise RuntimeError("clock target binding invalid")
+        if target_id in bound:
+            raise RuntimeError("duplicate target binding inside clock receipt")
+        target={"workflow":workflow,"target_run_id":target_id}
+        targets.append(target)
+        bound[target_id]={
+            "workflow":workflow,"clock_run_id":run_id,"clock_artifact_hash":meta["digest"],
+            "clock_source_workflow":receipt.get("source_workflow"),
+        }
+
+    wake=receipt.get("reducer_wake") or {}
+    if wake.get("action")=="REDUCER_WAKE_REQUESTED":
+        target_id=wake.get("target_run_id")
+        if (type(target_id) is not int or wake.get("target_event")!="workflow_dispatch"
+                or wake.get("target_head_sha")!=exact_sha or wake.get("target_actor")!="github-actions[bot]"):
+            raise RuntimeError("reducer wake binding invalid")
+        if target_id in bound:
+            raise RuntimeError("duplicate reducer wake target binding")
+        targets.append({"workflow":"portfolio-state-reducer","target_run_id":target_id})
+        bound[target_id]={
+            "workflow":"portfolio-state-reducer","clock_run_id":run_id,
+            "clock_artifact_hash":meta["digest"],
+            "clock_source_workflow":receipt.get("source_workflow"),
+        }
+
+    entry={
+        "run_id":run_id,"workflow":name,"event":event,"head_sha":exact_sha,
+        "artifact_hash":meta["digest"],"source_workflow":receipt.get("source_workflow"),
+        "source_event":receipt.get("source_event"),"source_run_id":receipt.get("source_run_id"),
+        "authority_granted":False,"dispatch_authority_effect":"NONE",
+        "bound_targets":targets,
+    }
+    return entry,bound
+
+
+def clock_bindings(
+    gh:GH,exact_sha:str,start:datetime,target_workflows:set[str],native_canary:dict[str,Any],
+) -> tuple[list[dict[str,Any]],dict[int,dict[str,Any]],dict[str,list[dict[str,Any]]]]:
+    canary_id=native_canary.get("run_id")
+    if type(canary_id) is not int:
+        raise RuntimeError("native scheduler canary identity missing")
+    canary_run=gh.get(f"/actions/runs/{canary_id}")
+    if (canary_run.get("name")!=CLOCK_NATIVE_WORKFLOW or canary_run.get("event")!="schedule"
+            or canary_run.get("head_sha")!=exact_sha or canary_run.get("head_branch")!="main"
+            or canary_run.get("status")!="completed" or canary_run.get("conclusion")!="success"):
+        raise RuntimeError("native scheduler canary no longer validates")
+    canary_entry,canary_bound=validate_clock_run(gh,canary_run,exact_sha,target_workflows)
+    if canary_entry["artifact_hash"]!=native_canary.get("artifact_hash"):
+        raise RuntimeError("native scheduler canary artifact hash changed")
+
+    grouped=transport_runs(gh,CLOCK_WORKFLOWS,exact_sha,start)
+    candidates=[]
+    for name,rows in grouped.items():
+        for row in rows:
+            if ((name==CLOCK_NATIVE_WORKFLOW and row.get("event")=="schedule")
+                    or (name==CLOCK_TICK_WORKFLOW and row.get("event")=="workflow_dispatch")):
+                if row.get("status")=="completed" and row.get("conclusion")=="success":
+                    candidates.append(row)
+    entries=[canary_entry]
+    bindings=dict(canary_bound)
+    seen_clock={canary_id}
+    for run in sorted(candidates,key=lambda r:(parse_time(r["created_at"]),r["id"])):
+        if run["id"] in seen_clock:
+            continue
+        entry,bound=validate_clock_run(gh,run,exact_sha,target_workflows)
+        seen_clock.add(run["id"])
+        for target_id,evidence in bound.items():
+            if target_id in bindings and bindings[target_id]!=evidence:
+                raise RuntimeError("target run bound by multiple clock receipts")
+            bindings[target_id]=evidence
+        entries.append(entry)
+    return entries,bindings,grouped
+
+
+def eligible_transport(
+    grouped:dict[str,list[dict[str,Any]]],bindings:dict[int,dict[str,Any]],
+) -> dict[str,list[dict[str,Any]]]:
+    out={name:[] for name in grouped}
+    for name,rows in grouped.items():
+        for row in rows:
+            if row.get("event")=="schedule":
+                out[name].append(row)
+                continue
+            evidence=bindings.get(row.get("id"))
+            if evidence is not None and evidence.get("workflow")==name:
+                out[name].append(row)
+    return out
 
 def evidence_window(rows: list[dict], minimum: int, workflow: str) -> list[dict]:
     # Scan every raw run for failures before selecting a bounded receipt set.
