@@ -31,7 +31,7 @@ class Step23PrearmPreflightTests(unittest.TestCase):
         self.assertIn("predrain",source)
         self.assertGreaterEqual(source.count("drain("),3)
 
-    def test_hunter_and_command_center_barrier_inside_writer_jobs(self):
+    def test_hunter_and_command_center_wait_for_barrier_inside_writer_jobs(self):
         from pathlib import Path
         root=Path(__file__).resolve().parents[1]
         for filename,target in (
@@ -40,13 +40,14 @@ class Step23PrearmPreflightTests(unittest.TestCase):
         ):
             with self.subTest(filename=filename):
                 text=(root/".github/workflows"/filename).read_text()
-                barrier=text.index("Run pre-arm reducer barrier after writer-lane acquisition")
+                barrier=text.index("Wait for pre-arm reducer barrier after writer-lane acquisition")
                 restore=text.index("Restore canonical",barrier)
                 self.assertLess(barrier,restore)
-                self.assertIn("acceptance.step23_inline_reducer_barrier",text)
+                self.assertIn("acceptance.step23_wait_reducer_barrier",text)
                 self.assertIn(f"--target {target}",text)
                 self.assertIn("inputs.prearm_id != ''",text)
-                self.assertIn("actions: write",text)
+                self.assertIn("actions: read",text)
+                self.assertNotIn("actions: write",text)
 
     def test_writer_serialization_and_reducer_independence_are_explicit(self):
         from pathlib import Path
