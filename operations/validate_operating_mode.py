@@ -212,9 +212,9 @@ def validate_operating_mode():
     req(expected["portfolio-state-reducer"].split()[0] != expected["portfolio-state-checkpoint-candidate"].split()[0],
         "checkpoint candidate must not collide with daily reducer refresh")
     req(set(p["approved_recurring_workflows"])==set(expected),"approved recurring workflow set changed")
-    # Step 23 is owner-armed for the 2x8 two-hour exact-main window at 07:30-09:30 UTC.
-    # The strict collector still requires two genuine scheduled successes per
-    # required workflow; manual/dispatch work never substitutes for schedule evidence.
+    # Step 23 is deliberately disarmed here. Pre-arm state carries only the
+    # reviewed steady-state schedules; temporary soak crons are injected only
+    # by a later exact-main re-arm change.
     delivery=load("operations/SCHEDULE_DELIVERY_POLICY.json")
     req(delivery == {
         "schema_version":"1.0.0", "workflow":"portfolio-schedule-delivery",
@@ -227,27 +227,32 @@ def validate_operating_mode():
       "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
       "portfolio-notification-cycle","command-center-pages",
     }
-    req(window["schema_version"]=="1.0.0" and window["status"]=="CANARY_REQUIRED",
-        "Step 23 canary identity changed")
-    req(set(window["temporary_crons"])==required_temp,"Step 23 canary workflow set changed")
-    req(window["qualification_horizon_start"]=="2026-10-06T16:20:00Z"
-        and window["qualification_horizon_end"]=="2026-10-06T16:50:00Z",
-        "Step 23 canary horizon changed")
-    req(window["required_successes_per_workflow"]==1 and window["max_soak_duration_seconds"]==0,
-        "Step 23 canary must prove delivery only")
-    req(all(len(crons)==1 for crons in window["temporary_crons"].values())
-        and window["observer_crons"]==[], "Step 23 canary cadence changed")
+    final_step23=load("acceptance/FINAL_ACCEPTANCE_POLICY.json")["step23"]
+    req(window["schema_version"]=="1.0.0" and window["status"]=="PREARM_READY",
+        "Step 23 pre-arm identity changed")
+    req(set(window["temporary_crons"])==required_temp,"Step 23 pre-arm workflow set changed")
+    req(window["qualification_horizon_start"] is None and window["qualification_horizon_end"] is None,
+        "Step 23 pre-arm state must not carry a stale qualification horizon")
+    req(window["required_successes_per_workflow"]==final_step23["min_successful_scheduled_cycles_per_workflow"],
+        "Step 23 success-count contract drifted")
+    req(window["max_soak_duration_seconds"]==final_step23["max_soak_duration_seconds"]==7200,
+        "Step 23 two-hour duration contract drifted")
+    req(all(crons==[] for crons in window["temporary_crons"].values())
+        and window["observer_crons"]==[], "Step 23 pre-arm state contains temporary crons")
     workflow_dir=ROOT/".github/workflows"
     actual=scheduled_workflow_inventory(workflow_dir)
     req(set(actual)==set(expected)|{delivery["workflow"]},
-        "scheduled workflow inventory differs from approved canary policy")
+        "scheduled workflow inventory differs from approved pre-arm policy")
     for name,cron in expected.items():
-        req(actual[name]==[cron,*window["temporary_crons"].get(name,[])],f"{name} cron mismatch")
+        req(actual[name]==[cron],f"{name} steady-state cron mismatch")
     req(actual[delivery["workflow"]]==[delivery["cron"]],"delivery probe cron mismatch")
     control=load("operations/STEP23_CONTROL.json")
-    req(control.get("status")=="CANARY_REQUIRED" and control.get("next_soak_start") is None
+    req(control.get("status")=="PREARM_READY" and control.get("next_soak_start") is None
+        and control.get("qualification_horizon_start") is None
+        and control.get("qualification_horizon_end") is None
+        and control.get("max_soak_duration_seconds")==7200
         and control.get("acceptance_complete") is False,
-        "Step 23 must remain disarmed until scheduler canary passes")
+        "Step 23 pre-arm control is not cleanly disarmed")
     workload=load("workload_control/WORKLOAD_POLICY.json")
     req(workload["mode"]=="GITHUB_NATIVE_WORKLOAD_CONTROL","workload control mode changed")
     workload_workflows={
