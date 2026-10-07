@@ -1,5 +1,0 @@
-{
-  "schema_version": "1.0.0",
-  "disabled": true,
-  "reason": "Pilot requires reviewed enablement and explicit runtime opt-in."
-}
