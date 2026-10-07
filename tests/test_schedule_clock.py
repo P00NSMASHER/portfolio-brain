@@ -150,6 +150,22 @@ class ScheduleClockTests(unittest.TestCase):
   self.assertEqual(daily["action"],"REDUCER_ALREADY_WOKEN_OR_ACTIVE")
   reducer_posts=[call for call in api.calls if call[0]=="/actions/workflows/portfolio-state-reducer.yml/dispatches" and call[1]=="POST"]
   self.assertEqual(len(reducer_posts),1)
+ def test_reducer_wake_counts_against_dispatch_budget(self):
+  reducers=[{
+    "id":700,"head_branch":"main","head_sha":MAIN,"status":"completed","conclusion":"success",
+    "created_at":"2026-10-06T16:00:00Z","updated_at":"2026-10-06T16:00:30Z",
+  }]
+  producers={"runtime-hourly-sync.yml":[{
+    "id":44,"head_branch":"main","head_sha":MAIN,"status":"completed","conclusion":"success",
+    "updated_at":"2026-10-06T16:05:00Z",
+  }]}
+  p={**POLICY,"max_dispatches_per_tick":1}
+  api=API(reducer_runs=reducers,producer_runs=producers)
+  result=execute(api,p,SOURCE,MAIN)
+  self.assertEqual(result["reducer_wake"]["action"],"REDUCER_WAKE_REQUESTED")
+  self.assertEqual(result["actions"][0]["action"],"DISPATCH_BUDGET_EXHAUSTED")
+  posts=[call for call in api.calls if call[1]=="POST"]
+  self.assertEqual(posts,[("/actions/workflows/portfolio-state-reducer.yml/dispatches","POST",{"ref":"main"})])
  def test_wrong_source_event_fails_closed(self):
   with self.assertRaisesRegex(ClockError,"native schedule"):
    execute(API(),POLICY,{**SOURCE,"event":"workflow_dispatch"},MAIN)
