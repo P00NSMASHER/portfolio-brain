@@ -111,7 +111,8 @@ def step23():
     run_id = 100
     minimum=p["step23"]["min_successful_scheduled_cycles_per_workflow"]
     for workflow in p["step23"]["required_workflows"]:
-        for _ in range(minimum):
+        samples=max(minimum,3) if workflow in {"portfolio-state-reducer","portfolio-autonomous-scheduler"} else minimum
+        for _ in range(samples):
             runs.append({
                 "workflow": workflow,
                 "event": "schedule",
