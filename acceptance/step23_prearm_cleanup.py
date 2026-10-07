@@ -1,4 +1,5 @@
 """Remove non-counting pre-arm workflow runs whose title captured credential material."""
+# Retrigger marker: temporary admin cleanup removed after exact zombie deletion; fresh exact-main pre-arm, 2026-10-07.
 # Retrigger marker: post-#629 reducer-zombie cleanup exact-main pre-arm, 2026-10-07.
 # Retrigger marker: steady-barrier liveness repair verified; fresh exact-main pre-arm, 2026-10-07.
 # Retrigger marker: reducer-liveness repair exact-main pre-arm, 2026-10-07.
