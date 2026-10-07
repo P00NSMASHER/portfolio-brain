@@ -25,7 +25,7 @@ BLOCKER_PATHS={
     ".github/workflows/command-center-pages.yml",
     ".github/workflows/verified-feedback-bootstrap.yml",
 }
-STALE_CANCELLABLE_EVENTS={"workflow_dispatch","workflow_run","push"}
+STALE_CANCELLABLE_EVENTS={"workflow_run","push"}
 
 
 def req(ok:bool,message:str)->None:
@@ -44,7 +44,14 @@ def stale_non_schedule_blocker(row:dict[str,Any],exact_sha:str)->bool:
         and row.get("head_sha")!=exact_sha
         and row.get("path") in BLOCKER_PATHS
         and row.get("status")!="completed"
-        and row.get("event") in STALE_CANCELLABLE_EVENTS
+        and (
+            row.get("event") in STALE_CANCELLABLE_EVENTS
+            or (
+                row.get("event")=="workflow_dispatch"
+                and isinstance(row.get("display_title"),str)
+                and row["display_title"].startswith("prearm-")
+            )
+        )
     )
 
 
