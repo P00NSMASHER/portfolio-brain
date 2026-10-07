@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime,timezone
-from operations.schedule_clock import ClockError,daemon_identity,due,execute
+from operations.schedule_clock import ClockError,bind_dispatched_run,daemon_identity,due,execute
 
 MAIN="a"*40
 SOURCE={"id":1,"name":"verified-feedback-bootstrap","path":".github/workflows/verified-feedback-bootstrap.yml",
@@ -28,7 +28,17 @@ class API:
   self.calls=[];self.requests=0
  def call(self,path,method="GET",payload=None):
   self.calls.append((path,method,payload));self.requests+=1
-  if method=="POST": return {}
+  if method=="POST":
+   name=path.split("/actions/workflows/",1)[1].split("/dispatches",1)[0]
+   workflow_name=name[:-4] if name.endswith(".yml") else name
+   next_id=900+self.requests
+   self.recent.setdefault((name,"workflow_dispatch"),[]).insert(0,{
+    "id":next_id,"name":workflow_name,"head_branch":"main","head_sha":MAIN,
+    "event":"workflow_dispatch","status":"queued","conclusion":None,
+    "created_at":datetime.now(timezone.utc).isoformat().replace("+00:00","Z"),
+    "actor":{"login":"github-actions[bot]"},"triggering_actor":{"login":"github-actions[bot]"},
+   })
+   return {}
   name=path.split("/actions/workflows/",1)[1].split("/runs?",1)[0]
   if name=="portfolio-state-reducer.yml" and "event=" not in path:
    return {"workflow_runs":self.reducer_runs}
@@ -80,8 +90,10 @@ class ScheduleClockTests(unittest.TestCase):
   self.assertFalse(due("EVERY_6_HOURS",at));self.assertFalse(due("DAILY_04_UTC",at))
  def test_trusted_schedule_source_dispatches_due_only(self):
   api=API();result=execute(api,POLICY,SOURCE,MAIN)
-  requested=[x["workflow"] for x in result["actions"] if x["action"]=="DISPATCH_REQUESTED"]
-  self.assertEqual(requested,["hourly","two"])
+  bound=[x for x in result["actions"] if x["action"]=="DISPATCH_BOUND"]
+  self.assertEqual([x["workflow"] for x in bound],["hourly","two"])
+  self.assertTrue(all(type(x["target_run_id"]) is int for x in bound))
+  self.assertTrue(all(x["target_event"]=="workflow_dispatch" and x["target_head_sha"]==MAIN for x in bound))
   self.assertFalse(result["authority_granted"])
  def test_recent_schedule_or_dispatch_dedupes(self):
   recent={("hourly.yml","schedule"):[{"id":9,"head_branch":"main","head_sha":MAIN,"created_at":"2026-10-06T16:10:00Z"}]}
@@ -89,6 +101,18 @@ class ScheduleClockTests(unittest.TestCase):
   row=next(x for x in result["actions"] if x["workflow"]=="hourly")
   self.assertEqual(row["action"],"ALREADY_RAN_IN_SLOT")
   self.assertEqual(row["evidence_run_ids"],[9])
+ def test_dispatch_binding_rejects_ambiguous_bot_runs(self):
+  class AmbiguousAPI:
+   def __init__(self): self.requests=0
+   def call(self,path,method="GET",payload=None):
+    self.requests+=1
+    now=datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
+    row=lambda i: {"id":i,"name":"hourly","head_branch":"main","head_sha":MAIN,
+      "event":"workflow_dispatch","status":"queued","created_at":now,
+      "actor":{"login":"github-actions[bot]"},"triggering_actor":{"login":"github-actions[bot]"}}
+    return {"workflow_runs":[row(1),row(2)]}
+  with self.assertRaisesRegex(ClockError,"ambiguous clock dispatch binding"):
+   bind_dispatched_run(AmbiguousAPI(),{"name":"hourly","file":"hourly.yml"},MAIN,set(),datetime.now(timezone.utc))
  def test_clock_wakes_reducer_when_producer_is_newer(self):
   reducers=[{
     "id":700,"head_branch":"main","head_sha":MAIN,"status":"completed","conclusion":"success",
