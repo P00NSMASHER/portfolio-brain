@@ -41,7 +41,7 @@ jobs:
     # provider restore + 126s forwarding + 80s health reads, leaving 109s for
     # scans/setup/finalization. Missing reducer delivery still fails closed.
     # Paid modes retain their existing five-minute reservation and hard limit.
-    timeout-minutes: ${{ inputs.prearm_id != '' && 25 || ((inputs.mode == 'observe' || inputs.mode == 'sync') && 15 || 5) }}
+    timeout-minutes: ${{ (inputs.mode == 'observe' || inputs.mode == 'sync') && 15 || 5 }}
     env:
       PORTFOLIO_RUNTIME_DISABLED: ${{ vars.PORTFOLIO_RUNTIME_DISABLED }}
       PORTFOLIO_SPEND_DISABLED: ${{ vars.PORTFOLIO_SPEND_DISABLED }}
