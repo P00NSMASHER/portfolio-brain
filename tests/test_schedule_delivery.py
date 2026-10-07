@@ -143,13 +143,14 @@ class DeliveryTests(unittest.TestCase):
     def test_fixed_arm_control_and_workflow_boundaries(self):
         control = json.loads((ROOT/'operations/STEP23_CONTROL.json').read_text())
         window = json.loads((ROOT/'operations/STEP23_DELIVERY_WINDOW.json').read_text())
-        self.assertEqual(control['status'], 'CANARY_REQUIRED')
+        self.assertEqual(control['status'], 'PREARM_READY')
         self.assertIsNone(control['next_soak_start'])
         self.assertFalse(control['acceptance_complete'])
+        self.assertEqual(window['max_soak_duration_seconds'], 7200)
+        self.assertTrue(all(window['temporary_crons'][name] == [] for name in d.CORE))
         for name in d.CORE:
             text = (ROOT/f'.github/workflows/{name}.yml').read_text()
-            for cron in window['temporary_crons'][name]:
-                self.assertIn(f'cron: "{cron}"', text)
+            self.assertNotIn('scheduler_canary:', text)
         for name in ('portfolio-state-reducer', 'portfolio-cost-watchdog', 'command-center-pages', 'portfolio-autonomous-repair'):
             self.assertNotIn('!startsWith(github.event.workflow_run.created_at', (ROOT/f'.github/workflows/{name}.yml').read_text())
         delivery_text = (ROOT/'.github/workflows/portfolio-schedule-delivery.yml').read_text()
@@ -163,6 +164,7 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn("github.event.workflow_run.event == 'schedule'", clock)
         self.assertIn("github.event_name == 'push'", recovery)
         self.assertIn('--without-cost-state', recovery)
+        self.assertNotIn('--force-reregister', recovery)
         observer = (ROOT/'.github/workflows/step23-live-soak-observer.yml').read_text()
         self.assertNotIn('  schedule:', observer)
         self.assertIn('workflow_run:', observer)
