@@ -12,7 +12,7 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 from brain.core import require, digest, utcnow, BrainError, timestamp
-from brain.adapters import NoRedirect
+from brain.adapters import NoRedirect, related_test_paths
 
 REPOSITORY='P00NSMASHER/portfolio-brain'
 PATH='brain/REUSE_KNOWLEDGE.json'
@@ -20,7 +20,13 @@ VALIDATION='actions/workflows/foundation-ci.yml/dispatches'
 
 def build_knowledge(report):
     require(report['status']=='PASS', 'upgrade requires passing authoritative report')
-    candidates=[c for c in report['reuse_candidates'] if c['data_kind']=='ACTUAL' and c['freshness']=='CURRENT' and c['test_paths'] and len(c['matched_terms'])>=2]
+    candidates=[]
+    for c in report['reuse_candidates']:
+        # Persisted candidates may predate retrieval fixes. Recheck association
+        # before granting upgrade eligibility, without rewriting historical facts.
+        tests=related_test_paths(c['path'],[{'path':p,'type':'blob'} for p in c['test_paths']])
+        if c['data_kind']=='ACTUAL' and c['freshness']=='CURRENT' and tests and len(c['matched_terms'])>=2:
+            candidates.append({**c,'test_paths':tests})
     require(len(candidates)>=3, 'INSUFFICIENT_UPGRADE_EVIDENCE: three real implementation-and-test sources required')
     sources=[]
     for c in sorted(candidates,key=lambda x:x['key'])[:12]:

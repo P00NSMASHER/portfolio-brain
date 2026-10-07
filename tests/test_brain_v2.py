@@ -174,6 +174,11 @@ class UpgradeTests(unittest.TestCase):
    with self.assertRaises(BrainError):api.request(path,method,{})
 
 class UpgradeEndToEndTests(unittest.TestCase):
+ def test_historical_unrelated_tests_cannot_qualify_upgrade(self):
+  from brain.upgrades import build_knowledge
+  candidate={'data_kind':'ACTUAL','freshness':'CURRENT','path':'hosted-x402/src/dynamic-payment.ts','test_paths':['tests/test_buyer_profile.py','tests/test_mcp_security.py'],'matched_terms':['payment','x402']}
+  with self.assertRaisesRegex(BrainError,'INSUFFICIENT_UPGRADE_EVIDENCE'):build_knowledge({'status':'PASS','reuse_candidates':[dict(candidate) for _ in range(3)]})
+
  def test_validation_dispatch_cannot_target_main_or_other_workflow(self):
   from brain.upgrades import UpgradeAPI,VALIDATION,REPOSITORY as repo
   calls=[];api=UpgradeAPI(transport=lambda *args:calls.append(args))
