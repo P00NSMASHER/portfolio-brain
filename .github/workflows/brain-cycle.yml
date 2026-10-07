@@ -25,6 +25,8 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: write
+      pull-requests: write
+      actions: write
     steps:
       - name: Checkout exact source without persisted credentials
         uses: actions/checkout@v4

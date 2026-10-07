@@ -174,6 +174,36 @@ class UpgradeTests(unittest.TestCase):
    with self.assertRaises(BrainError):api.request(path,method,{})
 
 class UpgradeEndToEndTests(unittest.TestCase):
+ def test_upgrade_payload_cannot_write_main_or_arbitrary_ref(self):
+  from brain.upgrades import UpgradeAPI,REPOSITORY as repo,PATH
+  calls=[];api=UpgradeAPI(transport=lambda *args:calls.append(args))
+  bad=[('git/refs','POST',{'ref':'refs/heads/main','sha':SHA}),('contents/'+PATH,'PUT',{'message':'test','branch':'main','sha':SHA,'content':'e30='}),('pulls','POST',{'head':'main','base':'other','title':'test','body':'AUTO_REPAIR_FINGERPRINT: test'})]
+  for endpoint,method,payload in bad:
+   with self.assertRaises(BrainError):api.request('/repos/'+repo+'/'+endpoint,method,payload)
+  self.assertEqual(calls,[])
+
+ def test_historical_unrelated_tests_cannot_qualify_upgrade(self):
+  from brain.upgrades import build_knowledge
+  candidate={'data_kind':'ACTUAL','freshness':'CURRENT','path':'hosted-x402/src/dynamic-payment.ts','test_paths':['tests/test_buyer_profile.py','tests/test_mcp_security.py'],'matched_terms':['payment','x402']}
+  with self.assertRaisesRegex(BrainError,'INSUFFICIENT_UPGRADE_EVIDENCE'):build_knowledge({'status':'PASS','reuse_candidates':[dict(candidate) for _ in range(3)]})
+
+ def test_validation_dispatch_cannot_target_main_or_other_workflow(self):
+  from brain.upgrades import UpgradeAPI,VALIDATION,REPOSITORY as repo
+  calls=[];api=UpgradeAPI(transport=lambda *args:calls.append(args))
+  for path,payload in [(VALIDATION,{'ref':'main'}),(VALIDATION,{'ref':'factory/auto-repair-v2-knowledge-'+'a'*16,'inputs':{}}),('actions/workflows/brain-cycle.yml/dispatches',{'ref':'main'})]:
+   with self.assertRaises(BrainError):api.request('/repos/'+repo+'/'+path,'POST',payload)
+  self.assertEqual(calls,[])
+
+ def test_upgrade_http_failure_preserves_status_without_token(self):
+  import urllib.error
+  from brain.upgrades import UpgradeAPI,REPOSITORY as repo
+  api=UpgradeAPI(token='secret-never-in-diagnostics')
+  class Opener:
+   def open(self,*args,**kwargs):raise urllib.error.HTTPError('https://api.github.com',403,'Forbidden',{},None)
+  api.opener=Opener()
+  with self.assertRaisesRegex(BrainError,'UPGRADE_API_403: POST pulls') as failure:api.request('/repos/'+repo+'/pulls','POST',{'head':'factory/auto-repair-v2-knowledge-'+'a'*16,'base':'main','title':'test','body':'AUTO_REPAIR_FINGERPRINT: '+'a'*64})
+  self.assertNotIn('secret-never-in-diagnostics',str(failure.exception))
+
  def test_evidence_qualified_proposal_uses_only_protected_path(self):
   from brain.upgrades import evolve
   with tempfile.TemporaryDirectory() as directory:
@@ -186,14 +216,24 @@ class UpgradeEndToEndTests(unittest.TestCase):
    store.submit(items);store.drain();store.report(SHA)
    calls=[]
    class API:
+    def __init__(self,fail_dispatch=False):self.head=None;self.pr=None;self.content=None;self.fail_dispatch=fail_dispatch
     def request(self,path,method='GET',body=None):
      calls.append((path,method,body))
      if path.endswith('/branches/main'):return {'commit':{'sha':SHA}}
-     if '/pulls?' in path:return []
+     if '/branches/factory/' in path:
+      if self.head is None:raise BrainError('UPGRADE_API_404: absent')
+      return {'commit':{'sha':self.head}}
+     if '/pulls?' in path:return [self.pr] if self.pr else []
+     if '/compare/' in path:return {'merge_base_commit':{'sha':SHA},'files':[{'filename':'brain/REUSE_KNOWLEDGE.json'}]}
+     if '/contents/' in path and method=='GET' and path.endswith('e'*40):return {'encoding':'base64','content':self.content}
      if '/contents/' in path and method=='GET':return {'sha':'d'*40}
-     if '/git/refs' in path:return {}
-     if '/contents/' in path and method=='PUT':return {'commit':{'sha':'e'*40}}
-     if path.endswith('/pulls') and method=='POST':return {'number':100,'html_url':'https://github.com/P00NSMASHER/portfolio-brain/pull/100'}
+     if '/git/refs' in path:self.head=SHA;return {}
+     if '/contents/' in path and method=='PUT':self.head='e'*40;self.content=body['content'];return {'commit':{'sha':self.head}}
+     if path.endswith('/pulls') and method=='POST':
+      self.pr={'number':100,'html_url':'https://github.com/P00NSMASHER/portfolio-brain/pull/100','head':{'sha':self.head,'ref':body['head'],'repo':{'full_name':REPOSITORY}},'base':{'ref':'main'},'user':{'login':'github-actions[bot]'}};return self.pr
+     if path.endswith('/actions/workflows/foundation-ci.yml/dispatches') and method=='POST':
+      if self.fail_dispatch:self.fail_dispatch=False;raise BrainError('UPGRADE_API_503: delivery interrupted')
+      return {}
      raise AssertionError(path)
    try:
     result=evolve(store,SHA,api=API());self.assertEqual(result['status'],'CANDIDATE_PR_CREATED');self.assertEqual(result['independent_review'],'PENDING')
@@ -201,6 +241,25 @@ class UpgradeEndToEndTests(unittest.TestCase):
     self.assertEqual(evolve(store,SHA,api=API())['status'],'COOLDOWN')
     create=[c for c in calls if c[0].endswith('/pulls') and c[1]=='POST'][0]
     self.assertEqual(create[2]['base'],'main');self.assertIn('AUTO_REPAIR_FINGERPRINT:',create[2]['body'])
+    dispatched=[c for c in calls if c[0].endswith('/dispatches')]
+    self.assertEqual(len(dispatched),1);self.assertEqual(dispatched[0][2]['ref'],create[2]['head'])
+    self.assertEqual(result['validation_dispatch'],'DELIVERED')
+    # An interrupted dispatch resumes the same verified branch/PR once after an
+    # hour, without creating another proposal or dropping the weekly cooldown.
+    from unittest.mock import patch
+    from datetime import timedelta
+    from brain.core import timestamp
+    recovery=Store(Path(directory)/'recovery.sqlite',visibility='PUBLIC');recovery.submit(items);recovery.drain();recovery.report(SHA)
+    api=API(fail_dispatch=True);calls.clear()
+    with self.assertRaisesRegex(BrainError,'UPGRADE_API_503'):evolve(recovery,SHA,api=api)
+    future=(timestamp(utcnow())+timedelta(seconds=3602)).isoformat().replace('+00:00','Z')
+    with patch('brain.upgrades.utcnow',return_value=future):
+     resumed=evolve(recovery,SHA,api=api);self.assertEqual(resumed['validation_dispatch'],'DELIVERED')
+     self.assertEqual(evolve(recovery,SHA,api=api)['status'],'COOLDOWN')
+    self.assertEqual(sum(p.endswith('/git/refs') and m=='POST' for p,m,_ in calls),1)
+    self.assertEqual(sum(p.endswith('/pulls') and m=='POST' for p,m,_ in calls),1)
+    self.assertEqual(sum(p.endswith('/dispatches') for p,m,_ in calls),2)
+    recovery.close()
    finally:store.close()
  def test_doctor_rejects_partial_monitor_borrowing_old_full_coverage(self):
   with tempfile.TemporaryDirectory() as directory:
