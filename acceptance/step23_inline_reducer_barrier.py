@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import time
 import urllib.parse
 import urllib.request
@@ -19,6 +20,7 @@ from acceptance.step23_live_collect import pending_event_count
 
 ALLOWED_TARGETS={"hunter-autonomous-cycle","command-center-pages"}
 REDUCER_FILE="portfolio-state-reducer.yml"
+PREARM_ID=re.compile(r"^prearm-[0-9]+-[a-z0-9-]+$")
 
 
 def req(ok: bool, message: str) -> None:
@@ -122,7 +124,7 @@ def main()->None:
     parent=os.environ.get("GITHUB_RUN_ID","")
     prearm_id=os.environ.get("STEP23_PREARM_ID","")
     req(repo and token and parent,"GitHub context required for inline reducer barrier")
-    req(prearm_id.startswith("prearm-"),"inline reducer barrier is pre-arm only")
+    req(PREARM_ID.fullmatch(prearm_id) is not None,"inline reducer barrier is pre-arm only")
     req(len(args.exact_sha)==40,"exact main SHA malformed")
 
     api=API(repo,token)
