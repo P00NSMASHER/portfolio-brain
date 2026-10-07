@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Cross-file Step 10 continuous-learning validator."""
 from __future__ import annotations
+from legacy.workflow_archive import legacy_workflow_path
 import json
 from pathlib import Path
 from learning.continuous_learning import policy, rebuild_from_ledger, rebuild_from_sources
@@ -54,14 +55,14 @@ def validate_learning():
     req("portfolio_learning_state.json" in runtime,"daily runtime does not emit portfolio learning state")
     req("rebuild_from_sources" in runtime,"daily runtime not connected to durable Step 10 learner")
     req("learning_observation_state.json" in runtime,"daily runtime does not consume durable learning observations")
-    runtime_workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text()
+    runtime_workflow=(legacy_workflow_path(ROOT/".github/workflows/runtime-worker.yml")).read_text()
     req("python -m state_journal.production_reader --domain learning --output learning/live/learning_observation_state.json" in runtime_workflow,"runtime does not restore canonical learning observations")
-    proof_workflow=(ROOT/".github/workflows/model-value-proof.yml").read_text()
-    bootstrap_workflow=(ROOT/".github/workflows/verified-feedback-bootstrap.yml").read_text()
+    proof_workflow=(legacy_workflow_path(ROOT/".github/workflows/model-value-proof.yml")).read_text()
+    bootstrap_workflow=(legacy_workflow_path(ROOT/".github/workflows/verified-feedback-bootstrap.yml")).read_text()
     for body,label in ((proof_workflow,"model value proof"),(bootstrap_workflow,"verified feedback bootstrap")):
         req("python -m value_proof.outcome_ingestion" in body,f"{label} does not use canonical verified-outcome ingestion")
         req("name: portfolio-learning-observation-state" in body,f"{label} does not persist continuous learning state")
-    learning_bootstrap=(ROOT/".github/workflows/continuous-learning-bootstrap.yml").read_text()
+    learning_bootstrap=(legacy_workflow_path(ROOT/".github/workflows/continuous-learning-bootstrap.yml")).read_text()
     req("learning/TRIGGER_VERIFIED_OUTCOME_BOOTSTRAP" in learning_bootstrap,"continuous learning bootstrap trigger missing")
     req("python -m value_proof.outcome_ingestion" in learning_bootstrap,"continuous learning bootstrap does not use canonical verified-outcome ingestion")
     req("python -m learning.integrity" in learning_bootstrap,"continuous learning bootstrap does not prove cross-subsystem integrity")

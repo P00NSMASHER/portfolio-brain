@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
+from legacy.workflow_archive import legacy_workflow_path
 import json
 from pathlib import Path
 from hunting.proposal_state import load_seed_state as load_hunter_proposal_seed, validate_state as validate_hunter_proposal_state
@@ -59,7 +60,7 @@ def validate_scheduler():
     lane=[p["value_lane_precedence"][w["value_lane"]] for w in selected]
     req(lane==sorted(lane),"engineering value lane precedence did not dominate selection")
     req(len(state["work_items"])==len(selected),"scheduler state did not persist queue")
-    wf=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text().lower()
+    wf=(legacy_workflow_path(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml")).read_text().lower()
     for token in ["contents: read","actions: write","pull-requests: read","23 * * * *","portfolio_scheduler_disabled","actions/upload-artifact@v4","cancel-in-progress: false"]:
         req(token in wf,f"scheduler workflow missing {token}")
     req("contents: write" not in wf,"scheduler gained repository write authority")
@@ -70,7 +71,7 @@ def validate_scheduler():
         "scheduler must not dispatch the same accepted REPAIR twice")
     req("push:" not in wf,"scheduler must not fan out on push inside the singleton cost-state concurrency lane")
     req(wf.index("concurrency:",wf.index("  schedule:"))>wf.index("  schedule:"),"scheduler shared-state mutex must cover the writer job")
-    runtime_event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
+    runtime_event=(legacy_workflow_path(ROOT/".github/workflows/runtime-event-observe.yml")).read_text()
     req('".github/workflows/portfolio-autonomous-scheduler.yml"' in runtime_event,"scheduler workflow changes are not isolated from runtime-event churn")
     for s in ["state_journal.production_reader --domain proposals","hunting/live/hunter_proposal_state.json","portfolio-hunter-proposal-state"]:
         req(s in wf,f"scheduler Hunter proposal inbox integration missing {s}")

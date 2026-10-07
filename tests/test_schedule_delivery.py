@@ -1,4 +1,5 @@
 """Deterministic delivery tests; fixture successes confer no acceptance credit."""
+from legacy.workflow_archive import legacy_workflow_path
 import copy
 import json
 import unittest
@@ -149,11 +150,11 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(window['max_soak_duration_seconds'], 7200)
         self.assertTrue(all(window['temporary_crons'][name] == [] for name in d.CORE))
         for name in d.CORE:
-            text = (ROOT/f'.github/workflows/{name}.yml').read_text()
+            text = (legacy_workflow_path(ROOT/f'.github/workflows/{name}.yml')).read_text()
             self.assertNotIn('scheduler_canary:', text)
         for name in ('portfolio-state-reducer', 'portfolio-cost-watchdog', 'command-center-pages', 'portfolio-autonomous-repair'):
-            self.assertNotIn('!startsWith(github.event.workflow_run.created_at', (ROOT/f'.github/workflows/{name}.yml').read_text())
-        delivery_text = (ROOT/'.github/workflows/portfolio-schedule-delivery.yml').read_text()
+            self.assertNotIn('!startsWith(github.event.workflow_run.created_at', (legacy_workflow_path(ROOT/f'.github/workflows/{name}.yml')).read_text())
+        delivery_text = (legacy_workflow_path(ROOT/'.github/workflows/portfolio-schedule-delivery.yml')).read_text()
         before_clock, clock_and_after = delivery_text.split('  clock:', 1)
         clock, recovery = clock_and_after.split('  recover:', 1)
         self.assertNotIn('actions: write', before_clock)
@@ -173,7 +174,7 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn("github.event_name == 'push'", recovery)
         self.assertIn('--without-cost-state', recovery)
         self.assertNotIn('--force-reregister', recovery)
-        observer = (ROOT/'.github/workflows/step23-live-soak-observer.yml').read_text()
+        observer = (legacy_workflow_path(ROOT/'.github/workflows/step23-live-soak-observer.yml')).read_text()
         self.assertNotIn('  schedule:', observer)
         self.assertIn('workflow_run:', observer)
         self.assertIn('step23_delivery_qualification', observer)

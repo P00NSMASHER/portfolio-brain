@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import tempfile
 import unittest
 from pathlib import Path
@@ -176,14 +177,14 @@ class SchedulerRepairFactoryBridgeTests(unittest.TestCase):
 
     def test_workflow_prevents_python_bytecode_from_contaminating_candidate_diff(self):
         root = Path(__file__).resolve().parents[1]
-        workflow = (root / ".github/workflows/portfolio-autonomous-repair.yml").read_text()
+        workflow = (legacy_workflow_path(root / ".github/workflows/portfolio-autonomous-repair.yml")).read_text()
         self.assertIn('PYTHONDONTWRITEBYTECODE: "1"', workflow)
         self.assertIn("python -m repair.autonomous_repair validate-diff", workflow)
         self.assertIn("software_factory.scheduler_repair_bridge submit", workflow)
 
     def test_workflow_excludes_scratch_before_candidate_accounting(self):
         root = Path(__file__).resolve().parents[1]
-        workflow = (root / ".github/workflows/portfolio-autonomous-repair.yml").read_text()
+        workflow = (legacy_workflow_path(root / ".github/workflows/portfolio-autonomous-repair.yml")).read_text()
         scratch = "printf '%s\\n' '/repair/out/' >> .git/info/exclude"
         self.assertIn(scratch, workflow)
         self.assertLess(workflow.index(scratch), workflow.index("mkdir -p repair/out"))
@@ -191,7 +192,7 @@ class SchedulerRepairFactoryBridgeTests(unittest.TestCase):
 
     def test_workflow_bounds_failed_builder_correction_to_exactly_one_retry(self):
         root = Path(__file__).resolve().parents[1]
-        workflow = (root / ".github/workflows/portfolio-autonomous-repair.yml").read_text()
+        workflow = (legacy_workflow_path(root / ".github/workflows/portfolio-autonomous-repair.yml")).read_text()
         initial = workflow.index("id: prepush")
         prompt = workflow.index("Prepare one bounded correction prompt")
         correction = workflow.index("Apply one bounded correction")
@@ -212,7 +213,7 @@ class SchedulerRepairFactoryBridgeTests(unittest.TestCase):
         self.assertLess(corrected_tests, submit)
     def test_workflow_separates_builder_from_network_disabled_factory_review(self):
         root = Path(__file__).resolve().parents[1]
-        workflow = (root / ".github/workflows/portfolio-autonomous-repair.yml").read_text()
+        workflow = (legacy_workflow_path(root / ".github/workflows/portfolio-autonomous-repair.yml")).read_text()
         self.assertIn("software_factory.scheduler_repair_bridge submit", workflow)
         self.assertIn("  factory-review:", workflow)
         self.assertIn("software_factory.scheduler_repair_bridge verify", workflow)

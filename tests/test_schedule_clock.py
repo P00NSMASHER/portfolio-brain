@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import unittest
 from datetime import datetime,timezone
 from pathlib import Path
@@ -192,7 +193,7 @@ class ScheduleClockTests(unittest.TestCase):
 
  def test_daemon_polls_reducer_liveness_faster_than_reader_timeout(self):
   root=Path(__file__).resolve().parents[1]
-  text=(root/".github/workflows/portfolio-schedule-clock-daemon.yml").read_text()
+  text=(legacy_workflow_path(root/".github/workflows/portfolio-schedule-clock-daemon.yml")).read_text()
   self.assertIn("--liveness-only",text)
   self.assertIn("--exact-sha \"$GITHUB_SHA\"",text)
   self.assertIn("sleep 60",text)

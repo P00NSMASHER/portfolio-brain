@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import inspect
 import unittest
 
@@ -44,7 +45,7 @@ class Step23WaitReducerBarrierTests(unittest.TestCase):
     def test_in_progress_barrier_does_not_mark_live_writer_as_explicit_recovery(self):
         from pathlib import Path
         root=Path(__file__).resolve().parents[1]
-        reducer=(root/".github/workflows/portfolio-state-reducer.yml").read_text()
+        reducer=(legacy_workflow_path(root/".github/workflows/portfolio-state-reducer.yml")).read_text()
         self.assertIn(
             "TRIGGER_WORKFLOW_RUN_ID: ${{ github.event_name == 'workflow_run' && github.event.action == 'completed' && github.event.workflow_run.id || '' }}",
             reducer,

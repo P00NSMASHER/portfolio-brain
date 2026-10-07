@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import json
 import tempfile
 import unittest
@@ -150,7 +151,7 @@ class LiveStateBridgeTests(unittest.TestCase):
         self.assertEqual(receipt["bridge_status"],"BLOCKED")
 
     def test_pages_workflow_restores_live_state_hourly_before_publish(self):
-        workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text()
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/command-center-pages.yml")).read_text()
         self.assertIn('cron: "37 * * * *"',workflow)
         self.assertIn("actions: read",workflow)
         self.assertIn("python -m dashboard.live_state_bridge",workflow)

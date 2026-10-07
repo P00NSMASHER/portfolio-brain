@@ -1,4 +1,5 @@
 """Regression coverage for the actual reducer dependency used by soak producers."""
+from legacy.workflow_archive import legacy_workflow_path
 from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
@@ -156,7 +157,7 @@ class SoakDependencyLivenessTests(unittest.TestCase):
                 self.exercise(pending=[{"id": 91, "created_at": value}])
 
     def test_reactive_reducer_remains_available_in_clean_prearm(self):
-        text = (ROOT / ".github/workflows/portfolio-state-reducer.yml").read_text()
+        text = (legacy_workflow_path(ROOT / ".github/workflows/portfolio-state-reducer.yml")).read_text()
         window = __import__("json").loads((ROOT / "operations/STEP23_DELIVERY_WINDOW.json").read_text())
         self.assertEqual(window["temporary_crons"]["portfolio-state-reducer"], [])
         self.assertIn("workflow_run:", text)
@@ -169,7 +170,7 @@ class SoakDependencyLivenessTests(unittest.TestCase):
         self.assertNotIn("30 16 6 10 *", text)
 
     def test_notifications_restore_canonical_cost_before_evaluation(self):
-        text = (ROOT / ".github/workflows/portfolio-notification-cycle.yml").read_text()
+        text = (legacy_workflow_path(ROOT / ".github/workflows/portfolio-notification-cycle.yml")).read_text()
         restore = text.index("--domain cost --output cost_governor/live/cost_state.json")
         evaluate = text.index("python -m notifications.notification_engine")
         self.assertLess(restore, evaluate)

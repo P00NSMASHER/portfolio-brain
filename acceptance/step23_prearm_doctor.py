@@ -9,6 +9,7 @@ This module has two modes:
 It never arms Step 23 and never counts workflow_dispatch runs as soak evidence.
 """
 from __future__ import annotations
+from legacy.workflow_archive import legacy_workflow_path
 
 import argparse
 import json
@@ -73,7 +74,7 @@ def validate_static(*, phase: str, now: datetime | None = None) -> dict[str, Any
         "Step 23 success-count contract drifted")
     req(set(window["temporary_crons"]) == required_names, "temporary-cron workflow inventory drifted")
 
-    workflow_dir = ROOT / ".github" / "workflows"
+    workflow_dir = legacy_workflow_path(ROOT / ".github" / "workflows")
     actual = scheduled_workflow_inventory(workflow_dir)
     delivery_name, delivery_file, delivery_cron = DELIVERY
     req(delivery["workflow"] == delivery_name and delivery["cron"] == delivery_cron,

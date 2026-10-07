@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import inspect
 import unittest
 
@@ -42,7 +43,7 @@ class Step23PrearmPreflightTests(unittest.TestCase):
             ("command-center-pages.yml","command-center-pages"),
         ):
             with self.subTest(filename=filename):
-                text=(root/".github/workflows"/filename).read_text()
+                text=(legacy_workflow_path(root/".github/workflows"/filename)).read_text()
                 barrier=text.index("Wait for reducer barrier after writer-lane acquisition")
                 restore=text.index("Restore canonical",barrier)
                 self.assertLess(barrier,restore)
@@ -54,8 +55,8 @@ class Step23PrearmPreflightTests(unittest.TestCase):
     def test_runtime_sync_forwards_and_waits_for_barrier(self):
         from pathlib import Path
         root=Path(__file__).resolve().parents[1]
-        hourly=(root/".github/workflows/runtime-hourly-sync.yml").read_text()
-        worker=(root/".github/workflows/runtime-worker.yml").read_text()
+        hourly=(legacy_workflow_path(root/".github/workflows/runtime-hourly-sync.yml")).read_text()
+        worker=(legacy_workflow_path(root/".github/workflows/runtime-worker.yml")).read_text()
         self.assertIn("prearm_id: ${{ inputs.prearm_id }}",hourly)
         self.assertIn("Wait for reducer barrier after writer-lane acquisition",worker)
         self.assertIn("--target runtime-hourly-sync",worker)
@@ -64,7 +65,7 @@ class Step23PrearmPreflightTests(unittest.TestCase):
     def test_steady_writer_starts_trigger_correlated_reducer_barriers(self):
         from pathlib import Path
         root=Path(__file__).resolve().parents[1]
-        reducer=(root/".github/workflows/portfolio-state-reducer.yml").read_text()
+        reducer=(legacy_workflow_path(root/".github/workflows/portfolio-state-reducer.yml")).read_text()
         self.assertIn("types: [in_progress, completed]",reducer)
         self.assertIn("writerbarrier-{0}-{1}-{2}",reducer)
         self.assertIn("portfolio-cost-watchdog",reducer)
@@ -73,7 +74,7 @@ class Step23PrearmPreflightTests(unittest.TestCase):
     def test_cost_watchdog_waits_for_steady_barrier_before_canonical_restore(self):
         from pathlib import Path
         root=Path(__file__).resolve().parents[1]
-        text=(root/".github/workflows/portfolio-cost-watchdog.yml").read_text()
+        text=(legacy_workflow_path(root/".github/workflows/portfolio-cost-watchdog.yml")).read_text()
         barrier=text.index("Wait for steady-state reducer barrier before canonical cost restore")
         restore=text.index("Restore canonical cost-governor state")
         self.assertLess(barrier,restore)
@@ -96,20 +97,20 @@ class Step23PrearmPreflightTests(unittest.TestCase):
             "command-center-pages.yml",
         ):
             with self.subTest(filename=filename):
-                text=(root/".github/workflows"/filename).read_text()
+                text=(legacy_workflow_path(root/".github/workflows"/filename)).read_text()
                 self.assertIn("group: portfolio-state-writer-v1",text)
-        runtime=(root/".github/workflows/runtime-worker.yml").read_text()
+        runtime=(legacy_workflow_path(root/".github/workflows/runtime-worker.yml")).read_text()
         self.assertIn("group: portfolio-state-writer-v1",runtime)
-        watchdog=(root/".github/workflows/portfolio-cost-watchdog.yml").read_text()
+        watchdog=(legacy_workflow_path(root/".github/workflows/portfolio-cost-watchdog.yml")).read_text()
         self.assertNotIn("state_journal.emitter",watchdog)
-        reducer=(root/".github/workflows/portfolio-state-reducer.yml").read_text()
+        reducer=(legacy_workflow_path(root/".github/workflows/portfolio-state-reducer.yml")).read_text()
         self.assertIn("group: portfolio-state-reducer",reducer)
         self.assertNotIn("group: portfolio-state-writer-v1",reducer)
 
     def test_passive_delivery_events_cannot_cancel_active_preflight(self):
         from pathlib import Path
         root=Path(__file__).resolve().parents[1]
-        text=(root/".github/workflows/step23-prearm-validation.yml").read_text()
+        text=(legacy_workflow_path(root/".github/workflows/step23-prearm-validation.yml")).read_text()
         self.assertIn("github.event.workflow_run.event == 'push' && 'step23-prearm-validation'",text)
         self.assertIn("format('step23-prearm-passive-{0}', github.run_id)",text)
         self.assertIn(

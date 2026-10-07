@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Static + machine-readable conformance validator for Step 8 runtime."""
 from __future__ import annotations
+from legacy.workflow_archive import legacy_workflow_path
 import inspect,json,re
 from pathlib import Path
 from state_journal.production_reader import _wait_for_reduction
@@ -84,7 +85,7 @@ def validate_runtime()->dict:
       ".github/workflows/runtime-daily-learning.yml",
       ".github/workflows/runtime-weekly-synthesis.yml",
     ]
-    texts={n:(ROOT/n).read_text() for n in names}
+    texts={n:legacy_workflow_path(ROOT/n).read_text() for n in names}
     worker=texts[names[0]]
     runtime_budgets=validate_workflow_budgets(worker,b,load('workload_control/WORKLOAD_POLICY.json'),load('cost_governor/COST_GOVERNOR_POLICY.json'))
     for required in ["contents: read","actions: read","PORTFOLIO_RUNTIME_DISABLED",

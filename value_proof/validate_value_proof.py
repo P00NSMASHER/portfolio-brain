@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Static validation for the candidate-specific model value task."""
 from __future__ import annotations
+from legacy.workflow_archive import legacy_workflow_path
 
 import json
 from pathlib import Path
@@ -57,7 +58,7 @@ def validate_value_proof():
     feedback_cfg=model_policy["verified_feedback_routing"]
     req(feedback_cfg["enabled"] is True and feedback_cfg["within_required_tier_only"] is True,"verified feedback routing disabled or widened")
     req(feedback_cfg["preserve_independence_gate"] is True and feedback_cfg["no_cross_tier_promotion"] is True,"feedback routing may weaken tier/independence")
-    workflow=(ROOT/".github/workflows/model-value-proof.yml").read_text()
+    workflow=(legacy_workflow_path(ROOT/".github/workflows/model-value-proof.yml")).read_text()
     for token in [
       "python -m value_proof.outcome_ingestion",
       "python -m state_journal.production_reader --domain hunter --output hunting/live/hunter_state.json",
@@ -66,9 +67,9 @@ def validate_value_proof():
       "name: portfolio-model-feedback-state",
     ]:
         req(token in workflow,f"Step 8 value-proof workflow missing {token}")
-    runtime_workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text()
+    runtime_workflow=(legacy_workflow_path(ROOT/".github/workflows/runtime-worker.yml")).read_text()
     req("python -m state_journal.production_reader --domain model_feedback --output model_router/live/model_feedback_state.json" in runtime_workflow,"runtime does not restore canonical model feedback")
-    bootstrap=(ROOT/".github/workflows/verified-feedback-bootstrap.yml").read_text()
+    bootstrap=(legacy_workflow_path(ROOT/".github/workflows/verified-feedback-bootstrap.yml")).read_text()
     for token in [
       "value_proof/TRIGGER_VERIFIED_FEEDBACK_BOOTSTRAP",
       "python -m value_proof.proof_artifact_state",

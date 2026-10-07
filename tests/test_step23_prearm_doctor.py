@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import unittest
 from pathlib import Path
 
@@ -18,13 +19,13 @@ class Step23PrearmDoctorTests(unittest.TestCase):
     def test_prearm_has_only_steady_state_crons(self):
         for name,(filename,steady) in REQUIRED.items():
             with self.subTest(workflow=name):
-                path=ROOT/".github/workflows"/filename
+                path=legacy_workflow_path(ROOT/".github/workflows"/filename)
                 self.assertEqual(workflow_schedule_crons(path),[steady])
                 self.assertIn("workflow_dispatch",workflow_top_level_triggers(path))
                 self.assertIn("prearm_id",path.read_text())
 
     def test_prearm_orchestrator_is_event_driven_not_scheduled(self):
-        path=ROOT/".github/workflows/step23-prearm-validation.yml"
+        path=legacy_workflow_path(ROOT/".github/workflows/step23-prearm-validation.yml")
         self.assertIsNone(workflow_schedule_crons(path))
         triggers=workflow_top_level_triggers(path)
         self.assertEqual(triggers,{"workflow_run","workflow_dispatch"})

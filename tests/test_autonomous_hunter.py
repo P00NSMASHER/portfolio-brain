@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import copy, unittest
 from pathlib import Path
 from hunting.autonomous_hunter import (
@@ -19,8 +20,8 @@ class FakeProvider:
 class HunterTests(unittest.TestCase):
     def test_on_demand_hunter_trigger_is_isolated_and_rerunnable(self):
         root=Path(__file__).resolve().parents[1]
-        workflow=(root/".github/workflows/hunter-autonomous-cycle.yml").read_text()
-        runtime=(root/".github/workflows/runtime-event-observe.yml").read_text()
+        workflow=(legacy_workflow_path(root/".github/workflows/hunter-autonomous-cycle.yml")).read_text()
+        runtime=(legacy_workflow_path(root/".github/workflows/runtime-event-observe.yml")).read_text()
         trigger=(root/".github/triggers/hunter-autonomous-now.txt").read_text()
         self.assertIn('.github/triggers/hunter-autonomous-now.txt',workflow)
         self.assertGreater(workflow.index("concurrency:",workflow.index("hunt:")),workflow.index("hunt:"))

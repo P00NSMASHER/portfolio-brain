@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import hashlib
 import io
 import json
@@ -85,10 +86,10 @@ class WorkflowLivenessTests(unittest.TestCase):
         self.assertEqual(runtime_sync["admission_workflow_id"],"runtime-worker")
         self.assertEqual(runtime_sync["admission_job_id"],"runtime-sync")
         for target in p["targets"]:
-            workflow=(ROOT/".github/workflows"/target["workflow_file"]).read_text()
+            workflow=(legacy_workflow_path(ROOT/".github/workflows"/target["workflow_file"])).read_text()
             if "uses: ./.github/workflows/runtime-worker.yml" in workflow:
-                workflow+="\n"+(ROOT/".github/workflows/runtime-worker.yml").read_text()
-            self.assertIn("workflow_dispatch:",(ROOT/".github/workflows"/target["workflow_file"]).read_text())
+                workflow+="\n"+(legacy_workflow_path(ROOT/".github/workflows/runtime-worker.yml")).read_text()
+            self.assertIn("workflow_dispatch:",(legacy_workflow_path(ROOT/".github/workflows"/target["workflow_file"])).read_text())
             self.assertIn("proof_artifact_name",target)
             self.assertIn("proof_member",target)
             self.assertIn("proof_kind",target)
@@ -399,7 +400,7 @@ class WorkflowLivenessTests(unittest.TestCase):
         self.assertFalse(result["authority_granted"])
         self.assertGreaterEqual(len(dispatched),1)
 
-        watchdog=(ROOT/".github/workflows/portfolio-cost-watchdog.yml").read_text()
+        watchdog=(legacy_workflow_path(ROOT/".github/workflows/portfolio-cost-watchdog.yml")).read_text()
         self.assertNotIn("portfolio-cost-watchdog",WORKFLOW_PRODUCERS)
         self.assertNotIn("state_journal.emitter",watchdog)
         self.assertNotIn("Capture immutable state transition event",watchdog)
@@ -454,7 +455,7 @@ class WorkflowLivenessTests(unittest.TestCase):
         self.assertFalse(result["authority_granted"])
 
     def test_watchdog_workflow_persists_liveness_receipt_and_keeps_actions_write_only(self):
-        workflow=(ROOT/".github/workflows/portfolio-cost-watchdog.yml").read_text()
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/portfolio-cost-watchdog.yml")).read_text()
         self.assertIn("python -m operations.workflow_liveness",workflow)
         self.assertIn("--without-cost-state",workflow)
         self.assertIn("Recover non-paid core workflows without canonical cost state",workflow)
@@ -481,7 +482,7 @@ class WorkflowLivenessTests(unittest.TestCase):
 
 
     def test_runtime_sync_wakes_immediately_after_runtime_repairs_land_on_main(self):
-        workflow=(ROOT/".github/workflows/runtime-hourly-sync.yml").read_text()
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/runtime-hourly-sync.yml")).read_text()
         self.assertIn("\n  push:\n",workflow)
         self.assertIn('branches: ["main"]',workflow)
         for path in ("adapters/**","runtime/**",".github/workflows/runtime-hourly-sync.yml",".github/workflows/runtime-worker.yml"):

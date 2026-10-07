@@ -10,6 +10,7 @@ downstream lane still has no merge or deployment authority. The invoking workflo
 fails closed unless the checked-out SHA is the current protected main head.
 """
 from __future__ import annotations
+from legacy.workflow_archive import legacy_workflow_path
 
 import argparse
 import hashlib
@@ -152,9 +153,9 @@ def controlled_approval_ledger(review:dict[str,Any])->dict[str,Any]:
     }
 
 def verify_scheduled_paths()->dict[str,Any]:
-    feedback=(ROOT/".github/workflows/verified-feedback-bootstrap.yml").read_text()
-    daily=(ROOT/".github/workflows/runtime-daily-learning.yml").read_text()
-    worker=(ROOT/".github/workflows/runtime-worker.yml").read_text()
+    feedback=(legacy_workflow_path(ROOT/".github/workflows/verified-feedback-bootstrap.yml")).read_text()
+    daily=(legacy_workflow_path(ROOT/".github/workflows/runtime-daily-learning.yml")).read_text()
+    worker=(legacy_workflow_path(ROOT/".github/workflows/runtime-worker.yml")).read_text()
     runtime=(ROOT/"runtime/continuous_runtime.py").read_text()
     req('cron: "17 * * * *"' in feedback and "value_proof.outcome_ingestion" in feedback,
         "verified outcome recurring ingestion path missing")

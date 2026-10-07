@@ -1,0 +1,196 @@
+"""Layered product tests: real calculations, persistence, retrieval, failure isolation."""
+import base64
+import copy
+import hashlib
+import json
+import tempfile
+import unittest
+from datetime import datetime,timedelta,timezone
+from pathlib import Path
+from unittest.mock import patch
+from brain.core import Store,BrainError,digest,utcnow
+from brain.adapters import GitHub,event,policy
+from brain.intelligence import holdings_report,validate_payload
+from brain.experiments import invoice_dedup_experiment
+from brain.__main__ import monitor,research,experiment,doctor
+
+SHA='a'*40
+NOW='2026-10-07T21:00:00Z'
+REPOSITORY='P00NSMASHER/portfolio-brain'
+
+def payload(repo=REPOSITORY):
+ return {'repository':repo,'head_sha':SHA,'default_branch':'main','checks':[],'open_issues':3,'source_ref':f'https://github.com/{repo}/commit/{SHA}'}
+
+class ProductTests(unittest.TestCase):
+ def setUp(self):
+  self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
+  self.path=Path(self.tmp.name);self.store=Store(self.path/'state.sqlite',visibility='PUBLIC');self.addCleanup(self.store.close)
+ def seed(self):
+  self.store.submit([event('repository',REPOSITORY,payload(),SHA,now=NOW)],now=NOW);self.store.drain()
+ def test_idempotency_and_collision_batch_rollback(self):
+  item=event('repository',REPOSITORY,payload(),SHA,now=NOW)
+  self.store.submit([item],now=NOW);self.store.submit([item],now=NOW)
+  self.assertEqual(self.store.pending(),1)
+  bad=copy.deepcopy(item);bad['payload']['open_issues']=99
+  with self.assertRaises(BrainError): self.store.submit([event('repository','other',payload(),SHA,now=NOW),bad],now=NOW)
+  self.assertEqual(self.store.db.execute('select count(*) from events').fetchone()[0],1)
+ def test_backup_restart_and_history_replay(self):
+  self.seed();original=self.store.report(SHA,now=NOW)
+  self.store.backup(self.path/'backup.sqlite')
+  restored=Store(self.path/'backup.sqlite',visibility='PUBLIC')
+  try: self.assertEqual(restored.read_report(SHA,now=NOW),original)
+  finally: restored.close()
+ def test_hash_chain_corruption_fail_closed(self):
+  self.seed();self.store.db.execute("UPDATE ledger SET chain_hash=?",('f'*64,))
+  with self.assertRaises(BrainError): self.store.report(SHA,now=NOW)
+ def test_fresh_wrapper_cannot_launder_old_source(self):
+  self.seed();old=self.store.report(SHA,now='2026-10-10T21:00:00Z')
+  self.assertEqual(old['status'],'BLOCKED')
+  with self.assertRaises(BrainError):self.store.read_report(SHA,now='2026-10-10T21:00:00Z')
+ def test_stale_projection_and_changed_source_sha_rejected(self):
+  self.seed();self.store.report(SHA,now=NOW)
+  with self.assertRaises(BrainError):self.store.read_report('b'*40,now=NOW)
+  new=event('repository',REPOSITORY,payload(),SHA,now='2026-10-07T21:01:00Z')
+  self.store.submit([new],now='2026-10-07T21:01:00Z');self.store.drain()
+  with self.assertRaises(BrainError): self.store.read_report(SHA,now='2026-10-07T21:01:00Z')
+ def test_simulated_experiment_never_claims_revenue(self):
+  self.seed();p=invoice_dedup_experiment(1000)
+  self.assertGreater(p['duplicate_cases'],0);self.assertEqual(p['near_duplicates'],2)
+  self.assertLess(p['candidate_operations'],p['baseline_operations']);self.assertTrue(p['equal_outputs'])
+  result=experiment(self.store,SHA,self.path/'experiment')
+  self.assertIsNone(result['learning']['verified_revenue']);self.assertIsNone(result['learning']['prediction_confidence'])
+ def test_experiment_cannot_mislabel_simulation(self):
+  item=event('experiment','dedup',invoice_dedup_experiment(),SHA,now=NOW)
+  with self.assertRaises(BrainError):self.store.submit([item],now=NOW)
+ def test_actual_market_math_and_unavailable_cost(self):
+  p={'currency':'USD','cash':'100','positions':[{'symbol':'A','quantity':'2','cost_basis':'160','sector':'Tech'},{'symbol':'B','quantity':'1','cost_basis':None,'sector':'Health'}], 'quotes':{'A':{'price':'100','observed_at':NOW,'source_ref':'operator supplied permitted input','data_kind':'ACTUAL'},'B':{'price':'200','observed_at':NOW,'source_ref':'operator supplied permitted input','data_kind':'ACTUAL'}},'authorization':'USER_AUTHORIZED','historical_prices':[{'observed_at':'2026-10-05T21:00:00Z','prices':{'A':'80','B':'140'},'source_ref':'licensed operator export','data_kind':'ACTUAL'},{'observed_at':'2026-10-06T21:00:00Z','prices':{'A':'60','B':'100'},'source_ref':'licensed operator export','data_kind':'ACTUAL'},{'observed_at':NOW,'prices':{'A':'100','B':'200'},'source_ref':'licensed operator export','data_kind':'ACTUAL'}]}
+  validate_payload('holdings',p,NOW);result=holdings_report(p)
+  self.assertEqual(result['net_asset_value_usd'],'500');self.assertIsNone(result['unrealized_gain_usd'])
+  self.assertAlmostEqual(result['concentration_hhi'],.36);self.assertEqual(result['stress_minus_20_percent_equities_usd'],'420.0')
+  self.assertAlmostEqual(result['history']['max_drawdown'],-.2);self.assertAlmostEqual(result['history']['total_price_return'],.25)
+  self.assertIsNone(result['history']['annualized_volatility']);self.assertFalse(result['execution_authority'])
+  broken=copy.deepcopy(p);broken['quotes']['A']['price']='NaN'
+  with self.assertRaises(BrainError):validate_payload('holdings',broken,NOW)
+  broken=copy.deepcopy(p);broken['historical_prices'][1]['observed_at']=NOW
+  with self.assertRaises(BrainError):validate_payload('holdings',broken,NOW)
+ def test_code_discovery_retains_missing_and_restrictive_license(self):
+  raw=b'def audit_invoice(rows):\n    return rows  # duplicate freight invoice\n'
+  blob=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+  meta={'full_name':'example/audit','private':False,'default_branch':'main','license':{'spdx_id':'GPL-3.0'}}
+  def transport(path):
+   if path.startswith('/search/'):return {'incomplete_results':False,'items':[meta]}
+   if '/branches/' in path:return {'commit':{'sha':SHA}}
+   if '/trees/' in path:return {'truncated':False,'tree':[{'type':'blob','path':'invoice.py','sha':blob,'size':len(raw)},{'type':'blob','path':'tests/test_invoice.py','sha':'b'*40,'size':30}]}
+   if '/blobs/' in path:return {'encoding':'base64','sha':blob,'content':base64.b64encode(raw).decode()}
+   raise AssertionError(path)
+  api=GitHub(transport=transport);found=api.discover(policy()['research_targets'][0]);self.assertEqual(found[0][0]['license'],'GPL-3.0')
+  self.assertIn('invoice',found[0][0]['matched_terms']);self.assertEqual(found[0][0]['test_paths'],['tests/test_invoice.py'])
+  meta['license']=None;self.assertEqual(GitHub(transport=transport).discover(policy()['research_targets'][0])[0][0]['license'],'UNKNOWN')
+ def test_malformed_or_mismatched_blob_rejected(self):
+  api=GitHub(transport=lambda _: {'full_name':'example/repo','private':True,'default_branch':'main'})
+  with self.assertRaises(BrainError):api.observe('example/repo')
+  with self.assertRaises(BrainError):api.get('//evil.invalid')
+ def test_targeted_failure_retains_other_observations_but_doctor_fails(self):
+  class API:
+   requests=2
+   def observe(self,repo):
+    if repo.endswith('bad'):raise BrainError('SOURCE_API_503')
+    return payload(repo),False
+  with self.assertRaises(BrainError):monitor(self.store,SHA,self.path/'report',api=API(),repositories=['example/good','example/bad'])
+  self.assertEqual(self.store.db.execute('select count(*) from events').fetchone()[0],1)
+  self.assertEqual(self.store.pending(),0)
+  with self.assertRaises(BrainError):doctor(self.store,SHA,self.path/'doctor')
+ def test_full_useful_operation_from_source_to_html_and_doctor(self):
+  class API:
+   requests=1
+   def observe(self,repo):return payload(repo),False
+   def discover(self,target,repository=None):return []
+  monitor(self.store,SHA,self.path/'monitor',api=API())
+  research(self.store,SHA,self.path/'research',api=API());experiment(self.store,SHA,self.path/'experiment')
+  result=doctor(self.store,SHA,self.path/'doctor')
+  self.assertEqual(result['status'],'PASS');self.assertEqual(result['pending_events'],0)
+  self.assertTrue((self.path/'monitor/report.html').exists())
+  # A code upgrade cannot borrow workload successes from another SHA.
+  self.store.report('b'*40)
+  with self.assertRaises(BrainError):doctor(self.store,'b'*40,self.path/'doctor')
+ def test_html_escapes_untrusted_repository_data(self):
+  from brain.render import write_report
+  report={'status':'FAIL','repositories':[{'repository':'<script>alert(1)</script>','head_sha':SHA,'checks':[],'source_ref':'https://github.com/example/repo'}]}
+  write_report(report,self.path/'html')
+  raw=(self.path/'html/report.html').read_text();self.assertNotIn('<script>',raw);self.assertIn('&lt;script&gt;',raw)
+ def test_request_budget_is_enforced(self):
+  api=GitHub(transport=lambda _: {})
+  for _ in range(24):api.get('/repos/example/repo')
+  with self.assertRaises(BrainError):api.get('/repos/example/repo')
+
+if __name__=='__main__': unittest.main()
+
+class UpgradeTests(unittest.TestCase):
+ def test_private_database_cannot_propose_public_upgrade(self):
+  from brain.upgrades import evolve
+  with tempfile.TemporaryDirectory() as directory:
+   store=Store(Path(directory)/'state.sqlite',visibility='PRIVATE')
+   try:
+    with self.assertRaises(BrainError):evolve(store,SHA,api=object())
+   finally:store.close()
+ def test_insufficient_or_synthetic_sources_do_not_upgrade(self):
+  from brain.upgrades import build_knowledge
+  with self.assertRaises(BrainError):build_knowledge({'status':'PASS','reuse_candidates':[]})
+  with self.assertRaises(BrainError):build_knowledge({'status':'FAIL','reuse_candidates':[{}]*3})
+ def test_upgrade_api_never_merges_or_writes_other_project(self):
+  from brain.upgrades import UpgradeAPI
+  api=UpgradeAPI(transport=lambda *args:{})
+  for path,method in (('/repos/P00NSMASHER/abvmschoolstarworld/git/refs','POST'),('/repos/P00NSMASHER/portfolio-brain/pulls/1/merge','PUT'),('/repos/P00NSMASHER/portfolio-brain/git/refs/heads/main','PATCH')):
+   with self.assertRaises(BrainError):api.request(path,method,{})
+
+class UpgradeEndToEndTests(unittest.TestCase):
+ def test_evidence_qualified_proposal_uses_only_protected_path(self):
+  from brain.upgrades import evolve
+  with tempfile.TemporaryDirectory() as directory:
+   store=Store(Path(directory)/'state.sqlite',visibility='PUBLIC')
+   now=utcnow();items=[event('repository',REPOSITORY,payload(),SHA,now=now)]
+   for index in range(3):
+    repo=f'example/invoice{index}'
+    candidate={'repository':repo,'head_sha':SHA,'path':'invoice.py','blob_sha':'b'*40,'code_sha256':'c'*64,'bytes':50,'test_paths':['tests/test_invoice.py'],'license':'UNKNOWN','source_ref':f'https://github.com/{repo}/blob/{SHA}/invoice.py','target':'freight-recovery','query':'invoice audit','matched_terms':['invoice','audit']}
+    items.append(event('candidate',repo+':invoice.py',candidate,SHA,now=now))
+   store.submit(items);store.drain();store.report(SHA)
+   calls=[]
+   class API:
+    def request(self,path,method='GET',body=None):
+     calls.append((path,method,body))
+     if path.endswith('/branches/main'):return {'commit':{'sha':SHA}}
+     if '/pulls?' in path:return []
+     if '/contents/' in path and method=='GET':return {'sha':'d'*40}
+     if '/git/refs' in path:return {}
+     if '/contents/' in path and method=='PUT':return {'commit':{'sha':'e'*40}}
+     if path.endswith('/pulls') and method=='POST':return {'number':100,'html_url':'https://github.com/P00NSMASHER/portfolio-brain/pull/100'}
+     raise AssertionError(path)
+   try:
+    result=evolve(store,SHA,api=API());self.assertEqual(result['status'],'CANDIDATE_PR_CREATED');self.assertEqual(result['independent_review'],'PENDING')
+    self.assertTrue(all('/merge' not in c[0] for c in calls))
+    self.assertEqual(evolve(store,SHA,api=API())['status'],'COOLDOWN')
+    create=[c for c in calls if c[0].endswith('/pulls') and c[1]=='POST'][0]
+    self.assertEqual(create[2]['base'],'main');self.assertIn('AUTO_REPAIR_FINGERPRINT:',create[2]['body'])
+   finally:store.close()
+ def test_doctor_rejects_partial_monitor_borrowing_old_full_coverage(self):
+  with tempfile.TemporaryDirectory() as directory:
+   store=Store(Path(directory)/'state.sqlite',visibility='PUBLIC')
+   class API:
+    requests=1
+    def observe(self,repo):return payload(repo),False
+    def discover(self,target,repository=None):return []
+   try:
+    monitor(store,SHA,Path(directory)/'monitor',api=API());research(store,SHA,Path(directory)/'research',api=API());experiment(store,SHA,Path(directory)/'experiment')
+    self.assertEqual(doctor(store,SHA,Path(directory)/'doctor')['status'],'PASS')
+    monitor(store,SHA,Path(directory)/'partial',api=API(),repositories=[REPOSITORY]);research(store,SHA,Path(directory)/'research',api=API());experiment(store,SHA,Path(directory)/'experiment')
+    with self.assertRaises(BrainError):doctor(store,SHA,Path(directory)/'doctor')
+   finally:store.close()
+ def test_repeated_execution_and_restart_keep_zero_backlog(self):
+  with tempfile.TemporaryDirectory() as directory:
+   db=Path(directory)/'state.sqlite'
+   for index in range(30):
+    store=Store(db,visibility='PUBLIC')
+    item=event('repository',REPOSITORY,payload(),SHA,now=utcnow())
+    store.submit([item]);store.submit([item]);store.drain();report=store.report(SHA)
+    self.assertEqual(store.pending(),0);self.assertEqual(report['state_sequence'],index+1)
+    self.assertEqual(store.read_report(SHA)['canonical_hash'],report['canonical_hash']);store.close()

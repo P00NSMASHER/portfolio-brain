@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Static/cross-file Step 9 Autonomous Hunter validator."""
 from __future__ import annotations
+from legacy.workflow_archive import legacy_workflow_path
 import json
 from pathlib import Path
 from hunting.autonomous_hunter import CandidateInspectionError, HunterError, _queries, detect_gaps, load_policy, load_query_concepts, load_seed_state, load_strategies, run_cycle, search_concepts_for_gap, select_objectives, strategy_priority_maturity, validate_state
@@ -243,7 +244,7 @@ def validate_hunter():
     req("build_hunter_signal_snapshot" in hunter_source and "hunter_supply_demand_signals.json" in hunter_source,"Hunter does not emit separated supply/demand evidence")
     signal_source=(ROOT/"hunting/signal_router.py").read_text()
     req('"github_supply_creates_demand":False' in signal_source and '"commercial_build_authorized_by_supply_only":False' in signal_source,"Hunter signal router weakened supply/demand boundary")
-    wf=(ROOT/".github/workflows/hunter-autonomous-cycle.yml").read_text()
+    wf=(legacy_workflow_path(ROOT/".github/workflows/hunter-autonomous-cycle.yml")).read_text()
     for s in ["contents: read","actions: read","timeout-minutes: 10","PORTFOLIO_HUNTER_DISABLED","47 */6 * * *","cancel-in-progress: false","actions/upload-artifact@v4","python -m hunting.calibration --output hunting/out/calibration_report.json",".github/triggers/hunter-autonomous-now.txt"]:
         req(s in wf,f"Hunter workflow missing {s}")
     req(wf.index("concurrency:",wf.index("hunt:"))>wf.index("hunt:"),"Hunter shared-state mutex must cover the writer job")
@@ -251,9 +252,9 @@ def validate_hunter():
     req("python -m state_journal.production_reader --domain proposals --output hunting/live/hunter_proposal_state.json" in wf,"Hunter workflow does not restore canonical proposal backlog")
     trigger=(ROOT/".github/triggers/hunter-autonomous-now.txt").read_text()
     req("authority=OBSERVE" in trigger and "model-calls=0" in trigger,"Hunter on-demand trigger widened authority/cost")
-    runtime_event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
+    runtime_event=(legacy_workflow_path(ROOT/".github/workflows/runtime-event-observe.yml")).read_text()
     req('".github/triggers/hunter-autonomous-now.txt"' in runtime_event and '".github/workflows/hunter-autonomous-cycle.yml"' in runtime_event,"Hunter proof trigger is not isolated from runtime-event churn")
-    proof_wf=(ROOT/".github/workflows/hunter-controlled-proof.yml").read_text()
+    proof_wf=(legacy_workflow_path(ROOT/".github/workflows/hunter-controlled-proof.yml")).read_text()
     for s in ["contents: read","actions: read","timeout-minutes: 5","hunting/TRIGGER_CONTROLLED_PROOF","python -m hunting.controlled_proof --output hunting/out/controlled_proof.json","portfolio-hunter-controlled-proof"]:
         req(s in proof_wf,f"controlled Hunter proof workflow missing {s}")
     req("portfolio-cost-governed-autonomy" not in proof_wf,"controlled proof must not compete for persistent autonomous-state concurrency")

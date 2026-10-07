@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import io
 import json
 import re
@@ -375,7 +376,7 @@ def assert_writer_contract(filename, text):
 
 class SharedStateWriterRegressionTests(unittest.TestCase):
     def workflows(self):
-        return {p.name:p.read_text(encoding="utf-8") for p in (ROOT/".github/workflows").glob("*.yml")}
+        return {p.name:p.read_text(encoding="utf-8") for p in (legacy_workflow_path(ROOT/".github/workflows")).glob("*.yml")}
 
     def test_every_legacy_mirror_publisher_holds_the_same_job_mutex(self):
         workflows = self.workflows()

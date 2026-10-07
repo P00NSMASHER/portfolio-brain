@@ -1,10 +1,11 @@
+from legacy.workflow_archive import legacy_workflow_path
 import copy,json,unittest
 from pathlib import Path
-from operations.validate_operating_mode import OperatingModeValidationError,scheduled_workflow_inventory,validate_gmail_gateway_status,validate_operating_mode,validate_reasoning_fallback,workflow_schedule_crons,workflow_top_level_triggers
+from operations.validate_operating_mode import OperatingModeValidationError,scheduled_workflow_inventory,validate_gmail_gateway_status,validate_legacy_operating_mode as validate_operating_mode,validate_reasoning_fallback,workflow_schedule_crons,workflow_top_level_triggers
 ROOT=Path(__file__).resolve().parents[1]
 
 class OperatingModeTests(unittest.TestCase):
-    def test_operational_contract_passes(self):
+    def test_preserved_historical_operating_contract_passes(self):
         result=validate_operating_mode()
         self.assertEqual(result["approved_recurring_workflows"],12)
         self.assertEqual(result["truthful_blocked_workflows"],7)
@@ -55,7 +56,7 @@ class OperatingModeTests(unittest.TestCase):
         self.assertEqual(set(policy["event_driven_workflows"]),{
           "runtime-event-observe","portfolio-autonomous-repair","portfolio-independent-verifier"
         })
-        repair=ROOT/".github/workflows/portfolio-autonomous-repair.yml"
+        repair=legacy_workflow_path(ROOT/".github/workflows/portfolio-autonomous-repair.yml")
         triggers=workflow_top_level_triggers(repair)
         self.assertIn("workflow_run",triggers)
         self.assertIn("workflow_dispatch",triggers)
@@ -72,7 +73,7 @@ class OperatingModeTests(unittest.TestCase):
         self.assertEqual(policy["independent_check"],{"name":"portfolio-phase1-gate","integration_id":5121826})
 
     def test_independent_verifier_is_workflow_run_only_and_credential_isolated(self):
-        verifier=ROOT/".github/workflows/portfolio-independent-verifier.yml"
+        verifier=legacy_workflow_path(ROOT/".github/workflows/portfolio-independent-verifier.yml")
         triggers=workflow_top_level_triggers(verifier)
         self.assertEqual(triggers,{"workflow_run"})
         text=verifier.read_text().lower()
@@ -86,10 +87,10 @@ class OperatingModeTests(unittest.TestCase):
             text.index("mint short-lived independent verifier app token"),
         )
 
-    def test_active_schedule_inventory_matches_operating_policy(self):
+    def test_archived_schedule_inventory_matches_historical_operating_policy(self):
         policy=json.loads((ROOT/"operations/OPERATING_MODE_POLICY.json").read_text())
         window=json.loads((ROOT/"operations/STEP23_DELIVERY_WINDOW.json").read_text())
-        actual=scheduled_workflow_inventory(ROOT/".github/workflows")
+        actual=scheduled_workflow_inventory(legacy_workflow_path(ROOT/".github/workflows"))
         expected={name:[entry["cron"],*window["temporary_crons"].get(name,[])]
                   for name,entry in policy["approved_recurring_workflows"].items()}
         expected["portfolio-schedule-delivery"]=["7,17,27,37,47,57 * * * *"]
@@ -104,13 +105,13 @@ class OperatingModeTests(unittest.TestCase):
         self.assertEqual(window["max_soak_duration_seconds"],7200)
         self.assertFalse(control["acceptance_complete"])
         self.assertNotIn("step23-live-soak-observer",actual)
-        monitor=(ROOT/".github/workflows/portfolio-schedule-delivery.yml").read_text()
+        monitor=(legacy_workflow_path(ROOT/".github/workflows/portfolio-schedule-delivery.yml")).read_text()
         self.assertIn("actions: read",monitor)
         self.assertIn("workflow_run:",monitor)
         self.assertIn("github.event_name == 'push'",monitor)
         self.assertIn("--repair",monitor)
         self.assertIn("--without-cost-state",monitor)
-        reducer=(ROOT/".github/workflows/portfolio-state-reducer.yml").read_text()
+        reducer=(legacy_workflow_path(ROOT/".github/workflows/portfolio-state-reducer.yml")).read_text()
         self.assertIn("cancel-in-progress: false",reducer)
 
     def test_learning_crons_avoid_known_hourly_writer_collisions(self):
@@ -121,7 +122,7 @@ class OperatingModeTests(unittest.TestCase):
 
     def test_singleton_cost_state_lane_does_not_fan_out_specialized_push_runs(self):
         for name in ("portfolio-autonomous-scheduler","agent-heartbeat-sweep"):
-            triggers=workflow_top_level_triggers(ROOT/".github/workflows"/f"{name}.yml")
+            triggers=workflow_top_level_triggers(legacy_workflow_path(ROOT/".github/workflows"/f"{name}.yml"))
             self.assertNotIn("push",triggers,name)
             self.assertIn("schedule",triggers,name)
             self.assertIn("workflow_dispatch",triggers,name)
@@ -180,22 +181,22 @@ class OperatingModeTests(unittest.TestCase):
             "portfolio-notification-cycle","command-center-pages","agent-heartbeat-sweep",
         ]
         for name in workload_names:
-            body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
+            body=(legacy_workflow_path(ROOT/".github/workflows"/f"{name}.yml")).read_text().lower()
             self.assertIn("steps.workload.outputs.allowed != 'true'",body,name)
             self.assertIn("exit 1",body,name)
             self.assertNotIn("cost_governor.workflow_gate",body,name)
 
-        runtime=(ROOT/".github/workflows/runtime-worker.yml").read_text().lower()
+        runtime=(legacy_workflow_path(ROOT/".github/workflows/runtime-worker.yml")).read_text().lower()
         self.assertIn("workload_control.workload_gate preflight",runtime)
         self.assertIn("cost_governor.workflow_gate preflight",runtime)
         self.assertIn("steps.admission.outputs.allowed != 'true'",runtime)
         self.assertIn("exit 1",runtime)
 
-        proof=(ROOT/".github/workflows/model-value-proof.yml").read_text().lower()
+        proof=(legacy_workflow_path(ROOT/".github/workflows/model-value-proof.yml")).read_text().lower()
         self.assertIn("steps.cost.outputs.allowed != 'true'",proof)
         self.assertIn("exit 1",proof)
 
-        factory=(ROOT/".github/workflows/software-factory-candidate.yml").read_text().lower()
+        factory=(legacy_workflow_path(ROOT/".github/workflows/software-factory-candidate.yml")).read_text().lower()
         self.assertIn("workload_control.workload_gate preflight",factory)
         self.assertIn("run: exit 3",factory)
 
@@ -215,7 +216,7 @@ class OperatingModeTests(unittest.TestCase):
         self.assertEqual(gmail["provider"],"CHATGPT_GMAIL_CONNECTOR")
         self.assertEqual(gmail["account_ref"],"PRIMARY_GMAIL_CONNECTOR")
         self.assertEqual(gmail["execution_task_id"],"6ab377c25df08191a6e2aa1537d9d2ef")
-        self.assertFalse((ROOT/".github/workflows/portfolio-action-worker.yml").exists())
+        self.assertFalse((legacy_workflow_path(ROOT/".github/workflows/portfolio-action-worker.yml")).exists())
 
     def test_live_gmail_gateway_proof_tracks_sanitized_ledger(self):
         status=json.loads((ROOT/"operations/OPERATING_MODE_STATUS.json").read_text())["connector_gateways"]["gmail"]
@@ -234,7 +235,7 @@ class OperatingModeTests(unittest.TestCase):
             validate_gmail_gateway_status(policy,status,ledger)
 
     def test_trigger_only_command_center_refresh_does_not_spawn_runtime_work(self):
-        workflow=(ROOT/".github/workflows/runtime-event-observe.yml").read_text()
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/runtime-event-observe.yml")).read_text()
         self.assertIn('"operations/COMMAND_CENTER_REFRESH_REQUEST.json"',workflow)
 
     def test_chatgpt_tasks_are_advisory_not_runtime_dependency(self):
