@@ -114,6 +114,21 @@ def reducer_liveness_wake(api:API,main_sha:str)->dict:
         "producer_run_ids":sorted(stale),
     }
 
+def liveness_probe(api:API,main_sha:str)->dict:
+    """Check reducer freshness without dispatching any portfolio workload."""
+    wake=reducer_liveness_wake(api,main_sha)
+    return {
+        "schema_version":"1.0.0",
+        "clock_id":"portfolio-reducer-liveness-probe-v1",
+        "status":"PASS",
+        "authority_granted":False,
+        "dispatch_authority_effect":"NONE",
+        "main_sha":main_sha,
+        "reducer_wake":wake,
+        "actions":[],
+        "api_requests":api.requests,
+    }
+
 def due(cadence:str,at:datetime)->bool:
     if cadence=="HOURLY": return True
     if cadence=="EVERY_2_HOURS": return at.hour%2==0
@@ -213,8 +228,10 @@ def main()->int:
     source=ap.add_mutually_exclusive_group(required=True)
     source.add_argument("--source-run-id",type=int)
     source.add_argument("--daemon-run-id",type=int)
+    source.add_argument("--liveness-only",action="store_true")
     ap.add_argument("--daemon-run-attempt",type=int)
     ap.add_argument("--tick-epoch",type=int)
+    ap.add_argument("--exact-sha")
     ap.add_argument("--output",type=Path,default=Path("operations/out/schedule_clock_receipt.json"))
     args=ap.parse_args()
     policy=load_policy()
@@ -223,7 +240,12 @@ def main()->int:
     api=API(os.environ["GITHUB_TOKEN"],policy["max_api_requests"])
     main_sha=api.call("/branches/main")["commit"]["sha"]
     current_run_id=int(os.environ["GITHUB_RUN_ID"])
-    if args.daemon_run_id is not None:
+    if args.liveness_only:
+        req(isinstance(args.exact_sha,str) and re.fullmatch(r"[0-9a-f]{40}",args.exact_sha) is not None,
+            "liveness probe exact SHA malformed")
+        req(main_sha==args.exact_sha,"liveness probe is not exact current main")
+        result=liveness_probe(api,main_sha)
+    elif args.daemon_run_id is not None:
         req(type(args.daemon_run_attempt) is int and type(args.tick_epoch) is int,
             "daemon clock inputs incomplete")
         daemon=daemon_identity(api,args.daemon_run_id,args.daemon_run_attempt,main_sha,args.tick_epoch)
