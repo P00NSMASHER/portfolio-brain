@@ -1,0 +1,55 @@
+name: step23-prearm-preflight
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "operations/TRIGGER_STEP23_PREFLIGHT"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: step23-prearm-preflight
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out exact triggering main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate static Step 23 pre-arm contract
+        run: >-
+          python -m acceptance.step23_prearm_doctor
+          --static-only
+          --output acceptance/out/step23-prearm-doctor-static.json
+
+      - name: Run non-counting exact-main eight-workload preflight
+        run: >-
+          python -m acceptance.step23_preflight
+          --exact-sha "${GITHUB_SHA}"
+          --output acceptance/out/step23-preflight.json
+
+      - name: Preserve pre-arm evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-step23-prearm-${{ github.run_id }}-${{ github.run_attempt }}
+          path: acceptance/out/
+          if-no-files-found: error
+          retention-days: 30
