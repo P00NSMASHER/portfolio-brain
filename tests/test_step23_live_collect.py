@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from acceptance import step23_live_collect as collector
+from acceptance.soak_observation import scheduled_runs as stable_scheduled_runs
 
 
 def run_row(i, created, conclusion="success"):
@@ -42,7 +43,7 @@ class ScheduledSoakObserverTests(unittest.TestCase):
         first = [run_row(200-i, at-timedelta(minutes=i)) for i in range(100)]
         failed = run_row(99, at-timedelta(minutes=100), "failure")
         gh = FakeGH({1: first, 2: [failed]})
-        grouped = collector.scheduled_runs(gh, {"portfolio-state-reducer"}, "a"*40, at-timedelta(days=1))
+        grouped = stable_scheduled_runs(gh, {"portfolio-state-reducer"}, "a"*40, at-timedelta(days=1))
         self.assertEqual(len(grouped["portfolio-state-reducer"]), 101)
         self.assertIn("conclusion=failure", collector.find_real_reset(grouped)[1])
 
@@ -50,14 +51,26 @@ class ScheduledSoakObserverTests(unittest.TestCase):
         at = datetime(2026, 10, 4, tzinfo=timezone.utc)
         gh = FakeGH({1: [run_row(1, at)]}, drift=True)
         with self.assertRaisesRegex(RuntimeError, "changed during pagination"):
-            collector.scheduled_runs(gh, {"portfolio-state-reducer"}, "a"*40, at-timedelta(days=1))
+            stable_scheduled_runs(gh, {"portfolio-state-reducer"}, "a"*40, at-timedelta(days=1))
 
     def test_page_bound_is_blocking(self):
         at = datetime(2026, 10, 4, tzinfo=timezone.utc)
         pages = {page: [run_row(3000-(page-1)*100-i, at-timedelta(seconds=(page-1)*100+i))
                         for i in range(100)] for page in range(1, 21)}
         with self.assertRaisesRegex(RuntimeError, "incomplete at page bound"):
-            collector.scheduled_runs(FakeGH(pages), {"portfolio-state-reducer"}, "a"*40, at-timedelta(days=1))
+            stable_scheduled_runs(FakeGH(pages), {"portfolio-state-reducer"}, "a"*40, at-timedelta(days=1))
+
+    def test_unbound_manual_dispatch_is_not_eligible_transport(self):
+        created=datetime(2026,10,6,tzinfo=timezone.utc).isoformat()
+        dispatch={"id":8,"name":"portfolio-state-reducer","head_sha":"a"*40,
+                  "event":"workflow_dispatch","head_branch":"main","status":"completed","conclusion":"success",
+                  "created_at":created,"updated_at":created}
+        native={**dispatch,"id":9,"event":"schedule"}
+        grouped={"portfolio-state-reducer":[dispatch,native]}
+        eligible=collector.eligible_transport(grouped,{})
+        self.assertEqual([row["id"] for row in eligible["portfolio-state-reducer"]],[9])
+        eligible=collector.eligible_transport(grouped,{8:{"workflow":"portfolio-state-reducer"}})
+        self.assertEqual([row["id"] for row in eligible["portfolio-state-reducer"]],[8,9])
 
     def test_artifact_wrong_head_or_changed_bytes_cannot_be_used(self):
         from hashlib import sha256
@@ -81,17 +94,21 @@ class ScheduledSoakObserverTests(unittest.TestCase):
             root = Path(tmp)
             cfg = root / "config.json"
             cfg.write_text(json.dumps({"exact_main_sha": "a"*40, "soak_start": collector.iso_now(),
+                "native_scheduler_canary": {"run_id": 1, "artifact_hash": "sha256:"+"0"*64},
                 "required_workflows": ["portfolio-state-reducer"], "required_handler_types": ["REPAIR"],
-                "required_successes_per_workflow": 3, "max_soak_duration_seconds": 3600}))
+                "required_successes_by_workflow": {"portfolio-state-reducer": 3},
+                "max_soak_duration_seconds": 3600}))
             meta, receipt = root / "meta.json", root / "receipt.json"
             argv = ["collect", "--config", str(cfg), "--output-meta", str(meta),
                     "--output-receipt", str(receipt), "--once"]
             with patch.dict("os.environ", {"GITHUB_TOKEN": "test", "GITHUB_REPOSITORY": "test/repo"}), \
                  patch("sys.argv", argv), patch.object(collector.GH, "get", return_value={"commit": {"sha": "a"*40}}), \
                  patch.object(collector, "pending_event_count", return_value=0), \
-                 patch.object(collector, "scheduled_runs", return_value={"portfolio-state-reducer": []}):
+                 patch.object(collector, "clock_bindings", return_value=([], {}, {
+                     "portfolio-schedule-delivery": [], "portfolio-schedule-clock-tick": []})), \
+                 patch.object(collector, "transport_runs", return_value={"portfolio-state-reducer": []}):
                 collector.main()
-            self.assertEqual(json.loads(meta.read_text())["status"], "WAITING_FOR_SCHEDULED_CYCLES")
+            self.assertEqual(json.loads(meta.read_text())["status"], "WAITING_FOR_REDUNDANT_CLOCK_CYCLES")
             self.assertFalse(json.loads(meta.read_text())["acceptance_complete"])
             self.assertFalse(receipt.exists())
 
