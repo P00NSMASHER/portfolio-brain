@@ -377,7 +377,10 @@ def main() -> None:
     exact_sha = cfg["exact_main_sha"]
     workflows = set(cfg["required_workflows"])
     required_handlers = set(cfg["required_handler_types"])
-    minimum = int(cfg["required_successes_per_workflow"])
+    minimums = cfg["required_successes_by_workflow"]
+    if set(minimums)!=workflows or any(type(v) is not int or v<1 for v in minimums.values()):
+        raise RuntimeError("STEP23_SUCCESS_MINIMUMS_INVALID")
+    native_canary = cfg["native_scheduler_canary"]
     poll = int(cfg.get("poll_seconds", 45))
     max_resets = int(cfg.get("max_resets", 5))
     effective_start = parse_time(cfg["soak_start"])
@@ -420,9 +423,16 @@ def main() -> None:
         while time.monotonic() < deadline:
             assert_main()
             try:
-                all_grouped = scheduled_runs(gh, workflows, exact_sha, window_start)
+                clock_receipts, bindings, clock_grouped = clock_bindings(
+                    gh, exact_sha, window_start, workflows, native_canary,
+                )
+                candidates = transport_runs(gh, workflows, exact_sha, window_start)
+                all_grouped = eligible_transport(candidates, bindings)
             except ObservationChanged as exc:
                 waiting({"status": "WAITING_FOR_STABLE_RUN_LIST", "reason": str(exc)})
+                continue
+            except RuntimeError as exc:
+                waiting({"status": "WAITING_FOR_TRACEABLE_CLOCK_BINDINGS", "reason": str(exc)})
                 continue
             observed_resets, observed_start = reset_history(
                 all_grouped, window_start, max_resets, cancellation_is_coalesced,
@@ -445,8 +455,12 @@ def main() -> None:
                 )
                 for name, rows in grouped.items()
             }
-            if any(count < minimum for count in success_counts.values()):
-                waiting({"status": "WAITING_FOR_SCHEDULED_CYCLES", "counts": success_counts})
+            if any(success_counts[name] < minimums[name] for name in workflows):
+                waiting({
+                    "status": "WAITING_FOR_REDUNDANT_CLOCK_CYCLES",
+                    "counts": success_counts,
+                    "required": minimums,
+                })
                 continue
 
             # Do not freeze a final window while an already-created included run is still active.
@@ -464,7 +478,7 @@ def main() -> None:
             deep: dict[tuple[str, int], tuple[dict[str, Any], bytes]] = {}
             try:
                 for workflow in sorted(workflows):
-                    rows = evidence_window(grouped[workflow], minimum, workflow)
+                    rows = evidence_window(grouped[workflow], minimums[workflow], workflow)
                     for row in rows:
                         conclusion = row.get("conclusion")
                         if conclusion == "success":
@@ -472,10 +486,22 @@ def main() -> None:
                             if key not in artifact_cache:
                                 artifact_cache[key] = select_artifact(gh, workflow, int(row["id"]), exact_sha)
                             deep[key] = artifact_cache[key]
+                            if row.get("event")=="schedule":
+                                transport_binding={"kind":"NATIVE_SCHEDULE"}
+                            else:
+                                proof=bindings.get(int(row["id"]))
+                                if proof is None or proof.get("workflow")!=workflow:
+                                    raise RuntimeError(f"workflow_dispatch {workflow} run {row['id']} lacks clock binding")
+                                transport_binding={
+                                    "kind":"REDUNDANT_CLOCK","clock_run_id":proof["clock_run_id"],
+                                    "clock_artifact_hash":proof["clock_artifact_hash"],
+                                    "clock_source_workflow":proof["clock_source_workflow"],
+                                }
                             run_rows.append(
                                 {
                                     "workflow": workflow,
-                                    "event": "schedule",
+                                    "event": row["event"],
+                                    "transport_binding": transport_binding,
                                     "classification": "SUCCESS",
                                     "classification_reason": "COMPLETED_SUCCESSFULLY_WITH_TRACEABLE_ARTIFACT",
                                     "conclusion": "success",
@@ -491,10 +517,22 @@ def main() -> None:
                             successor = cancellation_is_coalesced(row, rows)
                             if successor is None:
                                 raise RuntimeError(f"unresolved cancellation {workflow} run {row['id']}")
+                            if row.get("event")=="schedule":
+                                transport_binding={"kind":"NATIVE_SCHEDULE"}
+                            else:
+                                proof=bindings.get(int(row["id"]))
+                                if proof is None or proof.get("workflow")!=workflow:
+                                    raise RuntimeError(f"cancelled dispatch {workflow} run {row['id']} lacks clock binding")
+                                transport_binding={
+                                    "kind":"REDUNDANT_CLOCK","clock_run_id":proof["clock_run_id"],
+                                    "clock_artifact_hash":proof["clock_artifact_hash"],
+                                    "clock_source_workflow":proof["clock_source_workflow"],
+                                }
                             run_rows.append(
                                 {
                                     "workflow": workflow,
-                                    "event": "schedule",
+                                    "event": row["event"],
+                                    "transport_binding": transport_binding,
                                     "classification": "CANCELLED_COALESCED",
                                     "classification_reason": "SHORT_PREWORK_CANCELLATION_SUPERSEDED_BY_LATER_SUCCESS",
                                     "conclusion": "cancelled",
@@ -518,10 +556,10 @@ def main() -> None:
                 for name in workflows
             }
 
-            # Three monotonic canonical samples, each from a successful scheduled reducer run.
+            # Monotonic canonical samples from accepted reducer transport cycles.
             canonical_samples = []
             try:
-                for row in successes_by_workflow["portfolio-state-reducer"][:minimum]:
+                for row in successes_by_workflow["portfolio-state-reducer"][:minimums["portfolio-state-reducer"]]:
                     meta, raw = deep[("portfolio-state-reducer", row["run_id"])]
                     snapshot = zip_json(raw, "snapshot.json")
                     canonical_samples.append(
@@ -537,7 +575,7 @@ def main() -> None:
                 waiting({"status": "WAITING_FOR_CANONICAL_SAMPLES", "reason": str(exc)})
                 continue
 
-            # Real handler execution evidence must come from successful scheduled
+            # Real handler execution evidence must come from successful accepted
             # scheduler runs. The exact Step-23 handler-proof schedule publishes a
             # dedicated artifact; normal scheduler receipts remain a conservative
             # fallback. Every consumed ZIP is independently rehashed.
@@ -620,7 +658,7 @@ def main() -> None:
                 waiting({"status": "WAITING_FOR_REQUIRED_HANDLERS", "counts": handler_counts})
                 continue
 
-            # Hunter substantive work must be findings/proposals from successful scheduled Hunter cycles.
+            # Hunter substantive work must be findings/proposals from successful accepted Hunter cycles.
             hunter_evidence: list[dict[str, Any]] = []
             seen_hunter: set[str] = set()
             try:
@@ -661,7 +699,7 @@ def main() -> None:
                 waiting({"status": "WAITING_FOR_SUBSTANTIVE_HUNTER_WORK"})
                 continue
 
-            # Latest successful scheduled command-center cycle must be recent and traceable.
+            # Latest successful accepted command-center cycle must be recent and traceable.
             page_successes = successes_by_workflow["command-center-pages"]
             latest_page = page_successes[-1]
             dashboard_meta, _ = deep[("command-center-pages", latest_page["run_id"])]
@@ -682,20 +720,26 @@ def main() -> None:
 
             assert_main()
             try:
-                final_grouped = scheduled_runs(gh, workflows, exact_sha, window_start)
+                final_candidates = transport_runs(gh, workflows, exact_sha, window_start)
+                final_grouped = eligible_transport(final_candidates, bindings)
+                final_clock_grouped = transport_runs(gh, CLOCK_WORKFLOWS, exact_sha, window_start)
             except ObservationChanged as exc:
                 waiting({"status": "WAITING_FOR_STABLE_FINAL_CENSUS", "reason": str(exc)})
                 continue
-            if not final_census_unchanged(all_grouped, final_grouped):
+            if (not final_census_unchanged(all_grouped, final_grouped)
+                    or not final_census_unchanged(clock_grouped, final_clock_grouped)):
                 waiting({"status": "WAITING_FOR_STABLE_FINAL_CENSUS"})
                 continue
             assert_main()
             receipt = bind_receipt(
                 {
-                    "schema_version": "1.0.0",
+                    "schema_version": "2.0.0",
                     "step": 23,
                     "status": "PASS",
                     "exact_main_sha": exact_sha,
+                    "transport_mode": "REDUNDANT_CLOCK_V1",
+                    "native_scheduler_canary": native_canary,
+                    "clock_receipts": clock_receipts,
                     "run_classification_policy": "EXPLICIT",
                     "hash_traceability_pass": True,
                     "dashboard_fresh": True,
@@ -719,13 +763,14 @@ def main() -> None:
                 raise RuntimeError("STEP23_SOAK_WINDOW_EXPIRED")
             validate_step23(receipt)
             meta = {
-                "schema_version": "1.0.0",
+                "schema_version": "2.0.0",
                 "status": "PASS",
                 "exact_main_sha": exact_sha,
                 "configured_soak_start": cfg["soak_start"],
                 "effective_soak_start": receipt["soak_start"],
                 "resets": resets,
-                "observed_scheduled_run_ids": {name: [r["id"] for r in grouped[name]] for name in sorted(workflows)},
+                "observed_transport_run_ids": {name: [r["id"] for r in grouped[name]] for name in sorted(workflows)},
+                "validated_clock_run_ids": [row["run_id"] for row in clock_receipts],
                 "successful_run_counts": {
                     name: len(successes_by_workflow[name]) for name in sorted(workflows)
                 },
