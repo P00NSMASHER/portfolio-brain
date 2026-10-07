@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -165,14 +166,47 @@ def dispatch(
     req(CORRELATION.fullmatch(correlation) is not None, "unsafe pre-arm correlation id")
     assert_main(api, exact_sha)
     encoded = urllib.parse.quote(filename, safe="")
-    api.post(
-        f"/actions/workflows/{encoded}/dispatches",
-        {"ref": "main", "inputs": {"prearm_id": correlation}},
-    )
-    row = wait_for_correlated_run(
-        api, filename=filename, exact_sha=exact_sha, correlation=correlation,
-        on_started=on_started,
-    )
+    payload = {"ref": "main", "inputs": {"prearm_id": correlation}}
+    transient_statuses: list[int] = []
+    row = None
+    expected_timeout = f"timed out locating correlated pre-arm run for {filename}"
+
+    for attempt in range(2):
+        try:
+            api.post(f"/actions/workflows/{encoded}/dispatches", payload)
+        except urllib.error.HTTPError as exc:
+            if exc.code not in {500, 502, 503, 504}:
+                raise
+            transient_statuses.append(exc.code)
+            try:
+                row = wait_for_correlated_run(
+                    api,
+                    filename=filename,
+                    exact_sha=exact_sha,
+                    correlation=correlation,
+                    discovery_timeout=60 if attempt == 0 else 120,
+                    on_started=on_started,
+                )
+            except RuntimeError as recovery:
+                if str(recovery) != expected_timeout:
+                    raise
+                if attempt == 1:
+                    raise RuntimeError(
+                        f"transient GitHub dispatch remained unresolved for {filename}"
+                    ) from recovery
+                continue
+            break
+        else:
+            row = wait_for_correlated_run(
+                api,
+                filename=filename,
+                exact_sha=exact_sha,
+                correlation=correlation,
+                on_started=on_started,
+            )
+            break
+
+    req(row is not None, f"pre-arm dispatch produced no run for {filename}")
     assert_main(api, exact_sha)
     return {
         "workflow": workflow,
@@ -184,6 +218,7 @@ def dispatch(
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
         "correlation": correlation,
+        "dispatch_transient_http_statuses": transient_statuses,
         "acceptance_credit": False,
     }
 
