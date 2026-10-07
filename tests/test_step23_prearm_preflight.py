@@ -68,6 +68,7 @@ class Step23PrearmPreflightTests(unittest.TestCase):
         self.assertIn("types: [in_progress, completed]",reducer)
         self.assertIn("writerbarrier-{0}-{1}-{2}",reducer)
         self.assertIn("portfolio-cost-watchdog",reducer)
+        self.assertIn("github.event.action == 'completed' && github.event.workflow_run.id",reducer)
         self.assertIn("startsWith(github.event.workflow_run.display_title, 'prearm-')",reducer)
 
     def test_cost_watchdog_waits_for_steady_barrier_before_canonical_restore(self):
