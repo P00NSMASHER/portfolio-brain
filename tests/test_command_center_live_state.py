@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[1]
 
 
 class LiveStateBridgeTests(unittest.TestCase):
-    def fake_restorer(self, name, created_at, run_id, sequence=7, include_provider=True):
+    def fake_restorer(self, name, created_at, run_id, sequence=7, include_provider=True, provider_updated_at=None):
         def restore(*args, **kwargs):
             output = kwargs.get("output") or args[0]
             metadata_output = kwargs.get("metadata_output")
@@ -42,10 +42,10 @@ class LiveStateBridgeTests(unittest.TestCase):
             if name=="runtime" and include_provider and provider_output is not None and provider_metadata is not None:
                 Path(provider_output).write_text(json.dumps({
                   "schema_version":"1.1.0","state_id":"portfolio-provider-readiness-state",
-                  "sequence":sequence,"updated_at":created_at,"mode":"daily","status":"READY",
+                  "sequence":sequence,"updated_at":provider_updated_at or created_at,"mode":"daily","status":"READY",
                   "source_analysis_status":"SUCCESS","provider_id":"openai","model_id":"gpt-5.6-terra",
                   "configured":True,"enabled":True,"credential_ready":True,"call_verified":True,
-                  "last_successful_at":created_at,
+                  "last_successful_at":provider_updated_at or created_at,
                   "cost_gate_status":"COMMITTED","retryable":False,"provider_attempt":1,
                   "authority_granted":False,"evidence_upgraded":False,
                 })+"\n")
@@ -93,6 +93,34 @@ class LiveStateBridgeTests(unittest.TestCase):
         self.assertEqual(receipt["sources"]["hunter_proposal_reviews"]["state_sequence"],2)
         self.assertEqual(receipt["sources"]["scheduler"]["source_run_id"],102)
         self.assertEqual(receipt["sources"]["scheduler"]["artifact_created_at"],"2026-09-26T17:20:00Z")
+
+    def test_provider_artifact_cannot_launder_stale_semantic_state(self):
+        now=datetime(2026,9,26,18,0,tzinfo=timezone.utc)
+        restorers={
+            "runtime":self.fake_restorer(
+                "runtime","2026-09-26T17:30:00Z",101,
+                provider_updated_at="2026-09-24T12:00:00Z",
+            ),
+            "scheduler":self.fake_restorer("scheduler","2026-09-26T17:20:00Z",102),
+            "hunter":self.fake_restorer("hunter","2026-09-26T17:10:00Z",103),
+            "cost":self.fake_restorer("cost-governor","2026-09-26T17:45:00Z",104),
+            "notifications":self.fake_restorer("notification","2026-09-26T17:00:00Z",105),
+            "agents":self.fake_restorer("agent-heartbeat","2026-09-26T17:50:00Z",106),
+            "model_feedback":self.fake_restorer("model-feedback","2026-09-26T17:40:00Z",107,sequence=2),
+            "learning":self.fake_restorer("learning-observation","2026-09-26T17:35:00Z",108,sequence=1),
+            "hunter_proposals":self.fake_restorer("hunter-proposal","2026-09-26T17:42:00Z",109,sequence=9),
+            "hunter_proposal_reviews":self.fake_restorer("hunter-proposal-review","2026-09-26T17:44:00Z",110,sequence=2),
+        }
+        with tempfile.TemporaryDirectory() as td, patch.dict(bridge.RESTORERS,restorers,clear=True):
+            root=Path(td)
+            receipt=bridge.build_live_state(output_dir=root/"live",receipt_path=root/"receipt.json",now=now)
+        provider=receipt["sources"]["provider"]
+        self.assertEqual(receipt["bridge_status"],"LIVE")
+        self.assertEqual(provider["status"],"STALE")
+        self.assertEqual(provider["artifact_age_minutes"],30.0)
+        self.assertGreater(provider["state_age_minutes"],bridge.STALE_AFTER_MINUTES["provider"])
+        self.assertEqual(provider["age_minutes"],provider["state_age_minutes"])
+        self.assertEqual(provider["freshness_basis"],"ARTIFACT_AND_PROVIDER_STATE_UPDATED_AT")
 
     def test_optional_observability_fallback_does_not_degrade_healthy_core(self):
         now=datetime(2026,9,26,18,0,tzinfo=timezone.utc)
