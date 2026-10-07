@@ -160,6 +160,13 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn('workflow_run:', before_clock)
         self.assertIn('7,17,27,37,47,57 * * * *', before_clock)
         self.assertIn('group: portfolio-schedule-delivery-${{ github.event_name }}', delivery_text)
+        for path in (
+            'acceptance/step23_prearm_cleanup.py',
+            'acceptance/step23_prearm_preflight.py',
+            'acceptance/step23_prearm_doctor.py',
+            '.github/workflows/step23-prearm-validation.yml',
+        ):
+            self.assertIn(path,delivery_text)
         self.assertIn('actions: write', clock)
         self.assertIn('operations.schedule_clock', clock)
         self.assertIn("github.event.workflow_run.event == 'schedule'", clock)
