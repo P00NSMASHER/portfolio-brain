@@ -25,7 +25,7 @@ TARGETS = [
     ("command-center-pages", "command-center-pages.yml"),
 ]
 REDUCER = ("portfolio-state-reducer", "portfolio-state-reducer.yml")
-LIVE_BARRIER_TARGETS = {"hunter-autonomous-cycle", "command-center-pages"}
+LIVE_BARRIER_TARGETS = {"runtime-hourly-sync", "portfolio-autonomous-scheduler", "hunter-autonomous-cycle", "agent-heartbeat-sweep", "portfolio-notification-cycle", "command-center-pages"}
 CORRELATION = re.compile(r"^prearm-[0-9]+-[a-z0-9-]+$")
 
 
@@ -96,7 +96,8 @@ def wait_for_correlated_run(
     exact_sha: str,
     correlation: str,
     discovery_timeout: int = 180,
-    completion_timeout: int = 1200,
+    queue_timeout: int = 1800,
+    execution_timeout: int = 1800,
     on_started: Any = None,
 ) -> dict[str, Any]:
     encoded = urllib.parse.quote(filename, safe="")
@@ -123,22 +124,33 @@ def wait_for_correlated_run(
     req(selected is not None, f"timed out locating correlated pre-arm run for {filename}")
 
     run_id = int(selected["id"])
-    deadline = time.monotonic() + completion_timeout
+    queue_deadline = time.monotonic() + queue_timeout
+    execution_deadline = None
     started_barrier_ran = False
-    while time.monotonic() < deadline:
+    while True:
+        now = time.monotonic()
         row = api.get(f"/actions/runs/{run_id}")
-        if row.get("status") == "in_progress" and on_started is not None and not started_barrier_ran:
-            on_started(run_id)
-            started_barrier_ran = True
-            row = api.get(f"/actions/runs/{run_id}")
-        if row.get("status") == "completed":
+        status = row.get("status")
+        if status == "in_progress":
+            if execution_deadline is None:
+                execution_deadline = now + execution_timeout
+            if on_started is not None and not started_barrier_ran:
+                on_started(run_id)
+                started_barrier_ran = True
+                row = api.get(f"/actions/runs/{run_id}")
+                status = row.get("status")
+        if status == "completed":
             req(row.get("conclusion") == "success",
                 f"{filename} pre-arm run {run_id} concluded {row.get('conclusion')}")
             req(row.get("head_sha") == exact_sha and row.get("event") == "workflow_dispatch",
                 f"{filename} pre-arm run identity drifted")
             return row
+        if execution_deadline is None:
+            if now >= queue_deadline:
+                raise RuntimeError(f"timed out waiting for {filename} pre-arm run {run_id} to start")
+        elif now >= execution_deadline:
+            raise RuntimeError(f"timed out waiting for {filename} pre-arm run {run_id} to complete")
         time.sleep(5)
-    raise RuntimeError(f"timed out waiting for {filename} pre-arm run {run_id}")
 
 
 def dispatch(

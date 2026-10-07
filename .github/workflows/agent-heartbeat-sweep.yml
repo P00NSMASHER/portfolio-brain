@@ -46,6 +46,23 @@ jobs:
           --workflow-id agent-heartbeat-sweep
           --job-id heartbeat
           --estimated-minutes 8
+      - name: Wait for pre-arm reducer barrier after writer-lane acquisition
+        if: ${{ inputs.prearm_id != '' && steps.workload.outputs.allowed == 'true' }}
+        env:
+          STEP23_PREARM_ID: ${{ inputs.prearm_id }}
+        run: >-
+          python -m acceptance.step23_wait_reducer_barrier
+          --target agent-heartbeat-sweep
+          --exact-sha "$GITHUB_SHA"
+          --output acceptance/out/step23-barrier-wait-${GITHUB_RUN_ID}.json
+      - name: Preserve pre-arm reducer barrier wait evidence
+        if: ${{ inputs.prearm_id != '' && steps.workload.outputs.allowed == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-step23-barrier-wait-${{ github.run_id }}
+          path: acceptance/out/step23-barrier-wait-${{ github.run_id }}.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Restore canonical agent heartbeat state
         if: ${{ steps.workload.outputs.allowed == 'true' }}
         run: python -m state_journal.production_reader --domain heartbeat --output agents/live/agent_heartbeat_state.json

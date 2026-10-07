@@ -28,3 +28,4 @@ jobs:
     uses: ./.github/workflows/runtime-worker.yml
     with:
       mode: sync
+      prearm_id: ${{ inputs.prearm_id }}
