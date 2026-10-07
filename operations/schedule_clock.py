@@ -59,6 +59,39 @@ def _exact_main_runs(doc:dict,main_sha:str,label:str)->list[dict]:
     return [row for row in rows
             if row.get("head_branch")=="main" and row.get("head_sha")==main_sha]
 
+def bind_dispatched_run(api:API,target:dict,main_sha:str,prior_ids:set[int],requested_at:datetime)->dict:
+    """Bind one clock dispatch to the exact GitHub Actions run it created.
+
+    A bare 204 from the dispatch endpoint is not audit evidence. Poll a bounded
+    number of times and require exactly one new exact-main workflow_dispatch run
+    created by github-actions[bot]. Ambiguity fails closed.
+    """
+    encoded=urllib.parse.quote(target["file"],safe="")
+    for attempt in range(3):
+        doc=api.call(f"/actions/workflows/{encoded}/runs?event=workflow_dispatch&branch=main&per_page=20")
+        batch=doc.get("workflow_runs",[])
+        req(isinstance(batch,list),"clock dispatch run listing malformed")
+        candidates=[]
+        for row in batch:
+            if type(row.get("id")) is not int or row["id"] in prior_ids:
+                continue
+            actor=(row.get("actor") or {}).get("login")
+            triggering=(row.get("triggering_actor") or {}).get("login")
+            created=row.get("created_at")
+            if not isinstance(created,str):
+                continue
+            if (row.get("name")==target["name"] and row.get("head_branch")=="main"
+                    and row.get("head_sha")==main_sha and row.get("event")=="workflow_dispatch"
+                    and actor=="github-actions[bot]" and triggering=="github-actions[bot]"
+                    and parse_time(created)>=requested_at-timedelta(seconds=5)):
+                candidates.append(row)
+        if len(candidates)==1:
+            return candidates[0]
+        req(len(candidates)<=1,f"ambiguous clock dispatch binding for {target['name']}")
+        if attempt<2:
+            time.sleep(2)
+    raise ClockError(f"clock dispatch run did not materialize for {target['name']}")
+
 def reducer_liveness_wake(api:API,main_sha:str)->dict:
     """Explicitly wake the reducer when token-dispatched producers outpace canonical state.
 
@@ -106,12 +139,23 @@ def reducer_liveness_wake(api:API,main_sha:str)->dict:
     if not stale and latest_reducer_run_id is not None:
         return {"action":"REDUCER_CURRENT","latest_reducer_run_id":latest_reducer_run_id}
 
+    requested_at=datetime.now(timezone.utc)
+    prior_ids={row["id"] for row in reducers if type(row.get("id")) is int}
     api.call(f"/actions/workflows/{REDUCER_WORKFLOW_FILE}/dispatches","POST",{"ref":"main"})
+    bound=bind_dispatched_run(
+        api,{"name":"portfolio-state-reducer","file":REDUCER_WORKFLOW_FILE},
+        main_sha,prior_ids,requested_at,
+    )
     return {
         "action":"REDUCER_WAKE_REQUESTED",
         "reason":"NO_SUCCESSFUL_EXACT_MAIN_REDUCER" if latest_reducer_run_id is None else "PRODUCER_NEWER_THAN_LATEST_REDUCER",
         "latest_reducer_run_id":latest_reducer_run_id,
         "producer_run_ids":sorted(stale),
+        "target_run_id":bound["id"],
+        "target_created_at":bound["created_at"],
+        "target_event":"workflow_dispatch",
+        "target_head_sha":main_sha,
+        "target_actor":"github-actions[bot]",
     }
 
 def due(cadence:str,at:datetime)->bool:
@@ -194,9 +238,17 @@ def execute(api:API,policy:dict,source_run:dict,main_sha:str,current_run_id:int|
         if dispatch_count>=policy["max_dispatches_per_tick"]:
             actions.append({"workflow":target["name"],"action":"DISPATCH_BUDGET_EXHAUSTED"})
             break
+        requested_at=datetime.now(timezone.utc)
+        prior_ids={row["id"] for row in recent if type(row.get("id")) is int}
         api.call(f"/actions/workflows/{target['file']}/dispatches","POST",{"ref":"main"})
+        bound=bind_dispatched_run(api,target,main_sha,prior_ids,requested_at)
         dispatch_count+=1
-        actions.append({"workflow":target["name"],"action":"DISPATCH_REQUESTED"})
+        actions.append({
+            "workflow":target["name"],"action":"DISPATCH_BOUND",
+            "target_run_id":bound["id"],"target_created_at":bound["created_at"],
+            "target_event":"workflow_dispatch","target_head_sha":main_sha,
+            "target_actor":"github-actions[bot]",
+        })
     return {
         "schema_version":"1.0.0","clock_id":policy["clock_id"],"status":"PASS",
         "authority_granted":False,"dispatch_authority_effect":"NONE",
