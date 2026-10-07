@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from state_journal.provider_quarantine import require_quarantined_reducer_identity
+
 SECRET_MARKERS=("ghs_","gho_","ghu_","ghr_","github_pat_")
 BLOCKER_PATHS={
     ".github/workflows/portfolio-state-reducer.yml",
@@ -161,17 +163,26 @@ def _delete_jobless_queued_zombie(api:API,run_id:int,label:str)->str|None:
     req(type(total) is int and total>=len(rows),"workflow job count malformed")
     if total!=0 or rows:
         return None
+    artifacts=api.get(f"/actions/runs/{run_id}/artifacts?per_page=100")
+    artifact_rows=artifacts.get("artifacts",[])
+    artifact_total=artifacts.get("total_count",len(artifact_rows))
+    req(isinstance(artifact_rows,list),"workflow artifact listing malformed")
+    req(type(artifact_total) is int and artifact_total>=len(artifact_rows),
+        "workflow artifact count malformed")
+    if artifact_total!=0 or artifact_rows:
+        return None
     deleted=api.delete(f"/actions/runs/{run_id}")
     if deleted==204:
         status,_=api.request(f"/actions/runs/{run_id}")
         req(status==404,f"{label} queued zombie run {run_id} remained visible after delete")
         return "DELETE_JOBLESS_QUEUE"
     if deleted in {403,409}:
+        require_quarantined_reducer_identity(current)
         successor=_later_success_proves_zombie_inert(api,current,label)
         req(successor is not None,
             f"could not delete {label} queued zombie run {run_id}: {deleted}; "
             "no later successful same-workflow run proves it inert")
-        return f"PROVEN_INERT_JOBLESS_QUEUE:{successor}"
+        return f"PROVEN_INERT_QUARANTINED_QUEUE:{successor}"
     raise RuntimeError(f"could not delete {label} queued zombie run {run_id}: {deleted}")
 
 
@@ -237,7 +248,7 @@ def purge(api:API,*,exact_sha:str)->dict[str,Any]:
             force_cancelled.append(run_id)
         elif mode=="DELETE_JOBLESS_QUEUE":
             deleted_stale.append(run_id)
-        elif mode.startswith("PROVEN_INERT_JOBLESS_QUEUE:"):
+        elif mode.startswith("PROVEN_INERT_QUARANTINED_QUEUE:"):
             evidence_run_id=int(mode.rsplit(":",1)[1])
             proven_inert_stale.append({
                 "run_id":run_id,
