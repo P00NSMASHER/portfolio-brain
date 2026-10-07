@@ -124,7 +124,7 @@ jobs:
           import json, os
           status="QUALIFIED_WAITING_FOR_START" if os.environ["EXPIRED"]!="true" else "QUALIFIED_WINDOW_EXPIRED"
           open("step23-soak-progress.json","w").write(json.dumps({
-            "schema_version":"1.0.0","status":status,"exact_main_sha":os.environ["SOAK_SHA"],
+            "schema_version":"2.0.0","status":status,"exact_main_sha":os.environ["SOAK_SHA"],
             "configured_soak_start":os.environ["SOAK_START"],"acceptance_complete":False,
           },indent=2)+"\\n")
           PY
