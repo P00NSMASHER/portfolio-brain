@@ -28,6 +28,44 @@ def archive_due(event_count: int, serialized_bytes: int, *, max_events: int = MA
     return event_count >= int(max_events * ratio) or serialized_bytes >= int(max_bytes * ratio)
 
 
+def _latest_attempt_snapshot_artifact(run: dict, rows: list[dict]) -> dict:
+    """Select the immutable snapshot emitted by the successful current run attempt."""
+    run_id = run.get("id")
+    attempt = run.get("run_attempt")
+    require(type(run_id) is int and type(attempt) is int and attempt >= 1,
+            "Reducer run attempt identity malformed")
+    receipts = [
+        row for row in rows
+        if row.get("name") == f"portfolio-state-reducer-receipt-{run_id}-{attempt}"
+        and row.get("expired") is False
+    ]
+    require(len(receipts) == 1, "Latest reducer attempt receipt missing or ambiguous")
+    receipt = receipts[0]
+    require(type(receipt.get("id")) is int and isinstance(receipt.get("created_at"), str),
+            "Latest reducer attempt receipt metadata malformed")
+
+    snapshots = [
+        row for row in rows
+        if row.get("name") == SNAPSHOT_ARTIFACT
+        and row.get("expired") is False
+        and type(row.get("id")) is int
+        and isinstance(row.get("created_at"), str)
+        and row["created_at"] <= receipt["created_at"]
+    ]
+    require(bool(snapshots), "Latest reducer attempt snapshot missing")
+    snapshots.sort(key=lambda row: (row["created_at"], row["id"]))
+    selected = snapshots[-1]
+    later = [
+        row for row in rows
+        if row.get("name") == SNAPSHOT_ARTIFACT
+        and row.get("expired") is False
+        and isinstance(row.get("created_at"), str)
+        and row["created_at"] > receipt["created_at"]
+    ]
+    require(not later, "Reducer snapshot appeared after latest attempt receipt")
+    return selected
+
+
 def latest_canonical(reader: GitHubReader) -> tuple[dict, dict, dict]:
     runs = reader.get(
         "/actions/workflows/portfolio-state-reducer.yml/runs"
@@ -53,10 +91,9 @@ def latest_canonical(reader: GitHubReader) -> tuple[dict, dict, dict]:
             row for row in rows
             if row.get("name") == SNAPSHOT_ARTIFACT and row.get("expired") is False
         ]
-        require(len(matches) <= 1, "Reducer published multiple canonical snapshots")
         if not matches:
             continue
-        meta = matches[0]
+        meta = _latest_attempt_snapshot_artifact(run, rows)
         raw = reader.archive(meta["id"])
         artifact_digest(meta, raw)
         state = extract_json(raw, "snapshot.json")
@@ -152,8 +189,19 @@ def main() -> None:
     args = parser.parse_args()
     token = os.environ.get("GITHUB_TOKEN", "")
     require(bool(token), "GITHUB_TOKEN required to create checkpoint/archive candidate")
-    result = generate(args.root.resolve(), reader=GitHubReader(token, max_requests=40), force=args.force)
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        result = generate(args.root.resolve(), reader=GitHubReader(token, max_requests=40), force=args.force)
+    except Exception as exc:
+        result = {
+            "status": "BLOCKED",
+            "reason_type": type(exc).__name__,
+            "reason": str(exc)[:1000],
+            "force": bool(args.force),
+        }
+        _atomic_write(args.output, canonical(result) + b"\n")
+        print(json.dumps(result, sort_keys=True))
+        raise
     _atomic_write(args.output, canonical(result) + b"\n")
     print(json.dumps(result, sort_keys=True))
 
