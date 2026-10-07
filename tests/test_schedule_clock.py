@@ -144,9 +144,15 @@ class ScheduleClockTests(unittest.TestCase):
     "updated_at":"2026-10-06T04:05:00Z",
   }]}
   source={**SOURCE,"created_at":"2026-10-06T04:17:00Z"}
+  targets=[
+    {**target,"name":"portfolio-state-reducer","file":"portfolio-state-reducer.yml"}
+    if target["name"]=="daily" else target
+    for target in POLICY["target_workflows"]
+  ]
+  p={**POLICY,"target_workflows":targets}
   api=API(reducer_runs=reducers,producer_runs=producers)
-  result=execute(api,POLICY,source,MAIN)
-  daily=next(x for x in result["actions"] if x["workflow"]=="daily")
+  result=execute(api,p,source,MAIN)
+  daily=next(x for x in result["actions"] if x["workflow"]=="portfolio-state-reducer")
   self.assertEqual(daily["action"],"REDUCER_ALREADY_WOKEN_OR_ACTIVE")
   reducer_posts=[call for call in api.calls if call[0]=="/actions/workflows/portfolio-state-reducer.yml/dispatches" and call[1]=="POST"]
   self.assertEqual(len(reducer_posts),1)
