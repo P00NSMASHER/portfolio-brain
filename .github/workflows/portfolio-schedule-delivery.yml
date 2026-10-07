@@ -25,6 +25,9 @@ on:
       - operations/schedule_delivery.py
       - operations/STEP23_CONTROL.json
       - operations/SCHEDULE_DELIVERY_POLICY.json
+      - acceptance/step23_prearm_preflight.py
+      - acceptance/step23_prearm_doctor.py
+      - .github/workflows/step23-prearm-validation.yml
   workflow_dispatch:
 permissions:
   contents: read
