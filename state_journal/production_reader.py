@@ -89,7 +89,7 @@ def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, curren
     latest_event_time = max(event_times)
     pending_ids = {row["id"] for row in pending}
     deadline = clock() + timeout_seconds
-    seen_reducers: set[int] = set()
+    seen_reducers: set[tuple[int, object, str]] = set()
     poller = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
     while clock() < deadline:
         # Any genuine reducer completion can unblock the production reader.
@@ -110,10 +110,15 @@ def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, curren
             and completed_at >= latest_event_time
             and type(row.get("id")) is int
         ]
-        for reducer_run in sorted(successes, key=lambda row: row["id"]):
-            if reducer_run["id"] in seen_reducers:
+        for reducer_run in sorted(successes, key=lambda row: (row["id"], row.get("run_attempt") or 0)):
+            # One Actions run ID may have multiple genuine rerun attempts. A
+            # later attempt can publish a newer canonical snapshot that covers
+            # pending events missed by an earlier attempt, so dedupe by the
+            # provider attempt/completion identity rather than run ID alone.
+            completion_key = (reducer_run["id"], reducer_run.get("run_attempt"), reducer_run["updated_at"])
+            if completion_key in seen_reducers:
                 continue
-            seen_reducers.add(reducer_run["id"])
+            seen_reducers.add(completion_key)
             fresh = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
             artifacts = getattr(fresh, "list_recent_journal_artifacts", fresh.list_recent_artifacts)(
                 policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]
