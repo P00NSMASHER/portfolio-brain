@@ -1,4 +1,5 @@
 name: portfolio-cost-watchdog
+run-name: ${{ inputs.prearm_id || github.workflow }}
 
 on:
   schedule:
@@ -17,6 +18,12 @@ on:
     paths:
       - "operations/TRIGGER_WORKFLOW_LIVENESS"
   workflow_dispatch:
+    inputs:
+      prearm_id:
+        description: "Pre-arm correlation token; does not grant acceptance credit"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
