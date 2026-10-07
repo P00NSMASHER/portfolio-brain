@@ -6,8 +6,8 @@
   "registration_delay_minutes": 5,
   "start_delay_minutes": 30,
   "start_round_minutes": 15,
-  "required_successes_per_workflow": 1,
-  "max_soak_duration_seconds": 0,
+  "required_successes_per_workflow": 2,
+  "max_soak_duration_seconds": 7200,
   "temporary_crons": {
     "portfolio-state-reducer": [
       "30 16 6 10 *"
