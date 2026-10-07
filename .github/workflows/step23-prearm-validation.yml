@@ -47,6 +47,7 @@ jobs:
       - name: Purge any pre-arm run with credential-like correlation
         run: >-
           python -m acceptance.step23_prearm_cleanup
+          --exact-sha "$EXACT_SHA"
           --output acceptance/out/step23-prearm-secret-cleanup.json
 
       - name: Validate static pre-arm contract before any workload dispatch
