@@ -145,21 +145,11 @@ class PrearmCleanupTests(unittest.TestCase):
         self.assertFalse(stale_non_schedule_blocker({**base,"path":".github/workflows/foundation-ci.yml"},exact))
 
 
-    def test_one_shot_zombie_cleanup_uses_bounded_verifier_app_authority(self):
+    def test_one_shot_admin_cleanup_workflow_is_removed_before_prearm(self):
         from pathlib import Path
 
         root=Path(__file__).resolve().parents[1]
-        text=(root/".github/workflows/step23-admin-zombie-cleanup.yml").read_text(encoding="utf-8")
-        self.assertIn("uses: actions/create-github-app-token@v2",text)
-        self.assertIn('app-id: "5121826"',text)
-        self.assertIn("private-key: ${{ secrets.PORTFOLIO_VERIFIER_PRIVATE_KEY }}",text)
-        self.assertIn("permission-actions: write",text)
-        self.assertIn("GH_TOKEN: ${{ steps.cleanup-token.outputs.token }}",text)
-        self.assertNotIn("PORTFOLIO_REPAIR_PR_TOKEN",text)
-        self.assertIn('TARGET_RUN_ID: "37655516971"',text)
-        self.assertIn('EXPECTED_STALE_SHA: "18f3e3d5a9b3b8c9a3e64e118a7cd487a3551edb"',text)
-        self.assertIn('EXPECTED_PATH: ".github/workflows/portfolio-state-reducer.yml"',text)
-        self.assertIn('"authority": "PORTFOLIO_VERIFIER_GITHUB_APP"',text)
+        self.assertFalse((root/".github/workflows/step23-admin-zombie-cleanup.yml").exists())
 
 
 if __name__=="__main__":
