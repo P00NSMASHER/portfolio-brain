@@ -1,6 +1,80 @@
 {
+  "fingerprint": "6175589ea1856254197165c23167e6e19428150c059da8f2e678f4dd0d4349d8",
   "schema_version": 2,
   "scope": "STRUCTURAL_REUSE_KNOWLEDGE_NOT_EXECUTED_OR_REVENUE_VERIFIED",
-  "sources": [],
-  "fingerprint": null
+  "sources": [
+    {
+      "blob_sha": "584bb09b92335a350d9880f55b786baba1960941",
+      "code_sha256": "37a9e0801de948c3b558ca7c9846b3d0eb76ec062703ee3e5132df273ff569ab",
+      "head_sha": "58d18344b1ba81e704a22096d05ead2f5d5cdddd",
+      "key": "Jacob-Met/workflow-checks:freight_packets/freightpkt/invoice_match.py",
+      "license": "MIT",
+      "matched_terms": [
+        "invoice",
+        "duplicate"
+      ],
+      "path": "freight_packets/freightpkt/invoice_match.py",
+      "repository": "Jacob-Met/workflow-checks",
+      "source_ref": "https://github.com/Jacob-Met/workflow-checks/blob/58d18344b1ba81e704a22096d05ead2f5d5cdddd/freight_packets/freightpkt/invoice_match.py",
+      "target": "freight-recovery",
+      "test_paths": [
+        ".github/workflows/tests.yml",
+        "freight_packets/tests/conftest.py",
+        "freight_packets/tests/test_fines.py",
+        "freight_packets/tests/test_freight.py",
+        "freight_packets/tests/test_freight_hardening.py",
+        "pt_auth/tests/conftest.py",
+        "pt_auth/tests/test_ptauth.py",
+        "pt_auth/tests/test_ptauth_hardening.py",
+        "utility_watch/tests/test_uwatch.py"
+      ]
+    },
+    {
+      "blob_sha": "37f1d6af33e9123daf0c27f140d7b7ed9e9b1ee1",
+      "code_sha256": "74fe121abef89d094c434620ea1842c2b979f44c9d353b8e33ee75cedde1301c",
+      "head_sha": "34596ac9098eea2e2bbafccc0f420babf3d0e842",
+      "key": "daedalusdevelopmentgroup/ddg-agent-payable-services:hosted-x402/src/dynamic-payment.ts",
+      "license": "MIT",
+      "matched_terms": [
+        "payment",
+        "x402"
+      ],
+      "path": "hosted-x402/src/dynamic-payment.ts",
+      "repository": "daedalusdevelopmentgroup/ddg-agent-payable-services",
+      "source_ref": "https://github.com/daedalusdevelopmentgroup/ddg-agent-payable-services/blob/34596ac9098eea2e2bbafccc0f420babf3d0e842/hosted-x402/src/dynamic-payment.ts",
+      "target": "agent-products",
+      "test_paths": [
+        "tests/test_buyer_profile.py",
+        "tests/test_mcp_security.py",
+        "tests/test_submission_sync.py"
+      ]
+    },
+    {
+      "blob_sha": "bd98e95a7a4528916a34117d23ffd92f6f11bd89",
+      "code_sha256": "957c36dc406860e39735e4700ede40dd11fdc36176db87af67994dd131197baf",
+      "head_sha": "747b8f341b7a888e2160cbe454728424d5560b2f",
+      "key": "kaylogistics421-jpg/LOAD-MASR:api.test.js",
+      "license": "UNKNOWN",
+      "matched_terms": [
+        "invoice",
+        "duplicate"
+      ],
+      "path": "api.test.js",
+      "repository": "kaylogistics421-jpg/LOAD-MASR",
+      "source_ref": "https://github.com/kaylogistics421-jpg/LOAD-MASR/blob/747b8f341b7a888e2160cbe454728424d5560b2f/api.test.js",
+      "target": "freight-recovery",
+      "test_paths": [
+        "api.test.js",
+        "test_admin_control_api.js",
+        "test_admin_control_ui_e2e.js",
+        "test_admin_ui_e2e.js",
+        "test_backend_e2e.js",
+        "test_backend_e2e2.js",
+        "test_cargo_manual_e2e.js",
+        "test_carrier_ops_ui_e2e.js",
+        "test_carrier_shipments_api.js",
+        "test_carrier_wizard_backend.js"
+      ]
+    }
+  ]
 }
