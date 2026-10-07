@@ -158,7 +158,8 @@ def _validate_stages(receipt: dict[str, Any], expected: list[str]) -> dict[str, 
 
 def _common(receipt: dict[str, Any], *, step: int) -> None:
     _validate_receipt_hash(receipt)
-    _require(receipt.get("schema_version") == "1.0.0", f"Step {step} receipt schema drifted")
+    expected_schema = "2.0.0" if step == 23 else "1.0.0"
+    _require(receipt.get("schema_version") == expected_schema, f"Step {step} receipt schema drifted")
     _require(receipt.get("step") == step, f"Step {step} receipt step mismatch")
     _require(receipt.get("status") == "PASS", f"Step {step} cannot complete without PASS")
     _validate_sha40(receipt.get("exact_main_sha"), f"Step {step}.exact_main_sha")
