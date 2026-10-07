@@ -10,6 +10,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+import re
 
 from acceptance.step23_live_collect import pending_event_count
 
@@ -24,6 +25,7 @@ TARGETS = [
     ("command-center-pages", "command-center-pages.yml"),
 ]
 REDUCER = ("portfolio-state-reducer", "portfolio-state-reducer.yml")
+CORRELATION = re.compile(r"^prearm-[0-9]+-[a-z0-9-]+$")
 
 
 def req(ok: bool, message: str) -> None:
@@ -133,6 +135,7 @@ def dispatch(
     exact_sha: str,
     correlation: str,
 ) -> dict[str, Any]:
+    req(CORRELATION.fullmatch(correlation) is not None, "unsafe pre-arm correlation id")
     assert_main(api, exact_sha)
     encoded = urllib.parse.quote(filename, safe="")
     api.post(
@@ -162,12 +165,14 @@ def drain(
     *,
     exact_sha: str,
     prefix: str,
-    token: str,
+    github_token: str,
+    correlation_seed: str,
     drains: list[dict[str, Any]],
     max_rounds: int = 4,
 ) -> int:
+    req(correlation_seed.isdigit(), "pre-arm correlation seed must be numeric")
     for round_number in range(1, max_rounds + 1):
-        correlation = f"prearm-{prefix}-drain-{round_number}-{token}"
+        correlation = f"prearm-{correlation_seed}-{prefix}-drain-{round_number}"
         drains.append(dispatch(
             api,
             workflow=REDUCER[0],
@@ -175,7 +180,7 @@ def drain(
             exact_sha=exact_sha,
             correlation=correlation,
         ))
-        pending = pending_event_count(token)
+        pending = pending_event_count(github_token)
         if pending == 0:
             return 0
     raise RuntimeError(f"canonical pending events did not drain after {max_rounds} reducer rounds")
@@ -199,7 +204,10 @@ def main() -> None:
     reducer_drains: list[dict[str, Any]] = []
 
     # Establish a clean canonical baseline before any non-counting producer run.
-    drain(api, exact_sha=args.exact_sha, prefix="initial", token=token, drains=reducer_drains)
+    drain(
+        api, exact_sha=args.exact_sha, prefix="initial", github_token=token,
+        correlation_seed=orchestrator, drains=reducer_drains
+    )
 
     for index, (workflow, filename) in enumerate(TARGETS, start=1):
         correlation = f"prearm-{orchestrator}-{index}-{workflow}"
@@ -216,7 +224,8 @@ def main() -> None:
             api,
             exact_sha=args.exact_sha,
             prefix=f"{index}-{workflow}",
-            token=token,
+            github_token=token,
+            correlation_seed=orchestrator,
             drains=reducer_drains,
         )
 
