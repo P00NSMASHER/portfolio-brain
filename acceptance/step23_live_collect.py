@@ -410,7 +410,7 @@ def main() -> None:
     def waiting(value: dict) -> None:
         print(json.dumps(value, sort_keys=True))
         if args.once:
-            value.update(schema_version="1.0.0", exact_main_sha=exact_sha,
+            value.update(schema_version="2.0.0", exact_main_sha=exact_sha,
                          configured_soak_start=cfg["soak_start"],
                          effective_soak_start=effective_start.isoformat(),
                          resets=resets, generated_at=iso_now(), acceptance_complete=False)
