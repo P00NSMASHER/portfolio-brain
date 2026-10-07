@@ -15,6 +15,17 @@ from durable acknowledged state and drains interrupted input. Last failure remai
 visible in attempts. Optional knowledge-upgrade failure is BLOCKED without discarding
 core observations. Authentication/rate-limit/provider outage is never renamed success.
 
+Knowledge proposal delivery uses narrowly scoped repository contents, pull-request,
+and Actions permissions. After creating a fixed-file candidate PR, it dispatches
+the existing Foundation workflow exactly once on that candidate branch. Token-created
+PR events can require workflow approval; the explicit dispatch avoids depending on
+that event for validation. The unchanged independent verifier still binds and checks
+the actual head and alone merges eligible bot candidates through main protection.
+API failures expose sanitized status/endpoint evidence and leave the proposal
+unaccepted. Repository policy may still refuse bot PR creation; permissions do not
+override that policy. Failed attempts retain the weekly cooldown; no rapid retry
+or acceptance reset is implied by repairing code.
+
 ## Local continuous process on an existing host
 
 ```ini

@@ -174,6 +174,23 @@ class UpgradeTests(unittest.TestCase):
    with self.assertRaises(BrainError):api.request(path,method,{})
 
 class UpgradeEndToEndTests(unittest.TestCase):
+ def test_validation_dispatch_cannot_target_main_or_other_workflow(self):
+  from brain.upgrades import UpgradeAPI,VALIDATION,REPOSITORY as repo
+  calls=[];api=UpgradeAPI(transport=lambda *args:calls.append(args))
+  for path,payload in [(VALIDATION,{'ref':'main'}),(VALIDATION,{'ref':'factory/auto-repair-v2-knowledge-'+'a'*16,'inputs':{}}),('actions/workflows/brain-cycle.yml/dispatches',{'ref':'main'})]:
+   with self.assertRaises(BrainError):api.request('/repos/'+repo+'/'+path,'POST',payload)
+  self.assertEqual(calls,[])
+
+ def test_upgrade_http_failure_preserves_status_without_token(self):
+  import urllib.error
+  from brain.upgrades import UpgradeAPI,REPOSITORY as repo
+  api=UpgradeAPI(token='secret-never-in-diagnostics')
+  class Opener:
+   def open(self,*args,**kwargs):raise urllib.error.HTTPError('https://api.github.com',403,'Forbidden',{},None)
+  api.opener=Opener()
+  with self.assertRaisesRegex(BrainError,'UPGRADE_API_403: POST pulls') as failure:api.request('/repos/'+repo+'/pulls','POST',{})
+  self.assertNotIn('secret-never-in-diagnostics',str(failure.exception))
+
  def test_evidence_qualified_proposal_uses_only_protected_path(self):
   from brain.upgrades import evolve
   with tempfile.TemporaryDirectory() as directory:
@@ -194,6 +211,7 @@ class UpgradeEndToEndTests(unittest.TestCase):
      if '/git/refs' in path:return {}
      if '/contents/' in path and method=='PUT':return {'commit':{'sha':'e'*40}}
      if path.endswith('/pulls') and method=='POST':return {'number':100,'html_url':'https://github.com/P00NSMASHER/portfolio-brain/pull/100'}
+     if path.endswith('/actions/workflows/foundation-ci.yml/dispatches') and method=='POST':return {}
      raise AssertionError(path)
    try:
     result=evolve(store,SHA,api=API());self.assertEqual(result['status'],'CANDIDATE_PR_CREATED');self.assertEqual(result['independent_review'],'PENDING')
@@ -201,6 +219,9 @@ class UpgradeEndToEndTests(unittest.TestCase):
     self.assertEqual(evolve(store,SHA,api=API())['status'],'COOLDOWN')
     create=[c for c in calls if c[0].endswith('/pulls') and c[1]=='POST'][0]
     self.assertEqual(create[2]['base'],'main');self.assertIn('AUTO_REPAIR_FINGERPRINT:',create[2]['body'])
+    dispatched=[c for c in calls if c[0].endswith('/dispatches')]
+    self.assertEqual(len(dispatched),1);self.assertEqual(dispatched[0][2]['ref'],create[2]['head'])
+    self.assertEqual(result['validation_dispatch'],'DELIVERED')
    finally:store.close()
  def test_doctor_rejects_partial_monitor_borrowing_old_full_coverage(self):
   with tempfile.TemporaryDirectory() as directory:

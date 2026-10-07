@@ -163,7 +163,7 @@ def main(argv=None):
                     result=evolve(store,sha)
                 except (BrainError,urllib.error.HTTPError,OSError,KeyError,TypeError) as exc:
                     store.attempt('evolve','FAIL',type(exc).__name__,source_sha=sha)
-                    result={'status':'BLOCKED','operation':'evolve','error_class':type(exc).__name__,'source_sha':sha,'independent_review':'NOT_STARTED','authority_widened':False}
+                    result={'status':'BLOCKED','operation':'evolve','error_class':type(exc).__name__,'error':str(exc)[:300],'source_sha':sha,'independent_review':'NOT_ACCEPTED','authority_widened':False}
                 write_report(result,args.output)
             elif args.command=="doctor":
                 result=doctor(store,sha,args.output)
