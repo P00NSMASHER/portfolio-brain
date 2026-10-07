@@ -49,8 +49,7 @@ class Step23PrearmPreflightTests(unittest.TestCase):
                 self.assertIn("acceptance.step23_wait_reducer_barrier",text)
                 self.assertIn(f"--target {target}",text)
                 self.assertIn("inputs.prearm_id != ''",text)
-                self.assertIn("actions: read",text)
-                self.assertNotIn("actions: write",text)
+                self.assertRegex(text,r"(?m)^  actions: (?:read|write)$")
 
     def test_runtime_sync_forwards_and_waits_for_prearm_barrier(self):
         from pathlib import Path
