@@ -245,9 +245,16 @@ def validate_operating_mode():
         req(actual[name]==[cron,*window["temporary_crons"].get(name,[])],f"{name} cron mismatch")
     req(actual[delivery["workflow"]]==[delivery["cron"]],"delivery probe cron mismatch")
     control=load("operations/STEP23_CONTROL.json")
-    req(control.get("status")=="CANARY_REQUIRED" and control.get("next_soak_start") is None
-        and control.get("acceptance_complete") is False,
-        "Step 23 must remain disarmed until scheduler canary passes")
+    req(control=={
+        "schema_version":"2.0.0",
+        "status":"REDUNDANT_CLOCK_PREQUALIFYING",
+        "qualification_method":"ONE_NATIVE_SCHEDULE_THEN_REDUNDANT_CLOCK",
+        "registration_delay_minutes":5,
+        "start_delay_minutes":30,
+        "qualification_horizon_hours":24,
+        "soak_duration_seconds":25200,
+        "acceptance_complete":False,
+    }, "Step 23 redundant-clock qualification control changed")
     workload=load("workload_control/WORKLOAD_POLICY.json")
     req(workload["mode"]=="GITHUB_NATIVE_WORKLOAD_CONTROL","workload control mode changed")
     workload_workflows={
