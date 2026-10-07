@@ -13,6 +13,10 @@ on:
         required: false
         type: string
         default: ""
+      prearm_id:
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -37,7 +41,7 @@ jobs:
     # provider restore + 126s forwarding + 80s health reads, leaving 109s for
     # scans/setup/finalization. Missing reducer delivery still fails closed.
     # Paid modes retain their existing five-minute reservation and hard limit.
-    timeout-minutes: ${{ (inputs.mode == 'observe' || inputs.mode == 'sync') && 15 || 5 }}
+    timeout-minutes: ${{ inputs.prearm_id != '' && 25 || ((inputs.mode == 'observe' || inputs.mode == 'sync') && 15 || 5) }}
     env:
       PORTFOLIO_RUNTIME_DISABLED: ${{ vars.PORTFOLIO_RUNTIME_DISABLED }}
       PORTFOLIO_SPEND_DISABLED: ${{ vars.PORTFOLIO_SPEND_DISABLED }}
@@ -124,6 +128,24 @@ jobs:
                   + current
               )
           PY
+
+      - name: Wait for pre-arm reducer barrier after writer-lane acquisition
+        if: ${{ inputs.prearm_id != '' && inputs.mode == 'sync' && steps.admission.outputs.allowed == 'true' }}
+        env:
+          STEP23_PREARM_ID: ${{ inputs.prearm_id }}
+        run: >-
+          python -m acceptance.step23_wait_reducer_barrier
+          --target runtime-hourly-sync
+          --exact-sha "$GITHUB_SHA"
+          --output acceptance/out/step23-barrier-wait-${GITHUB_RUN_ID}.json
+      - name: Preserve pre-arm reducer barrier wait evidence
+        if: ${{ inputs.prearm_id != '' && inputs.mode == 'sync' && steps.admission.outputs.allowed == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-step23-barrier-wait-${{ github.run_id }}
+          path: acceptance/out/step23-barrier-wait-${{ github.run_id }}.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Restore canonical runtime state
         if: ${{ steps.admission.outputs.allowed == 'true' }}
