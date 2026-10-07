@@ -15,6 +15,16 @@ class CheckpointVerificationDispatchTests(unittest.TestCase):
         self.assertIn('row.get("status")!="completed"',text)
         self.assertIn('gh workflow run foundation-ci.yml --ref "$CHECKPOINT_BRANCH"',text)
 
+    def test_legitimate_checkpoint_noop_does_not_require_candidate_pr(self):
+        text=(ROOT/".github/workflows/portfolio-state-checkpoint-candidate.yml").read_text()
+        self.assertIn(
+            "steps.incident.outputs.active == 'true' || steps.generate.outputs.changed == 'true'",
+            text,
+        )
+        self.assertIn("steps.candidate.outputs.head_sha != ''",text)
+        self.assertIn("if git diff --quiet -- state_journal; then",text)
+        self.assertIn('echo "changed=false" >> "$GITHUB_OUTPUT"',text)
+
     def test_canonical_ready_trigger_remains_explicit_and_auditable(self):
         trigger=(ROOT/".github/triggers/step2-canonical-ready.txt").read_text()
         self.assertIn("post-sequence372-checkpoint-merge-live-reducer",trigger)
