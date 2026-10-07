@@ -145,21 +145,114 @@ class PrearmCleanupTests(unittest.TestCase):
         self.assertFalse(stale_non_schedule_blocker({**base,"path":".github/workflows/foundation-ci.yml"},exact))
 
 
-    def test_one_shot_zombie_cleanup_uses_bounded_verifier_app_authority(self):
-        from pathlib import Path
+    def test_undeletable_jobless_zombie_is_accepted_only_with_later_same_workflow_success(self):
+        class API:
+            def __init__(self):
+                self.posts=[]
+                self.deletes=[]
+            def post(self,path):
+                self.posts.append(path)
+                return 202
+            def get(self,path):
+                if "/jobs?" in path:
+                    return {"total_count":0,"jobs":[]}
+                if path.startswith("/actions/workflows/77/runs?"):
+                    return {"workflow_runs":[{
+                        "id":31,
+                        "workflow_id":77,
+                        "path":".github/workflows/portfolio-state-reducer.yml",
+                        "head_branch":"main",
+                        "status":"completed",
+                        "conclusion":"success",
+                        "created_at":"2026-10-07T17:47:17Z",
+                    }]}
+                return {
+                    "id":20,
+                    "status":"queued",
+                    "workflow_id":77,
+                    "path":".github/workflows/portfolio-state-reducer.yml",
+                    "head_branch":"main",
+                    "created_at":"2026-10-07T16:54:41Z",
+                }
+            def delete(self,path):
+                self.deletes.append(path)
+                return 403
 
-        root=Path(__file__).resolve().parents[1]
-        text=(root/".github/workflows/step23-admin-zombie-cleanup.yml").read_text(encoding="utf-8")
-        self.assertIn("uses: actions/create-github-app-token@v2",text)
-        self.assertIn('app-id: "5121826"',text)
-        self.assertIn("private-key: ${{ secrets.PORTFOLIO_VERIFIER_PRIVATE_KEY }}",text)
-        self.assertIn("permission-actions: write",text)
-        self.assertIn("GH_TOKEN: ${{ steps.cleanup-token.outputs.token }}",text)
-        self.assertNotIn("PORTFOLIO_REPAIR_PR_TOKEN",text)
-        self.assertIn('TARGET_RUN_ID: "37655516971"',text)
-        self.assertIn('EXPECTED_STALE_SHA: "18f3e3d5a9b3b8c9a3e64e118a7cd487a3551edb"',text)
-        self.assertIn('EXPECTED_PATH: ".github/workflows/portfolio-state-reducer.yml"',text)
-        self.assertIn('"authority": "PORTFOLIO_VERIFIER_GITHUB_APP"',text)
+        api=API()
+        with patch("acceptance.step23_prearm_cleanup.time.sleep",return_value=None):
+            mode=_cancel_and_wait(api,20,"stale pre-arm blocker")
+        self.assertEqual(mode,"PROVEN_INERT_JOBLESS_QUEUE:31")
+        self.assertEqual(api.deletes,["/actions/runs/20"])
+
+    def test_undeletable_jobless_zombie_without_later_success_remains_blocking(self):
+        class API:
+            def post(self,path):
+                return 202
+            def get(self,path):
+                if "/jobs?" in path:
+                    return {"total_count":0,"jobs":[]}
+                if path.startswith("/actions/workflows/77/runs?"):
+                    return {"workflow_runs":[{
+                        "id":19,
+                        "workflow_id":77,
+                        "path":".github/workflows/portfolio-state-reducer.yml",
+                        "head_branch":"main",
+                        "status":"completed",
+                        "conclusion":"success",
+                        "created_at":"2026-10-07T16:50:00Z",
+                    }]}
+                return {
+                    "id":20,
+                    "status":"queued",
+                    "workflow_id":77,
+                    "path":".github/workflows/portfolio-state-reducer.yml",
+                    "head_branch":"main",
+                    "created_at":"2026-10-07T16:54:41Z",
+                }
+            def delete(self,path):
+                return 403
+
+        with patch("acceptance.step23_prearm_cleanup.time.sleep",return_value=None):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "no later successful same-workflow run proves it inert",
+            ):
+                _cancel_and_wait(API(),20,"stale pre-arm blocker")
+
+    def test_undeletable_jobless_zombie_wrong_workflow_success_does_not_qualify(self):
+        class API:
+            def post(self,path):
+                return 202
+            def get(self,path):
+                if "/jobs?" in path:
+                    return {"total_count":0,"jobs":[]}
+                if path.startswith("/actions/workflows/77/runs?"):
+                    return {"workflow_runs":[{
+                        "id":31,
+                        "workflow_id":77,
+                        "path":".github/workflows/runtime-hourly-sync.yml",
+                        "head_branch":"main",
+                        "status":"completed",
+                        "conclusion":"success",
+                        "created_at":"2026-10-07T17:47:17Z",
+                    }]}
+                return {
+                    "id":20,
+                    "status":"queued",
+                    "workflow_id":77,
+                    "path":".github/workflows/portfolio-state-reducer.yml",
+                    "head_branch":"main",
+                    "created_at":"2026-10-07T16:54:41Z",
+                }
+            def delete(self,path):
+                return 409
+
+        with patch("acceptance.step23_prearm_cleanup.time.sleep",return_value=None):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "no later successful same-workflow run proves it inert",
+            ):
+                _cancel_and_wait(API(),20,"stale pre-arm blocker")
 
 
 if __name__=="__main__":
