@@ -18,10 +18,30 @@ class Step23PrearmPreflightTests(unittest.TestCase):
         self.assertNotIn("{github_token}",source)
         self.assertNotIn("{token}",source)
 
-    def test_quiescence_is_checked_before_each_preflight_target(self):
+    def test_preflight_uses_reducer_barriers_not_global_writer_silence(self):
         source=inspect.getsource(preflight.main)
-        self.assertGreaterEqual(source.count("wait_for_quiescence"),2)
-        self.assertIn("active_writer_blockers",inspect.getsource(preflight.wait_for_quiescence))
+        self.assertNotIn("wait_for_quiescence",source)
+        self.assertIn("predrain",source)
+        self.assertGreaterEqual(source.count("drain("),3)
+
+    def test_writer_serialization_and_reducer_independence_are_explicit(self):
+        from pathlib import Path
+        root=Path(__file__).resolve().parents[1]
+        for filename in (
+            "portfolio-autonomous-scheduler.yml","hunter-autonomous-cycle.yml",
+            "agent-heartbeat-sweep.yml","portfolio-notification-cycle.yml",
+            "command-center-pages.yml",
+        ):
+            with self.subTest(filename=filename):
+                text=(root/".github/workflows"/filename).read_text()
+                self.assertIn("group: portfolio-state-writer-v1",text)
+        runtime=(root/".github/workflows/runtime-worker.yml").read_text()
+        self.assertIn("group: portfolio-state-writer-v1",runtime)
+        watchdog=(root/".github/workflows/portfolio-cost-watchdog.yml").read_text()
+        self.assertNotIn("state_journal.emitter",watchdog)
+        reducer=(root/".github/workflows/portfolio-state-reducer.yml").read_text()
+        self.assertIn("group: portfolio-state-reducer",reducer)
+        self.assertNotIn("group: portfolio-state-writer-v1",reducer)
 
     def test_passive_delivery_events_cannot_cancel_active_preflight(self):
         from pathlib import Path
