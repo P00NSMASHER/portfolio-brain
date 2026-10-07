@@ -31,20 +31,22 @@ class Step23PrearmPreflightTests(unittest.TestCase):
         self.assertIn("predrain",source)
         self.assertGreaterEqual(source.count("drain("),3)
 
-    def test_hunter_and_command_center_get_started_reducer_barriers(self):
-        self.assertEqual(
-            preflight.LIVE_BARRIER_TARGETS,
-            {"hunter-autonomous-cycle","command-center-pages"},
-        )
-        main_source=inspect.getsource(preflight.main)
-        barrier_source=inspect.getsource(preflight.force_started_reducer_barrier)
-        wait_source=inspect.getsource(preflight.wait_for_correlated_run)
-        self.assertIn("workflow in LIVE_BARRIER_TARGETS",main_source)
-        self.assertIn("force_started_reducer_barrier",main_source)
-        self.assertIn('row.get("status") == "in_progress"',wait_source)
-        self.assertIn("on_started(run_id)",wait_source)
-        self.assertIn("drains.append(dispatch(",barrier_source)
-        self.assertIn("pending == 0",barrier_source)
+    def test_hunter_and_command_center_barrier_inside_writer_jobs(self):
+        from pathlib import Path
+        root=Path(__file__).resolve().parents[1]
+        for filename,target in (
+            ("hunter-autonomous-cycle.yml","hunter-autonomous-cycle"),
+            ("command-center-pages.yml","command-center-pages"),
+        ):
+            with self.subTest(filename=filename):
+                text=(root/".github/workflows"/filename).read_text()
+                barrier=text.index("Run pre-arm reducer barrier after writer-lane acquisition")
+                restore=text.index("Restore canonical",barrier)
+                self.assertLess(barrier,restore)
+                self.assertIn("acceptance.step23_inline_reducer_barrier",text)
+                self.assertIn(f"--target {target}",text)
+                self.assertIn("inputs.prearm_id != ''",text)
+                self.assertIn("actions: write",text)
 
     def test_writer_serialization_and_reducer_independence_are_explicit(self):
         from pathlib import Path
