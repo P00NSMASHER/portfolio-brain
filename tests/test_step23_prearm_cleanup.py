@@ -49,15 +49,21 @@ class PrearmCleanupTests(unittest.TestCase):
             ["/actions/runs/18/cancel","/actions/runs/18/force-cancel"],
         )
 
-    def test_force_cancel_must_reach_terminal_state(self):
+    def test_force_cancel_must_reach_terminal_state_when_jobs_exist(self):
         class API:
             def __init__(self):
                 self.posts=[]
+                self.deletes=[]
             def post(self,path):
                 self.posts.append(path)
                 return 202
             def get(self,path):
+                if "/jobs?" in path:
+                    return {"total_count":1,"jobs":[{"id":99}]}
                 return {"status":"queued"}
+            def delete(self,path):
+                self.deletes.append(path)
+                return 204
 
         api=API()
         with patch("acceptance.step23_prearm_cleanup.time.sleep",return_value=None):
@@ -67,6 +73,58 @@ class PrearmCleanupTests(unittest.TestCase):
             api.posts,
             ["/actions/runs/19/cancel","/actions/runs/19/force-cancel"],
         )
+        self.assertEqual(api.deletes,[])
+
+    def test_force_cancel_jobless_queued_zombie_is_deleted_and_verified_gone(self):
+        class API:
+            def __init__(self):
+                self.posts=[]
+                self.deletes=[]
+                self.requests=[]
+            def post(self,path):
+                self.posts.append(path)
+                return 202
+            def get(self,path):
+                if "/jobs?" in path:
+                    return {"total_count":0,"jobs":[]}
+                return {"status":"queued"}
+            def delete(self,path):
+                self.deletes.append(path)
+                return 204
+            def request(self,path,method="GET"):
+                self.requests.append((path,method))
+                return 404,b""
+
+        api=API()
+        with patch("acceptance.step23_prearm_cleanup.time.sleep",return_value=None):
+            mode=_cancel_and_wait(api,20,"stale pre-arm blocker")
+        self.assertEqual(mode,"DELETE_JOBLESS_QUEUE")
+        self.assertEqual(
+            api.posts,
+            ["/actions/runs/20/cancel","/actions/runs/20/force-cancel"],
+        )
+        self.assertEqual(api.deletes,["/actions/runs/20"])
+        self.assertEqual(api.requests,[("/actions/runs/20","GET")])
+
+    def test_force_cancel_never_deletes_in_progress_run_even_without_jobs(self):
+        class API:
+            def __init__(self):
+                self.deletes=[]
+            def post(self,path):
+                return 202
+            def get(self,path):
+                if "/jobs?" in path:
+                    raise AssertionError("jobs must not be queried for in-progress run")
+                return {"status":"in_progress"}
+            def delete(self,path):
+                self.deletes.append(path)
+                return 204
+
+        api=API()
+        with patch("acceptance.step23_prearm_cleanup.time.sleep",return_value=None):
+            with self.assertRaisesRegex(RuntimeError,"did not stop after force-cancel"):
+                _cancel_and_wait(api,21,"stale pre-arm blocker")
+        self.assertEqual(api.deletes,[])
 
     def test_only_superseded_non_scheduled_writer_runs_are_stale_blockers(self):
         exact="a"*40
