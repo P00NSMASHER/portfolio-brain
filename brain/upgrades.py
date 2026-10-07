@@ -17,6 +17,7 @@ from brain.adapters import NoRedirect, related_test_paths
 REPOSITORY='P00NSMASHER/portfolio-brain'
 PATH='brain/REUSE_KNOWLEDGE.json'
 VALIDATION='actions/workflows/foundation-ci.yml/dispatches'
+BRANCH=re.compile(r'factory/auto-repair-v2-knowledge-[0-9a-f]{16}')
 
 def build_knowledge(report):
     require(report['status']=='PASS', 'upgrade requires passing authoritative report')
@@ -43,14 +44,21 @@ class UpgradeAPI:
         self.opener=urllib.request.build_opener(NoRedirect())
     def request(self,path,method='GET',payload=None):
         self.requests+=1
-        require(self.requests<=9, 'UPGRADE_REQUEST_BUDGET')
+        require(self.requests<=10, 'UPGRADE_REQUEST_BUDGET')
         require(path.startswith('/repos/'+REPOSITORY+'/') and '..' not in path.split('/'), 'self upgrade scope violation')
         # Precisely bounded GitHub mutations; no arbitrary repository/URL or force update.
         if method!='GET':
             suffix=path.split(REPOSITORY+'/')[1]
             require((method=='POST' and suffix in {'git/refs','pulls',VALIDATION}) or (method=='PUT' and suffix==f'contents/{PATH}'), 'upgrade mutation forbidden')
+            require(type(payload) is dict, 'upgrade payload invalid')
+            if suffix=='git/refs':
+                require(set(payload)=={'ref','sha'} and payload['ref'].startswith('refs/heads/') and BRANCH.fullmatch(payload['ref'][11:]) and re.fullmatch('[0-9a-f]{40}',payload['sha']), 'upgrade ref forbidden')
+            if suffix==f'contents/{PATH}':
+                require(set(payload)=={'message','branch','sha','content'} and BRANCH.fullmatch(payload['branch']) and re.fullmatch('[0-9a-f]{40}',payload['sha']), 'upgrade content target forbidden')
+            if suffix=='pulls':
+                require(set(payload)=={'head','base','title','body'} and BRANCH.fullmatch(payload['head']) and payload['base']=='main' and 'AUTO_REPAIR_FINGERPRINT:' in payload['body'], 'upgrade pull target forbidden')
             if suffix==VALIDATION:
-                require(type(payload) is dict and set(payload)=={'ref'} and re.fullmatch(r'factory/auto-repair-v2-knowledge-[0-9a-f]{16}',payload['ref']), 'upgrade validation ref forbidden')
+                require(set(payload)=={'ref'} and BRANCH.fullmatch(payload['ref']), 'upgrade validation ref forbidden')
         if self.transport:return self.transport(path,method,payload)
         body=None if payload is None else json.dumps(payload).encode()
         request=urllib.request.Request('https://api.github.com'+path,data=body,method=method,headers={'Authorization':'Bearer '+self.token,'User-Agent':'PortfolioBrain-v2-protected-knowledge-upgrade','Accept':'application/vnd.github+json','Content-Type':'application/json'})
@@ -72,32 +80,53 @@ def evolve(store,source_sha, *, api=None):
     if current.get('fingerprint')==knowledge['fingerprint']:
         return {'status':'UNCHANGED','source_sha':source_sha,'authority_widened':False}
     # One proposal per week, including failed attempts. No speculative repair loop.
-    latest=store.db.execute("SELECT created_at FROM attempts WHERE operation='evolve' ORDER BY id DESC LIMIT 1").fetchone()
-    if latest and (timestamp(utcnow())-timestamp(latest[0])).total_seconds()<604800:
-        return {'status':'COOLDOWN','source_sha':source_sha,'authority_widened':False}
-    store.attempt('evolve','FAIL','PROPOSAL_STARTED',source_sha=source_sha)
+    fingerprint=knowledge['fingerprint']
+    latest=store.db.execute("SELECT * FROM attempts WHERE operation='evolve' ORDER BY id DESC LIMIT 1").fetchone()
+    recovering=False
+    if latest and (timestamp(utcnow())-timestamp(latest['created_at'])).total_seconds()<604800:
+        proposal=store.db.execute("SELECT * FROM attempts WHERE operation='evolve' AND json_extract(details,'$.fingerprint')=? ORDER BY id DESC LIMIT 1",(fingerprint,)).fetchone()
+        recovering=bool(proposal and proposal['source_sha']==source_sha and proposal['status']=='FAIL' and json.loads(proposal['details']).get('phase')=='PROPOSAL_STARTED' and (timestamp(utcnow())-timestamp(proposal['created_at'])).total_seconds()>=3600)
+        if not recovering:
+            return {'status':'COOLDOWN','source_sha':source_sha,'authority_widened':False}
+    branch='factory/auto-repair-v2-knowledge-'+fingerprint[:16]
+    store.attempt('evolve','FAIL','RECOVERY_STARTED' if recovering else 'PROPOSAL_STARTED',source_sha=source_sha,details={'fingerprint':fingerprint,'branch':branch,'phase':'RECOVERY_STARTED' if recovering else 'PROPOSAL_STARTED'})
     api=api or UpgradeAPI()
     main=api.request(f'/repos/{REPOSITORY}/branches/main')
     require(main['commit']['sha']==source_sha,'MAIN_DRIFT: upgrade source changed')
-    fingerprint=knowledge['fingerprint']
-    branch='factory/auto-repair-v2-knowledge-'+fingerprint[:16]
     pulls=api.request(f'/repos/{REPOSITORY}/pulls?state=open&head=P00NSMASHER:{branch}')
-    if pulls:
-        return {'status':'EXISTING_PR','url':pulls[0]['html_url'],'source_sha':source_sha,'authority_widened':False}
+    require(len(pulls)<=1,'upgrade PR identity ambiguous')
     old=api.request(f'/repos/{REPOSITORY}/contents/{PATH}?ref={source_sha}')
-    api.request(f'/repos/{REPOSITORY}/git/refs','POST',{'ref':'refs/heads/'+branch,'sha':source_sha})
+    try:
+        existing=api.request(f'/repos/{REPOSITORY}/branches/{branch}')
+    except BrainError as exc:
+        require(str(exc).startswith('UPGRADE_API_404'),'upgrade branch lookup failed')
+        require(not pulls,'upgrade PR lost its branch')
+        api.request(f'/repos/{REPOSITORY}/git/refs','POST',{'ref':'refs/heads/'+branch,'sha':source_sha})
+        existing={'commit':{'sha':source_sha}}
     encoded=base64.b64encode((json.dumps(knowledge,indent=2,sort_keys=True)+'\n').encode()).decode()
-    result=api.request(f'/repos/{REPOSITORY}/contents/{PATH}','PUT',{'message':'Update evidence-bound reusable code knowledge','branch':branch,'sha':old['sha'],'content':encoded})
-    head=result['commit']['sha']
+    head=existing['commit']['sha']
+    if head==source_sha:
+        require(not pulls,'upgrade PR exists before candidate content')
+        result=api.request(f'/repos/{REPOSITORY}/contents/{PATH}','PUT',{'message':'Update evidence-bound reusable code knowledge','branch':branch,'sha':old['sha'],'content':encoded})
+        head=result['commit']['sha']
+    else:
+        comparison=api.request(f'/repos/{REPOSITORY}/compare/{source_sha}...{head}')
+        require(comparison['merge_base_commit']['sha']==source_sha and [f['filename'] for f in comparison['files']]==[PATH],'upgrade recovery branch drift')
+        saved=api.request(f'/repos/{REPOSITORY}/contents/{PATH}?ref={head}')
+        require(saved.get('encoding')=='base64' and json.loads(base64.b64decode(saved['content']))==knowledge,'upgrade recovery content mismatch')
     require(re.fullmatch('[0-9a-f]{40}',head),'upgrade commit identity missing')
     body=f'''Refresh the Brain's reusable-code knowledge from independently hash-inspected public implementations and observed test paths. This does not execute source, claim production usefulness, grant rights, or claim revenue.
 
 AUTO_REPAIR_FINGERPRINT: {fingerprint}
 
 Source main: `{source_sha}`. Candidate head: `{head}`. Existing exact-head Foundation and App 5121826 remain mandatory. The trusted verifier alone may merge through repository protections; this worker never invokes merge or pushes main.'''
-    pr=api.request(f'/repos/{REPOSITORY}/pulls','POST',{'head':branch,'base':'main','title':'Brain v2: refresh evidence-bound reuse knowledge','body':body})
+    if pulls:
+        pr=pulls[0]
+        require(pr['head']['sha']==head and pr['head']['ref']==branch and pr['head']['repo']['full_name']==REPOSITORY and pr['base']['ref']=='main' and pr['user']['login']=='github-actions[bot]','upgrade existing PR identity mismatch')
+    else:
+        pr=api.request(f'/repos/{REPOSITORY}/pulls','POST',{'head':branch,'base':'main','title':'Brain v2: refresh evidence-bound reuse knowledge','body':body})
     # Token-created PR events may require approval. Explicitly dispatch the existing
     # Foundation entry point once; its exact-head independent verifier stays mandatory.
     api.request(f'/repos/{REPOSITORY}/{VALIDATION}','POST',{'ref':branch})
-    store.attempt('evolve','PASS',source_sha=source_sha,details={'pr_number':pr['number'],'head_sha':head})
+    store.attempt('evolve','PASS',source_sha=source_sha,details={'pr_number':pr['number'],'head_sha':head,'fingerprint':fingerprint,'phase':'VALIDATION_DELIVERED'})
     return {'status':'CANDIDATE_PR_CREATED','url':pr['html_url'],'head_sha':head,'source_sha':source_sha,'validation_dispatch':'DELIVERED','independent_review':'PENDING','authority_widened':False}

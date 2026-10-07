@@ -23,8 +23,13 @@ that event for validation. The unchanged independent verifier still binds and ch
 the actual head and alone merges eligible bot candidates through main protection.
 API failures expose sanitized status/endpoint evidence and leave the proposal
 unaccepted. Repository policy may still refuse bot PR creation; permissions do not
-override that policy. Failed attempts retain the weekly cooldown; no rapid retry
-or acceptance reset is implied by repairing code.
+override that policy. Failed attempts retain the weekly new-proposal cooldown.
+A recorded interrupted proposal may resume once after at least one hour, only for
+the identical evidence fingerprint and unchanged source main. Recovery verifies
+branch ancestry, the sole changed knowledge file, exact content and bot PR identity;
+it reuses the branch/PR and delivers the missing validation dispatch. A second
+failure, different evidence or main drift cannot create a rapid retry loop. Legacy
+orphan proposals without the new recovery receipt remain blocked/inert evidence.
 
 ## Local continuous process on an existing host
 
