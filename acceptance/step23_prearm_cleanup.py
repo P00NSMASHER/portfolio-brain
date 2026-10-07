@@ -30,6 +30,10 @@ BLOCKER_PATHS={
 STALE_CANCELLABLE_EVENTS={"workflow_run","push"}
 
 
+class StuckAfterForceCancel(RuntimeError):
+    """GitHub accepted force-cancel but left a stale run non-terminal."""
+
+
 def req(ok:bool,message:str)->None:
     if not ok:
         raise RuntimeError(message)
@@ -115,11 +119,36 @@ def _cancel_and_wait(api:API,run_id:int,label:str)->str:
 
     force=api.post(f"/actions/runs/{run_id}/force-cancel")
     req(force in {202,409},f"could not force-cancel {label} run {run_id}: {force}")
-    req(
-        _wait_stopped(api,run_id,label,attempts=20),
-        f"{label} run {run_id} did not stop after force-cancel",
-    )
+    if not _wait_stopped(api,run_id,label,attempts=20):
+        raise StuckAfterForceCancel(f"{label} run {run_id} did not stop after force-cancel")
     return "FORCE_CANCEL"
+
+
+def _delete_stuck_stale(api:API,row:dict[str,Any],exact_sha:str)->None:
+    """Delete only a provider-zombie stale run after cancellation was exhausted."""
+    run_id=int(row["id"])
+    current=api.get(f"/actions/runs/{run_id}")
+    req(stale_non_schedule_blocker(current,exact_sha),
+        f"stale blocker run {run_id} changed identity before deletion")
+    req(current.get("status") in {"queued","pending","waiting","requested"},
+        f"stale blocker run {run_id} is not an unstarted provider zombie")
+
+    jobs_doc=api.get(f"/actions/runs/{run_id}/jobs?per_page=100")
+    jobs=jobs_doc.get("jobs")
+    total=jobs_doc.get("total_count")
+    req(isinstance(jobs,list) and jobs==[] and total==0,
+        f"stale blocker run {run_id} has jobs and cannot be deleted")
+
+    deleted=api.delete(f"/actions/runs/{run_id}")
+    req(deleted==204,f"could not delete stale blocker run {run_id}: {deleted}")
+
+    for _ in range(5):
+        status,_=api.request(f"/actions/runs/{run_id}")
+        if status==404:
+            return
+        req(status==200,f"unexpected stale blocker verification status {status}")
+        time.sleep(1)
+    raise RuntimeError(f"stale blocker run {run_id} still exists after deletion")
 
 
 def purge(api:API,*,exact_sha:str)->dict[str,Any]:
@@ -147,6 +176,7 @@ def purge(api:API,*,exact_sha:str)->dict[str,Any]:
     ]
 
     deleted=[]
+    deleted_stale=[]
     cancelled_stale=[]
     force_cancelled=[]
     for row in leaked:
@@ -161,7 +191,12 @@ def purge(api:API,*,exact_sha:str)->dict[str,Any]:
 
     for row in stale:
         run_id=int(row["id"])
-        mode=_cancel_and_wait(api,run_id,"stale pre-arm blocker")
+        try:
+            mode=_cancel_and_wait(api,run_id,"stale pre-arm blocker")
+        except StuckAfterForceCancel:
+            _delete_stuck_stale(api,row,exact_sha)
+            deleted_stale.append(run_id)
+            continue
         if mode=="FORCE_CANCEL":
             force_cancelled.append(run_id)
         cancelled_stale.append(run_id)
@@ -169,11 +204,13 @@ def purge(api:API,*,exact_sha:str)->dict[str,Any]:
     main=api.get("/branches/main")
     req(main.get("commit",{}).get("sha")==exact_sha,"PREARM_MAIN_MOVED")
     return {
-        "schema_version":"1.2.0",
+        "schema_version":"1.3.0",
         "status":"PASS",
         "exact_main_sha":exact_sha,
         "deleted_run_ids":deleted,
         "deleted_count":len(deleted),
+        "deleted_stale_run_ids":deleted_stale,
+        "deleted_stale_count":len(deleted_stale),
         "cancelled_stale_run_ids":cancelled_stale,
         "cancelled_stale_count":len(cancelled_stale),
         "force_cancelled_run_ids":force_cancelled,
