@@ -1,4 +1,5 @@
 name: portfolio-state-reducer
+run-name: ${{ inputs.prearm_id || github.workflow }}
 
 on:
   schedule:
@@ -25,6 +26,11 @@ on:
     types: [completed]
   workflow_dispatch:
     inputs:
+      prearm_id:
+        description: "Pre-arm correlation token; does not grant acceptance credit"
+        required: false
+        type: string
+        default: ""
       initialize:
         description: "Initialize only from a reviewed, explicit checkpoint on main"
         type: boolean
