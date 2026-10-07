@@ -18,8 +18,12 @@ class PrearmCleanupTests(unittest.TestCase):
             "path":".github/workflows/runtime-hourly-sync.yml",
             "status":"in_progress","event":"workflow_dispatch",
         }
-        self.assertTrue(stale_non_schedule_blocker(base,exact))
+        self.assertFalse(stale_non_schedule_blocker(base,exact))
         self.assertTrue(stale_non_schedule_blocker({**base,"event":"workflow_run"},exact))
+        self.assertTrue(stale_non_schedule_blocker({**base,"event":"push"},exact))
+        self.assertTrue(stale_non_schedule_blocker({
+            **base,"event":"workflow_dispatch","display_title":"prearm-123-old-run"
+        },exact))
         self.assertFalse(stale_non_schedule_blocker({**base,"event":"schedule"},exact))
         self.assertFalse(stale_non_schedule_blocker({**base,"head_sha":exact},exact))
         self.assertFalse(stale_non_schedule_blocker({**base,"status":"completed"},exact))
