@@ -1,4 +1,5 @@
 name: hunter-autonomous-cycle
+run-name: ${{ inputs.prearm_id || github.workflow }}
 
 on:
   schedule:
@@ -10,6 +11,12 @@ on:
   repository_dispatch:
     types: ["portfolio_hunt"]
   workflow_dispatch:
+    inputs:
+      prearm_id:
+        description: "Pre-arm correlation token; does not grant acceptance credit"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
