@@ -13,7 +13,6 @@ from typing import Any
 import re
 
 from acceptance.step23_live_collect import pending_event_count
-from acceptance.step23_prearm_cleanup import BLOCKER_PATHS
 
 TARGETS = [
     ("portfolio-state-reducer", "portfolio-state-reducer.yml"),
@@ -82,38 +81,12 @@ def assert_main(api: API, exact_sha: str) -> None:
     req(observed == exact_sha, f"PREARM_MAIN_MOVED expected={exact_sha} observed={observed}")
 
 
-def active_writer_blockers(api: API, exact_sha: str) -> list[dict[str, Any]]:
-    doc=api.get("/actions/runs?branch=main&per_page=100")
-    rows=doc.get("workflow_runs",[])
-    req(isinstance(rows,list),"workflow run listing malformed")
-    return [
-        row for row in rows
-        if row.get("path") in BLOCKER_PATHS
-        and row.get("status")!="completed"
-        and row.get("head_branch")=="main"
-        and row.get("head_sha")==exact_sha
-        and type(row.get("id")) is int
-    ]
 
-
-def wait_for_quiescence(
-    api: API,
-    exact_sha: str,
-    *,
-    timeout_seconds: int = 900,
-    poll_seconds: float = 5.0,
-    clock=time.monotonic,
-    sleep=time.sleep,
-) -> None:
-    deadline=clock()+timeout_seconds
-    while clock()<deadline:
-        assert_main(api,exact_sha)
-        blockers=active_writer_blockers(api,exact_sha)
-        if not blockers:
-            return
-        sleep(poll_seconds)
-    raise RuntimeError("timed out waiting for current-main writer quiescence")
-
+# Producer workflows are already serialized by the shared
+# portfolio-state-writer-v1 job concurrency group. The canonical reducer runs
+# in an independent lane so it can catch up while producers are queued or
+# waiting on stale canonical state. A repository-wide "all writers idle" gate
+# therefore creates a deadlock-prone condition without adding safety.
 
 def wait_for_correlated_run(
     api: API,
@@ -237,18 +210,27 @@ def main() -> None:
     target_runs: list[dict[str, Any]] = []
     reducer_drains: list[dict[str, Any]] = []
 
-    # Let post-merge/current-main writers settle before entering the controlled
-    # preflight. Stale prior-main blockers are canceled by the cleanup step.
-    wait_for_quiescence(api,args.exact_sha)
-
     # Establish a clean canonical baseline before any non-counting producer run.
+    # Normal background producers may remain queued/running in their shared
+    # serialized writer lane; the reducer's independent lane is the safety
+    # barrier, not repository-wide silence.
     drain(
         api, exact_sha=args.exact_sha, prefix="initial", github_token=token,
         correlation_seed=orchestrator, drains=reducer_drains
     )
 
     for index, (workflow, filename) in enumerate(TARGETS, start=1):
-        wait_for_quiescence(api,args.exact_sha)
+        # Re-drain immediately before each target. This preserves a fresh
+        # canonical boundary without requiring unrelated background writers to
+        # become globally idle.
+        drain(
+            api,
+            exact_sha=args.exact_sha,
+            prefix=f"{index}-{workflow}-predrain",
+            github_token=token,
+            correlation_seed=orchestrator,
+            drains=reducer_drains,
+        )
         correlation = f"prearm-{orchestrator}-{index}-{workflow}"
         target_runs.append(dispatch(
             api,
