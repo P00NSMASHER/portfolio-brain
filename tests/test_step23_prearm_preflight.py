@@ -28,14 +28,17 @@ class Step23PrearmPreflightTests(unittest.TestCase):
         from pathlib import Path
         root=Path(__file__).resolve().parents[1]
         for filename in (
-            "runtime-hourly-sync.yml","portfolio-autonomous-scheduler.yml",
-            "hunter-autonomous-cycle.yml","agent-heartbeat-sweep.yml",
-            "portfolio-cost-watchdog.yml","portfolio-notification-cycle.yml",
+            "portfolio-autonomous-scheduler.yml","hunter-autonomous-cycle.yml",
+            "agent-heartbeat-sweep.yml","portfolio-notification-cycle.yml",
             "command-center-pages.yml",
         ):
             with self.subTest(filename=filename):
                 text=(root/".github/workflows"/filename).read_text()
                 self.assertIn("group: portfolio-state-writer-v1",text)
+        runtime=(root/".github/workflows/runtime-worker.yml").read_text()
+        self.assertIn("group: portfolio-state-writer-v1",runtime)
+        watchdog=(root/".github/workflows/portfolio-cost-watchdog.yml").read_text()
+        self.assertNotIn("state_journal.emitter",watchdog)
         reducer=(root/".github/workflows/portfolio-state-reducer.yml").read_text()
         self.assertIn("group: portfolio-state-reducer",reducer)
         self.assertNotIn("group: portfolio-state-writer-v1",reducer)
