@@ -162,5 +162,92 @@ class PrearmCleanupTests(unittest.TestCase):
         self.assertIn('"authority": "PORTFOLIO_VERIFIER_GITHUB_APP"',text)
 
 
+    def test_undeletable_exact_quarantined_ghost_requires_later_same_workflow_success(self):
+        class API:
+            def post(self,path):
+                return 202
+            def get(self,path):
+                if "/jobs?" in path:
+                    return {"total_count":0,"jobs":[]}
+                if "/artifacts?" in path:
+                    return {"total_count":0,"artifacts":[]}
+                if path=="/actions/runs?branch=main&per_page=100":
+                    return {"workflow_runs":[{
+                        "id":37661766775,
+                        "workflow_id":370374321,
+                        "path":".github/workflows/portfolio-state-reducer.yml",
+                        "head_branch":"main",
+                        "status":"completed",
+                        "conclusion":"success",
+                        "created_at":"2026-10-07T17:47:17Z",
+                    }]}
+                return {
+                    "id":37655516971,
+                    "status":"queued",
+                    "workflow_id":370374321,
+                    "path":".github/workflows/portfolio-state-reducer.yml",
+                    "head_branch":"main",
+                    "head_sha":"18f3e3d5a9b3b8c9a3e64e118a7cd487a3551edb",
+                    "event":"workflow_run",
+                    "created_at":"2026-10-07T16:54:41Z",
+                    "updated_at":"2026-10-07T16:54:41Z",
+                }
+            def delete(self,path):
+                return 403
+
+        with patch("acceptance.step23_prearm_cleanup.time.sleep",return_value=None):
+            mode=_cancel_and_wait(API(),37655516971,"stale pre-arm blocker")
+        self.assertEqual(mode,"PROVEN_INERT_QUARANTINED_QUEUE:37661766775")
+
+    def test_undeletable_unquarantined_jobless_run_remains_blocking(self):
+        class API:
+            def post(self,path):
+                return 202
+            def get(self,path):
+                if "/jobs?" in path:
+                    return {"total_count":0,"jobs":[]}
+                if "/artifacts?" in path:
+                    return {"total_count":0,"artifacts":[]}
+                return {
+                    "id":20,
+                    "status":"queued",
+                    "workflow_id":370374321,
+                    "path":".github/workflows/portfolio-state-reducer.yml",
+                    "head_branch":"main",
+                    "head_sha":"b"*40,
+                    "event":"workflow_run",
+                    "created_at":"2026-10-07T16:54:41Z",
+                    "updated_at":"2026-10-07T16:54:41Z",
+                }
+            def delete(self,path):
+                return 403
+
+        with patch("acceptance.step23_prearm_cleanup.time.sleep",return_value=None):
+            with self.assertRaisesRegex(RuntimeError,"explicitly quarantined"):
+                _cancel_and_wait(API(),20,"stale pre-arm blocker")
+
+    def test_jobless_queued_run_with_artifact_is_never_treated_as_provider_ghost(self):
+        class API:
+            def __init__(self):
+                self.deletes=[]
+            def post(self,path):
+                return 202
+            def get(self,path):
+                if "/jobs?" in path:
+                    return {"total_count":0,"jobs":[]}
+                if "/artifacts?" in path:
+                    return {"total_count":1,"artifacts":[{"id":99}]}
+                return {"status":"queued"}
+            def delete(self,path):
+                self.deletes.append(path)
+                return 204
+
+        api=API()
+        with patch("acceptance.step23_prearm_cleanup.time.sleep",return_value=None):
+            with self.assertRaisesRegex(RuntimeError,"did not stop after force-cancel"):
+                _cancel_and_wait(api,20,"stale pre-arm blocker")
+        self.assertEqual(api.deletes,[])
+
+
 if __name__=="__main__":
     unittest.main()
