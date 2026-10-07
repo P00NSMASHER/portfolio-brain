@@ -65,6 +65,14 @@ class QualificationTests(unittest.TestCase):
         self.assertFalse(result["qualified"])
         self.assertEqual(result["status"],"QUALIFICATION_TOO_LATE")
 
+
+    def test_duration_contract_refuses_non_two_hour_soak(self):
+        with self.assertRaisesRegex(RuntimeError,"DURATION_CONTRACT_DRIFT"):
+            derive_qualification(self.all_rows(),SHA,BASE,END,soak_duration_seconds=3600)
+        start=datetime(2026,10,6,7,30,tzinfo=timezone.utc)
+        with self.assertRaisesRegex(RuntimeError,"DURATION_CONTRACT_DRIFT"):
+            derive_fixed_arm(SHA,BASE,start,END,soak_duration_seconds=3600)
+
     def test_owner_fixed_arm_preserves_strict_two_hour_window(self):
         start=datetime(2026,10,6,7,30,tzinfo=timezone.utc)
         result=derive_fixed_arm(SHA,BASE,start,END)
