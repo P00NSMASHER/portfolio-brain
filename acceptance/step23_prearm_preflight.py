@@ -25,6 +25,7 @@ TARGETS = [
     ("command-center-pages", "command-center-pages.yml"),
 ]
 REDUCER = ("portfolio-state-reducer", "portfolio-state-reducer.yml")
+LIVE_BARRIER_TARGETS = {"hunter-autonomous-cycle", "command-center-pages"}
 CORRELATION = re.compile(r"^prearm-[0-9]+-[a-z0-9-]+$")
 
 
@@ -96,6 +97,7 @@ def wait_for_correlated_run(
     correlation: str,
     discovery_timeout: int = 180,
     completion_timeout: int = 1200,
+    on_started: Any = None,
 ) -> dict[str, Any]:
     encoded = urllib.parse.quote(filename, safe="")
     deadline = time.monotonic() + discovery_timeout
@@ -122,8 +124,13 @@ def wait_for_correlated_run(
 
     run_id = int(selected["id"])
     deadline = time.monotonic() + completion_timeout
+    started_barrier_ran = False
     while time.monotonic() < deadline:
         row = api.get(f"/actions/runs/{run_id}")
+        if row.get("status") == "in_progress" and on_started is not None and not started_barrier_ran:
+            on_started(run_id)
+            started_barrier_ran = True
+            row = api.get(f"/actions/runs/{run_id}")
         if row.get("status") == "completed":
             req(row.get("conclusion") == "success",
                 f"{filename} pre-arm run {run_id} concluded {row.get('conclusion')}")
@@ -141,6 +148,7 @@ def dispatch(
     filename: str,
     exact_sha: str,
     correlation: str,
+    on_started: Any = None,
 ) -> dict[str, Any]:
     req(CORRELATION.fullmatch(correlation) is not None, "unsafe pre-arm correlation id")
     assert_main(api, exact_sha)
@@ -150,7 +158,8 @@ def dispatch(
         {"ref": "main", "inputs": {"prearm_id": correlation}},
     )
     row = wait_for_correlated_run(
-        api, filename=filename, exact_sha=exact_sha, correlation=correlation
+        api, filename=filename, exact_sha=exact_sha, correlation=correlation,
+        on_started=on_started,
     )
     assert_main(api, exact_sha)
     return {
@@ -195,6 +204,35 @@ def drain(
     raise RuntimeError(f"canonical pending events did not drain after {max_rounds} reducer rounds")
 
 
+def force_started_reducer_barrier(
+    api: API,
+    *,
+    exact_sha: str,
+    prefix: str,
+    github_token: str,
+    correlation_seed: str,
+    drains: list[dict[str, Any]],
+) -> None:
+    """Run one reducer after the target has acquired the writer lane.
+
+    Hunter and command-center can sit queued long enough for state to become
+    stale after the orchestrator's ordinary pre-drain. Once either target is
+    in_progress it owns the serialized writer lane, so no producer can race a
+    fresh reducer snapshot before its canonical reads.
+    """
+    req(correlation_seed.isdigit(), "pre-arm correlation seed must be numeric")
+    correlation = f"prearm-{correlation_seed}-{prefix}-livebarrier"
+    drains.append(dispatch(
+        api,
+        workflow=REDUCER[0],
+        filename=REDUCER[1],
+        exact_sha=exact_sha,
+        correlation=correlation,
+    ))
+    pending = pending_event_count(github_token)
+    req(pending == 0, f"started reducer barrier left {pending} pending events")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--exact-sha", required=True)
@@ -234,12 +272,24 @@ def main() -> None:
             drains=reducer_drains,
         )
         correlation = f"prearm-{orchestrator}-{index}-{workflow}"
+        on_started = None
+        if workflow in LIVE_BARRIER_TARGETS:
+            def on_started(_run_id: int, *, _index=index, _workflow=workflow) -> None:
+                force_started_reducer_barrier(
+                    api,
+                    exact_sha=args.exact_sha,
+                    prefix=f"{_index}-{_workflow}",
+                    github_token=token,
+                    correlation_seed=orchestrator,
+                    drains=reducer_drains,
+                )
         target_runs.append(dispatch(
             api,
             workflow=workflow,
             filename=filename,
             exact_sha=args.exact_sha,
             correlation=correlation,
+            on_started=on_started,
         ))
         # Every producer may publish an immutable event. Reduce it before the
         # next consumer so stale-state waits cannot cascade through preflight.
