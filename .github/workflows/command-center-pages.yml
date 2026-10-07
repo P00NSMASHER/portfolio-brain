@@ -1,4 +1,5 @@
 name: command-center-pages
+run-name: ${{ inputs.prearm_id || github.workflow }}
 
 on:
   push:
@@ -27,6 +28,12 @@ on:
     types: [completed]
     branches: ["main"]
   workflow_dispatch:
+    inputs:
+      prearm_id:
+        description: "Pre-arm correlation token; does not grant acceptance credit"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
