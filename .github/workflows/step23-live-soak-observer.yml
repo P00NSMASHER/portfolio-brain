@@ -10,6 +10,7 @@ on:
       - portfolio-cost-watchdog
       - portfolio-notification-cycle
       - command-center-pages
+      - portfolio-schedule-delivery
     types: [completed]
     branches: [main]
   workflow_dispatch:
@@ -54,7 +55,7 @@ jobs:
           --exact-sha "$EXACT_SHA"
           --output step23-delivery-qualification.json
 
-      - name: Build immutable two-hour soak config
+      - name: Build immutable redundant-clock soak config
         if: ${{ steps.qualify.outputs.qualified == 'true' }}
         env:
           SOAK_SHA: ${{ steps.main.outputs.sha }}
@@ -62,17 +63,23 @@ jobs:
         run: |
           python - <<'PY'
           import json, os
+          qualification=json.load(open("step23-delivery-qualification.json",encoding="utf-8"))
+          policy=json.load(open("acceptance/FINAL_ACCEPTANCE_POLICY.json",encoding="utf-8"))["step23"]
+          if qualification.get("exact_main_sha") != os.environ["SOAK_SHA"]:
+              raise SystemExit("qualification exact-main mismatch")
+          if qualification.get("soak_duration_seconds") != policy["max_soak_duration_seconds"]:
+              raise SystemExit("qualification/policy soak duration mismatch")
+          canary=qualification.get("native_scheduler_canary")
+          if not isinstance(canary,dict) or not canary.get("run_id"):
+              raise SystemExit("native scheduler canary missing")
           config={
             "exact_main_sha":os.environ["SOAK_SHA"],
             "soak_start":os.environ["SOAK_START"],
-            "required_workflows":[
-              "portfolio-state-reducer","runtime-hourly-sync","portfolio-autonomous-scheduler",
-              "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
-              "portfolio-notification-cycle","command-center-pages",
-            ],
-            "required_handler_types":["REPAIR","TEST","VERIFICATION"],
-            "required_successes_per_workflow":2,
-            "max_soak_duration_seconds":7200,
+            "native_scheduler_canary":canary,
+            "required_workflows":policy["required_workflows"],
+            "required_handler_types":policy["required_handler_types"],
+            "required_successes_by_workflow":policy["min_successful_cycles_by_workflow"],
+            "max_soak_duration_seconds":policy["max_soak_duration_seconds"],
             "poll_seconds":60,
             "max_resets":5,
           }
@@ -86,12 +93,14 @@ jobs:
           SOAK_START: ${{ steps.qualify.outputs.soak_start }}
         run: |
           python - <<'PY' >> "$GITHUB_OUTPUT"
-          import os
+          import json, os
           from datetime import datetime, timezone, timedelta
           start=datetime.fromisoformat(os.environ["SOAK_START"].replace("Z","+00:00"))
+          cfg=json.load(open("step23-soak-config.json",encoding="utf-8"))
+          duration=timedelta(seconds=int(cfg["max_soak_duration_seconds"]))
           now=datetime.now(timezone.utc)
-          print("started="+("true" if start <= now < start+timedelta(hours=2) else "false"))
-          print("expired="+("true" if now >= start+timedelta(hours=2) else "false"))
+          print("started="+("true" if start <= now < start+duration else "false"))
+          print("expired="+("true" if now >= start+duration else "false"))
           PY
 
       - name: Run strict point observation
