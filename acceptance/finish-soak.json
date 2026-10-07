@@ -3,7 +3,7 @@
   "status": "PREPARING",
   "source_sha": null,
   "candidate_pr": 647,
-  "candidate_head": "7f6c38d6ceb1cb74b5f21328e8e4e5a3e86024fd",
+  "candidate_head": "0e48ebbb70d1997e3eca648330202e7315148b73",
   "authorization": {
     "user_instruction": "Finish it",
     "received_at": "2026-10-07T23:36:57Z",
@@ -34,7 +34,8 @@
   },
   "known_readiness_gaps": [
     "No brain-cycle-v2 scheduled event has yet been observed; push-triggered successes do not prove scheduling",
-    "Live knowledge upgrade merge remains not tested; failed attempt's weekly cooldown preserved"
+    "Live knowledge upgrade merge remains not tested; failed attempt's weekly cooldown preserved",
+    "PR647 exact final-head protected checks/review must pass before integration; live upgrade remains not tested"
   ],
   "external_orphan": {
     "run_id": 37655516971,
