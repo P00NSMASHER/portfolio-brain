@@ -159,6 +159,7 @@ class DeliveryTests(unittest.TestCase):
         self.assertNotIn('actions: write', before_clock)
         self.assertIn('workflow_run:', before_clock)
         self.assertIn('7,17,27,37,47,57 * * * *', before_clock)
+        self.assertIn('group: portfolio-schedule-delivery-${{ github.event_name }}', delivery_text)
         self.assertIn('actions: write', clock)
         self.assertIn('operations.schedule_clock', clock)
         self.assertIn("github.event.workflow_run.event == 'schedule'", clock)
