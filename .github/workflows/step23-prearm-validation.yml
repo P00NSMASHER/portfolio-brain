@@ -44,6 +44,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Purge any pre-arm run with credential-like correlation
+        run: >-
+          python -m acceptance.step23_prearm_cleanup
+          --output acceptance/out/step23-prearm-secret-cleanup.json
+
       - name: Validate static pre-arm contract before any workload dispatch
         run: >-
           python -m acceptance.step23_prearm_doctor
