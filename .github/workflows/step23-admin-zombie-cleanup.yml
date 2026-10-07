@@ -19,22 +19,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     env:
-      GH_TOKEN: ${{ secrets.PORTFOLIO_REPAIR_PR_TOKEN }}
       TARGET_RUN_ID: "37655516971"
       EXPECTED_STALE_SHA: "18f3e3d5a9b3b8c9a3e64e118a7cd487a3551edb"
       EXPECTED_PATH: ".github/workflows/portfolio-state-reducer.yml"
     steps:
-      - name: Require separately authorized repair credential
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "${GH_TOKEN}" || {
-            echo "::error title=Missing repair credential::PORTFOLIO_REPAIR_PR_TOKEN is not available."
-            exit 1
-          }
+      - name: Mint short-lived independent verifier App token
+        id: verifier-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: "5121826"
+          private-key: ${{ secrets.PORTFOLIO_VERIFIER_PRIVATE_KEY }}
+          owner: P00NSMASHER
+          repositories: portfolio-brain
 
       - name: Delete exact jobless queued provider zombie
         shell: bash
+        env:
+          GH_TOKEN: ${{ steps.verifier-token.outputs.token }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -117,7 +118,7 @@ jobs:
               "delete_status": 204,
               "post_delete_status": 404,
               "executed_on_main_sha": os.environ["GITHUB_SHA"],
-              "authority": "PORTFOLIO_REPAIR_PR_TOKEN",
+              "authority": "PORTFOLIO_VERIFIER_APP_TOKEN",
               "one_shot": True,
           }
           with open("operations/out/step23-admin-zombie-cleanup.json", "w", encoding="utf-8") as fh:
