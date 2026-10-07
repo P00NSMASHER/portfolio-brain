@@ -383,6 +383,7 @@ class FinalAcceptanceContractTests(unittest.TestCase):
         receipt["runs"].append({
             "workflow": "portfolio-state-reducer",
             "event": "schedule",
+            "transport_binding": {"kind": "NATIVE_SCHEDULE"},
             "classification": "CANCELLED_COALESCED",
             "classification_reason": "CONCURRENCY_COALESCED",
             "conclusion": "cancelled",
@@ -400,6 +401,7 @@ class FinalAcceptanceContractTests(unittest.TestCase):
         receipt["runs"].append({
             "workflow": "portfolio-state-reducer",
             "event": "schedule",
+            "transport_binding": {"kind": "NATIVE_SCHEDULE"},
             "classification": "CANCELLED_COALESCED",
             "classification_reason": "CONCURRENCY_COALESCED",
             "conclusion": "failure",
@@ -418,6 +420,7 @@ class FinalAcceptanceContractTests(unittest.TestCase):
         receipt["runs"].append({
             "workflow": "portfolio-state-reducer",
             "event": "schedule",
+            "transport_binding": {"kind": "NATIVE_SCHEDULE"},
             "classification": "CANCELLED_COALESCED",
             "classification_reason": "CONCURRENCY_COALESCED",
             "conclusion": "cancelled",
@@ -436,6 +439,7 @@ class FinalAcceptanceContractTests(unittest.TestCase):
         receipt["runs"].append({
             "workflow": "portfolio-state-reducer",
             "event": "schedule",
+            "transport_binding": {"kind": "NATIVE_SCHEDULE"},
             "classification": "CANCELLED_COALESCED",
             "classification_reason": "CONCURRENCY_COALESCED",
             "conclusion": "cancelled",
@@ -452,10 +456,45 @@ class FinalAcceptanceContractTests(unittest.TestCase):
         with self.assertRaisesRegex(FinalAcceptanceError, "another workflow"):
             validate_step23(bind_receipt(receipt))
 
-    def test_step23_rejects_run_completed_after_one_hour_deadline(self):
+    def test_step23_rejects_run_completed_after_soak_deadline(self):
         receipt = step23()
-        receipt["runs"][0]["completed_at"] = "2026-09-30T16:00:01Z"
+        receipt["runs"][0]["completed_at"] = "2026-09-30T21:00:01Z"
         with self.assertRaisesRegex(FinalAcceptanceError, "outside the configured soak window"):
+            validate_step23(bind_receipt(receipt))
+
+    def test_step23_accepts_clock_bound_workflow_dispatch(self):
+        receipt = step23()
+        row = next(r for r in receipt["runs"] if r["workflow"] == "runtime-hourly-sync")
+        row["event"] = "workflow_dispatch"
+        row["transport_binding"] = {
+            "kind": "REDUNDANT_CLOCK",
+            "clock_run_id": 50,
+            "clock_artifact_hash": H,
+            "clock_source_workflow": "portfolio-schedule-delivery",
+        }
+        receipt["clock_receipts"][0]["bound_targets"].append({
+            "workflow": "runtime-hourly-sync", "target_run_id": row["run_id"],
+        })
+        validate_step23(bind_receipt(receipt))
+
+    def test_step23_rejects_unbound_manual_workflow_dispatch(self):
+        receipt = step23()
+        row = next(r for r in receipt["runs"] if r["workflow"] == "runtime-hourly-sync")
+        row["event"] = "workflow_dispatch"
+        row["transport_binding"] = {
+            "kind": "REDUNDANT_CLOCK",
+            "clock_run_id": 50,
+            "clock_artifact_hash": H,
+            "clock_source_workflow": "portfolio-schedule-delivery",
+        }
+        with self.assertRaisesRegex(FinalAcceptanceError, "not listed in its clock receipt"):
+            validate_step23(bind_receipt(receipt))
+
+    def test_step23_rejects_daemon_tick_as_native_scheduler_canary(self):
+        receipt = step23()
+        receipt["native_scheduler_canary"]["workflow"] = "portfolio-schedule-clock-tick"
+        receipt["native_scheduler_canary"]["event"] = "workflow_dispatch"
+        with self.assertRaisesRegex(FinalAcceptanceError, "not a genuine schedule run"):
             validate_step23(bind_receipt(receipt))
 
     def test_step23_rejects_run_from_other_main(self):
@@ -679,6 +718,7 @@ class FinalAcceptanceContractTests(unittest.TestCase):
         receipt["runs"].append({
             "workflow": "portfolio-state-reducer",
             "event": "schedule",
+            "transport_binding": {"kind": "NATIVE_SCHEDULE"},
             "classification": "CANCELLED_COALESCED",
             "classification_reason": "CONCURRENCY_COALESCED",
             "conclusion": "cancelled",
