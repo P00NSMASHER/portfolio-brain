@@ -69,6 +69,10 @@
     "portfolio-independent-verifier": {
       "trigger": "workflow_run:foundation-ci-success",
       "purpose": "separately credentialed exact-head regression verifier publishing portfolio-phase1-gate from trusted main controls"
+    },
+    "step23-prearm-preflight": {
+      "trigger": "push:main(trigger-file) + workflow_dispatch",
+      "purpose": "non-counting exact-main Step 23 readiness preflight with strict static contract checks and workload-dispatch evidence"
     }
   },
   "reusable_nonrecurring_workflows": {
