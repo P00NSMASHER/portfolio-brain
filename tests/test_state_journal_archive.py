@@ -13,7 +13,7 @@ from state_journal.archive import (
 )
 from state_journal.github_reducer import reduce_from_provider
 from state_journal.production_reader import _pending_events
-from state_journal.checkpoint_archive import archive_due
+from state_journal.checkpoint_archive import archive_due, _latest_attempt_snapshot_artifact
 from state_journal.reducer import checkpoint, make_snapshot, set_authority
 
 
@@ -62,6 +62,37 @@ class ArchiveLifecycleTests(unittest.TestCase):
             (root / "state_journal/CHECKPOINT.json.gz").write_bytes(checkpoint_raw)
             loaded = load_active_manifest(root)
             self.assertEqual(loaded["manifest_hash"], manifest["manifest_hash"])
+
+    def test_latest_attempt_snapshot_selects_newest_snapshot_before_current_receipt(self):
+        run = {"id": 55, "run_attempt": 3}
+        rows = [
+            {"id": 101, "name": "portfolio-canonical-shadow-state", "expired": False, "created_at": "2026-10-07T06:27:17Z"},
+            {"id": 102, "name": "portfolio-state-reducer-receipt-55-1", "expired": False, "created_at": "2026-10-07T06:27:18Z"},
+            {"id": 201, "name": "portfolio-canonical-shadow-state", "expired": False, "created_at": "2026-10-07T06:35:23Z"},
+            {"id": 202, "name": "portfolio-state-reducer-receipt-55-2", "expired": False, "created_at": "2026-10-07T06:35:24Z"},
+            {"id": 301, "name": "portfolio-canonical-shadow-state", "expired": False, "created_at": "2026-10-07T06:39:50Z"},
+            {"id": 302, "name": "portfolio-state-reducer-receipt-55-3", "expired": False, "created_at": "2026-10-07T06:39:51Z"},
+        ]
+        self.assertEqual(_latest_attempt_snapshot_artifact(run, rows)["id"], 301)
+
+    def test_latest_attempt_snapshot_requires_current_attempt_receipt(self):
+        run = {"id": 55, "run_attempt": 3}
+        rows = [
+            {"id": 101, "name": "portfolio-canonical-shadow-state", "expired": False, "created_at": "2026-10-07T06:27:17Z"},
+            {"id": 102, "name": "portfolio-state-reducer-receipt-55-2", "expired": False, "created_at": "2026-10-07T06:27:18Z"},
+        ]
+        with self.assertRaisesRegex(Exception, "Latest reducer attempt receipt missing or ambiguous"):
+            _latest_attempt_snapshot_artifact(run, rows)
+
+    def test_latest_attempt_snapshot_rejects_snapshot_after_receipt(self):
+        run = {"id": 55, "run_attempt": 3}
+        rows = [
+            {"id": 301, "name": "portfolio-canonical-shadow-state", "expired": False, "created_at": "2026-10-07T06:39:50Z"},
+            {"id": 302, "name": "portfolio-state-reducer-receipt-55-3", "expired": False, "created_at": "2026-10-07T06:39:51Z"},
+            {"id": 303, "name": "portfolio-canonical-shadow-state", "expired": False, "created_at": "2026-10-07T06:39:52Z"},
+        ]
+        with self.assertRaisesRegex(Exception, "Reducer snapshot appeared after latest attempt receipt"):
+            _latest_attempt_snapshot_artifact(run, rows)
 
     def test_archive_high_water_precedes_hard_event_and_byte_limits(self):
         self.assertFalse(archive_due(69, 699, max_events=100, max_bytes=1000))
