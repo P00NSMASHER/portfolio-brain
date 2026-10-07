@@ -143,8 +143,12 @@ class DeliveryTests(unittest.TestCase):
     def test_fixed_arm_control_and_workflow_boundaries(self):
         control = json.loads((ROOT/'operations/STEP23_CONTROL.json').read_text())
         window = json.loads((ROOT/'operations/STEP23_DELIVERY_WINDOW.json').read_text())
-        self.assertEqual(control['status'], 'CANARY_REQUIRED')
-        self.assertIsNone(control['next_soak_start'])
+        self.assertEqual(control['status'], 'REDUNDANT_CLOCK_PREQUALIFYING')
+        self.assertEqual(control['qualification_method'], 'ONE_NATIVE_SCHEDULE_THEN_REDUNDANT_CLOCK')
+        self.assertEqual(control['registration_delay_minutes'], 5)
+        self.assertEqual(control['start_delay_minutes'], 30)
+        self.assertEqual(control['qualification_horizon_hours'], 24)
+        self.assertEqual(control['soak_duration_seconds'], 25200)
         self.assertFalse(control['acceptance_complete'])
         for name in d.CORE:
             text = (ROOT/f'.github/workflows/{name}.yml').read_text()
