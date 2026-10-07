@@ -34,7 +34,7 @@ jobs:
     if: ${{ vars.PORTFOLIO_NOTIFICATION_DISABLED != 'true' }}
     runs-on: ubuntu-latest
     # Five-minute canonical catch-up + two-minute work + one-minute finalization.
-    timeout-minutes: ${{ inputs.prearm_id != '' && 20 || 8 }}
+    timeout-minutes: 8
     env:
       PORTFOLIO_NOTIFICATION_DISABLED: ${{ vars.PORTFOLIO_NOTIFICATION_DISABLED }}
       GITHUB_TOKEN: ${{ github.token }}
