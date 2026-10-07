@@ -14,8 +14,8 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: step23-prearm-validation
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' && 'step23-prearm-validation' || format('step23-prearm-validation-passive-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' }}
 
 jobs:
   prearm:
