@@ -1,4 +1,5 @@
 """Remove non-counting pre-arm workflow runs whose title captured credential material."""
+# Guard marker: undeletable stale provider zombies remain blocking; no inert-provider exception, 2026-10-07.
 # Retrigger marker: post-#629 reducer-zombie cleanup exact-main pre-arm, 2026-10-07.
 # Retrigger marker: steady-barrier liveness repair verified; fresh exact-main pre-arm, 2026-10-07.
 # Retrigger marker: reducer-liveness repair exact-main pre-arm, 2026-10-07.
@@ -10,11 +11,8 @@ import os
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-
-from state_journal.provider_quarantine import require_quarantined_reducer_identity
 
 SECRET_MARKERS=("ghs_","gho_","ghu_","ghr_","github_pat_")
 BLOCKER_PATHS={
@@ -111,48 +109,8 @@ def _wait_stopped(api:API,run_id:int,label:str,*,attempts:int)->bool:
     return False
 
 
-def _provider_time(value:Any,label:str)->datetime:
-    req(isinstance(value,str) and value,label+" timestamp missing")
-    try:
-        parsed=datetime.fromisoformat(value.replace("Z","+00:00"))
-    except ValueError as exc:
-        raise RuntimeError(label+" timestamp malformed") from exc
-    req(parsed.tzinfo is not None,label+" timestamp lacks timezone")
-    return parsed.astimezone(timezone.utc)
-
-
-def _later_success_proves_zombie_inert(api:API,current:dict[str,Any],label:str)->int|None:
-    """Return a later same-workflow success proving the queued record holds no lane."""
-    run_id=current.get("id")
-    workflow_id=current.get("workflow_id")
-    path=current.get("path")
-    req(type(run_id) is int and type(workflow_id) is int and isinstance(path,str) and path,
-        label+" queued zombie identity malformed")
-    created=_provider_time(current.get("created_at"),label+" queued zombie")
-    doc=api.get(f"/actions/workflows/{workflow_id}/runs?branch=main&per_page=100")
-    rows=doc.get("workflow_runs",[])
-    req(isinstance(rows,list),"workflow run listing malformed")
-    candidates=[]
-    for row in rows:
-        if (
-            type(row.get("id")) is int
-            and row["id"]!=run_id
-            and row.get("workflow_id")==workflow_id
-            and row.get("path")==path
-            and row.get("head_branch")=="main"
-            and row.get("status")=="completed"
-            and row.get("conclusion")=="success"
-            and _provider_time(row.get("created_at"),"successor run")>created
-        ):
-            candidates.append(row)
-    if not candidates:
-        return None
-    candidates.sort(key=lambda row:(_provider_time(row["created_at"],"successor run"),row["id"]))
-    return int(candidates[0]["id"])
-
-
 def _delete_jobless_queued_zombie(api:API,run_id:int,label:str)->str|None:
-    """Resolve only a provider-stuck queued run that has never received a job."""
+    """Delete only a provider-stuck queued run with no jobs or artifacts."""
     current=api.get(f"/actions/runs/{run_id}")
     if current.get("status")!="queued":
         return None
@@ -172,19 +130,10 @@ def _delete_jobless_queued_zombie(api:API,run_id:int,label:str)->str|None:
     if artifact_total!=0 or artifact_rows:
         return None
     deleted=api.delete(f"/actions/runs/{run_id}")
-    if deleted==204:
-        status,_=api.request(f"/actions/runs/{run_id}")
-        req(status==404,f"{label} queued zombie run {run_id} remained visible after delete")
-        return "DELETE_JOBLESS_QUEUE"
-    if deleted in {403,409}:
-        require_quarantined_reducer_identity(current)
-        successor=_later_success_proves_zombie_inert(api,current,label)
-        req(successor is not None,
-            f"could not delete {label} queued zombie run {run_id}: {deleted}; "
-            "no later successful same-workflow run proves it inert")
-        return f"PROVEN_INERT_QUARANTINED_QUEUE:{successor}"
-    raise RuntimeError(f"could not delete {label} queued zombie run {run_id}: {deleted}")
-
+    req(deleted==204,f"could not delete {label} queued zombie run {run_id}: {deleted}")
+    status,_=api.request(f"/actions/runs/{run_id}")
+    req(status==404,f"{label} queued zombie run {run_id} remained visible after delete")
+    return "DELETE_JOBLESS_QUEUE"
 
 def _cancel_and_wait(api:API,run_id:int,label:str)->str:
     cancel=api.post(f"/actions/runs/{run_id}/cancel")
@@ -230,7 +179,6 @@ def purge(api:API,*,exact_sha:str)->dict[str,Any]:
     cancelled_stale=[]
     force_cancelled=[]
     deleted_stale=[]
-    proven_inert_stale=[]
     for row in leaked:
         run_id=int(row["id"])
         if row.get("status")!="completed":
@@ -248,18 +196,12 @@ def purge(api:API,*,exact_sha:str)->dict[str,Any]:
             force_cancelled.append(run_id)
         elif mode=="DELETE_JOBLESS_QUEUE":
             deleted_stale.append(run_id)
-        elif mode.startswith("PROVEN_INERT_QUARANTINED_QUEUE:"):
-            evidence_run_id=int(mode.rsplit(":",1)[1])
-            proven_inert_stale.append({
-                "run_id":run_id,
-                "evidence_run_id":evidence_run_id,
-            })
         cancelled_stale.append(run_id)
 
     main=api.get("/branches/main")
     req(main.get("commit",{}).get("sha")==exact_sha,"PREARM_MAIN_MOVED")
     return {
-        "schema_version":"1.4.0",
+        "schema_version":"1.3.0",
         "status":"PASS",
         "exact_main_sha":exact_sha,
         "deleted_run_ids":deleted,
@@ -270,9 +212,6 @@ def purge(api:API,*,exact_sha:str)->dict[str,Any]:
         "force_cancelled_count":len(force_cancelled),
         "deleted_stale_run_ids":deleted_stale,
         "deleted_stale_count":len(deleted_stale),
-        "proven_inert_stale_run_ids":[row["run_id"] for row in proven_inert_stale],
-        "proven_inert_stale_count":len(proven_inert_stale),
-        "proven_inert_stale_evidence":proven_inert_stale,
         "api_requests":api.requests,
     }
 
