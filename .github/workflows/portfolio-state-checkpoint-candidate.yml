@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: "19 * * * *"
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Force a protected checkpoint/archive recovery even below normal high-water"
+        required: false
+        type: boolean
+        default: false
   push:
     branches: ["main"]
     paths:
@@ -65,6 +71,7 @@ jobs:
         id: trigger
         env:
           EVENT_NAME: ${{ github.event_name }}
+          MANUAL_FORCE: ${{ inputs.force || false }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -72,8 +79,9 @@ jobs:
           import os
           from pathlib import Path
 
-          required = os.environ["EVENT_NAME"] != "workflow_run"
-          force = False
+          event_name = os.environ["EVENT_NAME"]
+          required = event_name != "workflow_run"
+          force = event_name == "push" or os.environ.get("MANUAL_FORCE", "false").lower() == "true"
           if not required:
               expected_reason = "Journal capacity exceeded; do not drop evidence"
               receipts = sorted(Path("state_journal/out/triggering-reducer").rglob("receipt.json"))
