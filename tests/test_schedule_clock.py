@@ -1,6 +1,7 @@
 import unittest
 from datetime import datetime,timezone
-from operations.schedule_clock import ClockError,daemon_identity,due,execute
+from pathlib import Path
+from operations.schedule_clock import ClockError,daemon_identity,due,execute,liveness_probe
 
 MAIN="a"*40
 SOURCE={"id":1,"name":"verified-feedback-bootstrap","path":".github/workflows/verified-feedback-bootstrap.yml",
@@ -172,6 +173,33 @@ class ScheduleClockTests(unittest.TestCase):
   self.assertEqual(result["actions"][0]["action"],"DISPATCH_BUDGET_EXHAUSTED")
   posts=[call for call in api.calls if call[1]=="POST"]
   self.assertEqual(posts,[("/actions/workflows/portfolio-state-reducer.yml/dispatches","POST",{"ref":"main"})])
+ def test_liveness_probe_wakes_only_reducer_and_never_product_workloads(self):
+  reducers=[{
+    "id":700,"head_branch":"main","head_sha":MAIN,"status":"completed","conclusion":"success",
+    "created_at":"2026-10-06T16:00:00Z","updated_at":"2026-10-06T16:00:30Z",
+  }]
+  producers={"runtime-hourly-sync.yml":[{
+    "id":44,"head_branch":"main","head_sha":MAIN,"status":"completed","conclusion":"success",
+    "updated_at":"2026-10-06T16:05:00Z",
+  }]}
+  api=API(reducer_runs=reducers,producer_runs=producers)
+  result=liveness_probe(api,MAIN)
+  self.assertEqual(result["reducer_wake"]["action"],"REDUCER_WAKE_REQUESTED")
+  self.assertEqual(result["actions"],[])
+  posts=[call for call in api.calls if call[1]=="POST"]
+  self.assertEqual(posts,[("/actions/workflows/portfolio-state-reducer.yml/dispatches","POST",{"ref":"main"})])
+  self.assertFalse(result["authority_granted"])
+
+ def test_daemon_polls_reducer_liveness_faster_than_reader_timeout(self):
+  root=Path(__file__).resolve().parents[1]
+  text=(root/".github/workflows/portfolio-schedule-clock-daemon.yml").read_text()
+  self.assertIn("--liveness-only",text)
+  self.assertIn("--exact-sha \"$GITHUB_SHA\"",text)
+  self.assertIn("sleep 60",text)
+  self.assertIn("NEXT_TICK=$(( ((NOW / 600) + 1) * 600 ))",text)
+  reader=(root/"state_journal/production_reader.py").read_text()
+  self.assertIn("timeout_seconds: int = 300",reader)
+
  def test_wrong_source_event_fails_closed(self):
   with self.assertRaisesRegex(ClockError,"native schedule"):
    execute(API(),POLICY,{**SOURCE,"event":"workflow_dispatch"},MAIN)
