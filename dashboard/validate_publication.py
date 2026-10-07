@@ -144,7 +144,7 @@ def validate_publication() -> dict[str, object]:
     require("Operational Telemetry" in html_text and "History & Trends" in html_text, "public telemetry/trends panels missing")
     require("Commercial Evidence" in html_text and "Retired FreightRecovery Baseline" in html_text, "public commercial provenance UI missing")
     require("Observed gateway threads" in html_text and "Human-reply threads in scope" in html_text, "public scoped commercial evidence UI missing")
-    require("GMAIL_SENT_18_FREIGHTRECOVERY_CAMPAIGN_THREADS_THREE_EXACT_SUBJECT_FAMILIES" in html_text, "public commercial coverage scope missing")
+    require("freightrecovery-sent-campaign-threads-v2" in html_text and "FREIGHTRECOVERY_CAMPAIGN_THREADS_THREE_EXACT_SUBJECT_FAMILIES" in html_text, "public commercial coverage scope missing")
     require("Live checkout sessions</td>" not in html_text and "Live payment intents</td>" not in html_text, "retired commercial baseline labeled live")
     require("Hunter Proposal Inbox" in html_text, "public Hunter proposal inbox panel missing")
     require(snapshot["hunter_proposals"]["authority_class"]=="OBSERVE","public Hunter proposal inbox widened authority")
