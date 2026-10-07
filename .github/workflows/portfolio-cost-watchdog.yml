@@ -36,24 +36,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  scheduler_canary:
-    if: ${{ github.event_name == 'schedule' && github.event.schedule == '35 16 6 10 *' }}
-    permissions:
-      contents: read
-      actions: read
-    runs-on: ubuntu-latest
-    steps:
-      - name: Prove native scheduled delivery without portfolio work
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$GITHUB_EVENT_NAME" = "schedule"
-          test "$GITHUB_REF" = "refs/heads/main"
-          printf 'scheduler_canary workflow=portfolio-cost-watchdog event=%s sha=%s schedule=%s\n' \
-            "$GITHUB_EVENT_NAME" "$GITHUB_SHA" '35 16 6 10 *'
-
   enforce:
-    if: ${{ (github.event_name != 'schedule' || github.event.schedule != '35 16 6 10 *') }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
