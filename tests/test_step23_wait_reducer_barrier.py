@@ -52,5 +52,52 @@ class Step23WaitReducerBarrierTests(unittest.TestCase):
         self.assertIn("types: [in_progress, completed]",reducer)
 
 
+    def test_steady_fallback_accepts_only_new_exact_main_reducer_success(self):
+        exact="a"*40
+        old={
+            "id":10,"run_attempt":1,"status":"completed","conclusion":"success",
+            "head_branch":"main","head_sha":exact,"updated_at":"2026-10-07T16:00:00Z",
+        }
+        baseline=barrier.reducer_success_keys([old],exact)
+        self.assertIsNone(barrier.fresh_reducer_success([old],exact,baseline))
+        new={
+            "id":11,"run_attempt":1,"status":"completed","conclusion":"success",
+            "head_branch":"main","head_sha":exact,"updated_at":"2026-10-07T16:01:00Z",
+        }
+        self.assertEqual(
+            barrier.fresh_reducer_success([new,old],exact,baseline)["id"],
+            11,
+        )
+
+    def test_reducer_that_was_in_progress_at_entry_becomes_fresh_on_success(self):
+        exact="a"*40
+        running={
+            "id":12,"run_attempt":1,"status":"in_progress","conclusion":None,
+            "head_branch":"main","head_sha":exact,"updated_at":"2026-10-07T16:00:00Z",
+        }
+        baseline=barrier.reducer_success_keys([running],exact)
+        self.assertEqual(baseline,set())
+        completed={**running,"status":"completed","conclusion":"success","updated_at":"2026-10-07T16:02:00Z"}
+        self.assertEqual(
+            barrier.fresh_reducer_success([completed],exact,baseline)["id"],
+            12,
+        )
+
+    def test_fresh_reducer_wrong_head_fails_closed(self):
+        exact="a"*40
+        wrong={
+            "id":13,"run_attempt":1,"status":"completed","conclusion":"success",
+            "head_branch":"main","head_sha":"b"*40,"updated_at":"2026-10-07T16:03:00Z",
+        }
+        with self.assertRaisesRegex(RuntimeError,"identity drifted"):
+            barrier.fresh_reducer_success([wrong],exact,set())
+
+    def test_prearm_never_uses_fresh_reducer_fallback(self):
+        source=inspect.getsource(barrier.main).replace(" ","")
+        self.assertIn('ifbarrier_kind=="STEADY_STATE":',source)
+        self.assertIn('"FRESH_REDUCER_FALLBACK"iffallback_usedelse"CORRELATED"',source)
+        self.assertNotIn('barrier_kind=="PREARM":\n            fresh=',inspect.getsource(barrier.main))
+
+
 if __name__=="__main__":
     unittest.main()
