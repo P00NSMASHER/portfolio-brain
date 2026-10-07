@@ -102,6 +102,16 @@ class ProductTests(unittest.TestCase):
   self.assertEqual(candidate['path'],'src/invoice.py')
   self.assertEqual(candidate['test_paths'],['api.test.js'])
 
+ def test_report_does_not_recommend_historical_test_file_candidates(self):
+  self.seed()
+  candidate={'repository':'example/audit','head_sha':SHA,'path':'api.test.js','blob_sha':'b'*40,'code_sha256':'c'*64,'bytes':50,'test_paths':['api.test.js'],'license':'UNKNOWN','source_ref':f'https://github.com/example/audit/blob/{SHA}/api.test.js','target':'freight-recovery','query':'invoice audit','matched_terms':['invoice','audit']}
+  self.store.submit([event('candidate','example/audit:api.test.js',candidate,SHA,now=NOW)],now=NOW)
+  self.store.drain()
+  report=self.store.report(SHA,now=NOW)
+  self.assertEqual(report['reuse_candidates'],[])
+  self.assertEqual(report['business_opportunities'],[])
+  self.assertEqual(report['learning']['facts'],2)
+
  def test_malformed_or_mismatched_blob_rejected(self):
   api=GitHub(transport=lambda _: {'full_name':'example/repo','private':True,'default_branch':'main'})
   with self.assertRaises(BrainError):api.observe('example/repo')
