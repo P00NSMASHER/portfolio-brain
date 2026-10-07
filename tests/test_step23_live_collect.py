@@ -51,7 +51,7 @@ class ScheduledSoakObserverTests(unittest.TestCase):
         at = datetime(2026, 10, 4, tzinfo=timezone.utc)
         gh = FakeGH({1: [run_row(1, at)]}, drift=True)
         with self.assertRaisesRegex(RuntimeError, "changed during pagination"):
-            stable_scheduled_runs(gh, {"portfolio-state-reducer"}, "a"*40, at-timedelta(days=1))
+            stable_scheduled_runs(gh, {"portfolio-state-reducer"}, "a"*40, at-timedelta(days=1), max_attempts=1)
 
     def test_page_bound_is_blocking(self):
         at = datetime(2026, 10, 4, tzinfo=timezone.utc)
