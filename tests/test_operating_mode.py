@@ -95,8 +95,10 @@ class OperatingModeTests(unittest.TestCase):
         expected["portfolio-schedule-delivery"]=["7,17,27,37,47,57 * * * *"]
         self.assertEqual(actual,expected)
         control=json.loads((ROOT/"operations/STEP23_CONTROL.json").read_text())
-        self.assertEqual(control["status"],"CANARY_REQUIRED")
-        self.assertIsNone(control["next_soak_start"])
+        self.assertEqual(control["status"],"REDUNDANT_CLOCK_PREQUALIFYING")
+        self.assertEqual(control["qualification_method"],"ONE_NATIVE_SCHEDULE_THEN_REDUNDANT_CLOCK")
+        self.assertEqual(control["qualification_horizon_hours"],24)
+        self.assertEqual(control["soak_duration_seconds"],25200)
         self.assertFalse(control["acceptance_complete"])
         self.assertNotIn("step23-live-soak-observer",actual)
         monitor=(ROOT/".github/workflows/portfolio-schedule-delivery.yml").read_text()
