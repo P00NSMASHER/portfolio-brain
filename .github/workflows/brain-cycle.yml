@@ -2,11 +2,15 @@ name: brain-cycle-v2
 
 on:
   schedule:
-    - cron: "17 * * * *"
+    - cron: "7,27,47 * * * *"
   workflow_dispatch:
     inputs:
       clock_commit:
         description: Immutable external-clock receipt commit; empty for native/manual runs
+        required: false
+        type: string
+      watchdog_run_id:
+        description: Real GitHub-native scheduled watchdog workflow run ID
         required: false
         type: string
   push:
@@ -60,6 +64,19 @@ jobs:
           [[ "$CLOCK_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "CLOCK_COMMIT_INVALID"; exit 1; }
           mkdir -p /tmp/brain
           gh api "repos/${GITHUB_REPOSITORY}/contents/clock/pulse.json?ref=${CLOCK_COMMIT}" --jq .content | base64 -d | python -m brain.clock "$BRAIN_SOURCE_SHA" > /tmp/brain/clock.json
+      - name: Validate GitHub-native watchdog scheduling origin
+        if: ${{ inputs.watchdog_run_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WATCHDOG_RUN_ID: ${{ inputs.watchdog_run_id }}
+          CLOCK_COMMIT: ${{ inputs.clock_commit }}
+        run: |
+          set -euo pipefail
+          test -z "$CLOCK_COMMIT" || { echo "COMPETING_CLOCK_INPUTS"; exit 1; }
+          [[ "$WATCHDOG_RUN_ID" =~ ^[1-9][0-9]*$ ]] || { echo "WATCHDOG_RUN_ID_INVALID"; exit 1; }
+          mkdir -p /tmp/brain
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/$WATCHDOG_RUN_ID" > /tmp/brain/watchdog-provider.json
+          python -m brain.watchdog verify --input /tmp/brain/watchdog-provider.json --source-sha "$BRAIN_SOURCE_SHA" --clock-run-id "$WATCHDOG_RUN_ID" --core-actor "$GITHUB_ACTOR" --output /tmp/brain/watchdog-origin.json
       - name: Restore dedicated durable state branch
         uses: actions/checkout@v4
         with:
