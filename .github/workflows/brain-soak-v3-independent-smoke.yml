@@ -1,0 +1,45 @@
+name: brain-soak-v3-independent-smoke
+
+on:
+  push:
+    branches: [rebuild/brain-soak-first-v3-20261008]
+    paths:
+      - "soak_v3/**"
+      - "tests/test_brain_soak*"
+      - ".github/workflows/brain-soak-v3-independent-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  independently-verify-native-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test isolated evidence evaluator
+        run: python -m unittest discover -s tests -p 'test_brain_soak*.py' -v
+      - name: Independently verify real GitHub native scheduling artifact and durable state
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python -m soak_v3.remote_probe \
+            --run-id 37715456875 \
+            --source-sha 8a47ce9f04f77c2c4ab4c972106ccd31bb1c97e9 \
+            --output /tmp/native-baseline.json
+      - name: Preserve nonsecret read-only proof
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: independent-soak-v3-baseline-${{ github.sha }}-${{ github.run_id }}
+          path: /tmp/native-baseline.json
+          if-no-files-found: warn
+          retention-days: 30
