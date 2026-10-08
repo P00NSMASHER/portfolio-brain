@@ -16,7 +16,7 @@ def validate_policy():
     for name in ("downstream_write_authority","trading_authority","external_message_authority","discovered_code_execution","license_discovery_filter","public_state_accepts_private_inputs"):
         require(p[name] is False, "forbidden authority/filter: "+name)
     workflow_dir=ROOT/".github/workflows"
-    expected={"foundation-ci.yml","portfolio-independent-verifier.yml","x402-gateway-ci.yml","x402-render-gateway-smoke.yml","brain-cycle.yml"}
+    expected={"foundation-ci.yml","portfolio-independent-verifier.yml","x402-gateway-ci.yml","x402-render-gateway-smoke.yml","brain-cycle.yml","brain-clock.yml"}
     require({x.name for x in workflow_dir.iterdir() if x.suffix in {".yml",".yaml"}}==expected, "active workflow inventory changed")
     from operations.validate_operating_mode import scheduled_workflow_inventory
     require(scheduled_workflow_inventory(workflow_dir)=={"brain-cycle":[p["cron"]]}, "only Brain v2 cycle may be recurring")
@@ -24,6 +24,11 @@ def validate_policy():
     for fragment in ("group: brain-v2-state", "cancel-in-progress: false", "timeout-minutes: 5", "ref: brain-state-v2", "--expected-sha", "STATE_CONFLICT", "STATE_DELIVERY_UNVERIFIED", "MAIN_DRIFT", "soak_completed", "persist-credentials: false"):
         require(fragment in source, "missing workflow guarantee: "+fragment)
     require("force" not in source.replace("without force", "") and "portfolio-state-writer" not in source, "unsafe publication or legacy lock")
+    clock=(workflow_dir/"brain-clock.yml").read_text()
+    for fragment in ("branches: [brain-clock-v2]", "paths: [clock/pulse.json]", "timeout-minutes: 2", "actions: write", "contents: read", "python -m brain.clock", "-f ref=main", "inputs[clock_commit]", "steps.source.outputs.sha", "persist-credentials: false"):
+        require(fragment in clock, "missing bounded clock guarantee: "+fragment)
+    require("contents: write" not in clock and "pull-requests: write" not in clock and "schedule:" not in clock, "clock must not write state/source or own another cron")
+    require("python -m brain.clock" in source and "inputs.clock_commit" in source, "core must independently validate clock provenance")
     manifest=json.loads((ROOT/"legacy/WORKFLOW_ARCHIVE_MANIFEST.json").read_text())
     # Archive manifest has its own independently verified source hash inventory.
     entries=manifest.get("workflows",manifest.get("files",{}))

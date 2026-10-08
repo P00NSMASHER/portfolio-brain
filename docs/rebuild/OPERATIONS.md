@@ -80,3 +80,40 @@ Create a recovery branch from exact preserved Brain commit
 protected reviewed integration. Do not reset/force-push main, erase history, change
 credentials, or replay old paid schedulers blindly. Old Step23 evidence remains
 blocked by issue640 unless GitHub actually repairs the provider record.
+
+## External clock fallback (GitHub cron delivery outage)
+
+Native `17 * * * *` remains configured. GitHub documents that scheduled events
+may be delayed or dropped. An active workflow is not delivery evidence.
+The existing hourly Portfolio Brain Reliability task owns the fallback clock;
+no new account, credential, service or automation subscription is introduced.
+When there is no successful current-main core cycle within 45 minutes and no
+active core run, it publishes at most one `clock/pulse.json` per UTC hour on
+`brain-clock-v2`, using a nonforce expected-parent update. The branch tree is
+copied from the current protected main, changing only this nonsecret receipt.
+The receipt contains exactly schema_version=1, source_sha=current main,
+issued_at=UTC timestamp, slot=YYYYMMDDTHH, producer=the existing reliability
+job ID, and kind=scheduled (only inside an actual scheduled task execution)
+or manual_probe (operator demonstration). A retry must not create another
+signal for the same slot. Do not refresh a failed receipt to hide its age.
+
+`brain-clock-v2` validates the receipt with code checked out from protected
+main, refuses stale/future timestamps and source drift, and requests exactly
+one dispatch of `brain-cycle.yml` at main. A request accepted by the API is
+not a completed workload. The core independently validates the immutable
+receipt again and includes clock.json in its actual execution artifact.
+The optional clock gate is absent on native cron/push runs; every existing
+mandatory core gate remains required. No source change is needed per pulse.
+The normal core concurrency and nonforce state publication remain authoritative.
+
+A fallback automatic acceptance cycle must have an actual scheduled task
+execution, immutable kind=scheduled receipt, successful clock job/artifact,
+and the associated successful workflow_dispatch core run/artifact containing
+that same receipt. Manual probes never count as automatic delivery. Native
+cron gaps remain recorded; fallback proof must be labelled external scheduling,
+not event=schedule. Require three automatically delivered complete cycles on
+one unchanged main over at least two hours, gaps at most 90 minutes, all
+failures accounted for, existing freshness/lineage/replay/zero-backlog gates,
+and post-soak validation. Invalid dispatches or provider failure are preserved
+and diagnosed without rerun loops. There is no guarantee of uninterrupted
+availability from either hosting provider.
