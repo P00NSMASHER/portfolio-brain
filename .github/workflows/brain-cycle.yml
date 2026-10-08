@@ -166,7 +166,7 @@ jobs:
             git -C state -c credential.helper='!gh auth git-credential' push origin HEAD:refs/heads/brain-state-v2
           fi
           PUBLICATION_SHA="$(git -C state rev-parse HEAD)"
-          # A successful nonforce git push can briefly precede visibility of the
+          # A successful git push without force can briefly precede visibility of the
           # updated branch tip through GitHub's REST branch endpoint. Only an
           # unchanged pre-push parent is retryable; any other tip fails closed.
           REMOTE_SHA=""
