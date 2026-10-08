@@ -1,0 +1,67 @@
+{
+  "schema_version": 3,
+  "status": "PRE_ARM",
+  "source_sha": "99a3c7864316b733c7021da4541aa50e6474e225",
+  "source_pr": 649,
+  "candidate_head": "314383b5d7e6766da7cc6a61416ebe4aa18ace33",
+  "created_at": "2026-10-08T03:58:24.215Z",
+  "origin_merge_commit": "99a3c7864316b733c7021da4541aa50e6474e225",
+  "source_protected_checks": {
+    "validate": {
+      "app_id": 15368,
+      "status": "success"
+    },
+    "portfolio_phase1_gate": {
+      "app_id": 5121826,
+      "status": "success"
+    }
+  },
+  "production_push_run_id": 37725203611,
+  "production_push_status": "RUNNING_AT_INITIALIZATION",
+  "first_automatic_delivery_deadline": "2026-10-08T05:57:53.000Z",
+  "acceptance_deadline": "2026-10-08T10:57:53.000Z",
+  "soak_started_at": null,
+  "soak_completed": false,
+  "accepted_automatic_runs": [],
+  "required": {
+    "minimum_automatic_cycles": 3,
+    "minimum_elapsed_seconds": 7200,
+    "maximum_completed_cycle_gap_seconds": 5400,
+    "exact_main_unchanged": true,
+    "mandatory_workloads_success": true,
+    "semantic_source_freshness": "REQUIRED",
+    "zero_pending_events": true,
+    "remote_sqlite_chain_integrity": "REQUIRED",
+    "complete_run_inventory_including_failures": "REQUIRED",
+    "independent_post_soak_replay": "REQUIRED"
+  },
+  "automatic_provenance": [
+    "provider-verified native brain-cycle-v2 event=schedule",
+    "provider-verified GitHub event=schedule brain-clock-v2 due dispatch -> bot workflow_dispatch core, full two artifacts and remote state",
+    "independently verified genuine ChatGPT scheduled task -> immutable pulse -> clock -> core (only if fully proven)"
+  ],
+  "disallowed_provenance": [
+    "manual_probe",
+    "user workflow_dispatch",
+    "push-triggered validation alone",
+    "self-declared GitHub schedule labels",
+    "API dispatch accepted without successful core"
+  ],
+  "phases": {
+    "PREPARE": "PASS",
+    "PROTECTED_CANDIDATE_CI": "PASS",
+    "CURRENT_MAIN_PUSH": "IN_PROGRESS",
+    "PRE_ARM": "PENDING",
+    "SOAK": "NOT STARTED",
+    "POST_SOAK_VALIDATION": "NOT TESTED"
+  },
+  "baseline": null,
+  "terminal_result": null,
+  "terminal_reason": null,
+  "owner": "Portfolio Brain Soak Watch",
+  "history_notice": "Original v2 2026-10-08 acceptance remains permanently FAIL on brain-acceptance-v2, commit de21b799d102ca30a96b83c71502c4d6f0051f41. Never erase, restart, or retrofit it.",
+  "additional_limitations": [
+    "GitHub schedules are best effort, no 100% uptime guarantee",
+    "The business/research core is bounded; arbitrary autonomous code repair or revenue generation is not demonstrated"
+  ]
+}
