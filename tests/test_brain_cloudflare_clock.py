@@ -60,6 +60,24 @@ class SignedClock(unittest.TestCase):
         for moment in (WHEN+timedelta(minutes=30), WHEN-timedelta(seconds=30)):
             with self.subTest(moment=moment),self.assertRaises(CloudflareClockError):
                 verify(a,b,SHA,now=moment,pubkey=self.public)
+    def test_real_cloudflare_cron_with_provider_seconds_accepted(self):
+        # Production Cloudflare Cron logged scheduledTime at 13:10:19, not :10:00.
+        # Signature, source, correct ten-minute minute/slot, and freshness still bind it.
+        self.doc["scheduled_at"]=iso(WHEN+timedelta(seconds=19))
+        self.doc["issued_at"]=iso(WHEN+timedelta(seconds=22))
+        a,b=self.inputs()
+        result=verify(a,b,SHA,now=WHEN+timedelta(seconds=40),pubkey=self.public)
+        self.assertEqual(result["status"],"CLOUDFLARE_SIGNED_ORIGIN_VERIFIED")
+        self.assertEqual(result["slot"],int(WHEN.timestamp()//600))
+        self.assertFalse(result["soak_pass"])
+
+    def test_nonzero_seconds_outside_cron_minute_rejected(self):
+        self.doc["scheduled_at"]=iso(WHEN+timedelta(minutes=1,seconds=19))
+        self.doc["issued_at"]=iso(WHEN+timedelta(minutes=1,seconds=22))
+        a,b=self.inputs()
+        with self.assertRaisesRegex(CloudflareClockError,"CLOCK_WRONG_MINUTE"):
+            verify(a,b,SHA,now=WHEN+timedelta(minutes=1,seconds=40),pubkey=self.public)
+
     def test_wrong_schedule_rejected(self):
         self.doc["scheduled_at"]=iso(WHEN+timedelta(minutes=1))
         self.doc["issued_at"]=iso(WHEN+timedelta(minutes=1,seconds=10))
