@@ -35,7 +35,7 @@ export function decide(runs, source, nowMs) {
   if (runs.workflow_runs.length > 100 || runs.total_count < runs.workflow_runs.length) fail("RUN_INVENTORY_INVALID");
   const present = runs.workflow_runs.filter(r => r.head_sha === source && r.head_branch === "main");
   for (const r of present) {
-    if (!Number.isInteger(r.id) || typeof r.created_at !== "string") fail("RUN_ID_INVALID");
+    if (!Number.isInteger(r.id) || !validSha(r.head_sha) || typeof r.created_at !== "string") fail("RUN_ID_OR_HEAD_SHA_INVALID");
     const t=Date.parse(r.created_at);
     if (!Number.isFinite(t) || t > nowMs + CLOCK_SKEW_MS) fail("RUN_TIME_INVALID");
   }
