@@ -45,6 +45,29 @@ class SignedClock(unittest.TestCase):
         result=verify(a,b,SHA,now=WHEN+timedelta(seconds=45),pubkey=self.public)
         self.assertTrue(result["signed_origin"])
         self.assertFalse(result["soak_pass"])
+    def test_provider_scheduled_seconds_are_not_exact_minute(self):
+        # Actual production Cloudflare Cron was scheduled at 13:20:19 UTC:
+        # signed minute 20 and slot are valid despite provider scheduling lag.
+        for offset in (1,19,59):
+            with self.subTest(seconds=offset):
+                self.doc["scheduled_at"]=iso(WHEN+timedelta(seconds=offset))
+                self.doc["issued_at"]=iso(WHEN+timedelta(seconds=offset+1))
+                self.doc["slot"]=int((WHEN+timedelta(seconds=offset)).timestamp()//600)
+                a,b=self.inputs()
+                result=verify(a,b,SHA,now=WHEN+timedelta(seconds=offset+8),pubkey=self.public)
+                self.assertTrue(result["signed_origin"])
+                self.assertFalse(result["soak_pass"])
+
+    def test_delayed_event_outside_cron_minute_fails_even_when_signed(self):
+        # A signature alone cannot turn a scheduled claim at xx:21:00
+        # into one of the permitted ten-minute cron slots.
+        self.doc["scheduled_at"]=iso(WHEN+timedelta(minutes=1,seconds=19))
+        self.doc["issued_at"]=iso(WHEN+timedelta(minutes=1,seconds=20))
+        self.doc["slot"]=int((WHEN+timedelta(minutes=1,seconds=19)).timestamp()//600)
+        a,b=self.inputs()
+        with self.assertRaisesRegex(CloudflareClockError,"CLOCK_WRONG_MINUTE"):
+            verify(a,b,SHA,now=WHEN+timedelta(minutes=1,seconds=25),pubkey=self.public)
+
     def test_wrong_source_rejected(self):
         a,b=self.inputs()
         with self.assertRaisesRegex(CloudflareClockError,"CLOCK_SOURCE_MISMATCH"):
