@@ -120,7 +120,7 @@ def verify_watchdog_core(api, run_id, source_sha):
     require(state.get("encoding")=="base64" and isinstance(state.get("content"),str),
             "REMOTE_STATE_UNAVAILABLE")
     try:
-        raw=base64.b64decode(state["content"],validate=True)
+        raw=base64.b64decode(state["content"].replace("\n",""),validate=True)
     except (ValueError,base64.binascii.Error) as exc:
         raise EvidenceError("REMOTE_STATE_BAD_BASE64") from exc
     require(git_blob_hash(raw)==state.get("sha"),"REMOTE_GIT_BLOB_IDENTITY_MISMATCH")
