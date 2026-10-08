@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "status": "PREPARING",
+  "status": "PRE_ARM",
   "source_sha": "8a47ce9f04f77c2c4ab4c972106ccd31bb1c97e9",
   "candidate_pr": 648,
   "candidate_head": "2070aac0e1a457061bb1b8fbb229b430962351b6",
@@ -13,12 +13,12 @@
   "maximum_cycle_gap_seconds": 5400,
   "phases": {
     "PREPARE": "PASS",
-    "EXACT_SHA_PREFLIGHT": "NOT TESTED",
+    "EXACT_SHA_PREFLIGHT": "PASS",
     "PRE_ARM": "BLOCKED",
     "SOAK": "NOT TESTED",
     "POST_SOAK_VALIDATION": "NOT TESTED"
   },
-  "pre_arm_blocker": "Clock fallback protected checks/integration and genuinely automatic delivery not yet verified",
+  "pre_arm_blocker": "Genuinely automatic delivery not yet verified; manual bridge success is not scheduling proof",
   "delivery_contract": "Native event=schedule OR verified scheduled Reliability task -> immutable scheduled receipt -> successful clock job -> matching successful workflow_dispatch core artifact; manual_probe excluded.",
   "native_cron_status": "BLOCKED",
   "deadline": "2026-10-08T07:09:44.000Z",
@@ -75,7 +75,22 @@
     "clock_run_id": 37711545775,
     "clock_status": "PASS",
     "core_run_id": 37711557264,
-    "core_status": "NOT TESTED",
-    "automatic_delivery_proof": false
-  }
+    "core_status": "PASS",
+    "automatic_delivery_proof": false,
+    "artifact_id": 11522091959,
+    "artifact_sha256": "6623e19f539c20b35fb8c7332c3f1b1fee129394bd70000bc6b076056c2ef3a7",
+    "state_commit": "41d43fcc25f563df95a917a7327e7f3c07d515da",
+    "state_parent": "72625bfa36ba307e836100a560f8d9906c482a35",
+    "canonical_hash": "f1d2c2183f641f64792fff98dc6599d2c83b6b64255cbcda51387c782749ea15",
+    "state_sequence": 49,
+    "pending_events": 0,
+    "independent_replay": "PASS",
+    "sqlite_sha256": "e2af96f60d32210dd8c70b4421b5b6a1d63afa0d6f08a09738f82c54a2ea75d4"
+  },
+  "main_foundation": {
+    "run_id": 37711517338,
+    "status": "PASS",
+    "source_sha": "8a47ce9f04f77c2c4ab4c972106ccd31bb1c97e9"
+  },
+  "first_scheduled_delivery_deadline": "2026-10-08T03:09:44.000Z"
 }
