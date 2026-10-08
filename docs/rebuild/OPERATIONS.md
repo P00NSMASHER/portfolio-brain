@@ -136,15 +136,24 @@ protected reviewed integration. Do not reset/force-push main, erase history, cha
 credentials, or replay old paid schedulers blindly. Old Step23 evidence remains
 blocked by issue640 unless GitHub actually repairs the provider record.
 
-## External clock fallback (GitHub cron delivery outage)
+## Historical external clock fallback (earlier GitHub cron outage)
 
-Native `17 * * * *` remains configured. GitHub documents that scheduled events
-may be delayed or dropped. An active workflow is not delivery evidence.
-The existing hourly Portfolio Brain Reliability task owns the fallback clock;
-no new account, credential, service or automation subscription is introduced.
-When there is no successful current-main core cycle within 45 minutes and no
-active core run, it publishes at most one `clock/pulse.json` per UTC hour on
-`brain-clock-v2`, using a nonforce expected-parent update. The branch tree is
+The following describes the original `brain-clock-v2` pulse-based recovery
+protocol and its provenance rules; **it is not an instruction to create a
+new pulse, dispatch a manual core, or start another soak**. The earlier single
+native Cron ran `17 * * * *`, but that schedule is no longer current.
+Today, the protected core uses `7,27,47 * * * *`, its native watchdog uses
+`16,36,56 * * * *`, and Cloudflare's independent recovery clock uses
+`*/10 * * * *` (all UTC; details above). GitHub scheduled events may be
+delayed or dropped, so a configured workflow is never completed-run proof.
+
+The existing Portfolio Brain Reliability task was the designated owner of the
+historical pulse fallback; this historical mechanism did not require a new
+account, credential, service or subscription. Its specification called for no
+more than one `clock/pulse.json` per UTC hour on `brain-clock-v2`, with a
+nonforce expected-parent update, after 45 minutes without a successful
+current-main core and with no competing active writer. Check current task
+instructions and real provider evidence before claiming this fallback ran. The branch tree is
 copied from the current protected main, changing only this nonsecret receipt.
 The receipt contains exactly schema_version=1, source_sha=current main,
 issued_at=UTC timestamp, slot=YYYYMMDDTHH, producer=the existing reliability
