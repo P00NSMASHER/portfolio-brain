@@ -79,7 +79,9 @@ def verify(payload_b64,signature_b64,expected_sha,*,now=None,pubkey=PUBLIC_KEY):
     require(0<=(current-issued).total_seconds()<=MAX_AGE,"CLOCK_STALE_OR_FUTURE")
     require(type(payload["slot"]) is int and payload["slot"]==int(scheduled.timestamp()//600),
             "CLOCK_SLOT_MISMATCH")
-    require(scheduled.minute%10==0 and scheduled.second==0,"CLOCK_WRONG_MINUTE")
+    # Cloudflare scheduledTime is provider-supplied and may contain seconds of jitter.
+    # The signed ten-minute slot and freshness bounds above remain mandatory.
+    require(scheduled.minute%10==0,"CLOCK_WRONG_MINUTE")
     require(pubkey.is_file(),"CLOCK_PUBLIC_KEY_MISSING")
     with tempfile.TemporaryDirectory(prefix="brain-cf-clock-") as d:
         message=Path(d)/"payload"
