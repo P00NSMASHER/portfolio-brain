@@ -185,7 +185,9 @@ def evaluate_window(records, *, source_sha, current_main, first_state_parent,
         require(type(run_id) is int and run_id > 0 and type(attempt) is int and attempt >= 1, "CYCLE_ID_INVALID")
         require((run_id, attempt) not in seen, "CYCLE_DUPLICATE_ATTEMPT")
         seen.add((run_id, attempt))
-        begin, end = utc(r.get("started_at")), utc(r.get("completed_at"))
+        begin = utc(r.get("started_at"))
+        unfinished = r.get("status") in {"queued", "in_progress", "pending", "waiting", "requested"}
+        end = begin if unfinished and r.get("completed_at") is None else utc(r.get("completed_at"))
         require(start <= begin <= end <= instant, "CYCLE_TIME_INVALID")
         require(r.get("source_sha") == source_sha, "CYCLE_SOURCE_DRIFT")
         applicable.append((begin, end, r))
@@ -207,7 +209,7 @@ def evaluate_window(records, *, source_sha, current_main, first_state_parent,
         state = r.get("state")
         if not isinstance(state, dict) or state.get("status") != "PASS":
             return Evaluation("BLOCKED", "REMOTE_STATE_NOT_VERIFIED", tuple(x[1] for x in automatic), 0, 0)
-        if state.get("parent") != previous_state or not HEX40.fullmatch(state.get("commit", "")):
+        if state.get("parent") != previous_state or not isinstance(state.get("commit"), str) or not HEX40.fullmatch(state["commit"]):
             return Evaluation("FAIL", "STATE_PARENT_CHAIN_BROKEN", tuple(x[1] for x in automatic), 0, 0)
         if state.get("sequence") != artifact.get("state_sequence") or state.get("canonical_hash") != artifact.get("canonical_hash"):
             return Evaluation("FAIL", "STATE_AND_ARTIFACT_DISAGREE", tuple(x[1] for x in automatic), 0, 0)
