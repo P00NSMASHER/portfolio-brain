@@ -56,9 +56,9 @@ class ProofTests(unittest.TestCase):
     def test_manual_dispatches_never_count(self):
         entries=[run(0),run(1,event='workflow_dispatch'),run(2)]
         entries[1]['external_clock']={'kind':'manual_probe', 'independently_verified':True}
-        self.assertEqual(evaluate(entries).reason,'INSUFFICIENT_GENUINE_AUTOMATIC_CYCLES')
+        self.assertEqual(evaluate(entries).reason,'AUTOMATIC_DELIVERY_GAP_EXCEEDED')
         entries[1]['external_clock']={'kind':'scheduled', 'independently_verified':True}
-        self.assertEqual(evaluate(entries).reason,'INSUFFICIENT_GENUINE_AUTOMATIC_CYCLES')
+        self.assertEqual(evaluate(entries).reason,'AUTOMATIC_DELIVERY_GAP_EXCEEDED')
 
     def test_full_external_clock_chain_required(self):
         entries=[run(0),run(1,event='workflow_dispatch'),run(2)]
@@ -75,10 +75,10 @@ class ProofTests(unittest.TestCase):
              'core_actor_verified':True}
         self.assertEqual(evaluate(entries).status,'PRE_POSTVALIDATION')
         entries[1]['external_clock']['clock_job_verified']=False
-        self.assertEqual(evaluate(entries).reason,'INSUFFICIENT_GENUINE_AUTOMATIC_CYCLES')
+        self.assertEqual(evaluate(entries).reason,'AUTOMATIC_DELIVERY_GAP_EXCEEDED')
         entries[1]['external_clock']['clock_job_verified']=True
         entries[1]['external_clock']['core_actor_verified']=False
-        self.assertEqual(evaluate(entries).reason,'INSUFFICIENT_GENUINE_AUTOMATIC_CYCLES')
+        self.assertEqual(evaluate(entries).reason,'AUTOMATIC_DELIVERY_GAP_EXCEEDED')
 
     def test_one_failed_cycle_poison_soak_even_with_three_successes(self):
         entries=[run(0),run(1),run(2)]
