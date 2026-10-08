@@ -239,13 +239,22 @@ def evaluate_window(records, *, source_sha, current_main, first_state_parent,
             return Evaluation("FAIL", "UNEXPECTED_CORE_EVENT", tuple(x[1] for x in automatic), 0, 0)
     automatic.sort()
     ids = tuple(x[1] for x in automatic)
-    if len(automatic) < MIN_CYCLES:
-        return Evaluation("BLOCKED" if instant >= deadline else "WAITING", "INSUFFICIENT_GENUINE_AUTOMATIC_CYCLES", ids, 0, 0)
-    gaps = [int((automatic[i][0] - automatic[i-1][0]).total_seconds()) for i in range(1, len(automatic))]
+    gaps = [int((automatic[i][0] - automatic[i-1][0]).total_seconds()) for i in range(1,len(automatic))]
     maximum = max(gaps, default=0)
-    span = int((automatic[-1][0] - automatic[0][0]).total_seconds())
+    span = int((automatic[-1][0]-automatic[0][0]).total_seconds()) if automatic else 0
     if maximum > MAX_GAP_SECONDS:
-        return Evaluation("FAIL", "AUTOMATIC_DELIVERY_GAP_EXCEEDED", ids, span, maximum)
+        return Evaluation("FAIL","AUTOMATIC_DELIVERY_GAP_EXCEEDED",ids,span,maximum)
+    # A missed second/third cycle is already a terminal failure at the original
+    # 90-minute gap, even when fewer than three runs have arrived.
+    # Once the two-hour span is legitimately complete, proceed to postvalidation.
+    if automatic and span < MIN_SPAN_SECONDS:
+        elapsed_since_latest=(instant-automatic[-1][0]).total_seconds()
+        if elapsed_since_latest > MAX_GAP_SECONDS:
+            return Evaluation("FAIL","AUTOMATIC_DELIVERY_GAP_EXCEEDED",ids,span,
+                              max(maximum,int(elapsed_since_latest)))
+    if len(automatic) < MIN_CYCLES:
+        return Evaluation("BLOCKED" if instant >= deadline else "WAITING",
+                          "INSUFFICIENT_GENUINE_AUTOMATIC_CYCLES",ids,span,maximum)
     if span < MIN_SPAN_SECONDS:
         return Evaluation("BLOCKED" if instant >= deadline else "WAITING", "SOAK_DURATION_INCOMPLETE", ids, span, maximum)
     if instant > deadline:
