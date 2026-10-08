@@ -188,7 +188,9 @@ def evaluate_window(records, *, source_sha, current_main, first_state_parent,
         begin = utc(r.get("started_at"))
         unfinished = r.get("status") in {"queued", "in_progress", "pending", "waiting", "requested"}
         end = begin if unfinished and r.get("completed_at") is None else utc(r.get("completed_at"))
-        require(start <= begin <= end <= instant, "CYCLE_TIME_INVALID")
+        # A completed automatic baseline anchors the acceptance start, even when
+        # its verified execution began seconds before the recorded baseline time.
+        require(begin <= end <= instant and end >= start, "CYCLE_TIME_INVALID")
         require(r.get("source_sha") == source_sha, "CYCLE_SOURCE_DRIFT")
         applicable.append((begin, end, r))
     applicable.sort(key=lambda x: (x[0], x[2]["run_id"], x[2]["attempt"]))
