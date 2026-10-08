@@ -235,6 +235,15 @@ def evaluate_window(records, *, source_sha, current_main, first_state_parent,
                 # These booleans MUST come from the independent provider collector;
                 # the pure evaluator can only return PRE_POSTVALIDATION, never PASS.
                 automatic.append((end, r["run_id"]))
+            elif (isinstance(clock, dict) and clock.get("kind") == "cloudflare_cron_v1"
+                    and clock.get("source_sha") == source_sha
+                    and clock.get("provider_cron_verified") is True
+                    and clock.get("signed_origin_verified") is True
+                    and clock.get("core_receipt_verified") is True
+                    and clock.get("state_verified") is True):
+                # These are independent provider/ZIP/SQLite attestations, never
+                # assertions manufactured by the workload producer itself.
+                automatic.append((end, r["run_id"]))
         elif r.get("event") != "push":
             return Evaluation("FAIL", "UNEXPECTED_CORE_EVENT", tuple(x[1] for x in automatic), 0, 0)
     automatic.sort()

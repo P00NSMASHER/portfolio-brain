@@ -21,7 +21,7 @@ def validate_policy():
     from operations.validate_operating_mode import scheduled_workflow_inventory
     require(scheduled_workflow_inventory(workflow_dir)=={"brain-cycle":[p["cron"]], "brain-clock":[p["watchdog_cron"]]}, "only reviewed native Brain execution and watchdog may recur")
     source=(workflow_dir/"brain-cycle.yml").read_text()
-    for fragment in ("group: brain-v2-state", "cancel-in-progress: false", "timeout-minutes: 5", "ref: brain-state-v2", "--expected-sha", "STATE_CONFLICT", "STATE_DELIVERY_UNVERIFIED", "MAIN_DRIFT", "soak_completed", "persist-credentials: false", "inputs.watchdog_run_id", "python -m brain.watchdog verify", "COMPETING_CLOCK_INPUTS"):
+    for fragment in ("group: brain-v2-state", "cancel-in-progress: false", "timeout-minutes: 5", "ref: brain-state-v2", "--expected-sha", "STATE_CONFLICT", "STATE_DELIVERY_UNVERIFIED", "MAIN_DRIFT", "soak_completed", "persist-credentials: false", "inputs.watchdog_run_id", "python -m brain.watchdog verify", "COMPETING_CLOCK_INPUTS", "python -m brain.cloudflare_clock", "inputs.cloudflare_attestation", "inputs.cloudflare_signature", "COMPETING_SCHEDULER_ORIGINS"):
         require(fragment in source, "missing workflow guarantee: "+fragment)
     require("force" not in source.replace("without force", "") and "portfolio-state-writer" not in source, "unsafe publication or legacy lock")
     clock=(workflow_dir/"brain-clock.yml").read_text()
@@ -29,6 +29,7 @@ def validate_policy():
         require(fragment in clock, "missing bounded clock guarantee: "+fragment)
     require("contents: write" not in clock and "pull-requests: write" not in clock and "schedule:" in clock, "clock must remain read-only with only scoped Actions dispatch authority")
     require("python -m brain.clock" in source and "inputs.clock_commit" in source, "core must independently validate clock provenance")
+    require((ROOT/"brain/cloudflare-clock-public.pem").read_text().startswith("-----BEGIN PUBLIC KEY-----"), "external clock public trust anchor missing")
     manifest=json.loads((ROOT/"legacy/WORKFLOW_ARCHIVE_MANIFEST.json").read_text())
     # Archive manifest has its own independently verified source hash inventory.
     entries=manifest.get("workflows",manifest.get("files",{}))
