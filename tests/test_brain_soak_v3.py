@@ -80,6 +80,18 @@ class ProofTests(unittest.TestCase):
         entries[1]['external_clock']['core_actor_verified']=False
         self.assertEqual(evaluate(entries).reason,'AUTOMATIC_DELIVERY_GAP_EXCEEDED')
 
+    def test_cloudflare_automatic_cycle_requires_provider_and_signed_proof(self):
+        entries=[run(0),run(1,event='workflow_dispatch'),run(2)]
+        entries[1]['external_clock']={'kind':'cloudflare_cron_v1','source_sha':SHA,
+            'provider_cron_verified':True,'signed_origin_verified':True,
+            'core_receipt_verified':True,'state_verified':True}
+        self.assertEqual(evaluate(entries).status,'PRE_POSTVALIDATION')
+        entries[1]['external_clock']['signed_origin_verified']=False
+        self.assertEqual(evaluate(entries).reason,'AUTOMATIC_DELIVERY_GAP_EXCEEDED')
+        entries[1]['external_clock']['signed_origin_verified']=True
+        entries[1]['external_clock']['provider_cron_verified']=False
+        self.assertEqual(evaluate(entries).reason,'AUTOMATIC_DELIVERY_GAP_EXCEEDED')
+
     def test_one_failed_cycle_poison_soak_even_with_three_successes(self):
         entries=[run(0),run(1),run(2)]
         failed=copy.deepcopy(run(1));failed['run_id']=700
