@@ -45,6 +45,27 @@ class SignedClock(unittest.TestCase):
         result=verify(a,b,SHA,now=WHEN+timedelta(seconds=45),pubkey=self.public)
         self.assertTrue(result["signed_origin"])
         self.assertFalse(result["soak_pass"])
+    def test_real_cloudflare_scheduled_timestamp_with_seconds_is_valid(self):
+        # Provider-issued Cloudflare scheduledTime contained 19 seconds at the
+        # real 2026-10-08T13:20 slot; exact :00 rejects valid cron deliveries.
+        observed=WHEN+timedelta(seconds=19)
+        self.doc["scheduled_at"]=iso(observed)
+        self.doc["issued_at"]=iso(observed+timedelta(seconds=1))
+        self.doc["slot"]=int(observed.timestamp()//600)
+        a,b=self.inputs()
+        result=verify(a,b,SHA,now=observed+timedelta(seconds=10),pubkey=self.public)
+        self.assertEqual(result["status"],"CLOUDFLARE_SIGNED_ORIGIN_VERIFIED")
+        self.assertFalse(result["soak_pass"])
+
+    def test_signed_wrong_ten_minute_slot_rejected_despite_seconds(self):
+        observed=WHEN+timedelta(seconds=19)
+        self.doc["scheduled_at"]=iso(observed)
+        self.doc["issued_at"]=iso(observed+timedelta(seconds=1))
+        self.doc["slot"]=int(observed.timestamp()//600)+1
+        a,b=self.inputs()
+        with self.assertRaisesRegex(CloudflareClockError,"CLOCK_SLOT_MISMATCH"):
+            verify(a,b,SHA,now=observed+timedelta(seconds=10),pubkey=self.public)
+
     def test_wrong_source_rejected(self):
         a,b=self.inputs()
         with self.assertRaisesRegex(CloudflareClockError,"CLOCK_SOURCE_MISMATCH"):
