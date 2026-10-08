@@ -67,6 +67,19 @@ class ProofTests(unittest.TestCase):
                                      'core_receipt_verified':True}
         self.assertEqual(evaluate(entries).status,'PRE_POSTVALIDATION')
 
+    def test_github_native_scheduled_watchdog_requires_all_evidence(self):
+        entries=[run(0),run(1,event='workflow_dispatch'),run(2)]
+        entries[1]['external_clock']={'kind':'github_schedule','source_sha':SHA,
+             'clock_run_id':929,'provider_scheduler_verified':True,
+             'clock_job_verified':True,'core_receipt_verified':True,
+             'core_actor_verified':True}
+        self.assertEqual(evaluate(entries).status,'PRE_POSTVALIDATION')
+        entries[1]['external_clock']['clock_job_verified']=False
+        self.assertEqual(evaluate(entries).reason,'INSUFFICIENT_GENUINE_AUTOMATIC_CYCLES')
+        entries[1]['external_clock']['clock_job_verified']=True
+        entries[1]['external_clock']['core_actor_verified']=False
+        self.assertEqual(evaluate(entries).reason,'INSUFFICIENT_GENUINE_AUTOMATIC_CYCLES')
+
     def test_one_failed_cycle_poison_soak_even_with_three_successes(self):
         entries=[run(0),run(1),run(2)]
         failed=copy.deepcopy(run(1));failed['run_id']=700
