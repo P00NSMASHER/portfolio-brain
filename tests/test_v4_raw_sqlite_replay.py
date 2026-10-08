@@ -34,6 +34,12 @@ def stamp(value):
 
 class IndependentRawSqliteV4(unittest.TestCase):
     def test_live_state_binary_and_canonical_replay(self):
+        # GitHub Foundation CI has an actual networked runner; the separate
+        # independent sandbox runs with --network none, so it cannot reach GitHub.
+        # The sandbox must never claim RAW_REPLAY_PASS from a skipped test.
+        # Terminal acceptance requires the hosted run receipt, not sandbox green.
+        if os.environ.get("GITHUB_ACTIONS") != "true":
+            self.skipTest("OFFLINE_SANDBOX: live Git binary replay requires separate GitHub Foundation receipt")
         # Prevent a PR running after protected production main has moved.
         actual_main = git("ls-remote", "origin", "refs/heads/main").split()[0]
         self.assertEqual(actual_main, SOURCE, "protected main drift: no replay acceptance")
