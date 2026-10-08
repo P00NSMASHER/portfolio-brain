@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "status": "FAIL",
+  "reason": "AUTOMATIC_CYCLE_GAP_EXCEEDED",
+  "checked_at": "2026-10-08T03:41:50.886Z",
+  "original_source_sha": "8a47ce9f04f77c2c4ab4c972106ccd31bb1c97e9",
+  "first_automatic_run_id": 37715456875,
+  "first_automatic_completed_at": "2026-10-08T01:57:46.000Z",
+  "latest_allowed_second_completed_at": "2026-10-08T03:27:46.000Z",
+  "required_maximum_gap_seconds": 5400,
+  "actual_second_automatic_run": "NOT_DELIVERED_WITHIN_LIMIT",
+  "brain_cycle_runs_observed_after_baseline": [],
+  "clock_receipt_at_observation": {
+    "schema_version": 1,
+    "source_sha": "8a47ce9f04f77c2c4ab4c972106ccd31bb1c97e9",
+    "issued_at": "2026-10-08T01:10:02.395Z",
+    "slot": "20261008T01",
+    "producer": "6ac323fee9c88191bd31e9d4cfc554f8",
+    "kind": "manual_probe"
+  },
+  "provider_query": "GitHub API /actions/runs?per_page=100; native schedule and dispatch queries cross-checked during prior observation",
+  "archived_state_commit": "e93a7d2bb99c7330c4679b1fc9739229fa10a6c8",
+  "original_acceptance_commit": "46f7b5bdb02413d71b7ec7dd02670855b3cfa0e2",
+  "post_soak": "NOT_RUN",
+  "note": "Soak failed solely on delivery continuity; baseline core/doctor/immutable state originally passed. Does not prove entire core code defective."
+}

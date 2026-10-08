@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "status": "ACTIVE",
+  "status": "FAIL",
   "source_sha": "8a47ce9f04f77c2c4ab4c972106ccd31bb1c97e9",
   "candidate_pr": 648,
   "candidate_head": "2070aac0e1a457061bb1b8fbb229b430962351b6",
@@ -17,8 +17,8 @@
     "PREPARE": "PASS",
     "EXACT_SHA_PREFLIGHT": "PASS",
     "PRE_ARM": "PASS",
-    "SOAK": "ACTIVE",
-    "POST_SOAK_VALIDATION": "NOT TESTED"
+    "SOAK": "FAIL",
+    "POST_SOAK_VALIDATION": "NOT RUN"
   },
   "pre_arm_blocker": null,
   "delivery_contract": "Native event=schedule OR verified scheduled Reliability task -> immutable scheduled receipt -> successful clock job -> matching successful workflow_dispatch core artifact; manual_probe excluded.",
@@ -115,5 +115,11 @@
     "independent_run_id": 37716480414
   },
   "pre_arm_evidence_path": "acceptance/evidence/native-baseline-37715456875.json",
-  "start_time_semantics": "First genuinely scheduled accepted completed cycle at 01:57:46Z; admission recorded later after independent verification."
+  "start_time_semantics": "First genuinely scheduled accepted completed cycle at 01:57:46Z; admission recorded later after independent verification.",
+  "terminal_at": "2026-10-08T03:41:50.886Z",
+  "failure_at": "2026-10-08T03:27:46.000Z",
+  "failure_code": "AUTOMATIC_CYCLE_GAP_EXCEEDED",
+  "failure_detail": "The first verified native scheduled core completed at 2026-10-08T01:57:46Z. Neither a second native-schedule nor a verified scheduled fallback core completed before the unchanged 90-minute gap deadline 2026-10-08T03:27:46Z. GitHub returned no intervening brain-cycle-v2 runs and clock branch remained manual_probe; no subsequent run can retroactively close this gap.",
+  "next_action": "Failed attempt is immutable historical evidence. Build a new reviewed candidate and start a new exact-source soak only after protected integration. Do not relabel a manual run automatic, weaken the interval, or restart this attempt.",
+  "failed_soak_evidence_path": "acceptance/evidence/soak-gap-fail-20261008.json"
 }
