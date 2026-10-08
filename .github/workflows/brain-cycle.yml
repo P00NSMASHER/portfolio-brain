@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "17 * * * *"
   workflow_dispatch:
+    inputs:
+      clock_commit:
+        description: Immutable external-clock receipt commit; empty for native/manual runs
+        required: false
+        type: string
   push:
     branches: ["main"]
     paths:
@@ -45,6 +50,16 @@ jobs:
           MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)"
           test "$SOURCE_SHA" = "$MAIN_SHA" || { echo "MAIN_DRIFT: cycle refused before state read"; exit 1; }
           echo "BRAIN_SOURCE_SHA=$SOURCE_SHA" >> "$GITHUB_ENV"
+      - name: Verify external clock provenance when supplied
+        if: ${{ inputs.clock_commit != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOCK_COMMIT: ${{ inputs.clock_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$CLOCK_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "CLOCK_COMMIT_INVALID"; exit 1; }
+          mkdir -p /tmp/brain
+          gh api "repos/${GITHUB_REPOSITORY}/contents/clock/pulse.json?ref=${CLOCK_COMMIT}" --jq .content | base64 -d | python -m brain.clock "$BRAIN_SOURCE_SHA" > /tmp/brain/clock.json
       - name: Restore dedicated durable state branch
         uses: actions/checkout@v4
         with:
