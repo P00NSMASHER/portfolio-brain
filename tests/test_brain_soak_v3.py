@@ -45,6 +45,14 @@ class ProofTests(unittest.TestCase):
         self.assertEqual(result.automatic_run_ids,(500,501,502))
         self.assertEqual(result.span_seconds,7200)
 
+    def test_baseline_completion_can_anchor_soak_start(self):
+        # GitHub's actual run starts before its completed time. A soak starting
+        # at the completed receipt may still legitimately include that run.
+        records=[run(0),run(1),run(2)]
+        result=evaluate(records,start=START+timedelta(seconds=30))
+        self.assertEqual(result.status,'PRE_POSTVALIDATION')
+        self.assertEqual(result.automatic_run_ids,(500,501,502))
+
     def test_manual_dispatches_never_count(self):
         entries=[run(0),run(1,event='workflow_dispatch'),run(2)]
         entries[1]['external_clock']={'kind':'manual_probe', 'independently_verified':True}
