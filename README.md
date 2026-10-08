@@ -36,7 +36,7 @@ python -m brain doctor --db brain-local/state.sqlite --output brain-local/doctor
 python -m brain evolve --db brain-local/state.sqlite --output brain-local/upgrade
 ```
 
-The sole recurring GitHub workflow runs hourly and persists **nonsecret public
+The recurring GitHub core and read-only watchdog schedule run without a local host, and the core persists **nonsecret public
 observations only** on `brain-state-v2`. GitHub scheduling is not a guarantee of
 continuous availability. `python -m brain service --db brain-local/state.sqlite
 --output brain-local/service` is the noninteractive continuous-process entry point
@@ -60,3 +60,7 @@ Reports include HTML, Markdown, and machine-readable JSON. `PASS` from determini
 preflight is not production acceptance. Live delivery and exact-main pre-arm must
 also pass. A lengthy soak requires explicit authorization; none is started by these
 commands or schedules.
+
+## Reliability-first v3 candidate
+
+The v2 two-hour soak failed because one successful genuine automatic run was not followed by another within 90 minutes; see the immutable `brain-acceptance-v2` failure record. The isolated v3 candidate replaces one sparse cron with a full monitored core at `7,27,47 * * * *` and an independently scheduled GitHub watchdog at `16,36,56 * * * *`. The watchdog is read-only except for requesting a due core through existing Actions permissions; it validates GitHub provider run metadata and cannot change source, state or declare acceptance. The full core verifies the exact scheduled watchdog origin and preserves its receipt. False/manual scheduled claims are rejected. Passing CI only proves code regressions, not a completed unattended soak. The unchanged two-hour evidence gates and separate post-soak verification remain required. Cloud scheduling may still be delayed or dropped.
