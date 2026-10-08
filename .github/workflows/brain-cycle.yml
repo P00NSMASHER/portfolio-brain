@@ -13,6 +13,14 @@ on:
         description: Real GitHub-native scheduled watchdog workflow run ID
         required: false
         type: string
+      cloudflare_attestation:
+        description: Signed envelope from scheduled Cloudflare Worker (not manual)
+        required: false
+        type: string
+      cloudflare_signature:
+        description: Cloudflare private-key P-256 ECDSA signature (public key in repository)
+        required: false
+        type: string
   push:
     branches: ["main"]
     paths:
@@ -77,6 +85,19 @@ jobs:
           mkdir -p /tmp/brain
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/$WATCHDOG_RUN_ID" > /tmp/brain/watchdog-provider.json
           python -m brain.watchdog verify --input /tmp/brain/watchdog-provider.json --source-sha "$BRAIN_SOURCE_SHA" --clock-run-id "$WATCHDOG_RUN_ID" --core-actor "$GITHUB_ACTOR" --output /tmp/brain/watchdog-origin.json
+      - name: Verify independently signed Cloudflare Cron provenance
+        if: ${{ inputs.cloudflare_attestation != '' || inputs.cloudflare_signature != '' }}
+        env:
+          CF_ENVELOPE: ${{ inputs.cloudflare_attestation }}
+          CF_SIGNATURE: ${{ inputs.cloudflare_signature }}
+          CLOCK_COMMIT: ${{ inputs.clock_commit }}
+          WATCHDOG_RUN_ID: ${{ inputs.watchdog_run_id }}
+        run: |
+          set -euo pipefail
+          test -z "$CLOCK_COMMIT" && test -z "$WATCHDOG_RUN_ID" || { echo "COMPETING_SCHEDULER_ORIGINS"; exit 1; }
+          test -n "$CF_ENVELOPE" && test -n "$CF_SIGNATURE" || { echo "CLOUDFLARE_SIGNATURE_REQUIRED"; exit 1; }
+          mkdir -p /tmp/brain
+          python -m brain.cloudflare_clock --envelope "$CF_ENVELOPE" --signature "$CF_SIGNATURE" --source-sha "$BRAIN_SOURCE_SHA" --output /tmp/brain/cloudflare-origin.json
       - name: Restore dedicated durable state branch
         uses: actions/checkout@v4
         with:
