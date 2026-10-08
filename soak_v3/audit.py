@@ -225,6 +225,16 @@ def evaluate_window(records, *, source_sha, current_main, first_state_parent,
             clock = r.get("external_clock")
             if isinstance(clock, dict) and clock.get("kind") == "scheduled" and clock.get("independently_verified") is True and clock.get("actual_task_execution_verified") is True and clock.get("clock_job_verified") is True and clock.get("core_receipt_verified") is True and clock.get("source_sha") == source_sha:
                 automatic.append((end, r["run_id"]))
+            elif (isinstance(clock, dict) and clock.get("kind") == "github_schedule"
+                    and clock.get("source_sha") == source_sha
+                    and type(clock.get("clock_run_id")) is int and clock["clock_run_id"] > 0
+                    and clock.get("provider_scheduler_verified") is True
+                    and clock.get("clock_job_verified") is True
+                    and clock.get("core_receipt_verified") is True
+                    and clock.get("core_actor_verified") is True):
+                # These booleans MUST come from the independent provider collector;
+                # the pure evaluator can only return PRE_POSTVALIDATION, never PASS.
+                automatic.append((end, r["run_id"]))
         elif r.get("event") != "push":
             return Evaluation("FAIL", "UNEXPECTED_CORE_EVENT", tuple(x[1] for x in automatic), 0, 0)
     automatic.sort()
