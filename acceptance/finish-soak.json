@@ -1,101 +1,30 @@
 {
   "schema_version": 2,
-  "status": "PRE_ARM",
-  "source_sha": "e2d825d061339f4ede67e6b6e6134e025eb84cca",
-  "candidate_pr": 647,
-  "candidate_head": "0e48ebbb70d1997e3eca648330202e7315148b73",
-  "authorization": {
-    "user_instruction": "Finish it",
-    "received_at": "2026-10-07T23:36:57Z",
-    "scope": "Finish remaining acceptance; start bounded validation only after fresh exact-main pre-arm passes"
-  },
-  "created_at": "2026-10-07T23:43:15.822Z",
-  "deadline": "2026-10-08T05:45:00Z",
-  "first_scheduled_delivery_deadline": "2026-10-08T01:51:03Z",
+  "status": "PREPARING",
+  "source_sha": null,
+  "candidate_pr": 648,
+  "candidate_head": "b6929e39c74d5c6baaa5cb723bc0ffe35d08ab20",
+  "prior_attempt": "acceptance/history/e2d825d-native-clock-blocked.json",
   "soak_started_at": null,
   "soak_completed": false,
-  "minimum_duration_seconds": 7200,
-  "minimum_successful_scheduled_cycles": 3,
-  "maximum_cycle_gap_seconds": 5400,
   "accepted_run_ids": [],
-  "earliest_failure": null,
-  "requirements": {
-    "unchanged_main": true,
-    "exact_main_foundation_success": true,
-    "preflight_pass": true,
-    "mandatory_steps_all_success": true,
-    "scheduled_trigger_delivery": true,
-    "doctor_pass": true,
-    "pending_events": 0,
-    "semantic_freshness": true,
-    "artifact_hash_verified": true,
-    "state_parent_chain_verified": true,
-    "post_soak_independent_replay": true
-  },
-  "known_readiness_gaps": [
-    "Scheduled core delivery NOT TESTED: no schedule-triggered v2 run observed yet; cron active, push cycles are not substitute evidence",
-    "Live autonomous knowledge upgrade merge NOT TESTED; this cycle correctly returned NO_CANDIDATE under strengthened evidence criteria",
-    "Unlimited never-needs-human repair and provider availability remain unmet; core and bounded repair are implemented"
-  ],
-  "external_orphan": {
-    "run_id": 37655516971,
-    "status": "UNRESOLVED_NOT_A_V2_DEPENDENCY"
-  },
-  "merged_at": "2026-10-07T23:51:03Z",
+  "minimum_duration_seconds": 7200,
+  "minimum_automatic_cycles": 3,
+  "maximum_cycle_gap_seconds": 5400,
   "phases": {
-    "PREPARE": "PASS",
-    "EXACT_SHA_PREFLIGHT": "PASS",
+    "PREPARE": "NOT TESTED",
+    "EXACT_SHA_PREFLIGHT": "NOT TESTED",
     "PRE_ARM": "BLOCKED",
     "SOAK": "NOT TESTED",
     "POST_SOAK_VALIDATION": "NOT TESTED"
   },
-  "protected_checks": [
-    {
-      "name": "portfolio-phase1-gate",
-      "head": "0e48ebbb70d1997e3eca648330202e7315148b73",
-      "app": 5121826,
-      "conclusion": "success",
-      "url": "https://github.com/P00NSMASHER/portfolio-brain/runs/113075604975"
-    },
-    {
-      "name": "validate",
-      "head": "0e48ebbb70d1997e3eca648330202e7315148b73",
-      "app": 15368,
-      "conclusion": "success",
-      "url": "https://github.com/P00NSMASHER/portfolio-brain/actions/runs/37704211734/job/113074602425"
-    }
+  "pre_arm_blocker": "Clock fallback protected checks/integration and genuinely automatic delivery not yet verified",
+  "delivery_contract": "Native event=schedule OR verified scheduled Reliability task -> immutable scheduled receipt -> successful clock job -> matching successful workflow_dispatch core artifact; manual_probe excluded.",
+  "native_cron_status": "BLOCKED",
+  "deadline": "2026-10-08T08:00:00Z",
+  "known_limitations": [
+    "General unrestricted self-repair and uninterrupted availability not demonstrated",
+    "Live protected knowledge merge NOT TESTED"
   ],
-  "prearm_push_cycle": {
-    "run_id": 37704569224,
-    "job_id": 113075751378,
-    "artifact_id": 11518543688,
-    "artifact_sha256": "4babc4f20096f07759875ab0cc17757f5d6be75e61f5c4a450550574dd4813d4",
-    "state_commit": "ca3e7890ed9e5d25dbbafc11230473db76efbfee",
-    "state_parent": "f0f8d267c13bca0cac2d2181b4f96ba4fb5993a0",
-    "doctor": "PASS",
-    "pending_events": 0,
-    "sequence": 35,
-    "canonical_hash": "2e9fd411734f7746f0ac1a44258a5e70ba2a30a2b88f7d62121d608695ab2dd6",
-    "independent_state_replay": "PASS",
-    "trigger": "push",
-    "not_scheduling_proof": true
-  },
-  "prearm_blocker": "Real schedule-triggered core delivery not yet observed",
-  "main_foundation": {
-    "run_id": 37704569097,
-    "job_id": 113075751071,
-    "status": "PASS",
-    "tests": 1411,
-    "seconds": 37.268
-  },
-  "local_product_tests": {
-    "status": "PASS",
-    "tests": 42
-  },
-  "independent_review": {
-    "status": "PASS",
-    "source_head": "0e48ebbb70d1997e3eca648330202e7315148b73",
-    "tests": 42,
-    "seconds": 0.209
-  }
+  "owner": "Portfolio Brain Soak Watch"
 }
