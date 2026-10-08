@@ -1,6 +1,6 @@
 # Unattended operation, restart, and recovery
 
-The hourly main-only workflow restores `brain-state-v2/state.sqlite`, verifies it,
+The scheduled main-only workflow restores `brain-state-v2/state.sqlite`, verifies it,
 executes exact-SHA tests, observes sources, researches, experiments, diagnoses state,
 and publishes one verified non-force state commit. It does not launch a soak.
 It requires an initialized dedicated state branch; missing state fails closed instead
@@ -117,3 +117,7 @@ failures accounted for, existing freshness/lineage/replay/zero-backlog gates,
 and post-soak validation. Invalid dispatches or provider failure are preserved
 and diagnosed without rerun loops. There is no guarantee of uninterrupted
 availability from either hosting provider.
+
+## v3 redundant native delivery (candidate until protected merge)
+
+The earlier v2 hourly cron/ChatGPT fallback missed a complete automatic cycle for more than 90 minutes and was recorded FAIL. The governed v3 candidate preserves existing ledger and gates while replacing the sparse scheduler with two *GitHub-native* crons declared in `brain/POLICY.json`. The primary runs full core on main every 20 minutes. The offset watchdog reads GitHub's actual recent core runs and only dispatches a missing core after 35 minutes, never changing state or source. It fails closed on stale active writers and records decisions. The core re-verifies that the watchdog's origin was a real GitHub `event=schedule` parent run, and its artifact retains the exact parent metadata. A separate acceptance verifier must authenticate both parent and child, and cannot count a manual request or a scheduling intention as a successful automatic run. More frequent GitHub Actions use and state growth must be measured after release. No new paid services or credentials are assumed.
