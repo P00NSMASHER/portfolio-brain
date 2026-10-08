@@ -47,4 +47,32 @@ console.log('WORKER_DECISIONS_PASS');
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertIn("WORKER_DECISIONS_PASS",result.stdout)
 
+    def test_cloudflare_edge_fetch_uses_supported_redirect_mode(self):
+        content=WORKER.read_text()
+        self.assertEqual(content.count('redirect:"manual"'),2)
+        self.assertNotIn('redirect:"error"',content)
+
+    def test_cloudflare_edge_redirect_is_rejected_without_following(self):
+        if not shutil.which("node"):self.skipTest("Node is unavailable")
+        js="""
+import {tick} from './reliability/cloudflare/worker.mjs';
+import assert from 'node:assert/strict';
+let requests=0;
+globalThis.fetch=async (url,options) => {
+  requests++;
+  assert.equal(options.redirect,'manual');
+  return {ok:false,status:302};
+};
+await assert.rejects(
+  () => tick({scheduledTime:Date.now(),cron:'*/10 * * * *'},{GITHUB_ACTIONS_TOKEN:'fake-test-token'}),
+  /GITHUB_GET_302/
+);
+assert.equal(requests,1);
+console.log('CLOUDFLARE_REDIRECT_FAIL_CLOSED_PASS');
+"""
+        done=subprocess.run(["node","--input-type=module","-e",js],
+            cwd=WORKER.parents[2],capture_output=True,text=True,timeout=15)
+        self.assertEqual(done.returncode,0,done.stderr)
+        self.assertIn('CLOUDFLARE_REDIRECT_FAIL_CLOSED_PASS',done.stdout)
+
 if __name__=="__main__":unittest.main()

@@ -24,7 +24,7 @@ async function githubGet(path, token) {
     headers: { "Accept": "application/vnd.github+json",
       "User-Agent": WORKER,
       ...(token ? { "Authorization": "Bearer " + token } : {}) },
-    redirect: "error"
+    redirect:"manual"
   });
   if (!r.ok) fail("GITHUB_GET_" + r.status);
   return await r.json();
@@ -79,7 +79,7 @@ export async function tick(controller,env) {
   if (signature.length !== 64) fail("INVALID_SIGNATURE_FORMAT");
   const body={ref:"main",inputs:{cloudflare_attestation:base64url(raw),cloudflare_signature:base64url(signature)}};
   const response=await fetch(API+"/actions/workflows/brain-cycle.yml/dispatches", {
-    method:"POST",redirect:"error",headers:{"Accept":"application/vnd.github+json",
+    method:"POST",redirect:"manual",headers:{"Accept":"application/vnd.github+json",
        "Content-Type":"application/json","User-Agent":WORKER,
        "Authorization":"Bearer "+token},body:JSON.stringify(body)
   });
