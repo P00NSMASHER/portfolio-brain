@@ -33,12 +33,14 @@ export function decide(runs, source, nowMs) {
   if (!validSha(source)) fail("SOURCE_INVALID");
   if (!runs || !Array.isArray(runs.workflow_runs) || !Number.isInteger(nowMs)) fail("RUN_INVENTORY_INVALID");
   if (runs.workflow_runs.length > 100 || runs.total_count < runs.workflow_runs.length) fail("RUN_INVENTORY_INVALID");
-  const present = runs.workflow_runs.filter(r => r.head_sha === source && r.head_branch === "main");
-  for (const r of present) {
-    if (!Number.isInteger(r.id) || !validSha(r.head_sha) || typeof r.created_at !== "string") fail("RUN_ID_OR_HEAD_SHA_INVALID");
+  const seen = new Set();
+  for (const r of runs.workflow_runs) {
+    if (!r || !Number.isInteger(r.id) || r.id <= 0 || seen.has(r.id) || !validSha(r.head_sha) || typeof r.created_at !== "string") fail("RUN_ID_OR_HEAD_SHA_INVALID");
+    seen.add(r.id);
     const t=Date.parse(r.created_at);
     if (!Number.isFinite(t) || t > nowMs + CLOCK_SKEW_MS) fail("RUN_TIME_INVALID");
   }
+  const present = runs.workflow_runs.filter(r => r.head_sha === source && r.head_branch === "main");
   const active = present.filter(r => r.status !== "completed").sort((a,b) => Date.parse(b.created_at)-Date.parse(a.created_at));
   if (active.length) {
     const age=nowMs-Date.parse(active[0].created_at);
