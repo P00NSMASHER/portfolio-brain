@@ -67,7 +67,7 @@ class ProofTests(unittest.TestCase):
 
     def test_an_inflight_cycle_does_not_falsely_fail(self):
         entries=[run(0),run(1),run(2)]
-        entries[1]['status']='in_progress';entries[1]['conclusion']=None
+        entries[1]['status']='in_progress';entries[1]['conclusion']=None;entries[1]['completed_at']=None
         self.assertEqual(evaluate(entries).reason,'CORE_EXECUTION_INCOMPLETE')
         self.assertEqual(evaluate(entries).status,'WAITING')
 
