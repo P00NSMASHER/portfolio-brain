@@ -1,5 +1,7 @@
 name: brain-clock-v2
 on:
+  schedule:
+    - cron: "16,36,56 * * * *"
   push:
     branches: [brain-clock-v2]
     paths: [clock/pulse.json]
@@ -10,6 +12,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   dispatch:
+    if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions:
@@ -40,5 +43,50 @@ jobs:
         with:
           name: brain-v2-clock-${{ github.sha }}-${{ github.run_id }}
           path: /tmp/clock.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  scheduled-watchdog:
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout actual protected source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check independent GitHub scheduling liveness
+        id: due
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)"
+          test "$MAIN_SHA" = "$GITHUB_SHA" || { echo "MAIN_DRIFT: no fallback dispatch"; exit 1; }
+          mkdir -p /tmp/native-watchdog
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/brain-cycle.yml/runs?branch=main&per_page=100" > /tmp/native-watchdog/runs.json
+          python -m brain.watchdog decide --input /tmp/native-watchdog/runs.json --source-sha "$MAIN_SHA" --output /tmp/native-watchdog/decision.json
+          DUE="$(python -c 'import json; print(str(json.load(open("/tmp/native-watchdog/decision.json"))["dispatch"]).lower())')"
+          echo "due=$DUE" >> "$GITHUB_OUTPUT"
+      - name: Dispatch one overdue core without inventing a PASS
+        if: ${{ steps.due.outputs.due == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)"
+          test "$MAIN_SHA" = "$GITHUB_SHA" || { echo "MAIN_DRIFT"; exit 1; }
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/brain-cycle.yml/dispatches" -f ref=main -f "inputs[watchdog_run_id]=$GITHUB_RUN_ID"
+          echo "DISPATCH_REQUEST_ACCEPTED: workload/soak remains unverified"
+      - name: Preserve actual scheduled watchdog evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: brain-v3-watchdog-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/native-watchdog/
           if-no-files-found: warn
           retention-days: 30
