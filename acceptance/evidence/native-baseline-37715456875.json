@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "kind": "PRE_ARM_NATIVE_BASELINE_EVIDENCE",
+  "status": "VERIFIED",
+  "acceptance_source_sha": "8a47ce9f04f77c2c4ab4c972106ccd31bb1c97e9",
+  "checked_at": "2026-10-08T02:31:23.894Z",
+  "automatic_provenance": {
+    "run_id": 37715456875,
+    "event": "schedule",
+    "run_attempt": 1,
+    "head_branch": "main",
+    "head_sha": "8a47ce9f04f77c2c4ab4c972106ccd31bb1c97e9",
+    "run_completed_at": "2026-10-08T01:57:46.000Z",
+    "conclusion": "success",
+    "url": "https://github.com/P00NSMASHER/portfolio-brain/actions/runs/37715456875",
+    "job_id": 113110773772,
+    "job_status": "completed",
+    "job_conclusion": "success",
+    "required_steps_succeeded": [
+      "Checkout exact source without persisted credentials",
+      "Bind execution to unchanged current main",
+      "Restore dedicated durable state branch",
+      "Validate restoration and capture publication parent",
+      "Exact-SHA deterministic preflight",
+      "Read-only public project monitoring",
+      "Bounded public code and opportunity research",
+      "Evidence-bound deterministic experiment",
+      "Verify authoritative state and zero event backlog",
+      "Propose a measured protected knowledge upgrade when eligible",
+      "Verify main and state parent before publication",
+      "Publish one nonsecret state transaction without force",
+      "Preserve verifiable execution evidence"
+    ],
+    "optional_external_clock_check": "skipped (native schedule event; permitted)"
+  },
+  "artifact": {
+    "artifact_id": 11522369892,
+    "sha256": "0b289bcc949de552b45ea78afcf50db617b271bd0a728341a0eead2b16be9da1",
+    "downloaded_and_sha256_verified": true,
+    "delivery_source_sha": "8a47ce9f04f77c2c4ab4c972106ccd31bb1c97e9",
+    "delivery_state_parent": "41d43fcc25f563df95a917a7327e7f3c07d515da",
+    "delivery_state_commit": "e93a7d2bb99c7330c4679b1fc9739229fa10a6c8",
+    "delivery_publication_verified": true,
+    "preflight_status": "PASS",
+    "report_doctor_status": "PASS",
+    "mandatory_workloads": {
+      "monitor": "PASS",
+      "research": "PASS",
+      "experiment": "PASS"
+    },
+    "state_sequence": 56,
+    "canonical_hash": "e811fcf5aebfe13e3011a9b8b54d7569b39e5122157fd8ad0c8e965a6fbade0c",
+    "pending_events": 0
+  },
+  "remote_state_independent_verification": {
+    "independent_workflow_run_id": 37716480414,
+    "independent_workflow_url": "https://github.com/P00NSMASHER/portfolio-brain/actions/runs/37716480414",
+    "independent_workflow_conclusion": "success",
+    "proof_artifact_id": 11524115878,
+    "proof_artifact_sha256": "a9ea57a7e7add7c4c3419b1e5279c80ad48583cca23734a6ebb3bbda7ca4fc2b",
+    "verified_result": "NATIVE_BASELINE_VERIFIED",
+    "state_commit": "e93a7d2bb99c7330c4679b1fc9739229fa10a6c8",
+    "state_parent": "41d43fcc25f563df95a917a7327e7f3c07d515da",
+    "blob_sha": "1ce959306cc89a299332dda7fb43ccc95c3526d5",
+    "sqlite_sha256": "6cc5f87e44e14ad18700d16f68a06edaf10ac48ee9d655a188428d43df84fda5",
+    "canonical_hash": "e811fcf5aebfe13e3011a9b8b54d7569b39e5122157fd8ad0c8e965a6fbade0c",
+    "state_sequence": 56,
+    "pending_events": 0
+  },
+  "protected_ci": {
+    "candidate_pr": 648,
+    "candidate_head": "2070aac0e1a457061bb1b8fbb229b430962351b6",
+    "validate": {
+      "app_id": 15368,
+      "conclusion": "success"
+    },
+    "portfolio_phase1_gate": {
+      "app_id": 5121826,
+      "conclusion": "success"
+    },
+    "current_main_foundation_run_id": 37711517338,
+    "current_main_foundation_conclusion": "success"
+  },
+  "acceptance": {
+    "baseline_count": 1,
+    "minimum_automatic_cycles": 3,
+    "minimum_elapsed_seconds": 7200,
+    "maximum_gap_seconds": 5400,
+    "earliest_baseline_span_completion": "2026-10-08T03:57:46.000Z",
+    "soak_deadline": "2026-10-08T07:09:44.000Z",
+    "accepted_automated_runs": [
+      37715456875
+    ],
+    "post_soak_validation": "NOT TESTED",
+    "soak_pass": false
+  },
+  "integrity_note": "Pre-arm verification was recorded after the genuinely completed native baseline; timestamps distinguish source event from subsequent admission. A manual probe is not counted. No fast-forward, synthetic clock signal, fake second cycle, acceptance weakening, or main mutation."
+}

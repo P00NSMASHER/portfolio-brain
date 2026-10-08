@@ -1,26 +1,28 @@
 {
   "schema_version": 2,
-  "status": "PRE_ARM",
+  "status": "ACTIVE",
   "source_sha": "8a47ce9f04f77c2c4ab4c972106ccd31bb1c97e9",
   "candidate_pr": 648,
   "candidate_head": "2070aac0e1a457061bb1b8fbb229b430962351b6",
   "prior_attempt": "acceptance/history/e2d825d-native-clock-blocked.json",
-  "soak_started_at": null,
+  "soak_started_at": "2026-10-08T01:57:46.000Z",
   "soak_completed": false,
-  "accepted_run_ids": [],
+  "accepted_run_ids": [
+    37715456875
+  ],
   "minimum_duration_seconds": 7200,
   "minimum_automatic_cycles": 3,
   "maximum_cycle_gap_seconds": 5400,
   "phases": {
     "PREPARE": "PASS",
     "EXACT_SHA_PREFLIGHT": "PASS",
-    "PRE_ARM": "BLOCKED",
-    "SOAK": "NOT TESTED",
+    "PRE_ARM": "PASS",
+    "SOAK": "ACTIVE",
     "POST_SOAK_VALIDATION": "NOT TESTED"
   },
-  "pre_arm_blocker": "Genuinely automatic delivery not yet verified; manual bridge success is not scheduling proof",
+  "pre_arm_blocker": null,
   "delivery_contract": "Native event=schedule OR verified scheduled Reliability task -> immutable scheduled receipt -> successful clock job -> matching successful workflow_dispatch core artifact; manual_probe excluded.",
-  "native_cron_status": "BLOCKED",
+  "native_cron_status": "PASS",
   "deadline": "2026-10-08T07:09:44.000Z",
   "known_limitations": [
     "General unrestricted self-repair and uninterrupted availability not demonstrated",
@@ -92,5 +94,26 @@
     "status": "PASS",
     "source_sha": "8a47ce9f04f77c2c4ab4c972106ccd31bb1c97e9"
   },
-  "first_scheduled_delivery_deadline": "2026-10-08T03:09:44.000Z"
+  "first_scheduled_delivery_deadline": "2026-10-08T03:09:44.000Z",
+  "acceptance_recorded_at": "2026-10-08T02:31:23.894Z",
+  "soak_earliest_eligible_at": "2026-10-08T03:57:46.000Z",
+  "current_main_freeze_sha": "8a47ce9f04f77c2c4ab4c972106ccd31bb1c97e9",
+  "baseline": {
+    "run_id": 37715456875,
+    "event": "schedule",
+    "completed_at": "2026-10-08T01:57:46.000Z",
+    "source_sha": "8a47ce9f04f77c2c4ab4c972106ccd31bb1c97e9",
+    "run_attempt": 1,
+    "artifact_id": 11522369892,
+    "artifact_sha256": "0b289bcc949de552b45ea78afcf50db617b271bd0a728341a0eead2b16be9da1",
+    "state_commit": "e93a7d2bb99c7330c4679b1fc9739229fa10a6c8",
+    "state_parent": "41d43fcc25f563df95a917a7327e7f3c07d515da",
+    "state_sequence": 56,
+    "canonical_hash": "e811fcf5aebfe13e3011a9b8b54d7569b39e5122157fd8ad0c8e965a6fbade0c",
+    "pending_events": 0,
+    "independent_replay": "PASS",
+    "independent_run_id": 37716480414
+  },
+  "pre_arm_evidence_path": "acceptance/evidence/native-baseline-37715456875.json",
+  "start_time_semantics": "First genuinely scheduled accepted completed cycle at 01:57:46Z; admission recorded later after independent verification."
 }
