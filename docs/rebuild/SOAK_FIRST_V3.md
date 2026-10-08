@@ -46,3 +46,18 @@ Do not change `brain-acceptance-v2`, `brain-state-v2`, `main`, trust-anchor file
 `python -m unittest discover -s tests -p test_brain_soak_v3.py -v`
 
 The new tests verify the verifier's adversarial logic; a unit-test PASS is not a hosted unattended run.
+
+## After the original v2 soak failed
+
+The v2 attempt is terminal **FAIL** at 2026-10-08T03:27:46Z (90-minute gap from the only genuine completed automatic cycle). Immutable source and provider evidence is preserved on `brain-acceptance-v2` under `acceptance/evidence/soak-gap-fail-20261008.json`. It must not be reclassified or restarted.
+
+### v3 automatic delivery replacement
+
+Two independently triggered GitHub-native schedules now provide redundancy under reviewed policy:
+
+- Complete current-main core: `7,27,47 * * * *`. Every delivered scheduled run executes the original monitored source coverage, research, experiment, doctor, non-force parent-checked state publication and artifact receipt. No step is skipped in a qualifying automatic cycle.
+- GitHub-native read-only watchdog: `16,36,56 * * * *`. It queries actual GitHub run metadata, never equates dispatch acceptance with core success, and dispatches once only if the last same-main successful core is at least 35 minutes old and no core is active. A provider-queued stale writer blocks instead of causing a competing writer. Its sole write privilege is Actions dispatch, not contents/state or pull-request merge.
+
+An overdue fallback carries the *actual scheduled watchdog GitHub run ID* into the core. The core fetches the provider's parent metadata and requires event=schedule, correct main SHA, correct clock workflow, recent timestamp, first attempt and github-actions[bot] dispatch actor. Its artifact saves the origin receipt. A separate collector must independently fetch that scheduled parent run, verify its dispatch job and associated core artifact and state before counting the fallback as automatic. An operator/manual dispatch is never treated as a scheduled run merely because its inputs look similar.
+
+Multiple schedules improve tolerance of an individual dropped/delayed cron. GitHub-native scheduling is still not guaranteed: a true outage, stale runner, state conflict, source-read failure or missing receipt fails closed. The original **three genuine automatic cycles, at least 7200 elapsed seconds, maximum 5400-second delivery gap, exact-main, all mandatory jobs, zero event backlog, immutable parent chain and post-soak verification** remain unchanged. Production requires protected exact-head CI and a fresh acceptance attempt after merging. These implementation changes are not a live soak PASS or proof of unlimited self-repair.
