@@ -1,0 +1,114 @@
+{
+  "schema_version": 4,
+  "status": "ACTIVE",
+  "owner": "Portfolio Brain Soak Watch",
+  "source_sha": "9fc08c72e2d050359e7f119bfcbfb82b23f95b5b",
+  "source_pr": 652,
+  "candidate_head": "6926296cb5e86f7a0ef4bf5030f2738376c7806e",
+  "protected_checks": {
+    "validate": {
+      "app_id": 15368,
+      "status": "success"
+    },
+    "portfolio_phase1_gate": {
+      "app_id": 5121826,
+      "status": "success"
+    }
+  },
+  "created_at": "2026-10-08T13:54:35.826Z",
+  "soak_started_at": "2026-10-08T13:50:59.000Z",
+  "earliest_possible_completion": "2026-10-08T19:50:59.000Z",
+  "soak_completed": false,
+  "required": {
+    "minimum_elapsed_seconds": 21600,
+    "minimum_automatic_cycles": 3,
+    "maximum_completed_cycle_gap_seconds": 5400,
+    "exact_main_unchanged": true,
+    "mandatory_workloads_success": true,
+    "complete_provider_run_inventory_including_failures": true,
+    "actual_scheduled_provenance": true,
+    "source_freshness": true,
+    "verified_artifact_zip_sha256": true,
+    "durable_remote_sqlite_state_parent_and_canonical_chain": true,
+    "zero_pending_events": true,
+    "independent_final_remote_sqlite_replay": true,
+    "independent_post_soak_validation": true
+  },
+  "accepted_automatic_runs": [
+    {
+      "run_id": 37787547513,
+      "run_attempt": 1,
+      "workflow": "brain-cycle-v2",
+      "event": "workflow_dispatch",
+      "source_sha": "9fc08c72e2d050359e7f119bfcbfb82b23f95b5b",
+      "provider": "Cloudflare Workers scheduled Cron Trigger",
+      "provider_worker": "portfolio-brain-recovery",
+      "provider_cron": "*/10 * * * *",
+      "provider_scheduled_at": "2026-10-08T13:50:19.000Z",
+      "provider_invocation_logged_at": "2026-10-08T13:50:23.352Z",
+      "provider_invocation_outcome": "ok",
+      "provider_dispatch_status": "DISPATCH_ACCEPTED_NOT_COMPLETED",
+      "core_created_at": "2026-10-08T13:50:22.000Z",
+      "core_completed_at": "2026-10-08T13:50:59.000Z",
+      "github_run_status": "completed",
+      "github_run_conclusion": "success",
+      "job_id": 113346094085,
+      "github_signed_origin_step": "success",
+      "github_mandatory_steps": "success",
+      "artifact_id": 11554991881,
+      "artifact_zip_sha256": "77535ad054c3631b4e60cc859a53b84af3f6be178fdf4e4a618c9e298d745f74",
+      "artifact_zip_hash_independently_matched": true,
+      "signed_origin_envelope_sha256": "16e7ce624c86405956bc5003596e0ee4e3a170daa651bdcff53f2f0486e823bc",
+      "signed_origin_signature_sha256": "2719d40c4fbeae9576f30fdc94745cfe7fb5a4e75293fb4d2407798029c4e8ec",
+      "state_parent": "d82c263ad7af3b8ed113a21591dc03c74714e0e9",
+      "state_commit": "43a31bd27da084d920ea951c4ec4d2ee85f26a17",
+      "remote_state_branch_commit_verified": true,
+      "remote_commit_parent_verified": true,
+      "remote_state_sqlite_git_blob_sha": "352c141b037e17aeb8e915d70da0bffbdcb3d2e3",
+      "doctor": {
+        "status": "PASS",
+        "state_sequence": 91,
+        "canonical_hash": "170f9e4f7abd2089c266243cf3b8ee6261ecc7afa6bcca1b7bb5912db5122cfc",
+        "pending_events": 0,
+        "mandatory_workloads": {
+          "monitor": "PASS",
+          "research": "PASS",
+          "experiment": "PASS"
+        }
+      },
+      "independent_raw_sqlite_replay": "PENDING_FINAL_ACCEPTANCE",
+      "provenance_note": "Genuine Cloudflare scheduled() provider log plus successful signed-origin GitHub job. GitHub actor is the configured GitHub token principal, not evidence of manual invocation."
+    }
+  ],
+  "nonqualifying_same_source_runs": [
+    {
+      "run_id": 37783926562,
+      "event": "push",
+      "conclusion": "success",
+      "reason": "Merge-triggered production smoke test; not automatic baseline"
+    }
+  ],
+  "phases": {
+    "PROTECTED_CANDIDATE_CI": "PASS",
+    "PRODUCTION_PUSH_SMOKE": "PASS",
+    "SIGNED_EXTERNAL_SCHEDULER": "PASS",
+    "FIRST_AUTOMATIC_CORE": "PASS",
+    "SOAK": "ACTIVE",
+    "INDEPENDENT_POST_SOAK_VALIDATION": "NOT_TESTED"
+  },
+  "soak_validation_notes": [
+    "Independent SHA256 validation of GitHub ZIP completed and matched provider digest.",
+    "Remote Git commit, parent and SQLite blob identity verified from actual GitHub provider; job doctor reports canonical state verified and SQLite integrity PASS.",
+    "Independent direct SQLite byte-level replay was unavailable to the interactive verifier due binary GitHub connector limitations and remains MANDATORY prior to terminal PASS; do not misrepresent it as completed.",
+    "Do not count Cloudflare HTTP 204 without independently completed successful signed-origin child core.",
+    "Any failed mandatory same-source core, source drift, broken artifact/state, or >5400 seconds since latest qualifying completed automatic run before full 21600 second span requires prompt terminal failure, with original evidence preserved.",
+    "Frozen protected production source must not change while ACTIVE.",
+    "All same-source workflow runs, including failures/retries/manual/push, must be inventoried before terminal decision."
+  ],
+  "historical_acceptance": {
+    "v2": "PERMANENT_FAIL_ON_BRAIN_ACCEPTANCE_V2",
+    "v3": "BLOCKED_FIRST_AUTOMATIC_DELIVERY_DEADLINE_MISSED_ON_BRAIN_ACCEPTANCE_V3"
+  },
+  "terminal_result": null,
+  "terminal_reason": null
+}
