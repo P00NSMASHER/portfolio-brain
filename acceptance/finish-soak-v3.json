@@ -19,13 +19,13 @@
   "production_push_run_id": 37725203611,
   "production_push_status": "RUNNING_AT_INITIALIZATION",
   "first_automatic_delivery_deadline": "2026-10-08T05:57:53.000Z",
-  "acceptance_deadline": "2026-10-08T10:57:53.000Z",
+  "acceptance_deadline": "2026-10-08T14:57:53.000Z",
   "soak_started_at": null,
   "soak_completed": false,
   "accepted_automatic_runs": [],
   "required": {
     "minimum_automatic_cycles": 3,
-    "minimum_elapsed_seconds": 7200,
+    "minimum_elapsed_seconds": 21600,
     "maximum_completed_cycle_gap_seconds": 5400,
     "exact_main_unchanged": true,
     "mandatory_workloads_success": true,
@@ -63,5 +63,19 @@
   "additional_limitations": [
     "GitHub schedules are best effort, no 100% uptime guarantee",
     "The business/research core is bounded; arbitrary autonomous code repair or revenue generation is not demonstrated"
-  ]
+  ],
+  "soak_duration_hours": 6,
+  "duration_amendment": {
+    "requested_by": "user",
+    "changed_at": "2026-10-08T04:02:10.027Z",
+    "original_minimum_elapsed_seconds": 7200,
+    "new_minimum_elapsed_seconds": 21600,
+    "original_acceptance_deadline": "2026-10-08T10:57:53.000Z",
+    "new_acceptance_deadline": "2026-10-08T14:57:53.000Z",
+    "first_delivery_deadline_unchanged": true,
+    "original_maximum_cycle_gap_seconds": 5400,
+    "unchanged_minimum_automatic_cycles": 3,
+    "reason": "Six-hour real unattended reliability soak requested before first automatic baseline; adds four hours without reducing any existing gate."
+  },
+  "duration_contract_note": "Six hours (21600 seconds) must elapse between first and last provider-verified completed automatic core cycles on the exact frozen main. The soak_v3 pure evaluator's built-in 7200-second lower bound is insufficient by itself: the authoritative independent Soak Watch MUST additionally verify >=21600 seconds from actual provider timestamps before postvalidation/PASS. Re-check all intervening core executions and <=5400-second gap. No code/source/main changes during soak."
 }
