@@ -127,10 +127,26 @@ class ProofTests(unittest.TestCase):
         entries[2]['completed_at']=utc(START+timedelta(seconds=7030))
         self.assertEqual(evaluate(entries).reason,'SOAK_DURATION_INCOMPLETE')
 
+    def test_missing_second_automatic_run_fails_at_unchanged_gap(self):
+        early=evaluate([run(0)],now=START+timedelta(minutes=89))
+        self.assertEqual(early.status,'WAITING')
+        late=evaluate([run(0)],now=START+timedelta(minutes=92))
+        self.assertEqual(late.status,'FAIL')
+        self.assertEqual(late.reason,'AUTOMATIC_DELIVERY_GAP_EXCEEDED')
+
+    def test_missing_third_run_fails_even_without_three_cycles(self):
+        result=evaluate([run(0),run(1)],now=START+timedelta(hours=2,minutes=35))
+        self.assertEqual(result.status,'FAIL')
+        self.assertEqual(result.reason,'AUTOMATIC_DELIVERY_GAP_EXCEEDED')
+
+    def test_completed_two_hour_soak_can_enter_postvalidation(self):
+        result=evaluate([run(0),run(1),run(2)],now=START+timedelta(hours=3))
+        self.assertEqual(result.status,'PRE_POSTVALIDATION')
+
     def test_deadline_and_no_runs_are_not_pass(self):
         self.assertEqual(evaluate([],now=START+timedelta(hours=1)).status,'WAITING')
         self.assertEqual(evaluate([],now=START+timedelta(hours=5)).status,'BLOCKED')
-        self.assertEqual(evaluate([run(0)],now=START+timedelta(hours=5)).status,'BLOCKED')
+        self.assertEqual(evaluate([run(0)],now=START+timedelta(hours=5)).status,'FAIL')
 
     def test_duplicate_run_attempt_and_invalid_time_rejected(self):
         with self.assertRaisesRegex(EvidenceError,'CYCLE_DUPLICATE_ATTEMPT'):
