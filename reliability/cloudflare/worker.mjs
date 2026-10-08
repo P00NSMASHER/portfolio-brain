@@ -32,7 +32,8 @@ async function githubGet(path, token) {
 export function decide(runs, source, nowMs) {
   if (!validSha(source)) fail("SOURCE_INVALID");
   if (!runs || !Array.isArray(runs.workflow_runs) || !Number.isInteger(nowMs)) fail("RUN_INVENTORY_INVALID");
-  if (runs.workflow_runs.length > 100 || runs.total_count < runs.workflow_runs.length) fail("RUN_INVENTORY_INVALID");
+  if (!Number.isInteger(runs.total_count) || runs.total_count < 0 ||
+      runs.workflow_runs.length !== Math.min(runs.total_count, 100)) fail("RUN_INVENTORY_INVALID");
   const seen = new Set();
   for (const r of runs.workflow_runs) {
     if (!r || !Number.isInteger(r.id) || r.id <= 0 || seen.has(r.id) || !validSha(r.head_sha) || typeof r.created_at !== "string") fail("RUN_ID_OR_HEAD_SHA_INVALID");
