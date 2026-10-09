@@ -82,6 +82,27 @@ production key must still fail signature verification or freshness. A green
 test is **not** a v5 scheduled execution, not a production fix deployed and
 not permission to re-label v4's historical failed job.
 
+## Additional research-quality source candidates in V5 draft (not deployment)
+
+The integration candidate also stages the source-reviewed, independently
+green code and regression tests from two still-unmerged main-based drafts:
+[knowledge diversity #662](https://github.com/P00NSMASHER/portfolio-brain/pull/662)
+at `089a3d9ffb714e0fa365a5c6ad2ba737479814bb` and
+[synthetic experiment integrity #663](https://github.com/P00NSMASHER/portfolio-brain/pull/663)
+at `bb7f830bc4abb62a50611245687162b9b440c3b7`.
+Their implementation and test Git blobs are copied unchanged, with only
+the two source-specific guidance pages reconciled to reflect staging in
+this combined V5 draft. Their original branches and pull requests remain
+unchanged.
+
+New integrated offline tests must demonstrate that balanced *eligible*
+knowledge selection and the revised **simulated-only** invoice experiment
+can coexist in the same canonical SQLite report, preserve complete replay,
+and make no claim of actual speedup, invoices, customer utility or revenue.
+The full combined candidate and its independent verifier require **new**
+exact-head green checks. Neither the original PR checks nor passing
+synthetic tests grant production source authority or new V5 acceptance.
+
 ## Offline cutover/rollback simulation (not deployment)
 
 `tests/test_v5_source_switch_safety.py` runs the actual reviewed Cloudflare
