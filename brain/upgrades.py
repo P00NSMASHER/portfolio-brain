@@ -19,6 +19,26 @@ PATH='brain/REUSE_KNOWLEDGE.json'
 VALIDATION='actions/workflows/foundation-ci.yml/dispatches'
 BRANCH=re.compile(r'factory/auto-repair-v2-knowledge-[0-9a-f]{16}')
 
+def balanced_knowledge_sources(candidates, limit=12):
+    """Round-robin prequalified sources by project target, with stable key order.
+
+    All eligibility checks still happen in build_knowledge. This only prevents
+    one alphabetically early project from crowding out other eligible projects.
+    No scoring probability, license grant, execution or authority is inferred.
+    """
+    require(type(limit) is int and 1 <= limit <= 12, 'knowledge source limit invalid')
+    buckets = {}
+    for candidate in sorted(candidates, key=lambda c: (c['target'], c['key'])):
+        buckets.setdefault(candidate['target'], []).append(candidate)
+    selected = []
+    for offset in range(max((len(group) for group in buckets.values()), default=0)):
+        for target in sorted(buckets):
+            if offset < len(buckets[target]):
+                selected.append(buckets[target][offset])
+                if len(selected) == limit:
+                    return selected
+    return selected
+
 def build_knowledge(report):
     require(report['status']=='PASS', 'upgrade requires passing authoritative report')
     candidates=[]
@@ -30,7 +50,7 @@ def build_knowledge(report):
             candidates.append({**c,'test_paths':tests})
     require(len(candidates)>=3, 'INSUFFICIENT_UPGRADE_EVIDENCE: three real implementation-and-test sources required')
     sources=[]
-    for c in sorted(candidates,key=lambda x:x['key'])[:12]:
+    for c in balanced_knowledge_sources(candidates):
         sources.append({key:c[key] for key in ('key','repository','head_sha','path','blob_sha','code_sha256','test_paths','license','source_ref','target','matched_terms')})
     # No private names, code, payloads, or subjective revenue claim in public upgrades.
     return {'schema_version':2,'scope':'STRUCTURAL_REUSE_KNOWLEDGE_NOT_EXECUTED_OR_REVENUE_VERIFIED','sources':sources,'fingerprint':digest(sources)}
