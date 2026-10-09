@@ -8,8 +8,10 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from brain.adapters import event
+from brain.__main__ import main as brain_cli
 from brain.core import BrainError, Store
 from brain.transfer import review_transfer, write_transfer_review
 
@@ -159,6 +161,45 @@ class TransferEvidenceTests(unittest.TestCase):
             for table in before
         }
         self.assertEqual(before, after)
+
+    def test_real_cli_entrypoint_reads_existing_authority_without_mutating_events(self):
+        source = self.root / "input.json"
+        source.write_text(json.dumps(request()))
+        destination = self.root / "cli-result"
+        tables = ("events", "ledger", "reports", "attempts")
+        before = {
+            table: self.store.db.execute("SELECT count(*) FROM " + table).fetchone()[0]
+            for table in tables
+        }
+        with patch("brain.__main__.source_sha", return_value=BRAIN_SHA):
+            with patch("brain.__main__.GitHub", return_value=StubGitHub()):
+                code = brain_cli([
+                    "transfer-review", "--db", str(self.root / "state.sqlite"),
+                    "--input", str(source), "--output", str(destination),
+                    "--expected-sha", BRAIN_SHA,
+                ])
+        self.assertEqual(code, 0)
+        generated = json.loads((destination / "transfer-review.json").read_text())
+        self.assertEqual(generated["status"], "DRAFT_PR_CHECKS_PASSED_NOT_ADOPTED")
+        after = {
+            table: self.store.db.execute("SELECT count(*) FROM " + table).fetchone()[0]
+            for table in tables
+        }
+        self.assertEqual(after, before)
+
+    def test_cli_refuses_missing_sqlite_instead_of_creating_new_authority(self):
+        nonexistent = self.root / "does-not-exist.sqlite"
+        source = self.root / "input.json"
+        source.write_text(json.dumps(request()))
+        with patch("brain.__main__.source_sha", return_value=BRAIN_SHA):
+            code = brain_cli([
+                "transfer-review", "--db", str(nonexistent),
+                "--input", str(source), "--output", str(self.root / "blocked"),
+                "--expected-sha", BRAIN_SHA,
+            ])
+        self.assertEqual(code, 1)
+        self.assertFalse(nonexistent.exists())
+        self.assertFalse((self.root / "blocked" / "transfer-review.json").exists())
 
     def test_receipt_written_to_local_private_output_only(self):
         report = self.run_review()
