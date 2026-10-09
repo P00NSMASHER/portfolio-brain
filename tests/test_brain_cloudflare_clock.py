@@ -2,6 +2,7 @@
 import base64
 from datetime import datetime,timedelta,timezone
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -45,6 +46,71 @@ class SignedClock(unittest.TestCase):
         result=verify(a,b,SHA,now=WHEN+timedelta(seconds=45),pubkey=self.public)
         self.assertTrue(result["signed_origin"])
         self.assertFalse(result["soak_pass"])
+    def test_real_valid_signed_base64url_can_begin_with_hyphen(self):
+        # Fully synthetic P-256 public key and fixed test attestation.
+        # Signed offline with an ephemeral TEST key; no production signing key.
+        # Exercises actual OpenSSL verification rather than a mocked signature.
+        fixture_envelope = (
+            "eyJraW5kIjoiY2xvdWRmbGFyZV9jcm9uX3YxIiwid29ya2VyIjoicG9ydG"
+            "ZvbGlvLWJyYWluLXJlY292ZXJ5IiwiY3JvbiI6IiovMTAgKiAqICogKiIsIn"
+            "NvdXJjZV9zaGEiOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFh"
+            "YWFhYWFhIiwic2NoZWR1bGVkX2F0IjoiMjAyNi0xMC0wOVQwOTozMDoxOV"
+            "oiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDA5OjMwOjIwWiIsInNsb3QiOj"
+            "I5ODU4OTd9"
+        )
+        fixture_signature = (
+            "-gLOwc_tmniszxGYFCTINyf3vnfW9anLqPM3vL-nrUklGVNr8xuDiSuaTRq"
+            "aoNZZHLmAg3340fqG134Yg2pR5w"
+        )
+        self.assertTrue(fixture_signature.startswith("-"))
+        sample_pubkey = Path(self.tmp.name) / "test-only-public.pem"
+        sample_pubkey.write_text(
+            "-----BEGIN PUBLIC KEY-----\n"
+            "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEk/QvLRPb/h9BhbXLYCyzNYA9jFCV\n"
+            "mIfv0HASSD6ctsjWqofXdfDgV2UxaPveblNLOhjVZQmdLZ2855eTDvU25w==\n"
+            "-----END PUBLIC KEY-----\n",
+            encoding="ascii",
+        )
+        test_now = datetime(2026, 10, 9, 9, 30, 40, tzinfo=timezone.utc)
+        trusted = verify(fixture_envelope, fixture_signature, SHA,
+                         now=test_now, pubkey=sample_pubkey)
+        self.assertEqual(trusted["status"], "CLOUDFLARE_SIGNED_ORIGIN_VERIFIED")
+        self.assertTrue(trusted["signed_origin"])
+        self.assertFalse(trusted["soak_pass"])
+        self.assertEqual(trusted["source_sha"], SHA)
+        # A similarly shaped but tampered signature must still be rejected.
+        tampered = fixture_signature[:2] + ("A" if fixture_signature[2] != "A" else "B") + fixture_signature[3:]
+        with self.assertRaisesRegex(CloudflareClockError, "CLOCK_SIGNATURE_NOT_VERIFIED"):
+            verify(fixture_envelope, tampered, SHA, now=test_now, pubkey=sample_pubkey)
+
+        # Replay the ACTUAL workflow shell command locally, overriding only
+        # its output destination to an isolated disposable test path. The
+        # production PEM is different from our test key, so this must BLOCK
+        # by signature or age, NOT by argparse misreading a leading '-'.
+        workflow = Path(__file__).resolve().parents[1] / ".github/workflows/brain-cycle.yml"
+        command = [line.strip() for line in workflow.read_text().splitlines()
+                   if line.strip().startswith("python -m brain.cloudflare_clock --envelope ")]
+        self.assertEqual(len(command), 1)
+        self.assertIn('--signature="$CF_SIGNATURE"', command[0])
+        self.assertNotIn('--signature "$CF_SIGNATURE"', command[0])
+        output = Path(self.tmp.name) / "parsed-not-authorized.json"
+        shell_line = command[0].replace("/tmp/brain/cloudflare-origin.json", str(output))
+        env = dict(os.environ, CF_ENVELOPE=fixture_envelope,
+                   CF_SIGNATURE=fixture_signature, BRAIN_SOURCE_SHA=SHA)
+        executed = subprocess.run(
+            ["bash", "-c", "set -euo pipefail\n" + shell_line],
+            cwd=workflow.parents[2], env=env,
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+        self.assertEqual(executed.returncode, 1)
+        self.assertNotIn("expected one argument", executed.stderr)
+        self.assertNotIn("unrecognized arguments", executed.stderr)
+        result = json.loads(output.read_text())
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertIn(result["reason"], {"CLOCK_SIGNATURE_NOT_VERIFIED",
+                                         "CLOCK_STALE_OR_FUTURE"})
+        self.assertFalse(result["soak_pass"])
+
     def test_wrong_source_rejected(self):
         a,b=self.inputs()
         with self.assertRaisesRegex(CloudflareClockError,"CLOCK_SOURCE_MISMATCH"):
