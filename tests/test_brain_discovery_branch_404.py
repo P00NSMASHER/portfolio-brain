@@ -41,7 +41,7 @@ def discovery_transport(*, unavailable=(EMPTY,), include_valid=False, other_erro
     """Minimal exact-path transport with an optional genuine source blob."""
     raw = b"def invoice_audit():\n    return 'freight invoice duplicate audit'\n"
     blob_sha = hashlib.sha1(
-        b"blob " + str(len(raw)).encode() + b"\\0" + raw,
+        b"blob " + str(len(raw)).encode() + bytes([0]) + raw,
     ).hexdigest()
     calls = []
     missing = set(unavailable)
