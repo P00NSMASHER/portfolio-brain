@@ -71,6 +71,20 @@ input typo cannot bootstrap an empty authority or generate a misleading
 transfer outcome. The command does not drain input or write feedback,
 report rows, attempt records or other canonical events.
 
+**Physical read-only guarantee:** `Store.__init__` normally writes SQLite
+metadata, sets PRAGMAs and changes file permissions. `transfer-review`
+therefore NEVER opens the supplied canonical database with `Store`. It
+opens the original using SQLite `mode=ro` and `query_only=ON`, verifies
+SQLite integrity and foreign keys, then uses SQLite's consistent backup
+operation to create a `0600` database in a disposable private `0700`
+temporary directory. The normal `Store.read_report()` and provider GET
+checks operate only on this temporary copy; the temporary directory and
+all SQLite handles are closed and cleaned up on success or failure.
+Symlinked or nonexistent original authority paths are rejected. Regression
+tests also assert the source database's original bytes, modification time,
+file permissions, and immutable event/report/attempt counts never change.
+This snapshot is not a second authoritative ledger or synchronized writer.
+
 ## Status interpretation
 
 | Result | What is verified | What is NOT verified |
