@@ -46,6 +46,42 @@ Do not force-update any state ref. In-flight old-source work can fail
 `MAIN_DRIFT` when source changes; preserve failure evidence, and require
 continuity from the last actual durable state commit.
 
+## October 9, 2026: signed Cron CLI parsing failure (source still v4)
+
+At 09:30 UTC, the **original Cloudflare** `scheduled()` event for worker
+`portfolio-brain-recovery` completed provider-side with
+`DISPATCH_ACCEPTED_NOT_COMPLETED` for protected v4 source
+`9fc08c72e2d050359e7f119bfcbfb82b23f95b5b`. Its corresponding
+[GitHub core #37911706292](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/37911706292)
+FAILED in "Verify independently signed Cloudflare Cron provenance"
+*before* loading/publishing durable state. The workflow gave Python argparse
+the P-256 **URL-safe base64** signature in the two-token form
+`--signature "$CF_SIGNATURE"`. This **valid encoding class** can begin with
+a hyphen, which argparse interprets as a new option, producing
+`argument --signature: expected one argument`, even when the expected
+input field is present. That error is a command-line argument binding
+failure; it does not prove a signature was invalid or forged, and this
+failed run must remain FAILED with no state publication or delivery claim.
+
+Cloudflare's authentic 09:40 UTC `scheduled()` event also accepted a
+dispatch. [GitHub core #37912778183](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/37912778183)
+subsequently SUCCEEDED, verifying P-256 provenance, mandatory workloads,
+doctor PASS/pending0 and nonforce state publication on the original v4
+source. Preserve both outcomes and do not replay the failed 09:30 run.
+
+The **unmerged v5 candidate only** changes the workflow call to the single
+`--signature="$CF_SIGNATURE"` argv token. This safely binds a leading
+`-` to the signature's option value; no verification algorithm, public key,
+signing secret, scheduler, replay guard or acceptance criteria change.
+`tests/test_brain_cloudflare_clock.py` includes an independently generated
+**test-only** valid P-256 envelope with a hyphen-leading signature and
+an intentionally tampered signature, plus execution of the actual workflow
+shell command in a disposable directory. It requires the signed test case to
+verify only under its matching test public key; a request using the real
+production key must still fail signature verification or freshness. A green
+test is **not** a v5 scheduled execution, not a production fix deployed and
+not permission to re-label v4's historical failed job.
+
 ## Offline cutover/rollback simulation (not deployment)
 
 `tests/test_v5_source_switch_safety.py` runs the actual reviewed Cloudflare
