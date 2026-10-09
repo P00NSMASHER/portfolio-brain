@@ -42,6 +42,19 @@ def timestamp(value):
 KINDS = {"repository", "candidate", "experiment", "feedback", "holdings"}
 
 
+def same_semantic_observation(prior, current):
+    """Same kind/key/time cannot relabel the same payload or visibility.
+
+    Producer/source revisions can differ for a legitimate identical replay;
+    the observed payload and its factual/private provenance cannot differ.
+    """
+    return (
+        prior["payload"] == current["payload"]
+        and prior["data_kind"] == current["data_kind"]
+        and prior["visibility"] == current["visibility"]
+    )
+
+
 def analyze_events(events, *, now, max_age):
     """Single deterministic projection shared by report creation and replay."""
     from brain.intelligence import build_report
@@ -123,7 +136,10 @@ class Store:
         with self.transaction():
             for event in events:
                 conflicts=self.db.execute("SELECT body FROM events WHERE json_extract(body,'$.kind')=? AND json_extract(body,'$.key')=? AND json_extract(body,'$.observed_at')=?", (event['kind'],event['key'],event['observed_at'])).fetchall()
-                require(all(json.loads(row[0])['payload']==event['payload'] for row in conflicts), "AMBIGUOUS_OBSERVATION: conflicting content at same source time")
+                require(
+                    all(same_semantic_observation(json.loads(row[0]), event) for row in conflicts),
+                    "AMBIGUOUS_OBSERVATION: conflicting payload or evidence label at same source time",
+                )
                 body, value_hash = canonical(event), digest(event)
                 old = self.db.execute("SELECT hash FROM events WHERE id=?", (event["id"],)).fetchone()
                 if old:
@@ -143,6 +159,7 @@ class Store:
         require((watermark[0] if watermark else 0)==maximum, 'EVENT_LOSS: committed inbox tail missing')
         previous, seq, events = "0"*64, 0, []
         pending_seen=False
+        seen_semantic = {}
         require(self.db.execute("SELECT count(*) FROM ledger").fetchone()[0] == sum(row["status"]=="APPLIED" for row in rows), "STATE_CORRUPT: orphan ledger entry")
         for row in rows:
             require(row["seq"] == seq+1, "EVENT_GAP: ledger sequence is not contiguous")
@@ -152,6 +169,12 @@ class Store:
             require(row["hash"] == digest(event), "STATE_CORRUPT: event hash mismatch")
             validate_event(event, row["received_at"])
             require(self.visibility == "PRIVATE" or event["visibility"] == "PUBLIC", "private event in public database")
+            identity = (event["kind"], event["key"], event["observed_at"])
+            prior = seen_semantic.setdefault(identity, event)
+            require(
+                same_semantic_observation(prior, event),
+                "AMBIGUOUS_OBSERVATION: inconsistent durable evidence classification",
+            )
             if row["status"] == "PENDING":
                 pending_seen=True
                 require(row["chain_hash"] is None and row["prev_hash"] is None, "pending event already has a ledger record")

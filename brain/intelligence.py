@@ -8,7 +8,7 @@ import math
 import re
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation
-from brain.core import BrainError, require, timestamp, digest
+from brain.core import BrainError, require, timestamp, digest, same_semantic_observation
 
 REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -221,11 +221,18 @@ def holdings_report(p):
 
 def build_report(events, *, now, max_age):
     latest = {}
+    observed_facts = {}
     for event in events:
+        # Inspect ALL semantic times, not only the latest key-level sample:
+        # a newer observation must never conceal older conflicting labels.
+        identity = (event["kind"], event["key"], event["observed_at"])
+        prior = observed_facts.setdefault(identity, event)
+        require(
+            same_semantic_observation(prior, event),
+            "AMBIGUOUS_OBSERVATION: conflicting equal-time payload or classification",
+        )
         key=(event["kind"],event["key"])
         old=latest.get(key)
-        # Conflicting equal-time observations cannot be treated as known facts.
-        require(old is None or old["observed_at"]!=event["observed_at"] or old["payload"]==event["payload"], "AMBIGUOUS_OBSERVATION: conflicting equal-time facts")
         if old is None or (timestamp(event["observed_at"]),event["id"]) > (timestamp(old["observed_at"]),old["id"]):
             latest[key]=event
     current=list(latest.values())

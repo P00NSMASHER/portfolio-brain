@@ -31,6 +31,12 @@ writer lock, agent heartbeat, cost governor, or orphaned-run cleanup is imported
   together. An interruption rolls the entire drain back; restart reapplies exactly once.
 - Every event has a contiguous sequence, source revision, semantic timestamp, data label,
   payload digest, previous digest, and chain digest. Missing/corrupt/ambiguous evidence fails closed.
+- Repeated kind/key/semantic-time observations must match on payload, ACTUAL/SIMULATED/
+  ESTIMATED classification, and PUBLIC/PRIVATE visibility. Replays from a different code
+  revision are allowed only for those identical observed facts. A conflicting label is
+  rejected atomically at ingestion and during whole-history ledger replay even when
+  a later observation superseded it; no change of event ID can upgrade simulated
+  observations into actual evidence. No canonical state history is rewritten.
 - Reports replay deterministically from verified events. A self-consistently rehashed
   fabricated report still fails the ledger comparison. Pending input blocks reads.
 - Delayed observations remain history and cannot replace newer semantic source facts.

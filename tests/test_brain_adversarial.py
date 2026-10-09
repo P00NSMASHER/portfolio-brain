@@ -8,6 +8,7 @@ from pathlib import Path
 from brain.adapters import GitHub, event
 from brain.core import BrainError, Store, canonical, digest
 from brain.experiments import invoice_dedup_experiment
+from brain.intelligence import build_report
 
 SHA = "a" * 40
 NOW = "2026-10-07T21:00:00Z"
@@ -54,6 +55,94 @@ class BrainIndependentAdversarialTests(unittest.TestCase):
         except BrainError:
             return
         self.assertEqual(result["status"], "BLOCKED", "Competing equal-time evidence cannot acquire authority by lexical event ID")
+
+    def test_same_time_simulated_to_actual_relabel_rejected_atomically(self):
+        actual = observation()
+        simulated = event(
+            "repository", actual["key"], actual["payload"], SHA,
+            now=NOW, data_kind="SIMULATED",
+        )
+        self.assertNotEqual(actual["id"], simulated["id"])
+        with self.assertRaisesRegex(BrainError, "AMBIGUOUS_OBSERVATION"):
+            self.store.submit([simulated, actual], now=LATER)
+        self.assertEqual(self.store.db.execute("SELECT count(*) FROM events").fetchone()[0], 0)
+
+        self.ingest(simulated)
+        with self.assertRaisesRegex(BrainError, "AMBIGUOUS_OBSERVATION"):
+            self.store.submit([actual], now=LATER)
+        self.assertEqual(self.store.db.execute("SELECT count(*) FROM events").fetchone()[0], 1)
+        report = self.store.report(SHA, now=LATER)
+        self.assertEqual(report["repositories"][0]["data_kind"], "SIMULATED")
+
+    def test_same_time_private_to_public_relabel_rejected(self):
+        path = Path(self.directory.name) / "private-authority.sqlite"
+        private_store = Store(path, visibility="PRIVATE")
+        self.addCleanup(private_store.close)
+        public = observation()
+        private = observation(private=True)
+        self.assertEqual(public["payload"], private["payload"])
+        with self.assertRaisesRegex(BrainError, "AMBIGUOUS_OBSERVATION"):
+            private_store.submit([private, public], now=LATER)
+        self.assertEqual(
+            private_store.db.execute("SELECT count(*) FROM events").fetchone()[0], 0,
+        )
+
+    def test_exact_fact_with_different_producer_source_sha_is_valid_replay(self):
+        first = observation()
+        second = event(
+            "repository", first["key"], first["payload"], "b" * 40,
+            now=NOW, data_kind=first["data_kind"],
+        )
+        self.assertNotEqual(first["id"], second["id"])
+        self.ingest(first, second)
+        report = self.store.report(SHA, now=LATER)
+        self.assertEqual(report["state_sequence"], 2)
+        self.assertEqual(len(report["repositories"]), 1)
+        self.assertEqual(self.store.read_report(SHA, now=LATER), report)
+
+    def test_historical_same_time_label_conflict_not_hidden_by_newer_fact(self):
+        old_actual = observation(issues=1)
+        old_simulated = event(
+            "repository", old_actual["key"], old_actual["payload"], SHA,
+            now=NOW, data_kind="SIMULATED",
+        )
+        newer = observation(issues=2, observed_at=LATER)
+        with self.assertRaisesRegex(BrainError, "AMBIGUOUS_OBSERVATION"):
+            build_report(
+                [old_actual, newer, old_simulated],
+                now=LATER, max_age=172800,
+            )
+
+    def test_legacy_valid_hash_chain_cannot_launder_conflicting_labels(self):
+        """Regression for historical accepted events with internally valid hashes."""
+        first = observation()
+        second = event(
+            "repository", first["key"], first["payload"], SHA,
+            now=NOW, data_kind="SIMULATED",
+        )
+        previous = "0" * 64
+        with self.store.transaction():
+            for item in (first, second):
+                body, event_hash = canonical(item), digest(item)
+                row = self.store.db.execute(
+                    "INSERT INTO events(id,body,hash,status,received_at) "
+                    "VALUES(?,?,?,'APPLIED',?)",
+                    (item["id"], body, event_hash, LATER),
+                )
+                seq = row.lastrowid
+                current = digest({
+                    "seq": seq, "event_hash": event_hash,
+                    "previous": previous,
+                })
+                self.store.db.execute(
+                    "INSERT INTO ledger(seq,prev_hash,chain_hash) VALUES(?,?,?)",
+                    (seq, previous, current),
+                )
+                previous = current
+        self.assertEqual(self.store.db.execute("SELECT count(*) FROM ledger").fetchone()[0], 2)
+        with self.assertRaisesRegex(BrainError, "AMBIGUOUS_OBSERVATION"):
+            self.store.report(SHA, now=LATER)
+        self.assertEqual(self.store.db.execute("SELECT count(*) FROM events").fetchone()[0], 2)
 
     def test_as_of_before_observation_never_passes(self):
         self.ingest(observation())
