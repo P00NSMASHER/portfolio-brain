@@ -55,6 +55,11 @@ def same_semantic_observation(prior, current):
     )
 
 
+def semantic_observation_identity(event):
+    """Normalize UTC precision: 21:00:00Z and 21:00:00.000000Z are one instant."""
+    return (event["kind"], event["key"], timestamp(event["observed_at"]))
+
+
 def analyze_events(events, *, now, max_age):
     """Single deterministic projection shared by report creation and replay."""
     from brain.intelligence import build_report
@@ -135,11 +140,22 @@ class Store:
             require(self.visibility == "PRIVATE" or event["visibility"] == "PUBLIC", "private input rejected by public state")
         with self.transaction():
             for event in events:
-                conflicts=self.db.execute("SELECT body FROM events WHERE json_extract(body,'$.kind')=? AND json_extract(body,'$.key')=? AND json_extract(body,'$.observed_at')=?", (event['kind'],event['key'],event['observed_at'])).fetchall()
-                require(
-                    all(same_semantic_observation(json.loads(row[0]), event) for row in conflicts),
-                    "AMBIGUOUS_OBSERVATION: conflicting payload or evidence label at same source time",
-                )
+                # Source timestamps are UTC instants, not bytewise string keys.
+                # Search this kind/key's history so differing ISO precision
+                # cannot bypass data-kind or visibility conflict admission.
+                previous_rows = self.db.execute(
+                    "SELECT body FROM events WHERE "
+                    "json_extract(body,'$.kind')=? AND json_extract(body,'$.key')=?",
+                    (event["kind"], event["key"]),
+                ).fetchall()
+                this_instant = timestamp(event["observed_at"])
+                for row in previous_rows:
+                    previous = json.loads(row[0])
+                    if timestamp(previous["observed_at"]) == this_instant:
+                        require(
+                            same_semantic_observation(previous, event),
+                            "AMBIGUOUS_OBSERVATION: conflicting payload or evidence label at same source time",
+                        )
                 body, value_hash = canonical(event), digest(event)
                 old = self.db.execute("SELECT hash FROM events WHERE id=?", (event["id"],)).fetchone()
                 if old:
@@ -169,7 +185,7 @@ class Store:
             require(row["hash"] == digest(event), "STATE_CORRUPT: event hash mismatch")
             validate_event(event, row["received_at"])
             require(self.visibility == "PRIVATE" or event["visibility"] == "PUBLIC", "private event in public database")
-            identity = (event["kind"], event["key"], event["observed_at"])
+            identity = semantic_observation_identity(event)
             prior = seen_semantic.setdefault(identity, event)
             require(
                 same_semantic_observation(prior, event),

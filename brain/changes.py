@@ -5,7 +5,7 @@ Only the latest two *semantic observation times* are compared per repository.
 """
 from collections import defaultdict
 
-from brain.core import require, timestamp, same_semantic_observation
+from brain.core import require, timestamp, same_semantic_observation, semantic_observation_identity
 
 _ADVERSE = frozenset({"failure", "timed_out", "action_required", "stale", "startup_failure"})
 
@@ -36,9 +36,10 @@ def repository_changes(events, *, now, max_age):
         if event["kind"] != "repository":
             continue
         by_time = observations[event["key"]]
-        previous = by_time.get(event["observed_at"])
+        instant = semantic_observation_identity(event)[2]
+        previous = by_time.get(instant)
         if previous is None:
-            by_time[event["observed_at"]] = event
+            by_time[instant] = event
         else:
             require(
                 same_semantic_observation(previous, event),

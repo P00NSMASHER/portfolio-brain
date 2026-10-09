@@ -100,11 +100,39 @@ class BrainIndependentAdversarialTests(unittest.TestCase):
         self.assertEqual(len(report["repositories"]), 1)
         self.assertEqual(self.store.read_report(SHA, now=LATER), report)
 
+    def test_same_utc_instant_with_different_text_precision_cannot_relabel(self):
+        first = observation()
+        alias = event(
+            "repository", first["key"], first["payload"], SHA,
+            now=NOW[:-1] + ".000000Z", data_kind="SIMULATED",
+        )
+        self.assertNotEqual(first["observed_at"], alias["observed_at"])
+        with self.assertRaisesRegex(BrainError, "AMBIGUOUS_OBSERVATION"):
+            self.store.submit([first, alias], now=LATER)
+        self.assertEqual(self.store.db.execute("SELECT count(*) FROM events").fetchone()[0], 0)
+        self.ingest(first)
+        with self.assertRaisesRegex(BrainError, "AMBIGUOUS_OBSERVATION"):
+            self.store.submit([alias], now=LATER)
+        self.assertEqual(self.store.db.execute("SELECT count(*) FROM events").fetchone()[0], 1)
+
+    def test_identical_utc_instant_alias_keeps_legal_replay_without_false_change(self):
+        first = observation()
+        alias = event(
+            "repository", first["key"], first["payload"], "b" * 40,
+            now=NOW[:-1] + ".000000Z", data_kind="ACTUAL",
+        )
+        self.ingest(first, alias)
+        report = self.store.report(SHA, now=LATER)
+        self.assertEqual(report["state_sequence"], 2)
+        self.assertEqual(len(report["repositories"]), 1)
+        self.assertEqual(report["repository_changes"], [])
+        self.assertEqual(self.store.read_report(SHA, now=LATER), report)
+
     def test_historical_same_time_label_conflict_not_hidden_by_newer_fact(self):
         old_actual = observation(issues=1)
         old_simulated = event(
             "repository", old_actual["key"], old_actual["payload"], SHA,
-            now=NOW, data_kind="SIMULATED",
+            now=NOW[:-1] + ".000000Z", data_kind="SIMULATED",
         )
         newer = observation(issues=2, observed_at=LATER)
         with self.assertRaisesRegex(BrainError, "AMBIGUOUS_OBSERVATION"):
@@ -118,7 +146,7 @@ class BrainIndependentAdversarialTests(unittest.TestCase):
         first = observation()
         second = event(
             "repository", first["key"], first["payload"], SHA,
-            now=NOW, data_kind="SIMULATED",
+            now=NOW[:-1] + ".000000Z", data_kind="SIMULATED",
         )
         previous = "0" * 64
         with self.store.transaction():

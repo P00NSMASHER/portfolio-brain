@@ -8,7 +8,7 @@ import math
 import re
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation
-from brain.core import BrainError, require, timestamp, digest, same_semantic_observation
+from brain.core import BrainError, require, timestamp, digest, same_semantic_observation, semantic_observation_identity
 
 REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -225,7 +225,7 @@ def build_report(events, *, now, max_age):
     for event in events:
         # Inspect ALL semantic times, not only the latest key-level sample:
         # a newer observation must never conceal older conflicting labels.
-        identity = (event["kind"], event["key"], event["observed_at"])
+        identity = semantic_observation_identity(event)
         prior = observed_facts.get(identity)
         if prior is None:
             observed_facts[identity] = event
