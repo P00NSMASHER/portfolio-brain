@@ -15,6 +15,7 @@ import re
 import shutil
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -270,6 +271,110 @@ class RealStateV5Compatibility(unittest.TestCase):
                 }
             finally:
                 store.close()
+
+            # Exercise a real source rollback on a DIFFERENT disposable copy.
+            # A v5-derived report is intentionally incompatible with v4's
+            # derived schema; source rollback must fail closed on the stale
+            # report, then generate a new v4 projection without losing events.
+            rollback_copy = Path(temp) / "rollback-copy.sqlite"
+            shutil.copyfile(disposable, rollback_copy)
+            rollback_root = Path(temp) / "v4-reviewed-source"
+            git("fetch", "--quiet", "--no-tags", "origin", PRODUCTION)
+            original_paths = git(
+                "ls-tree", "-r", "--name-only", PRODUCTION, "brain"
+            ).splitlines()
+            self.assertGreater(len(original_paths), 5)
+            for name in original_paths:
+                self.assertTrue(name.startswith("brain/") and ".." not in name.split("/"))
+                destination = rollback_root / name
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(git("show", f"{PRODUCTION}:{name}", raw=True))
+            v5_copy_before = hashlib.sha256(disposable.read_bytes()).hexdigest()
+
+            old_runtime = r"""
+import json, sqlite3, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from brain.core import Store, BrainError, utcnow
+path, expected_sha, expected_sequence, expected_chain = (
+    Path(sys.argv[2]), sys.argv[3], int(sys.argv[4]), sys.argv[5]
+)
+store = Store(path, visibility="PUBLIC")
+try:
+    events, seq, chain = store._verified_events()
+    assert seq == expected_sequence and chain == expected_chain
+    before_attempts = store.db.execute("SELECT count(*) FROM attempts").fetchone()[0]
+    before_reports = store.db.execute("SELECT count(*) FROM reports").fetchone()[0]
+    previous = store.db.execute(
+        "SELECT source_sha,body FROM reports ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    assert json.loads(previous["body"])["repository_changes"] is not None
+    assert previous["source_sha"] != expected_sha
+    # A new source cannot reinterpret a previous source's derived report
+    # as current canonical state. Fail closed rather than silently accept.
+    rejected_old_projection = False
+    try:
+        store.read_report(expected_sha, now=utcnow())
+    except BrainError:
+        rejected_old_projection = True
+    assert rejected_old_projection, "stale v5 report accepted by old v4 implementation"
+    now = utcnow()
+    report = store.report(expected_sha, now=now)
+    assert report["status"] == "PASS"
+    assert report["source_sha"] == expected_sha
+    assert "repository_changes" not in report
+    assert report["state_sequence"] == expected_sequence
+    assert report["canonical_hash"] == expected_chain
+    assert report["pending_events"] == 0
+    assert store.read_report(expected_sha, now=now) == report
+    assert store.db.execute("SELECT count(*) FROM events").fetchone()[0] == seq
+    assert store.db.execute("SELECT count(*) FROM attempts").fetchone()[0] == before_attempts
+    assert store.db.execute("SELECT count(*) FROM reports").fetchone()[0] == before_reports + 1
+    prior = store.db.execute(
+        "SELECT source_sha FROM reports ORDER BY id DESC LIMIT 1 OFFSET 1"
+    ).fetchone()
+    assert prior["source_sha"] != expected_sha
+    print("V4_DISPOSABLE_ROLLBACK_REPLAY=" + json.dumps({
+        "status": "PASS_V4_DISPOSABLE_ROLLBACK",
+        "v5_report_refused_under_v4": rejected_old_projection,
+        "v4_report_regenerated": True,
+        "v4_report_replayed": True,
+        "canonical_event_chain_retained": True,
+        "event_sequence": seq,
+        "canonical_hash": chain,
+        "attempts_added": 0,
+        "production_deployed": False,
+    }, sort_keys=True))
+finally:
+    store.close()
+"""
+            rollback_process = subprocess.run(
+                [
+                    sys.executable, "-I", "-c", old_runtime,
+                    str(rollback_root), str(rollback_copy),
+                    PRODUCTION, str(before["sequence"]), before["canonical_hash"],
+                ],
+                cwd=temp, capture_output=True, text=True, timeout=35,
+                check=False,
+            )
+            self.assertEqual(
+                rollback_process.returncode, 0,
+                "V4 rollback rehearsal failed: "
+                + (rollback_process.stderr + rollback_process.stdout)[-2500:],
+            )
+            rollback_line = next(
+                (line for line in rollback_process.stdout.splitlines()
+                 if line.startswith("V4_DISPOSABLE_ROLLBACK_REPLAY=")),
+                None,
+            )
+            self.assertIsNotNone(rollback_line, rollback_process.stdout[-1200:])
+            rollback_proof = json.loads(rollback_line.split("=", 1)[1])
+            self.assertEqual(rollback_proof["status"], "PASS_V4_DISPOSABLE_ROLLBACK")
+            self.assertEqual(hashlib.sha256(disposable.read_bytes()).hexdigest(), v5_copy_before)
+            receipt["v4_disposable_rollback"] = rollback_proof
+            receipt["v4_original_source_code"] = PRODUCTION
+            receipt["rollback_source_files"] = len(original_paths)
+            receipt["rollback_isolated_no_production_writes"] = True
 
             self.assertEqual(
                 hashlib.sha256(original.read_bytes()).hexdigest(),
