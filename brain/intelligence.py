@@ -226,11 +226,14 @@ def build_report(events, *, now, max_age):
         # Inspect ALL semantic times, not only the latest key-level sample:
         # a newer observation must never conceal older conflicting labels.
         identity = (event["kind"], event["key"], event["observed_at"])
-        prior = observed_facts.setdefault(identity, event)
-        require(
-            same_semantic_observation(prior, event),
-            "AMBIGUOUS_OBSERVATION: conflicting equal-time payload or classification",
-        )
+        prior = observed_facts.get(identity)
+        if prior is None:
+            observed_facts[identity] = event
+        else:
+            require(
+                same_semantic_observation(prior, event),
+                "AMBIGUOUS_OBSERVATION: conflicting equal-time payload or classification",
+            )
         key=(event["kind"],event["key"])
         old=latest.get(key)
         if old is None or (timestamp(event["observed_at"]),event["id"]) > (timestamp(old["observed_at"]),old["id"]):
