@@ -31,6 +31,11 @@ writer lock, agent heartbeat, cost governor, or orphaned-run cleanup is imported
   together. An interruption rolls the entire drain back; restart reapplies exactly once.
 - Every event has a contiguous sequence, source revision, semantic timestamp, data label,
   payload digest, previous digest, and chain digest. Missing/corrupt/ambiguous evidence fails closed.
+- Event keys for repository, candidate implementation, and reviewed experiment records
+  must match their validated payload identities exactly; repository source URLs
+  must name the actual recorded commit, not merely share the repository URL prefix.
+  These checks apply during intake and full ledger replay, without modifying old
+  records. Operator feedback and named holdings retain their existing key flexibility.
 - Repeated kind/key/semantic-time observations (including different UTC timestamp
   text precision for the same instant) must match on payload, ACTUAL/SIMULATED/
   ESTIMATED classification, and PUBLIC/PRIVATE visibility. Replays from a different code

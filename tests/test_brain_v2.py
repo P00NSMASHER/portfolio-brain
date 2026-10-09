@@ -32,7 +32,7 @@ class ProductTests(unittest.TestCase):
   self.store.submit([item],now=NOW);self.store.submit([item],now=NOW)
   self.assertEqual(self.store.pending(),1)
   bad=copy.deepcopy(item);bad['payload']['open_issues']=99
-  with self.assertRaises(BrainError): self.store.submit([event('repository','other',payload(),SHA,now=NOW),bad],now=NOW)
+  with self.assertRaisesRegex(BrainError,'IDEMPOTENCY_CONFLICT'): self.store.submit([event('repository','example/other',payload('example/other'),SHA,now=NOW),bad],now=NOW)
   self.assertEqual(self.store.db.execute('select count(*) from events').fetchone()[0],1)
  def test_backup_restart_and_history_replay(self):
   self.seed();original=self.store.report(SHA,now=NOW)
@@ -60,7 +60,7 @@ class ProductTests(unittest.TestCase):
   result=experiment(self.store,SHA,self.path/'experiment')
   self.assertIsNone(result['learning']['verified_revenue']);self.assertIsNone(result['learning']['prediction_confidence'])
  def test_experiment_cannot_mislabel_simulation(self):
-  item=event('experiment','dedup',invoice_dedup_experiment(),SHA,now=NOW)
+  p=invoice_dedup_experiment();item=event('experiment',p['experiment'],p,SHA,now=NOW)
   with self.assertRaises(BrainError):self.store.submit([item],now=NOW)
  def test_actual_market_math_and_unavailable_cost(self):
   p={'currency':'USD','cash':'100','positions':[{'symbol':'A','quantity':'2','cost_basis':'160','sector':'Tech'},{'symbol':'B','quantity':'1','cost_basis':None,'sector':'Health'}], 'quotes':{'A':{'price':'100','observed_at':NOW,'source_ref':'operator supplied permitted input','data_kind':'ACTUAL'},'B':{'price':'200','observed_at':NOW,'source_ref':'operator supplied permitted input','data_kind':'ACTUAL'}},'authorization':'USER_AUTHORIZED','historical_prices':[{'observed_at':'2026-10-05T21:00:00Z','prices':{'A':'80','B':'140'},'source_ref':'licensed operator export','data_kind':'ACTUAL'},{'observed_at':'2026-10-06T21:00:00Z','prices':{'A':'60','B':'100'},'source_ref':'licensed operator export','data_kind':'ACTUAL'},{'observed_at':NOW,'prices':{'A':'100','B':'200'},'source_ref':'licensed operator export','data_kind':'ACTUAL'}]}

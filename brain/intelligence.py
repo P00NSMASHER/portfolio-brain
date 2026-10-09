@@ -122,6 +122,10 @@ def validate_payload(kind, p, observed_at):
         require(type(p.get("source_ref")) is str and p["source_ref"].startswith(ref), "source reference must belong to repository")
     if kind == "repository":
         fields(p, {"repository","head_sha","default_branch","checks","open_issues","source_ref"})
+        require(
+            p["source_ref"] == f'{ref}commit/{p["head_sha"]}',
+            "SOURCE_REF_MISMATCH: repository reference must bind to exact commit",
+        )
         text(p["default_branch"], 100)
         require(type(p["open_issues"]) is int and p["open_issues"] >= 0, "issue count invalid")
         require(type(p["checks"]) is list and len(p["checks"]) <= 500, "checks invalid")

@@ -80,6 +80,24 @@ def validate_event(event, now, *, legacy_replay=False):
     require(type(event["payload"]) is dict and len(canonical(event)) <= 1_000_000, "event payload invalid/too large")
     from brain.intelligence import validate_payload
     validate_payload(event["kind"], event["payload"], event["observed_at"])
+    payload = event["payload"]
+    if event["kind"] == "repository":
+        require(
+            event["key"] == payload["repository"],
+            "EVIDENCE_KEY_MISMATCH: repository key must match its source",
+        )
+    elif event["kind"] == "candidate":
+        require(
+            event["key"] == f'{payload["repository"]}:{payload["path"]}',
+            "EVIDENCE_KEY_MISMATCH: candidate key must match its source path",
+        )
+    elif event["kind"] == "experiment":
+        require(
+            event["key"] == payload["experiment"],
+            "EVIDENCE_KEY_MISMATCH: experiment key must match its reviewed identity",
+        )
+    # Feedback keys and operator-owned holdings portfolio names retain their
+    # existing valid, flexible identity contract.
     if event['kind']=='experiment':
         require(event['data_kind']=='SIMULATED', 'experiment data must be labelled simulated')
     if event["kind"] == "holdings" and not legacy_replay:
