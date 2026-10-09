@@ -97,7 +97,7 @@ jobs:
           test -z "$CLOCK_COMMIT" && test -z "$WATCHDOG_RUN_ID" || { echo "COMPETING_SCHEDULER_ORIGINS"; exit 1; }
           test -n "$CF_ENVELOPE" && test -n "$CF_SIGNATURE" || { echo "CLOUDFLARE_SIGNATURE_REQUIRED"; exit 1; }
           mkdir -p /tmp/brain
-          python -m brain.cloudflare_clock --envelope "$CF_ENVELOPE" --signature "$CF_SIGNATURE" --source-sha "$BRAIN_SOURCE_SHA" --output /tmp/brain/cloudflare-origin.json
+          python -m brain.cloudflare_clock --envelope "$CF_ENVELOPE" --signature="$CF_SIGNATURE" --source-sha "$BRAIN_SOURCE_SHA" --output /tmp/brain/cloudflare-origin.json
       - name: Restore dedicated durable state branch
         uses: actions/checkout@v4
         with:
