@@ -86,6 +86,25 @@ it reuses the branch/PR and delivers the missing validation dispatch. A second
 failure, different evidence or main drift cannot create a rapid retry loop. Legacy
 orphan proposals without the new recovery receipt remain blocked/inert evidence.
 
+## Private report-output requirement in the unmerged V5 candidate
+
+V5's report renderer no longer changes permission bits on an existing shared
+output folder. Every direct `write_report` destination must either be newly
+created (private 0700) or an *existing* directory with mode exactly 0700.
+Report JSON/Markdown/HTML files are staged at 0600 and individually replaced
+atomically, with JSON installed last. Symlinked ancestor/destination paths,
+hard-linked output files, or other non-regular targets fail closed; unrelated
+files and their permissions are never changed. A three-file bundle is not one
+transaction, and only the final JSON replacement establishes the latest
+machine-readable receipt. An unsafe output cannot trigger a secondary CLI
+failure report at another path under the rejected folder.
+
+Existing manually provisioned report folders may need an **operator-reviewed**
+permission migration before separately authorized promotion. The renderer
+must not silently modify such existing folders. This candidate does not
+retroactively secure artifacts written by the v4 process or alter any live
+runtime path, state branch, accepting clock or credentials.
+
 ## Local continuous process on an existing host
 
 ```ini

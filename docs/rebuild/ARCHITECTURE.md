@@ -51,6 +51,13 @@ writer lock, agent heartbeat, cost governor, or orphaned-run cleanup is imported
 - Backup uses SQLite's backup API and integrity verification. Git publication uses one
   new commit from a captured state parent, rejects main/parent drift, and never force-pushes.
 - Public state rejects private input atomically. Private local state has no automatic publication path.
+- Local JSON/Markdown/HTML report publication uses private 0600 staging files,
+  secure 0700 output directories and per-file atomic replacement; it refuses
+  symlink/hardlink output targets, pre-existing shared destination directories,
+  and symlink ancestors instead of chmod'ing unrelated files. JSON is published
+  last as the canonical machine-readable receipt; a three-file bundle is not
+  a single atomic filesystem transaction. Render-path failures cannot create
+  a second failure artifact inside the rejected directory.
 
 ## Intelligence contracts
 
