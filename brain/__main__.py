@@ -123,7 +123,7 @@ def preflight(output, expected=None):
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description="Read-only autonomous business portfolio intelligence")
-    parser.add_argument("command",choices=["init","ingest","cycle","monitor","research","experiment","doctor","preflight","backup","service","feedback","evolve"])
+    parser.add_argument("command",choices=["init","ingest","cycle","monitor","research","experiment","doctor","preflight","backup","service","feedback","evolve","transfer-review"])
     parser.add_argument("--db",default="brain-local/state.sqlite")
     parser.add_argument("--output",default="brain-local/report")
     parser.add_argument("--input")
@@ -139,8 +139,16 @@ def main(argv=None):
             result=preflight(args.output,args.expected_sha)
         else:
             sha=source_sha(args.expected_sha)
+            if args.command == "transfer-review":
+                # Unlike init, a read-only review must never bootstrap a new
+                # public state just because an input DB path was misspelled.
+                require(Path(args.db).is_file(),
+                        "TRANSFER_STATE_DB_NOT_FOUND_NO_BOOTSTRAP")
             store=Store(args.db,visibility="PRIVATE" if args.private else "PUBLIC")
-            store.drain()
+            # A transfer review is a pure inspection. It must not apply pending
+            # inputs or write feedback, attempts, reports or other canonical state.
+            if args.command != "transfer-review":
+                store.drain()
             if args.command=="init":
                 result={"status":"PASS","scope":"EMPTY_STATE_BOOTSTRAP_NOT_OPERATIONAL","pending_events":store.pending(),"source_sha":sha}
                 write_report(result,args.output)
@@ -167,6 +175,19 @@ def main(argv=None):
                 write_report(result,args.output)
             elif args.command=="doctor":
                 result=doctor(store,sha,args.output)
+            elif args.command=="transfer-review":
+                from brain.transfer import review_transfer, write_transfer_review
+                require(args.input is not None and args.repository is None,
+                        "TRANSFER_REQUIRES_INPUT_AND_NO_REPOSITORY_OVERRIDE")
+                require(Path(args.input).stat().st_size <= 8192,
+                        "TRANSFER_INPUT_TOO_LARGE")
+                trusted_report = store.read_report(sha)
+                request = json.loads(Path(args.input).read_text())
+                result = review_transfer(
+                    trusted_report, request,
+                    api=GitHub(private=store.visibility == "PRIVATE"),
+                )
+                write_transfer_review(result,args.output)
             elif args.command=="backup":
                 result={"status":"PASS","backup_sha256":store.backup(args.output),"source_sha":sha}
             else:
@@ -198,7 +219,7 @@ def main(argv=None):
         print(json.dumps({k:result[k] for k in ("status","source_sha","pending_events","state_sequence","phase") if k in result},sort_keys=True))
         return 0
     except (BrainError,KeyError,TypeError,UnicodeError,json.JSONDecodeError) as exc:
-        if store:
+        if store and args.command != "transfer-review":
             store.attempt(args.command,"FAIL",type(exc).__name__,source_sha=locals().get("sha"))
         write_report({"status":"FAIL","error_class":type(exc).__name__,"error":str(exc)[:500],"operation":args.command,"soak_completed":False},Path(args.output)/"failure")
         print(f'{type(exc).__name__}: {str(exc)[:500]}',file=sys.stderr)
