@@ -24,7 +24,9 @@ near matches.
 - Generate `count - 2 - max(1, (count - 2) // 8)` unique synthetic
   invoice tuples with unique synthetic invoice identifiers.
 - Inject exactly `max(1, (count - 2) // 8)` intentional true-duplicate
-  rows sampled deterministically from those unique tuples.
+  rows sampled deterministically **without replacement** from those unique
+  tuples. Each original invoice is duplicated at most once; no one source
+  invoice is allowed to account for multiple injected duplicate rows.
 - Inject **two** explicit near misses for one original: a different
   carrier and a different charge amount. Both must remain distinct from
   every exact duplicate and appear only once.
@@ -33,7 +35,25 @@ near matches.
 - Require the quadratic first-prior-equality detector and set-membership
   detector to return the same exact duplicate positions; verify that
   the detected count also matches the independently injected count.
-- Fail closed if the identity checks or near-miss uniqueness checks break.
+- Fail closed if the identity checks, near-miss uniqueness, or the
+  requirement that each duplicate comes from a **distinct original** breaks.
+
+### Corrected second-order fixture defect
+
+The original draft's deterministic selection used a fixed modular stride
+`(i * 37 + 11) % unique_count`. At `count=44`, there are 37 unique
+original invoices and 5 intended duplicate copies. Because the modulus is
+also 37, **all five copies came from original index 11**. The earlier
+checks counted five duplicate rows, but did not detect the missing variety
+in duplicated sources. The updated sampler draws five **different** originals
+without replacement, and a separate frequency contract rejects fixtures
+where any invoice appears more than twice.
+
+The new adversarial suite validates the source-frequency distribution for
+**every supported size 20 through 2,000 (1,981 sizes)** in linear time per
+fixture. The more expensive quadratic-vs-index duplicate-position oracle is
+run for representative and boundary sizes, not all 1,981 lengths. This
+remains a synthetic methodology test, not evidence of actual invoice volumes.
 
 A size-1,000 experiment now includes 874 unique source rows, 124 injected
 copies, and two distinct near misses, for a total of 1,000. It is still
@@ -60,8 +80,9 @@ remain intact.
 `tests/test_brain_invoice_experiment_quality.py` covers minimum and
 maximum bounds, repeatability, all-unique/all-duplicate adversarial cases,
 near misses across carrier/amount/text/case, all permutations of a small
-hand-built fixture, oracle mismatch, injected-count tampering, event schema
-compatibility and claims about unequal metric units.
+hand-built fixture, the former `count=44` collision, exhaustive size-range
+source-diversity checks, oracle mismatch, injected-count tampering, event
+schema compatibility and claims about unequal metric units.
 
 This source candidate must pass full Foundation CI and the independently
 credentialed App check at the **exact PR head**. No production source
