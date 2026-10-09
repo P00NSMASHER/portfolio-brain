@@ -5,7 +5,6 @@ No network, customers, timing benchmarks, external code or revenue assertions.
 import copy
 import itertools
 import unittest
-from collections import Counter
 from unittest.mock import patch
 
 from brain.adapters import event
@@ -175,7 +174,7 @@ class InvoiceExperimentQuality(unittest.TestCase):
         ):
             with self.subTest(term=term):
                 self.assertIn(term, scope)
-        self.assertNotIn("verified speedup.", scope)
+        self.assertNotIn("demonstrates a verified speedup", scope)
 
 
 if __name__ == "__main__":
