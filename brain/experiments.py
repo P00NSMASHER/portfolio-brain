@@ -81,7 +81,8 @@ def invoice_dedup_experiment(count=500):
         "candidate failed correctness oracle or injected duplicate-count check",
     )
     require(
-        all(rows.count(row) == 1 for row in near_misses),
+        len(near_misses) == 2 and len(set(near_misses)) == 2
+        and all(rows.count(row) == 1 for row in near_misses),
         "synthetic near-miss became an exact duplicate",
     )
     require(
