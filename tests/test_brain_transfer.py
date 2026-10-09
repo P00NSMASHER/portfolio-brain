@@ -147,6 +147,7 @@ class TransferEvidenceTests(unittest.TestCase):
             PREFIX + "/pulls/343",
             PREFIX + "/pulls/343/files?per_page=100",
             PREFIX + "/commits/" + PR_HEAD + "/check-runs?per_page=100",
+            PREFIX + "/pulls/343",
         ])
 
     def test_review_is_deterministic_and_does_not_write_canonical_ledger(self):
@@ -251,6 +252,47 @@ class TransferEvidenceTests(unittest.TestCase):
         self.assertEqual(out["status"], "TRANSFER_TECHNICAL_EVIDENCE_BLOCKED")
         self.assertEqual(out["origin"]["attribution"], "ORIGIN_LINK_NOT_CORROBORATED")
         self.assertEqual(out["checks"]["status"], "GITHUB_REPORTED_REQUIRED_CHECKS_SUCCESS")
+
+    def test_pr_head_or_status_change_during_check_fetch_fails_closed(self):
+        # The first PR response and all checks are otherwise valid. Mutating
+        # only the SECOND PR read simulates an actual provider race, not an
+        # incorrect initial request or fake bad check.
+        scenarios = (
+            ("head moved", lambda p: p["head"].update(sha="f" * 40)),
+            ("draft changed", lambda p: p.update(draft=False)),
+            ("closed", lambda p: p.update(state="closed")),
+            ("merged", lambda p: p.update(state="closed", merged=True, draft=False)),
+            ("source attribution withdrawn", lambda p: p.update(body="link deleted")),
+            ("scope changed", lambda p: p.update(changed_files=2)),
+            ("base changed", lambda p: p["base"].update(ref="staging")),
+            ("repo replaced", lambda p: p["head"]["repo"].update(full_name="attacker/fork")),
+        )
+        for label, change in scenarios:
+            with self.subTest(label=label):
+                class MovingPR(StubGitHub):
+                    def get(self, path):
+                        answer = super().get(path)
+                        if path == PREFIX + "/pulls/343" and self.calls.count(path) == 2:
+                            change(answer)
+                        return answer
+                api = MovingPR()
+                with self.assertRaisesRegex(BrainError, "TRANSFER_PR_CHANGED_DURING_REVIEW"):
+                    review_transfer(self.trusted(), request(), api=api)
+                self.assertEqual(api.calls.count(PREFIX + "/pulls/343"), 2)
+                self.assertEqual(len(api.calls), 5)
+
+    def test_nonmaterial_pr_metadata_timestamp_change_is_ignored(self):
+        # Harmless provider metadata updates should not produce false blockers.
+        class ProviderTimestamp(StubGitHub):
+            def get(self, path):
+                answer = super().get(path)
+                if path == PREFIX + "/pulls/343" and self.calls.count(path) == 2:
+                    answer["updated_at"] = "2026-10-09T03:00:00Z"
+                return answer
+        api = ProviderTimestamp()
+        result = review_transfer(self.trusted(), request(), api=api)
+        self.assertEqual(result["status"], "DRAFT_PR_CHECKS_PASSED_NOT_ADOPTED")
+        self.assertEqual(api.calls.count(PREFIX + "/pulls/343"), 2)
 
     def test_missing_required_check_blocks_even_if_other_check_is_green(self):
         docs = responses()
