@@ -376,6 +376,147 @@ finally:
             receipt["rollback_source_files"] = len(original_paths)
             receipt["rollback_isolated_no_production_writes"] = True
 
+            # Separately rehearse the FULL first V5 workload on a disposable
+            # copy of the authentic ledger. Reuse old immutable source facts
+            # ONLY as explicitly SIMULATED mock responses, never current
+            # provider observations or commercial outcomes. This proves
+            # application wiring, not an automatic production run or soak.
+            from copy import deepcopy
+            from unittest.mock import patch
+            from brain.__main__ import monitor, research, experiment, doctor
+            from brain.adapters import event as make_event, policy as brain_policy
+
+            shadow_copy = Path(temp) / "shadow-first-cycle.sqlite"
+            shutil.copyfile(disposable, shadow_copy)
+            os.chmod(shadow_copy, 0o600)
+            shadow = Store(shadow_copy, visibility="PUBLIC")
+            try:
+                historical_events, initial_seq, initial_hash = shadow._verified_events()
+                self.assertEqual(initial_seq, before["sequence"])
+                self.assertEqual(initial_hash, before["canonical_hash"])
+                recent_repos = {}
+                historical_candidates = []
+                for item in historical_events:
+                    if item["kind"] == "repository":
+                        prior = recent_repos.get(item["key"])
+                        if prior is None or item["observed_at"] > prior["observed_at"]:
+                            recent_repos[item["key"]] = item
+                    elif item["kind"] == "candidate":
+                        historical_candidates.append(item)
+                required_repos = brain_policy()["repositories"]
+                self.assertEqual(
+                    set(required_repos) - set(recent_repos), set(),
+                    "Real input snapshot lacks configured monitored repositories",
+                )
+                self.assertTrue(historical_candidates,
+                                "No true prior source record for rehearsal")
+
+                class SimulatedReplayAPI:
+                    requests = 0
+                    def observe(self, repository):
+                        if repository not in recent_repos:
+                            raise AssertionError("Unrecognized monitor fixture source")
+                        return deepcopy(recent_repos[repository]["payload"]), False
+
+                    def discover(self, target, repository=None):
+                        if repository is not None:
+                            raise AssertionError("Rehearsal cannot override repository")
+                        match = next(
+                            (e for e in historical_candidates
+                             if e["payload"]["target"] == target["project"]), None
+                        )
+                        return [(deepcopy(match["payload"]), False)] if match else []
+
+                # The original code's event default is ACTUAL; force every
+                # fixture-created event to SIMULATED. This prevents a green
+                # rehearsal receipt from claiming a real fresh GitHub read.
+                def simulated_fixture_event(kind, key, payload, source_sha, **options):
+                    return make_event(
+                        kind, key, payload, source_sha,
+                        private=options.get("private", False),
+                        data_kind="SIMULATED", now=options.get("now"),
+                    )
+
+                with patch("brain.__main__.event", side_effect=simulated_fixture_event):
+                    shadow_api = SimulatedReplayAPI()
+                    monitor_report = monitor(
+                        shadow, candidate, Path(temp) / "shadow-monitor",
+                        api=shadow_api,
+                    )
+                    research_report = research(
+                        shadow, candidate, Path(temp) / "shadow-research",
+                        api=shadow_api,
+                    )
+                    experiment_report = experiment(
+                        shadow, candidate, Path(temp) / "shadow-experiment",
+                    )
+                    doctor_report = doctor(
+                        shadow, candidate, Path(temp) / "shadow-doctor",
+                    )
+                self.assertEqual(monitor_report["status"], "PASS")
+                self.assertEqual(research_report["status"], "PASS")
+                self.assertEqual(experiment_report["status"], "PASS")
+                self.assertEqual(doctor_report["status"], "PASS")
+                self.assertEqual(shadow_api.requests, 0)
+                self.assertEqual(
+                    doctor_report["mandatory_workloads"],
+                    {"monitor": "PASS", "research": "PASS", "experiment": "PASS"},
+                )
+                self.assertEqual(shadow.pending(), 0)
+                self.assertTrue((Path(temp) / "shadow-doctor" / "report.json").exists())
+                resulting_events, final_seq, final_hash = shadow._verified_events()
+                self.assertGreater(final_seq, initial_seq)
+                self.assertNotEqual(final_hash, initial_hash)
+                self.assertEqual(
+                    resulting_events[:initial_seq], historical_events,
+                    "Shadow run modified v4-origin immutable event prefix",
+                )
+                new_events = resulting_events[initial_seq:]
+                self.assertEqual(
+                    {e["data_kind"] for e in new_events}, {"SIMULATED"},
+                    "Fixture data leaked into an ACTUAL source record",
+                )
+                self.assertEqual(
+                    {e["kind"] for e in new_events},
+                    {"repository", "candidate", "experiment"}
+                    if any(e["kind"] == "candidate" for e in new_events)
+                    else {"repository", "experiment"},
+                )
+                self.assertEqual(
+                    sum(e["kind"] == "repository" for e in new_events),
+                    len(required_repos),
+                )
+                self.assertTrue(
+                    all(e["source_sha"] == candidate for e in new_events),
+                )
+                live_report = shadow.read_report(candidate)
+                self.assertEqual(live_report["pending_events"], 0)
+                self.assertEqual(live_report["canonical_hash"], final_hash)
+                self.assertIsNone(live_report["learning"]["verified_revenue"])
+                self.assertEqual(live_report["learning"]["outcomes"], [])
+                receipt["isolated_shadow_full_core"] = {
+                    "status": "PASS_SIMULATED_INPUT_FIRST_CYCLE_REHEARSAL",
+                    "mandatory_workloads": doctor_report["mandatory_workloads"],
+                    "original_event_sequence": initial_seq,
+                    "new_simulated_event_count": len(new_events),
+                    "resulting_disposable_sequence": final_seq,
+                    "resulting_disposable_chain": final_hash,
+                    "all_added_events_labelled_simulated": True,
+                    "remote_api_calls": shadow_api.requests,
+                    "state_branch_writes": 0,
+                    "source_events_preserved": True,
+                    "customer_value_claimed": False,
+                    "production_deployed": False,
+                    "v5_runtime_acceptance": False,
+                }
+            finally:
+                shadow.close()
+            self.assertEqual(
+                hashlib.sha256(disposable.read_bytes()).hexdigest(),
+                v5_copy_before,
+                "Shadow cycle modified original V5 compatibility copy",
+            )
+
             self.assertEqual(
                 hashlib.sha256(original.read_bytes()).hexdigest(),
                 raw_digest,
