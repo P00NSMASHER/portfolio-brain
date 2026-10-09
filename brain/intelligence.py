@@ -18,6 +18,88 @@ TEST_SOURCE_PATH = re.compile(r"(?:^|/)(?:tests?|__tests__)(?:/|[_.])|(?:^|/)[^/
 def is_test_source_path(path):
     return isinstance(path, str) and TEST_SOURCE_PATH.search(path) is not None
 
+# Separate the broad "never discover code under tests/" exclusion from
+# positive evidence that an EXECUTABLE test is plausibly tied to one module.
+# Filename/path association is not a claim that the tests passed or cover code.
+_NON_SEMANTIC_TEST_WORDS = frozenset({
+    "test", "tests", "spec", "specs", "unit", "integration", "e2e",
+    "init", "index", "main", "lib", "src", "app", "apps", "script",
+    "scripts", "code", "module", "mod", "mock", "mocks",
+    "fixture", "fixtures", "conftest", "setup", "helper", "helpers",
+    "util", "utils",
+})
+
+
+def _filename_tokens(path):
+    basename = path.rsplit("/", 1)[-1]
+    stem = basename.split(".", 1)[0]
+    stem = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", "_", stem)
+    stem = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", stem)
+    tokens = set()
+    for word in re.findall(r"[a-z0-9]+", stem.lower()):
+        if word.endswith("ies") and len(word) > 4:
+            word = word[:-3] + "y"
+        elif word.endswith("s") and len(word) > 4 and not word.endswith(("ss", "us")):
+            word = word[:-1]
+        if len(word) > 1 and word not in _NON_SEMANTIC_TEST_WORDS and not re.fullmatch(r"v?\d+", word):
+            tokens.add(word)
+    return tokens
+
+
+def _executable_test_path(path):
+    """Fixtures/README/JSON under tests/ never confer implementation-test credit."""
+    if not is_test_source_path(path):
+        return False
+    name = path.rsplit("/", 1)[-1]
+    return bool(
+        re.fullmatch(r"(?:test_[A-Za-z0-9_]+|[A-Za-z0-9_]+_test|tests(?:_[A-Za-z0-9_]+)?)\.py", name)
+        or re.fullmatch(r".+\.(?:test|spec)\.(?:[jt]sx?|mjs|cjs)", name)
+        or re.fullmatch(r".+_test\.go", name)
+        or re.fullmatch(r"(?:test_.+|.+_test|tests)\.rs", name)
+        or re.fullmatch(r".+(?:Test|Tests)\.(?:java|kt)", name)
+        or re.fullmatch(r".+(?:_spec|_test)\.lua", name)
+    )
+
+
+def _package_scope(path):
+    """Reject cross-package associations when both files identify a package."""
+    parts = path.split("/")
+    for index, name in enumerate(parts[:-1]):
+        if name in {"apps", "packages", "services"} and index + 1 < len(parts) - 1:
+            return name, parts[index + 1]
+    return None
+
+
+def related_test_paths(source_path, rows):
+    """Return up to 10 executable tests with source-module NAME evidence.
+
+    Shared generic directories, unrelated monorepo packages and data-only
+    fixtures are insufficient. These are candidates for REVIEW, not verified
+    coverage, successful executions, legal permission, or upgrade authority.
+    """
+    if not isinstance(source_path, str) or is_test_source_path(source_path):
+        return []
+    source_tokens = _filename_tokens(source_path)
+    if not source_tokens:
+        return []
+    source_scope = _package_scope(source_path)
+    related = []
+    for entry in rows:
+        if entry.get("type") != "blob":
+            continue
+        path = entry.get("path")
+        if not _executable_test_path(path):
+            continue
+        test_scope = _package_scope(path)
+        if source_scope and test_scope and source_scope != test_scope:
+            continue
+        if source_tokens.isdisjoint(_filename_tokens(path)):
+            continue
+        related.append(path)
+        if len(related) == 10:
+            break
+    return related
+
 def number(value, name, minimum=Decimal('0')):
     require(type(value) in {str, int, float}, name+" must be numeric")
     try:
