@@ -32,7 +32,10 @@ class ProductTests(unittest.TestCase):
   self.store.submit([item],now=NOW);self.store.submit([item],now=NOW)
   self.assertEqual(self.store.pending(),1)
   bad=copy.deepcopy(item);bad['payload']['open_issues']=99
-  with self.assertRaisesRegex(BrainError,'IDEMPOTENCY_CONFLICT'): self.store.submit([event('repository','example/other',payload('example/other'),SHA,now=NOW),bad],now=NOW)
+  # Advance the semantic time while reusing the old event ID, so this
+  # specifically tests ID collision rather than same-time fact conflicts.
+  bad['observed_at']='2026-10-07T21:01:00Z'
+  with self.assertRaisesRegex(BrainError,'IDEMPOTENCY_CONFLICT'): self.store.submit([event('repository','example/other',payload('example/other'),SHA,now=NOW),bad],now='2026-10-07T21:02:00Z')
   self.assertEqual(self.store.db.execute('select count(*) from events').fetchone()[0],1)
  def test_backup_restart_and_history_replay(self):
   self.seed();original=self.store.report(SHA,now=NOW)
