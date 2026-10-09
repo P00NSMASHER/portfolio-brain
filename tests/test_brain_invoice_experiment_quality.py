@@ -4,6 +4,7 @@ No network, customers, timing benchmarks, external code or revenue assertions.
 """
 import copy
 import itertools
+from collections import Counter
 import unittest
 from unittest.mock import patch
 
@@ -32,7 +33,7 @@ class InvoiceExperimentQuality(unittest.TestCase):
                 )
 
     def test_mostly_distinct_corpus_is_not_duplicate_heavy(self):
-        for count in (20, 21, 100, 500, 1000, 2000):
+        for count in (20, 21, 44, 100, 500, 1000, 2000):
             with self.subTest(count=count):
                 rows, intentional, near = _synthetic_invoice_rows(count)
                 self.assertEqual(len(rows), count)
@@ -47,6 +48,68 @@ class InvoiceExperimentQuality(unittest.TestCase):
                 self.assertTrue(all(isinstance(x[0], str) and
                                     isinstance(x[1], str) and
                                     type(x[2]) is int for x in rows))
+
+    def test_all_1981_supported_sizes_duplicate_distinct_originals(self):
+        # O(sum(count)) fixture validation, not an O(count**2) oracle at
+        # every size. The expensive quadratic oracle is covered separately.
+        for count in range(20, 2001):
+            with self.subTest(count=count):
+                rows, intentional, near = _synthetic_invoice_rows(count)
+                frequencies = Counter(rows)
+                self.assertEqual(len(rows), count)
+                self.assertEqual(len(frequencies), count - intentional)
+                self.assertEqual(sum(n == 2 for n in frequencies.values()),
+                                 intentional)
+                self.assertTrue(all(n in (1, 2) for n in frequencies.values()))
+                self.assertEqual(len(near), 2)
+                self.assertTrue(all(frequencies[n] == 1 for n in near))
+
+    def test_former_stride_collision_at_size_44_is_eliminated(self):
+        rows, intentional, near = _synthetic_invoice_rows(44)
+        frequencies = Counter(rows)
+        self.assertEqual(intentional, 5)
+        self.assertEqual(len(rows), 44)
+        self.assertEqual(len(frequencies), 39)
+        self.assertEqual(sum(n == 2 for n in frequencies.values()), 5)
+        self.assertTrue(all(n <= 2 for n in frequencies.values()))
+        self.assertTrue(all(frequencies[n] == 1 for n in near))
+        self.assertEqual(
+            len(_indexed_duplicate_indices(rows)), 5,
+        )
+        self.assertEqual(
+            _indexed_duplicate_indices(rows), _baseline_duplicate_indices(rows)[0],
+        )
+        self.assertEqual(invoice_dedup_experiment(44)["duplicate_cases"], 5)
+
+    def test_old_collision_fixture_fails_closed_despite_correct_total(self):
+        count = 44
+        intentional = (count - 2) // 8
+        originals = [
+            (f"CARRIER-{i % 13:02d}", f"INV-{i:06d}",
+             100 + ((i * 29) % 997))
+            for i in range(count - 2 - intentional)
+        ]
+        # Historical modulo stride 37 and modulus 37 selected source 11
+        # five times, despite the intended five separate duplicate originals.
+        wrong_copies = [
+            originals[(i * 37 + 11) % len(originals)]
+            for i in range(intentional)
+        ]
+        self.assertEqual(len(set(wrong_copies)), 1)
+        anchor = originals[0]
+        near = (
+            (anchor[0] + "-OTHER", anchor[1], anchor[2]),
+            (anchor[0], anchor[1], anchor[2] + 100_000),
+        )
+        rows = originals + wrong_copies + list(near)
+        self.assertEqual(_indexed_duplicate_indices(rows),
+                         _baseline_duplicate_indices(rows)[0])
+        self.assertEqual(len(_indexed_duplicate_indices(rows)), intentional)
+        with patch("brain.experiments._synthetic_invoice_rows",
+                   return_value=(rows, intentional, near)):
+            with self.assertRaisesRegex(BrainError,
+                                        "synthetic duplicate-source diversity"):
+                invoice_dedup_experiment(count)
 
     def test_experiment_duplicate_case_count_matches_known_injections(self):
         for count in (20, 21, 100, 500, 1000, 2000):
