@@ -3,6 +3,7 @@
 No external network, automated feedback, customer data or production mutations.
 """
 import copy
+import hashlib
 import json
 import os
 import tempfile
@@ -166,6 +167,14 @@ class TransferEvidenceTests(unittest.TestCase):
         source = self.root / "input.json"
         source.write_text(json.dumps(request()))
         destination = self.root / "cli-result"
+        original = self.root / "state.sqlite"
+        original_bytes_sha256 = hashlib.sha256(original.read_bytes()).hexdigest()
+        original_stat = original.stat()
+        # The real authority must not be chmod'd from a read-only mode merely
+        # because the CLI's Store wrapper normally performs initialization.
+        os.chmod(original, 0o400)
+        original_mode = original.stat().st_mode & 0o777
+        original_mtime = original.stat().st_mtime_ns
         tables = ("events", "ledger", "reports", "attempts")
         before = {
             table: self.store.db.execute("SELECT count(*) FROM " + table).fetchone()[0]
@@ -186,6 +195,32 @@ class TransferEvidenceTests(unittest.TestCase):
             for table in tables
         }
         self.assertEqual(after, before)
+        self.assertEqual(hashlib.sha256(original.read_bytes()).hexdigest(), original_bytes_sha256)
+        self.assertEqual(original.stat().st_mtime_ns, original_mtime)
+        self.assertEqual(original.stat().st_mode & 0o777, original_mode)
+        self.assertEqual(os.stat(destination / "transfer-review.json").st_mode & 0o777, 0o600)
+
+    def test_cli_rejects_symlinked_or_corrupt_source_before_writing_receipt(self):
+        source = self.root / "input.json"
+        source.write_text(json.dumps(request()))
+        original = self.root / "state.sqlite"
+        alias = self.root / "aliased-authority.sqlite"
+        alias.symlink_to(original)
+        corrupt = self.root / "invalid.sqlite"
+        corrupt.write_bytes(b"This is not a real SQLite database.")
+        for name, path in (("symlink", alias), ("corrupt", corrupt)):
+            with self.subTest(name=name):
+                out = self.root / ("blocked-" + name)
+                with patch("brain.__main__.source_sha", return_value=BRAIN_SHA):
+                    code = brain_cli([
+                        "transfer-review", "--db", str(path),
+                        "--input", str(source), "--output", str(out),
+                        "--expected-sha", BRAIN_SHA,
+                    ])
+                self.assertEqual(code, 1)
+                self.assertFalse((out / "transfer-review.json").exists())
+        self.assertTrue(alias.is_symlink())
+        self.assertEqual(corrupt.read_bytes(), b"This is not a real SQLite database.")
 
     def test_cli_refuses_missing_sqlite_instead_of_creating_new_authority(self):
         nonexistent = self.root / "does-not-exist.sqlite"
