@@ -2,6 +2,7 @@
 from __future__ import annotations
 import argparse
 import json
+from contextlib import ExitStack
 import os
 import subprocess
 import sys
@@ -134,17 +135,20 @@ def main(argv=None):
     parser.add_argument("--cycles",type=int,default=0,help="0 means service continues until stop file/signal")
     args=parser.parse_args(argv)
     store=None
+    snapshots=ExitStack()
     try:
         if args.command=="preflight":
             result=preflight(args.output,args.expected_sha)
         else:
             sha=source_sha(args.expected_sha)
             if args.command == "transfer-review":
-                # Unlike init, a read-only review must never bootstrap a new
-                # public state just because an input DB path was misspelled.
-                require(Path(args.db).is_file(),
-                        "TRANSFER_STATE_DB_NOT_FOUND_NO_BOOTSTRAP")
-            store=Store(args.db,visibility="PRIVATE" if args.private else "PUBLIC")
+                from brain.transfer import readonly_authority_snapshot
+                # Store() mutates DB permissions/journal/meta even for reads;
+                # never construct it with the original authority pathname.
+                isolated_db=snapshots.enter_context(readonly_authority_snapshot(args.db))
+            else:
+                isolated_db=args.db
+            store=Store(isolated_db,visibility="PRIVATE" if args.private else "PUBLIC")
             # A transfer review is a pure inspection. It must not apply pending
             # inputs or write feedback, attempts, reports or other canonical state.
             if args.command != "transfer-review":
@@ -225,7 +229,10 @@ def main(argv=None):
         print(f'{type(exc).__name__}: {str(exc)[:500]}',file=sys.stderr)
         return 1
     finally:
-        if store: store.close()
+        try:
+            if store: store.close()
+        finally:
+            snapshots.close()
 
 if __name__=="__main__":
     raise SystemExit(main())
