@@ -119,9 +119,34 @@ class RealStateV5Compatibility(unittest.TestCase):
             PRODUCTION,
             "Original v4 protected source changed; no compatibility claim",
         )
-        candidate = git("rev-parse", "HEAD")
-        self.assertRegex(candidate, r"^[0-9a-f]{40}$")
+        # checkout@v4 on pull_request normally checks out GitHub's virtual
+        # merge commit, not the PR's reviewed head. Bind BOTH identities and
+        # require byte-identical source trees instead of misnaming the merge.
+        self.assertEqual(os.environ.get("GITHUB_EVENT_NAME"), "pull_request")
+        branch = "refs/heads/integration/portfolio-brain-v5-candidate-20261008"
+        checkout_commit = git("rev-parse", "HEAD")
+        branch_tip = git("ls-remote", "origin", branch).split()[0]
+        self.assertRegex(branch_tip, r"^[0-9a-f]{40}$")
+        git("fetch", "--quiet", "--no-tags", "origin", branch)
+        candidate = git("rev-parse", "FETCH_HEAD")
+        self.assertEqual(candidate, branch_tip, "PR head advanced during acquisition")
         self.assertNotEqual(candidate, PRODUCTION)
+        checkout_tree = git("rev-parse", "HEAD^{tree}")
+        candidate_tree = git("rev-parse", f"{candidate}^{{tree}}")
+        self.assertEqual(checkout_tree, candidate_tree, "PR checkout tree differs from reviewed PR head")
+        if checkout_commit != candidate:
+            parents = [
+                line.removeprefix("parent ")
+                for line in git("cat-file", "-p", "HEAD").splitlines()
+                if line.startswith("parent ")
+            ]
+            self.assertEqual(
+                parents, [PRODUCTION, candidate],
+                "PR virtual merge must derive from frozen main and exact PR head",
+            )
+            checkout_kind = "GITHUB_PULL_REQUEST_MERGE_SAME_TREE"
+        else:
+            checkout_kind = "EXACT_PULL_REQUEST_HEAD"
         git("fetch", "--quiet", "--no-tags", "origin", STATE_REF)
         state_commit = git("rev-parse", "FETCH_HEAD")
         self.assertRegex(state_commit, r"^[0-9a-f]{40}$")
@@ -140,6 +165,11 @@ class RealStateV5Compatibility(unittest.TestCase):
             git("ls-remote", "origin", "refs/heads/main").split()[0],
             PRODUCTION,
             "Protected main changed during snapshot acquisition",
+        )
+        self.assertEqual(
+            git("ls-remote", "origin", branch).split()[0],
+            candidate,
+            "PR head moved during snapshot acquisition",
         )
 
         with tempfile.TemporaryDirectory(prefix="brain-v5-ro-migration-") as temp:
@@ -215,6 +245,10 @@ class RealStateV5Compatibility(unittest.TestCase):
                     "scope": "GITHUB_FOUNDATION_CI_DISPOSABLE_COPY_ONLY",
                     "original_production_source": PRODUCTION,
                     "v5_candidate_source": candidate,
+                    "ci_checkout_commit": checkout_commit,
+                    "ci_checkout_kind": checkout_kind,
+                    "candidate_source_tree": candidate_tree,
+                    "source_tree_matches_reviewed_pr_head": True,
                     "state_commit": state_commit,
                     "sqlite_blob": blob,
                     "sqlite_sha256": raw_digest,
