@@ -107,6 +107,14 @@ def validate_event(event, now, *, legacy_replay=False):
             _EVIDENCE_RANK[event["data_kind"]] >= _EVIDENCE_RANK[minimum],
             "HOLDINGS_EVIDENCE_KIND_UNDERSTATED: nested price evidence is less reliable than declared",
         )
+    # The existing event() producer starts with id="" and seals that
+    # complete body with kind + SHA-256. The same contract is mandatory
+    # for imported events and for immutable historical replay: a valid
+    # chain alone must not let an arbitrary alias inflate event lineage.
+    require(
+        event["id"] == event["kind"] + ":" + digest({**event, "id": ""}),
+        "EVENT_ID_CONTENT_MISMATCH: canonical event identity required",
+    )
 
 class Store:
     def __init__(self, path, *, visibility="PRIVATE"):

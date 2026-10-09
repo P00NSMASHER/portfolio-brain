@@ -31,6 +31,14 @@ writer lock, agent heartbeat, cost governor, or orphaned-run cleanup is imported
   together. An interruption rolls the entire drain back; restart reapplies exactly once.
 - Every event has a contiguous sequence, source revision, semantic timestamp, data label,
   payload digest, previous digest, and chain digest. Missing/corrupt/ambiguous evidence fails closed.
+- A canonical event ID is bound to the exact complete event content using the
+  existing producer contract: `<kind>:SHA256(canonical(event with id=""))`.
+  Intake and every verified historical ledger replay rederive this identity;
+  invented IDs or copied IDs from a different event fail even if SQLite row
+  identities, body hashes and chain hashes were all recomputed consistently.
+  Events legitimately repeated by a new producer revision or using an
+  equivalent UTC-text precision are still independently identified and allowed
+  when the semantic observation matches.
 - Event keys for repository, candidate implementation, and reviewed experiment records
   must match their validated payload identities exactly; repository source URLs
   must name the actual recorded commit, not merely share the repository URL prefix.
