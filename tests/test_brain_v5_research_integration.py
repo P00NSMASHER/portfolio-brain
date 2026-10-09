@@ -90,7 +90,7 @@ class CombinedV5ResearchIntegration(unittest.TestCase):
         self.assertFalse(report["learning"]["autonomous_code_execution"])
         self.assertEqual(synthetic["duplicate_cases"], 124)
         self.assertIn("NON-EQUIVALENT", synthetic["scope"])
-        self.assertNotIn("verified speedup", synthetic["scope"].lower())
+        self.assertIn("not benchmark timings or a verified speedup", synthetic["scope"].lower())
 
         knowledge = build_knowledge(report)
         self.assertEqual(knowledge["schema_version"], 2)
