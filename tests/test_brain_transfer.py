@@ -237,6 +237,34 @@ class TransferEvidenceTests(unittest.TestCase):
         self.assertFalse(nonexistent.exists())
         self.assertFalse((self.root / "blocked" / "transfer-review.json").exists())
 
+    def test_receipt_writer_never_follows_file_or_directory_symlinks(self):
+        report = self.run_review()
+        original = self.root / "state.sqlite"
+        original_hash = hashlib.sha256(original.read_bytes()).hexdigest()
+        original_time = original.stat().st_mtime_ns
+        original_mode = original.stat().st_mode & 0o777
+
+        file_dest = self.root / "danger-file"
+        file_dest.mkdir()
+        (file_dest / "transfer-review.json").symlink_to(original)
+        with self.assertRaisesRegex(BrainError, "TRANSFER_OUTPUT_SYMLINK_OR_FILE_REFUSED"):
+            write_transfer_review(report, file_dest)
+
+        dir_alias = self.root / "danger-dir"
+        dir_alias.symlink_to(self.root, target_is_directory=True)
+        with self.assertRaisesRegex(BrainError, "TRANSFER_OUTPUT_SYMLINK_REFUSED"):
+            write_transfer_review(report, dir_alias)
+
+        nested = self.root / "parent-symlink"
+        nested.symlink_to(self.root, target_is_directory=True)
+        with self.assertRaisesRegex(BrainError, "TRANSFER_OUTPUT_SYMLINK_REFUSED"):
+            write_transfer_review(report, nested / "subdirectory")
+
+        self.assertEqual(hashlib.sha256(original.read_bytes()).hexdigest(), original_hash)
+        self.assertEqual(original.stat().st_mtime_ns, original_time)
+        self.assertEqual(original.stat().st_mode & 0o777, original_mode)
+        self.assertTrue((file_dest / "transfer-review.json").is_symlink())
+
     def test_receipt_written_to_local_private_output_only(self):
         report = self.run_review()
         path = write_transfer_review(report, self.root / "out")
