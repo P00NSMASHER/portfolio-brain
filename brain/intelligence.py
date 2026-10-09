@@ -235,7 +235,21 @@ def build_report(events, *, now, max_age):
     stale=[e["key"] for e in current if e["kind"] in {"repository","holdings"} and (timestamp(now)-timestamp(e["observed_at"])).total_seconds()>max_age]
     stale_quotes=[e["key"] for e in current if e["kind"]=="holdings" and any((timestamp(now)-timestamp(q["observed_at"])).total_seconds()>max_age for q in e["payload"]["quotes"].values())]
     repos=[{"key":e["key"],"observed_at":e["observed_at"],"data_kind":e["data_kind"],**e["payload"]} for e in current if e["kind"]=="repository"]
-    candidates=sorted([{"key":e["key"],"observed_at":e["observed_at"],"data_kind":e["data_kind"],"reuse_score":reuse_score(e["payload"]),"utility_evidence":"STRUCTURAL_ONLY_NOT_EXECUTED",**e["payload"]} for e in current if e["kind"]=="candidate" and not is_test_source_path(e["payload"].get("path"))],key=lambda x:(-x["reuse_score"],x["key"]))
+    # Reconcile legacy persisted candidate paths when replaying old events.
+    # Old observations may include unrelated repo tests or data-only fixtures;
+    # never allow stored structural mistakes to retain ranking/upgrade credit.
+    candidates=[]
+    for e in current:
+        if e["kind"]!="candidate" or is_test_source_path(e["payload"].get("path")):
+            continue
+        p=dict(e["payload"])
+        p["test_paths"]=related_test_paths(
+            p["path"], [{"path":path,"type":"blob"} for path in p["test_paths"]]
+        )
+        candidates.append({"key":e["key"],"observed_at":e["observed_at"],
+            "data_kind":e["data_kind"],"reuse_score":reuse_score(p),
+            "utility_evidence":"STRUCTURAL_ONLY_NOT_EXECUTED",**p})
+    candidates.sort(key=lambda x:(-x["reuse_score"],x["key"]))
     feedback=[e["payload"] for e in current if e["kind"]=="feedback"]
     feedback_by_key={x["candidate_key"]:x for x in feedback}
     for candidate in candidates:
