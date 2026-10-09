@@ -3,6 +3,7 @@
 All invoice inputs are synthetic. Equality comparisons and hash-set membership
 probes are different units of work, NOT comparable timings or financial savings.
 """
+from collections import Counter
 from random import Random
 
 from brain.core import require
@@ -24,11 +25,11 @@ def _synthetic_invoice_rows(count):
         (f"CARRIER-{i % 13:02d}", f"INV-{i:06d}", 100 + ((i * 29) % 997))
         for i in range(unique_count)
     ]
-    # Source indices are deterministic, but not dependent on any customer data.
-    duplicates = [
-        originals[(i * 37 + 11) % unique_count]
-        for i in range(deliberate_duplicates)
-    ]
+    # Sampling without replacement ensures each duplicated invoice has a
+    # distinct original. A fixed modular stride can revisit the same original
+    # (for example all five copies at count=44 when unique_count=37).
+    rng = Random(20261009 + count)
+    duplicates = rng.sample(originals, deliberate_duplicates)
     anchor = originals[0]
     near_misses = (
         (anchor[0] + "-OTHER", anchor[1], anchor[2]),
@@ -40,9 +41,14 @@ def _synthetic_invoice_rows(count):
         "synthetic near-miss contamination",
     )
     rows = originals + duplicates + list(near_misses)
-    Random(20261009 + count).shuffle(rows)
-    require(len(rows) == count and len(set(rows)) == count - deliberate_duplicates,
-            "synthetic duplicate-count contract failed")
+    rng.shuffle(rows)
+    counts = Counter(rows)
+    require(
+        len(rows) == count and len(counts) == count - deliberate_duplicates
+        and sum(value == 2 for value in counts.values()) == deliberate_duplicates
+        and all(value <= 2 for value in counts.values()),
+        "synthetic duplicate-source diversity failed",
+    )
     return rows, deliberate_duplicates, near_misses
 
 
@@ -79,6 +85,16 @@ def invoice_dedup_experiment(count=500):
     require(
         baseline == indexed and len(indexed) == intended_duplicates,
         "candidate failed correctness oracle or injected duplicate-count check",
+    )
+    # The caller may supply an alternate synthetic fixture in offline tests.
+    # Matching the total duplicate count alone does not ensure that different
+    # invoice originals were exercised (the historical count=44 failure).
+    counts = Counter(rows)
+    require(
+        len(rows) == count and len(counts) == count - intended_duplicates
+        and sum(value == 2 for value in counts.values()) == intended_duplicates
+        and all(value <= 2 for value in counts.values()),
+        "synthetic duplicate-source diversity failed",
     )
     require(
         len(near_misses) == 2 and len(set(near_misses)) == 2

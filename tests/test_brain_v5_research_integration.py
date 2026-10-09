@@ -11,7 +11,10 @@ from pathlib import Path
 
 from brain.adapters import event
 from brain.core import Store, digest
-from brain.experiments import invoice_dedup_experiment
+from brain.experiments import (
+    _baseline_duplicate_indices, _indexed_duplicate_indices,
+    _synthetic_invoice_rows, invoice_dedup_experiment,
+)
 from brain.upgrades import build_knowledge
 
 
@@ -125,6 +128,69 @@ class CombinedV5ResearchIntegration(unittest.TestCase):
             self.assertEqual(reopened.pending(), 0)
         finally:
             reopened.close()
+
+    def test_corrected_size44_sampling_and_balanced_research_share_one_ledger(self):
+        """One source from each project plus the collision-sized experiment.
+
+        Distinct originals, actual duplicate positions and canonical report
+        replay all must agree, without reading any invoice or external service.
+        """
+        cases, intended, near_misses = _synthetic_invoice_rows(44)
+        counts = Counter(cases)
+        self.assertEqual(intended, 5)
+        self.assertEqual(len(cases), 44)
+        self.assertEqual(len(counts), 39)
+        self.assertEqual(sum(count == 2 for count in counts.values()), 5)
+        self.assertTrue(all(count <= 2 for count in counts.values()))
+        self.assertEqual(len(near_misses), 2)
+        self.assertTrue(all(counts[near] == 1 for near in near_misses))
+        self.assertEqual(
+            _baseline_duplicate_indices(cases)[0],
+            _indexed_duplicate_indices(cases),
+        )
+        payload = invoice_dedup_experiment(44)
+        self.assertEqual(payload["duplicate_cases"], intended)
+        self.assertEqual(payload["dataset_kind"], "SIMULATED")
+        self.assertIn("NON-EQUIVALENT", payload["scope"])
+
+        rows = (
+            candidate("school-tools", 101, "AAA"),
+            candidate("freight-recovery", 102, "BBB"),
+            candidate("agent-products", 103, "CCC"),
+        )
+        observations = [observed_repository()]
+        observations.extend(
+            event("candidate", row["repository"] + ":" + row["path"],
+                  row, SOURCE, now=NOW)
+            for row in rows
+        )
+        observations.append(event(
+            "experiment", payload["experiment"], payload, SOURCE,
+            now=NOW, data_kind="SIMULATED",
+        ))
+        self.store.submit(observations, now=NOW)
+        self.assertEqual(self.store.drain(), 5)
+        report = self.store.report(SOURCE, now=NOW)
+        self.assertEqual(report["state_sequence"], 5)
+        self.assertEqual(report["learning"]["experiments"], [payload])
+        self.assertEqual(report["status"], "PASS")
+        self.assertEqual(report["pending_events"], 0)
+        knowledge = build_knowledge(report)
+        self.assertEqual(
+            [source["target"] for source in knowledge["sources"]],
+            ["agent-products", "freight-recovery", "school-tools"],
+        )
+        self.assertEqual(knowledge["fingerprint"], digest(knowledge["sources"]))
+        self.assertEqual(self.store.read_report(SOURCE, now=NOW), report)
+        original = self.store.db.execute(
+            "SELECT body FROM events WHERE id=?", (observations[-1]["id"],)
+        ).fetchone()[0]
+        self.assertEqual(json.loads(original)["data_kind"], "SIMULATED")
+        self.assertIsNone(report["learning"]["verified_revenue"])
+        self.assertFalse(report["learning"]["autonomous_code_execution"])
+        self.assertEqual(self.store.db.execute(
+            "SELECT body FROM events WHERE id=?", (observations[-1]["id"],)
+        ).fetchone()[0], original)
 
     def test_historical_simulated_experiment_bytes_remain_immutable(self):
         historical = invoice_dedup_experiment(100)

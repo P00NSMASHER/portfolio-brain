@@ -103,6 +103,28 @@ The full combined candidate and its independent verifier require **new**
 exact-head green checks. Neither the original PR checks nor passing
 synthetic tests grant production source authority or new V5 acceptance.
 
+## Revised invoice duplicate-source diversity in integrated V5 candidate
+
+The original integration copied the initial synthetic-invoice experiment
+from PR #663, but that draft later fixed a second demonstrated fixture defect.
+At count 44, the former stride-37 selector injected all five duplicate
+copies from ONE original, even though the aggregate duplicate count looked
+correct. The V5 integration now copies the newer independently verified
+`brain/experiments.py` and invoice-quality test files **byte-for-byte**
+from source PR #663 head
+`e28a258871817eb3c945f82f25b696850cad7cdf`.
+The revised source samples distinct originals without replacement, refuses
+any triple-appearing invoice and checks all 1,981 supported fixture sizes.
+New isolated integration tests combine the formerly flawed count-44 case
+with legitimate multi-target knowledge selection and canonical SQLite
+read/replay. Old experiment facts remain immutable; all resulting evidence
+is SIMULATED and establishes no measured runtime or recoverable billing value.
+
+Both the assembled V5 head's Foundation and independent App checks must
+be rerun, even though source PR #663 passed its own independent gates.
+PR #663 remains untouched and unmerged. No production state or software
+has been deployed by this source reconciliation.
+
 ## Financial evidence classification safety (candidate only)
 
 The V5 source candidate also enforces a conservative provenance ceiling on
