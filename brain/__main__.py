@@ -139,6 +139,11 @@ def main(argv=None):
             result=preflight(args.output,args.expected_sha)
         else:
             sha=source_sha(args.expected_sha)
+            if args.command == "transfer-review":
+                # Unlike init, a read-only review must never bootstrap a new
+                # public state just because an input DB path was misspelled.
+                require(Path(args.db).is_file(),
+                        "TRANSFER_STATE_DB_NOT_FOUND_NO_BOOTSTRAP")
             store=Store(args.db,visibility="PRIVATE" if args.private else "PUBLIC")
             # A transfer review is a pure inspection. It must not apply pending
             # inputs or write feedback, attempts, reports or other canonical state.
