@@ -83,7 +83,16 @@ collection and refuses a moved branch instead of describing stale checks
 as the latest state. This bounded second read does not freeze GitHub's
 branch after the observation or prove CI/check behavior was useful.
 Discovery inspects actual exact-revision source bytes, verifies Git blob hashes, and records
-SHA-256 plus structural test paths. Licenses are metadata without a discovery filter.
+SHA-256 plus structural test paths. Search-index results can disappear before inspection:
+only a GitHub 404 at an indexed hit's branch/tree/blob read is quarantined with
+public repository + stage evidence. A run can continue only if at least one
+other source was actually hash-verified; otherwise it fails closed with
+`DISCOVERY_ALL_SEARCH_RESULTS_UNAVAILABLE`. GitHub search endpoint failure,
+non-404 transport failure, private/malformed results, truncated tree, and
+explicitly requested repository 404 remain hard failures. Source gaps are
+not presented as verified research or as full search coverage. No new
+provider, extra pagination or retry budget is introduced.
+Licenses are metadata without a discovery filter.
 No instruction in a README, comment, repository name, or fetched source can grant
 mutation authority. Fetched code is never executed.
 

@@ -65,7 +65,15 @@ workers, changing credentials, or weakening gates.
 Requests are GET-only for source acquisition, capped24 per operation, ten-second
 timeouts, one bounded retry for429/502/503/504 with retry delay at most two seconds.
 No full-preflight speculative retry loop exists. A source failure preserves successful
-other observations but fails full monitored coverage. The next scheduled cycle starts
+other observations but fails full monitored coverage. V5 research now distinguishes
+an unavailable *search result* (branch/tree/blob GET 404) from a search-API
+failure or an explicitly requested source: one disappearing indexed hit may
+be skipped only when another result is fully hash-inspected, and the report
+records `OBSERVED_WITH_SEARCH_RESULT_GAPS`, repository/stage and a nonadoption
+reason. If no result can be inspected, the research cycle still FAILS; 403,
+5xx, malformed/private metadata and incomplete search fail closed. This
+source-only candidate is not a production recovery or a retroactive
+reclassification of the four failed 18:00–18:30 UTC October 9 v4 runs. The next scheduled cycle starts
 from durable acknowledged state and drains interrupted input. Last failure remains
 visible in attempts. Optional knowledge-upgrade failure is BLOCKED without discarding
 core observations. Authentication/rate-limit/provider outage is never renamed success.
