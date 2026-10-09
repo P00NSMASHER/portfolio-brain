@@ -89,9 +89,18 @@ are not implemented. Source/API failure recovery and inbox replay are automatic.
 
 Holdings calculations require complete prices, finite nonnegative values, explicit
 source permission attestation, UTC semantic times, and aligned historical data.
+A newly submitted holdings event cannot claim more reliable evidence than any
+underlying current quote **or historical price observation**: SIMULATED dominates
+ESTIMATED, which dominates ACTUAL. Conservative over-labeling is permitted.
+All mixed-source holdings views separately expose valuation and historical
+kinds, quote/history source references and an explicit statement that source
+claims have **not** been independently verified. ACTUAL means operator/source
+reported rather than exchange-authenticated. Archived V4 facts are not rewritten:
+any older understated label is preserved in `declared_data_kind`, while the
+derived `data_kind` is conservatively downgraded and the discrepancy flagged.
 Missing cost basis means P/L unavailable. Historical results use current quantities
 and are labelled fixed-holdings scenarios; no realized performance, annualization
-assumption, future estimate, order instruction, or position recommendation is invented.
+assumption, future estimate, order instruction or position recommendation is invented.
 
 ## Acceptance sequence
 

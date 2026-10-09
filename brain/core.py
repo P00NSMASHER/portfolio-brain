@@ -69,7 +69,7 @@ def analyze_events(events, *, now, max_age):
     report["repository_changes"] = repository_changes(events, now=now, max_age=max_age)
     return report
 
-def validate_event(event, now):
+def validate_event(event, now, *, legacy_replay=False):
     require(type(event) is dict and set(event) == {"id", "kind", "key", "observed_at", "source_sha", "visibility", "data_kind", "payload"}, "event fields invalid")
     require(isinstance(event["id"], str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,160}", event["id"]), "invalid event id")
     require(event["kind"] in KINDS and isinstance(event["key"], str) and 0 < len(event["key"]) <= 200, "invalid event kind/key")
@@ -82,8 +82,13 @@ def validate_event(event, now):
     validate_payload(event["kind"], event["payload"], event["observed_at"])
     if event['kind']=='experiment':
         require(event['data_kind']=='SIMULATED', 'experiment data must be labelled simulated')
-    if event['kind']=='holdings' and any(q['data_kind']=='SIMULATED' for q in event['payload']['quotes'].values()):
-        require(event['data_kind']=='SIMULATED', 'synthetic quotes cannot be presented as actual holdings valuation')
+    if event["kind"] == "holdings" and not legacy_replay:
+        from brain.intelligence import holdings_evidence, _EVIDENCE_RANK
+        minimum = holdings_evidence(event["payload"])["required_data_kind"]
+        require(
+            _EVIDENCE_RANK[event["data_kind"]] >= _EVIDENCE_RANK[minimum],
+            "HOLDINGS_EVIDENCE_KIND_UNDERSTATED: nested price evidence is less reliable than declared",
+        )
 
 class Store:
     def __init__(self, path, *, visibility="PRIVATE"):
@@ -183,7 +188,10 @@ class Store:
             event = json.loads(row["body"])
             require(row["id"] == event.get("id"), "STATE_CORRUPT: durable event identity mismatch")
             require(row["hash"] == digest(event), "STATE_CORRUPT: event hash mismatch")
-            validate_event(event, row["received_at"])
+            # Legacy source data is immutable, including old label mistakes.
+            # Revalidate all other contracts and surface conservative derived
+            # labels rather than rewriting history or breaking V4-era replay.
+            validate_event(event, row["received_at"], legacy_replay=True)
             require(self.visibility == "PRIVATE" or event["visibility"] == "PUBLIC", "private event in public database")
             identity = semantic_observation_identity(event)
             prior = seen_semantic.setdefault(identity, event)

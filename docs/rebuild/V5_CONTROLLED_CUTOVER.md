@@ -103,6 +103,22 @@ The full combined candidate and its independent verifier require **new**
 exact-head green checks. Neither the original PR checks nor passing
 synthetic tests grant production source authority or new V5 acceptance.
 
+## Financial evidence classification safety (candidate only)
+
+The V5 source candidate also enforces a conservative provenance ceiling on
+explicitly supplied long-only holdings observations. New event ingestion rejects
+any `ACTUAL` holdings declaration containing `ESTIMATED` or `SIMULATED`
+quote or historical price inputs, and any `ESTIMATED` declaration containing
+`SIMULATED` prices. Analysis independently exposes valuation and historical
+evidence labels, source attestations, and the effective lower-confidence
+classification. Existing V4-era ledger bytes and hashes are preserved if
+their original declared labels were weaker than their nested evidence:
+replay may inspect those archived events, but derived reports conservatively
+downgrade them and visibly flag their original discrepancy. All numbers
+remain fixed-holdings scenarios, not verified custody, actual performance
+or financial execution authority. No brokerage connectors or permissions
+are enabled.
+
 ## Offline cutover/rollback simulation (not deployment)
 
 `tests/test_v5_source_switch_safety.py` runs the actual reviewed Cloudflare

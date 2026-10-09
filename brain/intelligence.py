@@ -200,6 +200,79 @@ def reuse_score(p):
     # Simple transparent ranking; never grants reuse, integration, or revenue verification.
     return (3 if p["test_paths"] else 0) + min(len(p["matched_terms"]),4) + (1 if p["bytes"] <= 30000 else 0)
 
+# A semantic kind is the strongest claim made by an input. A portfolio-level
+# declaration must be at least as cautious as every underlying price source.
+_EVIDENCE_RANK = {"ACTUAL": 0, "ESTIMATED": 1, "SIMULATED": 2}
+
+
+def conservative_data_kind(kinds):
+    kinds = list(kinds)
+    require(kinds and all(kind in _EVIDENCE_RANK for kind in kinds),
+            "HOLDINGS_EVIDENCE_KIND_UNAVAILABLE")
+    return max(kinds, key=_EVIDENCE_RANK.__getitem__)
+
+
+def holdings_evidence(p):
+    """Derive evidence provenance independently for quotes and historical rows.
+
+    ACTUAL means a source/operator *reported* a fact; it is not a verification
+    of exchange prices, custody, licensed data, or performance. No dataset is
+    fetched or authenticated here.
+    """
+    quote_kinds = sorted({row["data_kind"] for row in p["quotes"].values()})
+    historical_kinds = sorted({row["data_kind"] for row in p["historical_prices"]})
+    return {
+        "valuation_data_kind": conservative_data_kind(quote_kinds),
+        "historical_data_kind": (
+            conservative_data_kind(historical_kinds)
+            if historical_kinds else "UNAVAILABLE"
+        ),
+        "required_data_kind": conservative_data_kind(
+            quote_kinds + historical_kinds
+        ),
+        "historical_data_kinds": historical_kinds,
+        "quote_data_kinds": quote_kinds,
+    }
+
+
+def holdings_projection(e):
+    """Replay-safe, conservatively labelled view of an immutable holdings fact."""
+    payload = e["payload"]
+    evidence = holdings_evidence(payload)
+    declared = e["data_kind"]
+    # Previously stored records retain their exact bytes and chain hashes.
+    # If legacy provenance understated a nested estimate/simulation, display
+    # the more cautious effective kind instead of silently asserting ACTUAL.
+    effective = conservative_data_kind(
+        (declared, evidence["required_data_kind"])
+    )
+    figures = holdings_report(payload)
+    figures["history"]["data_kind"] = evidence["historical_data_kind"]
+    figures["history"]["data_kinds"] = evidence["historical_data_kinds"]
+    figures["history"]["sources"] = [
+        row["source_ref"] for row in payload["historical_prices"]
+    ]
+    return {
+        "key": e["key"],
+        "data_kind": effective,
+        "declared_data_kind": declared,
+        "valuation_data_kind": evidence["valuation_data_kind"],
+        "historical_data_kind": evidence["historical_data_kind"],
+        "historical_data_kinds": evidence["historical_data_kinds"],
+        "quote_data_kinds": evidence["quote_data_kinds"],
+        "legacy_provenance_understated": (
+            _EVIDENCE_RANK[declared] <
+            _EVIDENCE_RANK[evidence["required_data_kind"]]
+        ),
+        "sources_independently_verified": False,
+        "evidence_basis": "SOURCE_ATTESTED_NOT_INDEPENDENTLY_VERIFIED",
+        "sources": [
+            q["source_ref"] for q in payload["quotes"].values()
+        ],
+        **figures,
+    }
+
+
 def holdings_report(p):
     values = {pos["symbol"]:number(pos["quantity"],"quantity")*number(p["quotes"][pos["symbol"]]["price"],"price") for pos in p["positions"]}
     cash = number(p["cash"],"cash")
@@ -266,4 +339,4 @@ def build_report(events, *, now, max_age):
         candidate["feedback"]=feedback_by_key.get(candidate["key"])
         candidate["freshness"]="CURRENT" if (timestamp(now)-timestamp(candidate["observed_at"])).total_seconds()<=max_age else "HISTORICAL"
     opportunities=[{"target":c["target"],"candidate_key":c["key"],"source_ref":c["source_ref"],"hypothesis":"Evaluate this implementation and its tests against the project's requirements before reimplementation.","next_experiment":"Run project-specific correctness and adversarial tests in an isolated environment after source review.","customer_demand":"UNVERIFIED","revenue":"UNAVAILABLE","hours_saved":"UNMEASURED"} for c in candidates[:10]]
-    return {"schema_version":2,"status":"PASS" if semantic and not stale and not stale_quotes else "BLOCKED","scope":"READ_ONLY_BUSINESS_PORTFOLIO_INTELLIGENCE","evidence_basis":"OBSERVATIONS_AND_EXPLICITLY_LABELLED_EXPERIMENTS","stale_sources":sorted(set(stale+stale_quotes)),"semantic_timestamps":semantic,"repositories":repos,"reuse_candidates":candidates,"business_opportunities":opportunities,"learning":{"facts":len(current),"events":len(events),"outcomes":feedback,"experiments":[e["payload"] for e in current if e["kind"]=="experiment"],"autonomous_code_execution":False,"verified_revenue":None,"prediction_confidence":None},"holdings":[{"key":e["key"],"data_kind":e["data_kind"],"quote_data_kinds":sorted(set(q["data_kind"] for q in e["payload"]["quotes"].values())),"sources":[q["source_ref"] for q in e["payload"]["quotes"].values()],**holdings_report(e["payload"])} for e in current if e["kind"]=="holdings"]}
+    return {"schema_version":2,"status":"PASS" if semantic and not stale and not stale_quotes else "BLOCKED","scope":"READ_ONLY_BUSINESS_PORTFOLIO_INTELLIGENCE","evidence_basis":"OBSERVATIONS_AND_EXPLICITLY_LABELLED_EXPERIMENTS","stale_sources":sorted(set(stale+stale_quotes)),"semantic_timestamps":semantic,"repositories":repos,"reuse_candidates":candidates,"business_opportunities":opportunities,"learning":{"facts":len(current),"events":len(events),"outcomes":feedback,"experiments":[e["payload"] for e in current if e["kind"]=="experiment"],"autonomous_code_execution":False,"verified_revenue":None,"prediction_confidence":None},"holdings":[holdings_projection(e) for e in current if e["kind"]=="holdings"]}
