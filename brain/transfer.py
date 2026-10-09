@@ -9,10 +9,51 @@ from __future__ import annotations
 import json
 import os
 import re
+import sqlite3
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 from brain.core import BrainError, digest, require
 from brain.intelligence import REPO, SHA
+
+@contextmanager
+def readonly_authority_snapshot(database):
+    """Snapshot the original database using SQLite's read-only backup API.
+
+    Store.__init__ is a writer (journal PRAGMAs, chmod, schema and meta).
+    Calling it on the original DB would violate transfer-review's contract.
+    All Store operations instead run on a disposable, private snapshot.
+    The source connection cannot write; the SQLite backup is transactionally
+    coherent even if an existing authorized state writer commits during it.
+    """
+    path = Path(database)
+    require(path.is_file(), "TRANSFER_STATE_DB_NOT_FOUND_NO_BOOTSTRAP")
+    require(not path.is_symlink(), "TRANSFER_SYMLINK_STATE_REFUSED")
+    require(0 < path.stat().st_size <= 128_000_000, "TRANSFER_STATE_SIZE_UNSUPPORTED")
+    with tempfile.TemporaryDirectory(prefix="brain-transfer-ro-") as folder:
+        os.chmod(folder, 0o700)
+        scratch = Path(folder) / "state.sqlite"
+        try:
+            # URI mode=ro refuses opening a missing authority and disallows
+            # writes to its original SQLite database. NEVER use Store here.
+            with sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True, timeout=5) as source:
+                source.execute("PRAGMA query_only=ON")
+                require(
+                    source.execute("PRAGMA integrity_check").fetchone()[0] == "ok",
+                    "TRANSFER_SOURCE_SQLITE_CORRUPT",
+                )
+                require(
+                    source.execute("PRAGMA foreign_key_check").fetchall() == [],
+                    "TRANSFER_SOURCE_FOREIGN_KEYS_FAILED",
+                )
+                with sqlite3.connect(scratch, timeout=5) as target:
+                    source.backup(target)
+        except sqlite3.DatabaseError as exc:
+            raise BrainError("TRANSFER_SOURCE_SNAPSHOT_FAILED") from exc
+        os.chmod(scratch, 0o600)
+        yield scratch
+
 
 # These are source-reviewed *observability* gates for the first supported
 # downstream project, not user-supplied names that could make a trivial
