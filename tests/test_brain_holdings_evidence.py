@@ -146,7 +146,7 @@ class HoldingsEvidenceIntegration(unittest.TestCase):
         valid = observation(fixture(), "ACTUAL")
         invalid = observation(
             fixture(quotes={"A": "ESTIMATED", "B": "ACTUAL"}),
-            "ACTUAL", now="2026-10-09T12:59:00Z",
+            "ACTUAL", now=NOW,
         )
         with self.assertRaisesRegex(BrainError, "HOLDINGS_EVIDENCE_KIND_UNDERSTATED"):
             self.store.submit([valid, invalid], now=NOW)
