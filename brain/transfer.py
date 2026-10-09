@@ -34,7 +34,8 @@ def _request(input_data):
         "schema_version", "candidate_key", "target_repository",
         "pull_request_number", "expected_head_sha",
     }, "TRANSFER_INPUT_SCHEMA: only exact approved fields accepted")
-    require(input_data["schema_version"] == 1, "TRANSFER_INPUT_VERSION")
+    require(type(input_data["schema_version"]) is int and input_data["schema_version"] == 1,
+            "TRANSFER_INPUT_VERSION")
     require(
         type(input_data["candidate_key"]) is str
         and 0 < len(input_data["candidate_key"]) <= 200
@@ -63,8 +64,11 @@ def _request(input_data):
 def _canonical_source(report, candidate_key):
     require(type(report) is dict and report.get("status") == "PASS",
             "TRANSFER_CANONICAL_REPORT_NOT_PASS")
-    require(SHA.fullmatch(report.get("source_sha", "")) is not None,
-            "TRANSFER_SOURCE_SHA")
+    require(
+        type(report.get("source_sha")) is str
+        and SHA.fullmatch(report["source_sha"]) is not None,
+        "TRANSFER_SOURCE_SHA",
+    )
     require(report.get("pending_events") == 0,
             "TRANSFER_PENDING_EVENTS")
     candidates = report.get("reuse_candidates")
@@ -218,12 +222,16 @@ def review_transfer(report, input_data, *, api):
         check_state == "GITHUB_REPORTED_REQUIRED_CHECKS_SUCCESS"
         and attribution == "EXACT_SOURCE_LINK_CLAIMED_IN_PR"
     )
-    status = (
-        ("MERGED_PR_METADATA_ONLY_NOT_DEPLOYMENT"
-         if pr["merged"] else "DRAFT_PR_CHECKS_PASSED_NOT_ADOPTED"
-         if pr["draft"] else "OPEN_PR_CHECKS_PASSED_NOT_ADOPTED")
-        if qualified else "TRANSFER_TECHNICAL_EVIDENCE_BLOCKED"
-    )
+    if pr["state"] == "closed" and not pr["merged"]:
+        status = "CLOSED_UNMERGED_NOT_ADOPTED"
+    elif not qualified:
+        status = "TRANSFER_TECHNICAL_EVIDENCE_BLOCKED"
+    elif pr["merged"]:
+        status = "MERGED_PR_METADATA_ONLY_NOT_DEPLOYMENT"
+    elif pr["draft"]:
+        status = "DRAFT_PR_CHECKS_PASSED_NOT_ADOPTED"
+    else:
+        status = "OPEN_PR_CHECKS_PASSED_NOT_ADOPTED"
     return {
         "schema_version": 1,
         "status": status,
