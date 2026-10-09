@@ -137,15 +137,15 @@ class RepositoryChangeEvidenceTests(unittest.TestCase):
         )
         self.assertEqual(self.report()["repository_changes"], [])
 
-    def test_old_same_time_conflict_is_not_hidden_by_newest_snapshot(self):
-        # Previous latest-only guard could miss a conflicting historical fact.
-        self.ingest(
-            observation(T0, tally=1),
-            observation(T1, tally=3),
-            observation(T0, tally=2),
-        )
+    def test_old_same_time_conflict_is_rejected_at_ingestion(self):
+        self.ingest(observation(T0, tally=1), observation(T1, tally=3))
+        # The existing canonical write guard already catches this conflict,
+        # even though a newer observation has since arrived.
         with self.assertRaisesRegex(BrainError, "AMBIGUOUS_OBSERVATION"):
-            self.report()
+            self.ingest(observation(T0, tally=2))
+        result = self.report()
+        self.assertEqual(result["repository_changes"][0]["open_issue_pr_tally"]["net_delta"], 2)
+        self.assertEqual(result["state_sequence"], 2)
 
     def test_synthetic_and_stale_observations_cannot_claim_fresh_actual(self):
         self.ingest(
