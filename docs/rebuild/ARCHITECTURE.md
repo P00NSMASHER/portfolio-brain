@@ -63,8 +63,14 @@ These are state differences, not verified technical improvement, commercial
 value, root-cause attribution, or authorization to take action. The new
 projection needs no new workflow, provider query, database, or service.
 
-Repository checks are observed diagnostics, not proof of useful work. Discovery
-inspects actual exact-revision source bytes, verifies Git blob hashes, and records
+Repository checks are observed diagnostics, not proof of useful work. The
+GET-only monitor rejects truncated/changed pagination, repeated/invalid
+provider check-run IDs even for <=100 checks, and checks tied to a different
+SHA. It reads the exact default-branch revision before and after the check
+collection and refuses a moved branch instead of describing stale checks
+as the latest state. This bounded second read does not freeze GitHub's
+branch after the observation or prove CI/check behavior was useful.
+Discovery inspects actual exact-revision source bytes, verifies Git blob hashes, and records
 SHA-256 plus structural test paths. Licenses are metadata without a discovery filter.
 No instruction in a README, comment, repository name, or fetched source can grant
 mutation authority. Fetched code is never executed.

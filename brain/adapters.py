@@ -68,6 +68,8 @@ class GitHub:
         branch=meta["default_branch"]
         head=self.get("/repos/"+repository+"/branches/"+urllib.parse.quote(branch,safe=""))
         sha=head["commit"]["sha"]
+        require(type(sha) is str and re.fullmatch(r"[0-9a-f]{40}", sha) is not None,
+                "SOURCE_REVISION_UNAVAILABLE: invalid default-branch commit")
         return meta,branch,sha
 
     def observe(self, repository):
@@ -82,8 +84,25 @@ class GitHub:
             require(batch.get('total_count')==total and type(batch.get('check_runs')) is list, 'CHECK_COVERAGE_CHANGED: do not claim complete changing history')
             items.extend(batch['check_runs'])
         require(len(items)==total,'CHECK_COVERAGE_TRUNCATED: incomplete delivery')
-        if total>100:
-            require(all(type(x.get('id')) is int for x in items) and len({x['id'] for x in items})==total, 'CHECK_COVERAGE_AMBIGUOUS: duplicate/missing paginated identities')
+        # GitHub check-run IDs are unique, positive provider identities on
+        # EVERY page, including a one-page response. Never accept a duplicate
+        # as a second independent run, or a result for another source SHA.
+        require(
+            all(type(x) is dict and type(x.get("id")) is int
+                and x["id"] > 0 and x.get("head_sha") == sha for x in items)
+            and len({x["id"] for x in items}) == total,
+            "CHECK_COVERAGE_AMBIGUOUS: invalid, duplicate or cross-revision check identity",
+        )
+        # Branches can advance during a multi-page check fetch. A sampled
+        # branch must still point to this SHA at the end, or the entire
+        # observation fails closed. No retry or second provider is spawned.
+        confirmed=self.get("/repos/"+repository+"/branches/"+urllib.parse.quote(branch,safe=""))
+        require(
+            type(confirmed) is dict
+            and type(confirmed.get("commit")) is dict
+            and confirmed["commit"].get("sha") == sha,
+            "SOURCE_REVISION_CHANGED: branch advanced during check collection",
+        )
         rows=[{"name":x["name"],"status":x["status"],"conclusion":x.get("conclusion"),"head_sha":x["head_sha"],"url":x["html_url"]} for x in items]
         return {"repository":repository,"head_sha":sha,"default_branch":branch,"checks":rows,"open_issues":meta["open_issues_count"],"source_ref":f'https://github.com/{repository}/commit/{sha}'}, meta["private"]
 

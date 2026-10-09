@@ -289,16 +289,16 @@ class CheckPaginationTests(unittest.TestCase):
   def transport(path):
    if '/branches/' in path:return {'commit':{'sha':SHA}}
    if '/check-runs?' in path:
-    rows=[{'id':i,'name':'validate','status':'completed','conclusion':'success','head_sha':SHA,'html_url':f'https://github.com/{REPOSITORY}/runs/{i}'} for i in range(175)]
+    rows=[{'id':i,'name':'validate','status':'completed','conclusion':'success','head_sha':SHA,'html_url':f'https://github.com/{REPOSITORY}/runs/{i}'} for i in range(1,176)]
     return {'total_count':175,'check_runs':rows[100:] if 'page=2' in path else rows[:100]}
    return {'full_name':REPOSITORY,'private':False,'default_branch':'main','open_issues_count':3}
   api=GitHub(transport=transport);p,_=api.observe(REPOSITORY);validate_payload('repository',p,NOW)
-  self.assertEqual(len(p['checks']),175);self.assertEqual(api.requests,4)
+  self.assertEqual(len(p['checks']),175);self.assertEqual(api.requests,5)
  def test_paginated_duplicates_cannot_claim_complete_delivery(self):
   def transport(path):
    if '/branches/' in path:return {'commit':{'sha':SHA}}
    if '/check-runs?' in path:
-    rows=[{'id':i,'name':'validate','status':'completed','conclusion':'success','head_sha':SHA,'html_url':f'https://github.com/{REPOSITORY}/runs/{i}'} for i in range(100)]
+    rows=[{'id':i,'name':'validate','status':'completed','conclusion':'success','head_sha':SHA,'html_url':f'https://github.com/{REPOSITORY}/runs/{i}'} for i in range(1,101)]
     return {'total_count':101,'check_runs':rows[:1] if 'page=2' in path else rows}
    return {'full_name':REPOSITORY,'private':False,'default_branch':'main','open_issues_count':3}
   with self.assertRaises(BrainError):GitHub(transport=transport).observe(REPOSITORY)
