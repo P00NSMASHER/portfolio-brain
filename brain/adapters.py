@@ -62,6 +62,9 @@ class GitHub:
         require(not private or self.token, "PRIVATE_ACCESS_UNAVAILABLE: explicit existing GITHUB_TOKEN required")
         self.transport=transport
         self.requests=0
+        # Count optional search hits whose advertised branch was never created.
+        # This is not a waiver for monitored repositories or nonempty sources.
+        self.unavailable_discovery_branches=0
         self.opener=urllib.request.build_opener(NoRedirect())
 
     def get(self, path):
@@ -120,6 +123,7 @@ class GitHub:
         return {"repository":repository,"head_sha":sha,"default_branch":branch,"checks":rows,"open_issues":meta["open_issues_count"],"source_ref":f'https://github.com/{repository}/commit/{sha}'}, meta["private"]
 
     def discover(self, target, *, repository=None):
+        self.unavailable_discovery_branches=0
         if repository:
             repos=[self.get("/repos/"+repository)]
         else:
@@ -131,8 +135,21 @@ class GitHub:
         for meta in repos[:2]:
             name=meta["full_name"]
             require(self.private or meta["private"] is False, "private search result cannot enter public state")
-            # Resolve commit once. Fetch every source from that exact revision.
-            head=self.get(f'/repos/{name}/branches/'+urllib.parse.quote(meta["default_branch"],safe=""))
+            # Resolve commit once. Search sometimes lists *uninitialized* public
+            # repos (size=0) with an advertised default branch that returns 404.
+            # This is an optional discovery result, never an authoritative
+            # monitored repository. For that one observed case, skip and report
+            # degraded coverage; other 404s, identity errors and API failures
+            # must still fail closed. A size-0 repo WITH a branch is inspected.
+            try:
+                head=self.get(f'/repos/{name}/branches/'+urllib.parse.quote(meta["default_branch"],safe=""))
+            except BrainError as exc:
+                if (str(exc) == 'SOURCE_API_404: GET failed; no cursor advanced'
+                        and type(meta.get("size")) is int and meta["size"] == 0
+                        and repository is None):
+                    self.unavailable_discovery_branches+=1
+                    continue
+                raise
             sha=head["commit"]["sha"]
             tree=self.get(f'/repos/{name}/git/trees/{sha}?recursive=1')
             require(tree.get("truncated") is False, "SOURCE_TREE_TRUNCATED")
