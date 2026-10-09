@@ -258,6 +258,34 @@ def review_transfer(report, input_data, *, api):
         "GITHUB_REPORTED_REQUIRED_CHECKS_SUCCESS"
         if not missing and not failures else "GITHUB_CHECK_EVIDENCE_INCOMPLETE"
     )
+    # File and check endpoints are separate provider reads; the PR can move
+    # between them. Recheck the exact PR identity and attribution after checks
+    # so a moving head, newly closed PR or edited source claim cannot inherit
+    # a stale green verdict. Do not follow the new tip or use old results.
+    final_pr = api.get(f"{prefix}/pulls/{number}")
+    def stable_pr_fields(value):
+        if type(value) is not dict:
+            return None
+        current_head = value.get("head")
+        current_base = value.get("base")
+        if type(current_head) is not dict or type(current_base) is not dict:
+            return None
+        return {
+            "number": value.get("number"),
+            "state": value.get("state"),
+            "draft": value.get("draft"),
+            "merged": value.get("merged"),
+            "head_sha": current_head.get("sha"),
+            "head_repo": (current_head.get("repo") or {}).get("full_name"),
+            "base_ref": current_base.get("ref"),
+            "base_repo": (current_base.get("repo") or {}).get("full_name"),
+            "changed_files": value.get("changed_files"),
+            "body": value.get("body"),
+        }
+    require(
+        stable_pr_fields(final_pr) == stable_pr_fields(pr),
+        "TRANSFER_PR_CHANGED_DURING_REVIEW",
+    )
     # A green PR is NEVER evidence the target deployed or used the feature.
     qualified = (
         check_state == "GITHUB_REPORTED_REQUIRED_CHECKS_SUCCESS"
