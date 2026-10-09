@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from brain.core import BrainError
-from brain.render import write_report
+from brain.render import write_report, write_private_test_log
 
 SOURCE = "a" * 40
 
@@ -177,6 +177,26 @@ class PrivateReportOutputTests(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertEqual(mode(self.out), 0o755)
         self.assertEqual(list(self.out.iterdir()), [])
+
+    def test_preflight_log_is_private_and_preserved_by_report_write(self):
+        write_private_test_log(self.out, "Ran 3 tests\nOK\n")
+        self.assertEqual(mode(self.out), 0o700)
+        self.assertEqual(mode(self.out / "tests.txt"), 0o600)
+        write_report(report(), self.out)
+        self.assertEqual((self.out / "tests.txt").read_text(),
+                         "Ran 3 tests\nOK\n")
+        self.assertEqual(mode(self.out / "tests.txt"), 0o600)
+
+    def test_preflight_log_alias_is_rejected_without_overwriting_source(self):
+        self.out.mkdir(mode=0o700)
+        os.chmod(self.out, 0o700)
+        original = self.root / "original-sqlite.txt"
+        original.write_text("untouched")
+        (self.out / "tests.txt").symlink_to(original)
+        with self.assertRaisesRegex(BrainError, "REPORT_OUTPUT_SYMLINK_HARDLINK"):
+            write_private_test_log(self.out, "sensitive test output")
+        self.assertEqual(original.read_text(), "untouched")
+        self.assertEqual({p.name for p in self.out.iterdir()}, {"tests.txt"})
 
     def test_no_temporary_files_left_after_serialization_error(self):
         bad = report()

@@ -13,7 +13,7 @@ from pathlib import Path
 from brain.core import Store, BrainError, require, utcnow, digest, timestamp
 from brain.adapters import GitHub, event, policy
 from brain.experiments import invoice_dedup_experiment
-from brain.render import write_report
+from brain.render import write_report, write_private_test_log
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -113,8 +113,7 @@ def preflight(output, expected=None):
     from brain.validate import validate_policy
     validate_policy()
     test=subprocess.run([sys.executable,"-m","unittest","discover","-s","tests","-p","test_brain*.py","-v"],cwd=ROOT,capture_output=True,text=True,timeout=60)
-    out=Path(output);out.mkdir(parents=True,exist_ok=True)
-    (out/"tests.txt").write_text(test.stdout+test.stderr)
+    write_private_test_log(output, test.stdout+test.stderr)
     require(test.returncode==0, "PREFLIGHT_TEST_FAILURE: inspect tests.txt before retry")
     require("Ran 0 tests" not in test.stderr and "\nOK\n" in test.stderr,"PREFLIGHT_TEST_EVIDENCE_MISSING")
     # Preflight is a deterministic product test, never a substitute for live delivery/soak.

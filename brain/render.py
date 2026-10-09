@@ -15,6 +15,7 @@ from brain.core import BrainError, require
 
 
 _REPORT_NAMES = ("report.md", "report.html", "report.json")
+_TEST_LOG_NAMES = ("tests.txt",)
 
 
 def _assert_private_target(directory, name):
@@ -29,15 +30,19 @@ def _assert_private_target(directory, name):
     )
 
 
-def _write_private_bundle(output, contents):
-    """Publish three private files without truncating existing destination inodes.
+def _write_private_bundle(output, contents, *, names=_REPORT_NAMES):
+    """Publish allowlisted private files without truncating destination inodes.
 
-    Individual renames are atomic, but a three-file bundle is not one atomic
-    filesystem transaction. Publish machine-readable JSON LAST so an
-    interrupted render does not advance its canonical receipt prematurely.
+    Individual renames are atomic, but a three-file report is not one
+    filesystem transaction. Machine-readable JSON is published LAST so
+    interrupted renders cannot advance its canonical receipt prematurely.
     """
     out = Path(output)
-    require(set(contents) == set(_REPORT_NAMES), "REPORT_OUTPUT_SCHEMA_INVALID")
+    require(
+        names in (_REPORT_NAMES, _TEST_LOG_NAMES)
+        and set(contents) == set(names),
+        "REPORT_OUTPUT_SCHEMA_INVALID",
+    )
     for part in (out, *out.parents):
         require(not part.is_symlink(), "REPORT_OUTPUT_SYMLINK_DIRECTORY_REFUSED")
 
@@ -56,7 +61,7 @@ def _write_private_bundle(output, contents):
     staged = []
     try:
         # Existing aliases are rejected before any new receipt is installed.
-        for name in _REPORT_NAMES:
+        for name in names:
             _assert_private_target(directory, name)
         if created:
             os.fchmod(directory, 0o700)
@@ -67,7 +72,7 @@ def _write_private_bundle(output, contents):
             )
 
         try:
-            for name in _REPORT_NAMES:
+            for name in names:
                 temp_name = ".report-" + secrets.token_hex(12) + ".tmp"
                 handle = os.open(
                     temp_name,
@@ -101,6 +106,12 @@ def _write_private_bundle(output, contents):
                     pass
         finally:
             os.close(directory)
+
+
+def write_private_test_log(output, contents):
+    """Write only the preflight tests.txt using the report privacy contract."""
+    require(type(contents) is str, "REPORT_OUTPUT_SCHEMA_INVALID")
+    _write_private_bundle(output, {"tests.txt": contents}, names=_TEST_LOG_NAMES)
 
 
 def write_report(report, output):
