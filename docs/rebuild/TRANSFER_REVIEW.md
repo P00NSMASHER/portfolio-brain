@@ -66,6 +66,10 @@ If the report was built under a different Brain source revision, or has
 expired, **do not** bypass its trust gate with a fabricated source SHA;
 a new reviewed source revision must establish its own genuinely current
 canonical report before this command is considered a source-verified result.
+A missing SQLite path is rejected **before** Store initialization, so an
+input typo cannot bootstrap an empty authority or generate a misleading
+transfer outcome. The command does not drain input or write feedback,
+report rows, attempt records or other canonical events.
 
 ## Status interpretation
 
