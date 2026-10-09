@@ -50,16 +50,24 @@ class SignedClock(unittest.TestCase):
         # Fully synthetic P-256 public key and fixed test attestation.
         # Signed offline with an ephemeral TEST key; no production signing key.
         # Exercises actual OpenSSL verification rather than a mocked signature.
-        fixture_envelope = (
-            "eyJraW5kIjoiY2xvdWRmbGFyZV9jcm9uX3YxIiwid29ya2VyIjoicG9ydGZv"
-            "bGlvLWJyYWluLXJlY292ZXJ5IiwiY3JvbiI6IiovMTAgKiAqICogKiIsInNv"
-            "dXJjZV9zaGEiOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFh"
-            "Iiwic2NoZWR1bGVkX2F0IjoiMjAyNi0xMC0wOVQwOTozMDoxOVoiLCJpc3N1"
-            "ZWRfYXQiOiIyMDI2LTEwLTA5VDA5OjMwOjIwWiIsInNsb3QiOjI5ODU4OTd9"
-        )
+        # Construct the exact signed bytes from the structured document.
+        # Base64 string copying is unsafe for provenance fixtures: deleting
+        # even one encoded 'a' changes the signed 40-hex source identity.
+        fixture_doc = {
+            "kind": "cloudflare_cron_v1",
+            "worker": "portfolio-brain-recovery",
+            "cron": "*/10 * * * *",
+            "source_sha": SHA,
+            "scheduled_at": "2026-10-09T09:30:19Z",
+            "issued_at": "2026-10-09T09:30:20Z",
+            "slot": 2985897,
+        }
+        fixture_envelope = b64url(json.dumps(
+            fixture_doc, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8"))
         fixture_signature = (
-            "-m3gqQFOzjL9K4CVUlKuVgW-c1qZ9trMrUJzIw2J-bOSrNwPn7ype8o-ph7W"
-            "L5gcRFm50zcOrnVLcGyMdzqE2A"
+            "-m3gqQFOzjL9K4CVUlKuVgW-c1qZ9trMrUJzIw2J-bOSrNwPn7yp"
+            "e8o-ph7WL5gcRFm50zcOrnVLcGyMdzqE2A"
         )
         self.assertTrue(fixture_signature.startswith("-"))
         sample_pubkey = Path(self.tmp.name) / "test-only-public.pem"
