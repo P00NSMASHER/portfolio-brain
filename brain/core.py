@@ -41,6 +41,16 @@ def timestamp(value):
 
 KINDS = {"repository", "candidate", "experiment", "feedback", "holdings"}
 
+
+def analyze_events(events, *, now, max_age):
+    """Single deterministic projection shared by report creation and replay."""
+    from brain.intelligence import build_report
+    from brain.changes import repository_changes
+
+    report = build_report(events, now=now, max_age=max_age)
+    report["repository_changes"] = repository_changes(events, now=now, max_age=max_age)
+    return report
+
 def validate_event(event, now):
     require(type(event) is dict and set(event) == {"id", "kind", "key", "observed_at", "source_sha", "visibility", "data_kind", "payload"}, "event fields invalid")
     require(isinstance(event["id"], str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,160}", event["id"]), "invalid event id")
@@ -175,10 +185,9 @@ class Store:
         now = now or utcnow()
         require(re.fullmatch(r"[0-9a-f]{40}", source_sha or ""), "report exact source SHA required")
         require(type(max_age) is int and 0 < max_age <= 172800, "freshness threshold out of bounds")
-        from brain.intelligence import build_report
         with self.transaction():
             events, seq, chain = self._verified_events()
-            report = build_report(events, now=now, max_age=max_age)
+            report = analyze_events(events, now=now, max_age=max_age)
             report.update(source_sha=source_sha, state_sequence=seq, canonical_hash=chain, pending_events=0, generated_at=now)
             encoded = canonical(report)
             self.db.execute("INSERT INTO reports(seq,chain_hash,source_sha,created_at,body,hash) VALUES(?,?,?,?,?,?)", (seq,chain,source_sha,now,encoded,digest(report)))
@@ -193,7 +202,7 @@ class Store:
             report = json.loads(row["body"])
             require(row["hash"] == digest(report), "STATE_CORRUPT: report hash mismatch")
             from brain.intelligence import build_report
-            replay=build_report(events, now=row['created_at'], max_age=max_age)
+            replay=analyze_events(events, now=row['created_at'], max_age=max_age)
             replay.update(source_sha=row['source_sha'], state_sequence=row['seq'], canonical_hash=row['chain_hash'], pending_events=0, generated_at=row['created_at'])
             require(replay == report, "STATE_CORRUPT: report does not match deterministic ledger replay")
             require(row["seq"] == seq and row["chain_hash"] == chain, "STALE_REPORT: new events require new analysis")

@@ -13,6 +13,37 @@ def write_report(report, output):
     for repo in report.get("repositories",[]):
         failed=[x["name"] for x in repo["checks"] if x["conclusion"] not in {"success","neutral",None}]
         lines.append(f'- {repo["repository"]}: `{repo["head_sha"]}`; adverse checks: {", ".join(failed) or "none observed"}; [{repo["source_ref"]}]({repo["source_ref"]})')
+    lines.extend(["", "## Repository changes since prior observation", ""])
+    changes = report.get("repository_changes", [])
+    if not changes:
+        lines.append("No repository has two distinct observed snapshots yet.")
+    for change in changes:
+        facts = []
+        if change["revision_changed"]:
+            facts.append(
+                f'revision {change["previous_revision"][:8]} → {change["current_revision"][:8]}'
+            )
+        tally = change["open_issue_pr_tally"]["net_delta"]
+        if tally:
+            facts.append(f'open GitHub issue/PR tally {tally:+d}')
+        if change["check_deteriorations"]:
+            names = ", ".join(row["name"] for row in change["check_deteriorations"])
+            facts.append(f'observed adverse check transitions: {names}')
+        if change["check_recoveries"]:
+            names = ", ".join(row["name"] for row in change["check_recoveries"])
+            facts.append(f'observed recovered check transitions: {names}')
+        if change["check_comparison"] != "COMPARABLE":
+            facts.append(f'check comparability: {change["check_comparison"]}')
+        lines.append(
+            f'- {change["repository"]} ({change["previous_observed_at"]} to '
+            f'{change["current_observed_at"]}; {change["evidence_quality"]}): '
+            + ("; ".join(facts) if facts else "no measured changes")
+        )
+    lines.append(
+        "GitHub's open_issues_count includes pull requests. Check transitions require "
+        "the same commit and uniquely named completed checks; these are observations, "
+        "not causes, verified usefulness, or revenue."
+    )
     lines.extend(["", "## Reusable code to evaluate", ""])
     for candidate in report.get("reuse_candidates",[])[:10]:
         lines.append(f'- [{candidate["repository"]}/{candidate["path"]}]({candidate["source_ref"]}) — {candidate["target"]}; structural score {candidate["reuse_score"]}; license {candidate["license"]}; {candidate["utility_evidence"]}')
