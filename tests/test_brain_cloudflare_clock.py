@@ -51,23 +51,22 @@ class SignedClock(unittest.TestCase):
         # Signed offline with an ephemeral TEST key; no production signing key.
         # Exercises actual OpenSSL verification rather than a mocked signature.
         fixture_envelope = (
-            "eyJraW5kIjoiY2xvdWRmbGFyZV9jcm9uX3YxIiwid29ya2VyIjoicG9ydG"
-            "ZvbGlvLWJyYWluLXJlY292ZXJ5IiwiY3JvbiI6IiovMTAgKiAqICogKiIsIn"
-            "NvdXJjZV9zaGEiOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFh"
-            "YWFhYWFhIiwic2NoZWR1bGVkX2F0IjoiMjAyNi0xMC0wOVQwOTozMDoxOV"
-            "oiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDA5OjMwOjIwWiIsInNsb3QiOj"
-            "I5ODU4OTd9"
+            "eyJraW5kIjoiY2xvdWRmbGFyZV9jcm9uX3YxIiwid29ya2VyIjoicG9ydGZv"
+            "bGlvLWJyYWluLXJlY292ZXJ5IiwiY3JvbiI6IiovMTAgKiAqICogKiIsInNv"
+            "dXJjZV9zaGEiOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFh"
+            "Iiwic2NoZWR1bGVkX2F0IjoiMjAyNi0xMC0wOVQwOTozMDoxOVoiLCJpc3N1"
+            "ZWRfYXQiOiIyMDI2LTEwLTA5VDA5OjMwOjIwWiIsInNsb3QiOjI5ODU4OTd9"
         )
         fixture_signature = (
-            "-gLOwc_tmniszxGYFCTINyf3vnfW9anLqPM3vL-nrUklGVNr8xuDiSuaTRq"
-            "aoNZZHLmAg3340fqG134Yg2pR5w"
+            "-m3gqQFOzjL9K4CVUlKuVgW-c1qZ9trMrUJzIw2J-bOSrNwPn7ype8o-ph7W"
+            "L5gcRFm50zcOrnVLcGyMdzqE2A"
         )
         self.assertTrue(fixture_signature.startswith("-"))
         sample_pubkey = Path(self.tmp.name) / "test-only-public.pem"
         sample_pubkey.write_text(
             "-----BEGIN PUBLIC KEY-----\n"
-            "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEk/QvLRPb/h9BhbXLYCyzNYA9jFCV\n"
-            "mIfv0HASSD6ctsjWqofXdfDgV2UxaPveblNLOhjVZQmdLZ2855eTDvU25w==\n"
+            "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEc4EyboLDuEjJk1lbi3LJ9lLg30p+\n"
+            "ZfGOLgKSBlrKeaY19PtJexOrFbkX5m9OGeGe88WYFs5QU77NsH3IpEcTDw==\n"
             "-----END PUBLIC KEY-----\n",
             encoding="ascii",
         )
