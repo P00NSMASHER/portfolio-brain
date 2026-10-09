@@ -42,6 +42,20 @@ writer lock, agent heartbeat, cost governor, or orphaned-run cleanup is imported
 
 ## Intelligence contracts
 
+The report's \`repository_changes\` projection compares the two latest distinct
+semantic observation times per repository using the verified immutable ledger,
+not arrival order or external polling. It reports revision movement and the net
+GitHub \`open_issues_count\` tally (which includes pull requests), and records
+check deterioration/recovery only for uniquely named, completed checks observed
+on the **same exact revision**. Missing checks, duplicates, pending checks, and
+changed revisions never imply recovery or passing coverage. Each comparison
+retains its two source references, timestamps and ACTUAL_FRESH/NON_ACTUAL/
+HISTORICAL evidence quality. A conflicting historical same-time observation
+blocks the projection, even if the newest observation is unambiguous.
+These are state differences, not verified technical improvement, commercial
+value, root-cause attribution, or authorization to take action. The new
+projection needs no new workflow, provider query, database, or service.
+
 Repository checks are observed diagnostics, not proof of useful work. Discovery
 inspects actual exact-revision source bytes, verifies Git blob hashes, and records
 SHA-256 plus structural test paths. Licenses are metadata without a discovery filter.
