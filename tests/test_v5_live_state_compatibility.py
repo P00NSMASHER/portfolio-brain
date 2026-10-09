@@ -214,6 +214,86 @@ class RealStateV5Compatibility(unittest.TestCase):
                     store.read_report(candidate, now=analysis_at), v5_report,
                     "V5 deterministic canonical report read/replay failed",
                 )
+
+                # Exercise the REAL downstream provider, not only StubGitHub
+                # fixtures. This is a bounded, unauthenticated PUBLIC GitHub
+                # API read against an immutable real-ledger candidate and a
+                # pinned RETALLY PR head. A draft with green checks is NEVER
+                # evidence of deployment, customer adoption or realized value.
+                from brain.adapters import GitHub
+                from brain.transfer import review_transfer
+                originating_key = (
+                    "Jacob-Met/workflow-checks:"
+                    "freight_packets/freightpkt/invoice_match.py"
+                )
+                origin_match = [
+                    x for x in v5_report["reuse_candidates"]
+                    if x.get("key") == originating_key
+                ]
+                self.assertEqual(
+                    len(origin_match), 1,
+                    "Production ledger does not contain one exact discovery",
+                )
+                self.assertEqual(origin_match[0]["data_kind"], "ACTUAL")
+                self.assertEqual(origin_match[0]["freshness"], "CURRENT")
+                self.assertEqual(
+                    origin_match[0]["head_sha"],
+                    "a5fd61b0c361c8a9b8a6737b33ecc9efab46e0ad",
+                )
+                self.assertEqual(
+                    origin_match[0]["code_sha256"],
+                    "37a9e0801de948c3b558ca7c9846b3d0eb76ec062703ee3e5132df273ff569ab",
+                )
+                expected_target_head = (
+                    "9f68a2a0d22abd671ce7be353506a8b8cf9e5a52"
+                )
+                transfer_request = {
+                    "schema_version": 1,
+                    "candidate_key": originating_key,
+                    "target_repository": "P00NSMASHER/github-value-hunt-ledger",
+                    "pull_request_number": 343,
+                    "expected_head_sha": expected_target_head,
+                }
+                public_api = GitHub(private=False)
+                observed_transfer = review_transfer(
+                    v5_report, transfer_request, api=public_api
+                )
+                self.assertEqual(
+                    observed_transfer["status"],
+                    "DRAFT_PR_CHECKS_PASSED_NOT_ADOPTED",
+                )
+                self.assertEqual(
+                    observed_transfer["checks"]["status"],
+                    "GITHUB_REPORTED_REQUIRED_CHECKS_SUCCESS",
+                )
+                self.assertEqual(
+                    observed_transfer["target"]["pr_head_sha"],
+                    expected_target_head,
+                )
+                self.assertEqual(
+                    observed_transfer["origin"]["code_sha256"],
+                    origin_match[0]["code_sha256"],
+                )
+                self.assertEqual(
+                    observed_transfer["origin"]["attribution"],
+                    "EXACT_SOURCE_LINK_CLAIMED_IN_PR",
+                )
+                self.assertTrue(observed_transfer["target"]["draft"])
+                self.assertFalse(observed_transfer["target"]["merged_pr_metadata"])
+                self.assertFalse(observed_transfer["event_written"])
+                self.assertEqual(observed_transfer["github_mutations"], 0)
+                self.assertEqual(
+                    observed_transfer["integration"],
+                    "NOT_VERIFIED_BY_PULL_REQUEST_CHECKS",
+                )
+                self.assertEqual(observed_transfer["revenue"], "NOT_VERIFIED")
+                self.assertEqual(
+                    observed_transfer["realized_recovery"], "NOT_VERIFIED"
+                )
+                self.assertEqual(observed_transfer["operator_feedback"], "NOT_COLLECTED")
+                self.assertGreaterEqual(public_api.requests, 5)
+                self.assertLessEqual(public_api.requests, 24)
+
                 self.assertEqual(
                     store.db.execute("SELECT count(*) FROM events").fetchone()[0],
                     before_event_count,
@@ -268,6 +348,24 @@ class RealStateV5Compatibility(unittest.TestCase):
                     "production_deployed": False,
                     "v5_six_hour_soak_accepted": False,
                     "contains_raw_database_bytes": False,
+                    "real_retally_provider_transfer": {
+                        "status": observed_transfer["status"],
+                        "scope": "PUBLIC_GITHUB_GET_ONLY_FROM_REAL_LEDGER",
+                        "origin_candidate_key": originating_key,
+                        "origin_code_sha256": origin_match[0]["code_sha256"],
+                        "pr_number": 343,
+                        "target_pr_head_sha": expected_target_head,
+                        "provider_checks_reported": observed_transfer["checks"]["provider_check_count"],
+                        "required_checks_passed": True,
+                        "public_get_requests": public_api.requests,
+                        "target_remains_draft": True,
+                        "adoption_proven": False,
+                        "deployment_proven": False,
+                        "customer_value_proven": False,
+                        "revenue_proven": False,
+                        "feedback_event_written": False,
+                        "production_state_mutated": False,
+                    },
                 }
             finally:
                 store.close()
