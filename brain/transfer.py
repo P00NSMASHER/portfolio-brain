@@ -365,11 +365,31 @@ def review_transfer(report, input_data, *, api):
 
 
 def write_transfer_review(report, destination):
-    """Private-by-default local receipts; never write Brain canonical state."""
+    """Write one private receipt without following caller-controlled symlinks.
+
+    Never dereference a destination file alias: it might target the same
+    canonical SQLite authority we just read without write permissions.
+    """
     out = Path(destination)
+    for part in (out, *out.parents):
+        require(not part.is_symlink(), "TRANSFER_OUTPUT_SYMLINK_REFUSED")
     out.mkdir(parents=True, exist_ok=True)
-    os.chmod(out, 0o700)
-    output = out / "transfer-review.json"
-    output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
-    os.chmod(output, 0o600)
-    return output
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    try:
+        directory = os.open(out, directory_flags)
+    except OSError as exc:
+        raise BrainError("TRANSFER_OUTPUT_UNSAFE_DIRECTORY") from exc
+    try:
+        os.fchmod(directory, 0o700)
+        name = "transfer-review.json"
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
+        try:
+            handle = os.open(name, flags, 0o600, dir_fd=directory)
+        except OSError as exc:
+            raise BrainError("TRANSFER_OUTPUT_SYMLINK_OR_FILE_REFUSED") from exc
+        with os.fdopen(handle, "w", encoding="utf-8") as target:
+            os.fchmod(target.fileno(), 0o600)
+            target.write(json.dumps(report, indent=2, sort_keys=True) + "\n")
+        return out / name
+    finally:
+        os.close(directory)
