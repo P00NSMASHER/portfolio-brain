@@ -35,6 +35,14 @@ previously green review for a superseded PR revision or a withdrawn
 source citation, without creating another scheduled poller or following
 the new head automatically. Nonmaterial timestamps do not block.
 
+Local receipt output is guarded separately: existing directory/parent
+symlinks are rejected, the output directory is opened with
+`O_DIRECTORY|O_NOFOLLOW`, and `transfer-review.json` is opened with
+`O_NOFOLLOW` through the directory file descriptor. The receipt cannot
+follow a malicious file symlink to overwrite the original SQLite authority.
+The file and directory retain restrictive `0600`/`0700` modes.
+These physical source/output protections are regression-tested.
+
 ## CLI
 
 Run against an already-initialized, *same-source* canonical Brain SQLite
