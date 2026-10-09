@@ -77,7 +77,10 @@ def research(store, sha, output, *, api=None, repository=None):
     found=api.discover(target,repository=repository)
     items=[event("candidate",p["repository"]+":"+p["path"],p,sha,private=private) for p,private in found]
     report=persist(store,items,sha,output)
-    report["operation"]={"name":"research","requests":api.requests,"target":target["project"],"candidates_observed":len(items),"result":"OBSERVED" if items else "NO_MATCHES","license_filter_applied":False}
+    unavailable=getattr(api,"unavailable_discovery_branches",0)
+    report["operation"]={"name":"research","requests":api.requests,"target":target["project"],"candidates_observed":len(items),"result":"OBSERVED" if items else "NO_MATCHES","license_filter_applied":False,
+                         "discovery_coverage":"PARTIAL_OPTIONAL_BRANCH_UNAVAILABLE" if unavailable else "COMPLETE",
+                         "unavailable_discovery_branches":unavailable}
     write_report(report,output)
     store.attempt("research","PASS",source_sha=sha)
     return report
