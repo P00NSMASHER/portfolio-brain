@@ -265,6 +265,34 @@ class TransferEvidenceTests(unittest.TestCase):
         self.assertEqual(original.stat().st_mode & 0o777, original_mode)
         self.assertTrue((file_dest / "transfer-review.json").is_symlink())
 
+    def test_existing_hardlink_to_canonical_sqlite_is_not_truncated(self):
+        report = self.run_review()
+        original = self.root / "state.sqlite"
+        expected_hash = hashlib.sha256(original.read_bytes()).hexdigest()
+        expected_mtime = original.stat().st_mtime_ns
+        out = self.root / "hardlink-receipt"
+        out.mkdir()
+        receipt = out / "transfer-review.json"
+        os.link(original, receipt)
+        self.assertEqual(receipt.stat().st_ino, original.stat().st_ino)
+        with self.assertRaisesRegex(BrainError, "TRANSFER_OUTPUT_SYMLINK_OR_FILE_REFUSED"):
+            write_transfer_review(report, out)
+        self.assertEqual(hashlib.sha256(original.read_bytes()).hexdigest(), expected_hash)
+        self.assertEqual(original.stat().st_mtime_ns, expected_mtime)
+        self.assertEqual(receipt.stat().st_ino, original.stat().st_ino)
+        self.assertFalse(tuple(out.glob(".transfer-review-*.tmp")))
+
+    def test_normal_repeat_receipt_is_atomically_replaced_with_private_mode(self):
+        report = self.run_review()
+        out = self.root / "repeat-receipt"
+        first = write_transfer_review(report, out)
+        first.write_text("older harmless receipt")
+        second = write_transfer_review(report, out)
+        self.assertEqual(first, second)
+        self.assertEqual(json.loads(second.read_text()), report)
+        self.assertEqual(os.stat(second).st_mode & 0o777, 0o600)
+        self.assertFalse(tuple(out.glob(".transfer-review-*.tmp")))
+
     def test_receipt_written_to_local_private_output_only(self):
         report = self.run_review()
         path = write_transfer_review(report, self.root / "out")
