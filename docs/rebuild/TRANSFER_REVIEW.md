@@ -27,6 +27,14 @@ in Brain's immutable ledger report. That link is an attribution claim made
 by a downstream PR author, **not independent proof** of code causation,
 functional reuse, test execution, compliance or customer adoption.
 
+The GitHub PR is checked **twice** around the changed-file and CI reads.
+If its exact head revision, repo/base identity, open/closed/draft/merged
+state, file count or attribution body changes mid-review, verification
+fails closed with `TRANSFER_PR_CHANGED_DURING_REVIEW`. This refuses a
+previously green review for a superseded PR revision or a withdrawn
+source citation, without creating another scheduled poller or following
+the new head automatically. Nonmaterial timestamps do not block.
+
 ## CLI
 
 Run against an already-initialized, *same-source* canonical Brain SQLite
