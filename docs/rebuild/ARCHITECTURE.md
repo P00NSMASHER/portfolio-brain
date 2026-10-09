@@ -42,10 +42,10 @@ writer lock, agent heartbeat, cost governor, or orphaned-run cleanup is imported
 
 ## Intelligence contracts
 
-The report's \`repository_changes\` projection compares the two latest distinct
+The report's `repository_changes` projection compares the two latest distinct
 semantic observation times per repository using the verified immutable ledger,
 not arrival order or external polling. It reports revision movement and the net
-GitHub \`open_issues_count\` tally (which includes pull requests), and records
+GitHub `open_issues_count` tally (which includes pull requests), and records
 check deterioration/recovery only for uniquely named, completed checks observed
 on the **same exact revision**. Missing checks, duplicates, pending checks, and
 changed revisions never imply recovery or passing coverage. Each comparison
