@@ -375,15 +375,38 @@ def write_transfer_review(report, destination):
     out = Path(destination)
     for part in (out, *out.parents):
         require(not part.is_symlink(), "TRANSFER_OUTPUT_SYMLINK_REFUSED")
-    out.mkdir(parents=True, exist_ok=True)
+    # Never alter the mode of a caller's pre-existing directory. In particular,
+    # --output . must not silently chmod a shared working tree or home folder.
+    created_directory = False
+    try:
+        out.mkdir(parents=True, mode=0o700, exist_ok=False)
+        created_directory = True
+    except FileExistsError:
+        pass
     directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     try:
         directory = os.open(out, directory_flags)
     except OSError as exc:
         raise BrainError("TRANSFER_OUTPUT_UNSAFE_DIRECTORY") from exc
     try:
-        os.fchmod(directory, 0o700)
         name = "transfer-review.json"
+        # Prioritize the symlink/hardlink rejection before checking directory
+        # privacy, preserving the precise failure and the original file.
+        try:
+            old = os.stat(name, dir_fd=directory, follow_symlinks=False)
+        except FileNotFoundError:
+            old = None
+        require(
+            old is None or (stat.S_ISREG(old.st_mode) and old.st_nlink == 1),
+            "TRANSFER_OUTPUT_SYMLINK_OR_FILE_REFUSED",
+        )
+        if created_directory:
+            os.fchmod(directory, 0o700)
+        else:
+            require(
+                stat.S_IMODE(os.fstat(directory).st_mode) == 0o700,
+                "TRANSFER_OUTPUT_EXISTING_DIRECTORY_NOT_PRIVATE",
+            )
         temp_name = ".transfer-review-" + secrets.token_hex(12) + ".tmp"
         temp_created = False
         try:

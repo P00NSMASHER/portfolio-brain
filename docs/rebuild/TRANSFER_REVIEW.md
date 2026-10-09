@@ -43,8 +43,13 @@ by `os.replace` through the pinned directory file descriptor, never
 truncated directly. An existing output symlink, hard link, or nonregular
 file is explicitly rejected, because `O_NOFOLLOW` alone cannot detect
 a dangerous hard link to the canonical SQLite. The file and directory
-retain restrictive `0600`/`0700` modes. Tests verify normal repeat
-writes, cleanup of temporary files, and preservation of the real SQLite
+retain restrictive `0600`/`0700` modes. A newly created dedicated
+output directory is made private. An **existing** directory must already
+be mode `0700`: a shared or public directory is refused rather than
+silently chmodded (including `--output .`). On failure, transfer-review
+does not create a second, less-protected failure receipt in that directory.
+Tests verify normal repeat writes, rejection without permission or file
+changes, cleanup of temporary files, and preservation of the real SQLite
 bytes and mtime under symlink and hard-link attempts.
 
 ## CLI

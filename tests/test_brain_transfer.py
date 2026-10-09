@@ -282,6 +282,52 @@ class TransferEvidenceTests(unittest.TestCase):
         self.assertEqual(receipt.stat().st_ino, original.stat().st_ino)
         self.assertFalse(tuple(out.glob(".transfer-review-*.tmp")))
 
+    def test_existing_shared_output_is_refused_without_chmod_or_temp_files(self):
+        report = self.run_review()
+        out = self.root / "existing-shared-output"
+        out.mkdir()
+        os.chmod(out, 0o755)
+        sentinel = out / "keep.txt"
+        sentinel.write_text("unrelated content")
+        original_mode = out.stat().st_mode & 0o777
+
+        with self.assertRaisesRegex(BrainError, "TRANSFER_OUTPUT_EXISTING_DIRECTORY_NOT_PRIVATE"):
+            write_transfer_review(report, out)
+
+        self.assertEqual(out.stat().st_mode & 0o777, original_mode)
+        self.assertEqual(sentinel.read_text(), "unrelated content")
+        self.assertEqual(sorted(p.name for p in out.iterdir()), ["keep.txt"])
+
+    def test_existing_private_output_can_be_reused_without_mode_change(self):
+        report = self.run_review()
+        out = self.root / "existing-private-output"
+        out.mkdir(mode=0o700)
+        os.chmod(out, 0o700)
+
+        result = write_transfer_review(report, out)
+        self.assertEqual(json.loads(result.read_text()), report)
+        self.assertEqual(out.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(result.stat().st_mode & 0o777, 0o600)
+
+    def test_cli_unsafe_output_fails_without_creating_failure_artifacts(self):
+        source = self.root / "input.json"
+        source.write_text(json.dumps(request()))
+        out = self.root / "shared-cli-output"
+        out.mkdir()
+        os.chmod(out, 0o755)
+        (out / "sentinel.txt").write_text("keep original")
+        with patch("brain.__main__.source_sha", return_value=BRAIN_SHA):
+            with patch("brain.__main__.GitHub", return_value=StubGitHub()):
+                code = brain_cli([
+                    "transfer-review", "--db", str(self.root / "state.sqlite"),
+                    "--input", str(source), "--output", str(out),
+                    "--expected-sha", BRAIN_SHA,
+                ])
+        self.assertEqual(code, 1)
+        self.assertEqual(out.stat().st_mode & 0o777, 0o755)
+        self.assertEqual(sorted(p.name for p in out.iterdir()), ["sentinel.txt"])
+        self.assertEqual((out / "sentinel.txt").read_text(), "keep original")
+
     def test_normal_repeat_receipt_is_atomically_replaced_with_private_mode(self):
         report = self.run_review()
         out = self.root / "repeat-receipt"
