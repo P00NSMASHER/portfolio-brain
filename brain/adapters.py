@@ -17,39 +17,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from brain.core import require, BrainError, digest, utcnow
-from brain.intelligence import REPO, is_test_source_path
-
-_GENERIC_PATH_TOKENS = {
-    "api", "app", "code", "go", "index", "js", "lib", "library", "lua",
-    "main", "mod", "module", "py", "rs", "source", "spec", "specs", "src",
-    "test", "tests", "ts",
-}
-
-def _path_tokens(path):
-    return {
-        token for token in re.findall(r"[a-z0-9]+", path.lower())
-        if len(token) > 1 and token not in _GENERIC_PATH_TOKENS
-    }
-
-def related_test_paths(source_path, rows):
-    """Return only tests with path evidence linking them to this implementation.
-
-    Repository-wide test presence is not implementation evidence. This conservative
-    path association avoids awarding reuse-score credit for unrelated test suites.
-    """
-    source_tokens = _path_tokens(source_path)
-    if not source_tokens:
-        return []
-    related = []
-    for entry in rows:
-        path = entry.get("path")
-        if entry.get("type") != "blob" or not is_test_source_path(path):
-            continue
-        if source_tokens.intersection(_path_tokens(path)):
-            related.append(path)
-            if len(related) == 10:
-                break
-    return related
+from brain.intelligence import REPO, is_test_source_path, related_test_paths
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
