@@ -83,7 +83,7 @@ class FakeGitHub:
                 self._fail(path)
             return {"encoding":"base64","sha":BLOB_SHA,
                     "content":base64.b64encode(BLOB).decode()}
-        if path.startswith("/repos/") and path.count("/")==2:
+        if path.startswith("/repos/") and path.count("/")==3:
             name=path[len("/repos/"):]
             if name==MISSING and self.explicit:
                 self._fail(path)
@@ -217,7 +217,7 @@ class StaleSearchResultTests(unittest.TestCase):
                 self.assertEqual(result["reuse_candidates"][0]["repository"],GOOD)
                 self.assertIsNone(result["learning"]["verified_revenue"])
                 self.assertFalse(result["learning"]["autonomous_code_execution"])
-                self.assertEqual(store.read_report(SHA,now=NOW)["state_sequence"],2)
+                self.assertEqual(store.read_report(SHA)["state_sequence"],2)
             finally:
                 store.close()
 
