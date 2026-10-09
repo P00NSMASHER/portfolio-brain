@@ -11,6 +11,8 @@ import os
 import re
 import sqlite3
 import tempfile
+import secrets
+import stat
 from contextlib import closing, contextmanager
 from pathlib import Path
 
@@ -382,14 +384,34 @@ def write_transfer_review(report, destination):
     try:
         os.fchmod(directory, 0o700)
         name = "transfer-review.json"
-        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
+        temp_name = ".transfer-review-" + secrets.token_hex(12) + ".tmp"
+        temp_created = False
         try:
-            handle = os.open(name, flags, 0o600, dir_fd=directory)
-        except OSError as exc:
-            raise BrainError("TRANSFER_OUTPUT_SYMLINK_OR_FILE_REFUSED") from exc
-        with os.fdopen(handle, "w", encoding="utf-8") as target:
-            os.fchmod(target.fileno(), 0o600)
-            target.write(json.dumps(report, indent=2, sort_keys=True) + "\n")
-        return out / name
+            # Never truncate the final path directly: a hard link to the
+            # canonical SQLite has no symlink for O_NOFOLLOW to reject.
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+            handle = os.open(temp_name, flags, 0o600, dir_fd=directory)
+            temp_created = True
+            with os.fdopen(handle, "w", encoding="utf-8") as target:
+                os.fchmod(target.fileno(), 0o600)
+                target.write(json.dumps(report, indent=2, sort_keys=True) + "\n")
+            try:
+                old = os.stat(name, dir_fd=directory, follow_symlinks=False)
+            except FileNotFoundError:
+                old = None
+            require(
+                old is None or (
+                    stat.S_ISREG(old.st_mode) and old.st_nlink == 1
+                ),
+                "TRANSFER_OUTPUT_SYMLINK_OR_FILE_REFUSED",
+            )
+            # Atomic replacement of a normal receipt, not a write through a
+            # pre-existing path. The directory fd anchors both operations.
+            os.replace(temp_name, name, src_dir_fd=directory, dst_dir_fd=directory)
+            temp_created = False
+            return out / name
+        finally:
+            if temp_created:
+                os.unlink(temp_name, dir_fd=directory)
     finally:
         os.close(directory)
