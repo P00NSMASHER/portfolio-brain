@@ -37,11 +37,15 @@ the new head automatically. Nonmaterial timestamps do not block.
 
 Local receipt output is guarded separately: existing directory/parent
 symlinks are rejected, the output directory is opened with
-`O_DIRECTORY|O_NOFOLLOW`, and `transfer-review.json` is opened with
-`O_NOFOLLOW` through the directory file descriptor. The receipt cannot
-follow a malicious file symlink to overwrite the original SQLite authority.
-The file and directory retain restrictive `0600`/`0700` modes.
-These physical source/output protections are regression-tested.
+`O_DIRECTORY|O_NOFOLLOW`, and the receipt is first written to a new `0600` file using
+`O_CREAT|O_EXCL|O_NOFOLLOW`. The final receipt is **atomically replaced**
+by `os.replace` through the pinned directory file descriptor, never
+truncated directly. An existing output symlink, hard link, or nonregular
+file is explicitly rejected, because `O_NOFOLLOW` alone cannot detect
+a dangerous hard link to the canonical SQLite. The file and directory
+retain restrictive `0600`/`0700` modes. Tests verify normal repeat
+writes, cleanup of temporary files, and preservation of the real SQLite
+bytes and mtime under symlink and hard-link attempts.
 
 ## CLI
 
