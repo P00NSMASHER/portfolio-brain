@@ -174,6 +174,10 @@ def verify_v5_artifact(path, expected_digest, *, run_id, source_sha,
             require(all(name in names for name in required),
                     "V5_WORKLOAD_RECEIPT_MISSING")
             docs = [json.loads(archive.read(name)) for name in required]
+    except EvidenceError:
+        # EvidenceError derives from ValueError. Preserve explicit fail-closed
+        # missing-report and CRC error codes instead of relabeling them.
+        raise
     except (zipfile.BadZipFile, ValueError, KeyError, OSError, RuntimeError) as exc:
         raise EvidenceError("V5_WORKLOAD_RECEIPT_UNREADABLE") from exc
     require(all(type(doc) is dict for doc in docs),
