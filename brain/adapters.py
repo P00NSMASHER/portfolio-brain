@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import re
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -18,6 +19,45 @@ import urllib.request
 from pathlib import Path
 from brain.core import require, BrainError, digest, utcnow
 from brain.intelligence import REPO, is_test_source_path, related_test_paths
+
+def _api_request_family(path):
+    """Return only a fixed, non-sensitive endpoint family; never a URL/path.
+
+    The GitHub API path can contain private repositories, branch names, and
+    full-text search queries. None of those values belong in provider logs.
+    """
+    if path.startswith("/search/repositories?"):
+        return "REPOSITORY_SEARCH"
+    if re.fullmatch(r"/repos/[^/?]+/[^/?]+", path):
+        return "REPOSITORY_METADATA"
+    if re.fullmatch(r"/repos/[^/?]+/[^/?]+/branches/[^/?]+", path):
+        return "BRANCH_LOOKUP"
+    if re.fullmatch(r"/repos/[^/?]+/[^/?]+/git/trees/[^/?]+(?:\\?recursive=1)?", path):
+        return "GIT_TREE"
+    if re.fullmatch(r"/repos/[^/?]+/[^/?]+/git/blobs/[^/?]+", path):
+        return "GIT_BLOB"
+    if re.fullmatch(r"/repos/[^/?]+/[^/?]+/commits/[^/?]+/check-runs\\?.*", path):
+        return "COMMIT_CHECK_RUNS"
+    return "OTHER_BOUNDED_GET"
+
+
+def _report_api_read_context(path, request_number, *, http_status=None, read_error=None):
+    """Diagnostic for one failed GET, never a claim about the whole workload."""
+    evidence = {
+        "event": "SOURCE_API_GET_FAILURE_CONTEXT",
+        "request_family": _api_request_family(path),
+        "request_number": request_number,
+    }
+    if type(http_status) is int and 100 <= http_status <= 599:
+        evidence["http_status"] = http_status
+    elif read_error is not None:
+        # No exception message or URL, and no arbitrary class name.
+        evidence["read_failure"] = (
+            read_error if read_error in {"TimeoutError", "OSError", "JSONDecodeError"}
+            else "UNKNOWN"
+        )
+    print(json.dumps(evidence, sort_keys=True), file=sys.stderr)
+
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -57,8 +97,12 @@ class GitHub:
                     require(retry.isdigit() and int(retry)<=2, "RATE_LIMIT: retry exceeds bounded budget")
                     time.sleep(int(retry))
                     continue
+                _report_api_read_context(path, self.requests, http_status=exc.code)
                 raise BrainError(f'SOURCE_API_{exc.code}: GET failed; no cursor advanced') from None
             except (TimeoutError, OSError, json.JSONDecodeError) as exc:
+                _report_api_read_context(
+                    path, self.requests, read_error=type(exc).__name__
+                )
                 raise BrainError(f'SOURCE_READ_FAILED:{type(exc).__name__}; no cursor advanced') from None
         raise BrainError("SOURCE_RETRY_EXHAUSTED")
 
