@@ -70,6 +70,11 @@ class SourceTransport:
                 if self.stage=="branch" and name in selected:
                     raise BrainError("SOURCE_RESPONSE_TOO_LARGE")
                 return {"commit":{"sha":SOURCE}}
+            if path=="/repos/"+name+"/git/commits/"+SOURCE:
+                # This transport does not provide a complete, hash-pinned
+                # nonrecursive tree; failure is still quarantined ONLY when
+                # another original source has been independently verified.
+                raise BrainError("SOURCE_RESPONSE_TOO_LARGE")
             if path=="/repos/"+name+"/git/trees/"+SOURCE+"?recursive=1":
                 if self.stage=="tree" and name in selected:
                     raise BrainError("SOURCE_RESPONSE_TOO_LARGE")
@@ -169,8 +174,8 @@ class OversizedSourceRecoveryTests(unittest.TestCase):
             "stage":"tree",
             "reason":"SEARCH_RESULT_RESPONSE_TOO_LARGE_NOT_INSPECTED",
         }])
-        self.assertEqual(api.requests,6)
-        self.assertEqual(len(transport.calls),6)
+        self.assertEqual(api.requests,7)
+        self.assertEqual(len(transport.calls),7)
 
     def test_oversized_blob_with_verified_alternate_is_partial(self):
         transport=SourceTransport(stage="blob")
