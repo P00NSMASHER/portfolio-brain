@@ -97,13 +97,60 @@ Successfully recovered transient retries do not emit a failure context.
 
 This is **endpoint-class** evidence for a *future failed provider GET*, not
 a complete request audit and not proof of the unlogged October 9 incident.
-It does not change the existing `BrainError` text or type, 24-request cap,
-retry bounds, allowed discovery exceptions, workload PASS/FAIL decisions,
-SQLite/event schemas, report format or scheduled state writer. A skipped
-optional discovery result can produce a GET diagnostic while the research
-report separately records `OBSERVED_WITH_SEARCH_RESULT_GAPS`; that is not
-a claim that the whole research operation failed. Production only gains
-this diagnostic after a separately approved, protected source transition.
+It preserves the existing `BrainError` text/type for each individual
+failed GET, the 2,000,000-byte response cap, 24-request cap and retry bounds,
+SQLite/event schemas, report format, public/private source separation and
+scheduled state writer. Optional public discovery has a separate narrowly
+reviewed size-bound quarantine described below. A skipped optional hit can
+produce a GET diagnostic while the research report separately records
+`OBSERVED_WITH_SEARCH_RESULT_GAPS`; this is **partial verified observation**,
+not proof of complete search coverage. Production gains none of these changes
+until a separately approved, protected source transition.
+
+### October 10: five actual `SOURCE_RESPONSE_TOO_LARGE` production failures
+
+Preserve the original **FAILED** GitHub cycles on protected V5 source
+`35c1955bbfea1e2cd760ed39c8f6978ce5102f1d`:
+native schedule [#38033926025](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38033926025)
+at 07:17 UTC, and genuinely signed Cloudflare-origin cycles
+[#38039272940](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38039272940)
+08:50, [#38039853142](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38039853142)
+09:00, [#38040447668](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38040447668)
+09:10, [#38041038489](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38041038489)
+09:20. All five jobs stopped in bounded public research with the actual
+`BrainError: SOURCE_RESPONSE_TOO_LARGE`, after real monitoring. The **older
+production logs do not identify the failing GitHub GET family or repository**,
+so the actual request cannot be claimed or reconstructed from guessed search
+ranking. Separately read Cloudflare provider `scheduled()` events confirm
+the four 08:50–09:20 dispatches (dispatch ACK never equals GitHub completion);
+the 07:17 run was GitHub-native. Later successful 09:30 onward executions
+do not convert any of the five historical failures to success.
+
+**Bounded future response behavior — this DRAFT only:** A real oversized
+GET emits a single fixed-category diagnostic `ResponseTooLarge` with a
+numeric request ordinal, never endpoint URL, query, branch or credential.
+The 2,000,000-byte maximum remains **unchanged**: the reader fetches at most
+2,000,001 bytes, refuses to parse an oversized response, and does not
+retry it or increase spending. Only when the failed operation is an
+*optional public search-derived* `tree` or `blob` inspection may the
+candidate be explicitly recorded as
+`SEARCH_RESULT_RESPONSE_TOO_LARGE_NOT_INSPECTED` and the next originally
+selected search hit tried. The result is `OBSERVED_WITH_SEARCH_RESULT_GAPS`
+**only if another distinct candidate's original source blob was fully
+downloaded, size/identity-validated and hash-inspected**. This is not
+completeness or adoption proof. If all selected hits overflow, research
+**FAILS** with `DISCOVERY_ALL_SEARCH_RESULTS_UNAVAILABLE`, zero verified
+candidates and no fabricated successful research attempt. Oversized search
+API or default branch, explicit-repository, private discovery, identity,
+blob digest, truncated-tree, rate limit and other provider failures remain
+fail-closed. The original 24-GET budget and P-256/nonforce state protections
+are not loosened.
+
+This candidate must stay a **DRAFT / NOT DEPLOYED** until separate
+source-quality checks and a future authorized source transition. Any merge
+would change the currently observed V5 production SHA and require a new
+source-specific acceptance interval. Historical V2/V3/V4 acceptance facts
+and these five original FAIL records are immutable.
 
 Knowledge proposal delivery uses narrowly scoped repository contents, pull-request,
 and Actions permissions. After creating a fixed-file candidate PR, it dispatches
