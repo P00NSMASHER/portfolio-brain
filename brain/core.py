@@ -9,8 +9,10 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import sqlite3
-from contextlib import contextmanager
+import stat
+from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -291,11 +293,92 @@ class Store:
             self.db.execute("INSERT INTO attempts(created_at,operation,status,error_class,source_sha,event_seq,details) VALUES(?,?,?,?,?,?,?)", (utcnow(),operation,status,error_class,source_sha,self.db.execute("SELECT coalesce(max(seq),0) FROM events").fetchone()[0],canonical(details or {})))
 
     def backup(self, destination):
+        """Verify a private snapshot before replacing an ordinary backup file.
+
+        Never open the caller's final pathname with SQLite write access: a
+        different path may be a hard link to this live authority. A staging
+        file is exclusively created in the destination directory at 0600.
+        """
         destination = Path(destination)
-        require(destination.resolve() != self.path.resolve(), "backup must use another file")
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(destination) as other:
-            self.db.backup(other)
-            require(other.execute("PRAGMA integrity_check").fetchone()[0] == "ok", "backup verification failed")
-        os.chmod(destination, 0o600)
-        return hashlib.sha256(destination.read_bytes()).hexdigest()
+        require(destination.name not in {"", ".", ".."}, "BACKUP_OUTPUT_INVALID_NAME")
+        require(destination.resolve() != self.path.resolve(),
+                "BACKUP_OUTPUT_SOURCE_ALIAS_REFUSED")
+        for ancestor in (destination.parent, *destination.parent.parents):
+            require(not ancestor.is_symlink(),
+                    "BACKUP_OUTPUT_SYMLINK_DIRECTORY_REFUSED")
+        try:
+            destination.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+            directory = os.open(destination.parent,
+                                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        except OSError as exc:
+            raise BrainError("BACKUP_OUTPUT_UNSAFE_DIRECTORY") from exc
+        temporary = None
+        try:
+            folder = os.fstat(directory)
+            require(
+                stat.S_ISDIR(folder.st_mode) and folder.st_uid == os.getuid()
+                and not stat.S_IMODE(folder.st_mode) & 0o022,
+                "BACKUP_OUTPUT_DIRECTORY_NOT_PRIVATE_ENOUGH",
+            )
+
+            def check_destination():
+                try:
+                    existing = os.stat(destination.name, dir_fd=directory,
+                                       follow_symlinks=False)
+                except FileNotFoundError:
+                    return
+                require(
+                    stat.S_ISREG(existing.st_mode) and existing.st_nlink == 1,
+                    "BACKUP_OUTPUT_SYMLINK_HARDLINK_OR_NONFILE_REFUSED",
+                )
+                source = os.stat(self.path)
+                require(
+                    (existing.st_dev, existing.st_ino) !=
+                    (source.st_dev, source.st_ino),
+                    "BACKUP_OUTPUT_SOURCE_ALIAS_REFUSED",
+                )
+
+            check_destination()
+            temporary = ".brain-backup-" + secrets.token_hex(12) + ".tmp"
+            handle = os.open(
+                temporary, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                0o600, dir_fd=directory,
+            )
+            os.close(handle)
+            staged = destination.parent / temporary
+            try:
+                with closing(sqlite3.connect(staged, timeout=5)) as copy:
+                    self.db.backup(copy)
+                    require(copy.execute("PRAGMA integrity_check").fetchone()[0] == "ok",
+                            "BACKUP_SQLITE_INTEGRITY_FAILED")
+                    require(copy.execute("PRAGMA foreign_key_check").fetchall() == [],
+                            "BACKUP_FOREIGN_KEYS_FAILED")
+                    copy.commit()
+                # Verify the immutable copied ledger and pending inbox; do not
+                # drain or alter any event in the authoritative database.
+                isolated = Store(staged, visibility=self.visibility)
+                try:
+                    isolated._verified_events(include_pending=True)
+                finally:
+                    isolated.close()
+                with open(staged, "rb") as file:
+                    sha256 = hashlib.file_digest(file, "sha256").hexdigest()
+                    os.fsync(file.fileno())
+                # A destination replaced during staging must not be followed.
+                check_destination()
+                os.replace(temporary, destination.name,
+                           src_dir_fd=directory, dst_dir_fd=directory)
+                temporary = None
+                os.fsync(directory)
+                return sha256
+            except (sqlite3.Error, OSError) as exc:
+                raise BrainError("BACKUP_PRIVATE_COPY_FAILED") from exc
+        finally:
+            try:
+                if temporary is not None:
+                    try:
+                        os.unlink(temporary, dir_fd=directory)
+                    except FileNotFoundError:
+                        pass
+            finally:
+                os.close(directory)

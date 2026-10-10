@@ -145,6 +145,13 @@ is not claimed.
 2. Preserve the failing database and commit identity; do not overwrite evidence.
 3. Restore the last verified `state.sqlite` from the dedicated branch's immutable
    commit history, or `python -m brain backup --db ... --output backup.sqlite`.
+   The unmerged V5 backup implementation stages an exclusive 0600 file and
+   verifies a complete SQLite and ledger snapshot before replacing only an
+   ordinary, single-linked backup. Destination folders must belong to the
+   caller and not be group/world writable (0755 and 0700 are accepted).
+   Symlink and hardlink destinations are refused, and failed backups leave
+   both prior backup files and unprocessed canonical events unchanged.
+   No secondary CLI error report is written into the backup destination.
 4. Verify SQLite integrity and use `Store` to verify event IDs, content, contiguous
    sequence and chain. Drain pending work, then generate a new exact-source report.
 5. Rerun complete monitor → research → experiment → doctor. Compare expected sequence

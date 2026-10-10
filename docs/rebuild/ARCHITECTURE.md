@@ -56,8 +56,15 @@ writer lock, agent heartbeat, cost governor, or orphaned-run cleanup is imported
 - Delayed observations remain history and cannot replace newer semantic source facts.
 - Report generation time never makes old source data current. Code revision, projection
   sequence, semantic age, current complete workload coverage, and doctor freshness are separate checks.
-- Backup uses SQLite's backup API and integrity verification. Git publication uses one
-  new commit from a captured state parent, rejects main/parent drift, and never force-pushes.
+- Backup creates an exclusive 0600 staging file in an owner-controlled,
+  non-group/world-writable destination directory, then uses the SQLite
+  backup API. It verifies integrity, foreign keys, and canonical event/ledger
+  identity on the snapshot before atomic replacement, refusing symlinked or
+  hard-linked targets and preserving existing backups when validation fails.
+  The backup command neither drains pending state nor writes a secondary
+  failure report to a caller-supplied backup filename. Git publication uses
+  one new commit from a captured state parent, rejects main/parent drift,
+  and never force-pushes.
 - Public state rejects private input atomically. Private local state has no automatic publication path.
 - Local JSON/Markdown/HTML report publication uses private 0600 staging files,
   secure 0700 output directories and per-file atomic replacement; it refuses
