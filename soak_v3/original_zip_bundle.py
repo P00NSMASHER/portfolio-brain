@@ -50,6 +50,16 @@ def inspect_original_zip_bundle(manifest):
     artifacts = manifest.get("artifacts")
     require(type(artifacts) is list and 1 <= len(artifacts) <= MAX_ORIGINAL_ARTIFACTS,
             "ORIGINAL_ARTIFACT_LIST_INVALID")
+    # Validate the complete submitted run-ID order before reading ANY ZIP.
+    # This yields stable error attribution even if a reversed manifest would
+    # otherwise encounter an earlier state-parent mismatch.
+    previous_input_run = 0
+    for item in artifacts:
+        require(type(item) is dict, "ORIGINAL_ARTIFACT_ROW_INVALID")
+        value = item.get("run_id")
+        require(type(value) is int and value > previous_input_run,
+                "ORIGINAL_RUN_ORDER_OR_ID_INVALID")
+        previous_input_run = value
     previous_parent = first_parent
     previous_run = 0
     previous_sequence = -1
