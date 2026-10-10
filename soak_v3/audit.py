@@ -33,6 +33,7 @@ REQUIRED_STEPS = frozenset({
 })
 MIN_CYCLES = 3
 MIN_SPAN_SECONDS = 7200
+V5_MIN_SPAN_SECONDS = 21600  # Six hours on one exact protected source.
 MAX_GAP_SECONDS = 5400
 
 class EvidenceError(ValueError):
@@ -161,12 +162,14 @@ class Evaluation:
     maximum_gap_observed: int
 
 def evaluate_window(records, *, source_sha, current_main, first_state_parent,
-                    started_at, deadline_at, now):
+                    started_at, deadline_at, now, min_span_seconds=MIN_SPAN_SECONDS):
     """Fail closed on *all* exact-source runs, including inconvenient failures.
 
     Records are externally authenticated run/step/artifact/state attestations. This
     method intentionally cannot certify that unverified JSON originated at GitHub.
     """
+    require(type(min_span_seconds) is int and min_span_seconds >= MIN_SPAN_SECONDS,
+            "SOAK_MINIMUM_DURATION_INVALID")
     sha40(source_sha)
     sha40(current_main)
     sha40(first_state_parent)
@@ -256,7 +259,7 @@ def evaluate_window(records, *, source_sha, current_main, first_state_parent,
     # A missed second/third cycle is already a terminal failure at the original
     # 90-minute gap, even when fewer than three runs have arrived.
     # Once the two-hour span is legitimately complete, proceed to postvalidation.
-    if automatic and span < MIN_SPAN_SECONDS:
+    if automatic and span < min_span_seconds:
         elapsed_since_latest=(instant-automatic[-1][0]).total_seconds()
         if elapsed_since_latest > MAX_GAP_SECONDS:
             return Evaluation("FAIL","AUTOMATIC_DELIVERY_GAP_EXCEEDED",ids,span,
@@ -264,8 +267,77 @@ def evaluate_window(records, *, source_sha, current_main, first_state_parent,
     if len(automatic) < MIN_CYCLES:
         return Evaluation("BLOCKED" if instant >= deadline else "WAITING",
                           "INSUFFICIENT_GENUINE_AUTOMATIC_CYCLES",ids,span,maximum)
-    if span < MIN_SPAN_SECONDS:
+    if span < min_span_seconds:
         return Evaluation("BLOCKED" if instant >= deadline else "WAITING", "SOAK_DURATION_INCOMPLETE", ids, span, maximum)
     if instant > deadline:
         return Evaluation("BLOCKED", "DEADLINE_EXPIRED_BEFORE_POST_VALIDATION", ids, span, maximum)
     return Evaluation("PRE_POSTVALIDATION", "POST_SOAK_INDEPENDENT_CHECKS_REQUIRED", ids, span, maximum)
+
+
+def evaluate_v5_window(records, *, inventory, source_sha, current_main,
+                       first_state_parent, started_at, deadline_at, now):
+    """Evaluate *six-hour* V5 evidence using the existing fail-closed reducer.
+
+    An inventory and run manifests are caller-supplied data. This pure function
+    cannot authenticate them against GitHub or Cloudflare, verify raw ZIP bytes,
+    or create a terminal acceptance receipt. The most it can return is
+    PRE_POSTVALIDATION; an independent provider/artifact/state auditor is still
+    mandatory. V3's existing two-hour function remains backward compatible.
+    """
+    sha40(source_sha)
+    start, deadline, instant = utc(started_at), utc(deadline_at), utc(now)
+    require(
+        (deadline - start).total_seconds() >= V5_MIN_SPAN_SECONDS,
+        "V5_WINDOW_SHORTER_THAN_SIX_HOURS",
+    )
+    require(type(records) is list, "V5_RECORDS_INVALID")
+    require(
+        type(inventory) is dict
+        and inventory.get("coverage_complete") is True
+        and inventory.get("provenance") == "GITHUB_API_PROVIDER_METADATA"
+        and inventory.get("soak_pass") is False
+        and type(inventory.get("core_runs")) is list,
+        "V5_PROVIDER_INVENTORY_REQUIRED",
+    )
+    # The preflight census is not a cryptographic proof. Still refuse a
+    # manifest which has *obviously* dropped a reported failed/queued core.
+    expected = set()
+    for item in inventory["core_runs"]:
+        require(type(item) is dict, "V5_PROVIDER_INVENTORY_ROW_INVALID")
+        run_id, attempt = item.get("run_id"), item.get("run_attempt", 1)
+        require(type(run_id) is int and run_id > 0
+                and type(attempt) is int and attempt > 0,
+                "V5_PROVIDER_RUN_ID_INVALID")
+        identity = (run_id, attempt)
+        require(identity not in expected, "V5_PROVIDER_DUPLICATE_RUN")
+        expected.add(identity)
+        require(type(item.get("head_sha")) is str
+                and HEX40.fullmatch(item["head_sha"]),
+                "V5_PROVIDER_RUN_SOURCE_INVALID")
+        require(item.get("event") in {"push", "schedule", "workflow_dispatch"},
+                "V5_PROVIDER_RUN_TRIGGER_INVALID")
+        require(item.get("status") in {
+            "completed", "queued", "in_progress", "pending", "waiting",
+            "requested",
+        }, "V5_PROVIDER_RUN_STATUS_INVALID")
+        created = utc(item.get("created_at"))
+        require(start <= created <= instant, "V5_PROVIDER_RUN_TIME_INVALID")
+    manifest = set()
+    for record in records:
+        require(type(record) is dict, "V5_RUN_MANIFEST_ROW_INVALID")
+        identity = (record.get("run_id"), record.get("attempt"))
+        require(type(identity[0]) is int and type(identity[1]) is int,
+                "V5_RUN_MANIFEST_ID_INVALID")
+        require(identity not in manifest, "V5_RUN_MANIFEST_DUPLICATE")
+        manifest.add(identity)
+    require(manifest == expected, "V5_CENSUS_RECORD_MISMATCH")
+
+    # Runtime decisions, hashes, completion gaps and error classifications
+    # are delegated to the existing (independently tested) strict reducer.
+    # Never return PASS here, regardless of forged self-declared booleans.
+    return evaluate_window(
+        records, source_sha=source_sha, current_main=current_main,
+        first_state_parent=first_state_parent, started_at=started_at,
+        deadline_at=deadline_at, now=now,
+        min_span_seconds=V5_MIN_SPAN_SECONDS,
+    )
