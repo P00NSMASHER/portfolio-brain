@@ -82,6 +82,7 @@ def census(records, *, coverage=True):
                 "event": item["event"],
                 "created_at": item["started_at"],
                 "status": item["status"],
+                "conclusion": item["conclusion"],
             }
             for item in records
         ],
@@ -154,6 +155,32 @@ class V5SixHourGate(unittest.TestCase):
         data["core_runs"][0]["run_attempt"]=True
         with self.assertRaisesRegex(EvidenceError,"V5_PROVIDER_RUN_ID_INVALID"):
             inspect(records,inventory=data)
+
+    def test_provider_source_event_status_and_conclusion_cannot_be_laundered(self):
+        records=fixtures()
+        for field, forged in (
+            ("head_sha", "c"*40),
+            ("event", "push"),
+            ("status", "queued"),
+            ("conclusion", "failure"),
+        ):
+            with self.subTest(field=field):
+                provider=census(records)
+                provider["core_runs"][6][field]=forged
+                with self.assertRaisesRegex(
+                    EvidenceError, "V5_PROVIDER_.*MISMATCH"
+                ):
+                    inspect(records,inventory=provider)
+
+    def test_provider_created_time_must_precede_run_start(self):
+        records=fixtures()
+        provider=census(records)
+        provider["core_runs"][6]["created_at"]=stamp(
+            BEGIN+timedelta(hours=3,minutes=2)
+        )
+        with self.assertRaisesRegex(EvidenceError,
+                                    "V5_PROVIDER_STARTED_BEFORE_CREATED"):
+            inspect(records,inventory=provider)
 
     def test_missing_signed_origin_cannot_satisfy_six_hour_span(self):
         records=fixtures()
