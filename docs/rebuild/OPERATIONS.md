@@ -84,6 +84,27 @@ from durable acknowledged state and drains interrupted input. Last failure remai
 visible in attempts. Optional knowledge-upgrade failure is BLOCKED without discarding
 core observations. Authentication/rate-limit/provider outage is never renamed success.
 
+### Source GET failure context (candidate, not deployed)
+
+When one bounded GitHub GET definitively fails, the adapter prints a single
+`SOURCE_API_GET_FAILURE_CONTEXT` JSON line to the existing job stderr. The
+only fields are a fixed, non-sensitive request family, HTTP status (or a
+whitelisted read-failure class) and the bounded request number. Families
+distinguish repository search, metadata, branch lookup, Git tree, blob,
+commit checks, and unknown GET. **It never prints the raw URL, search query,
+repository identifier, branch name, exception message or credential.**
+Successfully recovered transient retries do not emit a failure context.
+
+This is **endpoint-class** evidence for a *future failed provider GET*, not
+a complete request audit and not proof of the unlogged October 9 incident.
+It does not change the existing `BrainError` text or type, 24-request cap,
+retry bounds, allowed discovery exceptions, workload PASS/FAIL decisions,
+SQLite/event schemas, report format or scheduled state writer. A skipped
+optional discovery result can produce a GET diagnostic while the research
+report separately records `OBSERVED_WITH_SEARCH_RESULT_GAPS`; that is not
+a claim that the whole research operation failed. Production only gains
+this diagnostic after a separately approved, protected source transition.
+
 Knowledge proposal delivery uses narrowly scoped repository contents, pull-request,
 and Actions permissions. After creating a fixed-file candidate PR, it dispatches
 the existing Foundation workflow exactly once on that candidate branch. Token-created
