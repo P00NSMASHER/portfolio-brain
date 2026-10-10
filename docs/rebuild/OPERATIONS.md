@@ -66,12 +66,18 @@ Requests are GET-only for source acquisition, capped24 per operation, ten-second
 timeouts, one bounded retry for429/502/503/504 with retry delay at most two seconds.
 No full-preflight speculative retry loop exists. A source failure preserves successful
 other observations but fails full monitored coverage. V5 research now distinguishes
-an unavailable *search result* (branch/tree/blob GET 404) from a search-API
-failure or an explicitly requested source: one disappearing indexed hit may
-be skipped only when another result is fully hash-inspected, and the report
-records `OBSERVED_WITH_SEARCH_RESULT_GAPS`, repository/stage and a nonadoption
-reason. If no result can be inspected, the research cycle still FAILS; 403,
-5xx, malformed/private metadata and incomplete search fail closed. This
+an unavailable optional *public search result* from a search-API
+failure or an explicitly requested source. A default-branch GET 404 is
+quarantined only when GitHub's search metadata reports an exact integer
+`size=0` (never-initialized repository); a missing branch on a nonempty,
+missing-size, or malformed-size repository remains fatal. V5 additionally
+handles a disappearing search-derived tree/blob GET 404, never an identity
+or integrity mismatch. A skipped result permits a PASS only when another
+source is fully hash-inspected, and the report records
+`OBSERVED_WITH_SEARCH_RESULT_GAPS`, repository/stage and a nonadoption
+reason. With zero verified source after any skipped 404, research FAILS;
+private-mode discovery, 403, 5xx, malformed metadata, incomplete search,
+and explicit target failures remain fatal. This
 source-only candidate is not a production recovery or a retroactive
 reclassification of the four failed 18:00–18:30 UTC October 9 v4 runs. The next scheduled cycle starts
 from durable acknowledged state and drains interrupted input. Last failure remains
