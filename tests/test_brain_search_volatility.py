@@ -29,8 +29,8 @@ TARGET={"project":"freight-recovery","query":"freight invoice audit",
         "terms":["invoice","freight","duplicate","audit"]}
 
 
-def metadata(name, *, private=False):
-    return {"full_name":name,"private":private,
+def metadata(name, *, private=False, size=0):
+    return {"full_name":name,"private":private, "size":size,
             "default_branch":"main","license":{"spdx_id":"MIT"}}
 
 
@@ -43,8 +43,10 @@ def missing(path):
 class FakeGitHub:
     """A strict API stub to distinguish search, branch, tree and blob errors."""
     def __init__(self, names=None, *, fail_stage=None, fail_status=404,
-                 explicit=False, private_hit=False, search_failure=False):
+                 explicit=False, private_hit=False, search_failure=False,
+                 missing_size=0):
         self.names=names if names is not None else [MISSING,GOOD]
+        self.missing_size=missing_size
         self.fail_stage=fail_stage
         self.fail_status=fail_status
         self.explicit=explicit
@@ -59,7 +61,8 @@ class FakeGitHub:
                 missing(path)
             names=self.names
             return {"incomplete_results":False,"items":[
-                metadata(n,private=(self.private_hit and n==MISSING))
+                metadata(n,private=(self.private_hit and n==MISSING),
+                         size=self.missing_size if n in {MISSING,BAD} else 10)
                 for n in names
             ]}
         if path.startswith("/repos/") and path.endswith("/branches/main"):
@@ -119,6 +122,34 @@ class StaleSearchResultTests(unittest.TestCase):
         self.assertEqual(len(transport.paths),api.requests)
         self.assertTrue(all(path.startswith(("/search/","/repos/")) for
                             path in transport.paths))
+
+    def test_nonempty_or_ill_typed_branch_404_stays_fatal(self):
+        for size in (1, 10, None, False, "0", 0.0):
+            with self.subTest(size=size):
+                api=GitHub(transport=FakeGitHub(
+                    names=[MISSING,GOOD],fail_stage="branch",
+                    missing_size=size))
+                with self.assertRaisesRegex(BrainError,"SOURCE_API_404"):
+                    api.discover(TARGET)
+                self.assertEqual(api.discovery_unavailable,[])
+                self.assertEqual(api.requests,2)
+
+    def test_size_zero_branch_that_exists_is_still_inspected(self):
+        api=GitHub(transport=FakeGitHub(names=[MISSING]))
+        rows=api.discover(TARGET)
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0][0]["repository"],MISSING)
+        self.assertEqual(api.discovery_unavailable,[])
+
+    def test_private_mode_never_suppresses_private_source_404(self):
+        from unittest.mock import patch
+        with patch.dict("os.environ", {"GITHUB_TOKEN":"fixture-token"}):
+            api=GitHub(private=True,transport=FakeGitHub(
+                names=[MISSING,GOOD],private_hit=True,
+                fail_stage="branch"))
+            with self.assertRaisesRegex(BrainError,"SOURCE_API_404"):
+                api.discover(TARGET)
+            self.assertEqual(api.discovery_unavailable,[])
 
     def test_tree_or_blob_404_skips_only_search_derived_hit(self):
         for stage,expected_count in (("tree",6),("blob",7)):

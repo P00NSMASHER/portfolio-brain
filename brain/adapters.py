@@ -160,7 +160,19 @@ class GitHub:
                 license=(meta.get("license") or {}).get("spdx_id") or "UNKNOWN"
                 found.append(({"repository":name,"head_sha":sha,"path":row["path"],"blob_sha":row["sha"],"code_sha256":hashlib.sha256(raw).hexdigest(),"bytes":len(raw),"test_paths":test_paths,"license":license,"source_ref":f'https://github.com/{name}/blob/{sha}/{row["path"]}',"target":target["project"],"query":target["query"],"matched_terms":[term for term in terms if term in body.lower()]},meta["private"]))
             except BrainError as exc:
-                if repository is None and str(exc).startswith("SOURCE_API_404:"):
+                # Only a never-initialized, public, search-derived branch
+                # may disappear without a fatal error. Nonempty or malformed
+                # repository size and private discovery always remain fatal.
+                # Preserve the V5 separate tree/blob search-volatility handling
+                # only for public optional hits with surviving inspected source.
+                optional_public = (repository is None and not self.private
+                                   and meta["private"] is False)
+                empty_branch = (stage == "branch"
+                                and type(meta.get("size")) is int
+                                and meta["size"] == 0)
+                if (optional_public
+                        and str(exc) == "SOURCE_API_404: GET failed; no cursor advanced"
+                        and (stage in {"tree", "blob"} or empty_branch)):
                     self.discovery_unavailable.append({
                         "repository":name, "stage":stage,
                         "reason":"SEARCH_RESULT_SOURCE_404_NOT_INSPECTED",
