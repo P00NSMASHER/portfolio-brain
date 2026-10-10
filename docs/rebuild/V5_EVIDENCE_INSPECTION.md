@@ -31,6 +31,28 @@ verification. `FRESH`, dispatch acknowledgments, self-labelled scheduled
 runs, a push, manual dispatch, a skipped verifier and provider metadata alone
 are not substitute successful completed cycles.
 
+### Strict V5 original ZIP verifier (review candidate)
+
+`python -m soak_v3 artifact-v5 --manifest <artifact.json>` uses the existing
+provider-digest-bound `verify_artifact` as its baseline, then opens the same
+bounded original ZIP to check every member's CRC and all mandatory workload
+report files: `report/report.json` (monitor), `research/report.json`,
+`experiment/report.json`, and `doctor/report.json`. It requires all four
+to be PASS on the same exact source with zero pending events, ordered
+nonregressing state sequences, matching final experiment/doctor sequence and
+canonical hash, the expected monitor/research operation labels, and the
+doctor's explicit mandatory workload PASS map. A ZIP whose original SHA-256
+matches provider metadata but has a broken noncritical member fails rather
+than being treated as complete.
+
+`artifact-v5` is **local original-byte consistency inspection** only:
+the expected ZIP digest MUST come from independent original GitHub provider
+metadata. These checks are not independently signed Cloudflare provenance,
+GitHub run-census completeness, remote state publication, or V5 final
+acceptance. The existing `artifact` mode remains unchanged for historical
+V3 replay; use the strict mode for future V5 original ZIPs. Do not merge
+this source review during the current protected-source acceptance period.
+
 ### Required evidence acquisition before supplying the manifest
 
 Acquire independently from original GitHub and Cloudflare providers, not
