@@ -73,6 +73,7 @@ class GitHub:
         # Per-discovery diagnostics are NOT events or verified source facts.
         # They only explain why a search-index hit could not be inspected.
         self.discovery_unavailable=[]
+        self.discovery_bounded_trees=[]
         self.opener=urllib.request.build_opener(NoRedirect())
 
     def get(self, path):
@@ -157,8 +158,95 @@ class GitHub:
         rows=[{"name":x["name"],"status":x["status"],"conclusion":x.get("conclusion"),"head_sha":x["head_sha"],"url":x["html_url"]} for x in items]
         return {"repository":repository,"head_sha":sha,"default_branch":branch,"checks":rows,"open_issues":meta["open_issues_count"],"source_ref":f'https://github.com/{repository}/commit/{sha}'}, meta["private"]
 
+    def _bounded_public_tree(self, repository, head_sha, terms):
+        """Source-visible but INCOMPLETE tree evidence after recursive overflow.
+
+        Pin the Git commit -> root Git tree -> each child Git tree by provider
+        object IDs, and verify the chosen original blob later in discover().
+        At most FOUR child trees, never a speculative full-tree crawl or an
+        override of the original 2 MB/read or 24 GET/workload limits.
+        Only call for optional *public* search hits, never private/explicit.
+        """
+        require(REPO.fullmatch(repository or ""), "BOUNDED_TREE_REPOSITORY_INVALID")
+        require(type(head_sha) is str and re.fullmatch(r"[0-9a-f]{40}", head_sha),
+                "BOUNDED_TREE_HEAD_INVALID")
+        commit=self.get(f"/repos/{repository}/git/commits/{head_sha}")
+        require(type(commit) is dict and commit.get("sha")==head_sha
+                and type(commit.get("tree")) is dict,
+                "BOUNDED_TREE_COMMIT_IDENTITY_INVALID")
+        root_sha=commit["tree"].get("sha")
+        require(type(root_sha) is str and re.fullmatch(r"[0-9a-f]{40}",root_sha),
+                "BOUNDED_TREE_ROOT_ID_INVALID")
+
+        def inspect(prefix, expected_sha):
+            tree=self.get(f"/repos/{repository}/git/trees/{expected_sha}")
+            require(type(tree) is dict and tree.get("sha")==expected_sha
+                    and tree.get("truncated") is False
+                    and type(tree.get("tree")) is list,
+                    "BOUNDED_TREE_OBJECT_INVALID")
+            files,children=[],[]
+            seen=set()
+            for obj in tree["tree"]:
+                require(type(obj) is dict and type(obj.get("path")) is str,
+                        "BOUNDED_TREE_ENTRY_INVALID")
+                name=obj["path"]
+                require(0<len(name)<=255 and name not in {".",".."}
+                        and "/" not in name and "\\" not in name
+                        and "\x00" not in name and name not in seen,
+                        "BOUNDED_TREE_PATH_INVALID")
+                seen.add(name)
+                full=prefix+name
+                kind=obj.get("type")
+                if kind=="tree":
+                    node_sha=obj.get("sha")
+                    require(type(node_sha) is str and
+                            re.fullmatch(r"[0-9a-f]{40}",node_sha),
+                            "BOUNDED_TREE_CHILD_ID_INVALID")
+                    children.append((full+"/",node_sha))
+                elif kind=="blob":
+                    node_sha=obj.get("sha")
+                    size=obj.get("size")
+                    require(type(node_sha) is str and
+                            re.fullmatch(r"[0-9a-f]{40}",node_sha)
+                            and type(size) is int and size>=0,
+                            "BOUNDED_TREE_BLOB_ID_OR_SIZE_INVALID")
+                    files.append({"type":"blob","path":full,
+                                  "size":size,"sha":node_sha})
+                else:
+                    # Gitlink/submodule content is NOT recursively inspected.
+                    require(kind=="commit", "BOUNDED_TREE_KIND_INVALID")
+            return files,children
+
+        all_files,pending=inspect("",root_sha)
+        # Prefer source/test code roots, then target-word-bearing folders.
+        # Re-rank at every step so a relevant second-level folder may be
+        # visited before unrelated root folders, without extra fanout.
+        names={"src":0,"tests":1,"lib":2,"app":3,"packages":4,
+               "services":5,"source":6,"internal":7,"test":8,
+               "examples":9,"crates":10}
+        def key(node):
+            path=node[0].rstrip("/").lower()
+            tail=path.rsplit("/",1)[-1]
+            matched=sum(str(t).lower() in path for t in terms)
+            return (-matched*20+names.get(tail,20),
+                    path.count("/"),path)
+        scanned=0
+        while pending and scanned<4:
+            pending.sort(key=key)
+            prefix,tree_sha=pending.pop(0)
+            # Only root or two child levels: reject unbounded descent.
+            if prefix.count("/")>2:
+                continue
+            files,children=inspect(prefix,tree_sha)
+            all_files.extend(files)
+            if prefix.count("/")<2:
+                pending.extend(children)
+            scanned+=1
+        return all_files,scanned
+
     def discover(self, target, *, repository=None):
         self.discovery_unavailable=[]
+        self.discovery_bounded_trees=[]
         if repository:
             # Explicitly requested sources are authoritative user scope: 404 is
             # always an error, never silently changed into an empty search.
@@ -189,13 +277,29 @@ class GitHub:
                 require(type(sha) is str and re.fullmatch(r"[0-9a-f]{40}",sha),
                         "DISCOVERY_SOURCE_SHA_INVALID")
                 stage="tree"
-                tree=self.get(f'/repos/{name}/git/trees/{sha}?recursive=1')
-                require(tree.get("truncated") is False, "SOURCE_TREE_TRUNCATED")
-                rows=tree.get("tree",[])
+                bounded_child_count=None
+                try:
+                    tree=self.get(f'/repos/{name}/git/trees/{sha}?recursive=1')
+                    require(tree.get("truncated") is False, "SOURCE_TREE_TRUNCATED")
+                    rows=tree.get("tree",[])
+                except BrainError as exc:
+                    optional_public=(repository is None and not self.private
+                                     and meta["private"] is False)
+                    if not optional_public or str(exc)!="SOURCE_RESPONSE_TOO_LARGE":
+                        raise
+                    # Fresh fixed-head provider objects; never inspect the
+                    # oversized recursive result or invent its contents.
+                    rows,bounded_child_count=self._bounded_public_tree(
+                        name,sha,target["terms"])
                 paths=[r for r in rows if r.get("type")=="blob" and 0<r.get("size",0)<=100000 and r["path"].endswith((".py",".ts",".js",".lua",".rs",".go")) and not re.search(r"(^|/)(vendor|node_modules|dist)(/|[_.])",r["path"],re.I) and not is_test_source_path(r["path"])]
                 terms=target["terms"]
                 paths.sort(key=lambda r:(-sum(t in r["path"].lower() for t in terms),r["path"]))
                 if not paths:
+                    if bounded_child_count is not None:
+                        self.discovery_unavailable.append({
+                            "repository":name,"stage":"tree",
+                            "reason":"SEARCH_RESULT_BOUNDED_TREE_NO_ELIGIBLE_SOURCE",
+                        })
                     continue
                 row=paths[0]
                 stage="blob"
@@ -207,6 +311,13 @@ class GitHub:
                 test_paths=related_test_paths(row["path"], rows)
                 license=(meta.get("license") or {}).get("spdx_id") or "UNKNOWN"
                 found.append(({"repository":name,"head_sha":sha,"path":row["path"],"blob_sha":row["sha"],"code_sha256":hashlib.sha256(raw).hexdigest(),"bytes":len(raw),"test_paths":test_paths,"license":license,"source_ref":f'https://github.com/{name}/blob/{sha}/{row["path"]}',"target":target["project"],"query":target["query"],"matched_terms":[term for term in terms if term in body.lower()]},meta["private"]))
+                if bounded_child_count is not None:
+                    self.discovery_bounded_trees.append({
+                        "repository":name,"head_sha":sha,
+                        "source_path":row["path"],
+                        "child_trees_inspected":bounded_child_count,
+                        "scope":"PARTIAL_TREE_ORIGINAL_BLOB_VERIFIED",
+                    })
             except BrainError as exc:
                 # Only a never-initialized, public, search-derived branch
                 # may disappear without a fatal error. Nonempty or malformed
@@ -249,7 +360,9 @@ class GitHub:
                 "provider 404" if reasons=={"SEARCH_RESULT_SOURCE_404_NOT_INSPECTED"}
                 else "provider size bound" if reasons==
                     {"SEARCH_RESULT_RESPONSE_TOO_LARGE_NOT_INSPECTED"}
-                else "provider 404/size bound"
+                else "partial tree no eligible source" if reasons==
+                    {"SEARCH_RESULT_BOUNDED_TREE_NO_ELIGIBLE_SOURCE"}
+                else "provider 404/size bound/partial tree"
             )
             raise BrainError(
                 "DISCOVERY_ALL_SEARCH_RESULTS_UNAVAILABLE: "
