@@ -10,6 +10,8 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sqlite3
+import subprocess
 import tempfile
 import unittest
 
@@ -81,7 +83,40 @@ class DeployedV5ReadOnlyProof(unittest.TestCase):
             original = Path(temp) / "original.sqlite"
             original.write_bytes(raw)
             os.chmod(original, 0o400)
-            before = physical_ledger_snapshot(original, expected_source=main)
+            # Source and state advance independently. A docs/tests-only merge
+            # may precede its first genuine new-source scheduled core.
+            # Require a canonical last-report source that is current main
+            # or an actual ancestor; never invent a completed current cycle.
+            with sqlite3.connect(
+                original.as_uri() + "?mode=ro&immutable=1", uri=True
+            ) as evidence:
+                latest = evidence.execute(
+                    "SELECT source_sha FROM reports ORDER BY id DESC LIMIT 1"
+                ).fetchone()
+            self.assertIsNotNone(latest, "State report evidence unavailable")
+            recorded_source = latest[0]
+            self.assertRegex(recorded_source, r"^[0-9a-f]{40}$")
+            if recorded_source != main:
+                if git("rev-parse", "--is-shallow-repository") == "true":
+                    git("fetch", "--quiet", "--no-tags", "--deepen=16",
+                        "origin", "refs/heads/main")
+                ancestry = subprocess.run(
+                    ["git", "merge-base", "--is-ancestor",
+                     recorded_source, main],
+                    capture_output=True, text=True, timeout=15, check=False,
+                )
+                self.assertEqual(
+                    ancestry.returncode, 0,
+                    "Stored report source not a verified protected-main "
+                    "ancestor (or history too shallow): fail closed",
+                )
+                self.assertEqual(
+                    git("ls-remote", "origin", "refs/heads/main").split()[0],
+                    main, "Main drift during ancestry check",
+                )
+            before = physical_ledger_snapshot(
+                original, expected_source=recorded_source
+            )
             self.assertGreater(before["sequence"], 210)
             disposable = Path(temp) / "analysis-copy.sqlite"
             shutil.copyfile(original, disposable)
@@ -117,7 +152,7 @@ class DeployedV5ReadOnlyProof(unittest.TestCase):
             self.assertEqual(hashlib.sha256(original.read_bytes()).hexdigest(),
                              raw_sha256, "Immutable original was modified")
             self.assertEqual(
-                physical_ledger_snapshot(original, expected_source=main),
+                physical_ledger_snapshot(original, expected_source=recorded_source),
                 before, "Canonical original changed"
             )
         print("POST_V5_SOURCE_STATE_RECEIPT=" + json.dumps({
@@ -128,5 +163,8 @@ class DeployedV5ReadOnlyProof(unittest.TestCase):
             "sqlite_bytes": len(raw), "sequence": before["sequence"],
             "canonical_hash": before["canonical_hash"],
             "pending_events": 0, "v4_acceptance_ref_intact": True,
+            "recorded_state_source": recorded_source,
+            "recorded_source_is_protected_main": recorded_source == main,
+            "pending_current_source_core_if_ancestor": recorded_source != main,
             "production_writes": 0, "scheduled_acceptance": False,
         }, sort_keys=True))
