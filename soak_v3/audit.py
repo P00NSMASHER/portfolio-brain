@@ -302,6 +302,7 @@ def evaluate_v5_window(records, *, inventory, source_sha, current_main,
     # The preflight census is not a cryptographic proof. Still refuse a
     # manifest which has *obviously* dropped a reported failed/queued core.
     expected = set()
+    provider_rows = {}
     for item in inventory["core_runs"]:
         require(type(item) is dict, "V5_PROVIDER_INVENTORY_ROW_INVALID")
         run_id, attempt = item.get("run_id"), item.get("run_attempt", 1)
@@ -311,6 +312,7 @@ def evaluate_v5_window(records, *, inventory, source_sha, current_main,
         identity = (run_id, attempt)
         require(identity not in expected, "V5_PROVIDER_DUPLICATE_RUN")
         expected.add(identity)
+        provider_rows[identity] = item
         require(type(item.get("head_sha")) is str
                 and HEX40.fullmatch(item["head_sha"]),
                 "V5_PROVIDER_RUN_SOURCE_INVALID")
@@ -320,6 +322,14 @@ def evaluate_v5_window(records, *, inventory, source_sha, current_main,
             "completed", "queued", "in_progress", "pending", "waiting",
             "requested",
         }, "V5_PROVIDER_RUN_STATUS_INVALID")
+        require(item["head_sha"] == source_sha,
+                "V5_PROVIDER_RUN_SOURCE_MISMATCH")
+        require(
+            type(item.get("conclusion")) is str
+            if item["status"] == "completed"
+            else item.get("conclusion") is None,
+            "V5_PROVIDER_RUN_CONCLUSION_INVALID",
+        )
         created = utc(item.get("created_at"))
         require(start <= created <= instant, "V5_PROVIDER_RUN_TIME_INVALID")
     manifest = set()
@@ -331,6 +341,19 @@ def evaluate_v5_window(records, *, inventory, source_sha, current_main,
         require(identity not in manifest, "V5_RUN_MANIFEST_DUPLICATE")
         manifest.add(identity)
     require(manifest == expected, "V5_CENSUS_RECORD_MISMATCH")
+    for record in records:
+        provider = provider_rows[(record["run_id"], record["attempt"])]
+        require(
+            record.get("source_sha") == provider["head_sha"]
+            and record.get("event") == provider["event"]
+            and record.get("status") == provider["status"]
+            and record.get("conclusion") == provider.get("conclusion"),
+            "V5_PROVIDER_MANIFEST_FACT_MISMATCH",
+        )
+        require(
+            utc(provider["created_at"]) <= utc(record.get("started_at")),
+            "V5_PROVIDER_STARTED_BEFORE_CREATED",
+        )
 
     # Runtime decisions, hashes, completion gaps and error classifications
     # are delegated to the existing (independently tested) strict reducer.
