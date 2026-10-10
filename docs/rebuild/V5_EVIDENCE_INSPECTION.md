@@ -1,33 +1,33 @@
 # Portfolio Brain V5: independent six-hour evidence inspection
 
 **This document is a source-review candidate, not an acceptance or deployment.**
-Protected production V5 source at authoring: \`35c1955bbfea1e2cd760ed39c8f6978ce5102f1d\`.
+Protected production V5 source at authoring: `35c1955bbfea1e2cd760ed39c8f6978ce5102f1d`.
 The current V5 observation remains tracked in [issue #669](https://github.com/P00NSMASHER/portfolio-brain/issues/669).
 The historical V2 FAIL, V3 BLOCKED and V4 PASS records are unchanged.
 
 ## Reuse of existing strict evaluator
 
-\`python -m soak_v3 window-v5 --manifest <local-readonly-evidence.json>\` calls
-\`evaluate_v5_window()\` in the existing \`soak_v3.audit\` module, which delegates
+`python -m soak_v3 window-v5 --manifest <local-readonly-evidence.json>` calls
+`evaluate_v5_window()` in the existing `soak_v3.audit` module, which delegates
 the event classification, mandatory steps, immutable artifact/state agreement,
 state-parent continuity, exact-source binding, provider-scheduled versus
 unverified/manual dispatch distinction, and maximum 5,400-second completion
-gap to the **same** \`evaluate_window\` function used by V3. V3 keeps its
+gap to the **same** `evaluate_window` function used by V3. V3 keeps its
 original two-hour minimum and interface. V5 supplies a 21,600-second minimum.
-The CLI prints \`NONAUTHORITATIVE_EVIDENCE_INSPECTION\` and never claims
-\`PASS\`; even six hours of perfect input is \`PRE_POSTVALIDATION\` pending
+The CLI prints `NONAUTHORITATIVE_EVIDENCE_INSPECTION` and never claims
+`PASS`; even six hours of perfect input is `PRE_POSTVALIDATION` pending
 the separate governed release decision.
 
 This mode additionally requires a **complete external provider core-run
 inventory**, with a distinct (run ID, attempt) record for **every** core in
 the observation period and one matching record in the supplied run evidence,
 including failed, pending and manually triggered cores. Dropping a reported
-failure produces \`V5_CENSUS_RECORD_MISMATCH\`. A success receipt from a
-Cloudflare-dispatched \`workflow_dispatch\` contributes to the automatic
+failure produces `V5_CENSUS_RECORD_MISMATCH`. A success receipt from a
+Cloudflare-dispatched `workflow_dispatch` contributes to the automatic
 completion clock **only when an independent collector supplied all four**
-\`cloudflare_cron_v1\` provenance checks: matching source SHA, provider Cron
+`cloudflare_cron_v1` provenance checks: matching source SHA, provider Cron
 event, verified signed P-256 origin, completed core receipt and state
-verification. \`FRESH\`, dispatch acknowledgments, self-labelled scheduled
+verification. `FRESH`, dispatch acknowledgments, self-labelled scheduled
 runs, a push, manual dispatch, a skipped verifier and provider metadata alone
 are not substitute successful completed cycles.
 
@@ -36,21 +36,21 @@ are not substitute successful completed cycles.
 Acquire independently from original GitHub and Cloudflare providers, not
 from a claimed summary or a hand-written JSON file. At minimum:
 
-1. Freeze current protected \`main\` SHA. Enumerate **all** GitHub core runs
+1. Freeze current protected `main` SHA. Enumerate **all** GitHub core runs
    over the exact acceptance interval, across every status, attempt and trigger,
    with complete pagination and fresh membership confirmation. Record failures
    even when they would spoil the outcome.
 2. For each candidate automatic run, independently match the original
-   Cloudflare \`scheduled()\` provider log to the signed P-256 envelope verified
+   Cloudflare `scheduled()` provider log to the signed P-256 envelope verified
    by the GitHub core. Confirm exact production SHA, completed SUCCESS, all
-   mandatory steps, and doctor PASS with zero pending events. A \`FRESH\` log
+   mandatory steps, and doctor PASS with zero pending events. A `FRESH` log
    is a useful liveness observation, not a cycle.
 3. Download original GitHub run artifact ZIP **bytes** and independently hash
    them against GitHub's actual artifact metadata and embedded delivery
    receipt. Fetch the published state bytes at the exact Git commit, verify
    the Git blob hash, original SQLite SHA-256, integrity/foreign keys, complete
    canonical event/ledger chain, expected source and zero backlog. Use the
-   existing \`soak_v3.audit.verify_artifact\` and \`verify_sqlite\` readers;
+   existing `soak_v3.audit.verify_artifact` and `verify_sqlite` readers;
    do not create parallel hash or ledger algorithms.
 4. Match every run's published state commit to its captured original state
    parent using nonforce ancestry, verify each state sequence and hash
@@ -64,7 +64,7 @@ from a claimed summary or a hand-written JSON file. At minimum:
 
 ### Local input shape, deliberately non-authoritative
 
-\`\`\`json
+```json
 {
   "source_sha": "<40-char exact protected SHA>",
   "current_main": "<40-char independently fetched protected SHA>",
@@ -111,7 +111,7 @@ from a claimed summary or a hand-written JSON file. At minimum:
     }
   ]
 }
-\`\`\`
+```
 
 Angle-bracket placeholders above are **not executable proof**. Caller-provided
 boolean labels and count matching cannot authenticate original GitHub or
