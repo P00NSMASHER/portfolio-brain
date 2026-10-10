@@ -153,6 +153,70 @@ def verify_artifact(path, expected_digest, *, run_id, source_sha, state_parent, 
             "canonical_hash": doctor["canonical_hash"], "pending_events": 0,
             "artifact_sha256": expected_digest[7:]}
 
+def verify_v5_artifact(path, expected_digest, *, run_id, source_sha,
+                       state_parent, state_commit):
+    """Require original ZIP integrity and all four mandatory workload receipts.
+
+    This is a *local read-only* consistency check of provider-supplied bytes.
+    A matching expected_digest is meaningful only if independently acquired
+    from GitHub; the ZIP itself cannot prove its Cloudflare scheduler origin.
+    """
+    basic = verify_artifact(
+        path, expected_digest, run_id=run_id, source_sha=source_sha,
+        state_parent=state_parent, state_commit=state_commit,
+    )
+    try:
+        with zipfile.ZipFile(path, "r") as archive:
+            require(archive.testzip() is None, "V5_ARTIFACT_MEMBER_CRC_INVALID")
+            names = set(archive.namelist())
+            required = ("report/report.json", "research/report.json",
+                        "experiment/report.json", "doctor/report.json")
+            require(all(name in names for name in required),
+                    "V5_WORKLOAD_RECEIPT_MISSING")
+            docs = [json.loads(archive.read(name)) for name in required]
+    except (zipfile.BadZipFile, ValueError, KeyError, OSError, RuntimeError) as exc:
+        raise EvidenceError("V5_WORKLOAD_RECEIPT_UNREADABLE") from exc
+    require(all(type(doc) is dict for doc in docs),
+            "V5_WORKLOAD_RECEIPT_NOT_OBJECT")
+    for kind, doc in zip(("monitor", "research", "experiment", "doctor"), docs):
+        require(doc.get("status") == "PASS"
+                and doc.get("source_sha") == source_sha
+                and doc.get("pending_events") == 0,
+                "V5_WORKLOAD_RECEIPT_NOT_PASS_" + kind.upper())
+        require(type(doc.get("state_sequence")) is int
+                and doc["state_sequence"] >= 0,
+                "V5_WORKLOAD_SEQUENCE_INVALID")
+        sha64(doc.get("canonical_hash"))
+    monitor, research, experiment, doctor = docs
+    require(
+        type(monitor.get("operation")) is dict
+        and monitor["operation"].get("name") == "monitor"
+        and type(research.get("operation")) is dict
+        and research["operation"].get("name") == "research",
+        "V5_WORKLOAD_OPERATION_INVALID",
+    )
+    sequences = [doc["state_sequence"] for doc in docs]
+    require(sequences == sorted(sequences)
+            and experiment["state_sequence"] == doctor["state_sequence"]
+            and doctor["state_sequence"] == basic["state_sequence"],
+            "V5_WORKLOAD_SEQUENCE_DISAGREEMENT")
+    require(experiment["canonical_hash"] == doctor["canonical_hash"]
+            == basic["canonical_hash"],
+            "V5_EXPERIMENT_DOCTOR_CHAIN_DISAGREEMENT")
+    require(doctor.get("mandatory_workloads") == {
+        "monitor": "PASS", "research": "PASS", "experiment": "PASS",
+    }, "V5_DOCTOR_MANDATORY_WORKLOADS_INVALID")
+    return {
+        **basic,
+        "workload_reports": "PASS",
+        "member_crc": "PASS",
+        "workload_sequences": {
+            "monitor": sequences[0], "research": sequences[1],
+            "experiment": sequences[2], "doctor": sequences[3],
+        },
+    }
+
+
 @dataclass(frozen=True)
 class Evaluation:
     status: str
