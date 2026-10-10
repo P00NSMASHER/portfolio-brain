@@ -245,10 +245,6 @@ class BoundedPinnedTreeTests(unittest.TestCase):
         provider=PinnedProvider()
         for scope in ("explicit","private"):
             with self.subTest(scope=scope):
-                api=GitHub(
-                    transport=provider,
-                    private=(scope=="private")
-                )
                 if scope=="private":
                     # Private mode requires the separately provided token.
                     import os
@@ -261,6 +257,7 @@ class BoundedPinnedTreeTests(unittest.TestCase):
                         api.discover(TARGET)
                     self.assertFalse(api.discovery_bounded_trees)
                 else:
+                    api=GitHub(transport=PinnedProvider())
                     with self.assertRaisesRegex(
                         BrainError,"SOURCE_RESPONSE_TOO_LARGE"
                     ):
