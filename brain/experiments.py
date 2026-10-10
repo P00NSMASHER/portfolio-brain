@@ -1,27 +1,127 @@
-"""Reviewed, bounded experiment code. Discovered source is never executed."""
+"""Reviewed, bounded experiment code. Discovered source is never executed.
+
+All invoice inputs are synthetic. Equality comparisons and hash-set membership
+probes are different units of work, NOT comparable timings or financial savings.
+"""
+from collections import Counter
+from random import Random
+
 from brain.core import require
 
-def invoice_dedup_experiment(count=500):
-    require(type(count) is int and 20 <= count <= 2000, "experiment size must be 20..2000")
-    # Deliberately labelled generated input; no customer invoices or savings claim.
-    base=[(f'CARRIER-{i%7}',f'INV-{i}',i%23) for i in range(min(count//2,113))]
-    rows=[base[i%len(base)] for i in range(count-2)]
-    rows.extend([(base[0][0]+'-OTHER',base[0][1],base[0][2]),(base[0][0],base[0][1],base[0][2]+100)])
-    baseline, operations=[] ,0
-    for index,row in enumerate(rows):
-        duplicate=False
-        for earlier in rows[:index]:
-            operations+=1
-            if row==earlier:
-                duplicate=True
+
+def _synthetic_invoice_rows(count):
+    """Build reproducible, mostly distinct exact-tuple invoice cases.
+
+    The earlier fixture recycled a small 113-row seed throughout nearly the
+    entire workload. That strongly favored a duplicate-heavy synthetic case.
+    Keep deliberate duplicates bounded to about one eighth of cases, plus two
+    deliberately close (but unequal) invoice tuples. No real invoice data.
+    """
+    require(type(count) is int and 20 <= count <= 2000,
+            "experiment size must be 20..2000")
+    deliberate_duplicates = max(1, (count - 2) // 8)
+    unique_count = count - 2 - deliberate_duplicates
+    originals = [
+        (f"CARRIER-{i % 13:02d}", f"INV-{i:06d}", 100 + ((i * 29) % 997))
+        for i in range(unique_count)
+    ]
+    # Sampling without replacement ensures each duplicated invoice has a
+    # distinct original. A fixed modular stride can revisit the same original
+    # (for example all five copies at count=44 when unique_count=37).
+    rng = Random(20261009 + count)
+    duplicates = rng.sample(originals, deliberate_duplicates)
+    anchor = originals[0]
+    near_misses = (
+        (anchor[0] + "-OTHER", anchor[1], anchor[2]),
+        (anchor[0], anchor[1], anchor[2] + 100_000),
+    )
+    require(
+        all(row not in originals and row not in duplicates for row in near_misses)
+        and near_misses[0] != near_misses[1],
+        "synthetic near-miss contamination",
+    )
+    rows = originals + duplicates + list(near_misses)
+    rng.shuffle(rows)
+    counts = Counter(rows)
+    require(
+        len(rows) == count and len(counts) == count - deliberate_duplicates
+        and sum(value == 2 for value in counts.values()) == deliberate_duplicates
+        and all(value <= 2 for value in counts.values()),
+        "synthetic duplicate-source diversity failed",
+    )
+    return rows, deliberate_duplicates, near_misses
+
+
+def _baseline_duplicate_indices(rows):
+    """First-equal-prior-row oracle, counting exact tuple comparisons."""
+    duplicates = []
+    equality_comparisons = 0
+    for index, row in enumerate(rows):
+        for prior_index in range(index):
+            equality_comparisons += 1
+            if row == rows[prior_index]:
+                duplicates.append(index)
                 break
-        if duplicate:
-            baseline.append(index)
-    seen=set()
-    candidate=[]
-    for index,row in enumerate(rows):
+    return duplicates, equality_comparisons
+
+
+def _indexed_duplicate_indices(rows):
+    """Set-based implementation: one membership probe per input row."""
+    seen = set()
+    duplicates = []
+    for index, row in enumerate(rows):
         if row in seen:
-            candidate.append(index)
+            duplicates.append(index)
         seen.add(row)
-    require(baseline==candidate, "candidate failed correctness oracle")
-    return {"experiment":"invoice-dedup-index-v1","dataset_kind":"SIMULATED","cases":count,"baseline_operations":operations,"candidate_operations":count,"equal_outputs":True,"duplicate_cases":len(candidate),"near_duplicates":2,"source_ref":"brain/experiments.py:invoice-dedup-index-v1","scope":"Exact tuple duplicate detection; operation counts only; does not prove freight overpayment, production speed, revenue, or engineering time savings."}
+    return duplicates
+
+
+def invoice_dedup_experiment(count=500):
+    require(type(count) is int and 20 <= count <= 2000,
+            "experiment size must be 20..2000")
+    rows, intended_duplicates, near_misses = _synthetic_invoice_rows(count)
+    baseline, comparisons = _baseline_duplicate_indices(rows)
+    indexed = _indexed_duplicate_indices(rows)
+    require(
+        baseline == indexed and len(indexed) == intended_duplicates,
+        "candidate failed correctness oracle or injected duplicate-count check",
+    )
+    # The caller may supply an alternate synthetic fixture in offline tests.
+    # Matching the total duplicate count alone does not ensure that different
+    # invoice originals were exercised (the historical count=44 failure).
+    counts = Counter(rows)
+    require(
+        len(rows) == count and len(counts) == count - intended_duplicates
+        and sum(value == 2 for value in counts.values()) == intended_duplicates
+        and all(value <= 2 for value in counts.values()),
+        "synthetic duplicate-source diversity failed",
+    )
+    require(
+        len(near_misses) == 2 and len(set(near_misses)) == 2
+        and all(rows.count(row) == 1 for row in near_misses),
+        "synthetic near-miss became an exact duplicate",
+    )
+    require(
+        comparisons >= len(rows),
+        "unexpected operation counter: baseline comparisons below membership probes",
+    )
+    return {
+        "experiment": "invoice-dedup-index-v1",
+        "dataset_kind": "SIMULATED",
+        "cases": count,
+        "baseline_operations": comparisons,
+        "candidate_operations": len(rows),
+        "equal_outputs": True,
+        "duplicate_cases": len(indexed),
+        "near_duplicates": 2,
+        "source_ref": "brain/experiments.py:invoice-dedup-index-v1",
+        "scope": (
+            "Synthetic exact-tuple duplicate experiment: mostly distinct "
+            "invoices, deliberate repeats and two nonduplicate near misses. "
+            "Baseline operations count tuple equality comparisons; candidate "
+            "operations count set membership probes. These are NON-EQUIVALENT "
+            "units, not benchmark timings or a verified speedup. No production "
+            "behavior, freight overpayment, revenue, engineering time saved "
+            "or customer benefit is established."
+        ),
+    }

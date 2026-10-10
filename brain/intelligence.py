@@ -8,7 +8,7 @@ import math
 import re
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation
-from brain.core import BrainError, require, timestamp, digest
+from brain.core import BrainError, require, timestamp, digest, same_semantic_observation, semantic_observation_identity
 
 REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -17,6 +17,88 @@ TEST_SOURCE_PATH = re.compile(r"(?:^|/)(?:tests?|__tests__)(?:/|[_.])|(?:^|/)[^/
 
 def is_test_source_path(path):
     return isinstance(path, str) and TEST_SOURCE_PATH.search(path) is not None
+
+# Separate the broad "never discover code under tests/" exclusion from
+# positive evidence that an EXECUTABLE test is plausibly tied to one module.
+# Filename/path association is not a claim that the tests passed or cover code.
+_NON_SEMANTIC_TEST_WORDS = frozenset({
+    "test", "tests", "spec", "specs", "unit", "integration", "e2e",
+    "init", "index", "main", "lib", "src", "app", "apps", "script",
+    "scripts", "code", "module", "mod", "mock", "mocks",
+    "fixture", "fixtures", "conftest", "setup", "helper", "helpers",
+    "util", "utils",
+})
+
+
+def _filename_tokens(path):
+    basename = path.rsplit("/", 1)[-1]
+    stem = basename.split(".", 1)[0]
+    stem = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", "_", stem)
+    stem = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", stem)
+    tokens = set()
+    for word in re.findall(r"[a-z0-9]+", stem.lower()):
+        if word.endswith("ies") and len(word) > 4:
+            word = word[:-3] + "y"
+        elif word.endswith("s") and len(word) > 4 and not word.endswith(("ss", "us")):
+            word = word[:-1]
+        if len(word) > 1 and word not in _NON_SEMANTIC_TEST_WORDS and not re.fullmatch(r"v?\d+", word):
+            tokens.add(word)
+    return tokens
+
+
+def _executable_test_path(path):
+    """Fixtures/README/JSON under tests/ never confer implementation-test credit."""
+    if not is_test_source_path(path):
+        return False
+    name = path.rsplit("/", 1)[-1]
+    return bool(
+        re.fullmatch(r"(?:test_[A-Za-z0-9_]+|[A-Za-z0-9_]+_test|tests(?:_[A-Za-z0-9_]+)?)\.py", name)
+        or re.fullmatch(r".+\.(?:test|spec)\.(?:[jt]sx?|mjs|cjs)", name)
+        or re.fullmatch(r".+_test\.go", name)
+        or re.fullmatch(r"(?:test_.+|.+_test|tests)\.rs", name)
+        or re.fullmatch(r".+(?:Test|Tests)\.(?:java|kt)", name)
+        or re.fullmatch(r".+(?:_spec|_test)\.lua", name)
+    )
+
+
+def _package_scope(path):
+    """Reject cross-package associations when both files identify a package."""
+    parts = path.split("/")
+    for index, name in enumerate(parts[:-1]):
+        if name in {"apps", "packages", "services"} and index + 1 < len(parts) - 1:
+            return name, parts[index + 1]
+    return None
+
+
+def related_test_paths(source_path, rows):
+    """Return up to 10 executable tests with source-module NAME evidence.
+
+    Shared generic directories, unrelated monorepo packages and data-only
+    fixtures are insufficient. These are candidates for REVIEW, not verified
+    coverage, successful executions, legal permission, or upgrade authority.
+    """
+    if not isinstance(source_path, str) or is_test_source_path(source_path):
+        return []
+    source_tokens = _filename_tokens(source_path)
+    if not source_tokens:
+        return []
+    source_scope = _package_scope(source_path)
+    related = []
+    for entry in rows:
+        if entry.get("type") != "blob":
+            continue
+        path = entry.get("path")
+        if not _executable_test_path(path):
+            continue
+        test_scope = _package_scope(path)
+        if source_scope and test_scope and source_scope != test_scope:
+            continue
+        if source_tokens.isdisjoint(_filename_tokens(path)):
+            continue
+        related.append(path)
+        if len(related) == 10:
+            break
+    return related
 
 def number(value, name, minimum=Decimal('0')):
     require(type(value) in {str, int, float}, name+" must be numeric")
@@ -40,6 +122,10 @@ def validate_payload(kind, p, observed_at):
         require(type(p.get("source_ref")) is str and p["source_ref"].startswith(ref), "source reference must belong to repository")
     if kind == "repository":
         fields(p, {"repository","head_sha","default_branch","checks","open_issues","source_ref"})
+        require(
+            p["source_ref"] == f'{ref}commit/{p["head_sha"]}',
+            "SOURCE_REF_MISMATCH: repository reference must bind to exact commit",
+        )
         text(p["default_branch"], 100)
         require(type(p["open_issues"]) is int and p["open_issues"] >= 0, "issue count invalid")
         require(type(p["checks"]) is list and len(p["checks"]) <= 500, "checks invalid")
@@ -118,6 +204,79 @@ def reuse_score(p):
     # Simple transparent ranking; never grants reuse, integration, or revenue verification.
     return (3 if p["test_paths"] else 0) + min(len(p["matched_terms"]),4) + (1 if p["bytes"] <= 30000 else 0)
 
+# A semantic kind is the strongest claim made by an input. A portfolio-level
+# declaration must be at least as cautious as every underlying price source.
+_EVIDENCE_RANK = {"ACTUAL": 0, "ESTIMATED": 1, "SIMULATED": 2}
+
+
+def conservative_data_kind(kinds):
+    kinds = list(kinds)
+    require(kinds and all(kind in _EVIDENCE_RANK for kind in kinds),
+            "HOLDINGS_EVIDENCE_KIND_UNAVAILABLE")
+    return max(kinds, key=_EVIDENCE_RANK.__getitem__)
+
+
+def holdings_evidence(p):
+    """Derive evidence provenance independently for quotes and historical rows.
+
+    ACTUAL means a source/operator *reported* a fact; it is not a verification
+    of exchange prices, custody, licensed data, or performance. No dataset is
+    fetched or authenticated here.
+    """
+    quote_kinds = sorted({row["data_kind"] for row in p["quotes"].values()})
+    historical_kinds = sorted({row["data_kind"] for row in p["historical_prices"]})
+    return {
+        "valuation_data_kind": conservative_data_kind(quote_kinds),
+        "historical_data_kind": (
+            conservative_data_kind(historical_kinds)
+            if historical_kinds else "UNAVAILABLE"
+        ),
+        "required_data_kind": conservative_data_kind(
+            quote_kinds + historical_kinds
+        ),
+        "historical_data_kinds": historical_kinds,
+        "quote_data_kinds": quote_kinds,
+    }
+
+
+def holdings_projection(e):
+    """Replay-safe, conservatively labelled view of an immutable holdings fact."""
+    payload = e["payload"]
+    evidence = holdings_evidence(payload)
+    declared = e["data_kind"]
+    # Previously stored records retain their exact bytes and chain hashes.
+    # If legacy provenance understated a nested estimate/simulation, display
+    # the more cautious effective kind instead of silently asserting ACTUAL.
+    effective = conservative_data_kind(
+        (declared, evidence["required_data_kind"])
+    )
+    figures = holdings_report(payload)
+    figures["history"]["data_kind"] = evidence["historical_data_kind"]
+    figures["history"]["data_kinds"] = evidence["historical_data_kinds"]
+    figures["history"]["sources"] = [
+        row["source_ref"] for row in payload["historical_prices"]
+    ]
+    return {
+        "key": e["key"],
+        "data_kind": effective,
+        "declared_data_kind": declared,
+        "valuation_data_kind": evidence["valuation_data_kind"],
+        "historical_data_kind": evidence["historical_data_kind"],
+        "historical_data_kinds": evidence["historical_data_kinds"],
+        "quote_data_kinds": evidence["quote_data_kinds"],
+        "legacy_provenance_understated": (
+            _EVIDENCE_RANK[declared] <
+            _EVIDENCE_RANK[evidence["required_data_kind"]]
+        ),
+        "sources_independently_verified": False,
+        "evidence_basis": "SOURCE_ATTESTED_NOT_INDEPENDENTLY_VERIFIED",
+        "sources": [
+            q["source_ref"] for q in payload["quotes"].values()
+        ],
+        **figures,
+    }
+
+
 def holdings_report(p):
     values = {pos["symbol"]:number(pos["quantity"],"quantity")*number(p["quotes"][pos["symbol"]]["price"],"price") for pos in p["positions"]}
     cash = number(p["cash"],"cash")
@@ -139,11 +298,21 @@ def holdings_report(p):
 
 def build_report(events, *, now, max_age):
     latest = {}
+    observed_facts = {}
     for event in events:
+        # Inspect ALL semantic times, not only the latest key-level sample:
+        # a newer observation must never conceal older conflicting labels.
+        identity = semantic_observation_identity(event)
+        prior = observed_facts.get(identity)
+        if prior is None:
+            observed_facts[identity] = event
+        else:
+            require(
+                same_semantic_observation(prior, event),
+                "AMBIGUOUS_OBSERVATION: conflicting equal-time payload or classification",
+            )
         key=(event["kind"],event["key"])
         old=latest.get(key)
-        # Conflicting equal-time observations cannot be treated as known facts.
-        require(old is None or old["observed_at"]!=event["observed_at"] or old["payload"]==event["payload"], "AMBIGUOUS_OBSERVATION: conflicting equal-time facts")
         if old is None or (timestamp(event["observed_at"]),event["id"]) > (timestamp(old["observed_at"]),old["id"]):
             latest[key]=event
     current=list(latest.values())
@@ -153,11 +322,25 @@ def build_report(events, *, now, max_age):
     stale=[e["key"] for e in current if e["kind"] in {"repository","holdings"} and (timestamp(now)-timestamp(e["observed_at"])).total_seconds()>max_age]
     stale_quotes=[e["key"] for e in current if e["kind"]=="holdings" and any((timestamp(now)-timestamp(q["observed_at"])).total_seconds()>max_age for q in e["payload"]["quotes"].values())]
     repos=[{"key":e["key"],"observed_at":e["observed_at"],"data_kind":e["data_kind"],**e["payload"]} for e in current if e["kind"]=="repository"]
-    candidates=sorted([{"key":e["key"],"observed_at":e["observed_at"],"data_kind":e["data_kind"],"reuse_score":reuse_score(e["payload"]),"utility_evidence":"STRUCTURAL_ONLY_NOT_EXECUTED",**e["payload"]} for e in current if e["kind"]=="candidate" and not is_test_source_path(e["payload"].get("path"))],key=lambda x:(-x["reuse_score"],x["key"]))
+    # Reconcile legacy persisted candidate paths when replaying old events.
+    # Old observations may include unrelated repo tests or data-only fixtures;
+    # never allow stored structural mistakes to retain ranking/upgrade credit.
+    candidates=[]
+    for e in current:
+        if e["kind"]!="candidate" or is_test_source_path(e["payload"].get("path")):
+            continue
+        p=dict(e["payload"])
+        p["test_paths"]=related_test_paths(
+            p["path"], [{"path":path,"type":"blob"} for path in p["test_paths"]]
+        )
+        candidates.append({"key":e["key"],"observed_at":e["observed_at"],
+            "data_kind":e["data_kind"],"reuse_score":reuse_score(p),
+            "utility_evidence":"STRUCTURAL_ONLY_NOT_EXECUTED",**p})
+    candidates.sort(key=lambda x:(-x["reuse_score"],x["key"]))
     feedback=[e["payload"] for e in current if e["kind"]=="feedback"]
     feedback_by_key={x["candidate_key"]:x for x in feedback}
     for candidate in candidates:
         candidate["feedback"]=feedback_by_key.get(candidate["key"])
         candidate["freshness"]="CURRENT" if (timestamp(now)-timestamp(candidate["observed_at"])).total_seconds()<=max_age else "HISTORICAL"
     opportunities=[{"target":c["target"],"candidate_key":c["key"],"source_ref":c["source_ref"],"hypothesis":"Evaluate this implementation and its tests against the project's requirements before reimplementation.","next_experiment":"Run project-specific correctness and adversarial tests in an isolated environment after source review.","customer_demand":"UNVERIFIED","revenue":"UNAVAILABLE","hours_saved":"UNMEASURED"} for c in candidates[:10]]
-    return {"schema_version":2,"status":"PASS" if semantic and not stale and not stale_quotes else "BLOCKED","scope":"READ_ONLY_BUSINESS_PORTFOLIO_INTELLIGENCE","evidence_basis":"OBSERVATIONS_AND_EXPLICITLY_LABELLED_EXPERIMENTS","stale_sources":sorted(set(stale+stale_quotes)),"semantic_timestamps":semantic,"repositories":repos,"reuse_candidates":candidates,"business_opportunities":opportunities,"learning":{"facts":len(current),"events":len(events),"outcomes":feedback,"experiments":[e["payload"] for e in current if e["kind"]=="experiment"],"autonomous_code_execution":False,"verified_revenue":None,"prediction_confidence":None},"holdings":[{"key":e["key"],"data_kind":e["data_kind"],"quote_data_kinds":sorted(set(q["data_kind"] for q in e["payload"]["quotes"].values())),"sources":[q["source_ref"] for q in e["payload"]["quotes"].values()],**holdings_report(e["payload"])} for e in current if e["kind"]=="holdings"]}
+    return {"schema_version":2,"status":"PASS" if semantic and not stale and not stale_quotes else "BLOCKED","scope":"READ_ONLY_BUSINESS_PORTFOLIO_INTELLIGENCE","evidence_basis":"OBSERVATIONS_AND_EXPLICITLY_LABELLED_EXPERIMENTS","stale_sources":sorted(set(stale+stale_quotes)),"semantic_timestamps":semantic,"repositories":repos,"reuse_candidates":candidates,"business_opportunities":opportunities,"learning":{"facts":len(current),"events":len(events),"outcomes":feedback,"experiments":[e["payload"] for e in current if e["kind"]=="experiment"],"autonomous_code_execution":False,"verified_revenue":None,"prediction_confidence":None},"holdings":[holdings_projection(e) for e in current if e["kind"]=="holdings"]}

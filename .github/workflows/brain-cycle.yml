@@ -97,7 +97,7 @@ jobs:
           test -z "$CLOCK_COMMIT" && test -z "$WATCHDOG_RUN_ID" || { echo "COMPETING_SCHEDULER_ORIGINS"; exit 1; }
           test -n "$CF_ENVELOPE" && test -n "$CF_SIGNATURE" || { echo "CLOUDFLARE_SIGNATURE_REQUIRED"; exit 1; }
           mkdir -p /tmp/brain
-          python -m brain.cloudflare_clock --envelope "$CF_ENVELOPE" --signature "$CF_SIGNATURE" --source-sha "$BRAIN_SOURCE_SHA" --output /tmp/brain/cloudflare-origin.json
+          python -m brain.cloudflare_clock --envelope "$CF_ENVELOPE" --signature="$CF_SIGNATURE" --source-sha "$BRAIN_SOURCE_SHA" --output /tmp/brain/cloudflare-origin.json
       - name: Restore dedicated durable state branch
         uses: actions/checkout@v4
         with:
@@ -166,9 +166,28 @@ jobs:
             git -C state -c credential.helper='!gh auth git-credential' push origin HEAD:refs/heads/brain-state-v2
           fi
           PUBLICATION_SHA="$(git -C state rev-parse HEAD)"
-          REMOTE_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/branches/brain-state-v2" --jq .commit.sha)"
+          # A successful git push without force can briefly precede visibility of the
+          # updated branch tip through GitHub's REST branch endpoint. Only an
+          # unchanged pre-push parent is retryable; any other tip fails closed.
+          REMOTE_SHA=""
+          for readback_attempt in 1 2 3 4 5 6; do
+            REMOTE_SHA="$(gh api --header 'Cache-Control: no-cache' "repos/${GITHUB_REPOSITORY}/branches/brain-state-v2" --jq .commit.sha)"
+            if [[ "$REMOTE_SHA" == "$PUBLICATION_SHA" ]]; then
+              break
+            fi
+            if [[ "$REMOTE_SHA" != "$BRAIN_STATE_PARENT" ]]; then
+              echo "STATE_DELIVERY_CONFLICT: remote tip differs from publication and preserved parent"
+              exit 1
+            fi
+            if [[ "$readback_attempt" == "6" ]]; then
+              echo "STATE_DELIVERY_UNVERIFIED: parent still visible after six bounded readbacks"
+              exit 1
+            fi
+            echo "STATE_VISIBILITY_PENDING: remote branch still at captured parent; bounded retry"
+            sleep 2
+          done
+          test "$REMOTE_SHA" = "$PUBLICATION_SHA" || { echo "STATE_DELIVERY_UNVERIFIED: exact published commit not verified"; exit 1; }
           MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)"
-          test "$REMOTE_SHA" = "$PUBLICATION_SHA" || { echo "STATE_DELIVERY_UNVERIFIED: remote state commit differs"; exit 1; }
           test "$MAIN_SHA" = "$BRAIN_SOURCE_SHA" || { echo "MAIN_DRIFT: persisted historical cycle is not current readiness evidence"; exit 1; }
           mkdir -p /tmp/brain
           python - "$PUBLICATION_SHA" <<'PY'

@@ -61,6 +61,39 @@ preflight is not production acceptance. Live delivery and exact-main pre-arm mus
 also pass. A lengthy soak requires explicit authorization; none is started by these
 commands or schedules.
 
-## Reliability-first v3 candidate
+## Accepted v4 production baseline (October 8, 2026)
+
+The source-pinned production Brain completed independent six-hour **v4 acceptance:
+PASS** on protected `main` commit
+[`9fc08c72e2d050359e7f119bfcbfb82b23f95b5b`](https://github.com/P00NSMASHER/portfolio-brain/commit/9fc08c72e2d050359e7f119bfcbfb82b23f95b5b).
+The authoritative, read-only acceptance record is
+[`brain-acceptance-v4/acceptance/finish-soak-v4.json`](https://github.com/P00NSMASHER/portfolio-brain/blob/brain-acceptance-v4/acceptance/finish-soak-v4.json)
+(commit `b1b9f63dc8136f259abdc1b9ad18fcd47cf3b681`).
+
+Fourteen independently provider-logged, signed Cloudflare-originated completed
+cores span 28,792 seconds (7h 59m 52s), with a maximum accepted completion gap
+of 3,625 seconds (below the 5,400-second limit). All 18 core runs in the
+certified window completed successfully, including three **nonqualifying**
+Cloudflare-origin jobs whose original provider invocation logs were unavailable,
+plus one separate GitHub-native scheduled success. None of those four was
+counted as a provider-verified Cloudflare cycle. Original artifact ZIP digests,
+remote Git state parents, and zero backlog were independently checked. The
+terminal 210-event SQLite ledger and database integrity were replayed in
+[networked Foundation CI](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/37850145136),
+with a separate [independent hosted verifier](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/37850298010)
+also successful.
+
+**Scope:** This PASS certifies the exact source and historical observation
+window only. It does not certify later code, permanently guarantee uptime,
+establish commercial outcomes, or authorize a production merge. The recurring
+Brain core, native watchdog and independent Cloudflare recovery clock still
+need normal runtime monitoring. For current schedules, recovery, and how to
+read a provider dispatch without mistaking it for a completed core, see
+[operations](docs/rebuild/OPERATIONS.md) and the
+[Cloudflare clock contract](reliability/cloudflare/README.md). The evidence-only
+[PR #655](https://github.com/P00NSMASHER/portfolio-brain/pull/655) remains
+**draft / do not merge**.
+
+## Historical v3 candidate (superseded by accepted v4)
 
 The v2 two-hour soak failed because one successful genuine automatic run was not followed by another within 90 minutes; see the immutable `brain-acceptance-v2` failure record. The isolated v3 candidate replaces one sparse cron with a full monitored core at `7,27,47 * * * *` and an independently scheduled GitHub watchdog at `16,36,56 * * * *`. The watchdog is read-only except for requesting a due core through existing Actions permissions; it validates GitHub provider run metadata and cannot change source, state or declare acceptance. The full core verifies the exact scheduled watchdog origin and preserves its receipt. False/manual scheduled claims are rejected. Passing CI only proves code regressions, not a completed unattended soak. The unchanged two-hour evidence gates and separate post-soak verification remain required. Cloud scheduling may still be delayed or dropped.

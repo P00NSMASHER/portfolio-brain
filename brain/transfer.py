@@ -1,0 +1,440 @@
+"""Read-only technical transfer evidence, not operator feedback or adoption.
+
+Uses the existing verified Brain report and the existing bounded GET-only GitHub
+adapter. A linked draft PR with green checks proves neither integration nor
+customer value, and can never grant code execution, payment or write authority.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import sqlite3
+import tempfile
+import secrets
+import stat
+from contextlib import closing, contextmanager
+from pathlib import Path
+
+from brain.core import BrainError, digest, require
+from brain.intelligence import REPO, SHA
+
+@contextmanager
+def readonly_authority_snapshot(database):
+    """Snapshot the original database using SQLite's read-only backup API.
+
+    Store.__init__ is a writer (journal PRAGMAs, chmod, schema and meta).
+    Calling it on the original DB would violate transfer-review's contract.
+    All Store operations instead run on a disposable, private snapshot.
+    The source connection cannot write; the SQLite backup is transactionally
+    coherent even if an existing authorized state writer commits during it.
+    """
+    path = Path(database)
+    require(path.is_file(), "TRANSFER_STATE_DB_NOT_FOUND_NO_BOOTSTRAP")
+    require(not path.is_symlink(), "TRANSFER_SYMLINK_STATE_REFUSED")
+    require(0 < path.stat().st_size <= 128_000_000, "TRANSFER_STATE_SIZE_UNSUPPORTED")
+    with tempfile.TemporaryDirectory(prefix="brain-transfer-ro-") as folder:
+        os.chmod(folder, 0o700)
+        scratch = Path(folder) / "state.sqlite"
+        try:
+            # URI mode=ro refuses opening a missing authority and disallows
+            # writes to its original SQLite database. NEVER use Store here.
+            with closing(sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True, timeout=5)) as source:
+                source.execute("PRAGMA query_only=ON")
+                require(
+                    source.execute("PRAGMA integrity_check").fetchone()[0] == "ok",
+                    "TRANSFER_SOURCE_SQLITE_CORRUPT",
+                )
+                require(
+                    source.execute("PRAGMA foreign_key_check").fetchall() == [],
+                    "TRANSFER_SOURCE_FOREIGN_KEYS_FAILED",
+                )
+                with closing(sqlite3.connect(scratch, timeout=5)) as target:
+                    source.backup(target)
+        except sqlite3.DatabaseError as exc:
+            raise BrainError("TRANSFER_SOURCE_SNAPSHOT_FAILED") from exc
+        os.chmod(scratch, 0o600)
+        yield scratch
+
+
+# These are source-reviewed *observability* gates for the first supported
+# downstream project, not user-supplied names that could make a trivial
+# check appear to certify a candidate. Adding other targets requires review.
+_TARGETS = {
+    "P00NSMASHER/github-value-hunt-ledger": {
+        "required_checks": frozenset({
+            "freight", "recoveryworks", "release-gate", "contracts", "verify"
+        }),
+        "allowed_changed_prefix": "freight/",
+        "expected_check_app_id": 15368,  # GitHub Actions; NOT an independent auditor
+        "skippable_check_names": frozenset({"deploy"}),
+    },
+}
+
+
+def _request(input_data):
+    require(type(input_data) is dict and set(input_data) == {
+        "schema_version", "candidate_key", "target_repository",
+        "pull_request_number", "expected_head_sha",
+    }, "TRANSFER_INPUT_SCHEMA: only exact approved fields accepted")
+    require(type(input_data["schema_version"]) is int and input_data["schema_version"] == 1,
+            "TRANSFER_INPUT_VERSION")
+    require(
+        type(input_data["candidate_key"]) is str
+        and 0 < len(input_data["candidate_key"]) <= 200
+        and ":" in input_data["candidate_key"],
+        "TRANSFER_CANDIDATE_KEY",
+    )
+    target = input_data["target_repository"]
+    require(
+        type(target) is str and REPO.fullmatch(target) is not None
+        and target in _TARGETS,
+        "TRANSFER_TARGET_NOT_APPROVED",
+    )
+    require(
+        type(input_data["pull_request_number"]) is int
+        and 0 < input_data["pull_request_number"] <= 1_000_000_000,
+        "TRANSFER_PR_NUMBER",
+    )
+    require(
+        type(input_data["expected_head_sha"]) is str
+        and SHA.fullmatch(input_data["expected_head_sha"]) is not None,
+        "TRANSFER_HEAD_SHA",
+    )
+    return input_data
+
+
+def _canonical_source(report, candidate_key):
+    require(type(report) is dict and report.get("status") == "PASS",
+            "TRANSFER_CANONICAL_REPORT_NOT_PASS")
+    require(
+        type(report.get("source_sha")) is str
+        and SHA.fullmatch(report["source_sha"]) is not None,
+        "TRANSFER_SOURCE_SHA",
+    )
+    require(report.get("pending_events") == 0,
+            "TRANSFER_PENDING_EVENTS")
+    candidates = report.get("reuse_candidates")
+    require(type(candidates) is list, "TRANSFER_CANDIDATES_UNAVAILABLE")
+    found = [x for x in candidates if x.get("key") == candidate_key]
+    require(len(found) == 1, "TRANSFER_CANDIDATE_NOT_UNIQUE_IN_LEDGER_REPORT")
+    item = found[0]
+    require(
+        item.get("data_kind") == "ACTUAL"
+        and item.get("freshness") == "CURRENT"
+        and item.get("utility_evidence") == "STRUCTURAL_ONLY_NOT_EXECUTED",
+        "TRANSFER_SOURCE_NOT_ACTUAL_CURRENT",
+    )
+    require(
+        type(item.get("repository")) is str and REPO.fullmatch(item["repository"])
+        and type(item.get("head_sha")) is str and SHA.fullmatch(item["head_sha"])
+        and type(item.get("path")) is str
+        and item["source_ref"] ==
+        f'https://github.com/{item["repository"]}/blob/{item["head_sha"]}/{item["path"]}',
+        "TRANSFER_SOURCE_REF_UNBOUND",
+    )
+    require(
+        SHA.fullmatch(item.get("blob_sha", "")) is not None
+        and isinstance(item.get("code_sha256"), str)
+        and re.fullmatch(r"[0-9a-f]{64}", item["code_sha256"]) is not None,
+        "TRANSFER_SOURCE_BYTES_UNVERIFIED",
+    )
+    return item
+
+
+def review_transfer(report, input_data, *, api):
+    """Reconcile one source against actual target PR/CI GitHub metadata.
+
+    The caller MUST supply an existing Store.read_report() result, which
+    performs canonical SQLite ledger replay. This pure function does NOT
+    mutate the ledger or call any GitHub write endpoint.
+    """
+    request = _request(input_data)
+    source = _canonical_source(report, request["candidate_key"])
+    target = request["target_repository"]
+    number = request["pull_request_number"]
+    expected = request["expected_head_sha"]
+    policy = _TARGETS[target]
+    prefix = f"/repos/{target}"
+
+    metadata = api.get(prefix)
+    require(
+        type(metadata) is dict
+        and metadata.get("full_name") == target
+        and metadata.get("private") is False,
+        "TRANSFER_TARGET_NOT_PUBLIC_EXACT_IDENTITY",
+    )
+    pr = api.get(f"{prefix}/pulls/{number}")
+    require(
+        type(pr) is dict and pr.get("number") == number
+        and pr.get("state") in {"open", "closed"}
+        and type(pr.get("draft")) is bool
+        and type(pr.get("merged")) is bool,
+        "TRANSFER_PR_PROVIDER_METADATA",
+    )
+    head, base = pr.get("head") or {}, pr.get("base") or {}
+    require(
+        head.get("sha") == expected
+        and (head.get("repo") or {}).get("full_name") == target
+        and (base.get("repo") or {}).get("full_name") == target
+        and base.get("ref") == metadata.get("default_branch"),
+        "TRANSFER_PR_WRONG_HEAD_REPO_OR_BASE",
+    )
+    require(
+        type(pr.get("changed_files")) is int
+        and 1 <= pr["changed_files"] <= 100,
+        "TRANSFER_PR_FILE_SCOPE_UNAVAILABLE",
+    )
+    files = api.get(f"{prefix}/pulls/{number}/files?per_page=100")
+    require(
+        type(files) is list and len(files) == pr["changed_files"],
+        "TRANSFER_PR_FILES_INCOMPLETE",
+    )
+    changed_paths = []
+    for row in files:
+        name = row.get("filename") if type(row) is dict else None
+        require(
+            type(name) is str
+            and len(name) <= 500
+            and name.startswith(policy["allowed_changed_prefix"])
+            and ".." not in name.split("/"),
+            "TRANSFER_PR_OUT_OF_APPROVED_SCOPE",
+        )
+        changed_paths.append(name)
+    require(len(set(changed_paths)) == len(changed_paths),
+            "TRANSFER_DUPLICATED_FILES")
+
+    # Target author text is an asserted attribution, not independent causation.
+    body = pr.get("body")
+    attribution = (
+        "EXACT_SOURCE_LINK_CLAIMED_IN_PR"
+        if type(body) is str and source["source_ref"] in body
+        else "ORIGIN_LINK_NOT_CORROBORATED"
+    )
+
+    check_document = api.get(
+        f"{prefix}/commits/{expected}/check-runs?per_page=100"
+    )
+    require(
+        type(check_document) is dict
+        and type(check_document.get("total_count")) is int
+        and 0 <= check_document["total_count"] <= 100
+        and type(check_document.get("check_runs")) is list
+        and len(check_document["check_runs"]) == check_document["total_count"],
+        "TRANSFER_CHECK_COVERAGE_INCOMPLETE",
+    )
+    observed, ids, failures = {}, set(), []
+    for row in check_document["check_runs"]:
+        require(
+            type(row) is dict and type(row.get("id")) is int
+            and row["id"] not in ids
+            and type(row.get("name")) is str
+            and row.get("head_sha") == expected
+            and type(row.get("app")) is dict
+            and type(row["app"].get("id")) is int,
+            "TRANSFER_CHECK_IDENTITY_UNVERIFIED",
+        )
+        ids.add(row["id"])
+        name = row["name"]
+        observed.setdefault(name, []).append(row)
+        complete = row.get("status") == "completed"
+        acceptable = (
+            row.get("conclusion") == "success"
+            or (
+                name in policy["skippable_check_names"]
+                and row.get("conclusion") == "skipped"
+            )
+        )
+        if not complete or not acceptable:
+            failures.append(name)
+    missing = sorted(policy["required_checks"] - observed.keys())
+    for name in sorted(policy["required_checks"] & observed.keys()):
+        if not all(
+            x.get("status") == "completed"
+            and x.get("conclusion") == "success"
+            and x["app"]["id"] == policy["expected_check_app_id"]
+            for x in observed[name]
+        ):
+            failures.append(name)
+    check_state = (
+        "GITHUB_REPORTED_REQUIRED_CHECKS_SUCCESS"
+        if not missing and not failures else "GITHUB_CHECK_EVIDENCE_INCOMPLETE"
+    )
+    # File and check endpoints are separate provider reads; the PR can move
+    # between them. Recheck the exact PR identity and attribution after checks
+    # so a moving head, newly closed PR or edited source claim cannot inherit
+    # a stale green verdict. Do not follow the new tip or use old results.
+    final_pr = api.get(f"{prefix}/pulls/{number}")
+    def stable_pr_fields(value):
+        if type(value) is not dict:
+            return None
+        current_head = value.get("head")
+        current_base = value.get("base")
+        if type(current_head) is not dict or type(current_base) is not dict:
+            return None
+        return {
+            "number": value.get("number"),
+            "state": value.get("state"),
+            "draft": value.get("draft"),
+            "merged": value.get("merged"),
+            "head_sha": current_head.get("sha"),
+            "head_repo": (current_head.get("repo") or {}).get("full_name"),
+            "base_ref": current_base.get("ref"),
+            "base_repo": (current_base.get("repo") or {}).get("full_name"),
+            "changed_files": value.get("changed_files"),
+            "body": value.get("body"),
+        }
+    require(
+        stable_pr_fields(final_pr) == stable_pr_fields(pr),
+        "TRANSFER_PR_CHANGED_DURING_REVIEW",
+    )
+    # A green PR is NEVER evidence the target deployed or used the feature.
+    qualified = (
+        check_state == "GITHUB_REPORTED_REQUIRED_CHECKS_SUCCESS"
+        and attribution == "EXACT_SOURCE_LINK_CLAIMED_IN_PR"
+    )
+    if pr["state"] == "closed" and not pr["merged"]:
+        status = "CLOSED_UNMERGED_NOT_ADOPTED"
+    elif not qualified:
+        status = "TRANSFER_TECHNICAL_EVIDENCE_BLOCKED"
+    elif pr["merged"]:
+        status = "MERGED_PR_METADATA_ONLY_NOT_DEPLOYMENT"
+    elif pr["draft"]:
+        status = "DRAFT_PR_CHECKS_PASSED_NOT_ADOPTED"
+    else:
+        status = "OPEN_PR_CHECKS_PASSED_NOT_ADOPTED"
+    return {
+        "schema_version": 1,
+        "status": status,
+        "scope": "READ_ONLY_CROSS_PROJECT_TECHNICAL_OBSERVATION",
+        "brain_report_source_sha": report["source_sha"],
+        "brain_canonical_hash": report.get("canonical_hash"),
+        "brain_state_sequence": report.get("state_sequence"),
+        "candidate_key": source["key"],
+        "origin": {
+            "repository": source["repository"],
+            "revision": source["head_sha"],
+            "path": source["path"],
+            "blob_sha": source["blob_sha"],
+            "code_sha256": source["code_sha256"],
+            "source_ref": source["source_ref"],
+            "published_license_metadata": source.get("license"),
+            "attribution": attribution,
+            "original_code_executed": False,
+        },
+        "target": {
+            "repository": target,
+            "pr_number": number,
+            "pr_url": f"https://github.com/{target}/pull/{number}",
+            "pr_head_sha": expected,
+            "base_branch": base["ref"],
+            "draft": pr["draft"],
+            "merged_pr_metadata": pr["merged"],
+            "changed_paths": changed_paths,
+        },
+        "checks": {
+            "status": check_state,
+            "required_names": sorted(policy["required_checks"]),
+            "missing_required": missing,
+            "failed_or_incomplete_names": sorted(set(failures)),
+            "provider_check_count": len(ids),
+            "matched_required_count": sum(
+                len(observed.get(name, [])) for name in policy["required_checks"]
+            ),
+            "skipped_deployment_proves_no_deployment": False,
+            "ci_success_is_not_independent_customer_validation": True,
+        },
+        "integration": "NOT_VERIFIED_BY_PULL_REQUEST_CHECKS",
+        "external_use": "NOT_VERIFIED",
+        "operator_feedback": "NOT_COLLECTED",
+        "customer_value": "NOT_VERIFIED",
+        "realized_recovery": "NOT_VERIFIED",
+        "revenue": "NOT_VERIFIED",
+        "time_saved": "UNMEASURED",
+        "event_written": False,
+        "github_mutations": 0,
+        "evidence_fingerprint": digest({
+            "candidate_key": source["key"],
+            "source_sha": source["code_sha256"],
+            "target": target,
+            "pr": number,
+            "head": expected,
+            "checks": sorted(ids),
+            "paths": sorted(changed_paths),
+            "status": status,
+        }),
+    }
+
+
+def write_transfer_review(report, destination):
+    """Write one private receipt without following caller-controlled symlinks.
+
+    Never dereference a destination file alias: it might target the same
+    canonical SQLite authority we just read without write permissions.
+    """
+    out = Path(destination)
+    for part in (out, *out.parents):
+        require(not part.is_symlink(), "TRANSFER_OUTPUT_SYMLINK_REFUSED")
+    # Never alter the mode of a caller's pre-existing directory. In particular,
+    # --output . must not silently chmod a shared working tree or home folder.
+    created_directory = False
+    try:
+        out.mkdir(parents=True, mode=0o700, exist_ok=False)
+        created_directory = True
+    except FileExistsError:
+        pass
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    try:
+        directory = os.open(out, directory_flags)
+    except OSError as exc:
+        raise BrainError("TRANSFER_OUTPUT_UNSAFE_DIRECTORY") from exc
+    try:
+        name = "transfer-review.json"
+        # Prioritize the symlink/hardlink rejection before checking directory
+        # privacy, preserving the precise failure and the original file.
+        try:
+            old = os.stat(name, dir_fd=directory, follow_symlinks=False)
+        except FileNotFoundError:
+            old = None
+        require(
+            old is None or (stat.S_ISREG(old.st_mode) and old.st_nlink == 1),
+            "TRANSFER_OUTPUT_SYMLINK_OR_FILE_REFUSED",
+        )
+        if created_directory:
+            os.fchmod(directory, 0o700)
+        else:
+            require(
+                stat.S_IMODE(os.fstat(directory).st_mode) == 0o700,
+                "TRANSFER_OUTPUT_EXISTING_DIRECTORY_NOT_PRIVATE",
+            )
+        temp_name = ".transfer-review-" + secrets.token_hex(12) + ".tmp"
+        temp_created = False
+        try:
+            # Never truncate the final path directly: a hard link to the
+            # canonical SQLite has no symlink for O_NOFOLLOW to reject.
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+            handle = os.open(temp_name, flags, 0o600, dir_fd=directory)
+            temp_created = True
+            with os.fdopen(handle, "w", encoding="utf-8") as target:
+                os.fchmod(target.fileno(), 0o600)
+                target.write(json.dumps(report, indent=2, sort_keys=True) + "\n")
+            try:
+                old = os.stat(name, dir_fd=directory, follow_symlinks=False)
+            except FileNotFoundError:
+                old = None
+            require(
+                old is None or (
+                    stat.S_ISREG(old.st_mode) and old.st_nlink == 1
+                ),
+                "TRANSFER_OUTPUT_SYMLINK_OR_FILE_REFUSED",
+            )
+            # Atomic replacement of a normal receipt, not a write through a
+            # pre-existing path. The directory fd anchors both operations.
+            os.replace(temp_name, name, src_dir_fd=directory, dst_dir_fd=directory)
+            temp_created = False
+            return out / name
+        finally:
+            if temp_created:
+                os.unlink(temp_name, dir_fd=directory)
+    finally:
+        os.close(directory)

@@ -32,7 +32,10 @@ class ProductTests(unittest.TestCase):
   self.store.submit([item],now=NOW);self.store.submit([item],now=NOW)
   self.assertEqual(self.store.pending(),1)
   bad=copy.deepcopy(item);bad['payload']['open_issues']=99
-  with self.assertRaises(BrainError): self.store.submit([event('repository','other',payload(),SHA,now=NOW),bad],now=NOW)
+  # The legacy reused-ID collision is now rejected even earlier by the
+  # canonical content-derived identity gate, before any batch write.
+  bad['observed_at']='2026-10-07T21:01:00Z'
+  with self.assertRaisesRegex(BrainError,'EVENT_ID_CONTENT_MISMATCH'): self.store.submit([event('repository','example/other',payload('example/other'),SHA,now=NOW),bad],now='2026-10-07T21:02:00Z')
   self.assertEqual(self.store.db.execute('select count(*) from events').fetchone()[0],1)
  def test_backup_restart_and_history_replay(self):
   self.seed();original=self.store.report(SHA,now=NOW)
@@ -60,7 +63,7 @@ class ProductTests(unittest.TestCase):
   result=experiment(self.store,SHA,self.path/'experiment')
   self.assertIsNone(result['learning']['verified_revenue']);self.assertIsNone(result['learning']['prediction_confidence'])
  def test_experiment_cannot_mislabel_simulation(self):
-  item=event('experiment','dedup',invoice_dedup_experiment(),SHA,now=NOW)
+  p=invoice_dedup_experiment();item=event('experiment',p['experiment'],p,SHA,now=NOW)
   with self.assertRaises(BrainError):self.store.submit([item],now=NOW)
  def test_actual_market_math_and_unavailable_cost(self):
   p={'currency':'USD','cash':'100','positions':[{'symbol':'A','quantity':'2','cost_basis':'160','sector':'Tech'},{'symbol':'B','quantity':'1','cost_basis':None,'sector':'Health'}], 'quotes':{'A':{'price':'100','observed_at':NOW,'source_ref':'operator supplied permitted input','data_kind':'ACTUAL'},'B':{'price':'200','observed_at':NOW,'source_ref':'operator supplied permitted input','data_kind':'ACTUAL'}},'authorization':'USER_AUTHORIZED','historical_prices':[{'observed_at':'2026-10-05T21:00:00Z','prices':{'A':'80','B':'140'},'source_ref':'licensed operator export','data_kind':'ACTUAL'},{'observed_at':'2026-10-06T21:00:00Z','prices':{'A':'60','B':'100'},'source_ref':'licensed operator export','data_kind':'ACTUAL'},{'observed_at':NOW,'prices':{'A':'100','B':'200'},'source_ref':'licensed operator export','data_kind':'ACTUAL'}]}
@@ -289,16 +292,16 @@ class CheckPaginationTests(unittest.TestCase):
   def transport(path):
    if '/branches/' in path:return {'commit':{'sha':SHA}}
    if '/check-runs?' in path:
-    rows=[{'id':i,'name':'validate','status':'completed','conclusion':'success','head_sha':SHA,'html_url':f'https://github.com/{REPOSITORY}/runs/{i}'} for i in range(175)]
+    rows=[{'id':i,'name':'validate','status':'completed','conclusion':'success','head_sha':SHA,'html_url':f'https://github.com/{REPOSITORY}/runs/{i}'} for i in range(1,176)]
     return {'total_count':175,'check_runs':rows[100:] if 'page=2' in path else rows[:100]}
    return {'full_name':REPOSITORY,'private':False,'default_branch':'main','open_issues_count':3}
   api=GitHub(transport=transport);p,_=api.observe(REPOSITORY);validate_payload('repository',p,NOW)
-  self.assertEqual(len(p['checks']),175);self.assertEqual(api.requests,4)
+  self.assertEqual(len(p['checks']),175);self.assertEqual(api.requests,5)
  def test_paginated_duplicates_cannot_claim_complete_delivery(self):
   def transport(path):
    if '/branches/' in path:return {'commit':{'sha':SHA}}
    if '/check-runs?' in path:
-    rows=[{'id':i,'name':'validate','status':'completed','conclusion':'success','head_sha':SHA,'html_url':f'https://github.com/{REPOSITORY}/runs/{i}'} for i in range(100)]
+    rows=[{'id':i,'name':'validate','status':'completed','conclusion':'success','head_sha':SHA,'html_url':f'https://github.com/{REPOSITORY}/runs/{i}'} for i in range(1,101)]
     return {'total_count':101,'check_runs':rows[:1] if 'page=2' in path else rows}
    return {'full_name':REPOSITORY,'private':False,'default_branch':'main','open_issues_count':3}
   with self.assertRaises(BrainError):GitHub(transport=transport).observe(REPOSITORY)

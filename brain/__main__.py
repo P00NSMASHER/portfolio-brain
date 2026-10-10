@@ -2,6 +2,7 @@
 from __future__ import annotations
 import argparse
 import json
+from contextlib import ExitStack
 import os
 import subprocess
 import sys
@@ -12,7 +13,7 @@ from pathlib import Path
 from brain.core import Store, BrainError, require, utcnow, digest, timestamp
 from brain.adapters import GitHub, event, policy
 from brain.experiments import invoice_dedup_experiment
-from brain.render import write_report
+from brain.render import write_report, write_private_test_log
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -77,7 +78,8 @@ def research(store, sha, output, *, api=None, repository=None):
     found=api.discover(target,repository=repository)
     items=[event("candidate",p["repository"]+":"+p["path"],p,sha,private=private) for p,private in found]
     report=persist(store,items,sha,output)
-    report["operation"]={"name":"research","requests":api.requests,"target":target["project"],"candidates_observed":len(items),"result":"OBSERVED" if items else "NO_MATCHES","license_filter_applied":False}
+    unavailable=list(getattr(api,"discovery_unavailable",[]))
+    report["operation"]={"name":"research","requests":api.requests,"target":target["project"],"candidates_observed":len(items),"result":"OBSERVED_WITH_SEARCH_RESULT_GAPS" if unavailable else ("OBSERVED" if items else "NO_MATCHES"),"unavailable_search_results":unavailable,"license_filter_applied":False}
     write_report(report,output)
     store.attempt("research","PASS",source_sha=sha)
     return report
@@ -112,8 +114,7 @@ def preflight(output, expected=None):
     from brain.validate import validate_policy
     validate_policy()
     test=subprocess.run([sys.executable,"-m","unittest","discover","-s","tests","-p","test_brain*.py","-v"],cwd=ROOT,capture_output=True,text=True,timeout=60)
-    out=Path(output);out.mkdir(parents=True,exist_ok=True)
-    (out/"tests.txt").write_text(test.stdout+test.stderr)
+    write_private_test_log(output, test.stdout+test.stderr)
     require(test.returncode==0, "PREFLIGHT_TEST_FAILURE: inspect tests.txt before retry")
     require("Ran 0 tests" not in test.stderr and "\nOK\n" in test.stderr,"PREFLIGHT_TEST_EVIDENCE_MISSING")
     # Preflight is a deterministic product test, never a substitute for live delivery/soak.
@@ -123,7 +124,7 @@ def preflight(output, expected=None):
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description="Read-only autonomous business portfolio intelligence")
-    parser.add_argument("command",choices=["init","ingest","cycle","monitor","research","experiment","doctor","preflight","backup","service","feedback","evolve"])
+    parser.add_argument("command",choices=["init","ingest","cycle","monitor","research","experiment","doctor","preflight","backup","service","feedback","evolve","transfer-review"])
     parser.add_argument("--db",default="brain-local/state.sqlite")
     parser.add_argument("--output",default="brain-local/report")
     parser.add_argument("--input")
@@ -134,13 +135,24 @@ def main(argv=None):
     parser.add_argument("--cycles",type=int,default=0,help="0 means service continues until stop file/signal")
     args=parser.parse_args(argv)
     store=None
+    snapshots=ExitStack()
     try:
         if args.command=="preflight":
             result=preflight(args.output,args.expected_sha)
         else:
             sha=source_sha(args.expected_sha)
-            store=Store(args.db,visibility="PRIVATE" if args.private else "PUBLIC")
-            store.drain()
+            if args.command == "transfer-review":
+                from brain.transfer import readonly_authority_snapshot
+                # Store() mutates DB permissions/journal/meta even for reads;
+                # never construct it with the original authority pathname.
+                isolated_db=snapshots.enter_context(readonly_authority_snapshot(args.db))
+            else:
+                isolated_db=args.db
+            store=Store(isolated_db,visibility="PRIVATE" if args.private else "PUBLIC")
+            # A transfer review is a pure inspection. It must not apply pending
+            # inputs or write feedback, attempts, reports or other canonical state.
+            if args.command not in {"transfer-review", "backup"}:
+                store.drain()
             if args.command=="init":
                 result={"status":"PASS","scope":"EMPTY_STATE_BOOTSTRAP_NOT_OPERATIONAL","pending_events":store.pending(),"source_sha":sha}
                 write_report(result,args.output)
@@ -167,6 +179,19 @@ def main(argv=None):
                 write_report(result,args.output)
             elif args.command=="doctor":
                 result=doctor(store,sha,args.output)
+            elif args.command=="transfer-review":
+                from brain.transfer import review_transfer, write_transfer_review
+                require(args.input is not None and args.repository is None,
+                        "TRANSFER_REQUIRES_INPUT_AND_NO_REPOSITORY_OVERRIDE")
+                require(Path(args.input).stat().st_size <= 8192,
+                        "TRANSFER_INPUT_TOO_LARGE")
+                trusted_report = store.read_report(sha)
+                request = json.loads(Path(args.input).read_text())
+                result = review_transfer(
+                    trusted_report, request,
+                    api=GitHub(private=store.visibility == "PRIVATE"),
+                )
+                write_transfer_review(result,args.output)
             elif args.command=="backup":
                 result={"status":"PASS","backup_sha256":store.backup(args.output),"source_sha":sha}
             else:
@@ -198,13 +223,23 @@ def main(argv=None):
         print(json.dumps({k:result[k] for k in ("status","source_sha","pending_events","state_sequence","phase") if k in result},sort_keys=True))
         return 0
     except (BrainError,KeyError,TypeError,UnicodeError,json.JSONDecodeError) as exc:
-        if store:
+        if store and args.command not in {"transfer-review", "backup"}:
             store.attempt(args.command,"FAIL",type(exc).__name__,source_sha=locals().get("sha"))
-        write_report({"status":"FAIL","error_class":type(exc).__name__,"error":str(exc)[:500],"operation":args.command,"soak_completed":False},Path(args.output)/"failure")
+        # Output-path security failures must not trigger secondary writes in
+        # the very directory we just rejected. Transfer review is read-only.
+        unsafe_output = (
+            isinstance(exc, BrainError)
+            and str(exc).startswith("REPORT_OUTPUT_")
+        )
+        if args.command not in {"transfer-review", "backup"} and not unsafe_output:
+            write_report({"status":"FAIL","error_class":type(exc).__name__,"error":str(exc)[:500],"operation":args.command,"soak_completed":False},Path(args.output)/"failure")
         print(f'{type(exc).__name__}: {str(exc)[:500]}',file=sys.stderr)
         return 1
     finally:
-        if store: store.close()
+        try:
+            if store: store.close()
+        finally:
+            snapshots.close()
 
 if __name__=="__main__":
     raise SystemExit(main())

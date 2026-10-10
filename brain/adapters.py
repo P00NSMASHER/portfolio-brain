@@ -17,39 +17,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from brain.core import require, BrainError, digest, utcnow
-from brain.intelligence import REPO, is_test_source_path
-
-_GENERIC_PATH_TOKENS = {
-    "api", "app", "code", "go", "index", "js", "lib", "library", "lua",
-    "main", "mod", "module", "py", "rs", "source", "spec", "specs", "src",
-    "test", "tests", "ts",
-}
-
-def _path_tokens(path):
-    return {
-        token for token in re.findall(r"[a-z0-9]+", path.lower())
-        if len(token) > 1 and token not in _GENERIC_PATH_TOKENS
-    }
-
-def related_test_paths(source_path, rows):
-    """Return only tests with path evidence linking them to this implementation.
-
-    Repository-wide test presence is not implementation evidence. This conservative
-    path association avoids awarding reuse-score credit for unrelated test suites.
-    """
-    source_tokens = _path_tokens(source_path)
-    if not source_tokens:
-        return []
-    related = []
-    for entry in rows:
-        path = entry.get("path")
-        if entry.get("type") != "blob" or not is_test_source_path(path):
-            continue
-        if source_tokens.intersection(_path_tokens(path)):
-            related.append(path)
-            if len(related) == 10:
-                break
-    return related
+from brain.intelligence import REPO, is_test_source_path, related_test_paths
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -62,6 +30,9 @@ class GitHub:
         require(not private or self.token, "PRIVATE_ACCESS_UNAVAILABLE: explicit existing GITHUB_TOKEN required")
         self.transport=transport
         self.requests=0
+        # Per-discovery diagnostics are NOT events or verified source facts.
+        # They only explain why a search-index hit could not be inspected.
+        self.discovery_unavailable=[]
         self.opener=urllib.request.build_opener(NoRedirect())
 
     def get(self, path):
@@ -100,6 +71,8 @@ class GitHub:
         branch=meta["default_branch"]
         head=self.get("/repos/"+repository+"/branches/"+urllib.parse.quote(branch,safe=""))
         sha=head["commit"]["sha"]
+        require(type(sha) is str and re.fullmatch(r"[0-9a-f]{40}", sha) is not None,
+                "SOURCE_REVISION_UNAVAILABLE: invalid default-branch commit")
         return meta,branch,sha
 
     def observe(self, repository):
@@ -114,43 +87,107 @@ class GitHub:
             require(batch.get('total_count')==total and type(batch.get('check_runs')) is list, 'CHECK_COVERAGE_CHANGED: do not claim complete changing history')
             items.extend(batch['check_runs'])
         require(len(items)==total,'CHECK_COVERAGE_TRUNCATED: incomplete delivery')
-        if total>100:
-            require(all(type(x.get('id')) is int for x in items) and len({x['id'] for x in items})==total, 'CHECK_COVERAGE_AMBIGUOUS: duplicate/missing paginated identities')
+        # GitHub check-run IDs are unique, positive provider identities on
+        # EVERY page, including a one-page response. Never accept a duplicate
+        # as a second independent run, or a result for another source SHA.
+        require(
+            all(type(x) is dict and type(x.get("id")) is int
+                and x["id"] > 0 and x.get("head_sha") == sha for x in items)
+            and len({x["id"] for x in items}) == total,
+            "CHECK_COVERAGE_AMBIGUOUS: invalid, duplicate or cross-revision check identity",
+        )
+        # Branches can advance during a multi-page check fetch. A sampled
+        # branch must still point to this SHA at the end, or the entire
+        # observation fails closed. No retry or second provider is spawned.
+        confirmed=self.get("/repos/"+repository+"/branches/"+urllib.parse.quote(branch,safe=""))
+        require(
+            type(confirmed) is dict
+            and type(confirmed.get("commit")) is dict
+            and confirmed["commit"].get("sha") == sha,
+            "SOURCE_REVISION_CHANGED: branch advanced during check collection",
+        )
         rows=[{"name":x["name"],"status":x["status"],"conclusion":x.get("conclusion"),"head_sha":x["head_sha"],"url":x["html_url"]} for x in items]
         return {"repository":repository,"head_sha":sha,"default_branch":branch,"checks":rows,"open_issues":meta["open_issues_count"],"source_ref":f'https://github.com/{repository}/commit/{sha}'}, meta["private"]
 
     def discover(self, target, *, repository=None):
+        self.discovery_unavailable=[]
         if repository:
+            # Explicitly requested sources are authoritative user scope: 404 is
+            # always an error, never silently changed into an empty search.
             repos=[self.get("/repos/"+repository)]
         else:
             query=target["query"]+('' if self.private else ' is:public')
             response=self.get("/search/repositories?q="+urllib.parse.quote(query,safe="")+"&per_page=2&sort=updated")
             require(response.get("incomplete_results") is False, "DISCOVERY_INCOMPLETE")
-            repos=response.get("items",[])
+            require(type(response.get("items")) is list, "DISCOVERY_RESPONSE_INVALID")
+            repos=response["items"]
         found=[]
         for meta in repos[:2]:
+            require(type(meta) is dict and type(meta.get("full_name")) is str
+                    and REPO.fullmatch(meta["full_name"]), "DISCOVERY_RESULT_IDENTITY_INVALID")
             name=meta["full_name"]
+            require(type(meta.get("private")) is bool, "DISCOVERY_RESULT_VISIBILITY_UNAVAILABLE")
             require(self.private or meta["private"] is False, "private search result cannot enter public state")
-            # Resolve commit once. Fetch every source from that exact revision.
-            head=self.get(f'/repos/{name}/branches/'+urllib.parse.quote(meta["default_branch"],safe=""))
-            sha=head["commit"]["sha"]
-            tree=self.get(f'/repos/{name}/git/trees/{sha}?recursive=1')
-            require(tree.get("truncated") is False, "SOURCE_TREE_TRUNCATED")
-            rows=tree.get("tree",[])
-            paths=[r for r in rows if r.get("type")=="blob" and 0<r.get("size",0)<=100000 and r["path"].endswith((".py",".ts",".js",".lua",".rs",".go")) and not re.search(r"(^|/)(vendor|node_modules|dist)(/|[_.])",r["path"],re.I) and not is_test_source_path(r["path"])]
-            terms=target["terms"]
-            paths.sort(key=lambda r:(-sum(t in r["path"].lower() for t in terms),r["path"]))
-            if not paths:
-                continue
-            row=paths[0]
-            blob=self.get(f'/repos/{name}/git/blobs/{row["sha"]}')
-            require(blob.get("encoding")=="base64" and blob.get("sha")==row["sha"], "source blob identity invalid")
-            raw=base64.b64decode(blob["content"],validate=False)
-            require(len(raw)==row["size"] and hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()==row["sha"], "SOURCE_CONTENT_HASH_MISMATCH")
-            body=raw.decode("utf-8",errors="strict")
-            test_paths=related_test_paths(row["path"], rows)
-            license=(meta.get("license") or {}).get("spdx_id") or "UNKNOWN"
-            found.append(({"repository":name,"head_sha":sha,"path":row["path"],"blob_sha":row["sha"],"code_sha256":hashlib.sha256(raw).hexdigest(),"bytes":len(raw),"test_paths":test_paths,"license":license,"source_ref":f'https://github.com/{name}/blob/{sha}/{row["path"]}',"target":target["project"],"query":target["query"],"matched_terms":[term for term in terms if term in body.lower()]},meta["private"]))
+            require(type(meta.get("default_branch")) is str
+                    and 0<len(meta["default_branch"])<=100, "DISCOVERY_RESULT_DEFAULT_BRANCH_INVALID")
+            # A GitHub search index can point to a repository or revision
+            # deleted between search and inspection. Only a provider 404 from
+            # inspecting a SEARCH-DERIVED candidate is skippable, and only if
+            # another result is genuinely inspected. All other errors fail.
+            stage="branch"
+            try:
+                head=self.get(f'/repos/{name}/branches/'+urllib.parse.quote(meta["default_branch"],safe=""))
+                sha=head["commit"]["sha"]
+                require(type(sha) is str and re.fullmatch(r"[0-9a-f]{40}",sha),
+                        "DISCOVERY_SOURCE_SHA_INVALID")
+                stage="tree"
+                tree=self.get(f'/repos/{name}/git/trees/{sha}?recursive=1')
+                require(tree.get("truncated") is False, "SOURCE_TREE_TRUNCATED")
+                rows=tree.get("tree",[])
+                paths=[r for r in rows if r.get("type")=="blob" and 0<r.get("size",0)<=100000 and r["path"].endswith((".py",".ts",".js",".lua",".rs",".go")) and not re.search(r"(^|/)(vendor|node_modules|dist)(/|[_.])",r["path"],re.I) and not is_test_source_path(r["path"])]
+                terms=target["terms"]
+                paths.sort(key=lambda r:(-sum(t in r["path"].lower() for t in terms),r["path"]))
+                if not paths:
+                    continue
+                row=paths[0]
+                stage="blob"
+                blob=self.get(f'/repos/{name}/git/blobs/{row["sha"]}')
+                require(blob.get("encoding")=="base64" and blob.get("sha")==row["sha"], "source blob identity invalid")
+                raw=base64.b64decode(blob["content"],validate=False)
+                require(len(raw)==row["size"] and hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()==row["sha"], "SOURCE_CONTENT_HASH_MISMATCH")
+                body=raw.decode("utf-8",errors="strict")
+                test_paths=related_test_paths(row["path"], rows)
+                license=(meta.get("license") or {}).get("spdx_id") or "UNKNOWN"
+                found.append(({"repository":name,"head_sha":sha,"path":row["path"],"blob_sha":row["sha"],"code_sha256":hashlib.sha256(raw).hexdigest(),"bytes":len(raw),"test_paths":test_paths,"license":license,"source_ref":f'https://github.com/{name}/blob/{sha}/{row["path"]}',"target":target["project"],"query":target["query"],"matched_terms":[term for term in terms if term in body.lower()]},meta["private"]))
+            except BrainError as exc:
+                # Only a never-initialized, public, search-derived branch
+                # may disappear without a fatal error. Nonempty or malformed
+                # repository size and private discovery always remain fatal.
+                # Preserve the V5 separate tree/blob search-volatility handling
+                # only for public optional hits with surviving inspected source.
+                optional_public = (repository is None and not self.private
+                                   and meta["private"] is False)
+                empty_branch = (stage == "branch"
+                                and type(meta.get("size")) is int
+                                and meta["size"] == 0)
+                if (optional_public
+                        and str(exc) == "SOURCE_API_404: GET failed; no cursor advanced"
+                        and (stage in {"tree", "blob"} or empty_branch)):
+                    self.discovery_unavailable.append({
+                        "repository":name, "stage":stage,
+                        "reason":"SEARCH_RESULT_SOURCE_404_NOT_INSPECTED",
+                    })
+                    continue
+                raise
+        # This is NOT a blanket 404 suppressor. No verified candidate means
+        # the selected search results were unavailable: leave the research
+        # workflow failed so the doctor cannot certify missing observation.
+        if self.discovery_unavailable and not found:
+            stages=",".join(sorted({row["stage"] for row in self.discovery_unavailable}))
+            raise BrainError(
+                "DISCOVERY_ALL_SEARCH_RESULTS_UNAVAILABLE: provider 404 at "
+                +stages+"; verified_candidates=0"
+            )
         return found
 
 def event(kind, key, payload, source_sha, *, private=False, data_kind="ACTUAL", now=None):

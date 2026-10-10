@@ -17,6 +17,32 @@ Cloudflare logs with the original actual `scheduled` event, signature, GitHub co
 
 The Worker suppresses dispatch when the same-main core succeeded in the last 25 minutes or when a core is active. Stale queued writers block rather than generating competing writers. It never changes GitHub main, credentials, scheduling, acceptance, data integrity or billing settings, and uses no paid endpoint. Free Worker quotas and GitHub Actions usage must be checked regularly.
 
+## Verified acceptance and future source changes
+
+The original v4 six-hour soak is **terminal PASS** for protected source
+`9fc08c72e2d050359e7f119bfcbfb82b23f95b5b`, with the authoritative
+[acceptance record](https://github.com/P00NSMASHER/portfolio-brain/blob/brain-acceptance-v4/acceptance/finish-soak-v4.json)
+at commit `b1b9f63dc8136f259abdc1b9ad18fcd47cf3b681`.
+Fourteen Cloudflare `scheduled()` events were independently retrieved,
+matched to P-256-verified successful GitHub cores and durable state delivery,
+and counted over 28,792 seconds (largest accepted gap 3,625 seconds).
+The historical 15:20, 16:20 and 18:50 UTC jobs passed signed origin and
+workloads but had no independently retrievable original provider event;
+they are **successful but nonqualifying**, not silently counted or called
+runtime failures. All original source-matched core runs are inventoried.
+Independent raw SQLite terminal replay and hosted independent verification
+passed; see [operations](../../docs/rebuild/OPERATIONS.md).
+
+A successful provider Cron invocation alone, or the worker's `FRESH`
+deduplication result, does not prove that a new GitHub core completed.
+Continuing operation still requires the actual GitHub run, workload,
+artifact, state and backlog checks. V4 acceptance applies only to that
+source and time window. Any revised production source needs separately
+authorized protected integration and a new-version acceptance period; do
+not reopen or overwrite historical v4. The draft evidence-only
+[PR #655](https://github.com/P00NSMASHER/portfolio-brain/pull/655)
+remains unmerged.
+
 ## Historical integrity
 
-The v2 soak is immutable FAIL; v3 had no qualifying automatic baseline by its 2026-10-08T05:57:53Z deadline and must be finalized by the independent Portfolio Brain Soak Watch, not silently restarted. A new source must receive exact-head protected CI and its OWN new six-hour v4 (or next unused version) acceptance: >=21600 seconds between first and last genuine successful automatic cycles, <=5400 seconds between consecutive completions, all-run inventory including failures, same source, correct durable state chain, zero pending and independent postvalidation. Do not replace v3 status with v4.
+The v2 soak is permanently FAIL; v3 missed its original automatic baseline deadline of 2026-10-08T05:57:53Z and remains BLOCKED. Neither historical result was rewritten when v4 passed. Any *future* code revision needs its own separately authorized protected source, new acceptance version and unchanged safety gates: at least 21,600 seconds between real successful automatic completions, no gap above 5,400 seconds, full failure/nonqualifier inventory, source/state continuity, independent replay and postvalidation.
