@@ -53,7 +53,7 @@ def _report_api_read_context(path, request_number, *, http_status=None, read_err
     elif read_error is not None:
         # No exception message or URL, and no arbitrary class name.
         evidence["read_failure"] = (
-            read_error if read_error in {"TimeoutError", "OSError", "JSONDecodeError"}
+            read_error if read_error in {"TimeoutError", "OSError", "JSONDecodeError", "ResponseTooLarge"}
             else "UNKNOWN"
         )
     print(json.dumps(evidence, sort_keys=True), file=sys.stderr)
@@ -89,7 +89,11 @@ class GitHub:
                 request=urllib.request.Request("https://api.github.com"+path, headers=headers, method="GET")
                 with self.opener.open(request, timeout=10) as response:
                     raw=response.read(2_000_001)
-                require(len(raw)<=2_000_000, "SOURCE_RESPONSE_TOO_LARGE")
+                if len(raw)>2_000_000:
+                    _report_api_read_context(
+                        path, self.requests, read_error="ResponseTooLarge"
+                    )
+                    raise BrainError("SOURCE_RESPONSE_TOO_LARGE")
                 return json.loads(raw)
             except urllib.error.HTTPError as exc:
                 if attempt==0 and exc.code in {429,502,503,504}:
@@ -214,12 +218,24 @@ class GitHub:
                 empty_branch = (stage == "branch"
                                 and type(meta.get("size")) is int
                                 and meta["size"] == 0)
-                if (optional_public
-                        and str(exc) == "SOURCE_API_404: GET failed; no cursor advanced"
-                        and (stage in {"tree", "blob"} or empty_branch)):
+                vanished = (str(exc) ==
+                            "SOURCE_API_404: GET failed; no cursor advanced")
+                oversized = (str(exc) == "SOURCE_RESPONSE_TOO_LARGE")
+                # A too-large optional recursive tree/blob is NOT an inspected
+                # source. Never truncate/parse it, increase the 2 MB response
+                # budget, retry it, or silently substitute a candidate. A
+                # distinct fully hash-inspected source is mandatory to PASS.
+                # Oversized search API, branch, explicit-repository, private,
+                # transport, identity or integrity failures remain fatal.
+                if optional_public and (
+                    (vanished and (stage in {"tree", "blob"} or empty_branch))
+                    or (oversized and stage in {"tree", "blob"})
+                ):
                     self.discovery_unavailable.append({
                         "repository":name, "stage":stage,
-                        "reason":"SEARCH_RESULT_SOURCE_404_NOT_INSPECTED",
+                        "reason":("SEARCH_RESULT_SOURCE_404_NOT_INSPECTED"
+                                  if vanished else
+                                  "SEARCH_RESULT_RESPONSE_TOO_LARGE_NOT_INSPECTED"),
                     })
                     continue
                 raise
@@ -228,9 +244,16 @@ class GitHub:
         # workflow failed so the doctor cannot certify missing observation.
         if self.discovery_unavailable and not found:
             stages=",".join(sorted({row["stage"] for row in self.discovery_unavailable}))
+            reasons={row["reason"] for row in self.discovery_unavailable}
+            failure_family = (
+                "provider 404" if reasons=={"SEARCH_RESULT_SOURCE_404_NOT_INSPECTED"}
+                else "provider size bound" if reasons==
+                    {"SEARCH_RESULT_RESPONSE_TOO_LARGE_NOT_INSPECTED"}
+                else "provider 404/size bound"
+            )
             raise BrainError(
-                "DISCOVERY_ALL_SEARCH_RESULTS_UNAVAILABLE: provider 404 at "
-                +stages+"; verified_candidates=0"
+                "DISCOVERY_ALL_SEARCH_RESULTS_UNAVAILABLE: "
+                +failure_family+" at "+stages+"; verified_candidates=0"
             )
         return found
 
