@@ -32,11 +32,11 @@ def _api_request_family(path):
         return "REPOSITORY_METADATA"
     if re.fullmatch(r"/repos/[^/?]+/[^/?]+/branches/[^/?]+", path):
         return "BRANCH_LOOKUP"
-    if re.fullmatch(r"/repos/[^/?]+/[^/?]+/git/trees/[^/?]+(?:\\?recursive=1)?", path):
+    if re.fullmatch(r"/repos/[^/?]+/[^/?]+/git/trees/[^/?]+(?:\?recursive=1)?", path):
         return "GIT_TREE"
     if re.fullmatch(r"/repos/[^/?]+/[^/?]+/git/blobs/[^/?]+", path):
         return "GIT_BLOB"
-    if re.fullmatch(r"/repos/[^/?]+/[^/?]+/commits/[^/?]+/check-runs\\?.*", path):
+    if re.fullmatch(r"/repos/[^/?]+/[^/?]+/commits/[^/?]+/check-runs\?.*", path):
         return "COMMIT_CHECK_RUNS"
     return "OTHER_BOUNDED_GET"
 
