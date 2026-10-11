@@ -53,6 +53,33 @@ acceptance. The existing `artifact` mode remains unchanged for historical
 V3 replay; use the strict mode for future V5 original ZIPs. Do not merge
 this source review during the current protected-source acceptance period.
 
+### V5 raw-state capacity and immutable authority binding
+
+Use `python -m soak_v3 state-v5 --manifest <local-state.json>` only for a
+separately acquired, **immutable**, original GitHub-published `state.sqlite`.
+The older `state` mode retains its **25,000,000-byte** maximum unchanged;
+the V5-specific `state-v5` verifier permits **at most 64,000,000 bytes**,
+using the same independent SQLite integrity, event/ledger SHA-256 replay,
+canonical report, exact source SHA, zero-pending and public-only checks.
+Both readers check file size **before** reading, read at most their maximum
+plus one byte and reject a locally changed-size snapshot. They never
+initialize, repair, rewrite or publish the inspected database.
+
+The genuine October 10, 2026 source-bound durable state commit
+`0152de8a51325bd177fa652f7b69ea1f82e0f86e` contains an original
+GitHub tree entry `state.sqlite` of **28,778,496 bytes** (Git blob
+`95ff018236fe2329f3f4b08e5d03678999a06b11`), which the previous
+V3-sized reader necessarily rejected before ledger inspection. This
+V5-only review candidate fixes an **offline verifier capacity mismatch**,
+not the earlier production research or preflight outages.
+
+The `state-v5` result's local `sha256` MUST be matched independently to
+the originally fetched Git blob/provider bytes. Its expected source, chain,
+sequence, state parent/commit, original ZIPs, Cloudflare P-256 source and
+complete failed-run census must be authenticated separately. A user-supplied
+manifest, plausible database or local `"status":"PASS"` is **never** V5
+automatic-runtime, deployment or terminal acceptance.
+
 ### Required evidence acquisition before supplying the manifest
 
 Acquire independently from original GitHub and Cloudflare providers, not
