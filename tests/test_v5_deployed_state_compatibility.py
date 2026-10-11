@@ -16,6 +16,10 @@ import tempfile
 import unittest
 
 from brain.core import Store, utcnow
+from soak_v3.audit import (
+    EvidenceError, V3_SQLITE_MAX_BYTES, V5_SQLITE_MAX_BYTES,
+    verify_sqlite, verify_v5_sqlite,
+)
 from test_v5_live_state_compatibility import (
     PRODUCTION, STATE_REF, git, physical_ledger_snapshot,
 )
@@ -118,6 +122,37 @@ class DeployedV5ReadOnlyProof(unittest.TestCase):
                 original, expected_source=recorded_source
             )
             self.assertGreater(before["sequence"], 210)
+            # The earlier full-source proof and the actual V5 CLI inspector
+            # previously had separate test lanes. Validate the *same* original
+            # bytes now: fetched from the real Git state branch, Git blob SHA
+            # checked above, immutable local copy opened read-only, ledger and
+            # original source checked by an independently implemented reader.
+            # This is still NOT a scheduled cycle or acceptance verdict.
+            self.assertLessEqual(
+                len(raw), V5_SQLITE_MAX_BYTES,
+                "Original provider SQLite exceeded the reviewed V5 bound",
+            )
+            sealed = verify_v5_sqlite(
+                original, expected_sequence=before["sequence"],
+                expected_chain=before["canonical_hash"],
+                expected_source=recorded_source,
+            )
+            self.assertEqual(sealed, {
+                "status": "PASS",
+                "sha256": raw_sha256,
+                "sequence": before["sequence"],
+                "canonical_hash": before["canonical_hash"],
+                "pending_events": 0,
+                "source_sha": recorded_source,
+            })
+            if len(raw) > V3_SQLITE_MAX_BYTES:
+                # V5 growth cannot quietly relax the historical 25 MB mode.
+                with self.assertRaisesRegex(EvidenceError, "STATE_SIZE_INVALID"):
+                    verify_sqlite(
+                        original, expected_sequence=before["sequence"],
+                        expected_chain=before["canonical_hash"],
+                        expected_source=recorded_source,
+                    )
             disposable = Path(temp) / "analysis-copy.sqlite"
             shutil.copyfile(original, disposable)
             os.chmod(disposable, 0o600)
@@ -161,6 +196,9 @@ class DeployedV5ReadOnlyProof(unittest.TestCase):
             "protected_main": main, "state_commit": state_commit,
             "sqlite_blob": blob, "sqlite_sha256": raw_sha256,
             "sqlite_bytes": len(raw), "sequence": before["sequence"],
+            "v5_offline_inspector": "PASS_SEALED_PROVIDER_BYTES_NOT_ACCEPTANCE",
+            "v5_inspector_source": sealed["source_sha"],
+            "v5_inspector_sha256": sealed["sha256"],
             "canonical_hash": before["canonical_hash"],
             "pending_events": 0, "v4_acceptance_ref_intact": True,
             "recorded_state_source": recorded_source,

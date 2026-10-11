@@ -10,10 +10,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
+import io
 import json
+import math
+import os
 from pathlib import Path
 import re
 import sqlite3
+import tempfile
 import zipfile
 
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
@@ -33,7 +37,10 @@ REQUIRED_STEPS = frozenset({
 })
 MIN_CYCLES = 3
 MIN_SPAN_SECONDS = 7200
+V5_MIN_SPAN_SECONDS = 21600  # Six hours on one exact protected source.
 MAX_GAP_SECONDS = 5400
+V3_SQLITE_MAX_BYTES = 25_000_000  # Retain historical V3 reader contract.
+V5_SQLITE_MAX_BYTES = 64_000_000  # Bounded growth room for actual V5 state.
 
 class EvidenceError(ValueError):
     """Unverifiable evidence is a BLOCKED result, never an inferred PASS."""
@@ -59,11 +66,40 @@ def sha64(value):
     require(isinstance(value, str) and HEX64.fullmatch(value), "SHA256_INVALID")
     return value
 
-def digest(value):
-    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True,
-                                     separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+def canonical(value):
+    """Exact existing producer JSON serialization, shared with digest()."""
+    return json.dumps(value, ensure_ascii=False, sort_keys=True,
+                      separators=(",", ":"), allow_nan=False)
 
-def verify_sqlite(path, *, expected_sequence, expected_chain, expected_source):
+
+def digest(value):
+    return hashlib.sha256(canonical(value).encode()).hexdigest()
+
+def _open_verified_byte_snapshot(raw):
+    """Open only the already hashed input bytes as a disposable read-only DB.
+
+    Do not re-open the caller's path after hashing: that path might be
+    replaced with different, equally sized SQLite bytes between operations.
+    The scratch file is created exclusively at 0600 inside a private folder;
+    caller owns closing the returned connection and cleaning that folder.
+    """
+    folder = tempfile.TemporaryDirectory(prefix="brain-soak-snapshot-")
+    try:
+        snapshot = Path(folder.name) / "state.sqlite"
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(snapshot, flags, 0o600)
+        with os.fdopen(fd, "wb") as target:
+            require(target.write(raw) == len(raw), "STATE_SNAPSHOT_SHORT_WRITE")
+        conn = sqlite3.connect(snapshot.as_uri() + "?mode=ro&immutable=1", uri=True)
+        conn.row_factory = sqlite3.Row
+        return conn, folder
+    except BaseException:
+        folder.cleanup()
+        raise
+
+
+def _verify_sqlite_bounded(path, *, expected_sequence, expected_chain,
+                           expected_source, size_limit, strict_state=False):
     """Read immutable downloaded state without opening a writable DB or trusting reports.
 
     The caller must separately bind bytes to the GitHub state commit it fetched.
@@ -72,13 +108,23 @@ def verify_sqlite(path, *, expected_sequence, expected_chain, expected_source):
     sha40(expected_source)
     sha64(expected_chain)
     require(type(expected_sequence) is int and expected_sequence >= 0, "SEQUENCE_INVALID")
-    raw = Path(path).read_bytes()
-    require(0 < len(raw) <= 25_000_000, "STATE_SIZE_INVALID")
+    # Fail before reading an oversized file. The additional read bound is
+    # defensive against a local file growing between stat and open; it is
+    # never a request for more GitHub data or a relaxed publisher limit.
+    source_path = Path(path)
+    before = source_path.stat()
+    require(0 < before.st_size <= size_limit, "STATE_SIZE_INVALID")
+    with source_path.open("rb") as stream:
+        raw = stream.read(size_limit + 1)
+    require(len(raw) == before.st_size, "STATE_SIZE_CHANGED_DURING_READ")
     sqlite_sha256 = hashlib.sha256(raw).hexdigest()
-    conn = sqlite3.connect(f"file:{Path(path).resolve().as_posix()}?mode=ro&immutable=1", uri=True)
-    conn.row_factory = sqlite3.Row
+    conn, snapshot_folder = _open_verified_byte_snapshot(raw)
     try:
         require(conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok", "SQLITE_CORRUPT")
+        if strict_state:
+            # integrity_check checks SQLite pages, not FK relationships.
+            require(conn.execute("PRAGMA foreign_key_check").fetchall() == [],
+                    "V5_STATE_FOREIGN_KEYS_INVALID")
         schema = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
         visibility = conn.execute("SELECT value FROM meta WHERE key='visibility'").fetchone()
         require(schema and schema[0] == "2" and visibility and visibility[0] == "PUBLIC", "STATE_SCHEMA_OR_VISIBILITY_INVALID")
@@ -92,9 +138,16 @@ def verify_sqlite(path, *, expected_sequence, expected_chain, expected_source):
         for seq, row in enumerate(rows, start=1):
             require(row["seq"] == seq and row["status"] == "APPLIED", "STATE_EVENT_GAP")
             try:
-                event = json.loads(row["body"])
+                event = (_strict_v5_receipt_json(row["body"]) if strict_state
+                         else json.loads(row["body"]))
+            except EvidenceError:
+                raise
             except (ValueError, TypeError) as exc:
                 raise EvidenceError("STATE_EVENT_JSON_INVALID") from exc
+            if strict_state:
+                require(type(event) is dict, "V5_STATE_EVENT_NOT_OBJECT")
+                require(row["body"] == canonical(event),
+                        "V5_STATE_EVENT_NOT_CANONICAL")
             require(event.get("visibility") == "PUBLIC" and row["id"] == event.get("id"), "STATE_EVENT_IDENTITY_INVALID")
             require(digest(event) == row["hash"], "STATE_EVENT_DIGEST_INVALID")
             require(row["prev_hash"] == prior, "STATE_CHAIN_PARENT_INVALID")
@@ -103,7 +156,17 @@ def verify_sqlite(path, *, expected_sequence, expected_chain, expected_source):
         require(prior == expected_chain, "STATE_CANONICAL_HASH_MISMATCH")
         latest = conn.execute("SELECT * FROM reports ORDER BY id DESC LIMIT 1").fetchone()
         require(latest is not None, "STATE_REPORT_MISSING")
-        report = json.loads(latest["body"])
+        report = (_strict_v5_receipt_json(latest["body"]) if strict_state
+                  else json.loads(latest["body"]))
+        if strict_state:
+            require(type(report) is dict, "V5_STATE_REPORT_NOT_OBJECT")
+            require(latest["body"] == canonical(report),
+                    "V5_STATE_REPORT_NOT_CANONICAL")
+            require(type(report.get("pending_events")) is int
+                    and type(report.get("state_sequence")) is int,
+                    "V5_STATE_REPORT_NUMERIC_TYPE_INVALID")
+            require(report.get("source_sha") == expected_source,
+                    "V5_STATE_REPORT_EMBEDDED_SOURCE_INVALID")
         require(digest(report) == latest["hash"], "STATE_REPORT_DIGEST_INVALID")
         require(latest["seq"] == expected_sequence and latest["chain_hash"] == prior, "STATE_REPORT_LINEAGE_INVALID")
         require(latest["source_sha"] == expected_source, "STATE_REPORT_SOURCE_INVALID")
@@ -114,31 +177,108 @@ def verify_sqlite(path, *, expected_sequence, expected_chain, expected_source):
     except sqlite3.DatabaseError as exc:
         raise EvidenceError("SQLITE_READ_FAILED") from exc
     finally:
-        conn.close()
+        try:
+            conn.close()
+        finally:
+            snapshot_folder.cleanup()
 
-def verify_artifact(path, expected_digest, *, run_id, source_sha, state_parent, state_commit):
-    """Check GitHub API artifact SHA256 and embedded real delivery/doctor receipts."""
+
+def verify_sqlite(path, *, expected_sequence, expected_chain, expected_source):
+    """Legacy V3 immutable SQLite verifier: retain its exact 25 MB limit."""
+    return _verify_sqlite_bounded(
+        path, expected_sequence=expected_sequence, expected_chain=expected_chain,
+        expected_source=expected_source, size_limit=V3_SQLITE_MAX_BYTES,
+    )
+
+
+def verify_v5_sqlite(path, *, expected_sequence, expected_chain, expected_source):
+    """V5 original-byte replay, capped at 64 MB; never terminal acceptance."""
+    return _verify_sqlite_bounded(
+        path, expected_sequence=expected_sequence, expected_chain=expected_chain,
+        expected_source=expected_source, size_limit=V5_SQLITE_MAX_BYTES,
+        strict_state=True,
+    )
+
+
+def _read_verified_artifact_bytes(path, expected_digest, *, run_id,
+                                  source_sha, state_parent, state_commit):
+    """Bound and hash original provider ZIP bytes once, never parse the path again.
+
+    A manifest digest is still only an *assertion* until it has been matched
+    independently to GitHub's original artifact metadata by the collector.
+    """
     sha40(source_sha)
     sha40(state_parent)
     sha40(state_commit)
     require(type(run_id) is int and run_id > 0, "RUN_ID_INVALID")
     require(isinstance(expected_digest, str) and expected_digest.startswith("sha256:"), "ARTIFACT_DIGEST_FORMAT")
     sha64(expected_digest[7:])
-    raw = Path(path).read_bytes()
-    require(0 < len(raw) < 20_000_000, "ARTIFACT_SIZE_INVALID")
+    source = Path(path)
+    before = source.stat()
+    require(0 < before.st_size < 20_000_000, "ARTIFACT_SIZE_INVALID")
+    with source.open("rb") as stream:
+        raw = stream.read(20_000_000)
+    require(len(raw) == before.st_size, "ARTIFACT_SIZE_CHANGED_DURING_READ")
     require(hashlib.sha256(raw).hexdigest() == expected_digest[7:], "ARTIFACT_SHA256_MISMATCH")
+    return raw
+
+
+def _strict_v5_receipt_json(raw):
+    """Fail closed on ambiguous JSON values in V5 provider receipt members.
+
+    Python's ordinary JSON reader uses last-key-wins and accepts NaN/Infinity.
+    Those permissive defaults must not silently turn contradictory evidence
+    into a V5 PASS. Do not change the historical V3 decoding contract.
+    """
+    def unique_pairs(pairs):
+        result = {}
+        for key, value in pairs:
+            require(key not in result, "V5_JSON_DUPLICATE_KEY")
+            result[key] = value
+        return result
+
+    def reject_constant(_value):
+        raise EvidenceError("V5_JSON_NONFINITE_NUMBER")
+
+    def finite_float(value):
+        number = float(value)
+        require(math.isfinite(number), "V5_JSON_NONFINITE_NUMBER")
+        return number
+
+    return json.loads(
+        raw, object_pairs_hook=unique_pairs,
+        parse_constant=reject_constant, parse_float=finite_float,
+    )
+
+
+def _verify_artifact_bytes(raw, expected_digest, *, run_id,
+                           source_sha, state_parent, state_commit,
+                           strict_json=False):
+    """Delivery/preflight/doctor checks, with strict JSON for V5 only."""
     try:
-        with zipfile.ZipFile(path, "r") as z:
+        with zipfile.ZipFile(io.BytesIO(raw), "r") as z:
             names = z.namelist()
             require(len(names) <= 100 and len(set(names)) == len(names), "ARTIFACT_DUPLICATE_OR_UNBOUNDED")
             require(all(not n.startswith("/") and ".." not in Path(n).parts for n in names), "ARTIFACT_UNSAFE_PATH")
             require(sum(i.file_size for i in z.infolist()) <= 4_000_000, "ARTIFACT_UNBOUNDED_UNCOMPRESSED")
             require(all(n in names for n in ("delivery.json", "doctor/report.json", "preflight/report.json")), "ARTIFACT_MISSING_REQUIRED_REPORT")
-            delivery = json.loads(z.read("delivery.json"))
-            doctor = json.loads(z.read("doctor/report.json"))
-            preflight = json.loads(z.read("preflight/report.json"))
+            parser = _strict_v5_receipt_json if strict_json else json.loads
+            delivery = parser(z.read("delivery.json"))
+            doctor = parser(z.read("doctor/report.json"))
+            preflight = parser(z.read("preflight/report.json"))
+    except EvidenceError as exc:
+        if strict_json:
+            raise
+        # Keep the old V3 exception classification intact.
+        raise EvidenceError("ARTIFACT_READ_FAILED") from exc
     except (zipfile.BadZipFile, ValueError, KeyError, OSError) as exc:
         raise EvidenceError("ARTIFACT_READ_FAILED") from exc
+    if strict_json:
+        require(all(type(item) is dict for item in
+                    (delivery, doctor, preflight)),
+                "V5_ARTIFACT_RECEIPT_NOT_OBJECT")
+        require(type(doctor.get("pending_events")) is int,
+                "V5_ARTIFACT_PENDING_EVENTS_TYPE_INVALID")
     require(delivery.get("source_sha") == source_sha and delivery.get("run_id") == str(run_id), "DELIVERY_SOURCE_OR_RUN_MISMATCH")
     require(delivery.get("state_parent") == state_parent and delivery.get("state_commit") == state_commit, "DELIVERY_STATE_LINEAGE_INVALID")
     require(delivery.get("publication_verified") is True and delivery.get("soak_completed") is False, "DELIVERY_NOT_VERIFIED")
@@ -152,6 +292,98 @@ def verify_artifact(path, expected_digest, *, run_id, source_sha, state_parent, 
             "canonical_hash": doctor["canonical_hash"], "pending_events": 0,
             "artifact_sha256": expected_digest[7:]}
 
+
+def verify_artifact(path, expected_digest, *, run_id, source_sha, state_parent, state_commit):
+    """Historical V3 artifact rules, now tied to the digest-verified ZIP bytes."""
+    raw = _read_verified_artifact_bytes(
+        path, expected_digest, run_id=run_id, source_sha=source_sha,
+        state_parent=state_parent, state_commit=state_commit,
+    )
+    return _verify_artifact_bytes(
+        raw, expected_digest, run_id=run_id, source_sha=source_sha,
+        state_parent=state_parent, state_commit=state_commit,
+    )
+
+
+def verify_v5_artifact(path, expected_digest, *, run_id, source_sha,
+                       state_parent, state_commit):
+    """Require original ZIP integrity and all four mandatory workload receipts.
+
+    This is a *local read-only* consistency check of provider-supplied bytes.
+    A matching expected_digest is meaningful only if independently acquired
+    from GitHub; the ZIP itself cannot prove its Cloudflare scheduler origin.
+    """
+    # Both the legacy delivery checks and V5's full CRC/workload checks
+    # inspect the *same* single digest-bound byte snapshot, never a path that
+    # could be replaced after hashing or between the two ZIP inspections.
+    raw = _read_verified_artifact_bytes(
+        path, expected_digest, run_id=run_id, source_sha=source_sha,
+        state_parent=state_parent, state_commit=state_commit,
+    )
+    basic = _verify_artifact_bytes(
+        raw, expected_digest, run_id=run_id, source_sha=source_sha,
+        state_parent=state_parent, state_commit=state_commit,
+        strict_json=True,
+    )
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw), "r") as archive:
+            require(archive.testzip() is None, "V5_ARTIFACT_MEMBER_CRC_INVALID")
+            names = set(archive.namelist())
+            required = ("report/report.json", "research/report.json",
+                        "experiment/report.json", "doctor/report.json")
+            require(all(name in names for name in required),
+                    "V5_WORKLOAD_RECEIPT_MISSING")
+            docs = [_strict_v5_receipt_json(archive.read(name))
+                    for name in required]
+    except EvidenceError:
+        # EvidenceError derives from ValueError. Preserve explicit fail-closed
+        # missing-report and CRC error codes instead of relabeling them.
+        raise
+    except (zipfile.BadZipFile, ValueError, KeyError, OSError, RuntimeError) as exc:
+        raise EvidenceError("V5_WORKLOAD_RECEIPT_UNREADABLE") from exc
+    require(all(type(doc) is dict for doc in docs),
+            "V5_WORKLOAD_RECEIPT_NOT_OBJECT")
+    for kind, doc in zip(("monitor", "research", "experiment", "doctor"), docs):
+        require(type(doc.get("pending_events")) is int,
+                "V5_WORKLOAD_PENDING_EVENTS_TYPE_INVALID_" + kind.upper())
+        require(doc.get("status") == "PASS"
+                and doc.get("source_sha") == source_sha
+                and doc.get("pending_events") == 0,
+                "V5_WORKLOAD_RECEIPT_NOT_PASS_" + kind.upper())
+        require(type(doc.get("state_sequence")) is int
+                and doc["state_sequence"] >= 0,
+                "V5_WORKLOAD_SEQUENCE_INVALID")
+        sha64(doc.get("canonical_hash"))
+    monitor, research, experiment, doctor = docs
+    require(
+        type(monitor.get("operation")) is dict
+        and monitor["operation"].get("name") == "monitor"
+        and type(research.get("operation")) is dict
+        and research["operation"].get("name") == "research",
+        "V5_WORKLOAD_OPERATION_INVALID",
+    )
+    sequences = [doc["state_sequence"] for doc in docs]
+    require(sequences == sorted(sequences)
+            and experiment["state_sequence"] == doctor["state_sequence"]
+            and doctor["state_sequence"] == basic["state_sequence"],
+            "V5_WORKLOAD_SEQUENCE_DISAGREEMENT")
+    require(experiment["canonical_hash"] == doctor["canonical_hash"]
+            == basic["canonical_hash"],
+            "V5_EXPERIMENT_DOCTOR_CHAIN_DISAGREEMENT")
+    require(doctor.get("mandatory_workloads") == {
+        "monitor": "PASS", "research": "PASS", "experiment": "PASS",
+    }, "V5_DOCTOR_MANDATORY_WORKLOADS_INVALID")
+    return {
+        **basic,
+        "workload_reports": "PASS",
+        "member_crc": "PASS",
+        "workload_sequences": {
+            "monitor": sequences[0], "research": sequences[1],
+            "experiment": sequences[2], "doctor": sequences[3],
+        },
+    }
+
+
 @dataclass(frozen=True)
 class Evaluation:
     status: str
@@ -161,12 +393,14 @@ class Evaluation:
     maximum_gap_observed: int
 
 def evaluate_window(records, *, source_sha, current_main, first_state_parent,
-                    started_at, deadline_at, now):
+                    started_at, deadline_at, now, min_span_seconds=MIN_SPAN_SECONDS):
     """Fail closed on *all* exact-source runs, including inconvenient failures.
 
     Records are externally authenticated run/step/artifact/state attestations. This
     method intentionally cannot certify that unverified JSON originated at GitHub.
     """
+    require(type(min_span_seconds) is int and min_span_seconds >= MIN_SPAN_SECONDS,
+            "SOAK_MINIMUM_DURATION_INVALID")
     sha40(source_sha)
     sha40(current_main)
     sha40(first_state_parent)
@@ -256,7 +490,7 @@ def evaluate_window(records, *, source_sha, current_main, first_state_parent,
     # A missed second/third cycle is already a terminal failure at the original
     # 90-minute gap, even when fewer than three runs have arrived.
     # Once the two-hour span is legitimately complete, proceed to postvalidation.
-    if automatic and span < MIN_SPAN_SECONDS:
+    if automatic and span < min_span_seconds:
         elapsed_since_latest=(instant-automatic[-1][0]).total_seconds()
         if elapsed_since_latest > MAX_GAP_SECONDS:
             return Evaluation("FAIL","AUTOMATIC_DELIVERY_GAP_EXCEEDED",ids,span,
@@ -264,8 +498,314 @@ def evaluate_window(records, *, source_sha, current_main, first_state_parent,
     if len(automatic) < MIN_CYCLES:
         return Evaluation("BLOCKED" if instant >= deadline else "WAITING",
                           "INSUFFICIENT_GENUINE_AUTOMATIC_CYCLES",ids,span,maximum)
-    if span < MIN_SPAN_SECONDS:
+    if span < min_span_seconds:
         return Evaluation("BLOCKED" if instant >= deadline else "WAITING", "SOAK_DURATION_INCOMPLETE", ids, span, maximum)
     if instant > deadline:
         return Evaluation("BLOCKED", "DEADLINE_EXPIRED_BEFORE_POST_VALIDATION", ids, span, maximum)
     return Evaluation("PRE_POSTVALIDATION", "POST_SOAK_INDEPENDENT_CHECKS_REQUIRED", ids, span, maximum)
+
+
+def evaluate_v5_window(records, *, inventory, source_sha, current_main,
+                       first_state_parent, started_at, deadline_at, now):
+    """Evaluate *six-hour* V5 evidence using the existing fail-closed reducer.
+
+    An inventory and run manifests are caller-supplied data. This pure function
+    cannot authenticate them against GitHub or Cloudflare, verify raw ZIP bytes,
+    or create a terminal acceptance receipt. The most it can return is
+    PRE_POSTVALIDATION; an independent provider/artifact/state auditor is still
+    mandatory. V3's existing two-hour function remains backward compatible.
+    """
+    sha40(source_sha)
+    start, deadline, instant = utc(started_at), utc(deadline_at), utc(now)
+    require(
+        (deadline - start).total_seconds() >= V5_MIN_SPAN_SECONDS,
+        "V5_WINDOW_SHORTER_THAN_SIX_HOURS",
+    )
+    require(type(records) is list, "V5_RECORDS_INVALID")
+    require(
+        type(inventory) is dict
+        and inventory.get("coverage_complete") is True
+        and inventory.get("provenance") == "GITHUB_API_PROVIDER_METADATA"
+        and inventory.get("soak_pass") is False
+        and type(inventory.get("core_runs")) is list,
+        "V5_PROVIDER_INVENTORY_REQUIRED",
+    )
+    # The preflight census is not a cryptographic proof. Still refuse a
+    # manifest which has *obviously* dropped a reported failed/queued core.
+    expected = set()
+    provider_rows = {}
+    used_job_ids = set()
+    for item in inventory["core_runs"]:
+        require(type(item) is dict, "V5_PROVIDER_INVENTORY_ROW_INVALID")
+        # Never silently equate a missing attempt number with attempt one.
+        run_id, attempt = item.get("run_id"), item.get("run_attempt")
+        require(type(run_id) is int and run_id > 0
+                and type(attempt) is int and attempt > 0,
+                "V5_PROVIDER_RUN_ID_INVALID")
+        identity = (run_id, attempt)
+        require(identity not in expected, "V5_PROVIDER_DUPLICATE_RUN")
+        expected.add(identity)
+        provider_rows[identity] = item
+        require(type(item.get("head_sha")) is str
+                and HEX40.fullmatch(item["head_sha"]),
+                "V5_PROVIDER_RUN_SOURCE_INVALID")
+        require(item.get("event") in {"push", "schedule", "workflow_dispatch"},
+                "V5_PROVIDER_RUN_TRIGGER_INVALID")
+        require(item.get("status") in {
+            "completed", "queued", "in_progress", "pending", "waiting",
+            "requested",
+        }, "V5_PROVIDER_RUN_STATUS_INVALID")
+        require(item["head_sha"] == source_sha,
+                "V5_PROVIDER_RUN_SOURCE_MISMATCH")
+        require(
+            type(item.get("conclusion")) is str
+            if item["status"] == "completed"
+            else item.get("conclusion") is None,
+            "V5_PROVIDER_RUN_CONCLUSION_INVALID",
+        )
+        created = utc(item.get("created_at"))
+        require(start <= created <= instant, "V5_PROVIDER_RUN_TIME_INVALID")
+        if item["status"] == "completed":
+            # The original Actions *run* provides run_started_at; the
+            # attempt-scoped Actions jobs API provides the monitor job's
+            # actual started_at/completed_at. Its attempt_scope is an
+            # independent collector annotation of the REST URL queried,
+            # NOT a field asserted to exist in GitHub's raw job schema.
+            require(type(item.get("run_started_at")) is str,
+                    "V5_PROVIDER_RUN_START_REQUIRED")
+            job = item.get("job")
+            require(type(job) is dict, "V5_PROVIDER_JOB_REQUIRED")
+            require(
+                type(job.get("id")) is int and job["id"] > 0
+                and type(job.get("run_id")) is int
+                and job["run_id"] == run_id
+                and type(job.get("attempt_scope")) is int
+                and job["attempt_scope"] == attempt
+                and job.get("name") == "monitor"
+                and job.get("head_sha") == source_sha,
+                "V5_PROVIDER_JOB_IDENTITY_INVALID",
+            )
+            require(job["id"] not in used_job_ids, "V5_PROVIDER_JOB_DUPLICATE")
+            used_job_ids.add(job["id"])
+            require(job.get("status") == "completed"
+                    and type(job.get("conclusion")) is str,
+                    "V5_PROVIDER_JOB_COMPLETION_INVALID")
+            if item["conclusion"] == "success":
+                require(job["conclusion"] == "success",
+                        "V5_PROVIDER_JOB_RESULT_INVALID")
+            require(type(job.get("started_at")) is str
+                    and type(job.get("completed_at")) is str,
+                    "V5_PROVIDER_JOB_TIME_REQUIRED")
+            run_begin = utc(item["run_started_at"])
+            job_begin = utc(job["started_at"])
+            job_end = utc(job["completed_at"])
+            require(created <= run_begin, "V5_PROVIDER_STARTED_BEFORE_CREATED")
+            require(run_begin <= job_begin <= job_end <= instant,
+                    "V5_PROVIDER_JOB_TIME_INVALID")
+    manifest = set()
+    for record in records:
+        require(type(record) is dict, "V5_RUN_MANIFEST_ROW_INVALID")
+        identity = (record.get("run_id"), record.get("attempt"))
+        require(type(identity[0]) is int and type(identity[1]) is int,
+                "V5_RUN_MANIFEST_ID_INVALID")
+        require(identity not in manifest, "V5_RUN_MANIFEST_DUPLICATE")
+        manifest.add(identity)
+    require(manifest == expected, "V5_CENSUS_RECORD_MISMATCH")
+    for record in records:
+        provider = provider_rows[(record["run_id"], record["attempt"])]
+        require(
+            record.get("source_sha") == provider["head_sha"]
+            and record.get("event") == provider["event"]
+            and record.get("status") == provider["status"]
+            and record.get("conclusion") == provider.get("conclusion"),
+            "V5_PROVIDER_MANIFEST_FACT_MISMATCH",
+        )
+        require(
+            utc(provider["created_at"]) <= utc(record.get("started_at")),
+            "V5_PROVIDER_STARTED_BEFORE_CREATED",
+        )
+        if provider["status"] == "completed":
+            # Cross-bind manifest times to independently acquired GitHub
+            # run and attempt-scoped monitor-job timestamps. No synthetic
+            # six-hour span from manually stretched completion times.
+            require(
+                utc(record.get("started_at")) ==
+                utc(provider["run_started_at"]),
+                "V5_PROVIDER_RUN_STARTED_MISMATCH",
+            )
+            require(
+                utc(record.get("completed_at")) ==
+                utc(provider["job"]["completed_at"]),
+                "V5_PROVIDER_JOB_COMPLETED_MISMATCH",
+            )
+        else:
+            require(record.get("completed_at") is None,
+                    "V5_PROVIDER_UNFINISHED_COMPLETION_INVALID")
+
+    # For V5, inspect the COMPLETE provider-reconciled census before the
+    # first unfinished run can short-circuit the legacy chronological reducer.
+    # Otherwise an earlier queued core could hide a later known FAILED core
+    # and mislabel disqualifying evidence as merely WAITING. Preserve genuine
+    # source drift as the stronger source-boundary failure.
+    if source_sha == current_main:
+        completed = [r for r in records if r["status"] == "completed"]
+        if any(r["conclusion"] != "success" for r in completed):
+            return Evaluation("FAIL", "CORE_EXECUTION_FAILED", (), 0, 0)
+        if any(
+            type(r.get("steps")) is not dict
+            or any(r["steps"].get(step) != "success"
+                   for step in REQUIRED_STEPS)
+            for r in completed
+        ):
+            return Evaluation(
+                "FAIL", "MANDATORY_STEP_FAILED_OR_MISSING", (), 0, 0,
+            )
+        # Explicitly unverified original artifacts/state must be BLOCKED,
+        # not hidden by an earlier in-progress run. Known failures above
+        # always take precedence over incomplete or uncertain evidence.
+        if any(
+            type(r.get("artifact")) is not dict
+            or r["artifact"].get("status") != "PASS"
+            for r in completed
+        ):
+            return Evaluation("BLOCKED", "ARTIFACT_NOT_VERIFIED", (), 0, 0)
+        if any(
+            type(r.get("state")) is not dict
+            or r["state"].get("status") != "PASS"
+            for r in completed
+        ):
+            return Evaluation("BLOCKED", "REMOTE_STATE_NOT_VERIFIED", (), 0, 0)
+
+    # Keep historical V3 reducer outcomes and exact first-to-last completion
+    # chronology: if no completed core is disqualifying, a genuinely unfinished
+    # run must still remain WAITING (or BLOCKED after deadline).
+    decision = evaluate_window(
+        records, source_sha=source_sha, current_main=current_main,
+        first_state_parent=first_state_parent, started_at=started_at,
+        deadline_at=deadline_at, now=now,
+        min_span_seconds=V5_MIN_SPAN_SECONDS,
+    )
+    if decision.status not in {"WAITING", "PRE_POSTVALIDATION"} or (
+        decision.reason == "CORE_EXECUTION_INCOMPLETE"
+    ):
+        return decision
+
+    # GitHub run_attempt=2+ is a rerun of the SAME original schedule event,
+    # not an independently scheduled cycle. Reject possible acceptance rather
+    # than counting successful replay attempts as additional Cron occurrences.
+    # All attempts remain in the externally supplied complete run census.
+    if any(
+        record["attempt"] > 1
+        and record["event"] in {"schedule", "workflow_dispatch"}
+        and record["status"] == "completed"
+        and record["conclusion"] == "success"
+        for record in records
+    ):
+        return Evaluation(
+            "BLOCKED", "V5_RERUN_NOT_NEW_SCHEDULED_CYCLE", (), 0, 0,
+        )
+
+    # Distinct GitHub runs do NOT prove distinct scheduled events. A single
+    # Cloudflare scheduled() invocation or a GitHub watchdog schedule could
+    # otherwise be replayed into multiple independently successful cores.
+    # Require original provider event identity/time + signed core binding
+    # only for cycles that the historical reducer has already credited.
+    credited = set(decision.automatic_run_ids)
+    seen_cloudflare_events = set()
+    seen_cloudflare_ticks = set()
+    seen_github_clock_runs = set()
+    for record in records:
+        if record["run_id"] not in credited or record["event"] != "workflow_dispatch":
+            continue
+        clock = record.get("external_clock")
+        if type(clock) is not dict:
+            return Evaluation(
+                "BLOCKED", "V5_EXTERNAL_SCHEDULER_UNVERIFIED", (), 0, 0,
+            )
+        if clock.get("kind") == "cloudflare_cron_v1":
+            # 'provider_event_id' is the original Workers Observability
+            # metadata event ID, 'scheduled_at' is provider scheduledTime;
+            # 'core_run_id' is extracted from the independently verified
+            # signed dispatch/receipt. These are COLLECTOR annotations, not
+            # claims that the pure evaluator can query or authenticate them.
+            event_id = clock.get("provider_event_id")
+            require(
+                type(event_id) is str
+                and 1 <= len(event_id) <= 128
+                and all(char.isascii() and (
+                    char.isalnum() or char in "-_:."
+                ) for char in event_id),
+                "V5_CLOUDFLARE_EVENT_ID_INVALID",
+            )
+            require(
+                type(clock.get("core_run_id")) is int
+                and clock["core_run_id"] == record["run_id"],
+                "V5_CLOUDFLARE_CORE_RUN_BINDING_INVALID",
+            )
+            require(
+                type(clock.get("scheduled_at")) is str,
+                "V5_CLOUDFLARE_SCHEDULE_TIME_REQUIRED",
+            )
+            event_time = utc(clock["scheduled_at"])
+            run_created = utc(
+                provider_rows[(record["run_id"], record["attempt"])]
+                ["created_at"]
+            )
+            require(
+                event_time <= run_created,
+                "V5_CLOUDFLARE_EVENT_CHRONOLOGY_INVALID",
+            )
+            if event_id in seen_cloudflare_events:
+                return Evaluation(
+                    "BLOCKED", "V5_SCHEDULED_PROVIDER_EVENT_REUSED", (), 0, 0,
+                )
+            if event_time in seen_cloudflare_ticks:
+                return Evaluation(
+                    "BLOCKED", "V5_SCHEDULED_PROVIDER_TICK_REUSED", (), 0, 0,
+                )
+            seen_cloudflare_events.add(event_id)
+            seen_cloudflare_ticks.add(event_time)
+        elif clock.get("kind") == "github_schedule":
+            # Historical reducer has already checked original GitHub-native
+            # clock-job provenance flags. One origin run may produce at most
+            # one independently credited dispatch in a V5 observation.
+            origin_id = clock.get("clock_run_id")
+            require(
+                type(origin_id) is int and origin_id > 0,
+                "V5_GITHUB_SCHEDULE_RUN_ID_INVALID",
+            )
+            if origin_id in seen_github_clock_runs:
+                return Evaluation(
+                    "BLOCKED", "V5_SCHEDULED_PROVIDER_EVENT_REUSED", (), 0, 0,
+                )
+            seen_github_clock_runs.add(origin_id)
+        else:
+            # The legacy 'scheduled' boolean-based adapter remains legal in
+            # historical V3, but is insufficiently source-bound for V5.
+            return Evaluation(
+                "BLOCKED", "V5_EXTERNAL_SCHEDULER_UNVERIFIED", (), 0, 0,
+            )
+
+    # The V3 reducer retains its historical integer gap reporting: int(5400.5)
+    # rounds down to 5400. V5's strict <=5400s cap must compare the exact
+    # provider-bound completion instants, including fractional seconds.
+    if len(decision.automatic_run_ids) > 1:
+        credited = set(decision.automatic_run_ids)
+        ends = sorted(
+            utc(provider_rows[(record["run_id"], record["attempt"])]
+                ["job"]["completed_at"])
+            for record in records if record["run_id"] in credited
+        )
+        require(len(ends) == len(decision.automatic_run_ids),
+                "V5_AUTOMATIC_COMPLETION_BINDING_INVALID")
+        exact_gap = max(
+            (ends[i] - ends[i - 1]).total_seconds()
+            for i in range(1, len(ends))
+        )
+        if exact_gap > MAX_GAP_SECONDS:
+            return Evaluation(
+                "FAIL", "AUTOMATIC_DELIVERY_GAP_EXCEEDED",
+                decision.automatic_run_ids, decision.span_seconds,
+                math.ceil(exact_gap),
+            )
+    return decision

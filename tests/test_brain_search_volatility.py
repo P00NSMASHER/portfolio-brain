@@ -10,6 +10,7 @@ import tempfile
 import unittest
 import urllib.error
 from pathlib import Path
+from unittest.mock import patch
 
 from brain.__main__ import research
 from brain.adapters import GitHub, event
@@ -214,7 +215,13 @@ class StaleSearchResultTests(unittest.TestCase):
         self.assertEqual(len(good),1)
         self.assertEqual(api.discovery_unavailable,[])
 
-    def test_research_records_partial_verified_source_without_claiming_completeness(self):
+    @patch("brain.adapters.utcnow", return_value=NOW)
+    @patch("brain.core.utcnow", return_value=NOW)
+    def test_research_records_partial_verified_source_without_claiming_completeness(self, _core_clock, _adapter_clock):
+        # This fixture's observations are intentionally frozen on 2026-10-09.
+        # Pin only the test clocks so valid historical observations do not
+        # expire as CI wall time moves past the real 48-hour freshness limit.
+        # The production Store/Brain 48-hour requirement is left intact.
         transport=FakeGitHub(fail_stage="branch")
         api=GitHub(transport=transport)
         with tempfile.TemporaryDirectory() as temp:
@@ -227,8 +234,6 @@ class StaleSearchResultTests(unittest.TestCase):
                 store.submit([event("repository",source_repo,payload,SHA,now=NOW)],
                              now=NOW)
                 store.drain()
-                import unittest.mock
-                from unittest.mock import patch
                 with patch("brain.__main__.ROOT",Path(__file__).resolve().parents[1]):
                     result=research(
                         store,SHA,Path(temp)/"output",api=api,
@@ -249,6 +254,13 @@ class StaleSearchResultTests(unittest.TestCase):
                 self.assertIsNone(result["learning"]["verified_revenue"])
                 self.assertFalse(result["learning"]["autonomous_code_execution"])
                 self.assertEqual(store.read_report(SHA)["state_sequence"],2)
+                # The real freshness boundary still fails one second after
+                # the two-day maximum; pinning synthetic clocks never widens it.
+                with patch("brain.core.utcnow", return_value="2026-10-11T18:00:01Z"):
+                    with self.assertRaisesRegex(
+                        BrainError, "STALE_REPORT: generated_at expired"
+                    ):
+                        store.read_report(SHA)
             finally:
                 store.close()
 
