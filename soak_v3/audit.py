@@ -35,6 +35,8 @@ MIN_CYCLES = 3
 MIN_SPAN_SECONDS = 7200
 V5_MIN_SPAN_SECONDS = 21600  # Six hours on one exact protected source.
 MAX_GAP_SECONDS = 5400
+V3_SQLITE_MAX_BYTES = 25_000_000  # Retain historical V3 reader contract.
+V5_SQLITE_MAX_BYTES = 64_000_000  # Bounded growth room for actual V5 state.
 
 class EvidenceError(ValueError):
     """Unverifiable evidence is a BLOCKED result, never an inferred PASS."""
@@ -64,7 +66,8 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True,
                                      separators=(",", ":"), allow_nan=False).encode()).hexdigest()
 
-def verify_sqlite(path, *, expected_sequence, expected_chain, expected_source):
+def _verify_sqlite_bounded(path, *, expected_sequence, expected_chain,
+                           expected_source, size_limit):
     """Read immutable downloaded state without opening a writable DB or trusting reports.
 
     The caller must separately bind bytes to the GitHub state commit it fetched.
@@ -73,8 +76,15 @@ def verify_sqlite(path, *, expected_sequence, expected_chain, expected_source):
     sha40(expected_source)
     sha64(expected_chain)
     require(type(expected_sequence) is int and expected_sequence >= 0, "SEQUENCE_INVALID")
-    raw = Path(path).read_bytes()
-    require(0 < len(raw) <= 25_000_000, "STATE_SIZE_INVALID")
+    # Fail before reading an oversized file. The additional read bound is
+    # defensive against a local file growing between stat and open; it is
+    # never a request for more GitHub data or a relaxed publisher limit.
+    source_path = Path(path)
+    before = source_path.stat()
+    require(0 < before.st_size <= size_limit, "STATE_SIZE_INVALID")
+    with source_path.open("rb") as stream:
+        raw = stream.read(size_limit + 1)
+    require(len(raw) == before.st_size, "STATE_SIZE_CHANGED_DURING_READ")
     sqlite_sha256 = hashlib.sha256(raw).hexdigest()
     conn = sqlite3.connect(f"file:{Path(path).resolve().as_posix()}?mode=ro&immutable=1", uri=True)
     conn.row_factory = sqlite3.Row
@@ -116,6 +126,23 @@ def verify_sqlite(path, *, expected_sequence, expected_chain, expected_source):
         raise EvidenceError("SQLITE_READ_FAILED") from exc
     finally:
         conn.close()
+
+
+def verify_sqlite(path, *, expected_sequence, expected_chain, expected_source):
+    """Legacy V3 immutable SQLite verifier: retain its exact 25 MB limit."""
+    return _verify_sqlite_bounded(
+        path, expected_sequence=expected_sequence, expected_chain=expected_chain,
+        expected_source=expected_source, size_limit=V3_SQLITE_MAX_BYTES,
+    )
+
+
+def verify_v5_sqlite(path, *, expected_sequence, expected_chain, expected_source):
+    """V5 original-byte replay, capped at 64 MB; never terminal acceptance."""
+    return _verify_sqlite_bounded(
+        path, expected_sequence=expected_sequence, expected_chain=expected_chain,
+        expected_source=expected_source, size_limit=V5_SQLITE_MAX_BYTES,
+    )
+
 
 def verify_artifact(path, expected_digest, *, run_id, source_sha, state_parent, state_commit):
     """Check GitHub API artifact SHA256 and embedded real delivery/doctor receipts."""
