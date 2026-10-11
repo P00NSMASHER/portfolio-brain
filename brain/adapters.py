@@ -197,24 +197,34 @@ class GitHub:
                 seen.add(name)
                 full=prefix+name
                 kind=obj.get("type")
+                mode=obj.get("mode")
                 if kind=="tree":
+                    require(mode=="040000", "BOUNDED_TREE_MODE_INVALID")
                     node_sha=obj.get("sha")
                     require(type(node_sha) is str and
                             re.fullmatch(r"[0-9a-f]{40}",node_sha),
                             "BOUNDED_TREE_CHILD_ID_INVALID")
                     children.append((full+"/",node_sha))
                 elif kind=="blob":
+                    # GitHub labels symlink targets as blobs (mode 120000).
+                    # A link is not a regular code file, even if its path
+                    # ends with .py/.ts/.js; never offer it as reusable source.
+                    require(mode in {"100644","100755","120000"},
+                            "BOUNDED_TREE_MODE_INVALID")
                     node_sha=obj.get("sha")
                     size=obj.get("size")
                     require(type(node_sha) is str and
                             re.fullmatch(r"[0-9a-f]{40}",node_sha)
                             and type(size) is int and size>=0,
                             "BOUNDED_TREE_BLOB_ID_OR_SIZE_INVALID")
+                    if mode=="120000":
+                        continue
                     files.append({"type":"blob","path":full,
                                   "size":size,"sha":node_sha})
                 else:
                     # Gitlink/submodule content is NOT recursively inspected.
                     require(kind=="commit", "BOUNDED_TREE_KIND_INVALID")
+                    require(mode=="160000", "BOUNDED_TREE_MODE_INVALID")
             return files,children
 
         all_files,pending=inspect("",root_sha)
