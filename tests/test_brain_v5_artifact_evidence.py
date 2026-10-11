@@ -195,7 +195,7 @@ class V5MandatoryArtifactEvidence(unittest.TestCase):
                 with self.assertRaisesRegex(
                     EvidenceError, "ARTIFACT_SIZE_CHANGED_DURING_READ"
                 ):
-                    self.check_original_zip(original)
+                    self.check_original_zip(original, strict=True)
 
     def check_original_zip(self, original, *, strict):
         kwargs = dict(
