@@ -316,6 +316,25 @@ from a claimed summary or a hand-written JSON file. At minimum:
    artifact provenance, policy, and historical acceptance refs. This CLI
    cannot write or independently certify that terminal receipt.
 
+### V5 CLI manifest input integrity (review-only)
+
+All three V5 inspection CLI modes (`window-v5`, `artifact-v5`, and
+`state-v5`) now consume at most **8,000,000 original manifest bytes**.
+File size is checked before opening; short/changed-size reads fail closed.
+The identical already-used strict V5 JSON parser rejects duplicate keys
+at any nesting level, `NaN`, `Infinity` and finite-looking floating
+overflow. This prevents last-key-wins JSON from silently hiding a failed
+core inside duplicate `runs` or `inventory.core_runs` entries.
+
+Historical V3 `window`, `artifact` and `state` CLI input decoding stays
+unchanged. V5's original artifact ZIP and SQLite bounds/verification
+stay separate from this manifest-size limit. These checks ensure only
+**unambiguous local input**, not independent provider authentication:
+a plausible manifest still needs separately fetched signed Cloudflare
+origins, complete GitHub attempt/job census, exact state/ZIP bytes and
+the governed terminal acceptance receipt. The CLI cannot manufacture
+automatic scheduled success or write production state.
+
 ### Local input shape, deliberately non-authoritative
 
 ```json
