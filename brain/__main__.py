@@ -79,7 +79,13 @@ def research(store, sha, output, *, api=None, repository=None):
     items=[event("candidate",p["repository"]+":"+p["path"],p,sha,private=private) for p,private in found]
     report=persist(store,items,sha,output)
     unavailable=list(getattr(api,"discovery_unavailable",[]))
-    report["operation"]={"name":"research","requests":api.requests,"target":target["project"],"candidates_observed":len(items),"result":"OBSERVED_WITH_SEARCH_RESULT_GAPS" if unavailable else ("OBSERVED" if items else "NO_MATCHES"),"unavailable_search_results":unavailable,"license_filter_applied":False}
+    bounded=list(getattr(api,"discovery_bounded_trees",[]))
+    # Every bounded-tree candidate's ORIGINAL source blob is still hashed,
+    # but its parent directory listing was only partially scanned.
+    result=("OBSERVED_WITH_SEARCH_RESULT_GAPS" if unavailable else
+            "OBSERVED_WITH_BOUNDED_TREE_COVERAGE" if bounded else
+            "OBSERVED" if items else "NO_MATCHES")
+    report["operation"]={"name":"research","requests":api.requests,"target":target["project"],"candidates_observed":len(items),"result":result,"unavailable_search_results":unavailable,"bounded_tree_scans":bounded,"license_filter_applied":False}
     write_report(report,output)
     store.attempt("research","PASS",source_sha=sha)
     return report

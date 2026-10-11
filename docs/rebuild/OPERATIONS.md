@@ -84,6 +84,109 @@ from durable acknowledged state and drains interrupted input. Last failure remai
 visible in attempts. Optional knowledge-upgrade failure is BLOCKED without discarding
 core observations. Authentication/rate-limit/provider outage is never renamed success.
 
+### Source GET failure context (candidate, not deployed)
+
+When one bounded GitHub GET definitively fails, the adapter prints a single
+`SOURCE_API_GET_FAILURE_CONTEXT` JSON line to the existing job stderr. The
+only fields are a fixed, non-sensitive request family, HTTP status (or a
+whitelisted read-failure class) and the bounded request number. Families
+distinguish repository search, metadata, branch lookup, Git tree, blob,
+commit checks, and unknown GET. **It never prints the raw URL, search query,
+repository identifier, branch name, exception message or credential.**
+Successfully recovered transient retries do not emit a failure context.
+
+This is **endpoint-class** evidence for a *future failed provider GET*, not
+a complete request audit and not proof of the unlogged October 9 incident.
+It preserves the existing `BrainError` text/type for each individual
+failed GET, the 2,000,000-byte response cap, 24-request cap and retry bounds,
+SQLite/event schemas, report format, public/private source separation and
+scheduled state writer. Optional public discovery has a separate narrowly
+reviewed size-bound quarantine described below. A skipped optional hit can
+produce a GET diagnostic while the research report separately records
+`OBSERVED_WITH_SEARCH_RESULT_GAPS`; this is **partial verified observation**,
+not proof of complete search coverage. Production gains none of these changes
+until a separately approved, protected source transition.
+
+### October 10: recurring `SOURCE_RESPONSE_TOO_LARGE` production failures
+
+Preserve the original **FAILED** GitHub cycles on protected V5 source
+`35c1955bbfea1e2cd760ed39c8f6978ce5102f1d`:
+native schedule [#38033926025](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38033926025)
+at 07:17 UTC, and genuinely signed Cloudflare-origin cycles
+[#38039272940](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38039272940)
+08:50, [#38039853142](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38039853142)
+09:00, [#38040447668](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38040447668)
+09:10, [#38041038489](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38041038489)
+09:20. All five jobs stopped in bounded public research with the actual
+`BrainError: SOURCE_RESPONSE_TOO_LARGE`, after real monitoring. The **older
+production logs do not identify the failing GitHub GET family or repository**,
+so the actual request cannot be claimed or reconstructed from guessed search
+ranking. Separately read Cloudflare provider `scheduled()` events confirm
+the four 08:50–09:20 dispatches (dispatch ACK never equals GitHub completion);
+the 07:17 run was GitHub-native. Later successful 09:30 onward executions
+do not convert any of the five historical failures to success.
+
+**Further independent incident evidence, 18:41 UTC:** the full October 10
+GitHub run census and original failed-step/job logs establish **18 total
+mandatory research failures** on this same protected source: the initial
+five above, another native `schedule` at **13:52**, seven signed
+Cloudflare-dispatched failures from **15:30 through 16:30**, and five
+failures from **18:10 through 18:40** (four Cloudflare-dispatched and
+one native at 18:25). Every inspected original job failed in the same
+mandatory research step with `SOURCE_RESPONSE_TOO_LARGE`. Previous
+intervening successful half-hour cycles do not make these failed cores
+eligible for V5 acceptance. The full run-ID/evidence roster is preserved
+in [production incident #673](https://github.com/P00NSMASHER/portfolio-brain/issues/673).
+As of the original 18:41 observation, no source-specific unbroken
+six-hour runtime acceptance had been independently established. Do not
+guess which upstream request stage triggered the historical failures.
+
+**Bounded future response behavior — this DRAFT only:** A real oversized
+GET emits a single fixed-category diagnostic `ResponseTooLarge` with a
+numeric request ordinal, never endpoint URL, query, branch or credential.
+The 2,000,000-byte maximum remains **unchanged**: the reader fetches at most
+2,000,001 bytes, refuses to parse an oversized response, and does not
+retry it or increase spending. Only when the failed operation is an
+*optional public search-derived* `tree` or `blob` inspection may the
+result be explicitly recorded as
+`SEARCH_RESULT_RESPONSE_TOO_LARGE_NOT_INSPECTED`. A verified alternate
+fully hash-inspected candidate is necessary before the whole research
+operation may report `OBSERVED_WITH_SEARCH_RESULT_GAPS`.
+
+**Additional source-bounded fallback in this review candidate:** If *only*
+an optional public recursive Git-tree GET exceeds 2 MB, bind the original
+HEAD commit to its root Git tree via the existing original GitHub provider,
+then inspect **one pinned root and at most four pinned nonrecursive child
+trees** to a maximum of two descendant levels. Every tree object must
+match its expected SHA and not declare truncation; every selected code
+blob must still match original size, Git blob SHA and original bytes SHA256.
+Never fetch/interpret the oversized recursive body or invent unvisited
+paths. A verified source under the partial tree reports explicit
+`bounded_tree_scans` metadata and `OBSERVED_WITH_BOUNDED_TREE_COVERAGE`
+(unless other skipped hits also require
+`OBSERVED_WITH_SEARCH_RESULT_GAPS`). This is verified **selected-source
+content**, not full repository coverage, verified tests, adoption or
+licensed reuse. An explored limited tree without an eligible source
+is recorded `SEARCH_RESULT_BOUNDED_TREE_NO_ELIGIBLE_SOURCE`; if no
+other source passes its own original blob check, research FAILS with
+`DISCOVERY_ALL_SEARCH_RESULTS_UNAVAILABLE`. Root/child tree SHA mismatch,
+truncation, malformed tree, unreadable provider, privacy/explicit-source
+scope, search/branch oversize, budget exhaustion and source blob hash
+mismatch all remain **fatal**. The root-lookup fallback must not exceed
+the same 24 overall GET budget. The fallback cannot be claimed as the
+definitive remediation for historical failures because the original
+failing GitHub GET endpoints were not logged.
+
+The original 24-GET budget, 10-second timeout, 2 MB per-response cap,
+provider retry policy and P-256/nonforce state protections are not
+loosened.
+
+This candidate must stay a **DRAFT / NOT DEPLOYED** until separate
+source-quality checks and a future authorized source transition. Any merge
+would change the currently observed V5 production SHA and require a new
+source-specific acceptance interval. Historical V2/V3/V4 acceptance facts
+and these five original FAIL records are immutable.
+
 Knowledge proposal delivery uses narrowly scoped repository contents, pull-request,
 and Actions permissions. After creating a fixed-file candidate PR, it dispatches
 the existing Foundation workflow exactly once on that candidate branch. Token-created
