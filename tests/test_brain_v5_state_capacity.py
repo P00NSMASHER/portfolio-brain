@@ -8,12 +8,14 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import sqlite3
 import subprocess
 import sys
 import tempfile
 import unittest
+from urllib.parse import unquote, urlparse
 from unittest.mock import patch
 
 from soak_v3.audit import (
@@ -117,6 +119,79 @@ class V5SQLiteCapacityTests(unittest.TestCase):
             "expected_chain": self.chain,
             "expected_source": SOURCE,
         }
+
+    def test_hash_and_replay_use_identical_bytes_after_same_size_replacement(self):
+        # Simulate a source file being swapped AFTER its SHA256 was taken but
+        # BEFORE sqlite3.connect. The verifier must use its sealed copy.
+        original = self.path.read_bytes()
+        original_digest = hashlib.sha256(original).hexdigest()
+        connection = sqlite3.connect
+        snapshots = []
+
+        def replace_original_at_connect(uri, *args, **kwargs):
+            self.assertEqual(kwargs.get("uri"), True)
+            self.assertIn("mode=ro&immutable=1", uri)
+            snapshot = Path(unquote(urlparse(uri).path))
+            snapshots.append(snapshot)
+            self.assertNotEqual(snapshot.resolve(), self.path.resolve())
+            self.assertEqual(snapshot.read_bytes(), original)
+            self.assertEqual(os.stat(snapshot).st_mode & 0o077, 0)
+            self.assertEqual(os.stat(snapshot.parent).st_mode & 0o077, 0)
+            # Same file length, completely invalid new content: size-only
+            # checks cannot detect this race if SQLite reopens original path.
+            self.path.write_bytes(b"!" * len(original))
+            return connection(uri, *args, **kwargs)
+
+        with patch("soak_v3.audit.sqlite3.connect",
+                   side_effect=replace_original_at_connect):
+            verified = verify_v5_sqlite(self.path, **self.kwargs())
+        self.assertEqual(len(snapshots), 1)
+        self.assertEqual(verified["sha256"], original_digest)
+        self.assertEqual(verified["canonical_hash"], self.chain)
+        self.assertEqual(verified["status"], "PASS")
+        self.assertNotEqual(hashlib.sha256(self.path.read_bytes()).hexdigest(),
+                            original_digest)
+        self.assertFalse(snapshots[0].exists())
+        self.assertFalse(snapshots[0].parent.exists())
+
+    def test_failed_chain_check_also_removes_private_snapshot(self):
+        db = sqlite3.connect(self.path)
+        try:
+            db.execute("UPDATE ledger SET chain_hash=?", ("e" * 64,))
+            db.commit()
+        finally:
+            db.close()
+        real_connect = sqlite3.connect
+        locations = []
+
+        def observe_snapshot(uri, *args, **kwargs):
+            locations.append(Path(unquote(urlparse(uri).path)))
+            return real_connect(uri, *args, **kwargs)
+
+        with patch("soak_v3.audit.sqlite3.connect",
+                   side_effect=observe_snapshot):
+            with self.assertRaisesRegex(EvidenceError,
+                                        "STATE_CHAIN_DIGEST_INVALID"):
+                verify_v5_sqlite(self.path, **self.kwargs())
+        self.assertEqual(len(locations), 1)
+        self.assertFalse(locations[0].exists())
+        self.assertFalse(locations[0].parent.exists())
+
+    def test_readonly_original_file_never_chmodded_or_replaced(self):
+        original = self.path.read_bytes()
+        before_digest = hashlib.sha256(original).hexdigest()
+        os.chmod(self.path, 0o400)
+        before_stat = self.path.stat()
+        for verifier in (verify_sqlite, verify_v5_sqlite):
+            verified = verifier(self.path, **self.kwargs())
+            self.assertEqual(verified["sha256"], before_digest)
+            self.assertEqual(verified["status"], "PASS")
+        after_stat = self.path.stat()
+        self.assertEqual(before_stat.st_ino, after_stat.st_ino)
+        self.assertEqual(before_stat.st_mtime_ns, after_stat.st_mtime_ns)
+        self.assertEqual(before_stat.st_mode & 0o777,
+                         after_stat.st_mode & 0o777)
+        self.assertEqual(self.path.read_bytes(), original)
 
     def test_small_valid_state_remains_compatible_with_v3_and_v5(self):
         self.assertEqual(verify_sqlite(self.path, **self.kwargs())["status"], "PASS")

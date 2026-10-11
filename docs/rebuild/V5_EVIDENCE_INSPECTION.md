@@ -62,8 +62,14 @@ the V5-specific `state-v5` verifier permits **at most 64,000,000 bytes**,
 using the same independent SQLite integrity, event/ledger SHA-256 replay,
 canonical report, exact source SHA, zero-pending and public-only checks.
 Both readers check file size **before** reading, read at most their maximum
-plus one byte and reject a locally changed-size snapshot. They never
-initialize, repair, rewrite or publish the inspected database.
+plus one byte and reject a locally changed-size snapshot. The exact bytes
+used for SHA-256 are then copied into an exclusive 0600 file inside a
+private, disposable directory, opened by SQLite in `mode=ro&immutable=1`.
+The original input path is **not** reopened after hashing; a same-size
+replacement cannot cause SQLite to inspect different bytes from those whose
+SHA-256 is reported. Temporary bytes are removed on success and failure.
+The input file is never chmodded, initialized, repaired, rewritten or published.
+This only proves local byte-consistency, **not** original provider provenance.
 
 The genuine October 10, 2026 source-bound durable state commit
 `0152de8a51325bd177fa652f7b69ea1f82e0f86e` contains an original

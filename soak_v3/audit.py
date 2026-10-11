@@ -11,9 +11,11 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import sqlite3
+import tempfile
 import zipfile
 
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
@@ -66,6 +68,29 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True,
                                      separators=(",", ":"), allow_nan=False).encode()).hexdigest()
 
+def _open_verified_byte_snapshot(raw):
+    """Open only the already hashed input bytes as a disposable read-only DB.
+
+    Do not re-open the caller's path after hashing: that path might be
+    replaced with different, equally sized SQLite bytes between operations.
+    The scratch file is created exclusively at 0600 inside a private folder;
+    caller owns closing the returned connection and cleaning that folder.
+    """
+    folder = tempfile.TemporaryDirectory(prefix="brain-soak-snapshot-")
+    try:
+        snapshot = Path(folder.name) / "state.sqlite"
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(snapshot, flags, 0o600)
+        with os.fdopen(fd, "wb") as target:
+            require(target.write(raw) == len(raw), "STATE_SNAPSHOT_SHORT_WRITE")
+        conn = sqlite3.connect(snapshot.as_uri() + "?mode=ro&immutable=1", uri=True)
+        conn.row_factory = sqlite3.Row
+        return conn, folder
+    except BaseException:
+        folder.cleanup()
+        raise
+
+
 def _verify_sqlite_bounded(path, *, expected_sequence, expected_chain,
                            expected_source, size_limit):
     """Read immutable downloaded state without opening a writable DB or trusting reports.
@@ -86,8 +111,7 @@ def _verify_sqlite_bounded(path, *, expected_sequence, expected_chain,
         raw = stream.read(size_limit + 1)
     require(len(raw) == before.st_size, "STATE_SIZE_CHANGED_DURING_READ")
     sqlite_sha256 = hashlib.sha256(raw).hexdigest()
-    conn = sqlite3.connect(f"file:{Path(path).resolve().as_posix()}?mode=ro&immutable=1", uri=True)
-    conn.row_factory = sqlite3.Row
+    conn, snapshot_folder = _open_verified_byte_snapshot(raw)
     try:
         require(conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok", "SQLITE_CORRUPT")
         schema = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
@@ -125,7 +149,10 @@ def _verify_sqlite_bounded(path, *, expected_sequence, expected_chain,
     except sqlite3.DatabaseError as exc:
         raise EvidenceError("SQLITE_READ_FAILED") from exc
     finally:
-        conn.close()
+        try:
+            conn.close()
+        finally:
+            snapshot_folder.cleanup()
 
 
 def verify_sqlite(path, *, expected_sequence, expected_chain, expected_source):
