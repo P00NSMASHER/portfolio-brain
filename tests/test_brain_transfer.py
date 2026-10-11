@@ -182,7 +182,12 @@ class TransferEvidenceTests(unittest.TestCase):
             for table in tables
         }
         with patch("brain.__main__.source_sha", return_value=BRAIN_SHA):
-            with patch("brain.__main__.GitHub", return_value=StubGitHub()):
+            # The fixture is historical. Freeze only the test clock for its
+            # CLI read; production freshness must remain strict.
+            with (
+                patch("brain.__main__.GitHub", return_value=StubGitHub()),
+                patch("brain.core.utcnow", return_value=NOW),
+            ):
                 code = brain_cli([
                     "transfer-review", "--db", str(self.root / "state.sqlite"),
                     "--input", str(source), "--output", str(destination),
@@ -200,6 +205,30 @@ class TransferEvidenceTests(unittest.TestCase):
         self.assertEqual(original.stat().st_mtime_ns, original_mtime)
         self.assertEqual(original.stat().st_mode & 0o777, original_mode)
         self.assertEqual(os.stat(destination / "transfer-review.json").st_mode & 0o777, 0o600)
+
+    def test_real_cli_still_rejects_expired_source_report(self):
+        source = self.root / "stale-input.json"
+        source.write_text(json.dumps(request()))
+        output = self.root / "stale-cli-result"
+        db = self.root / "state.sqlite"
+        original_hash = hashlib.sha256(db.read_bytes()).hexdigest()
+        # The fixture is October 8 at 22:00Z. One second beyond its
+        # 48-hour freshness limit must fail before any provider GET.
+        with (
+            patch("brain.__main__.source_sha", return_value=BRAIN_SHA),
+            patch("brain.core.utcnow", return_value="2026-10-10T22:00:01Z"),
+            patch("brain.__main__.GitHub",
+                  side_effect=AssertionError("expired report reached provider")),
+        ):
+            code = brain_cli([
+                "transfer-review", "--db", str(db),
+                "--input", str(source), "--output", str(output),
+                "--expected-sha", BRAIN_SHA,
+            ])
+        self.assertEqual(code, 1)
+        self.assertFalse((output / "transfer-review.json").exists())
+        self.assertEqual(hashlib.sha256(db.read_bytes()).hexdigest(),
+                         original_hash)
 
     def test_cli_rejects_symlinked_or_corrupt_source_before_writing_receipt(self):
         source = self.root / "input.json"
