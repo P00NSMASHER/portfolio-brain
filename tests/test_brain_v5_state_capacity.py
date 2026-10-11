@@ -383,7 +383,11 @@ class V5SQLiteCapacityTests(unittest.TestCase):
     def test_v5_source_binding_cannot_be_relabelled(self):
         self.grow_to_v5_size()
         altered = dict(self.kwargs(), expected_source=OTHER_SOURCE)
-        with self.assertRaisesRegex(EvidenceError, "STATE_REPORT_SOURCE_INVALID"):
+        # V5 now rejects the embedded source mismatch before the legacy
+        # SQLite report-column identity check, without weakening either.
+        with self.assertRaisesRegex(
+            EvidenceError, "V5_STATE_REPORT_EMBEDDED_SOURCE_INVALID"
+        ):
             verify_v5_sqlite(self.path, **altered)
 
     def test_v5_broken_ledger_remains_invalid_even_under_larger_limit(self):
