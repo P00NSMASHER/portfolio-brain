@@ -86,6 +86,30 @@ complete failed-run census must be authenticated separately. A user-supplied
 manifest, plausible database or local `"status":"PASS"` is **never** V5
 automatic-runtime, deployment or terminal acceptance.
 
+### Provider-backed V5 inspector parity in Foundation CI (candidate only)
+
+The existing **network-capable** `tests/test_v5_deployed_state_compatibility.py`
+already fetches the genuine `brain-state-v2` commit through Git and verifies
+the original SQLite bytes against the Git blob SHA-1 and a local SHA-256,
+then independently replays the complete ledger using its existing strict
+read-only reader. This candidate now also runs
+`soak_v3.audit.verify_v5_sqlite()` on **the same immutable original file**
+before producing any disposable new-source report, and requires exact
+agreement on original byte SHA-256, persisted report source SHA, state event
+sequence, canonical chain and zero pending events. If the snapshot exceeds
+the historical V3 25 MB limit, the old `verify_sqlite()` must continue to
+reject it while the bounded V5 reader succeeds.
+
+The network test reuses the **same fetched bytes**; it adds no GitHub API
+queries, dispatches, state pushes, or acceptance writer. It skips outside
+supported GitHub Foundation push/PR runs, rather than fabricating
+provider-backed evidence in an offline sandbox. The source/state receipt
+labels this separately as `PASS_SEALED_PROVIDER_BYTES_NOT_ACCEPTANCE`.
+A successful result is **read-only cross-validation of a GitHub state
+snapshot**, not proof of original Cloudflare `scheduled()` provenance,
+all workflow artifacts, complete failure inventory, protected deployment,
+or the mandatory six-hour uninterrupted V5 automatic execution.
+
 ### Required evidence acquisition before supplying the manifest
 
 Acquire independently from original GitHub and Cloudflare providers, not
