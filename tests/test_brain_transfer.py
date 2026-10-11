@@ -181,13 +181,20 @@ class TransferEvidenceTests(unittest.TestCase):
             table: self.store.db.execute("SELECT count(*) FROM " + table).fetchone()[0]
             for table in tables
         }
-        with patch("brain.__main__.source_sha", return_value=BRAIN_SHA):
-            with patch("brain.__main__.GitHub", return_value=StubGitHub()):
-                code = brain_cli([
-                    "transfer-review", "--db", str(self.root / "state.sqlite"),
-                    "--input", str(source), "--output", str(destination),
-                    "--expected-sha", BRAIN_SHA,
-                ])
+        # The fixture is intentionally frozen at NOW (2026-10-08T22:00Z).
+        # Pin ONLY this integration test's application clock to the seeded
+        # observation; otherwise the legitimate 48-hour freshness rule
+        # makes this unrelated, read-only CLI test fail as wall time advances.
+        # This does not patch Store.read_report, freshness thresholds, or
+        # any code executed by the production worker.
+        with patch("brain.core.utcnow", return_value=NOW):
+            with patch("brain.__main__.source_sha", return_value=BRAIN_SHA):
+                with patch("brain.__main__.GitHub", return_value=StubGitHub()):
+                    code = brain_cli([
+                        "transfer-review", "--db", str(self.root / "state.sqlite"),
+                        "--input", str(source), "--output", str(destination),
+                        "--expected-sha", BRAIN_SHA,
+                    ])
         self.assertEqual(code, 0)
         generated = json.loads((destination / "transfer-review.json").read_text())
         self.assertEqual(generated["status"], "DRAFT_PR_CHECKS_PASSED_NOT_ADOPTED")
@@ -200,6 +207,20 @@ class TransferEvidenceTests(unittest.TestCase):
         self.assertEqual(original.stat().st_mtime_ns, original_mtime)
         self.assertEqual(original.stat().st_mode & 0o777, original_mode)
         self.assertEqual(os.stat(destination / "transfer-review.json").st_mode & 0o777, 0o600)
+
+    def test_frozen_transfer_fixture_expires_at_real_48_hour_limit(self):
+        # Pinning one integration test must never weaken production's real
+        # 172800-second report and source freshness boundaries.
+        at_limit = self.store.read_report(
+            BRAIN_SHA, now="2026-10-10T22:00:00Z"
+        )
+        self.assertEqual(at_limit["source_sha"], BRAIN_SHA)
+        with self.assertRaisesRegex(
+            BrainError, "STALE_REPORT: generated_at expired"
+        ):
+            self.store.read_report(
+                BRAIN_SHA, now="2026-10-10T22:00:01Z"
+            )
 
     def test_cli_rejects_symlinked_or_corrupt_source_before_writing_receipt(self):
         source = self.root / "input.json"
