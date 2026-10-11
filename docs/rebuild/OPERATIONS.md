@@ -158,8 +158,12 @@ an optional public recursive Git-tree GET exceeds 2 MB, bind the original
 HEAD commit to its root Git tree via the existing original GitHub provider,
 then inspect **one pinned root and at most four pinned nonrecursive child
 trees** to a maximum of two descendant levels. Every tree object must
-match its expected SHA and not declare truncation; every selected code
-blob must still match original size, Git blob SHA and original bytes SHA256.
+match its expected SHA and not declare truncation. File modes are also
+validated: only Git regular blobs (100644 or 100755) can become source
+candidates; symbolic-link blobs (120000) are skipped, submodules (160000)
+are never traversed, and malformed/mismatched modes fail closed. Every
+selected code blob must still match original size, Git blob SHA and
+original bytes SHA256.
 Never fetch/interpret the oversized recursive body or invent unvisited
 paths. A verified source under the partial tree reports explicit
 `bounded_tree_scans` metadata and `OBSERVED_WITH_BOUNDED_TREE_COVERAGE`

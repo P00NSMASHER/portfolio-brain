@@ -36,7 +36,8 @@ TARGET={"project":"freight-recovery","query":"freight invoice audit",
 class PinnedProvider:
     def __init__(self, *, damaged_commit=False, bad_root=False,
                  bad_child=False, truncated=False, bad_blob=False,
-                 no_code=False, second=False):
+                 no_code=False, second=False, source_mode="100644",
+                 tree_mode="040000"):
         self.calls=[]
         self.damaged_commit=damaged_commit
         self.bad_root=bad_root
@@ -45,6 +46,8 @@ class PinnedProvider:
         self.bad_blob=bad_blob
         self.no_code=no_code
         self.second=second
+        self.source_mode=source_mode
+        self.tree_mode=tree_mode
     def __call__(self,path):
         self.calls.append(path)
         other="ExampleOrg/verified-small"
@@ -68,28 +71,28 @@ class PinnedProvider:
             return {"sha":("8"*40 if self.bad_root else ROOT),
                     "truncated":self.truncated,
                     "tree":[
-                        {"path":"src","type":"tree","sha":SRC},
-                        {"path":"tests","type":"tree","sha":TESTS},
-                        {"path":"lib","type":"tree","sha":LIB},
-                        {"path":"docs","type":"tree","sha":"1"*40},
-                        {"path":"assets","type":"tree","sha":"2"*40},
-                        {"path":"frontend","type":"tree","sha":"3"*40},
-                        {"path":"vendor","type":"tree","sha":"4"*40},
+                        {"path":"src","type":"tree","mode":self.tree_mode,"sha":SRC},
+                        {"path":"tests","type":"tree","mode":"040000","sha":TESTS},
+                        {"path":"lib","type":"tree","mode":"040000","sha":LIB},
+                        {"path":"docs","type":"tree","mode":"040000","sha":"1"*40},
+                        {"path":"assets","type":"tree","mode":"040000","sha":"2"*40},
+                        {"path":"frontend","type":"tree","mode":"040000","sha":"3"*40},
+                        {"path":"vendor","type":"tree","mode":"040000","sha":"4"*40},
                     ]}
         if path=="/repos/"+NAME+"/git/trees/"+SRC:
             return {"sha":SRC,"truncated":False,"tree":[
-                {"path":"freight","type":"tree","sha":SUB},
+                {"path":"freight","type":"tree","mode":"040000","sha":SUB},
             ]}
         if path=="/repos/"+NAME+"/git/trees/"+SUB:
             return {"sha":("7"*40 if self.bad_child else SUB),
                     "truncated":False,
                     "tree":[] if self.no_code else [
-                        {"path":"invoice_match.py","type":"blob",
+                        {"path":"invoice_match.py","type":"blob","mode":self.source_mode,
                          "size":len(CODE),"sha":CODE_SHA},
                     ]}
         if path=="/repos/"+NAME+"/git/trees/"+TESTS:
             return {"sha":TESTS,"truncated":False,"tree":[
-                {"path":"test_invoice_match.py","type":"blob",
+                {"path":"test_invoice_match.py","type":"blob","mode":"100644",
                  "size":len(TEST),"sha":TEST_SHA},
             ]}
         if path=="/repos/"+NAME+"/git/trees/"+LIB:
@@ -102,7 +105,7 @@ class PinnedProvider:
             return {"commit":{"sha":HEAD}}
         if path=="/repos/"+other+"/git/trees/"+HEAD+"?recursive=1" and self.second:
             return {"truncated":False,"tree":[{
-                "path":"audit.py","type":"blob","sha":CODE_SHA,
+                "path":"audit.py","type":"blob","mode":"100644","sha":CODE_SHA,
                 "size":len(CODE),
             }]}
         if path=="/repos/"+other+"/git/blobs/"+CODE_SHA and self.second:
@@ -138,6 +141,46 @@ class BoundedPinnedTreeTests(unittest.TestCase):
         self.assertFalse(any("/git/trees/"+"4"*40 in v for v in provider.calls))
         self.assertEqual(provider.calls.count(
             "/repos/"+NAME+"/git/commits/"+HEAD),1)
+
+    def test_symlink_source_is_not_misclassified_as_regular_code(self):
+        api=GitHub(transport=PinnedProvider(source_mode="120000"))
+        with self.assertRaisesRegex(
+            BrainError,
+            "DISCOVERY_ALL_SEARCH_RESULTS_UNAVAILABLE:"
+            " partial tree no eligible source at tree; verified_candidates=0",
+        ):
+            api.discover(TARGET)
+        self.assertEqual(api.discovery_bounded_trees,[])
+        self.assertEqual(api.discovery_unavailable,[{
+            "repository":NAME,"stage":"tree",
+            "reason":"SEARCH_RESULT_BOUNDED_TREE_NO_ELIGIBLE_SOURCE",
+        }])
+
+    def test_symlink_only_hit_requires_independent_verified_alternate(self):
+        api=GitHub(transport=PinnedProvider(source_mode="120000",second=True))
+        found=api.discover(TARGET)
+        self.assertEqual(len(found),1)
+        self.assertEqual(found[0][0]["repository"],"ExampleOrg/verified-small")
+        self.assertEqual(found[0][0]["code_sha256"],hashlib.sha256(CODE).hexdigest())
+        self.assertEqual(len(api.discovery_unavailable),1)
+        self.assertEqual(api.discovery_bounded_trees,[])
+
+    def test_executable_regular_git_blob_is_eligible_source(self):
+        api=GitHub(transport=PinnedProvider(source_mode="100755"))
+        found=api.discover(TARGET)
+        self.assertEqual(len(found),1)
+        self.assertEqual(found[0][0]["blob_sha"],CODE_SHA)
+        self.assertEqual(api.discovery_unavailable,[])
+
+    def test_missing_or_mismatched_git_modes_fail_closed(self):
+        for config in ({"source_mode":None}, {"source_mode":"040000"},
+                       {"tree_mode":"100644"}):
+            with self.subTest(config=config):
+                api=GitHub(transport=PinnedProvider(**config))
+                with self.assertRaisesRegex(BrainError,"BOUNDED_TREE_MODE_INVALID"):
+                    api.discover(TARGET)
+                self.assertEqual(api.discovery_bounded_trees,[])
+                self.assertEqual(api.discovery_unavailable,[])
 
     def test_commit_root_or_child_mismatch_fatal_not_quarantined(self):
         for field in ("damaged_commit","bad_root","bad_child"):
