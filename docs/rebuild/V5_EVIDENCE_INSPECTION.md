@@ -248,6 +248,43 @@ authentication, immutable ZIP/SQLite evidence, original failed-run inventory,
 Cloudflare P-256 provenance, and separate terminal V5 acceptance are
 still required.
 
+### Unique Cloudflare and GitHub scheduler events (V5-only)
+
+A GitHub workflow-run ID is NOT itself proof of a distinct original Cron
+occurrence. For every Cloudflare-origin \`workflow_dispatch\` that otherwise
+qualifies as an automatic V5 completion, the independent collector must
+record and independently corroborate these original-source fields:
+
+- \`provider_event_id\`: the unique Cloudflare Workers Observability
+  scheduled-event metadata ID (ASCII identity; **not** invented from the
+  GitHub run ID)
+- \`scheduled_at\`: the provider's original \`scheduledTime\` in explicit UTC
+- \`core_run_id\`: the actual GitHub run bound by the independently checked
+  signed Cloudflare P-256 dispatch and original completed core receipt
+
+The V5 read-only evaluator requires the bound core ID to match the exact
+GitHub census run, the scheduled event to precede that run's provider
+\`created_at\`, and **both** the event ID and original scheduled instant
+to be unique across credited Cloudflare completions. Replaying one Cron
+event into two different successful GitHub runs now returns \`BLOCKED\`,
+not additional six-hour completion credit. Original event IDs/times from
+Cloudflare are separate evidence from GitHub's workflow job timestamps.
+If fields are absent, acquire and retain the real original provider logs;
+never backfill fabricated identifiers or infer from run creation times.
+
+A separately corroborated GitHub scheduler/watchdog source identified by
+\`github_schedule.clock_run_id\` also has a unique clock-run constraint.
+Direct GitHub-native \`event=schedule\` cores remain eligible under the
+original provider run/attempt checks. The legacy V3 boolean-only
+\`external_clock.kind=scheduled\` adapter stays supported by V3 for
+historical replay, but is **not** V5 automatic completion proof.
+All old V3 contracts remain unchanged.
+
+These are **consistency checks over separately acquired evidence**, not
+independent verification of the provider itself, completed Cloudflare
+origin, original ZIP/SQLite or a six-hour terminal receipt. Passing any
+such check can yield at most \`PRE_POSTVALIDATION\`.
+
 ### Required evidence acquisition before supplying the manifest
 
 Acquire independently from original GitHub and Cloudflare providers, not
@@ -335,7 +372,10 @@ from a claimed summary or a hand-written JSON file. At minimum:
         "provider_cron_verified": true,
         "signed_origin_verified": true,
         "core_receipt_verified": true,
-        "state_verified": true
+        "state_verified": true,
+        "provider_event_id": "<original unique Cloudflare event metadata ID>",
+        "scheduled_at": "<original Cloudflare scheduledTime in UTC Z>",
+        "core_run_id": 123
       }
     }
   ]

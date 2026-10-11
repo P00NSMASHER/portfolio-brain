@@ -705,6 +705,87 @@ def evaluate_v5_window(records, *, inventory, source_sha, current_main,
             "BLOCKED", "V5_RERUN_NOT_NEW_SCHEDULED_CYCLE", (), 0, 0,
         )
 
+    # Distinct GitHub runs do NOT prove distinct scheduled events. A single
+    # Cloudflare scheduled() invocation or a GitHub watchdog schedule could
+    # otherwise be replayed into multiple independently successful cores.
+    # Require original provider event identity/time + signed core binding
+    # only for cycles that the historical reducer has already credited.
+    credited = set(decision.automatic_run_ids)
+    seen_cloudflare_events = set()
+    seen_cloudflare_ticks = set()
+    seen_github_clock_runs = set()
+    for record in records:
+        if record["run_id"] not in credited or record["event"] != "workflow_dispatch":
+            continue
+        clock = record.get("external_clock")
+        if type(clock) is not dict:
+            return Evaluation(
+                "BLOCKED", "V5_EXTERNAL_SCHEDULER_UNVERIFIED", (), 0, 0,
+            )
+        if clock.get("kind") == "cloudflare_cron_v1":
+            # 'provider_event_id' is the original Workers Observability
+            # metadata event ID, 'scheduled_at' is provider scheduledTime;
+            # 'core_run_id' is extracted from the independently verified
+            # signed dispatch/receipt. These are COLLECTOR annotations, not
+            # claims that the pure evaluator can query or authenticate them.
+            event_id = clock.get("provider_event_id")
+            require(
+                type(event_id) is str
+                and 1 <= len(event_id) <= 128
+                and all(char.isascii() and (
+                    char.isalnum() or char in "-_:."
+                ) for char in event_id),
+                "V5_CLOUDFLARE_EVENT_ID_INVALID",
+            )
+            require(
+                type(clock.get("core_run_id")) is int
+                and clock["core_run_id"] == record["run_id"],
+                "V5_CLOUDFLARE_CORE_RUN_BINDING_INVALID",
+            )
+            require(
+                type(clock.get("scheduled_at")) is str,
+                "V5_CLOUDFLARE_SCHEDULE_TIME_REQUIRED",
+            )
+            event_time = utc(clock["scheduled_at"])
+            run_created = utc(
+                provider_rows[(record["run_id"], record["attempt"])]
+                ["created_at"]
+            )
+            require(
+                event_time <= run_created,
+                "V5_CLOUDFLARE_EVENT_CHRONOLOGY_INVALID",
+            )
+            if event_id in seen_cloudflare_events:
+                return Evaluation(
+                    "BLOCKED", "V5_SCHEDULED_PROVIDER_EVENT_REUSED", (), 0, 0,
+                )
+            if event_time in seen_cloudflare_ticks:
+                return Evaluation(
+                    "BLOCKED", "V5_SCHEDULED_PROVIDER_TICK_REUSED", (), 0, 0,
+                )
+            seen_cloudflare_events.add(event_id)
+            seen_cloudflare_ticks.add(event_time)
+        elif clock.get("kind") == "github_schedule":
+            # Historical reducer has already checked original GitHub-native
+            # clock-job provenance flags. One origin run may produce at most
+            # one independently credited dispatch in a V5 observation.
+            origin_id = clock.get("clock_run_id")
+            require(
+                type(origin_id) is int and origin_id > 0,
+                "V5_GITHUB_SCHEDULE_RUN_ID_INVALID",
+            )
+            if origin_id in seen_github_clock_runs:
+                return Evaluation(
+                    "BLOCKED", "V5_SCHEDULED_PROVIDER_EVENT_REUSED", (), 0, 0,
+                )
+            seen_github_clock_runs.add(origin_id)
+        else:
+            # The legacy 'scheduled' boolean-based adapter remains legal in
+            # historical V3, but is insufficiently source-bound for V5.
+            return Evaluation(
+                "BLOCKED", "V5_EXTERNAL_SCHEDULER_UNVERIFIED", (), 0, 0,
+            )
+
     # The V3 reducer retains its historical integer gap reporting: int(5400.5)
     # rounds down to 5400. V5's strict <=5400s cap must compare the exact
     # provider-bound completion instants, including fractional seconds.

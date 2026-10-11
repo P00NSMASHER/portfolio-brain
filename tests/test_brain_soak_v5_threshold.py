@@ -64,6 +64,11 @@ def fixtures(hours=None, *, automatic=True):
                 "signed_origin_verified": True,
                 "core_receipt_verified": True,
                 "state_verified": True,
+                # Simulated, independently corroborated Cron metadata. The
+                # pure test never creates genuine provider proof.
+                "provider_event_id": "synthetic-cron-" + str(9000+i),
+                "scheduled_at": stamp(start - timedelta(seconds=5)),
+                "core_run_id": 9000+i,
             }
         records.append(item)
     return records
@@ -323,6 +328,111 @@ class V5SixHourGate(unittest.TestCase):
             inspect(failed, inventory=census(failed), now=1.2).reason,
             "CORE_EXECUTION_FAILED",
         )
+
+    def test_duplicate_cloudflare_event_id_cannot_earn_second_tick(self):
+        records = fixtures()
+        records[6]["external_clock"]["provider_event_id"] = (
+            records[5]["external_clock"]["provider_event_id"]
+        )
+        prior = evaluate_window(
+            records, source_sha=SHA, current_main=SHA,
+            first_state_parent=PARENT, started_at=stamp(BEGIN),
+            deadline_at=stamp(BEGIN + timedelta(hours=8)),
+            now=stamp(BEGIN + timedelta(hours=6.1)),
+        )
+        self.assertEqual(prior.status, "PRE_POSTVALIDATION")
+        verdict = inspect(records)
+        self.assertEqual(verdict.status, "BLOCKED")
+        self.assertEqual(verdict.reason, "V5_SCHEDULED_PROVIDER_EVENT_REUSED")
+        self.assertEqual(verdict.automatic_run_ids, ())
+
+    def test_duplicate_cloudflare_scheduled_timestamp_is_not_two_ticks(self):
+        records = fixtures()
+        records[6]["external_clock"]["scheduled_at"] = (
+            records[5]["external_clock"]["scheduled_at"]
+        )
+        verdict = inspect(records)
+        self.assertEqual(verdict.status, "BLOCKED")
+        self.assertEqual(verdict.reason, "V5_SCHEDULED_PROVIDER_TICK_REUSED")
+
+    def test_cloudflare_core_run_binding_and_event_identity_required(self):
+        records = fixtures()
+        for key, bad, error in (
+            ("provider_event_id", None, "V5_CLOUDFLARE_EVENT_ID_INVALID"),
+            ("provider_event_id", "\nforged", "V5_CLOUDFLARE_EVENT_ID_INVALID"),
+            ("provider_event_id", True, "V5_CLOUDFLARE_EVENT_ID_INVALID"),
+            ("core_run_id", None, "V5_CLOUDFLARE_CORE_RUN_BINDING_INVALID"),
+            ("core_run_id", 987654, "V5_CLOUDFLARE_CORE_RUN_BINDING_INVALID"),
+            ("core_run_id", True, "V5_CLOUDFLARE_CORE_RUN_BINDING_INVALID"),
+            ("scheduled_at", None, "V5_CLOUDFLARE_SCHEDULE_TIME_REQUIRED"),
+        ):
+            with self.subTest(key=key, bad=bad):
+                corrupted = deepcopy(records)
+                if bad is None:
+                    del corrupted[6]["external_clock"][key]
+                else:
+                    corrupted[6]["external_clock"][key] = bad
+                with self.assertRaisesRegex(EvidenceError, error):
+                    inspect(corrupted)
+
+    def test_cloudflare_event_cannot_occur_after_github_run_creation(self):
+        records = fixtures()
+        records[6]["external_clock"]["scheduled_at"] = stamp(
+            BEGIN + timedelta(hours=3, seconds=1)
+        )
+        with self.assertRaisesRegex(
+            EvidenceError, "V5_CLOUDFLARE_EVENT_CHRONOLOGY_INVALID"
+        ):
+            inspect(records)
+
+    def test_v5_refuses_legacy_self_declared_scheduler_clock(self):
+        records = fixtures()
+        records[6]["external_clock"] = {
+            "kind": "scheduled", "source_sha": SHA,
+            "independently_verified": True,
+            "actual_task_execution_verified": True,
+            "clock_job_verified": True,
+            "core_receipt_verified": True,
+        }
+        legacy = evaluate_window(
+            records, source_sha=SHA, current_main=SHA,
+            first_state_parent=PARENT, started_at=stamp(BEGIN),
+            deadline_at=stamp(BEGIN + timedelta(hours=8)),
+            now=stamp(BEGIN + timedelta(hours=6.1)),
+        )
+        self.assertEqual(legacy.status, "PRE_POSTVALIDATION")
+        strict = inspect(records)
+        self.assertEqual(strict.status, "BLOCKED")
+        self.assertEqual(strict.reason, "V5_EXTERNAL_SCHEDULER_UNVERIFIED")
+
+    def test_unique_independent_github_schedule_origins_remain_eligible(self):
+        records = fixtures()
+        for record in records:
+            record["external_clock"] = {
+                "kind": "github_schedule", "source_sha": SHA,
+                "clock_run_id": 100000 + record["run_id"],
+                "provider_scheduler_verified": True,
+                "clock_job_verified": True,
+                "core_receipt_verified": True,
+                "core_actor_verified": True,
+            }
+        success = inspect(records)
+        self.assertEqual(success.status, "PRE_POSTVALIDATION")
+        records[6]["external_clock"]["clock_run_id"] = (
+            records[5]["external_clock"]["clock_run_id"]
+        )
+        duplicated = inspect(records)
+        self.assertEqual(duplicated.status, "BLOCKED")
+        self.assertEqual(duplicated.reason, "V5_SCHEDULED_PROVIDER_EVENT_REUSED")
+
+    def test_original_github_native_schedule_cores_still_qualify(self):
+        records = fixtures()
+        for record in records:
+            record["event"] = "schedule"
+            del record["external_clock"]
+        result = inspect(records)
+        self.assertEqual(result.status, "PRE_POSTVALIDATION")
+        self.assertEqual(len(result.automatic_run_ids), 13)
 
     def test_missing_signed_origin_cannot_satisfy_six_hour_span(self):
         records=fixtures()
