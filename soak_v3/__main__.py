@@ -7,11 +7,11 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 import sys
-from soak_v3.audit import EvidenceError, evaluate_window, evaluate_v5_window, verify_artifact, verify_v5_artifact, verify_sqlite
+from soak_v3.audit import EvidenceError, evaluate_window, evaluate_v5_window, verify_artifact, verify_v5_artifact, verify_sqlite, verify_v5_sqlite
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Non-authoritative soak evidence inspector")
-    parser.add_argument("mode", choices=["artifact", "artifact-v5", "state", "window", "window-v5"])
+    parser.add_argument("mode", choices=["artifact", "artifact-v5", "state", "state-v5", "window", "window-v5"])
     parser.add_argument("--manifest", required=True, type=Path)
     args = parser.parse_args(argv)
     try:
@@ -23,9 +23,10 @@ def main(argv=None):
             result = verifier(manifest["path"], manifest["expected_digest"],
                                      run_id=manifest["run_id"], source_sha=manifest["source_sha"],
                                      state_parent=manifest["state_parent"], state_commit=manifest["state_commit"])
-        elif args.mode == "state":
-            result = verify_sqlite(manifest["path"], expected_sequence=manifest["state_sequence"],
-                                   expected_chain=manifest["canonical_hash"], expected_source=manifest["source_sha"])
+        elif args.mode in {"state", "state-v5"}:
+            verifier = verify_v5_sqlite if args.mode == "state-v5" else verify_sqlite
+            result = verifier(manifest["path"], expected_sequence=manifest["state_sequence"],
+                              expected_chain=manifest["canonical_hash"], expected_source=manifest["source_sha"])
         else:
             evaluate = evaluate_v5_window if args.mode == "window-v5" else evaluate_window
             extras = {"inventory": manifest["inventory"]} if args.mode == "window-v5" else {}
