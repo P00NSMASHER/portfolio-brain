@@ -72,6 +72,18 @@ def fixture(*, removed=None, mutate=None, extra=False):
     return data
 
 
+def replace_zip_member(source_bytes, name, replacement):
+    """Construct a new ZIP with valid member CRCs, not an accidental corruption."""
+    with zipfile.ZipFile(io.BytesIO(source_bytes), "r") as archive:
+        original = [(item.filename, archive.read(item))
+                    for item in archive.infolist()]
+    result = io.BytesIO()
+    with zipfile.ZipFile(result, "w", compression=zipfile.ZIP_STORED) as archive:
+        for path, body in original:
+            archive.writestr(path, replacement if path == name else body)
+    return result.getvalue()
+
+
 class V5MandatoryArtifactEvidence(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
@@ -84,6 +96,85 @@ class V5MandatoryArtifactEvidence(unittest.TestCase):
         kw=dict(run_id=RUN,source_sha=SHA,
                 state_parent=PARENT,state_commit=COMMIT)
         return (verify_v5_artifact if strict else verify_artifact)(*args,**kw)
+
+    def test_duplicate_keys_are_rejected_in_every_required_v5_receipt(self):
+        original = fixture()
+        required = (
+            "delivery.json", "preflight/report.json", "report/report.json",
+            "research/report.json", "experiment/report.json",
+            "doctor/report.json",
+        )
+        with zipfile.ZipFile(io.BytesIO(original), "r") as archive:
+            documents = {name: json.loads(archive.read(name)) for name in required}
+        for name in required:
+            with self.subTest(member=name):
+                # Last-key-wins would silently accept the original legitimate
+                # source even though the same JSON object also claims another.
+                duplicate = ('{"source_sha":"' + "e" * 40 + '",'
+                             + json.dumps(documents[name], sort_keys=True)[1:])
+                payload = replace_zip_member(original, name, duplicate.encode())
+                self.assertEqual(self.check(payload, strict=False)["status"], "PASS")
+                with self.assertRaisesRegex(EvidenceError,
+                                            "V5_JSON_DUPLICATE_KEY"):
+                    self.check(payload)
+
+    def test_nested_duplicate_doctor_workload_key_is_rejected(self):
+        original = fixture()
+        with zipfile.ZipFile(io.BytesIO(original), "r") as archive:
+            text = archive.read("doctor/report.json").decode()
+        token = '"monitor": "PASS"'
+        self.assertEqual(text.count(token), 1)
+        altered = text.replace(token, '"monitor": "FAIL", "monitor": "PASS"')
+        payload = replace_zip_member(
+            original, "doctor/report.json", altered.encode()
+        )
+        self.assertEqual(self.check(payload, strict=False)["status"], "PASS")
+        with self.assertRaisesRegex(EvidenceError, "V5_JSON_DUPLICATE_KEY"):
+            self.check(payload)
+
+    def test_nonfinite_numbers_rejected_even_in_ignored_receipt_fields(self):
+        original = fixture()
+        with zipfile.ZipFile(io.BytesIO(original), "r") as archive:
+            research = archive.read("research/report.json").decode()
+        for number in ("NaN", "Infinity", "-Infinity", "1e999"):
+            with self.subTest(number=number):
+                malformed = '{"ignored_metric": ' + number + ',' + research[1:]
+                payload = replace_zip_member(
+                    original, "research/report.json", malformed.encode()
+                )
+                self.assertEqual(self.check(payload, strict=False)["status"],
+                                 "PASS")
+                with self.assertRaisesRegex(EvidenceError,
+                                            "V5_JSON_NONFINITE_NUMBER"):
+                    self.check(payload)
+
+    def test_boolean_pending_events_never_counts_as_integer_zero(self):
+        for name in (
+            "doctor/report.json", "report/report.json",
+            "research/report.json", "experiment/report.json",
+        ):
+            with self.subTest(member=name):
+                payload = fixture(mutate=(name, "pending_events", False))
+                self.assertEqual(self.check(payload, strict=False)["status"],
+                                 "PASS")
+                error = ("V5_ARTIFACT_PENDING_EVENTS_TYPE_INVALID"
+                         if name == "doctor/report.json" else
+                         "V5_WORKLOAD_PENDING_EVENTS_TYPE_INVALID")
+                with self.assertRaisesRegex(EvidenceError, error):
+                    self.check(payload)
+
+    def test_nonobject_root_receipts_fail_closed_in_v5(self):
+        original = fixture()
+        for name, error in (
+            ("delivery.json", "V5_ARTIFACT_RECEIPT_NOT_OBJECT"),
+            ("preflight/report.json", "V5_ARTIFACT_RECEIPT_NOT_OBJECT"),
+            ("doctor/report.json", "V5_ARTIFACT_RECEIPT_NOT_OBJECT"),
+            ("research/report.json", "V5_WORKLOAD_RECEIPT_NOT_OBJECT"),
+        ):
+            with self.subTest(member=name):
+                payload = replace_zip_member(original, name, b"[]")
+                with self.assertRaisesRegex(EvidenceError, error):
+                    self.check(payload)
 
     def test_six_original_receipts_pass_with_consistent_chain(self):
         receipt=self.check(fixture())

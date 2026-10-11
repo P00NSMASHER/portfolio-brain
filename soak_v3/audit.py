@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 import hashlib
 import io
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -195,9 +196,38 @@ def _read_verified_artifact_bytes(path, expected_digest, *, run_id,
     return raw
 
 
+def _strict_v5_receipt_json(raw):
+    """Fail closed on ambiguous JSON values in V5 provider receipt members.
+
+    Python's ordinary JSON reader uses last-key-wins and accepts NaN/Infinity.
+    Those permissive defaults must not silently turn contradictory evidence
+    into a V5 PASS. Do not change the historical V3 decoding contract.
+    """
+    def unique_pairs(pairs):
+        result = {}
+        for key, value in pairs:
+            require(key not in result, "V5_JSON_DUPLICATE_KEY")
+            result[key] = value
+        return result
+
+    def reject_constant(_value):
+        raise EvidenceError("V5_JSON_NONFINITE_NUMBER")
+
+    def finite_float(value):
+        number = float(value)
+        require(math.isfinite(number), "V5_JSON_NONFINITE_NUMBER")
+        return number
+
+    return json.loads(
+        raw, object_pairs_hook=unique_pairs,
+        parse_constant=reject_constant, parse_float=finite_float,
+    )
+
+
 def _verify_artifact_bytes(raw, expected_digest, *, run_id,
-                           source_sha, state_parent, state_commit):
-    """Historical delivery/preflight/doctor contract on already hashed bytes."""
+                           source_sha, state_parent, state_commit,
+                           strict_json=False):
+    """Delivery/preflight/doctor checks, with strict JSON for V5 only."""
     try:
         with zipfile.ZipFile(io.BytesIO(raw), "r") as z:
             names = z.namelist()
@@ -205,11 +235,23 @@ def _verify_artifact_bytes(raw, expected_digest, *, run_id,
             require(all(not n.startswith("/") and ".." not in Path(n).parts for n in names), "ARTIFACT_UNSAFE_PATH")
             require(sum(i.file_size for i in z.infolist()) <= 4_000_000, "ARTIFACT_UNBOUNDED_UNCOMPRESSED")
             require(all(n in names for n in ("delivery.json", "doctor/report.json", "preflight/report.json")), "ARTIFACT_MISSING_REQUIRED_REPORT")
-            delivery = json.loads(z.read("delivery.json"))
-            doctor = json.loads(z.read("doctor/report.json"))
-            preflight = json.loads(z.read("preflight/report.json"))
+            parser = _strict_v5_receipt_json if strict_json else json.loads
+            delivery = parser(z.read("delivery.json"))
+            doctor = parser(z.read("doctor/report.json"))
+            preflight = parser(z.read("preflight/report.json"))
+    except EvidenceError as exc:
+        if strict_json:
+            raise
+        # Keep the old V3 exception classification intact.
+        raise EvidenceError("ARTIFACT_READ_FAILED") from exc
     except (zipfile.BadZipFile, ValueError, KeyError, OSError) as exc:
         raise EvidenceError("ARTIFACT_READ_FAILED") from exc
+    if strict_json:
+        require(all(type(item) is dict for item in
+                    (delivery, doctor, preflight)),
+                "V5_ARTIFACT_RECEIPT_NOT_OBJECT")
+        require(type(doctor.get("pending_events")) is int,
+                "V5_ARTIFACT_PENDING_EVENTS_TYPE_INVALID")
     require(delivery.get("source_sha") == source_sha and delivery.get("run_id") == str(run_id), "DELIVERY_SOURCE_OR_RUN_MISMATCH")
     require(delivery.get("state_parent") == state_parent and delivery.get("state_commit") == state_commit, "DELIVERY_STATE_LINEAGE_INVALID")
     require(delivery.get("publication_verified") is True and delivery.get("soak_completed") is False, "DELIVERY_NOT_VERIFIED")
@@ -254,6 +296,7 @@ def verify_v5_artifact(path, expected_digest, *, run_id, source_sha,
     basic = _verify_artifact_bytes(
         raw, expected_digest, run_id=run_id, source_sha=source_sha,
         state_parent=state_parent, state_commit=state_commit,
+        strict_json=True,
     )
     try:
         with zipfile.ZipFile(io.BytesIO(raw), "r") as archive:
@@ -263,7 +306,8 @@ def verify_v5_artifact(path, expected_digest, *, run_id, source_sha,
                         "experiment/report.json", "doctor/report.json")
             require(all(name in names for name in required),
                     "V5_WORKLOAD_RECEIPT_MISSING")
-            docs = [json.loads(archive.read(name)) for name in required]
+            docs = [_strict_v5_receipt_json(archive.read(name))
+                    for name in required]
     except EvidenceError:
         # EvidenceError derives from ValueError. Preserve explicit fail-closed
         # missing-report and CRC error codes instead of relabeling them.
@@ -273,6 +317,8 @@ def verify_v5_artifact(path, expected_digest, *, run_id, source_sha,
     require(all(type(doc) is dict for doc in docs),
             "V5_WORKLOAD_RECEIPT_NOT_OBJECT")
     for kind, doc in zip(("monitor", "research", "experiment", "doctor"), docs):
+        require(type(doc.get("pending_events")) is int,
+                "V5_WORKLOAD_PENDING_EVENTS_TYPE_INVALID_" + kind.upper())
         require(doc.get("status") == "PASS"
                 and doc.get("source_sha") == source_sha
                 and doc.get("pending_events") == 0,

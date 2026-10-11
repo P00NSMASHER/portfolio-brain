@@ -66,6 +66,23 @@ otherwise unchanged. The V5 mode additionally checks **every** member
 CRC and all four original mandatory workload receipts. Adversarial
 tests enforce both swap boundaries and the bounded pre-read behavior.
 
+### Ambiguous JSON receipt refusal (V5-only review hardening)
+
+`artifact-v5` now parses delivery, preflight, monitor, research,
+experiment and doctor JSON as **unambiguous evidence**. Duplicate keys
+(including nested mandatory-workload keys), non-finite numbers such as
+`NaN`/`Infinity`, and numeric overflows such as `1e999` fail closed
+even when ZIP SHA-256 and member CRCs are valid. The root receipt must
+be an object, and every mandatory `pending_events` count must be a
+real JSON integer, never `false` interpreted as zero.
+
+These checks reuse the same original SHA-256-bound in-memory ZIP bytes
+and existing workload consistency validator. The historical `artifact`
+V3 parsing contract stays unchanged; only `artifact-v5` is strict.
+Malformed originals remain rejected evidence, not repaired files.
+Passing strict local inspection does **not** authenticate the provider
+digest, original scheduler, complete failures or V5 terminal acceptance.
+
 ### V5 raw-state capacity and immutable authority binding
 
 Use `python -m soak_v3 state-v5 --manifest <local-state.json>` only for a
