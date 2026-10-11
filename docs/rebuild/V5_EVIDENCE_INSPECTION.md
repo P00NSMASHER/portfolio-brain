@@ -161,6 +161,40 @@ snapshot**, not proof of original Cloudflare `scheduled()` provenance,
 all workflow artifacts, complete failure inventory, protected deployment,
 or the mandatory six-hour uninterrupted V5 automatic execution.
 
+### Original GitHub run/job clock binding (V5-only, read-only)
+
+The six-hour clock uses **completed GitHub monitor-job times**, not a
+caller-typed completion timestamp. For each `completed` census row the
+independent collector must capture original workflow-run `created_at` and
+`run_started_at`, plus the original `monitor` job obtained from the
+**attempt-scoped** GitHub Actions jobs endpoint
+(`GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt}/jobs`).
+Persist the exact selected job's `id`, `run_id`, `head_sha`, `name`,
+`status`, `conclusion`, `started_at` and `completed_at`; include
+`attempt_scope` as an independent collector annotation identifying
+the attempt in the REST URL, **not as a claimed native job field**.
+
+`window-v5` now requires an explicit provider run attempt and one unique
+completed `monitor` job for each completed core. It rejects mismatched
+job run/source/attempt identities, missing job times, incongruent job
+status/conclusion, backwards timestamps or an altered manifest start or
+completion. Provider chronology must satisfy
+`created_at <= run_started_at <= job.started_at <= job.completed_at <= now`.
+For queued/in-progress cores, no completed-time proof may be supplied in
+the run manifest; these cannot contribute completed automatic cycles.
+Every failed core remains in the original census and still fails the
+underlying unchanged reducer.
+
+This is a **consistency gate over separately collected data**, not an
+authentication mechanism for a user-written JSON manifest. Obtain full
+provider pages, retain original API evidence, and independently corroborate
+job/run identity before preparing the manifest. If the collection tool drops
+job timing fields, obtain the original GitHub REST job metadata instead of
+guessing times. A run's `updated_at` is not by itself proof of the
+monitor job's exact completion. The V3 two-hour evaluator and its input
+shape are unchanged, and V5 still returns at most `PRE_POSTVALIDATION`,
+never an authoritative PASS.
+
 ### Required evidence acquisition before supplying the manifest
 
 Acquire independently from original GitHub and Cloudflare providers, not
@@ -212,7 +246,19 @@ from a claimed summary or a hand-written JSON file. At minimum:
         "run_attempt": 1,
         "head_sha": "<40-char exact source SHA>",
         "event": "workflow_dispatch",
-        "created_at": "<original GitHub timestamp>",
+        "created_at": "<original GitHub run created_at>",
+        "run_started_at": "<original GitHub run run_started_at>",
+        "job": {
+          "id": 456,
+          "run_id": 123,
+          "attempt_scope": 1,
+          "head_sha": "<40-char exact source SHA>",
+          "name": "monitor",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "<original attempt-scoped job started_at>",
+          "completed_at": "<original attempt-scoped job completed_at>"
+        },
         "status": "completed"
       }
     ]

@@ -81,8 +81,20 @@ def census(records, *, coverage=True):
                 "head_sha": item["source_sha"],
                 "event": item["event"],
                 "created_at": item["started_at"],
+                "run_started_at": item["started_at"],
                 "status": item["status"],
                 "conclusion": item["conclusion"],
+                "job": ({
+                    "id": 200_000 + item["run_id"],
+                    "run_id": item["run_id"],
+                    "attempt_scope": item["attempt"],
+                    "head_sha": item["source_sha"],
+                    "name": "monitor",
+                    "status": "completed",
+                    "conclusion": item["conclusion"],
+                    "started_at": item["started_at"],
+                    "completed_at": item["completed_at"],
+                } if item["status"] == "completed" else None),
             }
             for item in records
         ],
@@ -181,6 +193,128 @@ class V5SixHourGate(unittest.TestCase):
         with self.assertRaisesRegex(EvidenceError,
                                     "V5_PROVIDER_STARTED_BEFORE_CREATED"):
             inspect(records,inventory=provider)
+
+    def test_manifest_clock_inflation_cannot_forge_six_hour_span(self):
+        # Provider completes only 5.5 hours after the first run. An altered
+        # manifest stretches the last completion by 30 minutes: the legacy
+        # reducer would enter postvalidation, but strict V5 must reject it.
+        records = fixtures([n / 2 for n in range(12)])
+        original_provider = census(records)
+        records[-1]["completed_at"] = stamp(
+            BEGIN + timedelta(hours=6, seconds=45)
+        )
+        common = dict(
+            source_sha=SHA, current_main=SHA,
+            first_state_parent=PARENT, started_at=stamp(BEGIN),
+            deadline_at=stamp(BEGIN + timedelta(hours=8)),
+            now=stamp(BEGIN + timedelta(hours=6.2)),
+        )
+        self.assertEqual(
+            evaluate_window(records, **common).status,
+            "PRE_POSTVALIDATION",
+        )
+        with self.assertRaisesRegex(
+            EvidenceError, "V5_PROVIDER_JOB_COMPLETED_MISMATCH"
+        ):
+            inspect(records, inventory=original_provider, now=6.2)
+
+    def test_manifest_run_start_must_equal_original_github_run_start(self):
+        records = fixtures()
+        inventory = census(records)
+        records[6]["started_at"] = stamp(
+            BEGIN + timedelta(hours=3, seconds=10)
+        )
+        with self.assertRaisesRegex(
+            EvidenceError, "V5_PROVIDER_RUN_STARTED_MISMATCH"
+        ):
+            inspect(records, inventory=inventory)
+
+    def test_missing_provider_job_or_attempt_is_not_inferred(self):
+        records = fixtures()
+        for field, reason in (
+            ("job", "V5_PROVIDER_JOB_REQUIRED"),
+            ("run_started_at", "V5_PROVIDER_RUN_START_REQUIRED"),
+            ("run_attempt", "V5_PROVIDER_RUN_ID_INVALID"),
+        ):
+            with self.subTest(field=field):
+                inventory = census(records)
+                del inventory["core_runs"][6][field]
+                with self.assertRaisesRegex(EvidenceError, reason):
+                    inspect(records, inventory=inventory)
+
+    def test_wrong_job_identity_and_rerun_attempt_fail_closed(self):
+        records = fixtures()
+        for field, bad in (
+            ("run_id", 999),
+            ("attempt_scope", 2),
+            ("head_sha", "e" * 40),
+            ("name", "unrelated-check"),
+            ("id", True),
+        ):
+            with self.subTest(field=field):
+                inventory = census(records)
+                inventory["core_runs"][6]["job"][field] = bad
+                with self.assertRaisesRegex(
+                    EvidenceError, "V5_PROVIDER_JOB_IDENTITY_INVALID"
+                ):
+                    inspect(records, inventory=inventory)
+        inventory = census(records)
+        inventory["core_runs"][6]["job"]["id"] = (
+            inventory["core_runs"][5]["job"]["id"]
+        )
+        with self.assertRaisesRegex(
+            EvidenceError, "V5_PROVIDER_JOB_DUPLICATE"
+        ):
+            inspect(records, inventory=inventory)
+        rerun = fixtures()
+        rerun[6]["attempt"] = 2
+        inventory = census(rerun)
+        inventory["core_runs"][6]["job"]["attempt_scope"] = 1
+        with self.assertRaisesRegex(
+            EvidenceError, "V5_PROVIDER_JOB_IDENTITY_INVALID"
+        ):
+            inspect(rerun, inventory=inventory)
+
+    def test_job_result_and_chronology_must_match_original_provider(self):
+        records = fixtures()
+        for field, bad, reason in (
+            ("status", "in_progress", "V5_PROVIDER_JOB_COMPLETION_INVALID"),
+            ("conclusion", "failure", "V5_PROVIDER_JOB_RESULT_INVALID"),
+            ("started_at", stamp(BEGIN + timedelta(hours=4)),
+             "V5_PROVIDER_JOB_TIME_INVALID"),
+            ("completed_at", None, "V5_PROVIDER_JOB_TIME_REQUIRED"),
+            ("completed_at", stamp(BEGIN + timedelta(hours=7)),
+             "V5_PROVIDER_JOB_TIME_INVALID"),
+        ):
+            with self.subTest(field=field, value=bad):
+                inventory = census(records)
+                inventory["core_runs"][6]["job"][field] = bad
+                with self.assertRaisesRegex(EvidenceError, reason):
+                    inspect(records, inventory=inventory)
+
+    def test_failed_and_unfinished_provider_rows_cannot_earn_clock_credit(self):
+        records = fixtures([0, .5, 1])
+        records[1]["status"] = "in_progress"
+        records[1]["conclusion"] = None
+        records[1]["completed_at"] = None
+        inventory = census(records)
+        self.assertEqual(
+            inspect(records, inventory=inventory, now=1.2).status,
+            "WAITING",
+        )
+        records[1]["completed_at"] = stamp(
+            BEGIN + timedelta(hours=.5, seconds=45)
+        )
+        with self.assertRaisesRegex(
+            EvidenceError, "V5_PROVIDER_UNFINISHED_COMPLETION_INVALID"
+        ):
+            inspect(records, inventory=inventory, now=1.2)
+        failed = fixtures([0, .5, 1])
+        failed[1]["conclusion"] = "failure"
+        self.assertEqual(
+            inspect(failed, inventory=census(failed), now=1.2).reason,
+            "CORE_EXECUTION_FAILED",
+        )
 
     def test_missing_signed_origin_cannot_satisfy_six_hour_span(self):
         records=fixtures()

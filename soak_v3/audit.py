@@ -534,9 +534,11 @@ def evaluate_v5_window(records, *, inventory, source_sha, current_main,
     # manifest which has *obviously* dropped a reported failed/queued core.
     expected = set()
     provider_rows = {}
+    used_job_ids = set()
     for item in inventory["core_runs"]:
         require(type(item) is dict, "V5_PROVIDER_INVENTORY_ROW_INVALID")
-        run_id, attempt = item.get("run_id"), item.get("run_attempt", 1)
+        # Never silently equate a missing attempt number with attempt one.
+        run_id, attempt = item.get("run_id"), item.get("run_attempt")
         require(type(run_id) is int and run_id > 0
                 and type(attempt) is int and attempt > 0,
                 "V5_PROVIDER_RUN_ID_INVALID")
@@ -563,6 +565,43 @@ def evaluate_v5_window(records, *, inventory, source_sha, current_main,
         )
         created = utc(item.get("created_at"))
         require(start <= created <= instant, "V5_PROVIDER_RUN_TIME_INVALID")
+        if item["status"] == "completed":
+            # The original Actions *run* provides run_started_at; the
+            # attempt-scoped Actions jobs API provides the monitor job's
+            # actual started_at/completed_at. Its attempt_scope is an
+            # independent collector annotation of the REST URL queried,
+            # NOT a field asserted to exist in GitHub's raw job schema.
+            require(type(item.get("run_started_at")) is str,
+                    "V5_PROVIDER_RUN_START_REQUIRED")
+            job = item.get("job")
+            require(type(job) is dict, "V5_PROVIDER_JOB_REQUIRED")
+            require(
+                type(job.get("id")) is int and job["id"] > 0
+                and type(job.get("run_id")) is int
+                and job["run_id"] == run_id
+                and type(job.get("attempt_scope")) is int
+                and job["attempt_scope"] == attempt
+                and job.get("name") == "monitor"
+                and job.get("head_sha") == source_sha,
+                "V5_PROVIDER_JOB_IDENTITY_INVALID",
+            )
+            require(job["id"] not in used_job_ids, "V5_PROVIDER_JOB_DUPLICATE")
+            used_job_ids.add(job["id"])
+            require(job.get("status") == "completed"
+                    and type(job.get("conclusion")) is str,
+                    "V5_PROVIDER_JOB_COMPLETION_INVALID")
+            if item["conclusion"] == "success":
+                require(job["conclusion"] == "success",
+                        "V5_PROVIDER_JOB_RESULT_INVALID")
+            require(type(job.get("started_at")) is str
+                    and type(job.get("completed_at")) is str,
+                    "V5_PROVIDER_JOB_TIME_REQUIRED")
+            run_begin = utc(item["run_started_at"])
+            job_begin = utc(job["started_at"])
+            job_end = utc(job["completed_at"])
+            require(created <= run_begin, "V5_PROVIDER_STARTED_BEFORE_CREATED")
+            require(run_begin <= job_begin <= job_end <= instant,
+                    "V5_PROVIDER_JOB_TIME_INVALID")
     manifest = set()
     for record in records:
         require(type(record) is dict, "V5_RUN_MANIFEST_ROW_INVALID")
@@ -585,6 +624,23 @@ def evaluate_v5_window(records, *, inventory, source_sha, current_main,
             utc(provider["created_at"]) <= utc(record.get("started_at")),
             "V5_PROVIDER_STARTED_BEFORE_CREATED",
         )
+        if provider["status"] == "completed":
+            # Cross-bind manifest times to independently acquired GitHub
+            # run and attempt-scoped monitor-job timestamps. No synthetic
+            # six-hour span from manually stretched completion times.
+            require(
+                utc(record.get("started_at")) ==
+                utc(provider["run_started_at"]),
+                "V5_PROVIDER_RUN_STARTED_MISMATCH",
+            )
+            require(
+                utc(record.get("completed_at")) ==
+                utc(provider["job"]["completed_at"]),
+                "V5_PROVIDER_JOB_COMPLETED_MISMATCH",
+            )
+        else:
+            require(record.get("completed_at") is None,
+                    "V5_PROVIDER_UNFINISHED_COMPLETION_INVALID")
 
     # Runtime decisions, hashes, completion gaps and error classifications
     # are delegated to the existing (independently tested) strict reducer.
