@@ -642,9 +642,43 @@ def evaluate_v5_window(records, *, inventory, source_sha, current_main,
             require(record.get("completed_at") is None,
                     "V5_PROVIDER_UNFINISHED_COMPLETION_INVALID")
 
-    # Keep historical V3 reducer outcomes intact: in particular, a genuine
-    # failed core must remain FAIL and an incomplete core remain WAITING,
-    # regardless of whether it was a GitHub rerun.
+    # For V5, inspect the COMPLETE provider-reconciled census before the
+    # first unfinished run can short-circuit the legacy chronological reducer.
+    # Otherwise an earlier queued core could hide a later known FAILED core
+    # and mislabel disqualifying evidence as merely WAITING. Preserve genuine
+    # source drift as the stronger source-boundary failure.
+    if source_sha == current_main:
+        completed = [r for r in records if r["status"] == "completed"]
+        if any(r["conclusion"] != "success" for r in completed):
+            return Evaluation("FAIL", "CORE_EXECUTION_FAILED", (), 0, 0)
+        if any(
+            type(r.get("steps")) is not dict
+            or any(r["steps"].get(step) != "success"
+                   for step in REQUIRED_STEPS)
+            for r in completed
+        ):
+            return Evaluation(
+                "FAIL", "MANDATORY_STEP_FAILED_OR_MISSING", (), 0, 0,
+            )
+        # Explicitly unverified original artifacts/state must be BLOCKED,
+        # not hidden by an earlier in-progress run. Known failures above
+        # always take precedence over incomplete or uncertain evidence.
+        if any(
+            type(r.get("artifact")) is not dict
+            or r["artifact"].get("status") != "PASS"
+            for r in completed
+        ):
+            return Evaluation("BLOCKED", "ARTIFACT_NOT_VERIFIED", (), 0, 0)
+        if any(
+            type(r.get("state")) is not dict
+            or r["state"].get("status") != "PASS"
+            for r in completed
+        ):
+            return Evaluation("BLOCKED", "REMOTE_STATE_NOT_VERIFIED", (), 0, 0)
+
+    # Keep historical V3 reducer outcomes and exact first-to-last completion
+    # chronology: if no completed core is disqualifying, a genuinely unfinished
+    # run must still remain WAITING (or BLOCKED after deadline).
     decision = evaluate_window(
         records, source_sha=source_sha, current_main=current_main,
         first_state_parent=first_state_parent, started_at=started_at,

@@ -69,6 +69,14 @@ def fixtures(hours=None, *, automatic=True):
     return records
 
 
+def first_incomplete(records):
+    """Make the earliest synthetic provider core unfinished without fabricating completion."""
+    records[0]["status"] = "in_progress"
+    records[0]["conclusion"] = None
+    records[0]["completed_at"] = None
+    return records
+
+
 def census(records, *, coverage=True):
     return {
         "coverage_complete": coverage,
@@ -332,6 +340,83 @@ class V5SixHourGate(unittest.TestCase):
         self.assertEqual(result.status,"WAITING")
         self.assertEqual(result.reason,"INSUFFICIENT_GENUINE_AUTOMATIC_CYCLES")
         self.assertEqual(result.automatic_run_ids,())
+
+    def test_later_confirmed_core_failure_overrides_earlier_incomplete(self):
+        records = first_incomplete(fixtures([0, .5, 1]))
+        records[-1]["conclusion"] = "failure"
+        provider = census(records)
+        # The unmodified V3 reducer returns early on the queued first row.
+        legacy = evaluate_window(
+            records, source_sha=SHA, current_main=SHA,
+            first_state_parent=PARENT, started_at=stamp(BEGIN),
+            deadline_at=stamp(BEGIN + timedelta(hours=8)),
+            now=stamp(BEGIN + timedelta(hours=1.2)),
+        )
+        self.assertEqual(legacy.status, "WAITING")
+        self.assertEqual(legacy.reason, "CORE_EXECUTION_INCOMPLETE")
+        strict = inspect(records, inventory=provider, now=1.2)
+        self.assertEqual(strict.status, "FAIL")
+        self.assertEqual(strict.reason, "CORE_EXECUTION_FAILED")
+        self.assertEqual(strict.automatic_run_ids, ())
+
+    def test_later_mandatory_step_failure_overrides_earlier_incomplete(self):
+        records = first_incomplete(fixtures([0, .5, 1]))
+        records[-1]["steps"]["Evidence-bound deterministic experiment"] = "failure"
+        legacy = evaluate_window(
+            records, source_sha=SHA, current_main=SHA,
+            first_state_parent=PARENT, started_at=stamp(BEGIN),
+            deadline_at=stamp(BEGIN + timedelta(hours=8)),
+            now=stamp(BEGIN + timedelta(hours=1.2)),
+        )
+        self.assertEqual(legacy.reason, "CORE_EXECUTION_INCOMPLETE")
+        strict = inspect(records, inventory=census(records), now=1.2)
+        self.assertEqual(strict.status, "FAIL")
+        self.assertEqual(strict.reason, "MANDATORY_STEP_FAILED_OR_MISSING")
+
+    def test_artifact_unverified_after_pending_is_blocked_not_waiting(self):
+        records = first_incomplete(fixtures([0, .5, 1]))
+        records[-1]["artifact"]["status"] = "UNVERIFIED"
+        legacy = evaluate_window(
+            records, source_sha=SHA, current_main=SHA,
+            first_state_parent=PARENT, started_at=stamp(BEGIN),
+            deadline_at=stamp(BEGIN + timedelta(hours=8)),
+            now=stamp(BEGIN + timedelta(hours=1.2)),
+        )
+        self.assertEqual(legacy.reason, "CORE_EXECUTION_INCOMPLETE")
+        strict = inspect(records, inventory=census(records), now=1.2)
+        self.assertEqual(strict.status, "BLOCKED")
+        self.assertEqual(strict.reason, "ARTIFACT_NOT_VERIFIED")
+
+    def test_unverified_remote_state_after_pending_is_blocked(self):
+        records = first_incomplete(fixtures([0, .5, 1]))
+        records[-1]["state"]["status"] = "UNVERIFIED"
+        strict = inspect(records, inventory=census(records), now=1.2)
+        self.assertEqual(strict.status, "BLOCKED")
+        self.assertEqual(strict.reason, "REMOTE_STATE_NOT_VERIFIED")
+
+    def test_terminal_failure_precedes_other_uncertainties_in_any_order(self):
+        records = first_incomplete(fixtures([0, .5, 1, 1.5]))
+        records[1]["artifact"]["status"] = "UNVERIFIED"
+        records[2]["steps"]["Read-only public project monitoring"] = "failure"
+        records[3]["conclusion"] = "cancelled"
+        inventory = census(records)
+        for ordered in (records, list(reversed(records))):
+            with self.subTest(reverse=ordered is not records):
+                result = inspect(ordered, inventory=inventory, now=2)
+                self.assertEqual(result.status, "FAIL")
+                self.assertEqual(result.reason, "CORE_EXECUTION_FAILED")
+
+    def test_no_confirmed_failure_preserves_waiting_and_main_drift(self):
+        records = first_incomplete(fixtures([0, .5, 1]))
+        provider = census(records)
+        waiting = inspect(records, inventory=provider, now=1.2)
+        self.assertEqual(waiting.status, "WAITING")
+        self.assertEqual(waiting.reason, "CORE_EXECUTION_INCOMPLETE")
+        records[-1]["conclusion"] = "failure"
+        drift = inspect(records, inventory=census(records), now=1.2,
+                        main="e" * 40)
+        self.assertEqual(drift.status, "FAIL")
+        self.assertEqual(drift.reason, "MAIN_DRIFT")
 
     def test_failure_inside_provider_census_fails_full_window(self):
         records=fixtures()

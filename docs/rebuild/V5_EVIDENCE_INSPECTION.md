@@ -222,6 +222,32 @@ must still be acquired and authenticated by a genuinely independent
 collector. The new checks do not independently fetch Cloudflare logs,
 attest an actual scheduled cycle, or issue a terminal acceptance receipt.
 
+### Complete-census failure precedence despite unfinished cores (V5 only)
+
+An unfinished original core can occur **before** a later completed core.
+The historical V3 chronological reducer returns WAITING as soon as it
+encounters that first in-progress run, potentially leaving a later genuine
+FAILED core, failed mandatory step, or unverified ZIP/state evidence uninspected.
+The V5 wrapper now inspects **all completed records only after** provider
+run/attempt/status/source/time reconciliation and **before** invoking the
+existing reducer. Completed failed/cancelled/error conclusions are terminal
+\`FAIL/CORE_EXECUTION_FAILED\`; completed successful jobs with missing or
+failed mandatory steps are \`FAIL/MANDATORY_STEP_FAILED_OR_MISSING\`.
+Where there are no known terminal failures, completed cores with unverified
+original artifacts or remote state are \`BLOCKED\` with the original relevant
+evidence code. Neither outcome can be hidden by an earlier queued core.
+These checks return **no credited successful automatic cycles**.
+
+A genuinely unfinished core still yields WAITING (or BLOCKED after the
+declared deadline) when no later completed evidence is disqualifying.
+Protected source drift retains \`FAIL/MAIN_DRIFT\` precedence, and the
+historical V3 two-hour reducer and all V3 outputs remain unchanged.
+This is an inspection-order safeguard over independently collected data,
+not independent proof that a submitted census is complete. Provider source
+authentication, immutable ZIP/SQLite evidence, original failed-run inventory,
+Cloudflare P-256 provenance, and separate terminal V5 acceptance are
+still required.
+
 ### Required evidence acquisition before supplying the manifest
 
 Acquire independently from original GitHub and Cloudflare providers, not
