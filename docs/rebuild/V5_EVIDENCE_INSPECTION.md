@@ -195,6 +195,33 @@ monitor job's exact completion. The V3 two-hour evaluator and its input
 shape are unchanged, and V5 still returns at most `PRE_POSTVALIDATION`,
 never an authoritative PASS.
 
+### Rerun exclusion and exact 90-minute boundary (V5 only)
+
+Original GitHub `run_attempt=2` (or greater) re-executes a *previous*
+`schedule` or `workflow_dispatch` event; it is **not a second Cron tick**.
+The provider collector must inventory **all** attempts, their attempt-scoped
+job IDs and statuses. A failed retry remains `CORE_EXECUTION_FAILED`,
+and an unfinished retry remains `CORE_EXECUTION_INCOMPLETE`; neither is
+relabeled as a success. A successful scheduled-event rerun cannot earn
+another independent automatic cycle: `window-v5` returns
+`BLOCKED/V5_RERUN_NOT_NEW_SCHEDULED_CYCLE` rather than laundering that
+repeat into a six-hour observation. A manual `push` rerun remains
+nonautomatic and cannot contribute to the completion clock.
+
+The historical V3 reducer reports whole seconds for maximum successful-cycle
+gaps. A gap of **5,400.5 seconds** rounds down to 5,400 in that historical
+representation. V5 therefore checks exact **provider-bound** original job
+completion timestamps with microsecond precision and rejects any interval
+strictly greater than **5,400.000000 seconds**, while retaining the original
+V3 input/output contract and allowing exactly 5,400 seconds. Where the
+reducer has already returned a genuine failure or incomplete-core WAITING,
+the original classification takes precedence.
+
+As with all local V5 manifest inspection, the provider fields themselves
+must still be acquired and authenticated by a genuinely independent
+collector. The new checks do not independently fetch Cloudflare logs,
+attest an actual scheduled cycle, or issue a terminal acceptance receipt.
+
 ### Required evidence acquisition before supplying the manifest
 
 Acquire independently from original GitHub and Cloudflare providers, not

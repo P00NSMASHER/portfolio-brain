@@ -642,12 +642,55 @@ def evaluate_v5_window(records, *, inventory, source_sha, current_main,
             require(record.get("completed_at") is None,
                     "V5_PROVIDER_UNFINISHED_COMPLETION_INVALID")
 
-    # Runtime decisions, hashes, completion gaps and error classifications
-    # are delegated to the existing (independently tested) strict reducer.
-    # Never return PASS here, regardless of forged self-declared booleans.
-    return evaluate_window(
+    # Keep historical V3 reducer outcomes intact: in particular, a genuine
+    # failed core must remain FAIL and an incomplete core remain WAITING,
+    # regardless of whether it was a GitHub rerun.
+    decision = evaluate_window(
         records, source_sha=source_sha, current_main=current_main,
         first_state_parent=first_state_parent, started_at=started_at,
         deadline_at=deadline_at, now=now,
         min_span_seconds=V5_MIN_SPAN_SECONDS,
     )
+    if decision.status not in {"WAITING", "PRE_POSTVALIDATION"} or (
+        decision.reason == "CORE_EXECUTION_INCOMPLETE"
+    ):
+        return decision
+
+    # GitHub run_attempt=2+ is a rerun of the SAME original schedule event,
+    # not an independently scheduled cycle. Reject possible acceptance rather
+    # than counting successful replay attempts as additional Cron occurrences.
+    # All attempts remain in the externally supplied complete run census.
+    if any(
+        record["attempt"] > 1
+        and record["event"] in {"schedule", "workflow_dispatch"}
+        and record["status"] == "completed"
+        and record["conclusion"] == "success"
+        for record in records
+    ):
+        return Evaluation(
+            "BLOCKED", "V5_RERUN_NOT_NEW_SCHEDULED_CYCLE", (), 0, 0,
+        )
+
+    # The V3 reducer retains its historical integer gap reporting: int(5400.5)
+    # rounds down to 5400. V5's strict <=5400s cap must compare the exact
+    # provider-bound completion instants, including fractional seconds.
+    if len(decision.automatic_run_ids) > 1:
+        credited = set(decision.automatic_run_ids)
+        ends = sorted(
+            utc(provider_rows[(record["run_id"], record["attempt"])]
+                ["job"]["completed_at"])
+            for record in records if record["run_id"] in credited
+        )
+        require(len(ends) == len(decision.automatic_run_ids),
+                "V5_AUTOMATIC_COMPLETION_BINDING_INVALID")
+        exact_gap = max(
+            (ends[i] - ends[i - 1]).total_seconds()
+            for i in range(1, len(ends))
+        )
+        if exact_gap > MAX_GAP_SECONDS:
+            return Evaluation(
+                "FAIL", "AUTOMATIC_DELIVERY_GAP_EXCEEDED",
+                decision.automatic_run_ids, decision.span_seconds,
+                math.ceil(exact_gap),
+            )
+    return decision

@@ -340,6 +340,96 @@ class V5SixHourGate(unittest.TestCase):
         self.assertEqual(result.status,"FAIL")
         self.assertEqual(result.reason,"CORE_EXECUTION_FAILED")
 
+    def test_subsecond_gap_over_ninety_minutes_is_a_real_v5_failure(self):
+        # int(5400.5) == 5400, so the historical V3 reducer permits this
+        # fractional violation; V5 must enforce the full provider timestamp.
+        records = fixtures([0, 1.5 + 0.5 / 3600, 3, 4.5, 6])
+        common = dict(
+            source_sha=SHA, current_main=SHA, first_state_parent=PARENT,
+            started_at=stamp(BEGIN),
+            deadline_at=stamp(BEGIN + timedelta(hours=8)),
+            now=stamp(BEGIN + timedelta(hours=6.1)),
+        )
+        self.assertEqual(
+            evaluate_window(records, **common).status, "PRE_POSTVALIDATION"
+        )
+        outcome = inspect(records)
+        self.assertEqual(outcome.status, "FAIL")
+        self.assertEqual(outcome.reason, "AUTOMATIC_DELIVERY_GAP_EXCEEDED")
+        self.assertEqual(outcome.maximum_gap_observed, 5401)
+
+    def test_exact_ninety_minute_completion_gap_is_still_allowed(self):
+        records = fixtures([0, 1.5, 3, 4.5, 6])
+        outcome = inspect(records)
+        self.assertEqual(outcome.status, "PRE_POSTVALIDATION")
+        self.assertEqual(outcome.maximum_gap_observed, 5400)
+        self.assertEqual(outcome.span_seconds, V5_MIN_SPAN_SECONDS)
+
+    def test_successful_rerun_cannot_extend_six_hour_automatic_clock(self):
+        records = fixtures()
+        records[-1]["attempt"] = 2
+        self.assertEqual(
+            evaluate_window(
+                records, source_sha=SHA, current_main=SHA,
+                first_state_parent=PARENT, started_at=stamp(BEGIN),
+                deadline_at=stamp(BEGIN + timedelta(hours=8)),
+                now=stamp(BEGIN + timedelta(hours=6.1)),
+            ).status, "PRE_POSTVALIDATION",
+        )
+        result = inspect(records, inventory=census(records))
+        self.assertEqual(result.status, "BLOCKED")
+        self.assertEqual(result.reason,
+                         "V5_RERUN_NOT_NEW_SCHEDULED_CYCLE")
+        self.assertEqual(result.automatic_run_ids, ())
+
+    def test_second_successful_attempt_of_same_run_cannot_double_count(self):
+        records = fixtures()
+        replay = deepcopy(records[-1])
+        replay["attempt"] = 2
+        replay["started_at"] = stamp(
+            BEGIN + timedelta(hours=6, minutes=10)
+        )
+        replay["completed_at"] = stamp(
+            BEGIN + timedelta(hours=6, minutes=10, seconds=45)
+        )
+        replay["state"]["parent"] = records[-1]["state"]["commit"]
+        replay["state"]["commit"] = "f" * 40
+        replay["state"]["sequence"] += 1
+        replay["artifact"]["state_sequence"] += 1
+        replay["state"]["canonical_hash"] = "e" * 64
+        replay["artifact"]["canonical_hash"] = "e" * 64
+        records.append(replay)
+        inventory = census(records)
+        # Every run attempt must have its own real job identity.
+        inventory["core_runs"][-1]["job"]["id"] = 340001
+        result = inspect(records, inventory=inventory, now=6.5)
+        self.assertEqual(result.status, "BLOCKED")
+        self.assertEqual(result.reason,
+                         "V5_RERUN_NOT_NEW_SCHEDULED_CYCLE")
+
+    def test_failed_or_unfinished_rerun_keeps_original_classification(self):
+        records = fixtures()
+        records[6]["attempt"] = 2
+        records[6]["conclusion"] = "failure"
+        failure = inspect(records, inventory=census(records))
+        self.assertEqual(failure.status, "FAIL")
+        self.assertEqual(failure.reason, "CORE_EXECUTION_FAILED")
+        records[6]["status"] = "in_progress"
+        records[6]["conclusion"] = None
+        records[6]["completed_at"] = None
+        unfinished = inspect(records, inventory=census(records))
+        self.assertEqual(unfinished.status, "WAITING")
+        self.assertEqual(unfinished.reason, "CORE_EXECUTION_INCOMPLETE")
+
+    def test_manual_push_rerun_never_earns_automatic_cycle_credit(self):
+        records = fixtures()
+        records[6]["attempt"] = 2
+        records[6]["event"] = "push"
+        del records[6]["external_clock"]
+        result = inspect(records, inventory=census(records))
+        self.assertEqual(result.status, "PRE_POSTVALIDATION")
+        self.assertNotIn(records[6]["run_id"], result.automatic_run_ids)
+
     def test_oversized_gap_is_terminal_not_rounded_to_success(self):
         records=fixtures([0,.5,1,3,3.5,4,4.5,5,5.5,6])
         result=inspect(records)
