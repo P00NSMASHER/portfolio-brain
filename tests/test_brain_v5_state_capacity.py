@@ -128,10 +128,10 @@ class V5SQLiteCapacityTests(unittest.TestCase):
         connection = sqlite3.connect
         snapshots = []
 
-        def replace_original_at_connect(uri, *args, **kwargs):
+        def replace_original_at_connect(sqlite_uri, *args, **kwargs):
             self.assertEqual(kwargs.get("uri"), True)
-            self.assertIn("mode=ro&immutable=1", uri)
-            snapshot = Path(unquote(urlparse(uri).path))
+            self.assertIn("mode=ro&immutable=1", sqlite_uri)
+            snapshot = Path(unquote(urlparse(sqlite_uri).path))
             snapshots.append(snapshot)
             self.assertNotEqual(snapshot.resolve(), self.path.resolve())
             self.assertEqual(snapshot.read_bytes(), original)
@@ -140,7 +140,7 @@ class V5SQLiteCapacityTests(unittest.TestCase):
             # Same file length, completely invalid new content: size-only
             # checks cannot detect this race if SQLite reopens original path.
             self.path.write_bytes(b"!" * len(original))
-            return connection(uri, *args, **kwargs)
+            return connection(sqlite_uri, *args, **kwargs)
 
         with patch("soak_v3.audit.sqlite3.connect",
                    side_effect=replace_original_at_connect):
@@ -164,9 +164,9 @@ class V5SQLiteCapacityTests(unittest.TestCase):
         real_connect = sqlite3.connect
         locations = []
 
-        def observe_snapshot(uri, *args, **kwargs):
-            locations.append(Path(unquote(urlparse(uri).path)))
-            return real_connect(uri, *args, **kwargs)
+        def observe_snapshot(sqlite_uri, *args, **kwargs):
+            locations.append(Path(unquote(urlparse(sqlite_uri).path)))
+            return real_connect(sqlite_uri, *args, **kwargs)
 
         with patch("soak_v3.audit.sqlite3.connect",
                    side_effect=observe_snapshot):
