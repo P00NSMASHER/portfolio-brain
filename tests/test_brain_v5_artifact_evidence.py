@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 from soak_v3.audit import EvidenceError, verify_artifact, verify_v5_artifact
@@ -92,6 +93,119 @@ class V5MandatoryArtifactEvidence(unittest.TestCase):
         self.assertEqual(receipt["state_sequence"],63)
         self.assertEqual(receipt["workload_sequences"],
                          {"monitor":60,"research":62,"experiment":63,"doctor":63})
+
+    def test_v5_same_size_path_swap_after_sha_never_changes_inspected_zip(self):
+        original = fixture()
+        substituted = fixture(mutate=("doctor/report.json", "pending_events", 1))
+        self.assertEqual(len(original), len(substituted))
+        self.assertNotEqual(hashlib.sha256(original).digest(),
+                            hashlib.sha256(substituted).digest())
+        self.path.write_bytes(original)
+        observed = []
+        zip_constructor = zipfile.ZipFile
+
+        def swap_at_zip_open(source, *args, **kwargs):
+            observed.append(source)
+            if len(observed) == 1:
+                # Replace original ZIP with a completely valid same-length ZIP
+                # whose doctor is not PASS, *after* original SHA verification.
+                self.path.write_bytes(substituted)
+            self.assertIsInstance(source, io.BytesIO)
+            self.assertEqual(source.getvalue(), original)
+            return zip_constructor(source, *args, **kwargs)
+
+        with patch("soak_v3.audit.zipfile.ZipFile",
+                   side_effect=swap_at_zip_open):
+            result = self.check_original_zip(original, strict=True)
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["workload_reports"], "PASS")
+        self.assertEqual(result["artifact_sha256"],
+                         hashlib.sha256(original).hexdigest())
+        self.assertGreaterEqual(len(observed), 2)
+        self.assertEqual(self.path.read_bytes(), substituted)
+
+    def test_v5_path_swap_between_delivery_and_crc_uses_same_hashed_bytes(self):
+        original = fixture()
+        # Valid new ZIP deliberately omits the research report; V5 must not
+        # inspect it after checking the first ZIP's original delivery receipt.
+        substituted = fixture(removed="research/report.json")
+        self.path.write_bytes(original)
+        zip_constructor = zipfile.ZipFile
+        inspected = []
+
+        def swap_second_parse(source, *args, **kwargs):
+            inspected.append(source)
+            self.assertIsInstance(source, io.BytesIO)
+            self.assertEqual(source.getvalue(), original)
+            if len(inspected) == 2:
+                self.path.write_bytes(substituted)
+            return zip_constructor(source, *args, **kwargs)
+
+        with patch("soak_v3.audit.zipfile.ZipFile",
+                   side_effect=swap_second_parse):
+            receipt = self.check_original_zip(original, strict=True)
+        self.assertEqual(receipt["workload_reports"], "PASS")
+        self.assertGreaterEqual(len(inspected), 2)
+        self.assertEqual(self.path.read_bytes(), substituted)
+
+    def test_legacy_artifact_still_parses_only_original_verified_bytes(self):
+        original = fixture(removed="research/report.json")
+        substituted = fixture(
+            removed="research/report.json",
+            mutate=("doctor/report.json", "pending_events", 1),
+        )
+        self.assertEqual(len(original), len(substituted))
+        self.path.write_bytes(original)
+        constructor = zipfile.ZipFile
+        opened = []
+
+        def swap_before_legacy_zip(source, *args, **kwargs):
+            opened.append(source)
+            self.path.write_bytes(substituted)
+            self.assertIsInstance(source, io.BytesIO)
+            self.assertEqual(source.getvalue(), original)
+            return constructor(source, *args, **kwargs)
+
+        with patch("soak_v3.audit.zipfile.ZipFile",
+                   side_effect=swap_before_legacy_zip):
+            result = self.check_original_zip(original, strict=False)
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["artifact_sha256"],
+                         hashlib.sha256(original).hexdigest())
+        self.assertEqual(len(opened), 1)
+        self.assertEqual(self.path.read_bytes(), substituted)
+
+    def test_oversized_zip_fails_before_open_or_allocate(self):
+        with self.path.open("wb") as stream:
+            stream.truncate(20_000_000)
+        with patch.object(Path, "open",
+                          side_effect=AssertionError("oversized artifact opened")):
+            for strict in (False, True):
+                with self.subTest(strict=strict):
+                    with self.assertRaisesRegex(EvidenceError,
+                                                "ARTIFACT_SIZE_INVALID"):
+                        self.check_original_zip(b"", strict=strict)
+
+    def test_short_read_fails_before_any_zip_parse(self):
+        original = fixture()
+        self.path.write_bytes(original)
+        with patch.object(Path, "open", return_value=io.BytesIO(b"short")):
+            with patch("soak_v3.audit.zipfile.ZipFile",
+                       side_effect=AssertionError("short ZIP was parsed")):
+                with self.assertRaisesRegex(
+                    EvidenceError, "ARTIFACT_SIZE_CHANGED_DURING_READ"
+                ):
+                    self.check_original_zip(original)
+
+    def check_original_zip(self, original, *, strict):
+        kwargs = dict(
+            run_id=RUN, source_sha=SHA, state_parent=PARENT, state_commit=COMMIT,
+        )
+        verifier = verify_v5_artifact if strict else verify_artifact
+        return verifier(
+            self.path, "sha256:" + hashlib.sha256(original).hexdigest(),
+            **kwargs,
+        )
 
     def test_legacy_artifact_check_remains_compatible(self):
         missing=fixture(removed="research/report.json")

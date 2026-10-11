@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -171,19 +172,34 @@ def verify_v5_sqlite(path, *, expected_sequence, expected_chain, expected_source
     )
 
 
-def verify_artifact(path, expected_digest, *, run_id, source_sha, state_parent, state_commit):
-    """Check GitHub API artifact SHA256 and embedded real delivery/doctor receipts."""
+def _read_verified_artifact_bytes(path, expected_digest, *, run_id,
+                                  source_sha, state_parent, state_commit):
+    """Bound and hash original provider ZIP bytes once, never parse the path again.
+
+    A manifest digest is still only an *assertion* until it has been matched
+    independently to GitHub's original artifact metadata by the collector.
+    """
     sha40(source_sha)
     sha40(state_parent)
     sha40(state_commit)
     require(type(run_id) is int and run_id > 0, "RUN_ID_INVALID")
     require(isinstance(expected_digest, str) and expected_digest.startswith("sha256:"), "ARTIFACT_DIGEST_FORMAT")
     sha64(expected_digest[7:])
-    raw = Path(path).read_bytes()
-    require(0 < len(raw) < 20_000_000, "ARTIFACT_SIZE_INVALID")
+    source = Path(path)
+    before = source.stat()
+    require(0 < before.st_size < 20_000_000, "ARTIFACT_SIZE_INVALID")
+    with source.open("rb") as stream:
+        raw = stream.read(20_000_000)
+    require(len(raw) == before.st_size, "ARTIFACT_SIZE_CHANGED_DURING_READ")
     require(hashlib.sha256(raw).hexdigest() == expected_digest[7:], "ARTIFACT_SHA256_MISMATCH")
+    return raw
+
+
+def _verify_artifact_bytes(raw, expected_digest, *, run_id,
+                           source_sha, state_parent, state_commit):
+    """Historical delivery/preflight/doctor contract on already hashed bytes."""
     try:
-        with zipfile.ZipFile(path, "r") as z:
+        with zipfile.ZipFile(io.BytesIO(raw), "r") as z:
             names = z.namelist()
             require(len(names) <= 100 and len(set(names)) == len(names), "ARTIFACT_DUPLICATE_OR_UNBOUNDED")
             require(all(not n.startswith("/") and ".." not in Path(n).parts for n in names), "ARTIFACT_UNSAFE_PATH")
@@ -207,6 +223,19 @@ def verify_artifact(path, expected_digest, *, run_id, source_sha, state_parent, 
             "canonical_hash": doctor["canonical_hash"], "pending_events": 0,
             "artifact_sha256": expected_digest[7:]}
 
+
+def verify_artifact(path, expected_digest, *, run_id, source_sha, state_parent, state_commit):
+    """Historical V3 artifact rules, now tied to the digest-verified ZIP bytes."""
+    raw = _read_verified_artifact_bytes(
+        path, expected_digest, run_id=run_id, source_sha=source_sha,
+        state_parent=state_parent, state_commit=state_commit,
+    )
+    return _verify_artifact_bytes(
+        raw, expected_digest, run_id=run_id, source_sha=source_sha,
+        state_parent=state_parent, state_commit=state_commit,
+    )
+
+
 def verify_v5_artifact(path, expected_digest, *, run_id, source_sha,
                        state_parent, state_commit):
     """Require original ZIP integrity and all four mandatory workload receipts.
@@ -215,12 +244,19 @@ def verify_v5_artifact(path, expected_digest, *, run_id, source_sha,
     A matching expected_digest is meaningful only if independently acquired
     from GitHub; the ZIP itself cannot prove its Cloudflare scheduler origin.
     """
-    basic = verify_artifact(
+    # Both the legacy delivery checks and V5's full CRC/workload checks
+    # inspect the *same* single digest-bound byte snapshot, never a path that
+    # could be replaced after hashing or between the two ZIP inspections.
+    raw = _read_verified_artifact_bytes(
         path, expected_digest, run_id=run_id, source_sha=source_sha,
         state_parent=state_parent, state_commit=state_commit,
     )
+    basic = _verify_artifact_bytes(
+        raw, expected_digest, run_id=run_id, source_sha=source_sha,
+        state_parent=state_parent, state_commit=state_commit,
+    )
     try:
-        with zipfile.ZipFile(path, "r") as archive:
+        with zipfile.ZipFile(io.BytesIO(raw), "r") as archive:
             require(archive.testzip() is None, "V5_ARTIFACT_MEMBER_CRC_INVALID")
             names = set(archive.namelist())
             required = ("report/report.json", "research/report.json",

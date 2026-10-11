@@ -34,8 +34,8 @@ are not substitute successful completed cycles.
 ### Strict V5 original ZIP verifier (review candidate)
 
 `python -m soak_v3 artifact-v5 --manifest <artifact.json>` uses the existing
-provider-digest-bound `verify_artifact` as its baseline, then opens the same
-bounded original ZIP to check every member's CRC and all mandatory workload
+provider-digest-bound historical delivery/preflight/doctor checks as its
+baseline, then verifies every ZIP member's CRC and all mandatory workload
 report files: `report/report.json` (monitor), `research/report.json`,
 `experiment/report.json`, and `doctor/report.json`. It requires all four
 to be PASS on the same exact source with zero pending events, ordered
@@ -52,6 +52,19 @@ GitHub run-census completeness, remote state publication, or V5 final
 acceptance. The existing `artifact` mode remains unchanged for historical
 V3 replay; use the strict mode for future V5 original ZIPs. Do not merge
 this source review during the current protected-source acceptance period.
+
+Each invocation first checks the **strictly under 20,000,000-byte**
+input size, reads no more than 20,000,000 bytes, rejects a read-size
+change, and compares those exact bytes to the independently supplied
+provider SHA-256. The historical and strict V5 ZIP parsers now both
+open `io.BytesIO` views of **that one already hashed byte buffer**;
+neither reopens the source path after hashing or between mandatory
+report/CRC checks. A same-size original-file substitution during
+verification therefore cannot silently substitute un-hashed reports.
+The legacy `artifact` mode's receipt scope and required fields are
+otherwise unchanged. The V5 mode additionally checks **every** member
+CRC and all four original mandatory workload receipts. Adversarial
+tests enforce both swap boundaries and the bounded pre-read behavior.
 
 ### V5 raw-state capacity and immutable authority binding
 
