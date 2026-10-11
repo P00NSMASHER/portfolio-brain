@@ -116,6 +116,27 @@ complete failed-run census must be authenticated separately. A user-supplied
 manifest, plausible database or local `"status":"PASS"` is **never** V5
 automatic-runtime, deployment or terminal acceptance.
 
+### Canonical V5 SQLite event and report evidence (review only)
+
+`state-v5` now matches the original reducer's canonical JSON serialization
+byte-for-byte, not just the hash of a permissively parsed object. Every
+stored event and the terminal report must be canonical, with unique JSON
+keys and finite numbers throughout nested structures; both report backlog
+and sequence must be **real JSON integers**, not `false` or `true`
+silently compared as Python 0/1. The report's embedded source must match
+the exact independently supplied source. After SQLite page integrity,
+the V5 mode also checks `PRAGMA foreign_key_check` before ledger replay;
+ordinary `integrity_check` alone does not detect orphan relationships.
+
+All checks run on the already SHA-256-bound private sealed snapshot, using
+the **existing canonical digest/ledger algorithm** and strict JSON parser,
+not new authority or a new source writer. Historical V3 `state` parsing
+and its 25 MB cap remain unchanged. The stricter V5-only checks reject
+noncanonical or contradictory original bytes rather than normalizing,
+repairing, or relabelling them. Original GitHub/Cloudflare provider
+authentication, signed scheduler provenance, failure census and a distinct
+six-hour terminal acceptance remain separately necessary.
+
 ### Provider-backed V5 inspector parity in Foundation CI (candidate only)
 
 The existing **network-capable** `tests/test_v5_deployed_state_compatibility.py`

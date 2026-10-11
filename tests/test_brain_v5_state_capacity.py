@@ -20,7 +20,7 @@ from unittest.mock import patch
 
 from soak_v3.audit import (
     EvidenceError, V3_SQLITE_MAX_BYTES, V5_SQLITE_MAX_BYTES,
-    digest, verify_sqlite, verify_v5_sqlite,
+    canonical, digest, verify_sqlite, verify_v5_sqlite,
 )
 
 SOURCE = "a" * 40
@@ -74,7 +74,7 @@ class V5SQLiteCapacityTests(unittest.TestCase):
             })
             db.execute(
                 "INSERT INTO events VALUES(?,?,?,?,?,?)",
-                (1, observed["id"], json.dumps(observed), observed_hash,
+                (1, observed["id"], canonical(observed), observed_hash,
                  "APPLIED", DATE),
             )
             db.execute(
@@ -87,7 +87,7 @@ class V5SQLiteCapacityTests(unittest.TestCase):
             db.execute(
                 "INSERT INTO reports VALUES(?,?,?,?,?,?,?)",
                 (1, 1, self.chain, SOURCE, DATE,
-                 json.dumps(report), digest(report)),
+                 canonical(report), digest(report)),
             )
             db.commit()
         finally:
@@ -119,6 +119,151 @@ class V5SQLiteCapacityTests(unittest.TestCase):
             "expected_chain": self.chain,
             "expected_source": SOURCE,
         }
+
+    def _replace_body(self, table, body, *, report_hash=None):
+        assert table in ("events", "reports")
+        with sqlite3.connect(self.path) as connection:
+            if table == "events":
+                connection.execute("UPDATE events SET body=? WHERE seq=1",
+                                   (body,))
+            elif report_hash is None:
+                connection.execute("UPDATE reports SET body=? WHERE id=1",
+                                   (body,))
+            else:
+                connection.execute(
+                    "UPDATE reports SET body=?,hash=? WHERE id=1",
+                    (body, report_hash),
+                )
+
+    def test_noncanonical_sqlite_event_or_report_cannot_pass_v5(self):
+        for table in ("events", "reports"):
+            with self.subTest(table=table):
+                with sqlite3.connect(self.path) as connection:
+                    original = connection.execute(
+                        "SELECT body FROM " + table
+                    ).fetchone()[0]
+                tampered = original.replace('{"', '{  "', 1)
+                self.assertNotEqual(original, tampered)
+                self._replace_body(table, tampered)
+                try:
+                    # V3's legacy logic checked the parsed object hash only.
+                    self.assertEqual(
+                        verify_sqlite(self.path, **self.kwargs())["status"],
+                        "PASS",
+                    )
+                    with self.assertRaisesRegex(
+                        EvidenceError,
+                        "V5_STATE_" + ("EVENT" if table == "events" else
+                                       "REPORT") + "_NOT_CANONICAL",
+                    ):
+                        verify_v5_sqlite(self.path, **self.kwargs())
+                finally:
+                    self._replace_body(table, original)
+
+    def test_duplicate_sqlite_event_and_report_keys_cannot_be_laundered(self):
+        for table, field in (("events", '"id":"forged",'),
+                             ("reports", '"status":"FAIL",')):
+            with self.subTest(table=table):
+                with sqlite3.connect(self.path) as connection:
+                    original = connection.execute(
+                        "SELECT body FROM " + table
+                    ).fetchone()[0]
+                tampered = "{" + field + original[1:]
+                self._replace_body(table, tampered)
+                try:
+                    self.assertEqual(
+                        verify_sqlite(self.path, **self.kwargs())["status"],
+                        "PASS",
+                    )
+                    with self.assertRaisesRegex(
+                        EvidenceError, "V5_JSON_DUPLICATE_KEY"
+                    ):
+                        verify_v5_sqlite(self.path, **self.kwargs())
+                finally:
+                    self._replace_body(table, original)
+
+    def test_v5_rejects_boolean_backlog_and_sequence_in_valid_hash_report(self):
+        with sqlite3.connect(self.path) as connection:
+            old_body, old_hash = connection.execute(
+                "SELECT body,hash FROM reports WHERE id=1"
+            ).fetchone()
+        for key, value in (("pending_events", False),
+                           ("state_sequence", True)):
+            with self.subTest(key=key):
+                report = json.loads(old_body)
+                report[key] = value
+                self._replace_body("reports", canonical(report),
+                                   report_hash=digest(report))
+                try:
+                    # Both substitutions compare equal to the old integers
+                    # under Python's legacy bool/int equality rules.
+                    self.assertEqual(
+                        verify_sqlite(self.path, **self.kwargs())["status"],
+                        "PASS",
+                    )
+                    with self.assertRaisesRegex(
+                        EvidenceError, "V5_STATE_REPORT_NUMERIC_TYPE_INVALID"
+                    ):
+                        verify_v5_sqlite(self.path, **self.kwargs())
+                finally:
+                    self._replace_body("reports", old_body,
+                                       report_hash=old_hash)
+
+    def test_nonfinite_and_nonobject_state_json_fail_closed(self):
+        with sqlite3.connect(self.path) as connection:
+            old_event = connection.execute(
+                "SELECT body FROM events WHERE seq=1"
+            ).fetchone()[0]
+            old_report = connection.execute(
+                "SELECT body FROM reports WHERE id=1"
+            ).fetchone()[0]
+        cases = (
+            ("events", old_event.replace('"payload":{}',
+                                         '"payload":{"sample":NaN}'),
+             "V5_JSON_NONFINITE_NUMBER"),
+            ("reports", '{"diagnostic":1e999,' + old_report[1:],
+             "V5_JSON_NONFINITE_NUMBER"),
+            ("events", "[]", "V5_STATE_EVENT_NOT_OBJECT"),
+            ("reports", "[]", "V5_STATE_REPORT_NOT_OBJECT"),
+        )
+        for table, body, reason in cases:
+            with self.subTest(table=table, reason=reason):
+                self._replace_body(table, body)
+                try:
+                    with self.assertRaisesRegex(EvidenceError, reason):
+                        verify_v5_sqlite(self.path, **self.kwargs())
+                finally:
+                    self._replace_body(
+                        table, old_event if table == "events" else old_report,
+                    )
+
+    def test_v5_checks_foreign_keys_not_covered_by_integrity_check(self):
+        with sqlite3.connect(self.path) as connection:
+            connection.execute(
+                "CREATE TABLE parent_sentinel(id INTEGER PRIMARY KEY)"
+            )
+            connection.execute(
+                "CREATE TABLE child_sentinel("
+                "id INTEGER PRIMARY KEY,"
+                "parent_id INTEGER REFERENCES parent_sentinel(id))"
+            )
+            connection.execute(
+                "INSERT INTO child_sentinel(id,parent_id) VALUES(1,999)"
+            )
+            self.assertEqual(
+                connection.execute("PRAGMA integrity_check").fetchone()[0],
+                "ok",
+            )
+            self.assertTrue(
+                connection.execute("PRAGMA foreign_key_check").fetchall()
+            )
+        self.assertEqual(
+            verify_sqlite(self.path, **self.kwargs())["status"], "PASS"
+        )
+        with self.assertRaisesRegex(
+            EvidenceError, "V5_STATE_FOREIGN_KEYS_INVALID"
+        ):
+            verify_v5_sqlite(self.path, **self.kwargs())
 
     def test_hash_and_replay_use_identical_bytes_after_same_size_replacement(self):
         # Simulate a source file being swapped AFTER its SHA256 was taken but

@@ -66,9 +66,14 @@ def sha64(value):
     require(isinstance(value, str) and HEX64.fullmatch(value), "SHA256_INVALID")
     return value
 
+def canonical(value):
+    """Exact existing producer JSON serialization, shared with digest()."""
+    return json.dumps(value, ensure_ascii=False, sort_keys=True,
+                      separators=(",", ":"), allow_nan=False)
+
+
 def digest(value):
-    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True,
-                                     separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+    return hashlib.sha256(canonical(value).encode()).hexdigest()
 
 def _open_verified_byte_snapshot(raw):
     """Open only the already hashed input bytes as a disposable read-only DB.
@@ -94,7 +99,7 @@ def _open_verified_byte_snapshot(raw):
 
 
 def _verify_sqlite_bounded(path, *, expected_sequence, expected_chain,
-                           expected_source, size_limit):
+                           expected_source, size_limit, strict_state=False):
     """Read immutable downloaded state without opening a writable DB or trusting reports.
 
     The caller must separately bind bytes to the GitHub state commit it fetched.
@@ -116,6 +121,10 @@ def _verify_sqlite_bounded(path, *, expected_sequence, expected_chain,
     conn, snapshot_folder = _open_verified_byte_snapshot(raw)
     try:
         require(conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok", "SQLITE_CORRUPT")
+        if strict_state:
+            # integrity_check checks SQLite pages, not FK relationships.
+            require(conn.execute("PRAGMA foreign_key_check").fetchall() == [],
+                    "V5_STATE_FOREIGN_KEYS_INVALID")
         schema = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
         visibility = conn.execute("SELECT value FROM meta WHERE key='visibility'").fetchone()
         require(schema and schema[0] == "2" and visibility and visibility[0] == "PUBLIC", "STATE_SCHEMA_OR_VISIBILITY_INVALID")
@@ -129,9 +138,16 @@ def _verify_sqlite_bounded(path, *, expected_sequence, expected_chain,
         for seq, row in enumerate(rows, start=1):
             require(row["seq"] == seq and row["status"] == "APPLIED", "STATE_EVENT_GAP")
             try:
-                event = json.loads(row["body"])
+                event = (_strict_v5_receipt_json(row["body"]) if strict_state
+                         else json.loads(row["body"]))
+            except EvidenceError:
+                raise
             except (ValueError, TypeError) as exc:
                 raise EvidenceError("STATE_EVENT_JSON_INVALID") from exc
+            if strict_state:
+                require(type(event) is dict, "V5_STATE_EVENT_NOT_OBJECT")
+                require(row["body"] == canonical(event),
+                        "V5_STATE_EVENT_NOT_CANONICAL")
             require(event.get("visibility") == "PUBLIC" and row["id"] == event.get("id"), "STATE_EVENT_IDENTITY_INVALID")
             require(digest(event) == row["hash"], "STATE_EVENT_DIGEST_INVALID")
             require(row["prev_hash"] == prior, "STATE_CHAIN_PARENT_INVALID")
@@ -140,7 +156,17 @@ def _verify_sqlite_bounded(path, *, expected_sequence, expected_chain,
         require(prior == expected_chain, "STATE_CANONICAL_HASH_MISMATCH")
         latest = conn.execute("SELECT * FROM reports ORDER BY id DESC LIMIT 1").fetchone()
         require(latest is not None, "STATE_REPORT_MISSING")
-        report = json.loads(latest["body"])
+        report = (_strict_v5_receipt_json(latest["body"]) if strict_state
+                  else json.loads(latest["body"]))
+        if strict_state:
+            require(type(report) is dict, "V5_STATE_REPORT_NOT_OBJECT")
+            require(latest["body"] == canonical(report),
+                    "V5_STATE_REPORT_NOT_CANONICAL")
+            require(type(report.get("pending_events")) is int
+                    and type(report.get("state_sequence")) is int,
+                    "V5_STATE_REPORT_NUMERIC_TYPE_INVALID")
+            require(report.get("source_sha") == expected_source,
+                    "V5_STATE_REPORT_EMBEDDED_SOURCE_INVALID")
         require(digest(report) == latest["hash"], "STATE_REPORT_DIGEST_INVALID")
         require(latest["seq"] == expected_sequence and latest["chain_hash"] == prior, "STATE_REPORT_LINEAGE_INVALID")
         require(latest["source_sha"] == expected_source, "STATE_REPORT_SOURCE_INVALID")
@@ -170,6 +196,7 @@ def verify_v5_sqlite(path, *, expected_sequence, expected_chain, expected_source
     return _verify_sqlite_bounded(
         path, expected_sequence=expected_sequence, expected_chain=expected_chain,
         expected_source=expected_source, size_limit=V5_SQLITE_MAX_BYTES,
+        strict_state=True,
     )
 
 
