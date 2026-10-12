@@ -218,6 +218,86 @@ class RepositoryChangeEvidenceTests(unittest.TestCase):
         self.assertEqual(change["evidence_quality"], "NON_ACTUAL")
         self.assertEqual(change["open_issue_pr_tally"]["net_delta"], 1)
 
+    def test_historical_v5_stale_baseline_requires_new_v6_report_from_ledger(self):
+        # This is a deliberately constructed old-source projection, not a
+        # modification to the production state or its acceptance receipt.
+        v5_sha = "3fb0bb0dcc28f961033d782260c31f36ed78eb71"
+        v6_candidate = "9d91e79981cfe229fb6615cabeda71ed29f64d2d"
+        self.ingest(observation(T0, tally=3), observation(T2, tally=5))
+        report = self.store.report(v5_sha, now=NOW, max_age=3600)
+        self.assertEqual(
+            report["repository_changes"][0]["evidence_quality"],
+            "ACTUAL_STALE_BASELINE",
+        )
+        historical = json.loads(canonical(report))
+        historical["repository_changes"][0]["evidence_quality"] = "ACTUAL_FRESH"
+        old_bytes = canonical(historical)
+        self.store.db.execute(
+            "UPDATE reports SET body=?,hash=? WHERE id=(SELECT max(id) FROM reports)",
+            (old_bytes, digest(historical)),
+        )
+        old_record = tuple(self.store.db.execute(
+            "SELECT body,hash FROM reports ORDER BY id DESC LIMIT 1"
+        ).fetchone())
+        old_event_rows = list(self.store.db.execute(
+            "SELECT seq,id,hash,status FROM events ORDER BY seq"
+        ))
+        old_ledger_rows = list(self.store.db.execute(
+            "SELECT seq,prev_hash,chain_hash FROM ledger ORDER BY seq"
+        ))
+
+        # The new code must FAIL CLOSED on the old persisted V5 projection,
+        # even if its report digest has been correctly recomputed. Never
+        # silently relabel the historical report as a verified V6 report.
+        with self.assertRaisesRegex(
+            BrainError, "report does not match deterministic ledger replay"
+        ):
+            self.store.read_report(v5_sha, now=NOW, max_age=3600)
+        self.assertEqual(tuple(self.store.db.execute(
+            "SELECT body,hash FROM reports ORDER BY id DESC LIMIT 1"
+        ).fetchone()), old_record)
+
+        # On a throwaway Store (as the new source's first monitored cycle),
+        # regenerate analysis from independently validated events and chain.
+        regenerated = self.store.report(v6_candidate, now=NOW, max_age=3600)
+        self.assertEqual(regenerated["status"], "PASS")
+        self.assertEqual(
+            regenerated["repository_changes"][0]["evidence_quality"],
+            "ACTUAL_STALE_BASELINE",
+        )
+        self.assertEqual(
+            self.store.read_report(v6_candidate, now=NOW, max_age=3600),
+            regenerated,
+        )
+        self.assertEqual(list(self.store.db.execute(
+            "SELECT seq,id,hash,status FROM events ORDER BY seq"
+        )), old_event_rows)
+        self.assertEqual(list(self.store.db.execute(
+            "SELECT seq,prev_hash,chain_hash FROM ledger ORDER BY seq"
+        )), old_ledger_rows)
+        self.assertEqual(tuple(self.store.db.execute(
+            "SELECT body,hash FROM reports ORDER BY id=1"
+        ).fetchone()), old_record)
+        self.assertEqual(
+            regenerated["canonical_hash"], historical["canonical_hash"]
+        )
+        self.assertEqual(regenerated["state_sequence"], 2)
+
+    def test_rehashed_legacy_report_cannot_forge_tally_on_source_change(self):
+        v5_sha = "3fb0bb0dcc28f961033d782260c31f36ed78eb71"
+        self.ingest(observation(T0, tally=3), observation(T2, tally=5))
+        claimed = self.store.report(v5_sha, now=NOW, max_age=3600)
+        claimed["repository_changes"][0]["evidence_quality"] = "ACTUAL_FRESH"
+        claimed["repository_changes"][0]["open_issue_pr_tally"]["net_delta"] = 999
+        self.store.db.execute(
+            "UPDATE reports SET body=?,hash=? WHERE id=1",
+            (canonical(claimed), digest(claimed)),
+        )
+        with self.assertRaisesRegex(
+            BrainError, "report does not match deterministic ledger replay"
+        ):
+            self.store.read_report(v5_sha, now=NOW, max_age=3600)
+
     def test_rehashed_fabricated_change_cannot_survive_independent_replay(self):
         self.ingest(observation(T0), observation(T1, tally=4))
         report = self.report()
