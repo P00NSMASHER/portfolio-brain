@@ -84,8 +84,15 @@ check deterioration/recovery only for uniquely named, completed checks observed
 on the **same exact revision**. Missing checks, duplicates, pending checks, and
 changed revisions never imply recovery or passing coverage. Each comparison
 retains its two source references, timestamps and ACTUAL_FRESH/NON_ACTUAL/
-HISTORICAL evidence quality. A conflicting historical same-time observation
-blocks the projection, even if the newest observation is unambiguous.
+HISTORICAL/ACTUAL_STALE_BASELINE evidence quality. ACTUAL_STALE_BASELINE
+means the latest actual snapshot is within the configured freshness window but
+the earlier actual snapshot is outside it: measured differences are preserved,
+while no current-period change timing or recent recovery is inferred. At the
+freshness boundary, an age exactly equal to max_age remains eligible; one
+second beyond is stale. An old baseline must not make the entire report stale
+when the latest independently observed source is fresh. A conflicting
+historical same-time observation blocks the projection even when the newest
+observation is unambiguous.
 These are state differences, not verified technical improvement, commercial
 value, root-cause attribution, or authorization to take action. The new
 projection needs no new workflow, provider query, database, or service.
