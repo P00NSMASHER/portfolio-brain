@@ -141,6 +141,11 @@ def write_report(report, output):
             facts.append(f'observed recovered check transitions: {names}')
         if change["check_comparison"] != "COMPARABLE":
             facts.append(f'check comparability: {change["check_comparison"]}')
+        if change["evidence_quality"] == "ACTUAL_STALE_BASELINE":
+            facts.append(
+                "earlier snapshot exceeds the freshness window; "
+                "the timing of these differences is not established"
+            )
         lines.append(
             f'- {change["repository"]} ({change["previous_observed_at"]} to '
             f'{change["current_observed_at"]}; {change["evidence_quality"]}): '
