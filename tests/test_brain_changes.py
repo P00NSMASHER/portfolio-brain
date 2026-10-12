@@ -276,7 +276,7 @@ class RepositoryChangeEvidenceTests(unittest.TestCase):
             "SELECT seq,prev_hash,chain_hash FROM ledger ORDER BY seq"
         )), old_ledger_rows)
         self.assertEqual(tuple(self.store.db.execute(
-            "SELECT body,hash FROM reports ORDER BY id=1"
+            "SELECT body,hash FROM reports WHERE id=1"
         ).fetchone()), old_record)
         self.assertEqual(
             regenerated["canonical_hash"], historical["canonical_hash"]
