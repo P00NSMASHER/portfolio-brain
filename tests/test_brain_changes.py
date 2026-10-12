@@ -165,6 +165,59 @@ class RepositoryChangeEvidenceTests(unittest.TestCase):
         self.assertEqual(stale["status"], "BLOCKED")
         self.assertEqual(stale["repository_changes"][0]["evidence_quality"], "HISTORICAL")
 
+    def test_fresh_latest_with_expired_actual_baseline_is_not_a_recent_change(self):
+        self.ingest(observation(T0, tally=3), observation(T2, tally=5))
+        # The newest source is five minutes old; the comparison baseline
+        # is over two hours old relative to a one-hour freshness limit.
+        result = self.report(now=NOW, max_age=3600)
+        self.assertEqual(result["status"], "PASS")
+        change = result["repository_changes"][0]
+        self.assertEqual(change["evidence_quality"], "ACTUAL_STALE_BASELINE")
+        self.assertEqual(change["change_types"], ["OPEN_TRACKER_TALLY_CHANGED"])
+        self.assertEqual(change["open_issue_pr_tally"]["net_delta"], 2)
+        self.assertEqual(
+            self.store.read_report(CODE_SHA, now=NOW, max_age=3600), result
+        )
+        write_report(result, self.dir / "stale-baseline-report")
+        markdown = (self.dir / "stale-baseline-report" / "report.md").read_text()
+        html = (self.dir / "stale-baseline-report" / "report.html").read_text()
+        machine = json.loads(
+            (self.dir / "stale-baseline-report" / "report.json").read_text()
+        )
+        self.assertIn("ACTUAL_STALE_BASELINE", markdown)
+        self.assertIn("timing of these differences is not established", markdown)
+        self.assertIn("ACTUAL_STALE_BASELINE", html)
+        self.assertEqual(
+            machine["repository_changes"][0]["evidence_quality"],
+            "ACTUAL_STALE_BASELINE",
+        )
+
+    def test_prior_observation_exactly_at_freshness_limit_is_allowed(self):
+        self.ingest(observation(T1), observation(T2, tally=4))
+        at_limit = self.report(now=NOW, max_age=3900)
+        self.assertEqual(
+            at_limit["repository_changes"][0]["evidence_quality"],
+            "ACTUAL_FRESH",
+        )
+        past_limit = self.report(now=NOW, max_age=3899)
+        self.assertEqual(
+            past_limit["repository_changes"][0]["evidence_quality"],
+            "ACTUAL_STALE_BASELINE",
+        )
+        self.assertEqual(
+            self.store.read_report(CODE_SHA, now=NOW, max_age=3899),
+            past_limit,
+        )
+
+    def test_nonactual_evidence_overrides_stale_baseline_label(self):
+        self.ingest(
+            observation(T0, data_kind="SIMULATED"),
+            observation(T2, tally=4),
+        )
+        change = self.report(now=NOW, max_age=3600)["repository_changes"][0]
+        self.assertEqual(change["evidence_quality"], "NON_ACTUAL")
+        self.assertEqual(change["open_issue_pr_tally"]["net_delta"], 1)
+
     def test_rehashed_fabricated_change_cannot_survive_independent_replay(self):
         self.ingest(observation(T0), observation(T1, tally=4))
         report = self.report()
