@@ -222,6 +222,37 @@ class TransferEvidenceTests(unittest.TestCase):
                 BRAIN_SHA, now="2026-10-10T22:00:01Z"
             )
 
+    def test_real_cli_still_rejects_expired_source_report(self):
+        # The historical fixture is 2026-10-08T22:00Z. Pin only this
+        # CLI test to the first second after the real 48-hour limit.
+        # The stale authority must not be silently refreshed or sent to
+        # an external provider, even while other fixture tests freeze time.
+        source = self.root / "stale-input.json"
+        source.write_text(json.dumps(request()))
+        output = self.root / "stale-cli-result"
+        database = self.root / "state.sqlite"
+        before_sha256 = hashlib.sha256(database.read_bytes()).hexdigest()
+        before_mode = database.stat().st_mode & 0o777
+        before_mtime_ns = database.stat().st_mtime_ns
+
+        with (
+            patch("brain.__main__.source_sha", return_value=BRAIN_SHA),
+            patch("brain.core.utcnow", return_value="2026-10-10T22:00:01Z"),
+            patch("brain.__main__.GitHub",
+                  side_effect=AssertionError("stale authority reached provider")),
+        ):
+            code = brain_cli([
+                "transfer-review", "--db", str(database),
+                "--input", str(source), "--output", str(output),
+                "--expected-sha", BRAIN_SHA,
+            ])
+
+        self.assertEqual(code, 1)
+        self.assertFalse((output / "transfer-review.json").exists())
+        self.assertEqual(hashlib.sha256(database.read_bytes()).hexdigest(), before_sha256)
+        self.assertEqual(database.stat().st_mode & 0o777, before_mode)
+        self.assertEqual(database.stat().st_mtime_ns, before_mtime_ns)
+
     def test_cli_rejects_symlinked_or_corrupt_source_before_writing_receipt(self):
         source = self.root / "input.json"
         source.write_text(json.dumps(request()))
