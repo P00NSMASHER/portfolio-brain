@@ -85,12 +85,18 @@ def repository_changes(events, *, now, max_age):
                     recoveries.append(transition)
 
         quality = "ACTUAL_FRESH"
-        age = (timestamp(now) - timestamp(after["observed_at"])).total_seconds()
-        require(age >= 0, "FUTURE_SOURCE: change comparison after report time required")
+        latest_age = (timestamp(now) - timestamp(after["observed_at"])).total_seconds()
+        baseline_age = (timestamp(now) - timestamp(before["observed_at"])).total_seconds()
+        require(latest_age >= 0, "FUTURE_SOURCE: change comparison after report time required")
         if after["data_kind"] != "ACTUAL" or before["data_kind"] != "ACTUAL":
             quality = "NON_ACTUAL"
-        elif age > max_age:
+        elif latest_age > max_age:
             quality = "HISTORICAL"
+        elif baseline_age > max_age:
+            # A fresh newest observation does not make an old comparison
+            # baseline fresh. Preserve observed deltas, but do not describe
+            # their timing as a current-period movement.
+            quality = "ACTUAL_STALE_BASELINE"
 
         types = []
         if revision_changed:
