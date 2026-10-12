@@ -93,6 +93,35 @@ second beyond is stale. An old baseline must not make the entire report stale
 when the latest independently observed source is fresh. A conflicting
 historical same-time observation blocks the projection even when the newest
 observation is unambiguous.
+
+### V5-to-V6 stored-report replay after a long observation gap
+
+The original V5 source `3fb0bb0dcc28f961033d782260c31f36ed78eb71`
+classified a fresh latest ACTUAL sample against an expired ACTUAL baseline
+as `ACTUAL_FRESH`. V6 deliberately changes that **derived** comparison
+label to `ACTUAL_STALE_BASELINE`. If a persisted V5 report happens to
+contain such a comparison, V6's strict `Store.read_report` recomputes
+the new projection and **rejects** the older report, even when that older
+report's stored hash is internally valid. This is fail-closed **projection
+version drift**, not evidence that the immutable SQLite event ledger is corrupt.
+Never bypass the deterministic report comparison or rewrite old reports.
+
+To prepare a new source safely, independently verify the original SQLite
+snapshot, ledger chain, and source, then **on a disposable copy** use V6
+`Store.report(new_source_sha)` to append a fresh report derived from those
+unchanged events. Re-read with `Store.read_report(new_source_sha)`, verify
+the original event IDs and chain hashes are unchanged and that the V5 report
+row was preserved, and only then consider a governed source transition.
+The scheduled V6 sequence also calls `monitor` (which regenerates its
+report) before `research` and `doctor`, but a passing synthetic copy is
+not a completed live acceptance period. Previous reports remain historical;
+they do not automatically inherit V6 evidence labels. Tests include
+a synthesized, faithfully V5-labeled stale-baseline report, its strict
+rejection under V6, safe candidate regeneration, and rejection of a
+self-consistently rehashed fabricated tally. The audited actual October 12
+V5 snapshot had **zero** expired baselines and independently replayed
+successfully; do not describe this potential gap as an observed outage.
+
 These are state differences, not verified technical improvement, commercial
 value, root-cause attribution, or authorization to take action. The new
 projection needs no new workflow, provider query, database, or service.
