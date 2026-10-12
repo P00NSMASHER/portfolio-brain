@@ -129,7 +129,18 @@ def request_from_run(run: dict[str, Any], failed_log: str, *, base_sha: str) -> 
     req(_sha40(failed_head), "failed workflow head sha invalid")
     req(_sha40(base_sha), "repair base sha invalid")
     summary = _sanitize_failure_log(failed_log, policy["max_prompt_log_chars"])
-    req(summary.strip(), "failed workflow log is empty")
+    if not summary.strip():
+        # GitHub can report a failed/cancelled run before a downloadable failed
+        # log exists (for example startup failures or jobs cancelled while
+        # waiting on concurrency). Preserve that diagnostic gap explicitly
+        # rather than disabling recovery or inventing a root cause.
+        summary = (
+            f"GitHub Actions workflow {name} run {run['id']} concluded "
+            f"{run.get('conclusion')} on exact main source {failed_head}. "
+            "No failed-step log text was available from GitHub for this run. "
+            "Inspect the repository and run metadata; do not infer a root cause "
+            "without reproducing it."
+        )
     core = {
         "schema_version": "1.0.0",
         "source_kind": "WORKFLOW_FAILURE",
