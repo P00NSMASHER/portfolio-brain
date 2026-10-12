@@ -1,0 +1,235 @@
+{
+  "schema_version": 5,
+  "status": "PASS",
+  "scope": "HISTORICAL_SOURCE_SPECIFIC_ACCEPTANCE_ONLY",
+  "source_sha": "3fb0bb0dcc28f961033d782260c31f36ed78eb71",
+  "source_pr": 676,
+  "controlled_transition_merged_at_utc": "2026-10-11T21:04:30Z",
+  "evidence_branch": "brain-acceptance-v5",
+  "acceptance_window": {
+    "first_qualifying_core_completed_utc": "2026-10-11T21:31:14Z",
+    "last_qualifying_core_completed_utc": "2026-10-12T11:31:15Z",
+    "verified_duration_seconds": 50401,
+    "minimum_duration_seconds": 21600,
+    "maximum_qualifying_completion_gap_seconds": 3545,
+    "maximum_allowed_gap_seconds": 5400,
+    "strict_provider_or_native_qualified_successful_core_count": 29,
+    "automatic_successful_core_count": 30,
+    "complete_exact_source_core_census_as_of_terminal_snapshot": {
+      "success": 31,
+      "failure": 0,
+      "nonqualifying_push_smoke": 1
+    },
+    "original_artifact_zip_sha256_matched_count": 30,
+    "original_artifact_zip_crc_verified_count": 30,
+    "mandatory_workloads_pass_count": 30,
+    "all_automatic_doctor_pending_events": 0,
+    "tests_per_core": 339,
+    "all_original_state_parent_child_links_contiguous": true
+  },
+  "original_artifact_inventory": [
+    {
+      "run_id": 38176646016,
+      "artifact_id": 11716370206,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38178660039,
+      "artifact_id": 11717271453,
+      "strict_qualifies": false
+    },
+    {
+      "run_id": 38180635394,
+      "artifact_id": 11718040491,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38182626612,
+      "artifact_id": 11718675318,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38184531444,
+      "artifact_id": 11719366170,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38186369964,
+      "artifact_id": 11719746944,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38188257475,
+      "artifact_id": 11720218683,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38190191179,
+      "artifact_id": 11720921920,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38192147308,
+      "artifact_id": 11722195529,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38193252335,
+      "artifact_id": 11722696667,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38195393023,
+      "artifact_id": 11722959769,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38197369251,
+      "artifact_id": 11723722521,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38199358015,
+      "artifact_id": 11724332923,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38201342247,
+      "artifact_id": 11725676330,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38203373575,
+      "artifact_id": 11725788783,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38205412906,
+      "artifact_id": 11727157912,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38207505241,
+      "artifact_id": 11727648652,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38209706781,
+      "artifact_id": 11728148492,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38212041044,
+      "artifact_id": 11730025893,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38214521879,
+      "artifact_id": 11731196108,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38217182380,
+      "artifact_id": 11732419905,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38219999578,
+      "artifact_id": 11734480187,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38222966687,
+      "artifact_id": 11735730888,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38226057687,
+      "artifact_id": 11736752221,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38227319194,
+      "artifact_id": 11736819636,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38230325707,
+      "artifact_id": 11737973255,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38233549806,
+      "artifact_id": 11739482720,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38236748799,
+      "artifact_id": 11740662551,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38239869165,
+      "artifact_id": 11742846549,
+      "strict_qualifies": true
+    },
+    {
+      "run_id": 38243079687,
+      "artifact_id": 11744256203,
+      "strict_qualifies": true
+    }
+  ],
+  "conservative_exclusion": {
+    "run_id": 38178660039,
+    "classification": "SUCCESS_BUT_NOT_STRICT_PROVIDER_PAIRED",
+    "reason": "Original signed GitHub-origin verification and Cloudflare application log exist; distinct original Cloudflare invocation-summary row was unavailable. Retained as successful, excluded from strict endpoint calculation."
+  },
+  "independent_terminal_state": {
+    "commit": "571c14333d76437605568019d0098a6364c7e971",
+    "parent_commit": "126a18e0029665cd8d9e65acce81c2786f024846",
+    "git_blob_sha1": "7cf11d3a0c00b007f4e4b6af58127729a5dfa2a6",
+    "raw_sqlite_sha256": "c114bf63b92f06d0a9f460dcde71b6053c836c944cd2ae0115820402e2389956",
+    "raw_bytes": 38612992,
+    "canonical_sequence": 1095,
+    "canonical_hash": "a6604aa5d6a24e860d9eb0bb87a13f2ed6727ec09c12ebae3bc23db27e13a706",
+    "pending_events": 0,
+    "sqlite_integrity_check": "PASS",
+    "foreign_key_check": "PASS",
+    "event_id_chain_and_hash_replay": "PASS",
+    "deterministic_semantic_report_replay": "PASS",
+    "verified_on_separate_github_actions_runner": true
+  },
+  "independent_post_soak_verification": {
+    "audit_pr": 677,
+    "audit_pr_state": "DRAFT_DO_NOT_MERGE",
+    "foundation_ci_run": 38246362477,
+    "foundation_ci_job": 114801097410,
+    "foundation_ci_conclusion": "success",
+    "total_regression_tests": 1713,
+    "exact_source_specific_raw_binary_test": "PASS",
+    "independent_verifier_workflow_run": 38246622067,
+    "independent_verifier_workflow_conclusion": "success",
+    "replay_attested_at_utc": "2026-10-12T12:03:09Z",
+    "original_log_marker": "BRAIN_V5_INDEPENDENT_RAW_REPLAY"
+  },
+  "preservation": {
+    "accepted_v4_branch": "brain-acceptance-v4",
+    "accepted_v4_record": "acceptance/finish-soak-v4.json",
+    "v2": "FAIL_PRESERVED",
+    "v3": "BLOCKED_PRESERVED",
+    "v4": "PASS_SOURCE_SPECIFIC_PRESERVED",
+    "prior_v5_old_source_failures": "FAILED_PRESERVED",
+    "no_changes_to_protected_main": true,
+    "no_changes_to_durable_state": true,
+    "no_changes_to_cloudflare_worker": true,
+    "no_new_schedules_or_tasks": true,
+    "no_inference_about_future_source_or_state": true
+  },
+  "references": {
+    "evidence_tracker": "https://github.com/P00NSMASHER/portfolio-brain/issues/669",
+    "candidate_replay_pr": "https://github.com/P00NSMASHER/portfolio-brain/pull/677",
+    "foundation_ci": "https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38246362477",
+    "independent_verifier": "https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38246622067"
+  },
+  "acceptance_scope_note": "This PASS certifies only protected source 3fb0bb0... during the stated completed-core window and the independently replayed terminal state commit. No source transition, credentials, spending, production state, or Cron settings are authorized by this receipt."
+}
