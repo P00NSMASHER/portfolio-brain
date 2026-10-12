@@ -1,5 +1,6 @@
 import copy
 import unittest
+from datetime import datetime, timedelta
 
 from commercial_evidence.state import (
     CommercialEvidenceError,
@@ -25,9 +26,10 @@ class CommercialEvidenceTests(unittest.TestCase):
         validate_observation(observation)
         self.assertEqual(observation["source_kind"],"CHATGPT_GMAIL_CONNECTOR_SANITIZED_OBSERVATION")
         self.assertEqual(observation["evidence_state"],"OBSERVED")
-        self.assertEqual(observation["threads_observed"],18)
+        self.assertEqual(observation["threads_observed"],19)
         self.assertEqual(observation["outbound_messages_observed"],21)
-        self.assertEqual(observation["inbound_messages_observed"],0)
+        self.assertEqual(observation["inbound_messages_observed"],1)
+        self.assertEqual(observation["threads_with_auto_response"],1)
         self.assertEqual(observation["threads_with_human_reply"],0)
         self.assertFalse(observation["private_payloads_persisted"])
         self.assertFalse(observation["raw_message_ids_persisted"])
@@ -35,7 +37,10 @@ class CommercialEvidenceTests(unittest.TestCase):
         self.assertFalse(observation["recipient_identifiers_persisted"])
 
     def test_fresh_scoped_zero_reply_is_observed_not_global_zero_or_definitive_outcome(self):
-        projection=project_current(load_current(),at="2026-09-27T21:40:00Z")
+        observation=load_current()
+        captured=datetime.fromisoformat(observation["captured_at"].replace("Z","+00:00"))
+        at=(captured+timedelta(minutes=5)).isoformat().replace("+00:00","Z")
+        projection=project_current(observation,at=at)
         self.assertEqual(projection["evidence_status"],"CURRENT_SCOPE_OBSERVED")
         self.assertEqual(projection["current_reply_state"],"OBSERVED_NO_HUMAN_REPLY_IN_SCOPE")
         self.assertEqual(projection["current_payment_state"],"UNKNOWN")
@@ -45,7 +50,10 @@ class CommercialEvidenceTests(unittest.TestCase):
         self.assertIn("explicit Gmail query contract",projection["scope_note"])
 
     def test_stale_observation_fails_closed_to_unknown(self):
-        projection=project_current(load_current(),at="2026-09-29T00:41:00Z")
+        observation=load_current()
+        captured=datetime.fromisoformat(observation["captured_at"].replace("Z","+00:00"))
+        at=(captured+timedelta(minutes=float(policy()["max_observation_age_minutes"])+1)).isoformat().replace("+00:00","Z")
+        projection=project_current(observation,at=at)
         self.assertEqual(projection["evidence_status"],"STALE_OR_UNAVAILABLE")
         self.assertFalse(projection["fresh"])
         self.assertEqual(projection["current_reply_state"],"UNKNOWN")
