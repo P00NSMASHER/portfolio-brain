@@ -20,6 +20,15 @@ from pathlib import Path
 from brain.core import require, BrainError, digest, utcnow
 from brain.intelligence import REPO, is_test_source_path, related_test_paths
 
+
+class _VerifiedSourceNotUTF8(BrainError):
+    """Raised only after exact, hash-verified blob bytes fail strict UTF-8.
+
+    The subtype prevents a remote error with the same string from being
+    treated as a legitimate local encoding finding.
+    """
+
+
 def _api_request_family(path):
     """Return only a fixed, non-sensitive endpoint family; never a URL/path.
 
@@ -317,7 +326,13 @@ class GitHub:
                 require(blob.get("encoding")=="base64" and blob.get("sha")==row["sha"], "source blob identity invalid")
                 raw=base64.b64decode(blob["content"],validate=False)
                 require(len(raw)==row["size"] and hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()==row["sha"], "SOURCE_CONTENT_HASH_MISMATCH")
-                body=raw.decode("utf-8",errors="strict")
+                # GitHub can return a correctly hashed non-text blob under
+                # a .py/.ts/.js extension. Never replace invalid bytes, guess
+                # another encoding or assign verified-code credit to it.
+                try:
+                    body=raw.decode("utf-8",errors="strict")
+                except UnicodeDecodeError:
+                    raise _VerifiedSourceNotUTF8("SOURCE_BLOB_NOT_UTF8") from None
                 test_paths=related_test_paths(row["path"], rows)
                 license=(meta.get("license") or {}).get("spdx_id") or "UNKNOWN"
                 found.append(({"repository":name,"head_sha":sha,"path":row["path"],"blob_sha":row["sha"],"code_sha256":hashlib.sha256(raw).hexdigest(),"bytes":len(raw),"test_paths":test_paths,"license":license,"source_ref":f'https://github.com/{name}/blob/{sha}/{row["path"]}',"target":target["project"],"query":target["query"],"matched_terms":[term for term in terms if term in body.lower()]},meta["private"]))
@@ -342,6 +357,11 @@ class GitHub:
                 vanished = (str(exc) ==
                             "SOURCE_API_404: GET failed; no cursor advanced")
                 oversized = (str(exc) == "SOURCE_RESPONSE_TOO_LARGE")
+                non_utf8 = (stage == "blob"
+                            and isinstance(exc, _VerifiedSourceNotUTF8))
+                # A hash-verified non-UTF-8 optional search hit cannot become
+                # source code. A forged provider BrainError with the same text
+                # is NOT eligible: only our typed post-hash decoder error is.
                 # A too-large optional recursive tree/blob is NOT an inspected
                 # source. Never truncate/parse it, increase the 2 MB response
                 # budget, retry it, or silently substitute a candidate. A
@@ -351,12 +371,15 @@ class GitHub:
                 if optional_public and (
                     (vanished and (stage in {"tree", "blob"} or empty_branch))
                     or (oversized and stage in {"tree", "blob"})
+                    or non_utf8
                 ):
                     self.discovery_unavailable.append({
                         "repository":name, "stage":stage,
                         "reason":("SEARCH_RESULT_SOURCE_404_NOT_INSPECTED"
                                   if vanished else
-                                  "SEARCH_RESULT_RESPONSE_TOO_LARGE_NOT_INSPECTED"),
+                                  "SEARCH_RESULT_RESPONSE_TOO_LARGE_NOT_INSPECTED"
+                                  if oversized else
+                                  "SEARCH_RESULT_NON_UTF8_BLOB_NOT_INSPECTED"),
                     })
                     continue
                 raise
@@ -372,7 +395,9 @@ class GitHub:
                     {"SEARCH_RESULT_RESPONSE_TOO_LARGE_NOT_INSPECTED"}
                 else "partial tree no eligible source" if reasons==
                     {"SEARCH_RESULT_BOUNDED_TREE_NO_ELIGIBLE_SOURCE"}
-                else "provider 404/size bound/partial tree"
+                else "non-UTF-8 source" if reasons==
+                    {"SEARCH_RESULT_NON_UTF8_BLOB_NOT_INSPECTED"}
+                else "provider 404/size bound/non-UTF-8 source/partial tree"
             )
             raise BrainError(
                 "DISCOVERY_ALL_SEARCH_RESULTS_UNAVAILABLE: "
