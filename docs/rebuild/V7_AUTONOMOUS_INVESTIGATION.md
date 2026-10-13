@@ -96,3 +96,10 @@ and nonactual suppression, and the POSIX private CLI state-preservation path.
 **Release remains HOLD** until V6 completes its independent original signed
 provider six-hour acceptance, followed by separately approved V7 promotion
 and entirely fresh source-specific automatic verification.
+
+
+**Mixed outcomes:** If a single fresh, same-commit comparison has both a
+deteriorated check and a different recovered check, both names are rechecked
+in the **same bounded provider observation**. Neither the recovery nor a
+possibly still-failing check is silently dropped, and the green status remains
+only an observation, not root-cause resolution.

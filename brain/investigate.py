@@ -93,12 +93,29 @@ def _plan(report, now, limits):
             continue
         repository = item["metadata"]["repository"]
         row = selected[repository]
+        # A repository may show one new adverse check and a different observed
+        # recovery in the same exact-source comparison. Recheck both in ONE
+        # bounded GET instead of discarding the recovery forever.
+        recoveries = row.get("check_recoveries")
+        require(type(recoveries) is list, "CONTINUATION_RECOVERY_EVIDENCE_MISSING")
+        for change in recoveries:
+            require(type(change) is dict
+                    and change.get("from_conclusion") in _ADVERSE
+                    and change.get("to_conclusion") == "success"
+                    and _source_reference(change.get("source_ref"), repository),
+                    "CONTINUATION_RECOVERY_EVIDENCE_UNBOUND")
+        check_names = [check["name"] for check in row["check_deteriorations"]]
+        check_names.extend(change["name"] for change in recoveries)
+        require(len(check_names) == len(set(check_names)),
+                "CONTINUATION_RECOVERY_CHECK_NAME_AMBIGUOUS")
+        refs = sorted(set(item["source_refs"] + [change["source_ref"]
+                                                  for change in recoveries]))
         result.append({
             "repository": repository, "queue_id": item["id"],
             "expected_revision": row["current_revision"],
             "original_observed_at": row["current_observed_at"],
-            "source_refs": list(item["source_refs"]),
-            "check_names": sorted(check["name"] for check in row["check_deteriorations"]),
+            "source_refs": refs,
+            "check_names": sorted(check_names),
         })
     require(len(result) == len(selected), "investigation queue unexpectedly truncated")
     return result

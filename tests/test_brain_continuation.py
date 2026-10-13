@@ -123,6 +123,38 @@ class ContinuedEvidenceTests(unittest.TestCase):
         self.assertEqual(receipt["status"],
                          "BOUNDED_READ_ONLY_REVALIDATION_COMPLETE_WITH_DEFERRED")
 
+    def test_initial_deterioration_and_simultaneous_recovery_share_one_read(self):
+        def mixed(when, validate, audit):
+            data = copy.deepcopy(snapshot(when=when, conclusion=validate)["payload"])
+            data["checks"].append({
+                "name": "audit", "status": "completed", "conclusion": audit,
+                "head_sha": REV,
+                "url": f"https://github.com/{REPO}/actions/runs/11/job/21",
+            })
+            return event("repository", REPO, data, SOURCE, now=when)
+        report, history = self.report_events(
+            mixed(T0, "success", "failure"),
+            mixed(T1, "failure", "success"),
+        )
+        change = report["repository_changes"][0]
+        self.assertEqual(len(change["check_deteriorations"]), 1)
+        self.assertEqual(len(change["check_recoveries"]), 1)
+        transport = Transport(conclusion="failure")
+        transport.extra_checks = [{
+            "id": 21, "name": "audit", "status": "completed",
+            "conclusion": "success", "head_sha": REV,
+            "html_url": f"https://github.com/{REPO}/actions/runs/11/job/21",
+        }]
+        receipt, transport = self.run_case(report, history, transport=transport)
+        checks = {row["name"]: row["outcome"] for row in receipt["investigations"][0]["checks"]}
+        self.assertEqual(checks, {
+            "audit": "SUCCESS_OBSERVED_NOT_RESOLUTION",
+            "validate": "STILL_ADVERSE",
+        })
+        self.assertEqual(receipt["eligible_count"], 1)
+        self.assertEqual(len(transport.calls), 4)
+        self.assertEqual(receipt["requests_used"], 4)
+
     def test_long_lived_four_repo_failures_rotate_without_starvation(self):
         records = []
         for repo in (FOURTH, REPO, THIRD, OTHER):
