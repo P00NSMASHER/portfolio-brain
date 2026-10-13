@@ -180,7 +180,9 @@ def investigate(report, *, api=None, now=None, max_investigations=3, stop_reques
             receipt["status"] = "REQUEST_BUDGET_DEFERRED"
             break
         try:
-            result = _revalidate(plan, api.observe(plan["repository"]))
+            observation, private = api.observe(plan["repository"])
+            require(private is False, "private provider observation refused")
+            result = _revalidate(plan, observation)
         except (BrainError, OSError, KeyError, TypeError, AttributeError):
             result = {**plan, "observed_revision": None, "checks": [],
                       "outcome": "UNVERIFIED_READ_FAILED"}
