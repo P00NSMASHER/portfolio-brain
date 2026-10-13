@@ -47,11 +47,31 @@ class TemporalSidecarTests(unittest.TestCase):
         self.assertEqual(public["historical_adverse_streak_bands"], {"NONE": 1})
         self.assertFalse(public["root_cause_verified"])
 
-    def test_missing_check_yields_partial_and_no_claimed_adverse_streak(self):
+    def test_original_gap_breaks_streak_even_when_provider_rechecks_successfully(self):
         receipt = classified(sample(T0), sample(T1, included=False))
+        public = result(receipt)
+        self.assertEqual(public["status"], "OBSERVED_READ_ONLY")
+        self.assertEqual(public["historical_adverse_streak_bands"], {"NONE": 1})
+
+    def test_unresolved_provider_gap_remains_partial(self):
+        from brain.adapters import GitHub
+        from brain.investigate import investigate
+        from test_brain_temporal import NOW
+        from test_brain_investigate import Transport
+        from test_brain_evidence_gaps import verified
+
+        report, history = verified(sample(T0), sample(T1, included=False))
+        transport = Transport()
+        transport.check_mutation = lambda item: item.update(name="unrelated")
+        receipt = investigate(report, history=history, now=NOW,
+                              api=GitHub(transport=transport))
         public = result(receipt)
         self.assertEqual(public["status"], "PARTIAL_READ_ONLY")
         self.assertEqual(public["historical_adverse_streak_bands"], {"NONE": 1})
+        self.assertEqual(public["observed_outcomes"],
+                         {"UNVERIFIED_MISSING_OR_AMBIGUOUS_CHECK": 1})
+        self.assertEqual(len(transport.calls), 4)
+        self.assertFalse(public["root_cause_verified"])
 
     def test_stale_or_forged_history_metrics_never_become_public(self):
         original = classified(sample(T0), sample(T1))
@@ -86,6 +106,10 @@ class TemporalSidecarTests(unittest.TestCase):
 
     def test_plan_and_observed_check_temporal_histories_must_match(self):
         original = classified(sample(T0), sample(T1))
+        plan = original["investigations"][0]["historical_check_patterns"]["validate"]
+        checked = original["investigations"][0]["checks"][0]["historical_observations"]
+        self.assertIsNot(plan, checked)
+        self.assertEqual(plan, checked)
         for attack in ("omit_check", "omit_plan", "change_check", "rename_plan"):
             tampered = copy.deepcopy(original)
             row = tampered["investigations"][0]
