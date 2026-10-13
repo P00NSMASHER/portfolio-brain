@@ -217,7 +217,8 @@ def investigate(report, *, api=None, now=None, max_investigations=3, stop_reques
             require(type(additional_classes) is dict,
                     "CONTINUATION_EVIDENCE_MAP_INVALID")
             for check_name, evidence_class in additional_classes.items():
-                require(check_name not in existing_classes,
+                require(check_name not in existing_classes
+                        or existing_classes[check_name] == evidence_class,
                         "CONTINUATION_CONTRADICTORY_CHECK_EVIDENCE")
                 existing_classes[check_name] = evidence_class
             current["check_names"] = sorted(existing_classes)
