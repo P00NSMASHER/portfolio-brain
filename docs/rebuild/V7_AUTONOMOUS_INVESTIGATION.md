@@ -187,3 +187,41 @@ gaps/source changes as PARTIAL, never a verified repair.
 All prior production, paid-call, trading, source-license, scheduler and
 acceptance restrictions remain intact. No V7 runtime is released by this
 draft.
+
+## New V7 read-only temporal check evidence (draft)
+
+Every eligible check revalidation can now summarize up to **12 successive
+terminal GitHub observations** on one exact source revision from the
+**original replay-verified SQLite ledger**, within the existing 48-hour
+source-freshness window. The pure `brain.temporal` projection tracks:
+consecutive adverse sampled conclusions, first timestamp *observed* in that
+sample streak, total completed samples, how often sampled statuses flipped
+between adverse and success, and whether the 12-sample display cap was
+reached. A gap, unavailable/duplicated check, pending status, simulated
+sample, source revision change or expired sample **breaks continuity**,
+rather than being silently ignored.
+
+The private investigation receipt and human-readable report disclose these
+original measured observations alongside the newly fetched public GitHub
+check status. Changes in provider status **do not rewrite original evidence**.
+The reported timestamps are **sampling times**, not timestamps of actual
+failure onset, outage duration, incident resolution or confidence that a
+test is intrinsically flaky. Multiple changes are described only as
+observed terminal-state movements, not a root-cause diagnosis.
+
+The optional public sidecar publishes only fixed, names-free
+`historical_adverse_streak_bands` counts (none / one / two / three or
+more), a count of checks with multiple observed adverse/success movements
+and a count of histories truncated at 12 samples. It does not publish
+check names, repository names, event timestamps, raw state, API content,
+private Markdown/HTML or raw error messages. Malformed historical data,
+fabricated counts, inconsistent timestamps or mismatches between the
+original plan and the observed check record are **BLOCKED** before a
+complete advisory status can be claimed. Old receipts without this
+optional metadata remain readable.
+
+**No additional GitHub provider request, state writer, schedule, shared
+cursor, automatic repair, third-party-code execution, charge, trade,
+customer communication, merge or authorization** is introduced. All
+existing V6 production and V7 draft-only governance boundaries remain
+unchanged.
