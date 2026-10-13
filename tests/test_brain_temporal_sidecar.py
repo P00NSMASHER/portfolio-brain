@@ -20,7 +20,7 @@ class TemporalSidecarTests(unittest.TestCase):
     def test_two_original_adverse_samples_publish_names_free_bucket(self):
         receipt = classified(sample(T0), sample(T1))
         public = result(receipt)
-        self.assertEqual(public["status"], "OBSERVED_READ_ONLY")
+        self.assertEqual(public["status"], "PARTIAL_READ_ONLY")
         self.assertEqual(public["historical_adverse_streak_bands"], {"TWO": 1})
         self.assertEqual(public["historical_repeated_terminal_movements"], 0)
         self.assertEqual(public["historical_sample_caps"], 0)
@@ -35,7 +35,7 @@ class TemporalSidecarTests(unittest.TestCase):
             sample("2026-10-12T13:00:00Z", conclusion="success"),
             sample(T0, conclusion="failure"), sample(T1, conclusion="failure"))
         public = result(receipt)
-        self.assertEqual(public["status"], "OBSERVED_READ_ONLY")
+        self.assertEqual(public["status"], "PARTIAL_READ_ONLY")
         self.assertEqual(public["historical_adverse_streak_bands"], {"TWO": 1})
         self.assertEqual(public["historical_repeated_terminal_movements"], 1)
         self.assertFalse(public["production_accepted"])
@@ -50,7 +50,7 @@ class TemporalSidecarTests(unittest.TestCase):
     def test_original_gap_breaks_streak_even_when_provider_rechecks_successfully(self):
         receipt = classified(sample(T0), sample(T1, included=False))
         public = result(receipt)
-        self.assertEqual(public["status"], "OBSERVED_READ_ONLY")
+        self.assertEqual(public["status"], "PARTIAL_READ_ONLY")
         self.assertEqual(public["historical_adverse_streak_bands"], {"NONE": 1})
 
     def test_unresolved_provider_gap_remains_partial(self):
