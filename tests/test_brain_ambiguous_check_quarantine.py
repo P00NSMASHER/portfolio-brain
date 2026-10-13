@@ -169,6 +169,59 @@ class QuarantinedCheckNamesTests(unittest.TestCase):
                         api=GitHub(transport=api), now=NOW)
         self.assertEqual(api.calls, [])
 
+    def test_partial_comparison_merges_all_unique_check_signals_in_one_read(self):
+        from test_brain_same_revision_all_signals import transport
+        before = [
+            c("validate", "success"), c("persist", "failure"),
+            c("audit", "failure"), c("orphan", "success"),
+        ] + duplicate("ambiguous", "failure")
+        after = [
+            c("validate", "failure"), c("persist", "failure"),
+            c("audit", "success"),
+        ] + duplicate("ambiguous", "failure")
+        report, history = get_report(before, after)
+        self.assertEqual(report["repository_changes"][0]["check_comparison"],
+                         "PARTIAL_AMBIGUOUS_CHECK_NAMES")
+        provider = transport()
+        original = copy.deepcopy((report, history))
+        receipt = investigate(report, history=history, now=NOW,
+                              api=GitHub(transport=provider))
+        self.assertEqual((report, history), original)
+        self.assertEqual(len(provider.calls), 4)
+        self.assertEqual(receipt["requests_used"], 4)
+        row = receipt["investigations"][0]
+        self.assertEqual(row["check_names"],
+                         ["audit", "orphan", "persist", "validate"])
+        self.assertNotIn("ambiguous", row["check_names"])
+        self.assertTrue(row["partial_check_coverage"])
+        self.assertEqual(row["check_evidence_classes"], {
+            "validate": "INITIAL_ADVERSE_TRANSITION",
+            "persist": "PERSISTENT_ADVERSE_OBSERVED",
+            "audit": "RECOVERY_OBSERVED_NOT_RESOLUTION",
+            "orphan": "EVIDENCE_GAP_REVALIDATION",
+        })
+        public = summarize(receipt, SOURCE, *["success"] * 4)
+        self.assertEqual(public["status"], "PARTIAL_READ_ONLY")
+        self.assertEqual(public["checked"], 1)
+        self.assertEqual(public["partial_check_coverage_repositories"], 1)
+        self.assertIs(public["root_cause_verified"], False)
+        self.assertNotIn("ambiguous", str(public))
+
+    def test_quarantined_untrusted_name_never_enters_private_review(self):
+        unsafe = "<script> **invoke** [jump](https://untrusted.invalid)"
+        report, history = get_report(
+            [c("validate", "success")] + duplicate(unsafe, "failure"),
+            [c("validate", "failure")] + duplicate(unsafe, "failure"),
+        )
+        receipt, _ = run_case(report, history)
+        packet = "\n".join(review_lines(receipt))
+        self.assertNotIn("<script>", packet)
+        self.assertNotIn("invoke", packet)
+        self.assertIn("partial original CI check-name coverage", packet.lower())
+        self.assertIn("validate", packet)
+        self.assertNotIn(unsafe, str(summarize(
+            receipt, SOURCE, *["success"] * 4)))
+
     def test_normal_unambiguous_comparison_remains_complete(self):
         report, history = get_report(
             [c("validate", "success")], [c("validate", "failure")],
