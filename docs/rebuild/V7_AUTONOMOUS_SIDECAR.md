@@ -271,3 +271,22 @@ The V7 workflow path always supplies all original provenance arguments.
 The entire original V6 cycle writer, scheduling, signing, state publication,
 permissions, source and six-hour acceptance boundary remain unchanged;
 only the previously appended V7 optional job's finalization inputs changed.
+
+### Two-stage original-manifest content pin (V7 draft refinement)
+
+The initial `prepare` step now writes **both** the original immutable
+state commit and the SHA-256 of the exact original delivery-manifest bytes
+to the private GitHub Actions step output. The separate `finalize` step
+requires that *pinned digest* in addition to the original run ID, run
+attempt, source SHA and published state SHA. Re-reading a semantically
+similar but byte-different manifest is deliberately insufficient:
+**any change after prepare fails closed**, even if schema, source and
+state IDs are unchanged.
+
+The final public status contains only the original manifest SHA-256 and
+nonsecret exact run/state IDs; it never uploads the original delivery file,
+SQLite, private review notes or source-level check names. Missing or
+inconsistent pins produce BLOCKED, not an unbound green status.
+Production V6's signer, original workflow steps, schedule, state
+publication and acceptance remain byte-identical and are not affected
+by this candidate V7-only extension.
