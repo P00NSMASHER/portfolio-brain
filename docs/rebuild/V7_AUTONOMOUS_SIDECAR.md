@@ -184,3 +184,29 @@ Original GitHub scopes/permissions, scheduling, credentials, production
 source, canonical ledger and acceptance gates remain intact. Historical
 receipts lacking the optional failure-scope field remain readable and
 conservatively classified.
+
+### No eligible CI findings is not source-coverage verification
+
+The optional V7 sidecar now validates an exact fixed-schema
+`original_comparison_coverage` watermark produced by the read-only
+investigator from its original canonical source report, the current
+invocation timestamp and the existing four-project policy allowlist.
+The category labels are limited to comparable fresh original evidence,
+nonactual/stale, changed revision, duplicate check names, no shared checks
+or otherwise unverified comparison. **Comparable means source-comparable,
+not healthy or successful CI.**
+
+Only the following names-free public fields are added:
+`comparison_coverage_counts` (fixed category totals),
+`unassessed_approved_repositories` (bounded count), and
+`comparison_coverage_limited` (Boolean/unknown). A missing approved
+original comparison, ambiguous or expired evidence, or cross-revision
+comparison **always makes the advisory PARTIAL**, even where there were
+zero investigations or all individually selected GETs completed.
+A contradictory supplied watermark is BLOCKED without exposing private
+source identifiers. Previous legacy receipts with no watermark remain
+readable and explicitly report unknown coverage, not fabricated zero gaps.
+
+This adds no provider GET, cron, mutable state, machine-generated
+compliance PASS, incident closure, code repair, external message,
+authorization change, spending or portfolio trading.
