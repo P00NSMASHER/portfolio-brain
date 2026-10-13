@@ -29,3 +29,39 @@ the optional public sidecar still uploads **only its existing sanitized
 fixed-label counts**. This feature remains in draft PR #685, based on original
 protected V6. The V6 acceptance gate #684, all existing schedules and
 protected main remain untouched. No V7 production acceptance is claimed.
+
+## Stable original-source case references (draft extension)
+
+Each private human-review item now receives a **stable 24-hex case reference**
+derived from its exact observed Git repository, immutable commit revision and
+check name. Unlike the transient review proposal ID, this reference remains
+the same when a later check is reobserved or changes outcome **on that same
+commit**. It changes for another check, repository or source revision. It is a
+deterministic bookmark for operator discussion, **not a persisted incident
+record, a ticket, an acknowledgement, a status tracker or an automated action**.
+
+## Cross-repository check-name coincidences (not a causal claim)
+
+Within the original bounded private review packet, the Brain compares only
+the **selected** human-review items. If the **exact same GitHub check name**
+has been observed as adverse in two or three distinct, original public
+repository-scoped check-run references in that one pass, it adds a separate
+human-only comparison note. Names can overlap even when underlying workflows
+or causes do not. **A same-name coincidence is not a common root cause, a
+shared infrastructure incident, impact measurement, or a suggestion to apply
+one fix everywhere.** Successful, missing, ambiguous, pending, provider-
+unavailable and non-check-run observations never become coincidences.
+
+The comparison note carries an original source-bound case reference and the
+static recommendation to independently review the original CI results. The
+selection remains bounded to **four evidence-review items per repository,
+twelve overall, and at most four same-name coincidence notes**, with any
+omitted coincidence groups counted separately. Review order is a deterministic
+evidence order, not a business impact or urgency estimate. GitHub-sourced
+check names are escaped before private Markdown/HTML rendering.
+
+No additional provider GETs, filesystem state writes, incident resolution,
+downstream PR creations, external messages, costs, trading, schedules or
+production runtime changes. Only the existing private 0700/0600 evidence bundle
+changes on this **unmerged V7 draft**; the optional public sidecar remains
+strictly names-free.
