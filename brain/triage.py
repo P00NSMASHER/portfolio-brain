@@ -149,6 +149,13 @@ def _candidate_proposals(candidates):
         target = candidate.get("target")
         if type(target) is not str or not target:
             continue
+        feedback = candidate.get("feedback")
+        # Do not re-suggest an operator-dismissed or already-reported
+        # integration merely because it is structurally well ranked.
+        if (type(feedback) is dict
+                and feedback.get("basis") == "OPERATOR_REPORTED"
+                and feedback.get("outcome") in {"NOT_USEFUL", "INTEGRATED"}):
+            continue
         buckets.setdefault(target, []).append(candidate)
 
     for target in buckets:
@@ -162,8 +169,6 @@ def _candidate_proposals(candidates):
                 continue
             candidate = group[depth]
             feedback = candidate.get("feedback")
-            if type(feedback) is dict and feedback.get("basis") == "OPERATOR_REPORTED" and feedback.get("outcome") in {"NOT_USEFUL", "INTEGRATED"}:
-                continue
             license_hint = candidate.get("license", "UNKNOWN")
             selected.append(_proposal(
                 "REVIEW_THIRD_PARTY_SOURCE", "STRUCTURAL_REVIEW_ONLY",
