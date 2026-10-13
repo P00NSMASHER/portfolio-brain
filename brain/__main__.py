@@ -34,19 +34,32 @@ def persist(store, items, sha, output):
     return result
 
 def monitor(store, sha, output, *, api=None, repositories=None):
+    # Real public scheduled V7 monitor only: one bounded source race
+    # recovery is allowed. Explicit test/integration API overrides retain
+    # original fail-closed behavior. Protected V6 main is unmodified.
+    automatic_public_monitor=(api is None and store.visibility=="PUBLIC")
     api=api or GitHub(private=store.visibility=="PRIVATE")
     repositories=repositories or policy()["repositories"]
     require(0<len(repositories)<=4, "monitor repository bound exceeded")
     errors=[]
+    source_revision_rechecks=[]
     for repo in repositories:
         try:
-            payload,private=api.observe(repo)
+            if automatic_public_monitor:
+                from .monitor_resilience import observe_after_bounded_revision_race
+                (payload,private), retried=observe_after_bounded_revision_race(api,repo)
+                if retried:
+                    source_revision_rechecks.append(repo)
+            else:
+                payload,private=api.observe(repo)
             store.submit([event("repository",repo,payload,sha,private=private)])
             store.drain()
         except (BrainError,KeyError,UnicodeError,TypeError) as exc:
             errors.append({"repository":repo,"error_class":type(exc).__name__,"error":str(exc)[:300]})
     report=store.report(sha)
-    report["operation"]={"name":"monitor","requests":api.requests,"required_repositories":repositories,"errors":errors}
+    report["operation"]={"name":"monitor","requests":api.requests,
+                         "required_repositories":repositories,"errors":errors,
+                         "source_revision_rechecks":source_revision_rechecks}
     if errors:
         report["status"]="FAIL"
     write_report(report,output)
