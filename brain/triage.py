@@ -170,6 +170,15 @@ def _candidate_proposals(candidates):
             candidate = group[depth]
             feedback = candidate.get("feedback")
             license_hint = candidate.get("license", "UNKNOWN")
+            if type(license_hint) is not str or not license_hint or len(license_hint) > 100:
+                raise ValueError("candidate license metadata malformed")
+            rights_review = (
+                "MISSING_OR_INCONCLUSIVE_LICENSE_METADATA"
+                if license_hint.strip().upper() in {
+                    "UNKNOWN", "NOASSERTION", "NONE", "UNLICENSED"
+                }
+                else "DECLARED_LICENSE_METADATA_NOT_INDEPENDENTLY_VERIFIED"
+            )
             selected.append(_proposal(
                 "REVIEW_THIRD_PARTY_SOURCE", "STRUCTURAL_REVIEW_ONLY",
                 [candidate["target"], candidate["key"], candidate["code_sha256"]],
@@ -187,6 +196,8 @@ def _candidate_proposals(candidates):
                     "structural_score_not_probability":candidate["reuse_score"],
                     "test_path_count_not_executed":len(candidate["test_paths"]),
                     "license_metadata_only":license_hint,
+                    "license_review_status":rights_review,
+                    "source_reuse_permission_confirmed":False,
                     "operator_feedback_not_independent":bool(feedback),
                 },
             ))
