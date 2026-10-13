@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "scope": "ACTIVE_REPO_BACKED_PROJECTS_WITH_EXPLICIT_MEASUREMENT_CONTRACTS",
+  "extended_observation_bound": 4,
+  "projects": [
+    {
+      "id": "portfolio-brain",
+      "name": "Portfolio Brain",
+      "repository": "P00NSMASHER/portfolio-brain",
+      "research_target": "portfolio-reliability",
+      "improvement_focus": "production reliability and durable state continuity",
+      "success_metric": "verified reliability incidents",
+      "direction": "DOWN"
+    },
+    {
+      "id": "trading-platform",
+      "name": "Trading Platform",
+      "repository": "P00NSMASHER/trading-platform",
+      "research_target": "trading-data",
+      "improvement_focus": "market-data completeness and reproducibility",
+      "success_metric": "unresolved required data rows",
+      "direction": "DOWN"
+    },
+    {
+      "id": "abvm",
+      "name": "ABVM School Star",
+      "repository": "P00NSMASHER/abvmschoolstarworld",
+      "research_target": "school-tools",
+      "improvement_focus": "school-data integrity and learner-facing correctness",
+      "success_metric": "verified content or calendar conflicts",
+      "direction": "DOWN"
+    },
+    {
+      "id": "retally",
+      "name": "RETALLY",
+      "repository": "P00NSMASHER/github-value-hunt-ledger",
+      "research_target": "freight-recovery",
+      "improvement_focus": "review quality, evidence integrity and recovery workflow utility",
+      "success_metric": "useful findings minus avoidable review burden",
+      "direction": "UP"
+    },
+    {
+      "id": "pips-classroom",
+      "name": "PipsQuestWorld Classroom",
+      "repository": "P00NSMASHER/PipsQuestWorld",
+      "research_target": "roblox-school",
+      "improvement_focus": "photo-faithful environment and release validation",
+      "success_metric": "verified reference-parity gaps",
+      "direction": "DOWN"
+    },
+    {
+      "id": "permitplate",
+      "name": "PermitPlate",
+      "repository": "P00NSMASHER/permitplate-nyc",
+      "research_target": "permit-intelligence",
+      "improvement_focus": "security, provenance and licensing-data correctness",
+      "success_metric": "blocking security or provenance findings",
+      "direction": "DOWN"
+    },
+    {
+      "id": "starblox",
+      "name": "StarBlox",
+      "repository": "P00NSMASHER/StarBlox",
+      "research_target": "game-quality",
+      "improvement_focus": "client-verified gameplay and UI release quality",
+      "success_metric": "verified client-proof release gaps",
+      "direction": "DOWN"
+    },
+    {
+      "id": "capturebrief",
+      "name": "CaptureBrief",
+      "repository": "P00NSMASHER/capturebrief",
+      "research_target": "document-workflows",
+      "improvement_focus": "capture, evidence and publication integrity",
+      "success_metric": "blocking release or evidence defects",
+      "direction": "DOWN"
+    },
+    {
+      "id": "product-factory",
+      "name": "Product Factory",
+      "repository": "P00NSMASHER/github-value-hunt-ledger",
+      "research_target": "agent-products",
+      "improvement_focus": "candidate-to-tested-product conversion",
+      "success_metric": "evidence-qualified candidates reaching measured tests",
+      "direction": "UP"
+    },
+    {
+      "id": "research-labs",
+      "name": "Research Labs",
+      "repository": "P00NSMASHER/github-value-hunt-ledger",
+      "research_target": "freight-recovery",
+      "improvement_focus": "experiment validity and measured learning",
+      "success_metric": "independently supported experiment outcomes",
+      "direction": "UP"
+    }
+  ]
+}
