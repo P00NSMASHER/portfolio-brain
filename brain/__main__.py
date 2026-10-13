@@ -43,7 +43,8 @@ def monitor(store, sha, output, *, api=None, repositories=None):
     require(0<len(repositories)<=4, "monitor repository bound exceeded")
     errors=[]
     source_revision_rechecks=[]
-    for repo in repositories:
+    deferred_after_global_failure=[]
+    for index,repo in enumerate(repositories):
         try:
             if automatic_public_monitor:
                 from .monitor_resilience import observe_after_bounded_revision_race
@@ -55,11 +56,29 @@ def monitor(store, sha, output, *, api=None, repositories=None):
             store.submit([event("repository",repo,payload,sha,private=private)])
             store.drain()
         except (BrainError,KeyError,UnicodeError,TypeError) as exc:
-            errors.append({"repository":repo,"error_class":type(exc).__name__,"error":str(exc)[:300]})
+            if automatic_public_monitor:
+                from .monitor_resilience import public_monitor_failure_scope
+                scope=public_monitor_failure_scope(exc)
+                errors.append({
+                    "repository":repo,
+                    "error_class":"PUBLIC_MONITOR_EVIDENCE_UNVERIFIED",
+                    "failure_scope":scope,
+                })
+                if scope=="GLOBAL_OR_UNCLASSIFIED_SOURCE_STOP":
+                    # Never keep consuming an unknown provider/rate-limit/
+                    # permission failure. Unread scopes must stay explicit.
+                    deferred_after_global_failure=list(repositories[index+1:])
+                    break
+            else:
+                # Explicit caller/private-mode backwards compatibility.
+                errors.append({"repository":repo,"error_class":type(exc).__name__,"error":str(exc)[:300]})
     report=store.report(sha)
     report["operation"]={"name":"monitor","requests":api.requests,
                          "required_repositories":repositories,"errors":errors,
                          "source_revision_rechecks":source_revision_rechecks}
+    if automatic_public_monitor:
+        report["operation"]["deferred_after_global_failure"]=deferred_after_global_failure
+        report["operation"]["global_failure_stopped_reads"]=bool(deferred_after_global_failure)
     if errors:
         report["status"]="FAIL"
     write_report(report,output)
