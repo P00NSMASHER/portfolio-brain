@@ -209,3 +209,79 @@ jobs:
           path: /tmp/brain/
           if-no-files-found: error
           retention-days: 30
+
+  readonly_investigation:
+    name: Optional V7 autonomous read-only investigation
+    needs: monitor
+    if: ${{ needs.monitor.result == 'success' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    continue-on-error: true
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout exact completed core source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download original completed core artifact
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: brain-v2-cycle-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/brain-v7-original
+      - name: Pin source and original state commit
+        id: source
+        if: ${{ steps.download.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)"
+          test "$MAIN_SHA" = "$GITHUB_SHA" || { echo SIDECAR_MAIN_DRIFT; exit 1; }
+          python -m brain.sidecar prepare --delivery /tmp/brain-v7-original/delivery.json --source-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --github-output "$GITHUB_OUTPUT"
+      - name: Restore exact published immutable state
+        id: state
+        if: ${{ steps.source.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.state_sha }}
+          path: state
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Replay original state and perform bounded GET-only follow-up
+        id: investigate
+        if: ${{ steps.state.outcome == 'success' && steps.source.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PINNED_STATE_SHA: ${{ steps.source.outputs.state_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -C state rev-parse HEAD)" = "$PINNED_STATE_SHA" || { echo SIDECAR_STATE_DRIFT; exit 1; }
+          timeout --signal=TERM --kill-after=5s 75s python -m brain.investigate --db state/state.sqlite --output /tmp/brain-v7/investigation --expected-sha "$GITHUB_SHA" --max-investigations 3
+      - name: Record sanitized complete partial or blocked outcome
+        if: ${{ always() }}
+        env:
+          DOWNLOAD_OUTCOME: ${{ steps.download.outcome }}
+          SOURCE_OUTCOME: ${{ steps.source.outcome }}
+          STATE_OUTCOME: ${{ steps.state.outcome }}
+          INVESTIGATE_OUTCOME: ${{ steps.investigate.outcome }}
+        run: |
+          python -m brain.sidecar finalize --receipt /tmp/brain-v7/investigation/report.json --output /tmp/brain-v7/sidecar-status.json --source-sha "$GITHUB_SHA" --downloaded "$DOWNLOAD_OUTCOME" --proven "$SOURCE_OUTCOME" --state "$STATE_OUTCOME" --investigated "$INVESTIGATE_OUTCOME"
+      - name: Preserve only sanitized advisory status outside original cycle
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: brain-v7-sidecar-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/brain-v7/sidecar-status.json
+          if-no-files-found: warn
+          retention-days: 30
