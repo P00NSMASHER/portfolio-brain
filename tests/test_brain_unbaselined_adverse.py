@@ -20,7 +20,7 @@ CLASS = "UNBASELINED_ADVERSE_OBSERVED"
 
 
 def sample(repo, when, checks, *, kind="ACTUAL", revision=REV):
-    return observe(repo, when, checks, kind=kind, sha=revision)
+    return observe(repo, when, [{**item, "head_sha": revision} for item in checks], kind=kind, sha=revision)
 
 
 def c(repo, name, conclusion="failure", *, status="completed"):
