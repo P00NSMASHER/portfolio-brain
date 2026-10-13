@@ -230,7 +230,7 @@ class QuarantinedCheckNamesTests(unittest.TestCase):
         self.assertEqual(len(provider.calls), 4)
         self.assertIs(receipt["investigations"][0]["partial_check_coverage"], False)
         public = summarize(receipt, SOURCE, *["success"] * 4)
-        self.assertEqual(public["status"], "OBSERVED_READ_ONLY")
+        self.assertEqual(public["status"], "PARTIAL_READ_ONLY")
         self.assertEqual(public["partial_check_coverage_repositories"], 0)
 
 
