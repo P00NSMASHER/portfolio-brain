@@ -6,6 +6,7 @@ advisory summary only. It does not authorize further actions or make calls.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -142,6 +143,11 @@ def _blocked(source_sha):
         "schema_version": 1, "scope": "OPTIONAL_READ_ONLY_V7_ADVISORY",
         "source_sha": source_sha if type(source_sha) is str and _SHA.fullmatch(source_sha) else None,
         "status": "BLOCKED_NO_VERIFIED_INVESTIGATION",
+        "original_delivery_verified": False,
+        "original_core_run_id": None,
+        "original_core_run_attempt": None,
+        "published_state_sha": None,
+        "original_delivery_sha256": None,
         "checked": 0, "eligible": 0, "deferred": 0, "requests_used": 0,
         "observed_outcomes": {}, "observed_followup_kinds": {},
         "comparison_coverage_counts": {},
@@ -371,8 +377,42 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
     return result
 
 
-def finalize(receipt_path, output_path, source_sha, downloaded, proven, state, investigated):
-    """Emit one safe result even if original investigation ended incomplete."""
+def _original_delivery_binding(original_delivery, source_sha, run_id,
+                               run_attempt, published_state_sha):
+    """Reverify the immutable core publication at public advisory finalization.
+
+    Never use the original manifest as a state writer or a source of
+    instructions; it merely certifies the exact original run + state revision.
+    """
+    source = Path(original_delivery)
+    require(source.is_file() and not source.is_symlink(),
+            "SIDECAR_FINAL_DELIVERY_UNAVAILABLE")
+    st = source.stat()
+    require(stat.S_ISREG(st.st_mode) and st.st_nlink == 1
+            and 0 < st.st_size <= 8192,
+            "SIDECAR_FINAL_DELIVERY_INODE_INVALID")
+    raw = source.read_bytes()
+    require(len(raw) == st.st_size and 0 < len(raw) <= 8192,
+            "SIDECAR_FINAL_DELIVERY_UNSTABLE")
+    parsed = json.loads(raw.decode("utf-8"))
+    actual_state = validate_delivery(parsed, source_sha, run_id, run_attempt)
+    require(type(published_state_sha) is str and
+            _SHA.fullmatch(published_state_sha) and
+            published_state_sha == actual_state,
+            "SIDECAR_FINAL_PUBLISHED_STATE_MISMATCH")
+    return {
+        "original_delivery_verified": True,
+        "original_core_run_id": run_id,
+        "original_core_run_attempt": run_attempt,
+        "published_state_sha": actual_state,
+        "original_delivery_sha256": hashlib.sha256(raw).hexdigest(),
+    }
+
+
+def finalize(receipt_path, output_path, source_sha, downloaded, proven, state,
+             investigated, *, original_delivery=None, original_run_id=None,
+             original_run_attempt=None, published_state_sha=None):
+    """Emit a safe result, bound to an original core run when requested."""
     source = None
     original = Path(receipt_path)
     try:
@@ -382,6 +422,21 @@ def finalize(receipt_path, output_path, source_sha, downloaded, proven, state, i
     except (OSError, UnicodeError, ValueError):
         source = None
     result = summarize(source, source_sha, downloaded, proven, state, investigated)
+    originals = (original_delivery, original_run_id, original_run_attempt,
+                 published_state_sha)
+    if any(item is not None for item in originals):
+        # The production path always requests all four fields. A missing,
+        # mismatched or altered manifest MUST produce a blocked advisory, not
+        # an unbound green status, and still leave a sanitized artifact.
+        if any(type(item) is not str or not item for item in originals):
+            result = _blocked(source_sha)
+        else:
+            try:
+                result.update(_original_delivery_binding(*(
+                    original_delivery, source_sha, original_run_id,
+                    original_run_attempt, published_state_sha)))
+            except (BrainError, ValueError, OSError, UnicodeError, TypeError):
+                result = _blocked(source_sha)
     out = Path(output_path)
     require(out.name == "sidecar-status.json", "SIDECAR_OUTPUT_NAME_INVALID")
     require(not out.is_symlink(), "SIDECAR_OUTPUT_SYMLINK_INVALID")
@@ -417,6 +472,10 @@ def main(argv=None):
     finish.add_argument("--receipt", required=True)
     finish.add_argument("--output", required=True)
     finish.add_argument("--source-sha", required=True)
+    finish.add_argument("--original-delivery")
+    finish.add_argument("--original-run-id")
+    finish.add_argument("--original-run-attempt")
+    finish.add_argument("--published-state-sha")
     for stage in ("downloaded", "proven", "state", "investigated"):
         finish.add_argument("--" + stage, required=True)
     args = parser.parse_args(argv)
@@ -426,8 +485,14 @@ def main(argv=None):
                     args.github_output)
             print("SIDECAR_SOURCE_BOUND")
         else:
-            result = finalize(args.receipt, args.output, args.source_sha,
-                              args.downloaded, args.proven, args.state, args.investigated)
+            result = finalize(
+                args.receipt, args.output, args.source_sha,
+                args.downloaded, args.proven, args.state, args.investigated,
+                original_delivery=args.original_delivery,
+                original_run_id=args.original_run_id,
+                original_run_attempt=args.original_run_attempt,
+                published_state_sha=args.published_state_sha,
+            )
             print(json.dumps({"status": result["status"], "checked": result["checked"]}))
         return 0
     except (ValueError, OSError, UnicodeError) as exc:
