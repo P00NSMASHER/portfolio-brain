@@ -58,8 +58,12 @@ def _plan(report, now, limits):
         if not deteriorations:
             continue
         require(repository not in selected, "duplicate repository evidence")
-        require(row.get("check_comparison") == "COMPARABLE" and row.get("revision_changed") is False,
-                "same-revision comparable evidence required")
+        # Quarantine duplicate-named checks, not independent unique checks.
+        # The canonical comparison already excludes ambiguous check names.
+        require(row.get("check_comparison") in {
+            "COMPARABLE", "PARTIAL_AMBIGUOUS_CHECK_NAMES",
+        } and row.get("revision_changed") is False,
+                "same-revision uniquely identifiable evidence required")
         revision = row.get("current_revision")
         require(type(revision) is str and _SHA.fullmatch(revision)
                 and row.get("previous_revision") == revision, "exact comparison revision required")
@@ -125,6 +129,9 @@ def _plan(report, now, limits):
             "source_refs": refs,
             "check_names": sorted(check_names),
             "check_evidence_classes": original_classes,
+            "partial_check_coverage": (
+                row["check_comparison"] == "PARTIAL_AMBIGUOUS_CHECK_NAMES"
+            ),
         })
     require(len(result) == len(selected), "investigation queue unexpectedly truncated")
     return result
