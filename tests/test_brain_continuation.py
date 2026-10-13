@@ -233,7 +233,7 @@ class SidecarClassificationTests(unittest.TestCase):
             snapshot(when=T0), snapshot(when=T1))
         receipt, _ = self.run_case(data, history)
         result = summarize(receipt, SOURCE, *["success"] * 4)
-        self.assertEqual(result["status"], "OBSERVED_READ_ONLY")
+        self.assertEqual(result["status"], "PARTIAL_READ_ONLY")
         self.assertEqual(result["observed_followup_kinds"],
                          {"PERSISTENT_ADVERSE_OBSERVED": 1})
         self.assertNotIn(REPO, str(result))
