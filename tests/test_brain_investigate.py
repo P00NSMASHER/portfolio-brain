@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from brain.adapters import GitHub
-from brain.core import BrainError, Store
+from brain.core import BrainError, Store, digest
 from brain.investigate import investigate, main
 
 SOURCE = "a" * 40
@@ -281,10 +281,12 @@ class InvestigationCliTests(unittest.TestCase):
                                "checks": [{"name": "validate", "status": "completed",
                                            "conclusion": conclusion, "head_sha": REV,
                                            "url": f"https://github.com/{REPO}/actions/runs/10/job/20"}]}
-                    store.submit([{"id": f"investigation-{index}", "kind": "repository", "key": REPO,
+                    observation = {"id": "", "kind": "repository", "key": REPO,
                                    "observed_at": f"2026-10-12T{14 + index}:00:00Z",
-                                   "source_sha": SOURCE, "visibility": "PUBLIC", "data_kind": "ACTUAL",
-                                   "payload": payload}])
+                                   "source_sha": SOURCE, "visibility": "PUBLIC",
+                                   "data_kind": "ACTUAL", "payload": payload}
+                    observation["id"] = "repository:" + digest(observation)
+                    store.submit([observation])
                     store.drain()
                 store.report(SOURCE)
             finally:
