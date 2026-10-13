@@ -158,6 +158,7 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha)
         "canonical_state_sequence": canonical_report.get("state_sequence"),
         "canonical_pending_events": canonical_report.get("pending_events"),
         "projects": projects,
+        "repositories": [repositories[name] for name in sorted(repositories)],
         "repository_count": len(repositories),
         "logical_project_count": len(projects),
         "missing_repositories": sorted(set(missing)),
