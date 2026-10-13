@@ -144,6 +144,8 @@ def _blocked(source_sha):
         "checked": 0, "eligible": 0, "deferred": 0, "requests_used": 0,
         "observed_outcomes": {}, "observed_followup_kinds": {},
         "observed_check_evidence_classes": {},
+        "repository_local_provider_failures": 0,
+        "provider_failure_hard_stops": 0,
         "partial_check_coverage_repositories": 0,
         "historical_adverse_streak_bands": {},
         "historical_repeated_terminal_movements": 0,
@@ -199,8 +201,9 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
             and deferred == 0)
         or (status in {"REQUEST_BUDGET_DEFERRED", "STOPPED"} and deferred == 0)
         or (status == "INCOMPLETE_READ_ONLY_REVALIDATION"
-            and (not entries or type(entries[-1]) is not dict
-                 or entries[-1].get("outcome") != "UNVERIFIED_READ_FAILED"))
+            and not any(type(item) is dict
+                        and item.get("outcome") == "UNVERIFIED_READ_FAILED"
+                        for item in entries))
         or (type(report.get("max_investigations", 3)) is not int)
         or not 1 <= report.get("max_investigations", 3) <= 3
         or len(entries) > report.get("max_investigations", 3)):
@@ -208,12 +211,33 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
     counts = {}
     kinds = {}
     check_classes = {}
+    repository_local_failures = 0
+    provider_hard_stops = 0
     partially_comparable = 0
     streak_bands = {}
     repeated_movements = 0
     sample_caps = 0
-    for entry in entries:
+    for index, entry in enumerate(entries):
         if type(entry) is not dict or entry.get("outcome") not in _ROWS:
+            return result
+        failed = entry["outcome"] == "UNVERIFIED_READ_FAILED"
+        if "provider_failure_scope" in entry:
+            scope = entry["provider_failure_scope"]
+            if not failed or type(scope) is not str:
+                return result
+            if scope == "REPOSITORY_LOCAL_EVIDENCE_UNAVAILABLE":
+                repository_local_failures += 1
+            elif scope == "GLOBAL_OR_UNCLASSIFIED_STOP":
+                if index != len(entries) - 1:
+                    # The global circuit breaker must have stopped work.
+                    return result
+                provider_hard_stops += 1
+            else:
+                return result
+        if failed and report["status"] in {
+            "NO_ELIGIBLE_FAILURES", "READ_ONLY_REVALIDATION_COMPLETE",
+            "BOUNDED_READ_ONLY_REVALIDATION_COMPLETE_WITH_DEFERRED",
+        }:
             return result
         kind = entry.get("follow_up_kind", "INITIAL_ADVERSE_TRANSITION")
         if type(kind) is not str or kind not in _FOLLOWUP_KINDS:
@@ -313,6 +337,8 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
         requests_used=requests, observed_outcomes=dict(sorted(counts.items())),
         observed_followup_kinds=dict(sorted(kinds.items())),
         observed_check_evidence_classes=dict(sorted(check_classes.items())),
+        repository_local_provider_failures=repository_local_failures,
+        provider_failure_hard_stops=provider_hard_stops,
         partial_check_coverage_repositories=partially_comparable,
         historical_adverse_streak_bands=dict(sorted(streak_bands.items())),
         historical_repeated_terminal_movements=int(repeated_movements),
