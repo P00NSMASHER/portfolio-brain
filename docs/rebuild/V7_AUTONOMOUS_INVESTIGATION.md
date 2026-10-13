@@ -156,3 +156,34 @@ counted in every receipt.
 A completed provider observation is never evidence that a check was repaired.
 Any changed source revision, unknown completed conclusion, missing check or
 nonterminal check is surfaced as incomplete, not a green resolution.
+
+## Complete same-source multi-signal revalidation (draft-only)
+
+The standalone V7 investigation now reconciles the **entire observed
+same-commit check set in one bounded provider observation**, even when a new
+`success → adverse` regression occurs concurrently with another persistent
+adverse check, an observed recovery and a previously completed check that
+has disappeared or stalled. Earlier direct-deterioration selection hid
+continuation evidence from the same repository.
+
+All candidates still derive from original PUBLIC/ACTUAL events, exact source
+SHAs, the full ledger chain and two fresh comparable observations. An
+originally deteriorated check receives
+`INITIAL_ADVERSE_TRANSITION`; disjoint checks retain their
+`PERSISTENT_ADVERSE_OBSERVED`, `RECOVERY_OBSERVED_NOT_RESOLUTION` or
+`EVIDENCE_GAP_REVALIDATION` label. Concurrent records must match repository,
+revision and source-observation timestamp or the operation refuses all reads.
+Contradictory classifications fail closed.
+
+The high-priority new deterioration keeps its place in the fair
+three-repository selection; continuation evidence from that same repository
+is merged into it **without another GitHub request, a second queue entry, a
+new event, a cursor or any state write**. Read-only receipts can therefore
+distinguish a newly failing check, a different persistent failure, an
+observed successful check and an unresolved missing check. The public
+sidecar reports only bounded category totals and classifies unresolved
+gaps/source changes as PARTIAL, never a verified repair.
+
+All prior production, paid-call, trading, source-license, scheduler and
+acceptance restrictions remain intact. No V7 runtime is released by this
+draft.
