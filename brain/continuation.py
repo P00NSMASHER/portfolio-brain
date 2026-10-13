@@ -76,7 +76,7 @@ def _eligible(row, now, limits):
     repo = row["repository"]
     if (repo not in limits["repositories"]
             or row.get("evidence_quality") != "ACTUAL_FRESH"
-            or row.get("check_comparison") != "COMPARABLE"
+            or row.get("check_comparison") not in {"COMPARABLE", "NO_SHARED_CHECK_NAMES"}
             or row.get("revision_changed") is not False
             or row.get("check_deteriorations")):
         return False
@@ -126,35 +126,54 @@ def continued_plans(report, history, *, now, limits):
             continue
         recoveries = row.get("check_recoveries")
         require(type(recoveries) is list, "CONTINUATION_RECOVERY_MISSING")
-        if recoveries:
-            names = []
-            for item in recoveries:
-                require(type(item) is dict
-                        and item.get("from_conclusion") in _ADVERSE
-                        and item.get("to_conclusion") == "success"
-                        and _source_url(item.get("source_ref"), repo),
-                        "CONTINUATION_UNBOUND_RECOVERY")
-                names.append(item["name"])
-            require(len(names) == len(set(names)),
-                    "CONTINUATION_AMBIGUOUS_RECOVERY")
+        recovered_names = []
+        for item in recoveries:
+            require(type(item) is dict
+                    and item.get("from_conclusion") in _ADVERSE
+                    and item.get("to_conclusion") == "success"
+                    and _source_url(item.get("source_ref"), repo),
+                    "CONTINUATION_UNBOUND_RECOVERY")
+            recovered_names.append(item["name"])
+        require(len(recovered_names) == len(set(recovered_names)),
+                "CONTINUATION_AMBIGUOUS_RECOVERY")
+
+        persistent_names = [
+            name for name in sorted(old_checks.keys() & new_checks.keys())
+            if old_checks[name]["status"] == "completed"
+            and new_checks[name]["status"] == "completed"
+            and old_checks[name]["conclusion"] in _ADVERSE
+            and new_checks[name]["conclusion"] in _ADVERSE
+        ]
+        # A missing or stalled check is an observability gap, NOT an adverse
+        # transition or a recovered incident. Revisit using one bounded GET.
+        gaps = [
+            name for name, earlier in sorted(old_checks.items())
+            if earlier["status"] == "completed"
+            and earlier["conclusion"] in (_ADVERSE | {"success"})
+            and (name not in new_checks
+                 or new_checks[name]["status"] != "completed")
+        ]
+        if gaps:
+            names = sorted(set(gaps + persistent_names + recovered_names))
+            kind = "EVIDENCE_GAP_REVALIDATION"
+        elif recovered_names:
+            names = sorted(recovered_names)
             kind = "RECOVERY_OBSERVED_NOT_RESOLUTION"
         else:
-            names = [
-                name for name in sorted(old_checks.keys() & new_checks.keys())
-                if old_checks[name]["status"] == "completed"
-                and new_checks[name]["status"] == "completed"
-                and old_checks[name]["conclusion"] in _ADVERSE
-                and new_checks[name]["conclusion"] in _ADVERSE
-            ]
+            names = persistent_names
             kind = "PERSISTENT_ADVERSE_OBSERVED"
         if not names:
             continue
         require(len(names) <= 500, "CONTINUATION_CHECK_COUNT_LIMIT")
         names = sorted(names)
+        checked_refs = []
         for name in names:
-            require(_source_url(new_checks[name]["url"], repo),
+            evidence = new_checks.get(name, old_checks.get(name))
+            require(evidence is not None
+                    and _source_url(evidence["url"], repo),
                     "CONTINUATION_CHECK_REF_UNBOUND")
-        refs = sorted({commit_url} | {new_checks[name]["url"] for name in names})
+            checked_refs.append(evidence["url"])
+        refs = sorted({commit_url} | set(checked_refs))
         selected.append({
             "repository": repo,
             "queue_id": digest(["CONTINUATION", kind, repo, current_revision,

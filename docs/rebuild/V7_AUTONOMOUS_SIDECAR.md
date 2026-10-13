@@ -85,3 +85,8 @@ Its uploaded status JSON includes only a fixed-enumeration
 `observed_followup_kinds` count map and no repository or check names.
 Recovered check results never count as an independently verified fix. This
 capability is draft-only until separate V7 release acceptance.
+
+The V7 continuation also follows previously completed checks that go missing
+or remain pending; their outcomes are labelled evidence gaps rather than
+invented check recoveries. Only the fixed-allowlist aggregate category
+`EVIDENCE_GAP_REVALIDATION` is added to the optional sanitized receipt.

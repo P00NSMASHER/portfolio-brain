@@ -176,7 +176,6 @@ class ContinuedEvidenceTests(unittest.TestCase):
     def test_nonactual_pending_ambiguous_and_changed_revisions_never_promote(self):
         cases = [
             (snapshot(when=T0), snapshot(when=T1,data_kind="SIMULATED")),
-            (snapshot(when=T0), snapshot(when=T1,conclusion=None,status="in_progress")),
             (snapshot(when=T0), snapshot(when=T1,duplicate=True)),
             (snapshot(when=T0), snapshot(when=T1,sha="c" * 40)),
             (snapshot(when="2026-10-09T14:00:00Z"), snapshot(when=T1)),

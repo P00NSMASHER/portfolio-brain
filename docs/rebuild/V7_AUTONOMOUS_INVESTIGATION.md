@@ -103,3 +103,27 @@ deteriorated check and a different recovered check, both names are rechecked
 in the **same bounded provider observation**. Neither the recovery nor a
 possibly still-failing check is silently dropped, and the green status remains
 only an observation, not root-cause resolution.
+
+### Missing or stalled CI checks (bounded evidence-gap follow-up)
+
+V7 now also rechecks a check that was **previously completed successfully or
+adversely** but is absent or nonterminal in the latest fresh PUBLIC/ACTUAL
+snapshot on the **same commit**. This is an `EVIDENCE_GAP_REVALIDATION`, never
+an inferred regression, recovery, deletion, or verified root cause. Ambiguous
+check names, nonactual sources, changed revisions and stale baselines remain
+ineligible. The previous check's original source-bound URL supplies provenance
+when no latest check URL exists. If the provider still omits the check, the
+result is `UNVERIFIED_MISSING_OR_AMBIGUOUS_CHECK`; a pending check remains
+`CHECK_NOT_COMPLETED`.
+
+Priority: new actual regressions, then evidence gaps, then persistent adverse
+checks, then observed recoveries; bounded UTC-hour rotation prevents equivalent
+gap cases from starvation. The existing **three-repository and 24-GET limits**
+still apply. The isolated sidecar publishes only aggregate allowlisted
+`EVIDENCE_GAP_REVALIDATION` counts, no check names or raw history.
+
+The initial deterioration path remains separate: when a repository has a new
+regression it receives a priority recheck through the original queue. Gap-only
+continuation applies where that same repository does not have a new recorded
+regression. Neither path performs repairs, merges, external messages, paid
+operations, or canonical state writes.

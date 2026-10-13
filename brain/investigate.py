@@ -192,13 +192,15 @@ def investigate(report, *, api=None, now=None, max_investigations=3, stop_reques
             return rows[offset:] + rows[:offset]
 
         initial = sorted(plans, key=lambda item: item["repository"])
+        gaps = [item for item in extended
+                if item["follow_up_kind"] == "EVIDENCE_GAP_REVALIDATION"]
         persistent = [item for item in extended
                       if item["follow_up_kind"] == "PERSISTENT_ADVERSE_OBSERVED"]
         recovered = [item for item in extended
                      if item["follow_up_kind"] == "RECOVERY_OBSERVED_NOT_RESOLUTION"]
-        require(len(persistent) + len(recovered) == len(extended),
+        require(len(gaps) + len(persistent) + len(recovered) == len(extended),
                 "CONTINUATION_CLASSIFICATION_INVALID")
-        plans = initial + rotated(persistent) + rotated(recovered)
+        plans = initial + rotated(gaps) + rotated(persistent) + rotated(recovered)
     receipt = {
         "schema_version": 1, "scope": "READ_ONLY_AUTONOMOUS_CHECK_REVALIDATION",
         "source_sha": report["source_sha"],
