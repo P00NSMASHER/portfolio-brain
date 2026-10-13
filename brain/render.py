@@ -12,10 +12,20 @@ import stat
 from pathlib import Path
 
 from brain.core import BrainError, require
+from brain.evidence_urls import blob_ref
 
 
 _REPORT_NAMES = ("report.md", "report.html", "report.json")
 _TEST_LOG_NAMES = ("tests.txt",)
+
+
+def _review_source_text(value):
+    """Escape original metadata before writing human-readable Markdown."""
+    sanitized = str(value).replace(chr(92), chr(92) + chr(92))
+    for char in (chr(96), "*", "_", "[", "]", "<", ">", "|", "(", ")"):
+        sanitized = sanitized.replace(char, chr(92) + char)
+    return sanitized.replace(chr(10), " ").replace(chr(13), " ")
+
 
 
 def _assert_private_target(directory, name):
@@ -323,9 +333,41 @@ def write_report(report, output):
             "ROI estimate, adoption claim or urgency deadline. "
             "No provider queries, state writes or downstream actions occurred."
         )
-    lines.extend(["", "## Reusable code to evaluate", ""])
-    for candidate in report.get("reuse_candidates",[])[:10]:
-        lines.append(f'- [{candidate["repository"]}/{candidate["path"]}]({candidate["source_ref"]}) — {candidate["target"]}; structural score {candidate["reuse_score"]}; license {candidate["license"]}; {candidate["utility_evidence"]}')
+    lines.extend(["", "## Reusable code to evaluate (source review only)", ""])
+    # This legacy private view cannot bypass the exact V7 source gate.
+    candidates = report.get("reuse_candidates", [])
+    require(type(candidates) is list, "SOURCE_REVIEW_CANDIDATE_LIST_INVALID")
+    omitted = 0
+    for candidate in candidates[:10]:
+        if type(candidate) is not dict:
+            omitted += 1
+            continue
+        repository = candidate.get("repository")
+        revision = candidate.get("head_sha")
+        path = candidate.get("path")
+        original_ref = candidate.get("source_ref")
+        if (not blob_ref(original_ref, repository, revision, path)
+                or candidate.get("key") != str(repository) + ":" + str(path)
+                or type(candidate.get("reuse_score")) is not int):
+            omitted += 1
+            continue
+        lines.append(
+            "- [" + _review_source_text(repository + "/" + path)
+            + "](" + original_ref + ") — "
+            + _review_source_text(candidate.get("target", "UNKNOWN"))
+            + "; structural score " + str(candidate["reuse_score"])
+            + "; declared license metadata "
+            + _review_source_text(candidate.get("license", "UNKNOWN"))
+            + "; " + _review_source_text(candidate.get("utility_evidence", "UNKNOWN"))
+            + ". Exact commit/path link verified; execution, source rights"
+            " and claimed value NOT independently verified."
+        )
+    if omitted:
+        lines.append(str(omitted) + " unverified candidate source link(s) omitted"
+                     " from private review; no source adoption or execution.")
+    if len(candidates) > 10:
+        lines.append(str(len(candidates)-10)
+                     + " additional original candidates beyond the fixed display bound.")
     lines.extend(["", "## Business opportunities", ""])
     for opportunity in report.get("business_opportunities",[]):
         lines.append(f'- {opportunity["target"]}: {opportunity["hypothesis"]} Customer demand {opportunity["customer_demand"]}; revenue {opportunity["revenue"]}.')
