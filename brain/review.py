@@ -163,8 +163,13 @@ def review_packet(receipt):
            and receipt["paid_calls"] == 0,
            "REVIEW_EXECUTION_AUTHORITY_REFUSED")
     by_repo = {}
+    partly_covered = 0
     for row in investigations:
         _check(type(row) is dict, "REVIEW_INVESTIGATION_INVALID")
+        quarantined = row.get("partial_check_coverage", False)
+        _check(type(quarantined) is bool,
+               "REVIEW_PARTIAL_COVERAGE_FLAG_INVALID")
+        partly_covered += int(quarantined)
         repo = row.get("repository")
         revision = row.get("expected_revision")
         _check(type(repo) is str and _REPO.fullmatch(repo),
@@ -318,6 +323,7 @@ def review_packet(receipt):
         "candidates_considered": candidates,
         "omitted_due_to_review_bounds": candidates - len(selected),
         "deferred_repositories_not_inspected": deferred,
+        "partial_original_check_coverage_repositories": partly_covered,
         "per_repo_review_limit": _MAX_PER_REPOSITORY,
         "max_reviews": _MAX_REVIEWS,
         "get_requests_added": 0,
@@ -349,6 +355,14 @@ def review_lines(receipt):
              f'Shown: {len(packet["items"])}; '
              f'Omitted by review bounds: {packet["omitted_due_to_review_bounds"]}; '
              f'Deferred repositories: {packet["deferred_repositories_not_inspected"]}.']
+    if packet["partial_original_check_coverage_repositories"]:
+        lines.append(
+            "Partial original CI check-name coverage: "
+            + str(packet["partial_original_check_coverage_repositories"])
+            + " repository comparisons contained duplicate names."
+            + " Ambiguous names were quarantined; uniquely identified checks"
+            + " were revalidated separately. Full check coverage is NOT verified."
+        )
     if not packet["items"]:
         lines.append("No reviewable completed investigation evidence in this pass.")
     for item in packet["items"]:
