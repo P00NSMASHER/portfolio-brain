@@ -219,7 +219,10 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
     # A finished GET does not make a missing or still-pending check complete.
     # Surface unresolved evidence gaps as partial instead of a green summary.
     unresolved = (counts.get("UNVERIFIED_MISSING_OR_AMBIGUOUS_CHECK", 0)
-                  + counts.get("CHECK_NOT_COMPLETED", 0))
+                  + counts.get("CHECK_NOT_COMPLETED", 0)
+                  + counts.get("OTHER_CONCLUSION_NOT_RESOLUTION", 0)
+                  + sum(row.get("outcome") == "SOURCE_CHANGED_REQUIRES_NEW_COMPARISON"
+                        for row in entries))
     if investigated == "success" and reported in {
         "NO_ELIGIBLE_FAILURES", "READ_ONLY_REVALIDATION_COMPLETE"
     } and not deferred and not unresolved and all(
