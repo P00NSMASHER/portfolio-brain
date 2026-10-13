@@ -189,7 +189,7 @@ def main(argv=None):
             result=preflight(args.output,args.expected_sha)
         else:
             sha=source_sha(args.expected_sha)
-            if args.command == "transfer-review":
+            if args.command in {"transfer-review", "projects"}:
                 from brain.transfer import readonly_authority_snapshot
                 # Store() mutates DB permissions/journal/meta even for reads;
                 # never construct it with the original authority pathname.
@@ -199,7 +199,7 @@ def main(argv=None):
             store=Store(isolated_db,visibility="PRIVATE" if args.private else "PUBLIC")
             # A transfer review is a pure inspection. It must not apply pending
             # inputs or write feedback, attempts, reports or other canonical state.
-            if args.command not in {"transfer-review", "backup"}:
+            if args.command not in {"transfer-review", "projects", "backup"}:
                 store.drain()
             if args.command=="init":
                 result={"status":"PASS","scope":"EMPTY_STATE_BOOTSTRAP_NOT_OPERATIONAL","pending_events":store.pending(),"source_sha":sha}
@@ -273,7 +273,7 @@ def main(argv=None):
         print(json.dumps({k:result[k] for k in ("status","source_sha","pending_events","state_sequence","phase") if k in result},sort_keys=True))
         return 0
     except (BrainError,KeyError,TypeError,UnicodeError,json.JSONDecodeError) as exc:
-        if store and args.command not in {"transfer-review", "backup"}:
+        if store and args.command not in {"transfer-review", "projects", "backup"}:
             store.attempt(args.command,"FAIL",type(exc).__name__,source_sha=locals().get("sha"))
         # Output-path security failures must not trigger secondary writes in
         # the very directory we just rejected. Transfer review is read-only.
@@ -281,7 +281,7 @@ def main(argv=None):
             isinstance(exc, BrainError)
             and str(exc).startswith("REPORT_OUTPUT_")
         )
-        if args.command not in {"transfer-review", "backup"} and not unsafe_output:
+        if args.command not in {"transfer-review", "projects", "backup"} and not unsafe_output:
             write_report({"status":"FAIL","error_class":type(exc).__name__,"error":str(exc)[:500],"operation":args.command,"soak_completed":False},Path(args.output)/"failure")
         print(f'{type(exc).__name__}: {str(exc)[:500]}',file=sys.stderr)
         return 1
