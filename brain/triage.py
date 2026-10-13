@@ -10,6 +10,8 @@ import hashlib
 import json
 import re
 
+from .evidence_urls import blob_ref, check_run_ref, commit_ref, repo_evidence_ref
+
 _SHA40 = re.compile(r"^[0-9a-f]{40}$")
 _SHA64 = re.compile(r"^[0-9a-f]{64}$")
 _MAX_ITEMS = 10
@@ -29,9 +31,23 @@ def _identifier(category, identity):
 
 
 def _reference(value):
-    # A URL is *evidence of a claim* only after validated report replay.
-    # Even then, it does not prove commercial demand or third-party rights.
-    return type(value) is str and value.startswith("https://github.com/") and len(value) <= 1200
+    """Only canonical GitHub evidence. This never authorizes code reuse."""
+    if type(value) is not str or not value.startswith("https://github.com/"):
+        return False
+    segments = value[len("https://github.com/"):].split("/", 2)
+    if len(segments) < 3:
+        return False
+    repository = "/".join(segments[:2])
+    return (repo_evidence_ref(value, repository)
+            or blob_ref(value, repository))
+
+
+def _sha40(value):
+    return type(value) is str and _SHA40.fullmatch(value) is not None
+
+
+def _sha64(value):
+    return type(value) is str and _SHA64.fullmatch(value) is not None
 
 
 def _proposal(category, band, key, headline, next_step, refs, *,
@@ -61,9 +77,18 @@ def _change_proposals(changes):
         if quality not in _ALLOWED_EVIDENCE:
             raise ValueError("unsupported evidence quality: fail closed")
         refs = item["source_refs"]
-        if type(refs) is not list or len(refs) != 2 or not all(map(_reference, refs)):
-            raise ValueError("repository change has missing source-bound evidence")
         repository = item["repository"]
+        if (type(repository) is not str
+                or type(refs) is not list or len(refs) != 2
+                or not commit_ref(refs[0], repository, item.get("previous_revision"))
+                or not commit_ref(refs[1], repository, item.get("current_revision"))):
+            raise ValueError("repository change has missing source-bound evidence")
+        for observed in item["check_deteriorations"] + item["check_recoveries"]:
+            if (type(observed) is not dict
+                    or not (check_run_ref(observed.get("source_ref"), repository)
+                            or commit_ref(observed.get("source_ref"), repository,
+                                          item.get("current_revision")))):
+                raise ValueError("check transition source is not bound to its repository")
         delta = item["open_issue_pr_tally"]["net_delta"]
         kinds = item["change_types"]
         deteriorations = item["check_deteriorations"]
@@ -135,15 +160,26 @@ def _candidate_proposals(candidates):
     buckets = {}
     seen = set()
     for candidate in candidates:
-        if candidate.get("key") in seen:
+        if type(candidate) is not dict:
             continue
-        seen.add(candidate.get("key"))
+        key = candidate.get("key")
+        if type(key) is not str or key in seen:
+            continue
+        seen.add(key)
+        repository = candidate.get("repository")
+        revision = candidate.get("head_sha")
+        source_path = candidate.get("path")
         if (candidate.get("data_kind") != "ACTUAL"
                 or candidate.get("freshness") != "CURRENT"
                 or not candidate.get("test_paths")
-                or not _SHA40.fullmatch(candidate.get("blob_sha") or "")
-                or not _SHA64.fullmatch(candidate.get("code_sha256") or "")
-                or not _reference(candidate.get("source_ref"))
+                or not _sha40(candidate.get("blob_sha"))
+                or not _sha64(candidate.get("code_sha256"))
+                or not _sha40(revision)
+                or type(repository) is not str
+                or type(source_path) is not str
+                or key != repository + ":" + source_path
+                or not blob_ref(candidate.get("source_ref"), repository,
+                                revision, source_path)
                 or type(candidate.get("reuse_score")) is not int):
             continue
         target = candidate.get("target")
@@ -198,6 +234,9 @@ def _candidate_proposals(candidates):
                     "license_metadata_only":license_hint,
                     "license_review_status":rights_review,
                     "source_reuse_permission_confirmed":False,
+                    "immutable_repo_revision_path_pin_verified":True,
+                    "code_bytes_independently_executed_or_tested":False,
+                    "declared_license_independently_verified":False,
                     "operator_feedback_not_independent":bool(feedback),
                 },
             ))
