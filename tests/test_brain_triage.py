@@ -151,7 +151,7 @@ class EvidenceGatedDecisionQueueTests(unittest.TestCase):
         second = decision_queue(sample_report(candidates=list(reversed(candidates))))
         self.assertEqual(first, second, "provider list order must not change review order")
         rows = first["items"]
-        self.assertEqual(len(rows), 6)
+        self.assertEqual(len(rows), 5)
         self.assertEqual({x["category"] for x in rows}, {"REVIEW_THIRD_PARTY_SOURCE"})
         selected = [x["metadata"]["target"] for x in rows]
         self.assertEqual(selected.count("agent-products"), 2)
@@ -186,6 +186,8 @@ class EvidenceGatedDecisionQueueTests(unittest.TestCase):
             "basis": "OPERATOR_REPORTED", "outcome": "NOT_USEFUL",
         }), candidate("agent-products", 3)]
         selected = decision_queue(sample_report(candidates=integrations))["items"]
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0]["metadata"]["candidate_key"], integrations[2]["key"])
         self.assertTrue(all(x["metadata"]["candidate_key"] != integrations[0]["key"] for x in selected))
         self.assertTrue(all(x["metadata"]["candidate_key"] != integrations[1]["key"] for x in selected))
         self.assertTrue(all(x["verified_revenue"] is None for x in selected))
