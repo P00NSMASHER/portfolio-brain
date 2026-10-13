@@ -78,3 +78,19 @@ receive proposals; the review packet never certifies full test-suite coverage.
 
 The stable case keys, no-root-cause label, bounded per-repository human
 review selection and noncausal cross-project comparisons remain unchanged.
+
+## Source-scoped check links for operator review (draft)
+
+Human-review packet source links must now match the exact GitHub repository
+and either a canonical original commit or canonical CI check-run URL.
+A check's otherwise plausible link to an unrelated GitHub issue, PR, redirect
+query or fragment **is never retained as original check evidence**; the
+private packet falls back to the exact known immutable commit reference.
+A human-only cross-repository same-name coincidence also requires valid
+original check-run URLs for both repositories, not merely the same label on
+two source-commit pages. This is still not a shared-root-cause finding.
+
+The review guidance remains private, bounded and advisory only. Invalid
+links are never followed, and neither the original SQLite ledger, public
+sanitized sidecar, API request budget, scheduled jobs, downstream permissions
+nor production branch are modified.

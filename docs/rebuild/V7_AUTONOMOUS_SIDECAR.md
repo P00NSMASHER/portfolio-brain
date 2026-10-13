@@ -222,3 +222,15 @@ keeps the overall advisory PARTIAL even if the current provider GET later
 observes a green check. Duplicated names, nonactual source, changed commits,
 stale comparisons and unfinished checks do not establish a baseline.
 Unrecognized classes cannot bypass fixed-enumeration receipt validation.
+
+### Canonical check-run provenance is required
+
+The V7 sidecar remains names-free and interprets only the fixed enumeration
+of outcomes. The investigator now quarantines a live provider check without
+an exact same-repository canonical GitHub check-run link, even if the
+untrusted status appears green or red. That check is counted as unverified
+and the entire advisory remains PARTIAL. If original check-link evidence is
+invalid, the read-only investigation fails before any provider read; an
+unbound GitHub URL is never laundered into a completed incident observation.
+No additional fields, original V6 state writes, network reads or authorizations
+are added to the public sidecar.

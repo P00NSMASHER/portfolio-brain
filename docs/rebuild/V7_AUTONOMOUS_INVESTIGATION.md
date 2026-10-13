@@ -367,3 +367,32 @@ operator guidance requires an independently verified baseline. The optional
 public sidecar emits only names-free fixed-class counts and remains PARTIAL
 for unbaselined evidence, even if a later GET reports success. No new
 incident diagnosis, repair, release or execution authority is created.
+
+## Canonical CI evidence link quarantine (V7 draft security pass)
+
+A source-bound GitHub check record is not sufficient evidence if its displayed
+URL points to an unrelated issue, pull request, code file, query-string
+redirect, encoded traversal, misleading host or different repository. V7 now
+uses one standalone, pure canonical URL validator for original check links,
+fresh provider results and human review.
+
+- Original immutable commit evidence is restricted to the exact GitHub
+  repository and 40-hex source commit URL, with no query or fragment.
+- Check evidence is restricted to the exact same repository's canonical
+  /runs/{positive-id}, /actions/runs/{positive-id}, or
+  /actions/runs/{positive-id}/job/{positive-id} reference. No other same-host
+  paths are accepted as completed check-run provenance.
+- Unsafe originally recorded check URLs fail before any additional provider
+  GET; their original immutable ledger record is **not rewritten**.
+- If a newly fetched provider result for one check has an invalid URL, only
+  that check is quarantined as unverified/missing CI evidence. Distinct
+  uniquely source-bound checks in the same repository can still be
+  revalidated through the same existing bounded GET. Incomplete check
+  evidence remains **PARTIAL**, never verified repair or automatic closure.
+- The validator does not visit links, follow redirects, authenticate sites,
+  execute source code, or make an additional network request.
+
+These restrictions apply to draft V7 evidence-only interpretation. Earlier
+V6 original run receipts, schedules, protected state, GitHub write authority,
+Cloudflare signer, acceptance measurements, financial/trading permissions
+and production code remain unchanged.
