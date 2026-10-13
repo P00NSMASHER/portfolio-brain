@@ -121,7 +121,7 @@ class SanitizeReceiptIntegrityTests(unittest.TestCase):
         receipt = investigate(report, history=history, now=NOW,
                               api=GitHub(transport=Transport()))
         self.assertEqual(summarize(receipt, SOURCE, *["success"] * 4)["status"],
-                         "OBSERVED_READ_ONLY")
+                         "PARTIAL_READ_ONLY")
         tamper = copy.deepcopy(receipt)
         tamper["investigations"][0]["checks"][0][
             "original_evidence_class"] = "RECOVERY_OBSERVED_NOT_RESOLUTION"
