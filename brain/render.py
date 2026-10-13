@@ -159,6 +159,9 @@ def investigation_summary_lines(receipt):
             lines.append(
                 "  - Check " + safe(check.get("name", "UNKNOWN")) + ": "
                 + label(check.get("outcome", "UNKNOWN"))
+                + "; original evidence class "
+                + label(check.get("original_evidence_class",
+                                  row.get("follow_up_kind", "INITIAL_ADVERSE_TRANSITION")))
                 + "; evidence " + safe(check.get("source_ref") or "UNAVAILABLE")
             )
     lines.append("Any successful check is an observation, not an independently confirmed resolution.")
