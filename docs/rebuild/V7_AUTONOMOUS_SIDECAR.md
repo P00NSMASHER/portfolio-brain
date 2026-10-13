@@ -158,3 +158,29 @@ a receipt containing partial original name coverage is
 `PARTIAL_READ_ONLY`, **not** a full successful observation. Unknown flag
 types are BLOCKED. No duplicate check names, raw source URLs, GitHub
 responses, original SQLite, or private report text are uploaded.
+
+### Selective repository-read errors remain partial and names-free
+
+A V7-only investigator can continue after a fixed, demonstrably
+repository-local failure to inspect the next independently verified
+public repository, respecting its existing 3-repo/24-GET caps. A global
+or unclassified provider failure, access denial, rate limit or transport
+error still stops all further reads. The private report shows only
+`REPOSITORY_LOCAL_EVIDENCE_UNAVAILABLE` or
+`GLOBAL_OR_UNCLASSIFIED_STOP` for failed reads, **never raw exception
+messages, provider secrets or raw GitHub payloads**.
+
+The optional read-only sidecar's fixed-schema JSON adds only two
+nonidentifying integer counts:
+`repository_local_provider_failures` and
+`provider_failure_hard_stops`. It requires each classification to
+match an actual incomplete provider row and rejects a hard-stop record
+followed by additional supposed reads. An incomplete operation need
+not finish with a failed row: earlier unverified repositories can be
+followed by honest independent observations. Any such operation remains
+`PARTIAL_READ_ONLY`, never `OBSERVED_READ_ONLY` or an incident fix.
+
+Original GitHub scopes/permissions, scheduling, credentials, production
+source, canonical ledger and acceptance gates remain intact. Historical
+receipts lacking the optional failure-scope field remain readable and
+conservatively classified.
