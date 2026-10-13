@@ -141,3 +141,18 @@ The public sidecar labels unresolved missing or nonterminal checks PARTIAL,
 not completed. This does not grant repair, incident closure, PR merge, spending,
 trading or any new execution authority. Current request, privacy, history
 replay and production safeguards remain unchanged.
+
+## Fair bounded first-response selection
+
+When four or more public repositories show fresh, source-bound completed check
+regressions at the same priority, the three available investigation slots rotate
+deterministically by UTC hour. This removes alphabetical starvation for
+first-response regressions, complementing the existing rotation of evidence
+gaps, persistent adverse checks and observed recoveries. New regressions still
+rank ahead of lower-priority categories, with no additional GETs, new cursor,
+background task, state mutation or permission. Deferred repositories remain
+counted in every receipt.
+
+A completed provider observation is never evidence that a check was repaired.
+Any changed source revision, unknown completed conclusion, missing check or
+nonterminal check is surfaced as incomplete, not a green resolution.
