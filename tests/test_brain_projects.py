@@ -82,6 +82,8 @@ class ProjectRegistryTests(unittest.TestCase):
         )
         retally = next(row for row in result["projects"] if row["id"] == "retally")
         self.assertEqual(retally["status"], "MEASURED_OUTCOME_RECORDED")
+        research_labs = next(row for row in result["projects"] if row["id"] == "research-labs")
+        self.assertEqual(research_labs["operator_outcome_count"], 0)
         starblox = next(row for row in result["projects"] if row["id"] == "starblox")
         self.assertEqual(starblox["operator_outcome_count"], 0)
 
