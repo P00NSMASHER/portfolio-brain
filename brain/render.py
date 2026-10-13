@@ -184,7 +184,7 @@ def write_report(report, output):
             )
             lines.append(
                 "- Review " + str(item["review_order_not_value_rank"])
-                + " [" + item["band"] + "] "
+                + " [" + item["band"] + " / " + item["category"] + "] "
                 + _review_text(context) + ": " + item["headline"]
                 + " Next: " + item["next_step"]
                 + " Evidence: " + _review_text(item["source_refs"][0])
