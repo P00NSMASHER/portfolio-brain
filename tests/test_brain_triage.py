@@ -30,8 +30,10 @@ def change(*, repo=REPO, quality="ACTUAL_FRESH", delta=0,
            failures=None, recovery=None, revision=False):
     failures = failures or []
     recovery = recovery or []
+    # The original source links must match the recorded comparison
+    # revisions exactly, including the same-revision fixture.
     refs = [
-        "https://github.com/" + repo + "/commit/" + BASE,
+        "https://github.com/" + repo + "/commit/" + (BASE if revision else REV),
         "https://github.com/" + repo + "/commit/" + REV,
     ]
     return {
