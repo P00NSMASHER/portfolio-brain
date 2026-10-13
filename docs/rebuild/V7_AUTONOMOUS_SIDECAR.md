@@ -90,3 +90,23 @@ The V7 continuation also follows previously completed checks that go missing
 or remain pending; their outcomes are labelled evidence gaps rather than
 invented check recoveries. Only the fixed-allowlist aggregate category
 `EVIDENCE_GAP_REVALIDATION` is added to the optional sanitized receipt.
+
+### Fail-closed autonomous receipt coherence
+
+Before publishing sanitized advisory counts, the sidecar verifies the
+investigation's status, eligible/deferred/observed counts, configured
+three-repository limit, and any per-check original-evidence classifications.
+Impossible combinations (for example, no eligible work plus completed checks,
+an apparently completed run with deferred work, or an incomplete provider read
+without the requisite failed final observation) are BLOCKED. Check identities
+and original per-check classifications, when provided, must exactly match
+the corresponding investigation plan; malformed unhashable data is rejected
+without exposing source contents. Previously valid historical schema-one
+receipts remain readable.
+
+Source-advanced, unavailable, nonterminal and otherwise unresolved check
+evidence is classified PARTIAL rather than complete. Neither a green GitHub
+check nor a successful GET establishes independently verified incident
+resolution, release acceptance or downstream execution authority. All public
+results remain fixed-schema and names-free; no new API quota, secrets, state
+writer, cron changes, spending, trading, PR mutation or production deployment.
