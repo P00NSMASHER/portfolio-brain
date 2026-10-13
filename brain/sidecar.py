@@ -144,6 +144,7 @@ def _blocked(source_sha):
         "checked": 0, "eligible": 0, "deferred": 0, "requests_used": 0,
         "observed_outcomes": {}, "observed_followup_kinds": {},
         "observed_check_evidence_classes": {},
+        "partial_check_coverage_repositories": 0,
         "historical_adverse_streak_bands": {},
         "historical_repeated_terminal_movements": 0,
         "historical_sample_caps": 0,
@@ -207,6 +208,7 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
     counts = {}
     kinds = {}
     check_classes = {}
+    partially_comparable = 0
     streak_bands = {}
     repeated_movements = 0
     sample_caps = 0
@@ -217,6 +219,10 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
         if type(kind) is not str or kind not in _FOLLOWUP_KINDS:
             return result
         kinds[kind] = kinds.get(kind, 0) + 1
+        quarantined = entry.get("partial_check_coverage", False)
+        if type(quarantined) is not bool:
+            return result
+        partially_comparable += int(quarantined)
         checks = entry.get("checks")
         if type(checks) is not list or len(checks) > 500:
             return result
@@ -286,7 +292,8 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
     reported = report["status"]
     # A finished GET does not make a missing or still-pending check complete.
     # Surface unresolved evidence gaps as partial instead of a green summary.
-    unresolved = (counts.get("UNVERIFIED_MISSING_OR_AMBIGUOUS_CHECK", 0)
+    unresolved = (partially_comparable
+                  + counts.get("UNVERIFIED_MISSING_OR_AMBIGUOUS_CHECK", 0)
                   + counts.get("CHECK_NOT_COMPLETED", 0)
                   + counts.get("OTHER_CONCLUSION_NOT_RESOLUTION", 0)
                   + sum(row.get("outcome") == "SOURCE_CHANGED_REQUIRES_NEW_COMPARISON"
@@ -306,6 +313,7 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
         requests_used=requests, observed_outcomes=dict(sorted(counts.items())),
         observed_followup_kinds=dict(sorted(kinds.items())),
         observed_check_evidence_classes=dict(sorted(check_classes.items())),
+        partial_check_coverage_repositories=partially_comparable,
         historical_adverse_streak_bands=dict(sorted(streak_bands.items())),
         historical_repeated_terminal_movements=int(repeated_movements),
         historical_sample_caps=int(sample_caps),
