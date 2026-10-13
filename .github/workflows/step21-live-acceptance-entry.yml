@@ -1,0 +1,173 @@
+name: step21-live-acceptance-entry
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/step21-live-acceptance-entry.yml"
+      - ".github/triggers/step21-live-canary.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: portfolio-step21-live-acceptance-entry
+  cancel-in-progress: false
+
+jobs:
+  dispatch_bounded_entry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Require exact protected main
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          if os.environ.get("GITHUB_REF_NAME") != "main":
+              raise SystemExit("STEP21_ENTRY_REQUIRES_MAIN")
+          req = urllib.request.Request(
+              "https://api.github.com/repos/" + os.environ["GITHUB_REPOSITORY"] + "/branches/main",
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": "Bearer " + os.environ["GITHUB_TOKEN"],
+                  "X-GitHub-Api-Version": "2022-11-28",
+                  "User-Agent": "portfolio-step21-live-entry/1.0",
+              },
+          )
+          with urllib.request.urlopen(req, timeout=30) as response:
+              current = json.load(response)["commit"]["sha"]
+          if current != os.environ["GITHUB_SHA"]:
+              raise SystemExit(
+                  "STALE_STEP21_ENTRY: checked out "
+                  + os.environ["GITHUB_SHA"]
+                  + " current main "
+                  + current
+              )
+          print("exact protected main:", current)
+          PY
+
+      - name: Dispatch bounded Hunter to governed implementation path
+        run: >-
+          python -m hunting.steps10_12_live_acceptance
+          --source-sha "$GITHUB_SHA"
+          --run-id "$GITHUB_RUN_ID"
+          --source-branch "$GITHUB_REF_NAME"
+          --dispatch-live
+          --output acceptance/out/step21_entry_source.json
+
+      - name: Bind fail-closed Step 21 entry evidence
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          source_path = Path("acceptance/out/step21_entry_source.json")
+          source = json.loads(source_path.read_text(encoding="utf-8"))
+          step12 = source.get("step12") or {}
+
+          if source.get("status") != "PASS":
+              raise SystemExit("STEP21_ENTRY_SOURCE_NOT_PASS")
+          if source.get("source_sha") != os.environ["GITHUB_SHA"]:
+              raise SystemExit("STEP21_ENTRY_SOURCE_SHA_MISMATCH")
+          if source.get("source_branch") != "main":
+              raise SystemExit("STEP21_ENTRY_SOURCE_BRANCH_MISMATCH")
+          if step12.get("dispatch_mode") != "LIVE_GITHUB_WORKFLOW":
+              raise SystemExit("STEP21_ENTRY_NOT_LIVE_DISPATCH")
+          if step12.get("dispatch_workflow_file") != "portfolio-autonomous-repair.yml":
+              raise SystemExit("STEP21_ENTRY_WRONG_REPAIR_WORKFLOW")
+          if step12.get("scheduler_dispatch_status") != "ACCEPTED":
+              raise SystemExit("STEP21_ENTRY_DISPATCH_NOT_ACCEPTED")
+          if step12.get("dispatch_authority_granted") is not False:
+              raise SystemExit("STEP21_ENTRY_AUTHORITY_WIDENED")
+          if step12.get("implementation_complete") is not False:
+              raise SystemExit("STEP21_ENTRY_FALSE_IMPLEMENTATION_COMPLETION")
+          if step12.get("merge_authority_granted") is not False:
+              raise SystemExit("STEP21_ENTRY_MERGE_AUTHORITY_WIDENED")
+          if step12.get("deployment_authority_granted") is not False:
+              raise SystemExit("STEP21_ENTRY_DEPLOY_AUTHORITY_WIDENED")
+          if step12.get("market_verified") is not False or step12.get("revenue_verified") is not False:
+              raise SystemExit("STEP21_ENTRY_FALSE_VALUE_VERIFICATION")
+
+          core = {
+              "schema_version": "1.0.0",
+              "evidence_kind": "STEP21_LIVE_ENTRY",
+              "status": "ENTRY_DISPATCHED",
+              "step21_complete": False,
+              "canary_id": "STEP21-" + os.environ["GITHUB_RUN_ID"],
+              "exact_entry_main_sha": os.environ["GITHUB_SHA"],
+              "entry_workflow_run_id": int(os.environ["GITHUB_RUN_ID"]),
+              "source_receipt_hash": source["receipt_hash"],
+              "proposal_id": step12["proposal_id"],
+              "acceptance_id": step12["acceptance_id"],
+              "scheduler_work_id": step12["scheduler_work_id"],
+              "factory_bound_request_id": step12["factory_bound_request_id"],
+              "factory_bound_request_fingerprint": step12["factory_bound_request_fingerprint"],
+              "dispatch_workflow_file": step12["dispatch_workflow_file"],
+              "authority_granted": False,
+              "evidence_upgraded": False,
+          }
+          raw = json.dumps(core, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+          receipt = {**core, "receipt_hash": "sha256:" + hashlib.sha256(raw).hexdigest()}
+          out = Path("acceptance/out/step21_live_entry.json")
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(json.dumps(receipt, sort_keys=True))
+          PY
+
+      - name: Require protected main unchanged during entry dispatch
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          req = urllib.request.Request(
+              "https://api.github.com/repos/" + os.environ["GITHUB_REPOSITORY"] + "/branches/main",
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": "Bearer " + os.environ["GITHUB_TOKEN"],
+                  "X-GitHub-Api-Version": "2022-11-28",
+                  "User-Agent": "portfolio-step21-live-entry/1.0",
+              },
+          )
+          with urllib.request.urlopen(req, timeout=30) as response:
+              current = json.load(response)["commit"]["sha"]
+          if current != os.environ["GITHUB_SHA"]:
+              raise SystemExit(
+                  "STEP21_ENTRY_MAIN_MOVED: entry "
+                  + os.environ["GITHUB_SHA"]
+                  + " current "
+                  + current
+              )
+          PY
+
+      - name: Upload tamper-evident Step 21 entry evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-step21-live-entry-${{ github.run_id }}
+          path: |
+            acceptance/out/step21_entry_source.json
+            acceptance/out/step21_live_entry.json
+          if-no-files-found: error
+          retention-days: 30
