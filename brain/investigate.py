@@ -203,7 +203,10 @@ def investigate(report, *, api=None, now=None, max_investigations=3, stop_reques
             offset = (int(timestamp(now).timestamp()) // 3600) % len(rows)
             return rows[offset:] + rows[:offset]
 
-        initial = sorted(plans, key=lambda item: item["repository"])
+        # Rotate equal-priority fresh regressions as well: when four
+        # repositories regress at once, no repository should permanently
+        # occupy the fourth (deferred) slot in every bounded follow-up.
+        initial = rotated(plans)
         gaps = [item for item in extended
                 if item["follow_up_kind"] == "EVIDENCE_GAP_REVALIDATION"]
         persistent = [item for item in extended
