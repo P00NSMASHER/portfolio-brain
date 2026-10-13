@@ -156,7 +156,7 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
             and deferred == 0)
         or (status in {"REQUEST_BUDGET_DEFERRED", "STOPPED"} and deferred == 0)
         or (status == "INCOMPLETE_READ_ONLY_REVALIDATION"
-            and (not entries
+            and (not entries or type(entries[-1]) is not dict
                  or entries[-1].get("outcome") != "UNVERIFIED_READ_FAILED"))
         or (type(report.get("max_investigations", 3)) is not int)
         or not 1 <= report.get("max_investigations", 3) <= 3
@@ -180,14 +180,18 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
         original_names = entry.get("check_names")
         if original_names is not None:
             if (type(original_names) is not list
-                    or len(original_names) != len(set(original_names))
                     or any(type(name) is not str or not name
                            for name in original_names)):
                 return result
-            if (entry["outcome"] == "OBSERVED_CHECK_STATUS_NOT_ROOT_CAUSE"
-                    and sorted(original_names) != sorted(
-                        item.get("name") for item in checks if type(item) is dict)):
+            if len(original_names) != len(set(original_names)):
                 return result
+            if entry["outcome"] == "OBSERVED_CHECK_STATUS_NOT_ROOT_CAUSE":
+                if any(type(item) is not dict
+                       or type(item.get("name")) is not str for item in checks):
+                    return result
+                if (len(original_names) != len(checks)
+                        or set(original_names) != {item["name"] for item in checks}):
+                    return result
         expected_classes = entry.get("check_evidence_classes")
         if expected_classes is not None:
             if (type(expected_classes) is not dict
