@@ -155,6 +155,18 @@ def investigation_summary_lines(receipt):
             + "; newly observed revision " + safe(row.get("observed_revision") or "UNAVAILABLE")
             + "; original evidence " + safe((row.get("source_refs") or ["UNAVAILABLE"])[0])
         )
+        if row.get("outcome") == "UNVERIFIED_READ_FAILED":
+            source = row.get("provider_failure_scope")
+            if source is not None:
+                require(type(source) is str and source in {
+                    "REPOSITORY_LOCAL_EVIDENCE_UNAVAILABLE",
+                    "GLOBAL_OR_UNCLASSIFIED_STOP",
+                }, "INVESTIGATION_PROVIDER_SCOPE_INVALID")
+                lines.append(
+                    "  - Provider failure boundary: " + label(source)
+                    + ". This is missing evidence, NOT a verified incident"
+                    " resolution; no repairs or new permissions follow."
+                )
         for check in row.get("checks", []):
             lines.append(
                 "  - Check " + safe(check.get("name", "UNKNOWN")) + ": "
