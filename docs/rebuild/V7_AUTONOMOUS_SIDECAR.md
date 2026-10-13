@@ -234,3 +234,40 @@ invalid, the read-only investigation fails before any provider read; an
 unbound GitHub URL is never laundered into a completed incident observation.
 No additional fields, original V6 state writes, network reads or authorizations
 are added to the public sidecar.
+
+### Exact original-run and immutable-state attestation at public finalization
+
+Previously the optional V7 sidecar performed the original publication
+verification during `prepare`, but its **sanitized public artifact** had no
+direct evidence of which original core run, attempt or pinned state commit
+produced it. The finalization step now **independently revalidates the same
+bounded original `delivery.json`**, matching the original workflow, exact
+source SHA, run ID, attempt and immutable published state commit that the
+previous checkout had already pinned and verified. The manifest is read
+only, must be a regular non-symlink, single-linked file within the original
+8-KiB bound, and retains its exact schema and Boolean publication checks.
+
+A complete or partial **verified** advisory includes only public audit
+metadata: `original_delivery_verified=true`, original core run ID and
+attempt, pinned published state SHA, and SHA-256 of the original manifest
+bytes. These values make the advisory traceable to the specific original
+Actions run and immutable state. They **do not cryptographically sign**
+GitHub's artifact, assert production readiness, prove root cause or authorize
+actions. They can be independently checked against the original same-run
+artifact and GitHub state history.
+
+Missing/mismatched delivery, alternate run/attempt/state, unknown fields,
+invalid original schema, symlink/hardlink, corrupted JSON, oversized
+source receipt or incomplete binding CLI arguments produce an explicit
+**BLOCKED** advisory. Invalid private investigation evidence cannot be
+made valid just by presenting a genuine original manifest. The optional
+sidecar still preserves only its bounded names-free status JSON; no
+raw original manifest, checked repository data or private report is uploaded.
+Older local API consumers calling `finalize` without optional provenance
+arguments remain backwards compatible, **explicitly marked
+`original_delivery_verified=false`** (not falsely reported as bound).
+The V7 workflow path always supplies all original provenance arguments.
+
+The entire original V6 cycle writer, scheduling, signing, state publication,
+permissions, source and six-hour acceptance boundary remain unchanged;
+only the previously appended V7 optional job's finalization inputs changed.
