@@ -180,6 +180,7 @@ def _revalidate(plan, observation):
                 and set(classes) == set(plan["check_names"])
                 and all(type(tag) is str and tag in {
                     "INITIAL_ADVERSE_TRANSITION",
+                    "UNBASELINED_ADVERSE_OBSERVED",
                     "EVIDENCE_GAP_REVALIDATION",
                     "PERSISTENT_ADVERSE_OBSERVED",
                     "RECOVERY_OBSERVED_NOT_RESOLUTION",
@@ -283,15 +284,22 @@ def investigate(report, *, api=None, now=None, max_investigations=3, stop_reques
         # repositories regress at once, no repository should permanently
         # occupy the fourth (deferred) slot in every bounded follow-up.
         initial = rotated(plans)
+        unbaselined = [item for item in extended
+                       if item["follow_up_kind"] == "UNBASELINED_ADVERSE_OBSERVED"]
         gaps = [item for item in extended
                 if item["follow_up_kind"] == "EVIDENCE_GAP_REVALIDATION"]
         persistent = [item for item in extended
                       if item["follow_up_kind"] == "PERSISTENT_ADVERSE_OBSERVED"]
         recovered = [item for item in extended
                      if item["follow_up_kind"] == "RECOVERY_OBSERVED_NOT_RESOLUTION"]
-        require(len(gaps) + len(persistent) + len(recovered) == len(extended),
+        require(len(unbaselined) + len(gaps) + len(persistent)
+                + len(recovered) == len(extended),
                 "CONTINUATION_CLASSIFICATION_INVALID")
-        plans = initial + rotated(gaps) + rotated(persistent) + rotated(recovered)
+        # Proven success-to-adverse changes retain highest priority.
+        # A newly observed adverse check has NO verified baseline; it gets
+        # second-tier human evidence revalidation, not "regression" status.
+        plans = (initial + rotated(unbaselined) + rotated(gaps)
+                 + rotated(persistent) + rotated(recovered))
         # A purely local, original-ledger historical pattern projection.
         # It cannot add provider calls, change priority, or write state.
         from .temporal import annotate_verified_plans
