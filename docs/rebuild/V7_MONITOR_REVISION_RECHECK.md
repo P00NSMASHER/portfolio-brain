@@ -56,3 +56,38 @@ A future V7 promotion requires separate authorization and its own
 genuinely signed production acceptance. There are no new GitHub writes,
 customer messages, trades, spending, paid calls, private tokens,
 cron changes or third-party code execution.
+
+
+## Public monitor provider-wide circuit breaker (draft-only)
+
+Alongside the single source-revision recheck, V7's future automatic PUBLIC
+monitor can now distinguish explicitly repository-local evidence failures
+from potentially provider-wide access and API failures. A fixed 404, bounded
+check-coverage failure, source revision race or oversized response means
+that one repository is unverified; the monitor retains a safe fixed-class
+record and may continue to other already allowlisted repositories without
+widening the existing 24-GET operation ceiling.
+
+A 403, rate limit, upstream 5xx, network/Unicode/unknown response error,
+or other unclassified provider exception instead **stops further public
+monitor reads immediately**. The private monitor report counts and lists
+source repositories that were deliberately not queried. When a global failure
+occurs at the last repository, the report still marks the stop cause even
+though no repositories remain to defer. A locally unsuccessful read cannot
+be relabeled a successful monitor cycle simply because another public
+repository returned data. Original valid observations may still be retained
+under the existing V6 monitor's canonical event validation.
+
+Original upstream exception text, HTTP headers, provider error payloads and
+private diagnostics are **never copied** into the future V7 automatic
+public monitor's operation report or source-error console output. They are
+replaced by fixed nonsecret `PUBLIC_MONITOR_EVIDENCE_UNVERIFIED` and one of
+`REPOSITORY_LOCAL_READ_FAILED` or
+`GLOBAL_OR_UNCLASSIFIED_SOURCE_STOP`. Explicit caller-injected adapters
+and private monitoring keep legacy behavior for compatibility.
+
+This is an independent **V7 draft source improvement only**. The protected
+V6 monitor, signed source/ledger, existing scheduler and GitHub Actions core
+workflow, trading/spending permissions and original acceptance run remain
+unchanged. It is not a real incident repair, provider uptime claim or V7
+production readiness attestation.
