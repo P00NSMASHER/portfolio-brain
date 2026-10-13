@@ -286,11 +286,11 @@ class FrozenRealStateRollbackRehearsal(unittest.TestCase):
                         (original["old_report_body"], original["old_report_hash"]),
                     )
                     self.assertEqual(
-                        list(store.db.execute("SELECT seq,id,hash,status FROM events ORDER BY seq")),
+                        [tuple(row) for row in store.db.execute("SELECT seq,id,hash,status FROM events ORDER BY seq")],
                         event_ledger_original[0],
                     )
                     self.assertEqual(
-                        list(store.db.execute("SELECT seq,prev_hash,chain_hash FROM ledger ORDER BY seq")),
+                        [tuple(row) for row in store.db.execute("SELECT seq,prev_hash,chain_hash FROM ledger ORDER BY seq")],
                         event_ledger_original[1],
                     )
                     stored_sources = [
