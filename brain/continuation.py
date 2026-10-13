@@ -148,6 +148,17 @@ def continued_plans(report, history, *, now, limits):
             and old_checks[name]["conclusion"] in _ADVERSE
             and new_checks[name]["conclusion"] in _ADVERSE
         ]
+        # An adverse check with NO completed or uniquely identified prior
+        # baseline is NOT a regression. Observe it once for human review,
+        # but never invent a successful prior conclusion or root cause.
+        # A previously duplicated old check name is ambiguous, NOT absent.
+        unbaselined = [
+            name for name, current_check in sorted(new_checks.items())
+            if name not in old_checks and name not in old_duplicates
+            and name not in new_duplicates
+            and current_check["status"] == "completed"
+            and current_check["conclusion"] in _ADVERSE
+        ]
         # A missing or stalled check is an observability gap, NOT an adverse
         # transition or a recovered incident. Revisit using one bounded GET.
         gaps = [
@@ -163,6 +174,7 @@ def continued_plans(report, history, *, now, limits):
         # still failing. Reconcile every relevant signal in one bounded GET.
         evidence_classes = {}
         for classification, candidates in (
+            ("UNBASELINED_ADVERSE_OBSERVED", unbaselined),
             ("RECOVERY_OBSERVED_NOT_RESOLUTION", recovered_names),
             ("PERSISTENT_ADVERSE_OBSERVED", persistent_names),
             ("EVIDENCE_GAP_REVALIDATION", gaps),
@@ -174,7 +186,8 @@ def continued_plans(report, history, *, now, limits):
         names = sorted(evidence_classes)
         if not names:
             continue
-        kind = ("EVIDENCE_GAP_REVALIDATION" if gaps else
+        kind = ("UNBASELINED_ADVERSE_OBSERVED" if unbaselined else
+                "EVIDENCE_GAP_REVALIDATION" if gaps else
                 "PERSISTENT_ADVERSE_OBSERVED" if persistent_names else
                 "RECOVERY_OBSERVED_NOT_RESOLUTION")
         require(len(names) <= 500, "CONTINUATION_CHECK_COUNT_LIMIT")
