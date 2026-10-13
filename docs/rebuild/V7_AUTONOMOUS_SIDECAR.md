@@ -110,3 +110,14 @@ check nor a successful GET establishes independently verified incident
 resolution, release acceptance or downstream execution authority. All public
 results remain fixed-schema and names-free; no new API quota, secrets, state
 writer, cron changes, spending, trading, PR mutation or production deployment.
+
+### One-GET multi-signal provenance (V7 draft)
+
+A newly adverse check and different persistent, recovering or missing checks
+on one unchanged source revision are now investigated together, with separate
+original-evidence classifications for every check. The optional sidecar
+preserves fixed-enumeration aggregate counts, never the check names,
+repository identities or original ledger. One repository consumes the same
+single bounded GitHub observation, not several reads. Unresolved gaps,
+pending checks and source drift still produce partial, not complete, results.
+This adds no release authority, new scheduled task, state write or trade.
