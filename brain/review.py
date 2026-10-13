@@ -21,6 +21,8 @@ _BANDS = {
     "SOURCE_COMPARABILITY_LOST": (0, "Obtain two fresh observations on the new commit before comparing CI outcomes."),
     "PROVIDER_EVIDENCE_UNAVAILABLE": (0, "Verify provider availability and rerun bounded public evidence collection; no diagnosis is established."),
     "NEW_ADVERSE_CHECK": (1, "Inspect the original same-commit transition and fresh completed CI logs; independently test before any repair."),
+    "RECOVERY_NOT_REPRODUCED": (1, "Original recovery was NOT reproduced by the current exact-source recheck. Compare separate original and current CI runs; do not infer a new regression or a confirmed root cause."),
+    "ORIGINAL_ADVERSE_NOT_REOBSERVED": (4, "A prior adverse observation is now green on recheck, but a fixed incident is NOT independently verified. Check source identity, original logs and repeated results before considering closure."),
     "UNBASELINED_ADVERSE_CHECK": (2, "A newly observed adverse CI check has no baseline. Independently establish its first qualifying source-bound result; do not call this a new regression or infer the failure began now."),
     "MISSING_OR_PENDING_CHECK": (2, "Revalidate the exact commit and confirm a uniquely identified completed check; keep the case open until evidence is complete."),
     "PERSISTENT_ADVERSE_CHECK": (3, "Compare the repeated adverse check observations and CI logs; distinguish repeated observation from elapsed downtime."),
@@ -239,7 +241,20 @@ def review_packet(receipt):
             elif check.get("original_evidence_class") is not None:
                 _check(cls == row.get("follow_up_kind", "INITIAL_ADVERSE_TRANSITION"),
                        "REVIEW_LEGACY_CLASS_MISMATCH")
-            if outcome == "STILL_ADVERSE":
+            relation = check.get("source_followup_relation")
+            if relation is not None:
+                from .evidence_relation import source_followup_relation
+                try:
+                    expected_relation = source_followup_relation(cls, outcome)
+                except ValueError as exc:
+                    raise ValueError("REVIEW_RELATION_SOURCE_INVALID") from None
+                _check(type(relation) is str and relation == expected_relation,
+                       "REVIEW_RELATION_NOT_SOURCE_BOUND")
+            if relation == "RECOVERY_NOT_REPRODUCED":
+                band = "RECOVERY_NOT_REPRODUCED"
+            elif relation == "ORIGINAL_ADVERSE_NOT_REOBSERVED":
+                band = "ORIGINAL_ADVERSE_NOT_REOBSERVED"
+            elif outcome == "STILL_ADVERSE":
                 band = ("NEW_ADVERSE_CHECK" if cls == "INITIAL_ADVERSE_TRANSITION"
                         else "UNBASELINED_ADVERSE_CHECK" if cls == "UNBASELINED_ADVERSE_OBSERVED"
                         else "PERSISTENT_ADVERSE_CHECK" if cls == "PERSISTENT_ADVERSE_OBSERVED"
@@ -252,13 +267,16 @@ def review_packet(receipt):
             else:
                 band = "INCONCLUSIVE_COMPLETED_CHECK"
             check_ref = _copy_ref(check.get("source_ref"), repo) or original_ref
-            by_repo[repo].append(_item(
+            proposal = _item(
                 source_sha=source, repo=repo, revision=revision,
                 check_name=name, reason=band, provider_outcome=outcome,
                 original_class=cls, checked_at=checked_at,
                 evidence_ref=check_ref,
                 original_pattern=_history(check),
-            ))
+            )
+            if relation is not None:
+                proposal["source_followup_relation"] = relation
+            by_repo[repo].append(proposal)
     # Human attention is bounded per repository as well as globally;
     # the high-volume repository cannot silence every other monitored project.
     candidates = sum(len(items) for items in by_repo.values())
@@ -376,6 +394,9 @@ def review_lines(receipt):
                if item["check_name"] is not None else "")
             + ". Case reference: " + item["case_key"]
             + ". Observed: " + item["observed_outcome"]
+            + (". Source-versus-recheck: "
+               + item["source_followup_relation"]
+               if "source_followup_relation" in item else "")
             + ". Next manual check: " + item["proposed_human_review"]
             + " Original source: " + _safe(item["evidence_ref"])
         )

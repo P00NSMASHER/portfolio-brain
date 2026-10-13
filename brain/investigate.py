@@ -220,6 +220,11 @@ def _revalidate(plan, observation):
                 checked["outcome"] = "SUCCESS_OBSERVED_NOT_RESOLUTION"
             else:
                 checked["outcome"] = "OTHER_CONCLUSION_NOT_RESOLUTION"
+        if classes is not None:
+            from .evidence_relation import source_followup_relation
+            checked["source_followup_relation"] = source_followup_relation(
+                classes[name], checked["outcome"]
+            )
         result["checks"].append(checked)
     result["outcome"] = "OBSERVED_CHECK_STATUS_NOT_ROOT_CAUSE"
     return result

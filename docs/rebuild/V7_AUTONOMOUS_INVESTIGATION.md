@@ -396,3 +396,34 @@ These restrictions apply to draft V7 evidence-only interpretation. Earlier
 V6 original run receipts, schedules, protected state, GitHub write authority,
 Cloudflare signer, acceptance measurements, financial/trading permissions
 and production code remain unchanged.
+
+
+## Original CI state vs recheck: fixed noncausal relation (V7 draft)
+
+One original source-verified check may have a different observed result at
+the next exact-commit GitHub recheck. A single green result cannot establish
+an incident fix, and an apparent green recovery followed by another failed
+check does not prove a new regression or root cause. The V7 read-only
+investigator now attaches a fixed, deterministic
+`source_followup_relation` for each uniquely revalidated check, derived
+ONLY from its original replay-verified class and current source-bound check
+outcome. Examples: a newly adverse check reobserved adverse, a persistent
+adverse check still adverse, a prior recovery that was NOT reproduced, a prior
+adverse check now green but NOT a verified fix, an original evidence gap
+rechecked as adverse/success, or still unavailable/nonterminal evidence.
+A first-observed adverse check cannot invent a prior success baseline.
+
+The private human review gives unreproduced apparent recoveries specific
+follow-up instructions and distinguishes merely not-reobserved adverse
+observations from incident resolution. All links and original evidence types
+retain existing exact source and safe Markdown requirements. The optional
+public sidecar validates the supplied relation against BOTH the checked
+original evidence class and the observed provider outcome before aggregating
+fixed-label counts; incorrect, unrecognized or forged relation labels BLOCK
+publication. Historical receipts without this OPTIONAL relation remain
+readable, with no invented relation counts.
+
+No new provider GET, state write, schedule, secrets, notification, downstream
+repair, trades, spending or release approval. Original V6 production and
+six-hour acceptance remain unchanged. These are sampled check-status
+relations only, NOT measured outage durations, causes or completed fixes.

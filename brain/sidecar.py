@@ -159,6 +159,7 @@ def _blocked(source_sha):
         "unassessed_approved_repositories": None,
         "comparison_coverage_limited": None,
         "observed_check_evidence_classes": {},
+        "observed_source_followup_relations": {},
         "repository_local_provider_failures": 0,
         "provider_failure_hard_stops": 0,
         "partial_check_coverage_repositories": 0,
@@ -232,6 +233,7 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
     counts = {}
     kinds = {}
     check_classes = {}
+    source_relations = {}
     repository_local_failures = 0
     provider_hard_stops = 0
     partially_comparable = 0
@@ -317,6 +319,23 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
                     return result
             elif original != kind:
                 return result
+            if "source_followup_relation" in item:
+                # The derived class must agree with BOTH the replay-bound
+                # original evidence and the fresh provider observation.
+                # Forged labels cannot be laundered into public advisories.
+                from .evidence_relation import source_followup_relation
+                try:
+                    expected_relation = source_followup_relation(original, category)
+                except ValueError:
+                    return result
+                supplied_relation = item["source_followup_relation"]
+                if type(supplied_relation) is not str or supplied_relation != expected_relation:
+                    return result
+                if expected_classes is None or "original_evidence_class" not in item:
+                    return result
+                source_relations[expected_relation] = (
+                    source_relations.get(expected_relation, 0) + 1
+                )
             pattern = item.get("historical_observations")
             if history is None:
                 if pattern is not None:
@@ -372,6 +391,7 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
             coverage["limitations_present"] if coverage is not None else None
         ),
         observed_check_evidence_classes=dict(sorted(check_classes.items())),
+        observed_source_followup_relations=dict(sorted(source_relations.items())),
         repository_local_provider_failures=repository_local_failures,
         provider_failure_hard_stops=provider_hard_stops,
         partial_check_coverage_repositories=partially_comparable,

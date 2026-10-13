@@ -290,3 +290,23 @@ inconsistent pins produce BLOCKED, not an unbound green status.
 Production V6's signer, original workflow steps, schedule, state
 publication and acceptance remain byte-identical and are not affected
 by this candidate V7-only extension.
+
+
+### Source-versus-recheck status relation: fixed-bucket advisory
+
+Original same-commit check evidence and a fresh read-only provider outcome
+now produce an optional fixed-label `source_followup_relation` for private
+operator follow-up. Explicit labels include reobserved adversity, adverse
+evidence no longer reproduced, apparent recovery not reproduced, apparent
+recovery reobserved without fix verification, missing-source checks later
+adverse/success, and still-incomplete evidence. No outcome proves incident
+closure, root cause, customer impact, or fix.
+
+The optional V7-only public status gains only the fixed-enumeration
+`observed_source_followup_relations` count map. No repository/check names,
+source URLs, timestamps or raw private evidence are uploaded. The sidecar
+recomputes every supplied label from the original evidence class and
+observed status; unknown, mismatched or malformed labels fail closed.
+Legacy receipts without the new field produce an empty count map and remain
+backwards compatible. This changes NO provider budget, core workflow,
+permissions, production scheduling, spending or trading.

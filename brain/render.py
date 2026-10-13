@@ -207,6 +207,8 @@ def investigation_summary_lines(receipt):
                 + "; original evidence class "
                 + label(check.get("original_evidence_class",
                                   row.get("follow_up_kind", "INITIAL_ADVERSE_TRANSITION")))
+                + "; original-to-current relation "
+                + label(check.get("source_followup_relation", "UNCLASSIFIED_LEGACY"))
                 + "; evidence " + safe(check.get("source_ref") or "UNAVAILABLE")
             )
             evidence = check.get("historical_observations")
