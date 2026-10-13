@@ -155,11 +155,18 @@ def _revalidate(plan, observation):
                     "RECOVERY_OBSERVED_NOT_RESOLUTION",
                 } for tag in classes.values()),
                 "CONTINUATION_PER_CHECK_CLASS_INVALID")
+    historical = plan.get("historical_check_patterns")
+    if historical is not None:
+        require(type(historical) is dict
+                and set(historical) == set(plan["check_names"]),
+                "TEMPORAL_SELECTED_CHECKS_MISMATCH")
     for name in plan["check_names"]:
         matches = [row for row in checks if row.get("name") == name]
         checked = {"name": name}
         if classes is not None:
             checked["original_evidence_class"] = classes[name]
+        if historical is not None:
+            checked["historical_observations"] = historical[name]
         if len(matches) != 1:
             checked["outcome"] = "UNVERIFIED_MISSING_OR_AMBIGUOUS_CHECK"
         else:
@@ -250,6 +257,13 @@ def investigate(report, *, api=None, now=None, max_investigations=3, stop_reques
         require(len(gaps) + len(persistent) + len(recovered) == len(extended),
                 "CONTINUATION_CLASSIFICATION_INVALID")
         plans = initial + rotated(gaps) + rotated(persistent) + rotated(recovered)
+        # A purely local, original-ledger historical pattern projection.
+        # It cannot add provider calls, change priority, or write state.
+        from .temporal import annotate_verified_plans
+        plans = annotate_verified_plans(
+            history, plans, now=now,
+            max_age=limits["max_source_age_seconds"],
+        )
     receipt = {
         "schema_version": 1, "scope": "READ_ONLY_AUTONOMOUS_CHECK_REVALIDATION",
         "source_sha": report["source_sha"],
