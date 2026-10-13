@@ -65,7 +65,7 @@ class EvidenceGapTests(unittest.TestCase):
         self.assertEqual((report, events), before)
         self.assertEqual(len(transport.calls), 4)
         public = summarize(result, SOURCE, *["success"] * 4)
-        self.assertEqual(public["status"], "OBSERVED_READ_ONLY")
+        self.assertEqual(public["status"], "PARTIAL_READ_ONLY")
         self.assertEqual(public["observed_followup_kinds"],
                          {"EVIDENCE_GAP_REVALIDATION": 1})
         self.assertNotIn("validate", str(public))
