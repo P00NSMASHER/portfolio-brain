@@ -104,6 +104,7 @@ def _blocked(source_sha):
         "status": "BLOCKED_NO_VERIFIED_INVESTIGATION",
         "checked": 0, "eligible": 0, "deferred": 0, "requests_used": 0,
         "observed_outcomes": {}, "observed_followup_kinds": {},
+        "observed_check_evidence_classes": {},
         "root_cause_verified": False, "execution_authority": False,
         "github_mutations": 0, "events_written": 0, "paid_calls": 0,
         "production_accepted": False, "authorization_granted": False,
@@ -145,6 +146,7 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
         return result
     counts = {}
     kinds = {}
+    check_classes = {}
     for entry in entries:
         if type(entry) is not dict or entry.get("outcome") not in _ROWS:
             return result
@@ -162,6 +164,10 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
                 return result
             category = item["outcome"]
             counts[category] = counts.get(category, 0) + 1
+            original = item.get("original_evidence_class", kind)
+            if type(original) is not str or original not in _FOLLOWUP_KINDS:
+                return _blocked(source_sha)
+            check_classes[original] = check_classes.get(original, 0) + 1
     reported = report["status"]
     if investigated == "success" and reported in {
         "NO_ELIGIBLE_FAILURES", "READ_ONLY_REVALIDATION_COMPLETE"
@@ -175,6 +181,7 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
         status=final, checked=len(entries), eligible=eligible, deferred=deferred,
         requests_used=requests, observed_outcomes=dict(sorted(counts.items())),
         observed_followup_kinds=dict(sorted(kinds.items())),
+        observed_check_evidence_classes=dict(sorted(check_classes.items())),
     )
     return result
 
