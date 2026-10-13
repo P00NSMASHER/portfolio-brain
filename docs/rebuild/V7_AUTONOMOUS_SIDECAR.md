@@ -210,3 +210,15 @@ readable and explicitly report unknown coverage, not fabricated zero gaps.
 This adds no provider GET, cron, mutable state, machine-generated
 compliance PASS, incident closure, code repair, external message,
 authorization change, spending or portfolio trading.
+
+
+### Newly adverse without comparable historical baseline
+
+A uniquely identified check first observed as completed/adverse on an exact
+original commit is labeled `UNBASELINED_ADVERSE_OBSERVED`. It is not a
+proven regression. The optional V7 public status publishes only its bounded
+fixed-enum aggregate count, never repository/check names. Such evidence
+keeps the overall advisory PARTIAL even if the current provider GET later
+observes a green check. Duplicated names, nonactual source, changed commits,
+stale comparisons and unfinished checks do not establish a baseline.
+Unrecognized classes cannot bypass fixed-enumeration receipt validation.
