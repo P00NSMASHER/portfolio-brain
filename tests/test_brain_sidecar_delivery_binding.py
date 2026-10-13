@@ -31,11 +31,15 @@ def files(folder, *, manifest=None, receipt=None):
 
 
 def bound(d, report, output, *, source=SOURCE, run_id=RUN,
-          attempt="1", sha=STATE, stages=SUCCESS):
+          attempt="1", sha=STATE, stages=SUCCESS, digest=None):
+    digest = (hashlib.sha256(Path(d).read_bytes()).hexdigest()
+              if digest is None and Path(d).exists()
+              else "0" * 64 if digest is None else digest)
     return finalize(
         report, output, source, *stages,
         original_delivery=d, original_run_id=run_id,
         original_run_attempt=attempt, published_state_sha=sha,
+        expected_delivery_sha256=digest,
     )
 
 
@@ -104,6 +108,24 @@ class OriginalCycleBindingTests(unittest.TestCase):
                 self.assertEqual(result["status"], "BLOCKED_NO_VERIFIED_INVESTIGATION")
                 self.assertIs(result["original_delivery_verified"], False)
                 self.assertNotIn("UNTRUSTED_SENTINEL", out.read_text())
+
+    def test_manifest_changed_after_prepare_is_rejected_even_if_fields_still_valid(self):
+        with tempfile.TemporaryDirectory() as folder:
+            d, r, out = files(folder)
+            first = hashlib.sha256(d.read_bytes()).hexdigest()
+            modified = delivery(state_parent="d" * 40)
+            d.write_text(json.dumps(modified))
+            # The modified manifest still meets every shape/source/run/state
+            # constraint, but its bytes differ from the prepare-stage digest.
+            check = bound(d, r, out, digest=first)
+            self.assertEqual(check["status"],
+                             "BLOCKED_NO_VERIFIED_INVESTIGATION")
+            self.assertIs(check["original_delivery_verified"], False)
+            # Even inconsequential byte-only changes break the original pin.
+            d.write_text(json.dumps(delivery(), separators=(",", ":")))
+            result = bound(d, r, out, digest=first)
+            self.assertEqual(result["status"],
+                             "BLOCKED_NO_VERIFIED_INVESTIGATION")
 
     def test_missing_invalid_or_oversized_original_manifest_blocks_green(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -201,6 +223,8 @@ class OriginalCycleBindingTests(unittest.TestCase):
                 "--original-run-id", RUN,
                 "--original-run-attempt", "1",
                 "--published-state-sha", STATE,
+                "--expected-delivery-sha256",
+                hashlib.sha256(d.read_bytes()).hexdigest(),
             ]
             with redirect_stdout(io.StringIO()):
                 exit_code = main(arguments)
@@ -246,6 +270,8 @@ class SidecarWorkflowProtectionTests(unittest.TestCase):
         self.assertIn('--original-run-attempt "$GITHUB_RUN_ATTEMPT"', child)
         self.assertIn('--published-state-sha "$PINNED_PUBLISHED_STATE_SHA"', child)
         self.assertIn("steps.source.outputs.state_sha", child)
+        self.assertIn("steps.source.outputs.delivery_sha256", child)
+        self.assertIn('--expected-delivery-sha256 "$PINNED_DELIVERY_SHA256"', child)
         self.assertIn("python -m brain.sidecar prepare", child)
         self.assertIn("python -m brain.sidecar finalize", child)
         self.assertNotIn("path: /tmp/brain-v7/investigation", child)
