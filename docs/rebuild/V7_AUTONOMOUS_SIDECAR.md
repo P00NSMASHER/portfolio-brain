@@ -143,3 +143,18 @@ plan before publishing only three names-free aggregate fields:
 the public advisory. Old receipts without temporal evidence remain
 backward compatible. No provider budget, workflow, cron, permissions,
 original SQLite, external API call or financial execution authority changes.
+
+### Explicit partial source coverage when GitHub check names are duplicated
+
+The V7 read-only investigator may still recheck **other uniquely identified**
+checks when an original public GitHub observation contains duplicated check
+names. The original duplicate-named evidence is quarantined, never used as
+reliable regression, recovery, missing-check or root-cause evidence.
+
+The sidecar's fixed-schema `partial_check_coverage_repositories` integer
+counts selected repositories with such originally ambiguous check coverage.
+Even where all selected unique checks have finished their bounded GET,
+a receipt containing partial original name coverage is
+`PARTIAL_READ_ONLY`, **not** a full successful observation. Unknown flag
+types are BLOCKED. No duplicate check names, raw source URLs, GitHub
+responses, original SQLite, or private report text are uploaded.
