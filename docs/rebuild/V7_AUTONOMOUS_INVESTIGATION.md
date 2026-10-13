@@ -299,3 +299,52 @@ check-run coverage errors, source revision races, rate-limit/global circuit
 breakers, unknown and OS errors, STOP, actual request budgets, hard-stop
 receipt forgery, and confidential-error suppression. This feature remains
 draft-only; the original V6 automatic-acceptance process is unchanged.
+
+## Read-only original CI coverage watermark (source-quality upgrade)
+
+A run with **no eligible new or persistent adverse checks** is no longer
+automatically a sufficient CI-health observation: this may simply mean that
+some original allowlisted repositories have no comparable observation pair,
+have stale/nonactual evidence, moved to a different commit, have duplicate
+check names, or share no stable check names between original snapshots.
+
+Without adding a single GET, the investigator now projects an **original
+comparison coverage watermark** from the replay-verified canonical report
+and the existing four-repository policy allowlist. It independently checks
+the source observation timestamps against the real invocation time and the
+existing 48-hour policy age limit. It records only fixed source-comparison
+categories:
+
+- **COMPARABLE_FRESH:** two original fresh same-commit samples with comparable
+  check identities. This is a property of the **evidence**, NOT a claim all
+  CI checks passed, that root cause was fixed, or that the repository is safe.
+- **DUPLICATE_NAME_QUARANTINE / NO_SHARED_CHECK_NAMES:** source identity
+  ambiguity or absent comparable original check identities.
+- **REVISION_CHANGED:** fresh evidence from different commits; a before/after
+  check result cannot simply be treated as a comparable recovery.
+- **STALE_SOURCE_EVIDENCE / NON_ACTUAL_SOURCE:** expired or simulated/nonactual
+  comparison. A formerly fresh original report may become stale relative
+  to the current investigation invocation, even when its stored label
+  was originally accurate.
+- **UNVERIFIED_OTHER_COMPARISON:** unrecognized or unsupported quality evidence
+  conservatively treated as limited, never a clean signal.
+
+The watermark counts **unassessed approved repositories** separately:
+an unapproved external repository is never accepted as a substitute for a
+missing original allowlisted source. The human private report shows the
+fixed categories and counts, not a computed probability or health score.
+
+The public read-only sidecar emits only names-free category counts,
+`unassessed_approved_repositories`, and a Boolean
+`comparison_coverage_limited`. It rejects impossible, forged, negative or
+non-Boolean category totals. Any missing, stale, ambiguous or cross-revision
+source comparison makes the result **PARTIAL_READ_ONLY**, including a
+`NO_ELIGIBLE_FAILURES` one-shot pass that performed zero GETs. Previously
+issued optional receipts lacking coverage metadata remain backwards
+readable, with coverage marked **unknown**, not incorrectly filled in.
+
+The original source-bound ledger, private provider data, release/signing
+rules, 3-repository/24-GET cap, STOP and writer credentials remain intact.
+The watermark is an evidence-coverage diagnostic **only**, not an
+unattested waiver of V6 acceptance or authorization to trade, spend, repair
+CI, merge a PR or deploy V7.
