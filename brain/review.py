@@ -10,6 +10,8 @@ import hashlib
 import json
 import re
 
+from .evidence_urls import check_run_ref, repo_evidence_ref
+
 _MAX_REVIEWS = 12
 _MAX_PER_REPOSITORY = 4
 _MAX_COINCIDENCE_GROUPS = 4
@@ -53,13 +55,13 @@ def _check(condition, failure):
 
 
 def _source_ref(value, repo):
-    return (type(value) is str and 0 < len(value) <= 1200
-            and value.startswith(f"https://github.com/{repo}/")
-            and all(32 <= ord(c) <= 126 for c in value))
+    return repo_evidence_ref(value, repo)
 
 
 def _copy_ref(value, repo):
-    return value if _source_ref(value, repo) else None
+    # Human check links MUST be actual scoped CI check-run references.
+    # Missing/ambiguous URLs fall back to exact original source commit.
+    return value if check_run_ref(value, repo) else None
 
 
 def _history(check):
@@ -283,9 +285,7 @@ def review_packet(receipt):
             continue
         reference = item["evidence_ref"]
         repository = item["repository"]
-        if not _source_ref(reference, repository):
-            continue
-        if not ("/actions/runs/" in reference or "/runs/" in reference):
+        if not check_run_ref(reference, repository):
             continue
         by_check_name.setdefault(name, {})[repository] = item
     coincidences = []

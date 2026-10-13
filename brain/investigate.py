@@ -14,6 +14,7 @@ from pathlib import Path
 from .adapters import GitHub, policy
 from .core import BrainError, Store, require, timestamp, utcnow
 from .triage import decision_queue
+from .evidence_urls import check_run_ref
 
 _MAX_INVESTIGATIONS = 3
 # Metadata, branch before/after, and at most five check pages; one retry each.
@@ -46,9 +47,7 @@ def _provider_failure_scope(exc):
 
 
 def _source_reference(value, repository):
-    return (type(value) is str and len(value) <= 1200
-            and value.startswith(f"https://github.com/{repository}/")
-            and not any(ord(char) < 32 or ord(char) == 127 for char in value))
+    return check_run_ref(value, repository)
 
 
 def _plan(report, now, limits):
@@ -203,10 +202,16 @@ def _revalidate(plan, observation):
             require(type(historical[name]) is dict,
                     "TEMPORAL_CHECK_RECORD_INVALID")
             checked["historical_observations"] = dict(historical[name])
-        if len(matches) != 1:
+        if len(matches) != 1 or not check_run_ref(
+            matches[0].get("url"), repository
+        ):
+            # A provider result with no canonical check-run evidence cannot
+            # be promoted to verified check status or root-cause closure.
+            # Continue checking OTHER uniquely identified runs in this repo.
             checked["outcome"] = "UNVERIFIED_MISSING_OR_AMBIGUOUS_CHECK"
         else:
             match = matches[0]
+            checked["source_ref"] = match["url"]
             if match.get("status") != "completed":
                 checked["outcome"] = "CHECK_NOT_COMPLETED"
             elif match.get("conclusion") in _ADVERSE:
@@ -215,10 +220,6 @@ def _revalidate(plan, observation):
                 checked["outcome"] = "SUCCESS_OBSERVED_NOT_RESOLUTION"
             else:
                 checked["outcome"] = "OTHER_CONCLUSION_NOT_RESOLUTION"
-            # A provider URL is never followed, interpreted as an instruction,
-            # or rendered as trusted evidence outside the scoped repository.
-            if _source_reference(match.get("url"), repository):
-                checked["source_ref"] = match["url"]
         result["checks"].append(checked)
     result["outcome"] = "OBSERVED_CHECK_STATUS_NOT_ROOT_CAUSE"
     return result

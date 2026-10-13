@@ -10,6 +10,7 @@ import re
 
 from .changes import repository_changes, _unambiguous_checks
 from .core import BrainError, digest, require, timestamp
+from .evidence_urls import check_run_ref
 
 _SHA = re.compile(r"[0-9a-f]{40}\Z")
 _CHAIN = re.compile(r"[0-9a-f]{64}\Z")
@@ -67,9 +68,7 @@ def _validate_history(report, history, limits):
 
 
 def _source_url(value, repo):
-    return (type(value) is str and len(value) <= 1200
-            and value.startswith(f"https://github.com/{repo}/")
-            and all(32 <= ord(char) < 127 for char in value))
+    return check_run_ref(value, repo)
 
 
 def _eligible(row, now, limits):
