@@ -121,3 +121,25 @@ repository identities or original ledger. One repository consumes the same
 single bounded GitHub observation, not several reads. Unresolved gaps,
 pending checks and source drift still produce partial, not complete, results.
 This adds no release authority, new scheduled task, state write or trade.
+
+### Historical check patterns: safe, bounded private-to-public summary
+
+The read-only V7 investigator now derives a private historical record for
+each followed check from the original verified ledger and the latest two
+actual snapshots. A maximum of 12 consecutive, completed, same-revision
+observations within 48 hours can contribute. Missing, pending, nonactual,
+stale, revision-changed and duplicate-name observations break continuity.
+The record includes measured sample counts, the first observed adverse
+sample in the consecutive streak, latest original sample, observed
+adverse/success transitions, and explicit sample-cap status. **No observed
+span is claimed as actual continuous outage duration**.
+
+The optional sidecar validates type/range/count and timestamp invariants
+and requires each private check's temporal record to match the source-bound
+plan before publishing only three names-free aggregate fields:
+`historical_adverse_streak_bands`,
+`historical_repeated_terminal_movements`, and
+`historical_sample_caps`. Unknown or contradictory temporal data blocks
+the public advisory. Old receipts without temporal evidence remain
+backward compatible. No provider budget, workflow, cron, permissions,
+original SQLite, external API call or financial execution authority changes.
