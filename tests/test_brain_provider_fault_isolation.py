@@ -224,6 +224,57 @@ class SelectiveRepositoryFailureTests(unittest.TestCase):
                 self.assertEqual(public["repository_local_provider_failures"], 0)
                 self.assertEqual(public["provider_failure_hard_stops"], 0)
 
+    def test_private_review_discloses_only_fixed_failure_scope(self):
+        from brain.render import investigation_summary_lines
+        result, _, _ = run_case()
+        lines = "\n".join(investigation_summary_lines(result))
+        self.assertIn("REPOSITORY_LOCAL_EVIDENCE_UNAVAILABLE", lines)
+        self.assertIn("NOT a verified incident", lines)
+        self.assertNotIn("PRIVATE_API_DIAGNOSTIC_SENTINEL", lines)
+        hard, _, _ = run_case(code="SOURCE_API_403")
+        hard_lines = "\n".join(investigation_summary_lines(hard))
+        self.assertIn("GLOBAL_OR_UNCLASSIFIED_STOP", hard_lines)
+        self.assertNotIn("PRIVATE_API_DIAGNOSTIC_SENTINEL", hard_lines)
+
+    def test_hard_stop_cannot_be_followed_by_fabricated_read(self):
+        report_data, _, _ = run_case()
+        altered = copy.deepcopy(report_data)
+        altered["investigations"][0]["provider_failure_scope"] = (
+            "GLOBAL_OR_UNCLASSIFIED_STOP"
+        )
+        summary = summarize(altered, SOURCE, *["success"] * 4)
+        self.assertEqual(summary["status"], "BLOCKED_NO_VERIFIED_INVESTIGATION")
+        self.assertFalse(summary["execution_authority"])
+
+    def test_failure_scope_on_success_and_false_green_status_are_blocked(self):
+        recorded, _, _ = run_case()
+        altered = copy.deepcopy(recorded)
+        altered["investigations"][1]["provider_failure_scope"] = (
+            "REPOSITORY_LOCAL_EVIDENCE_UNAVAILABLE"
+        )
+        self.assertEqual(summarize(altered, SOURCE, *["success"] * 4)["status"],
+                         "BLOCKED_NO_VERIFIED_INVESTIGATION")
+        altered = copy.deepcopy(recorded)
+        altered["status"] = "READ_ONLY_REVALIDATION_COMPLETE"
+        self.assertEqual(summarize(altered, SOURCE, *["success"] * 4)["status"],
+                         "BLOCKED_NO_VERIFIED_INVESTIGATION")
+
+    def test_actual_unclassified_os_error_stops_all_later_repositories(self):
+        class BrokenIO(Transport):
+            def __call__(self, path):
+                self.calls.append(path)
+                raise OSError("PRIVATE_DIAGNOSTIC_SENTINEL")
+        transport = BrokenIO()
+        result, _, _ = run_case(provider=transport)
+        self.assertEqual(result["status"], "INCOMPLETE_READ_ONLY_REVALIDATION")
+        self.assertEqual(result["deferred_count"], 2)
+        self.assertEqual(len(transport.calls), 1)
+        self.assertEqual(
+            result["investigations"][0]["provider_failure_scope"],
+            "GLOBAL_OR_UNCLASSIFIED_STOP"
+        )
+        self.assertNotIn("PRIVATE_DIAGNOSTIC_SENTINEL", json.dumps(result))
+
     def test_legacy_failure_without_scope_remains_conservative(self):
         result, _, _ = run_case()
         old = copy.deepcopy(result)
