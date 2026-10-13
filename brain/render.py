@@ -156,6 +156,45 @@ def write_report(report, output):
         "the same commit and uniquely named completed checks; these are observations, "
         "not causes, verified usefulness, or revenue."
     )
+    if (
+        report.get("status") == "PASS"
+        and report.get("scope") == "READ_ONLY_BUSINESS_PORTFOLIO_INTELLIGENCE"
+    ):
+        from brain.triage import decision_queue
+
+        def _review_text(value):
+            # Markdown is a separate consumer of original public metadata.
+            # Prevent untrusted repository names/paths from injecting markup.
+            sanitized = str(value).replace("\\", "\\\\")
+            for char in ("`", "*", "_", "[", "]", "<", ">", "|"):
+                sanitized = sanitized.replace(char, "\\" + char)
+            return sanitized.replace("\n", " ").replace("\r", " ")
+
+        queue = decision_queue(report)
+        lines.extend(["", "## Evidence-gated decision queue (human review only)", ""])
+        lines.append(
+            "These are observations and proposed checks, NOT verified benefits, "
+            "license permission, instructions to trade or authorization to execute."
+        )
+        if not queue["items"]:
+            lines.append("No currently eligible evidence-backed review proposals.")
+        for item in queue["items"]:
+            context = item["metadata"].get(
+                "repository", item["metadata"].get("target", "")
+            )
+            lines.append(
+                "- Review " + str(item["review_order_not_value_rank"])
+                + " [" + item["band"] + "] "
+                + _review_text(context) + ": " + item["headline"]
+                + " Next: " + item["next_step"]
+                + " Evidence: " + _review_text(item["source_refs"][0])
+                + ". Limit: " + item["limitations"][0]
+            )
+        lines.append(
+            "The order is a deterministic review rule, not a probability, "
+            "ROI estimate, adoption claim or urgency deadline. "
+            "No provider queries, state writes or downstream actions occurred."
+        )
     lines.extend(["", "## Reusable code to evaluate", ""])
     for candidate in report.get("reuse_candidates",[])[:10]:
         lines.append(f'- [{candidate["repository"]}/{candidate["path"]}]({candidate["source_ref"]}) — {candidate["target"]}; structural score {candidate["reuse_score"]}; license {candidate["license"]}; {candidate["utility_evidence"]}')
