@@ -53,3 +53,32 @@ def commit_ref(value, repository, revision=None):
 def repo_evidence_ref(value, repository):
     """Allowlist original commit or CI check-run pages, nothing else."""
     return commit_ref(value, repository) or check_run_ref(value, repository)
+
+_BLOB = re.compile(
+    r"blob/[0-9a-f]{40}/[A-Za-z0-9_.@+/-]{1,500}\\Z"
+)
+
+
+def blob_ref(value, repository, revision=None, source_path=None):
+    """Review-only immutable GitHub code blob reference, not reuse rights.
+
+    Require a literal exact repository, full commit SHA, and canonical
+    unencoded source path. Reject encoded traversal, URL parameters, unusual
+    schemes, fragments and misleading lookalikes. No link is followed.
+    """
+    suffix = _path(value, repository)
+    if suffix is None or _BLOB.fullmatch(suffix) is None:
+        return False
+    blob_sha, path = suffix[5:].split("/", 1)
+    parts = path.split("/")
+    if not parts or any(part in ("", ".", "..") for part in parts):
+        return False
+    if revision is not None and (
+        type(revision) is not str or blob_sha != revision
+    ):
+        return False
+    if source_path is not None and (
+        type(source_path) is not str or path != source_path
+    ):
+        return False
+    return True
