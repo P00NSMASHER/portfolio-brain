@@ -119,7 +119,7 @@ class FullSingleRepositorySignalTests(unittest.TestCase):
         self.assertEqual(receipt["investigations"][0]["check_names"],
                          ["audit", "persist", "validate"])
         summary = summarize(receipt, SOURCE, *["success"] * 4)
-        self.assertEqual(summary["status"], "OBSERVED_READ_ONLY")
+        self.assertEqual(summary["status"], "PARTIAL_READ_ONLY")
         self.assertEqual(summary["observed_check_evidence_classes"], {
             "INITIAL_ADVERSE_TRANSITION": 1,
             "PERSISTENT_ADVERSE_OBSERVED": 1,
