@@ -242,7 +242,9 @@ def review_packet(receipt):
                 _check(cls == row.get("follow_up_kind", "INITIAL_ADVERSE_TRANSITION"),
                        "REVIEW_LEGACY_CLASS_MISMATCH")
             relation = check.get("source_followup_relation")
-            if relation is not None:
+            if "source_followup_relation" in check:
+                # An explicitly supplied None is forged/invalid; only
+                # complete legacy receipts may omit this optional field.
                 from .evidence_relation import source_followup_relation
                 try:
                     expected_relation = source_followup_relation(cls, outcome)
