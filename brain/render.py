@@ -164,6 +164,23 @@ def investigation_summary_lines(receipt):
                                   row.get("follow_up_kind", "INITIAL_ADVERSE_TRANSITION")))
                 + "; evidence " + safe(check.get("source_ref") or "UNAVAILABLE")
             )
+            evidence = check.get("historical_observations")
+            if evidence is not None:
+                require(type(evidence) is dict,
+                        "TEMPORAL_PRIVATE_EVIDENCE_OBJECT_INVALID")
+                lines.append(
+                    "    - Original ledger's recent completed samples: "
+                    + safe(evidence.get("terminal_samples", "UNKNOWN"))
+                    + "; consecutive adverse observations: "
+                    + safe(evidence.get("adverse_streak_samples", "UNKNOWN"))
+                    + "; first observed in this adverse sample streak: "
+                    + safe(evidence.get("adverse_streak_first_observed_at") or "UNAVAILABLE")
+                    + "; observed adverse/success changes: "
+                    + safe(evidence.get("adverse_success_flips_observed", "UNKNOWN"))
+                    + "; 12-sample display cap reached: "
+                    + safe(evidence.get("capped_at_12_samples", "UNKNOWN"))
+                )
+    lines.append("Past sampled check conclusions are NOT continuous outage duration, root cause, or confirmed test flakiness.")
     lines.append("Any successful check is an observation, not an independently confirmed resolution.")
     return lines
 
