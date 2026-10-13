@@ -276,8 +276,9 @@ jobs:
           STATE_OUTCOME: ${{ steps.state.outcome }}
           INVESTIGATE_OUTCOME: ${{ steps.investigate.outcome }}
           PINNED_PUBLISHED_STATE_SHA: ${{ steps.source.outputs.state_sha }}
+          PINNED_DELIVERY_SHA256: ${{ steps.source.outputs.delivery_sha256 }}
         run: |
-          python -m brain.sidecar finalize --receipt /tmp/brain-v7/investigation/report.json --output /tmp/brain-v7/sidecar-status.json --source-sha "$GITHUB_SHA" --downloaded "$DOWNLOAD_OUTCOME" --proven "$SOURCE_OUTCOME" --state "$STATE_OUTCOME" --investigated "$INVESTIGATE_OUTCOME" --original-delivery /tmp/brain-v7-original/delivery.json --original-run-id "$GITHUB_RUN_ID" --original-run-attempt "$GITHUB_RUN_ATTEMPT" --published-state-sha "$PINNED_PUBLISHED_STATE_SHA"
+          python -m brain.sidecar finalize --receipt /tmp/brain-v7/investigation/report.json --output /tmp/brain-v7/sidecar-status.json --source-sha "$GITHUB_SHA" --downloaded "$DOWNLOAD_OUTCOME" --proven "$SOURCE_OUTCOME" --state "$STATE_OUTCOME" --investigated "$INVESTIGATE_OUTCOME" --original-delivery /tmp/brain-v7-original/delivery.json --original-run-id "$GITHUB_RUN_ID" --original-run-attempt "$GITHUB_RUN_ATTEMPT" --published-state-sha "$PINNED_PUBLISHED_STATE_SHA" --expected-delivery-sha256 "$PINNED_DELIVERY_SHA256"
       - name: Preserve only sanitized advisory status outside original cycle
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
