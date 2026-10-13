@@ -65,3 +65,16 @@ downstream PR creations, external messages, costs, trading, schedules or
 production runtime changes. Only the existing private 0700/0600 evidence bundle
 changes on this **unmerged V7 draft**; the optional public sidecar remains
 strictly names-free.
+
+### Partial evidence coverage, not skipped investigation
+
+Duplicated GitHub CI check names in either original snapshot are quarantined
+individually. A repository can still have a distinct, uniquely named failure
+that merits evidence-only human review. The private review packet now exposes
+a clear **partial original CI check-name coverage** caveat and the number of
+affected repositories. No duplicate-named check is falsely identified as
+missing or fixed. Only the previously verified uniquely identified checks
+receive proposals; the review packet never certifies full test-suite coverage.
+
+The stable case keys, no-root-cause label, bounded per-repository human
+review selection and noncausal cross-project comparisons remain unchanged.
