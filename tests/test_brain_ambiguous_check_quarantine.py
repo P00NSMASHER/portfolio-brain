@@ -74,7 +74,7 @@ class QuarantinedCheckNamesTests(unittest.TestCase):
         self.assertEqual(public["partial_check_coverage_repositories"], 1)
         self.assertNotIn("noise", str(public))
         human = "\n".join(review_lines(receipt))
-        self.assertIn("partial original CI check-name coverage", human.lower())
+        self.assertIn("partial original ci check-name coverage", human.lower())
         self.assertIn("NEW_ADVERSE_CHECK", human)
         self.assertNotIn("noise", human)
 
@@ -217,7 +217,7 @@ class QuarantinedCheckNamesTests(unittest.TestCase):
         packet = "\n".join(review_lines(receipt))
         self.assertNotIn("<script>", packet)
         self.assertNotIn("invoke", packet)
-        self.assertIn("partial original CI check-name coverage", packet.lower())
+        self.assertIn("partial original ci check-name coverage", packet.lower())
         self.assertIn("validate", packet)
         self.assertNotIn(unsafe, str(summarize(
             receipt, SOURCE, *["success"] * 4)))
