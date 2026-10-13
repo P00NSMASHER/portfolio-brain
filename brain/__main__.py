@@ -115,6 +115,48 @@ def doctor(store, sha, output):
     write_report(result,output)
     return result
 
+def projects(store, sha, output, *, api=None):
+    """Observe extended repo-backed projects and build an honest improvement queue.
+
+    Core canonical state remains owned by the existing monitor. Extended project
+    snapshots are read-only execution evidence and are not inserted into SQLite,
+    so an optional project's provider failure cannot corrupt or stale core state.
+    """
+    from brain.projects import build_project_portfolio, extended_repositories
+    canonical = store.read_report(sha)
+    api = api or GitHub(private=store.visibility == "PRIVATE")
+    snapshots, errors = [], []
+    observed_at = utcnow()
+    for repository in extended_repositories():
+        try:
+            payload, private = api.observe(repository)
+            require(private is False or store.visibility == "PRIVATE",
+                    "PROJECT_PRIVATE_SOURCE_REFUSED")
+            snapshots.append({
+                "key": repository,
+                "observed_at": observed_at,
+                "data_kind": "ACTUAL",
+                **payload,
+            })
+        except (BrainError, KeyError, UnicodeError, TypeError) as exc:
+            errors.append({
+                "repository": repository,
+                "error_class": type(exc).__name__,
+                "error": str(exc)[:300],
+            })
+    result = build_project_portfolio(canonical, snapshots, source_sha=sha)
+    result["operation"] = {
+        "name": "projects",
+        "requests": api.requests,
+        "extended_repositories": list(extended_repositories()),
+        "errors": errors,
+    }
+    if errors:
+        result["status"] = "BLOCKED"
+    write_report(result, output)
+    return result
+
+
 def preflight(output, expected=None):
     sha=source_sha(expected)
     from brain.validate import validate_policy
@@ -130,7 +172,7 @@ def preflight(output, expected=None):
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description="Read-only autonomous business portfolio intelligence")
-    parser.add_argument("command",choices=["init","ingest","cycle","monitor","research","experiment","doctor","preflight","backup","service","feedback","evolve","transfer-review"])
+    parser.add_argument("command",choices=["init","ingest","cycle","monitor","research","experiment","doctor","projects","preflight","backup","service","feedback","evolve","transfer-review"])
     parser.add_argument("--db",default="brain-local/state.sqlite")
     parser.add_argument("--output",default="brain-local/report")
     parser.add_argument("--input")
@@ -185,6 +227,8 @@ def main(argv=None):
                 write_report(result,args.output)
             elif args.command=="doctor":
                 result=doctor(store,sha,args.output)
+            elif args.command=="projects":
+                result=projects(store,sha,args.output)
             elif args.command=="transfer-review":
                 from brain.transfer import review_transfer, write_transfer_review
                 require(args.input is not None and args.repository is None,
@@ -205,7 +249,7 @@ def main(argv=None):
                 count=0
                 while not (Path(args.db).parent/"STOP").exists():
                     source_sha(sha)
-                    for name,fn in (("monitor",monitor),("research",research),("experiment",experiment),("doctor",doctor)):
+                    for name,fn in (("monitor",monitor),("research",research),("experiment",experiment),("doctor",doctor),("projects",projects)):
                         try:
                             store.drain()
                             fn(store,sha,Path(args.output)/name)
