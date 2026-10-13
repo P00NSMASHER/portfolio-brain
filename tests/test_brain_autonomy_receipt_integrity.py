@@ -140,6 +140,23 @@ class SanitizeReceiptIntegrityTests(unittest.TestCase):
                 modified["investigations"][0]["check_names"] = names
                 self.verify_blocked(modified)
 
+    def test_malformed_nested_check_and_truncated_investigation_is_blocked(self):
+        original = old_observation()
+        for poisoned in ([{"injected": "unhashable"}], [None], [4]):
+            with self.subTest(names=poisoned):
+                receipt = copy.deepcopy(original)
+                receipt["investigations"][0]["check_names"] = poisoned
+                self.verify_blocked(receipt)
+        invalid = copy.deepcopy(original)
+        invalid["status"] = "INCOMPLETE_READ_ONLY_REVALIDATION"
+        invalid["investigations"] = [None]
+        self.verify_blocked(invalid)
+        capped = copy.deepcopy(original)
+        capped["max_investigations"] = 1
+        capped["investigations"].append(copy.deepcopy(capped["investigations"][0]))
+        capped["eligible_count"] = 2
+        self.verify_blocked(capped)
+
     def test_replayed_sidecar_source_is_kept_private(self):
         receipt = old_observation()
         self.assertEqual(summarize(receipt, SOURCE, *["success"] * 4)["status"],
