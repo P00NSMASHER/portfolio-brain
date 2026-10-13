@@ -21,6 +21,29 @@ _OBSERVATION_REQUEST_RESERVE = 16
 _ADVERSE = frozenset({"failure", "timed_out", "action_required", "startup_failure", "stale"})
 _SHA = re.compile(r"[0-9a-f]{40}\Z")
 
+# Only provider failures demonstrably scoped to one repository are isolated.
+# Rate limits, authorization/visibility, transport failures, policy or
+# malformed unclassified evidence still break the entire investigation.
+_LOCAL_REPOSITORY_READ_FAILURES = frozenset({
+    "SOURCE_API_404",
+    "CHECK_COVERAGE_UNAVAILABLE",
+    "CHECK_COVERAGE_TRUNCATED",
+    "CHECK_COVERAGE_CHANGED",
+    "CHECK_COVERAGE_AMBIGUOUS",
+    "SOURCE_REVISION_CHANGED",
+    "SOURCE_REVISION_UNAVAILABLE",
+    "SOURCE_RESPONSE_TOO_LARGE",
+})
+
+
+def _provider_failure_scope(exc):
+    """Fixed-label circuit breaker; never echo upstream diagnostic content."""
+    if isinstance(exc, BrainError):
+        fixed_code = str(exc).partition(":")[0]
+        if fixed_code in _LOCAL_REPOSITORY_READ_FAILURES:
+            return "REPOSITORY_LOCAL_EVIDENCE_UNAVAILABLE"
+    return "GLOBAL_OR_UNCLASSIFIED_STOP"
+
 
 def _source_reference(value, repository):
     return (type(value) is str and len(value) <= 1200
@@ -301,17 +324,25 @@ def investigate(report, *, api=None, now=None, max_investigations=3, stop_reques
         if limits["max_requests_per_operation"] - api.requests < _OBSERVATION_REQUEST_RESERVE:
             receipt["status"] = "REQUEST_BUDGET_DEFERRED"
             break
+        must_stop_provider = False
         try:
             observation, private = api.observe(plan["repository"])
             require(private is False, "private provider observation refused")
             result = _revalidate(plan, observation)
-        except (BrainError, OSError, KeyError, TypeError, AttributeError):
+        except (BrainError, OSError, KeyError, TypeError, AttributeError) as exc:
+            scope = _provider_failure_scope(exc)
             result = {**plan, "observed_revision": None, "checks": [],
-                      "outcome": "UNVERIFIED_READ_FAILED"}
+                      "outcome": "UNVERIFIED_READ_FAILED",
+                      "provider_failure_scope": scope}
             receipt["status"] = "INCOMPLETE_READ_ONLY_REVALIDATION"
+            must_stop_provider = scope == "GLOBAL_OR_UNCLASSIFIED_STOP"
         receipt["investigations"].append(result)
-        if receipt["status"] == "INCOMPLETE_READ_ONLY_REVALIDATION":
+        if must_stop_provider:
+            # Keep the original circuit breaker for auth/rate-limit/global or
+            # unclassified failure. No later provider calls are permissible.
             break
+        # Only a fixed, repository-local failure permits checking the next
+        # independently prevalidated repository within the existing budget.
     receipt["requests_used"] = api.requests - started_requests
     receipt["deferred_count"] = len(plans) - len(receipt["investigations"])
     if receipt["deferred_count"] and receipt["status"] == "READ_ONLY_REVALIDATION_COMPLETE":
