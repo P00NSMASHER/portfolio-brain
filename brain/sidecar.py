@@ -143,6 +143,9 @@ def _blocked(source_sha):
         "status": "BLOCKED_NO_VERIFIED_INVESTIGATION",
         "checked": 0, "eligible": 0, "deferred": 0, "requests_used": 0,
         "observed_outcomes": {}, "observed_followup_kinds": {},
+        "comparison_coverage_counts": {},
+        "unassessed_approved_repositories": None,
+        "comparison_coverage_limited": None,
         "observed_check_evidence_classes": {},
         "repository_local_provider_failures": 0,
         "provider_failure_hard_stops": 0,
@@ -179,6 +182,12 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
             or type(report.get("state_sequence")) is not int
             or report["state_sequence"] < 0):
         return result
+    coverage = None
+    if "original_comparison_coverage" in report:
+        from .coverage import validate_coverage
+        coverage = report["original_comparison_coverage"]
+        if not validate_coverage(coverage):
+            return result
     entries = report.get("investigations")
     eligible = report.get("eligible_count")
     deferred = report.get("deferred_count")
@@ -324,7 +333,9 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
                         for row in entries))
     if investigated == "success" and reported in {
         "NO_ELIGIBLE_FAILURES", "READ_ONLY_REVALIDATION_COMPLETE"
-    } and not deferred and not unresolved and all(
+    } and not deferred and not unresolved and not (
+        coverage is not None and coverage["limitations_present"]
+    ) and all(
         x.get("outcome") != "UNVERIFIED_READ_FAILED" for x in entries
     ):
         final = "OBSERVED_READ_ONLY"
@@ -336,6 +347,15 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
         status=final, checked=len(entries), eligible=eligible, deferred=deferred,
         requests_used=requests, observed_outcomes=dict(sorted(counts.items())),
         observed_followup_kinds=dict(sorted(kinds.items())),
+        comparison_coverage_counts=(dict(sorted(
+            coverage["comparison_classes"].items()
+        )) if coverage is not None else {}),
+        unassessed_approved_repositories=(
+            coverage["unassessed_repositories"] if coverage is not None else None
+        ),
+        comparison_coverage_limited=(
+            coverage["limitations_present"] if coverage is not None else None
+        ),
         observed_check_evidence_classes=dict(sorted(check_classes.items())),
         repository_local_provider_failures=repository_local_failures,
         provider_failure_hard_stops=provider_hard_stops,
