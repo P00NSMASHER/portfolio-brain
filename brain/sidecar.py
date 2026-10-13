@@ -440,7 +440,10 @@ def finalize(receipt_path, output_path, source_sha, downloaded, proven, state,
         # The production path always requests all four fields. A missing,
         # mismatched or altered manifest MUST produce a blocked advisory, not
         # an unbound green status, and still leave a sanitized artifact.
-        if any(type(item) is not str or not item for item in originals):
+        if (not isinstance(original_delivery, (str, Path))
+                or not str(original_delivery)
+                or any(type(item) is not str or not item
+                       for item in originals[1:])):
             result = _blocked(source_sha)
         else:
             try:
