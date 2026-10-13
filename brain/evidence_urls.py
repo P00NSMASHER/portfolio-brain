@@ -55,7 +55,7 @@ def repo_evidence_ref(value, repository):
     return commit_ref(value, repository) or check_run_ref(value, repository)
 
 _BLOB = re.compile(
-    r"blob/[0-9a-f]{40}/[A-Za-z0-9_.@+/-]{1,500}\\Z"
+    r"blob/[0-9a-f]{40}/[A-Za-z0-9_.@+/-]{1,500}\Z"
 )
 
 
