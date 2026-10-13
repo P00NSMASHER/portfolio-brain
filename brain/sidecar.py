@@ -432,9 +432,12 @@ def finalize(receipt_path, output_path, source_sha, downloaded, proven, state,
             result = _blocked(source_sha)
         else:
             try:
-                result.update(_original_delivery_binding(*(
+                binding = _original_delivery_binding(
                     original_delivery, source_sha, original_run_id,
-                    original_run_attempt, published_state_sha)))
+                    original_run_attempt, published_state_sha,
+                )
+                if result["status"] != "BLOCKED_NO_VERIFIED_INVESTIGATION":
+                    result.update(binding)
             except (BrainError, ValueError, OSError, UnicodeError, TypeError):
                 result = _blocked(source_sha)
     out = Path(output_path)
