@@ -44,6 +44,7 @@ def monitor(store, sha, output, *, api=None, repositories=None):
     errors=[]
     source_revision_rechecks=[]
     deferred_after_global_failure=[]
+    global_provider_failure_seen=False
     for index,repo in enumerate(repositories):
         try:
             if automatic_public_monitor:
@@ -65,6 +66,7 @@ def monitor(store, sha, output, *, api=None, repositories=None):
                     "failure_scope":scope,
                 })
                 if scope=="GLOBAL_OR_UNCLASSIFIED_SOURCE_STOP":
+                    global_provider_failure_seen=True
                     # Never keep consuming an unknown provider/rate-limit/
                     # permission failure. Unread scopes must stay explicit.
                     deferred_after_global_failure=list(repositories[index+1:])
@@ -78,7 +80,7 @@ def monitor(store, sha, output, *, api=None, repositories=None):
                          "source_revision_rechecks":source_revision_rechecks}
     if automatic_public_monitor:
         report["operation"]["deferred_after_global_failure"]=deferred_after_global_failure
-        report["operation"]["global_failure_stopped_reads"]=bool(deferred_after_global_failure)
+        report["operation"]["global_failure_stopped_reads"]=global_provider_failure_seen
     if errors:
         report["status"]="FAIL"
     write_report(report,output)
