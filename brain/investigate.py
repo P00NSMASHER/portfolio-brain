@@ -108,6 +108,14 @@ def _plan(report, now, limits):
         check_names.extend(change["name"] for change in recoveries)
         require(len(check_names) == len(set(check_names)),
                 "CONTINUATION_RECOVERY_CHECK_NAME_AMBIGUOUS")
+        original_classes = {
+            check["name"]: "INITIAL_ADVERSE_TRANSITION"
+            for check in row["check_deteriorations"]
+        }
+        original_classes.update({
+            check["name"]: "RECOVERY_OBSERVED_NOT_RESOLUTION"
+            for check in recoveries
+        })
         refs = sorted(set(item["source_refs"] + [change["source_ref"]
                                                   for change in recoveries]))
         result.append({
@@ -116,6 +124,7 @@ def _plan(report, now, limits):
             "original_observed_at": row["current_observed_at"],
             "source_refs": refs,
             "check_names": sorted(check_names),
+            "check_evidence_classes": original_classes,
         })
     require(len(result) == len(selected), "investigation queue unexpectedly truncated")
     return result
@@ -140,6 +149,7 @@ def _revalidate(plan, observation):
         require(type(classes) is dict
                 and set(classes) == set(plan["check_names"])
                 and all(type(tag) is str and tag in {
+                    "INITIAL_ADVERSE_TRANSITION",
                     "EVIDENCE_GAP_REVALIDATION",
                     "PERSISTENT_ADVERSE_OBSERVED",
                     "RECOVERY_OBSERVED_NOT_RESOLUTION",
@@ -189,9 +199,32 @@ def investigate(report, *, api=None, now=None, max_investigations=3, stop_reques
     if history is not None:
         from .continuation import continued_plans
         extended = continued_plans(report, history, now=now, limits=limits)
-        already_planned = {item["repository"] for item in plans}
-        require(all(item["repository"] not in already_planned for item in extended),
-                "CONTINUATION_DUPLICATE_REPOSITORY")
+        # Merge current deterioration with other independent check findings
+        # from the *same exact immutable observation*. One repository GET
+        # must cover all evidence without duplicating request expenditure.
+        already_planned = {item["repository"]: item for item in plans}
+        remaining = []
+        for continuation in extended:
+            current = already_planned.get(continuation["repository"])
+            if current is None:
+                remaining.append(continuation)
+                continue
+            require(current["expected_revision"] == continuation["expected_revision"]
+                    and current["original_observed_at"] == continuation["original_observed_at"],
+                    "CONTINUATION_SOURCE_OR_TIME_MISMATCH")
+            existing_classes = current["check_evidence_classes"]
+            additional_classes = continuation["check_evidence_classes"]
+            require(type(additional_classes) is dict,
+                    "CONTINUATION_EVIDENCE_MAP_INVALID")
+            for check_name, evidence_class in additional_classes.items():
+                require(check_name not in existing_classes,
+                        "CONTINUATION_CONTRADICTORY_CHECK_EVIDENCE")
+                existing_classes[check_name] = evidence_class
+            current["check_names"] = sorted(existing_classes)
+            current["source_refs"] = sorted(set(
+                current["source_refs"] + continuation["source_refs"]
+            ))
+        extended = remaining
         # New regressions stay first. Persistent/recovery work is equally
         # important within its class, so rotate it deterministically each UTC
         # hour; four ongoing failures must not permanently starve the fourth.
