@@ -153,19 +153,25 @@ def continued_plans(report, history, *, now, limits):
             and (name not in new_checks
                  or new_checks[name]["status"] != "completed")
         ]
-        if gaps:
-            names = sorted(set(gaps + persistent_names + recovered_names))
-            kind = "EVIDENCE_GAP_REVALIDATION"
-        elif recovered_names:
-            names = sorted(recovered_names)
-            kind = "RECOVERY_OBSERVED_NOT_RESOLUTION"
-        else:
-            names = persistent_names
-            kind = "PERSISTENT_ADVERSE_OBSERVED"
+        # A recovery in one check must never hide another check that is
+        # still failing. Reconcile every relevant signal in one bounded GET.
+        evidence_classes = {}
+        for classification, candidates in (
+            ("RECOVERY_OBSERVED_NOT_RESOLUTION", recovered_names),
+            ("PERSISTENT_ADVERSE_OBSERVED", persistent_names),
+            ("EVIDENCE_GAP_REVALIDATION", gaps),
+        ):
+            for name in candidates:
+                require(name not in evidence_classes,
+                        "CONTINUATION_OVERLAPPING_CHECK_EVIDENCE")
+                evidence_classes[name] = classification
+        names = sorted(evidence_classes)
         if not names:
             continue
+        kind = ("EVIDENCE_GAP_REVALIDATION" if gaps else
+                "PERSISTENT_ADVERSE_OBSERVED" if persistent_names else
+                "RECOVERY_OBSERVED_NOT_RESOLUTION")
         require(len(names) <= 500, "CONTINUATION_CHECK_COUNT_LIMIT")
-        names = sorted(names)
         checked_refs = []
         for name in names:
             evidence = new_checks.get(name, old_checks.get(name))
@@ -181,5 +187,6 @@ def continued_plans(report, history, *, now, limits):
             "follow_up_kind": kind, "expected_revision": current_revision,
             "original_observed_at": row["current_observed_at"],
             "source_refs": refs, "check_names": names,
+            "check_evidence_classes": evidence_classes,
         })
     return selected
