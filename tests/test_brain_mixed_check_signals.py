@@ -80,6 +80,7 @@ class MixedCheckSignalTests(unittest.TestCase):
         self.assertEqual(statuses["orphan"],
                          "UNVERIFIED_MISSING_OR_AMBIGUOUS_CHECK")
         public = summarize(result, SOURCE, *["success"] * 4)
+        self.assertEqual(public["status"], "PARTIAL_READ_ONLY")
         self.assertEqual(public["observed_check_evidence_classes"], {
             "EVIDENCE_GAP_REVALIDATION": 1,
             "PERSISTENT_ADVERSE_OBSERVED": 1,
