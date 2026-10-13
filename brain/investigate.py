@@ -166,7 +166,12 @@ def _revalidate(plan, observation):
         if classes is not None:
             checked["original_evidence_class"] = classes[name]
         if historical is not None:
-            checked["historical_observations"] = historical[name]
+            # Keep private check evidence independent of its source plan.
+            # In-memory aliasing must not let a forged check observation
+            # silently mutate its companion expected-history record.
+            require(type(historical[name]) is dict,
+                    "TEMPORAL_CHECK_RECORD_INVALID")
+            checked["historical_observations"] = dict(historical[name])
         if len(matches) != 1:
             checked["outcome"] = "UNVERIFIED_MISSING_OR_AMBIGUOUS_CHECK"
         else:
