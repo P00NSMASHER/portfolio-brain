@@ -143,6 +143,29 @@ def investigation_summary_lines(receipt):
         f'Deferred: {receipt.get("deferred_count", 0)}; '
         f'Requests used: {receipt.get("requests_used", 0)}.',
     ]
+    coverage = receipt.get("original_comparison_coverage")
+    if coverage is not None:
+        from .coverage import validate_coverage
+        require(validate_coverage(coverage),
+                "INVESTIGATION_COVERAGE_ADVISORY_INVALID")
+        lines.append(
+            "Original comparison coverage (not CI health): "
+            + str(coverage["compared_repositories"]) + " of "
+            + str(coverage["approved_repositories"]) + " approved repositories; "
+            + str(coverage["unassessed_repositories"]) + " unassessed; "
+            + ("LIMITED" if coverage["limitations_present"]
+               else "COMPARABLE_ORIGINAL_SAMPLES_NOT_HEALTH_VERIFIED")
+            + "."
+        )
+        for label_name, count in sorted(coverage["comparison_classes"].items()):
+            lines.append(
+                "  - Original evidence class " + label(label_name)
+                + ": " + str(count) + " repository comparisons."
+            )
+        lines.append(
+            "No new failure does NOT certify that missing, stale, nonactual,"
+            " ambiguous or cross-revision CI evidence is healthy."
+        )
     if not items:
         lines.append("No eligible failure was revalidated in this one-shot pass.")
     for row in items:
