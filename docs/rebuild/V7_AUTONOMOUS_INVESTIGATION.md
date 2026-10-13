@@ -259,3 +259,43 @@ All existing provider request limits, source gates, immutable original
 ledger, artifact confidentiality, fair selection, human repair approval,
 separate V6 acceptance, trading and spending restrictions remain intact.
 This remains **V7 draft-only** and cannot authorize a production release.
+
+## Bounded repository-local provider fault isolation (V7 candidate)
+
+One public repository's unavailable metadata, missing GitHub API resource,
+inconsistent check-run coverage, too-large response, or changed default-branch
+commit must not necessarily blind all **other independently selected and
+source-verified** repositories. The V7 investigation now distinguishes two
+conservative fixed failure scopes:
+
+- **REPOSITORY_LOCAL_EVIDENCE_UNAVAILABLE**: an explicitly allowlisted,
+  repository-scoped original GitHub read failure. Preserve an
+  `UNVERIFIED_READ_FAILED` entry for that repository, then continue to the
+  next *previously validated* independent repository only if a fresh read
+  fits the original worst-case request reservation.
+- **GLOBAL_OR_UNCLASSIFIED_STOP**: provider-wide rate limiting, access
+  refusal/visibility conflict, transport failures, unrecognized errors, and
+  all other failures. Stop immediately; do not issue another repository GET
+  or speculate about the provider state.
+
+The exception text, check response and any diagnostic/private tokens are
+**never copied** to the receipt. Only a fixed classification is recorded.
+The total **three-repository** selection and **24-GET** operation budget
+are unchanged, with the original 16-slot worst-case preflight reserve
+before *every* observation. STOP, provider authorization rules, and source
+freshness continue to apply between attempts. The library does not retry
+a single failed repository in a loop and cannot expand its schedule.
+
+If any read failed, the overall observation is **INCOMPLETE**, even if other
+repositories were rechecked and observed successfully. Missing and failed
+evidence remains open for operator review; green CI elsewhere is not
+root-cause resolution. The partial/blocked sidecar never turns a local
+404, API error, branch change or other missing evidence into a successful
+incident fix, automatic repair, or permission to merge, spend or trade.
+
+Synthetic full-adapter tests cover one missing repository plus two genuine
+independent reads, failure in the middle, all three reads unavailable,
+check-run coverage errors, source revision races, rate-limit/global circuit
+breakers, unknown and OS errors, STOP, actual request budgets, hard-stop
+receipt forgery, and confidential-error suppression. This feature remains
+draft-only; the original V6 automatic-acceptance process is unchanged.
