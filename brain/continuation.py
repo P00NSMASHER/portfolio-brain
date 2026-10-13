@@ -76,7 +76,10 @@ def _eligible(row, now, limits):
     repo = row["repository"]
     if (repo not in limits["repositories"]
             or row.get("evidence_quality") != "ACTUAL_FRESH"
-            or row.get("check_comparison") not in {"COMPARABLE", "NO_SHARED_CHECK_NAMES"}
+            or row.get("check_comparison") not in {
+                "COMPARABLE", "NO_SHARED_CHECK_NAMES",
+                "PARTIAL_AMBIGUOUS_CHECK_NAMES",
+            }
             or row.get("revision_changed") is not False):
         return False
     revision = row.get("current_revision")
@@ -121,8 +124,10 @@ def continued_plans(report, history, *, now, limits):
                     "CONTINUATION_NONACTUAL_OR_UNBOUND_SAMPLE")
         old_checks, old_duplicates = _unambiguous_checks(prior["payload"]["checks"])
         new_checks, new_duplicates = _unambiguous_checks(current["payload"]["checks"])
-        if old_duplicates or new_duplicates:
-            continue
+        # The canonical comparison already quarantines duplicate names.
+        # Continue only on checks uniquely identifiable in BOTH snapshots.
+        # A duplicated current name is ambiguous, not evidence of a missing
+        # or recovered check.
         recoveries = row.get("check_recoveries")
         require(type(recoveries) is list, "CONTINUATION_RECOVERY_MISSING")
         recovered_names = []
@@ -149,6 +154,8 @@ def continued_plans(report, history, *, now, limits):
             name for name, earlier in sorted(old_checks.items())
             if earlier["status"] == "completed"
             and earlier["conclusion"] in (_ADVERSE | {"success"})
+            and name not in old_duplicates
+            and name not in new_duplicates
             and (name not in new_checks
                  or new_checks[name]["status"] != "completed")
         ]
@@ -187,5 +194,8 @@ def continued_plans(report, history, *, now, limits):
             "original_observed_at": row["current_observed_at"],
             "source_refs": refs, "check_names": names,
             "check_evidence_classes": evidence_classes,
+            "partial_check_coverage": (
+                row["check_comparison"] == "PARTIAL_AMBIGUOUS_CHECK_NAMES"
+            ),
         })
     return selected
