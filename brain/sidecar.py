@@ -14,7 +14,7 @@ import stat
 import sys
 from pathlib import Path
 
-from .core import BrainError, require
+from .core import BrainError, require, timestamp
 
 _SHA = re.compile(r"[0-9a-f]{40}\Z")
 _RUN = re.compile(r"[1-9][0-9]{0,19}\Z")
@@ -43,6 +43,45 @@ _FOLLOWUP_KINDS = frozenset({
     "PERSISTENT_ADVERSE_OBSERVED",
     "RECOVERY_OBSERVED_NOT_RESOLUTION",
 })
+_TEMPORAL_SCOPE = "RECENT_TERMINAL_OBSERVATIONS_NOT_REALTIME_OUTAGE"
+_TEMPORAL_FIELDS = frozenset({
+    "scope", "terminal_samples", "adverse_streak_samples",
+    "adverse_streak_first_observed_at", "latest_terminal_observed_at",
+    "adverse_success_flips_observed", "capped_at_12_samples",
+})
+
+
+def _valid_temporal_facts(value, checked_at):
+    """Never publish fabricated age/confidence values from an untrusted receipt."""
+    if type(value) is not dict or set(value) != _TEMPORAL_FIELDS:
+        return False
+    if value["scope"] != _TEMPORAL_SCOPE:
+        return False
+    n = value["terminal_samples"]
+    streak = value["adverse_streak_samples"]
+    changes = value["adverse_success_flips_observed"]
+    capped = value["capped_at_12_samples"]
+    if (type(n) is not int or not 0 <= n <= 12
+            or type(streak) is not int or not 0 <= streak <= n
+            or type(changes) is not int or not 0 <= changes <= max(n-1, 0)
+            or type(capped) is not bool or (capped and n != 12)):
+        return False
+    first = value["adverse_streak_first_observed_at"]
+    last = value["latest_terminal_observed_at"]
+    if (streak == 0 and first is not None) or (n == 0 and last is not None):
+        return False
+    if (streak > 0 and type(first) is not str) or (n > 0 and type(last) is not str):
+        return False
+    try:
+        observed_at = timestamp(checked_at)
+        if last is not None and timestamp(last) > observed_at:
+            return False
+        if first is not None and (timestamp(first) > timestamp(last)
+                                  or timestamp(first) > observed_at):
+            return False
+    except (BrainError, ValueError, TypeError):
+        return False
+    return True
 
 
 def validate_delivery(document, source_sha, run_id, run_attempt):
@@ -105,6 +144,9 @@ def _blocked(source_sha):
         "checked": 0, "eligible": 0, "deferred": 0, "requests_used": 0,
         "observed_outcomes": {}, "observed_followup_kinds": {},
         "observed_check_evidence_classes": {},
+        "historical_adverse_streak_bands": {},
+        "historical_repeated_terminal_movements": 0,
+        "historical_sample_caps": 0,
         "root_cause_verified": False, "execution_authority": False,
         "github_mutations": 0, "events_written": 0, "paid_calls": 0,
         "production_accepted": False, "authorization_granted": False,
@@ -165,6 +207,9 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
     counts = {}
     kinds = {}
     check_classes = {}
+    streak_bands = {}
+    repeated_movements = 0
+    sample_caps = 0
     for entry in entries:
         if type(entry) is not dict or entry.get("outcome") not in _ROWS:
             return result
@@ -192,6 +237,14 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
                 if (len(original_names) != len(checks)
                         or set(original_names) != {item["name"] for item in checks}):
                     return result
+        history = entry.get("historical_check_patterns")
+        if history is not None:
+            if (type(history) is not dict or original_names is None
+                    or set(history) != set(original_names)):
+                return result
+            if any(not _valid_temporal_facts(value, report.get("checked_at"))
+                   for value in history.values()):
+                return result
         expected_classes = entry.get("check_evidence_classes")
         if expected_classes is not None:
             if (type(expected_classes) is not dict
@@ -213,6 +266,21 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
                     return result
             elif original != kind:
                 return result
+            pattern = item.get("historical_observations")
+            if history is None:
+                if pattern is not None:
+                    return result
+            else:
+                if type(item.get("name")) is not str:
+                    return result
+                if pattern != history.get(item["name"]):
+                    return result
+                samples = pattern["adverse_streak_samples"]
+                band = ("NONE" if samples == 0 else "SINGLE" if samples == 1
+                        else "TWO" if samples == 2 else "THREE_OR_MORE")
+                streak_bands[band] = streak_bands.get(band, 0) + 1
+                repeated_movements += pattern["adverse_success_flips_observed"] >= 2
+                sample_caps += pattern["capped_at_12_samples"]
             counts[category] = counts.get(category, 0) + 1
             check_classes[original] = check_classes.get(original, 0) + 1
     reported = report["status"]
@@ -238,6 +306,9 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
         requests_used=requests, observed_outcomes=dict(sorted(counts.items())),
         observed_followup_kinds=dict(sorted(kinds.items())),
         observed_check_evidence_classes=dict(sorted(check_classes.items())),
+        historical_adverse_streak_bands=dict(sorted(streak_bands.items())),
+        historical_repeated_terminal_movements=int(repeated_movements),
+        historical_sample_caps=int(sample_caps),
     )
     return result
 
