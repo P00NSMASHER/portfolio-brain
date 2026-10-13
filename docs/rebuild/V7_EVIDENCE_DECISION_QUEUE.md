@@ -106,3 +106,33 @@ acceptance is being measured. A future V7 protected merge creates a **new**
 source SHA and requires a distinct operator authorization, state migration
 review and source-specific acceptance. Historical V6 automatic runs and V5
 receipts cannot certify V7.
+
+## Bounded non-UTF-8 source quarantine (V7 research resilience)
+
+The October 13 signed V6 monitor/research run [#38454048750](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38454048750) stopped its **research** stage with a `UnicodeDecodeError` while reading a third-party blob. A source file's `.py`, `.ts` or similar extension alone does **not** prove that its bytes are valid UTF-8 program text.
+
+In this V7-only draft, source discovery still retrieves the **exact original
+Git blob**, verifies the original Git object SHA-1 and declared byte length,
+and strictly decodes UTF-8. If those genuine, hash-verified bytes are not
+valid UTF-8, the hit is classified as
+`SEARCH_RESULT_NON_UTF8_BLOB_NOT_INSPECTED`. No replacement characters,
+guessed charset, rewritten source, fabricated hash or code-reuse credit
+are introduced.
+
+Only an **optional, public, search-derived** hit can be quarantined.
+Discovery continues within its existing two-result/24-GET upper bounds and
+records the skipped source as explicit missing research evidence. A distinct
+fully verified second source is needed before research may report a partial
+successful observation. If every returned source is unreadable, the run
+fails with `DISCOVERY_ALL_SEARCH_RESULTS_UNAVAILABLE` rather than claiming
+there were no relevant sources or closing a production acceptance gate.
+**Explicitly requested sources, private lookups, wrong blob hashes, access
+denials and network/global failures remain fatal.** A provider-supplied error
+that merely says `SOURCE_BLOB_NOT_UTF8` cannot impersonate the internal
+post-hash decoding finding.
+
+The change affects only the unmerged candidate, not the original V6
+production workflow or its signed acceptance process. No new scheduler,
+external calls, retries, credits, write authority, third-party execution,
+trading or spending is introduced. These are research-availability facts,
+not an assurance that a discovered source is licensed, correct or useful.
