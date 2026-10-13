@@ -111,6 +111,16 @@
         "evidence",
         "workflow"
       ]
+    },
+    {
+      "project": "research-methods",
+      "query": "experiment validation reproducible benchmark",
+      "terms": [
+        "experiment",
+        "benchmark",
+        "replay",
+        "evidence"
+      ]
     }
   ],
   "watchdog_cron": "16,36,56 * * * *"
