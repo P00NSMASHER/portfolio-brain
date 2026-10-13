@@ -144,6 +144,24 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
             or eligible != len(entries) + deferred
             or type(requests) is not int or requests < 0 or requests > 24):
         return result
+    # Reconcile status, counts and work-limit semantics before displaying
+    # a result. An apparently green receipt with conflicting completion
+    # metadata is unverified rather than an autonomous success.
+    status = report["status"]
+    if ((status == "NO_ELIGIBLE_FAILURES"
+         and (eligible != 0 or entries or deferred != 0 or requests != 0))
+        or (status == "READ_ONLY_REVALIDATION_COMPLETE"
+            and (not entries or deferred != 0))
+        or (status == "BOUNDED_READ_ONLY_REVALIDATION_COMPLETE_WITH_DEFERRED"
+            and deferred == 0)
+        or (status in {"REQUEST_BUDGET_DEFERRED", "STOPPED"} and deferred == 0)
+        or (status == "INCOMPLETE_READ_ONLY_REVALIDATION"
+            and (not entries
+                 or entries[-1].get("outcome") != "UNVERIFIED_READ_FAILED"))
+        or (type(report.get("max_investigations", 3)) is not int)
+        or not 1 <= report.get("max_investigations", 3) <= 3
+        or len(entries) > report.get("max_investigations", 3)):
+        return result
     counts = {}
     kinds = {}
     check_classes = {}
@@ -157,16 +175,41 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
         checks = entry.get("checks")
         if type(checks) is not list or len(checks) > 500:
             return result
-        if entry["outcome"] == "UNVERIFIED_READ_FAILED" and checks:
+        if entry["outcome"] != "OBSERVED_CHECK_STATUS_NOT_ROOT_CAUSE" and checks:
             return result
+        original_names = entry.get("check_names")
+        if original_names is not None:
+            if (type(original_names) is not list
+                    or len(original_names) != len(set(original_names))
+                    or any(type(name) is not str or not name
+                           for name in original_names)):
+                return result
+            if (entry["outcome"] == "OBSERVED_CHECK_STATUS_NOT_ROOT_CAUSE"
+                    and sorted(original_names) != sorted(
+                        item.get("name") for item in checks if type(item) is dict)):
+                return result
+        expected_classes = entry.get("check_evidence_classes")
+        if expected_classes is not None:
+            if (type(expected_classes) is not dict
+                    or original_names is None
+                    or set(expected_classes) != set(original_names)
+                    or any(type(key) is not str or type(value) is not str
+                           or value not in _FOLLOWUP_KINDS
+                           for key, value in expected_classes.items())):
+                return result
         for item in checks:
             if type(item) is not dict or item.get("outcome") not in _OBSERVED:
                 return result
             category = item["outcome"]
-            counts[category] = counts.get(category, 0) + 1
             original = item.get("original_evidence_class", kind)
             if type(original) is not str or original not in _FOLLOWUP_KINDS:
-                return _blocked(source_sha)
+                return result
+            if expected_classes is not None:
+                if original != expected_classes.get(item.get("name")):
+                    return result
+            elif original != kind:
+                return result
+            counts[category] = counts.get(category, 0) + 1
             check_classes[original] = check_classes.get(original, 0) + 1
     reported = report["status"]
     # A finished GET does not make a missing or still-pending check complete.
