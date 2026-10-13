@@ -169,9 +169,15 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
                 return _blocked(source_sha)
             check_classes[original] = check_classes.get(original, 0) + 1
     reported = report["status"]
+    # A finished GET does not make a missing or still-pending check complete.
+    # Surface unresolved evidence gaps as partial instead of a green summary.
+    unresolved = (counts.get("UNVERIFIED_MISSING_OR_AMBIGUOUS_CHECK", 0)
+                  + counts.get("CHECK_NOT_COMPLETED", 0))
     if investigated == "success" and reported in {
         "NO_ELIGIBLE_FAILURES", "READ_ONLY_REVALIDATION_COMPLETE"
-    } and not deferred and all(x.get("outcome") != "UNVERIFIED_READ_FAILED" for x in entries):
+    } and not deferred and not unresolved and all(
+        x.get("outcome") != "UNVERIFIED_READ_FAILED" for x in entries
+    ):
         final = "OBSERVED_READ_ONLY"
     elif reported in _REPORT_STATUSES:
         final = "PARTIAL_READ_ONLY"
