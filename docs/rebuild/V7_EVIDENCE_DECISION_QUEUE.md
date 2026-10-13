@@ -63,6 +63,34 @@ an unknown license or feedback of uncertain provenance, investigate it before
 considering reuse. Do not interpret this module as validating any copyright
 or third-party access claim.
 
+### Explicit per-source licensing gate in the review display
+
+The verified original V6 snapshot tested against V7 emitted **five** code
+reviews. Three of those five had `UNKNOWN` license metadata (freight-recovery
+and two school-tool examples), while two agent-product examples said `MIT`.
+These labels come from source metadata and are **not** independent license
+verification or reuse authorization. Previously the private Markdown/HTML
+preview displayed only the **first** generic limitation, leaving the specific
+permission caveat hidden from a reviewer reading just the human report.
+
+For every code-review row V7 now exposes its exact declared license metadata,
+a deterministic `license_review_status` and
+`source_reuse_permission_confirmed=false`. Both inconclusive labels
+(`UNKNOWN`, `NOASSERTION`, `NONE`, `UNLICENSED`) and declared SPDX-like
+labels require independent rights review before use. Inconclusive metadata
+is explicitly called out; a declared `MIT` string does **not** mean license
+conditions, attribution, owner authority or code provenance were checked.
+All of each item's limitations are included in the human Markdown/HTML.
+Text originating in source metadata remains escaped; the canonical
+machine-readable `report.json` is byte-for-byte identical to its input.
+
+This is a **visibility and review-safety improvement**, not an admission
+filter, a license verifier, a legal opinion, a newly measured business result
+or permission to ingest restricted repository content. The five source
+recommendations, their target balancing and original structural scores
+are unchanged. Only the V7 derived review metadata and private human
+presentation are extended.
+
 ## Tests and release boundary
 
 `tests/test_brain_triage.py` covers stale/nonactual evidence precedence,
