@@ -72,3 +72,16 @@ genuinely completed source-specific six-hour automatic acceptance.
 
 This feature is **prepared on the V7 draft only**; no production autonomous
 sidecar or real GitHub incident investigation is claimed here.
+
+
+### Immutable-history continuity (extension)
+
+The V7 sidecar runner now revalidates two classes that a one-off check
+transition alone would miss: repeated completed adverse observations on the
+same exact revision, and observed adverse-to-success recoveries. Original
+immutable SQLite and report replay are verified first; no additional durable
+state, queue, cron, credential, API quota, scheduled job or writer is created.
+Its uploaded status JSON includes only a fixed-enumeration
+`observed_followup_kinds` count map and no repository or check names.
+Recovered check results never count as an independently verified fix. This
+capability is draft-only until separate V7 release acceptance.

@@ -1,4 +1,4 @@
-"""Bounded, one-shot, read-only evidence follow-up; no repair authority.
+"""Bounded, one-shot read-only adverse/recovery follow-up; no repair authority.
 
 Library callers supply a canonical replay-verified report. The standalone CLI
 verifies that provenance itself on a disposable snapshot of existing state.
@@ -142,11 +142,13 @@ def _revalidate(plan, observation):
     return result
 
 
-def investigate(report, *, api=None, now=None, max_investigations=3, stop_requested=None):
+def investigate(report, *, api=None, now=None, max_investigations=3, stop_requested=None, history=None):
     """Select and revalidate bounded failure evidence without state mutation.
 
     ``report`` must already have passed canonical ledger replay. This function
     verifies selection/freshness constraints; the CLI also verifies provenance.
+    Optional ``history`` must match the report's exact immutable hash chain;
+    it only adds repeated-adverse and observed-recovery GET rechecks.
     Provider exceptions are deliberately reduced to fixed, nonsecret labels.
     """
     require(type(max_investigations) is int and 1 <= max_investigations <= _MAX_INVESTIGATIONS,
@@ -155,6 +157,31 @@ def investigate(report, *, api=None, now=None, max_investigations=3, stop_reques
     now = now or utcnow()
     limits = policy()
     plans = _plan(report, now, limits)
+    if history is not None:
+        from .continuation import continued_plans
+        extended = continued_plans(report, history, now=now, limits=limits)
+        already_planned = {item["repository"] for item in plans}
+        require(all(item["repository"] not in already_planned for item in extended),
+                "CONTINUATION_DUPLICATE_REPOSITORY")
+        # New regressions stay first. Persistent/recovery work is equally
+        # important within its class, so rotate it deterministically each UTC
+        # hour; four ongoing failures must not permanently starve the fourth.
+        # No cursor, scheduling change, mutable state or extra API reads.
+        def rotated(rows):
+            rows = sorted(rows, key=lambda item: item["repository"])
+            if len(rows) < 2:
+                return rows
+            offset = (int(timestamp(now).timestamp()) // 3600) % len(rows)
+            return rows[offset:] + rows[:offset]
+
+        initial = sorted(plans, key=lambda item: item["repository"])
+        persistent = [item for item in extended
+                      if item["follow_up_kind"] == "PERSISTENT_ADVERSE_OBSERVED"]
+        recovered = [item for item in extended
+                     if item["follow_up_kind"] == "RECOVERY_OBSERVED_NOT_RESOLUTION"]
+        require(len(persistent) + len(recovered) == len(extended),
+                "CONTINUATION_CLASSIFICATION_INVALID")
+        plans = initial + rotated(persistent) + rotated(recovered)
     receipt = {
         "schema_version": 1, "scope": "READ_ONLY_AUTONOMOUS_CHECK_REVALIDATION",
         "source_sha": report["source_sha"],
@@ -227,13 +254,19 @@ def main(argv=None):
             require(snapshot_path.resolve() != args.db.resolve(), "snapshot aliases original state")
             if isinstance(snapshot, Store):
                 report = snapshot.read_report(sha)
+                history, sequence, ledger_hash = snapshot._verified_events()
             else:
                 store = Store(snapshot_path, visibility="PUBLIC")
                 try:
                     report = store.read_report(sha)
+                    history, sequence, ledger_hash = store._verified_events()
                 finally:
                     store.close()
-        receipt = investigate(report, max_investigations=args.max_investigations,
+        require(sequence == report["state_sequence"]
+                and ledger_hash == report["canonical_hash"],
+                "CONTINUATION_SNAPSHOT_CHANGED")
+        receipt = investigate(report, history=history,
+                              max_investigations=args.max_investigations,
                               stop_requested=lambda: (args.db.parent / "STOP").exists())
         write_report(receipt, args.output)
         print(json.dumps({"status": receipt["status"], "requests_used": receipt["requests_used"]}))

@@ -37,6 +37,11 @@ _ROWS = frozenset({
     "SOURCE_CHANGED_REQUIRES_NEW_COMPARISON",
     "UNVERIFIED_READ_FAILED",
 })
+_FOLLOWUP_KINDS = frozenset({
+    "INITIAL_ADVERSE_TRANSITION",
+    "PERSISTENT_ADVERSE_OBSERVED",
+    "RECOVERY_OBSERVED_NOT_RESOLUTION",
+})
 
 
 def validate_delivery(document, source_sha, run_id, run_attempt):
@@ -97,7 +102,7 @@ def _blocked(source_sha):
         "source_sha": source_sha if type(source_sha) is str and _SHA.fullmatch(source_sha) else None,
         "status": "BLOCKED_NO_VERIFIED_INVESTIGATION",
         "checked": 0, "eligible": 0, "deferred": 0, "requests_used": 0,
-        "observed_outcomes": {},
+        "observed_outcomes": {}, "observed_followup_kinds": {},
         "root_cause_verified": False, "execution_authority": False,
         "github_mutations": 0, "events_written": 0, "paid_calls": 0,
         "production_accepted": False, "authorization_granted": False,
@@ -138,9 +143,14 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
             or type(requests) is not int or requests < 0 or requests > 24):
         return result
     counts = {}
+    kinds = {}
     for entry in entries:
         if type(entry) is not dict or entry.get("outcome") not in _ROWS:
             return result
+        kind = entry.get("follow_up_kind", "INITIAL_ADVERSE_TRANSITION")
+        if type(kind) is not str or kind not in _FOLLOWUP_KINDS:
+            return result
+        kinds[kind] = kinds.get(kind, 0) + 1
         checks = entry.get("checks")
         if type(checks) is not list or len(checks) > 500:
             return result
@@ -163,6 +173,7 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
     result.update(
         status=final, checked=len(entries), eligible=eligible, deferred=deferred,
         requests_used=requests, observed_outcomes=dict(sorted(counts.items())),
+        observed_followup_kinds=dict(sorted(kinds.items())),
     )
     return result
 

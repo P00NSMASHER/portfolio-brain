@@ -46,3 +46,53 @@ This command is NOT wired into existing Cloudflare/GitHub cron, `brain service`,
 Use the real existing GitHub adapter with synthetic transport fixtures, not a replacement implementation of provider verification. Cover persistent failure, observed success without incident closure, branch movement and branch races, incomplete/ambiguous check observations, private metadata, source identity, stale/future evidence, zero-backlog and exact-source requirements, stop before/between observations, global budget reservation, deterministic selection and explicit deferred work. Exercise the real CLI on synthetic SQLite state and require unchanged original bytes, mtime and permissions, private receipt output, no missing-state bootstrap, no expired report reads and no output overwrite of original state.
 
 Final candidate quality requires full exact-head Foundation CI plus the separately credentialed existing independent verifier. A passing synthetic test suite is not a real production incident investigation or V7 operational acceptance.
+
+
+## Continued check follow-up from immutable state (candidate extension)
+
+The original V7 queue rechecked newly deteriorated checks, but stopped
+investigating once two consecutive samples both showed a failure. The extension
+derives **persistent adverse checks** and **observed recoveries** from the
+already-verifiable original SQLite ledger; it does **not** introduce an incident
+database, cursor, scheduled task, new event schema, or extra state writer.
+
+Before any GitHub requests, it independently reconstructs each original event
+identity and the immutable canonical hash chain and requires exact agreement
+with the source-bound canonical report's state sequence, hash and deterministic
+repository-change projection. The source report must be PASS with no pending
+events and a fresh, original timestamp. Each candidate must be policy
+allowlisted, PUBLIC, ACTUAL, and based on two distinct fresh observations of
+the **same immutable commit** with unambiguous check identities and completed
+conclusions. A completed adverse check repeated in both samples is labelled
+`PERSISTENT_ADVERSE_OBSERVED` (not a newly diagnosed regression); adverse to
+successful is `RECOVERY_OBSERVED_NOT_RESOLUTION` (not a fix). Missing,
+simulated, stale, revised-source, pending and ambiguous samples do not qualify.
+
+Deterministic order prefers **new check deteriorations**, then **persistent
+adverse checks**, then **observed recoveries**. Equally ranked persistent
+and recovery repositories rotate each UTC hour (derived from the trusted
+invocation time, not a mutable cursor), so a fourth ongoing failure is not
+indefinitely starved by three alphabetically earlier repositories. The limit
+remains three public repository rechecks per invocation and the same 24-request
+provider budget.
+Every deferred case is counted; stopped, invalid and provider-failed cycles
+remain visible, and no failed or skipped verification is called resolved.
+
+The local private investigation report displays the distinct follow-up class.
+The optional post-core sidecar uploads only **fixed-enumeration aggregate
+counts** of follow-up classes, never names, code, URLs or raw event history.
+`INITIAL_ADVERSE_TRANSITION` is used solely for the existing direct
+deterioration path. Public aggregate labels never give execution authority.
+
+The standalone CLI now reads and validates full original events **only on
+the disposable read-only snapshot**, and checks report sequence plus chain
+identity before selecting additional investigation work. The original SQLite
+bytes, timestamp, mode, canonical schema and production workflows remain
+unchanged. Regression tests include genuine synthetic ledger replay, repeated
+failure, observed success, falsified recovery, competing priority, four-repo
+capacity, forged hash/history rejection, out-of-order history identity, stale
+and nonactual suppression, and the POSIX private CLI state-preservation path.
+
+**Release remains HOLD** until V6 completes its independent original signed
+provider six-hour acceptance, followed by separately approved V7 promotion
+and entirely fresh source-specific automatic verification.

@@ -149,6 +149,8 @@ def investigation_summary_lines(receipt):
         lines.append(
             "- " + safe(row.get("repository", "UNKNOWN")) + ": "
             + label(row.get("outcome", "UNKNOWN"))
+            + "; follow-up class "
+            + label(row.get("follow_up_kind", "INITIAL_ADVERSE_TRANSITION"))
             + "; original revision " + safe(row.get("expected_revision", "UNKNOWN"))
             + "; newly observed revision " + safe(row.get("observed_revision") or "UNAVAILABLE")
             + "; original evidence " + safe((row.get("source_refs") or ["UNAVAILABLE"])[0])
