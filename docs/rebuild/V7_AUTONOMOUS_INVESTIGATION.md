@@ -127,3 +127,17 @@ regression it receives a priority recheck through the original queue. Gap-only
 continuation applies where that same repository does not have a new recorded
 regression. Neither path performs repairs, merges, external messages, paid
 operations, or canonical state writes.
+
+## Mixed check evidence, without duplicate GitHub reads
+
+If one same-revision comparison contains both persistent adverse checks and
+observed recoveries, the investigator revalidates every qualifying check in
+one already-budgeted public GitHub observation. A recovery never hides a
+different persistent failure. Original per-check classifications are retained
+in the private report, and the optional sidecar exposes only fixed-label
+aggregate counts; no check names, original state or raw reports are uploaded.
+
+The public sidecar labels unresolved missing or nonterminal checks PARTIAL,
+not completed. This does not grant repair, incident closure, PR merge, spending,
+trading or any new execution authority. Current request, privacy, history
+replay and production safeguards remain unchanged.
