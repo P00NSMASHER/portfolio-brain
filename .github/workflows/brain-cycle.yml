@@ -130,6 +130,11 @@ jobs:
         run: python -m brain experiment --db state/state.sqlite --output /tmp/brain/experiment --expected-sha "$BRAIN_SOURCE_SHA"
       - name: Verify authoritative state and zero event backlog
         run: python -m brain doctor --db state/state.sqlite --output /tmp/brain/doctor --expected-sha "$BRAIN_SOURCE_SHA"
+      - name: Build read-only all-project improvement queue
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python -m brain projects --db state/state.sqlite --output /tmp/brain/projects --expected-sha "$BRAIN_SOURCE_SHA"
       - name: Propose a measured protected knowledge upgrade when eligible
         env:
           GITHUB_TOKEN: ${{ github.token }}

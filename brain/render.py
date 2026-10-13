@@ -159,6 +159,23 @@ def write_report(report, output):
     lines.extend(["", "## Reusable code to evaluate", ""])
     for candidate in report.get("reuse_candidates",[])[:10]:
         lines.append(f'- [{candidate["repository"]}/{candidate["path"]}]({candidate["source_ref"]}) — {candidate["target"]}; structural score {candidate["reuse_score"]}; license {candidate["license"]}; {candidate["utility_evidence"]}')
+    if report.get("scope") == "READ_ONLY_CROSS_PROJECT_IMPROVEMENT_QUEUE":
+        lines.extend(["", "## Project improvement queue", ""])
+        for project in report.get("projects", []):
+            revision = project.get("repository_revision")
+            revision_text = revision[:8] if isinstance(revision, str) else "unobserved"
+            lines.append(
+                f'- {project["name"]} ({project["repository"]}@{revision_text}) — '
+                f'{project["status"]}; metric: {project["success_metric"]} '
+                f'({project["direction"]}); candidates: {project["current_candidate_count"]}; '
+                f'operator outcomes: {project["operator_outcome_count"]}. '
+                f'{project["next_action"]}'
+            )
+        lines.append(
+            "Baseline and measured-result fields remain empty until explicit before/after "
+            "evidence exists. This queue cannot write downstream repositories, merge code, "
+            "send messages, trade, spend money, or manufacture value claims."
+        )
     lines.extend(["", "## Business opportunities", ""])
     for opportunity in report.get("business_opportunities",[]):
         lines.append(f'- {opportunity["target"]}: {opportunity["hypothesis"]} Customer demand {opportunity["customer_demand"]}; revenue {opportunity["revenue"]}.')

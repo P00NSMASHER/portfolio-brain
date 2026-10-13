@@ -87,8 +87,10 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha)
         require(type(row) is dict and REPO.fullmatch(row.get("repository", "")), "PROJECT_CORE_SOURCE_INVALID")
         repositories[row["repository"]] = row
     require(type(extended_snapshots) is list, "PROJECT_EXTENDED_SOURCE_INVALID")
+    allowed_extended = set(extended_repositories())
     for row in extended_snapshots:
         require(type(row) is dict and REPO.fullmatch(row.get("repository", "")), "PROJECT_EXTENDED_SOURCE_INVALID")
+        require(row["repository"] in allowed_extended, "PROJECT_EXTENDED_SOURCE_OUT_OF_SCOPE")
         require(row["repository"] not in repositories, "PROJECT_SOURCE_DUPLICATED")
         repositories[row["repository"]] = row
 
