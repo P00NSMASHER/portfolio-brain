@@ -182,13 +182,32 @@ def write_report(report, output):
             context = item["metadata"].get(
                 "repository", item["metadata"].get("target", "")
             )
+            license_note = ""
+            if item["category"] == "REVIEW_THIRD_PARTY_SOURCE":
+                status = item["metadata"]["license_review_status"]
+                license_note = (
+                    " Declared license metadata: "
+                    + _review_text(item["metadata"]["license_metadata_only"])
+                    + " ("
+                    + (
+                        "missing/inconclusive; review rights before reuse"
+                        if status == "MISSING_OR_INCONCLUSIVE_LICENSE_METADATA"
+                        else "unverified declaration; review rights before reuse"
+                    )
+                    + ")."
+                )
+            # Keep every important caveat visible in the text a reviewer
+            # actually reads; the pure queue does not grant any permission.
+            all_limits = "; ".join(
+                _review_text(limitation) for limitation in item["limitations"]
+            )
             lines.append(
                 "- Review " + str(item["review_order_not_value_rank"])
                 + " [" + item["band"] + " / " + item["category"] + "] "
                 + _review_text(context) + ": " + item["headline"]
                 + " Next: " + item["next_step"]
                 + " Evidence: " + _review_text(item["source_refs"][0])
-                + ". Limit: " + item["limitations"][0]
+                + "." + license_note + " Limitations: " + all_limits
             )
         lines.append(
             "The order is a deterministic review rule, not a probability, "
