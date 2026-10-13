@@ -39,6 +39,7 @@ _ROWS = frozenset({
 })
 _FOLLOWUP_KINDS = frozenset({
     "INITIAL_ADVERSE_TRANSITION",
+    "UNBASELINED_ADVERSE_OBSERVED",
     "EVIDENCE_GAP_REVALIDATION",
     "PERSISTENT_ADVERSE_OBSERVED",
     "RECOVERY_OBSERVED_NOT_RESOLUTION",
@@ -327,6 +328,9 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
     # Surface unresolved evidence gaps as partial instead of a green summary.
     unresolved = (partially_comparable
                   + counts.get("UNVERIFIED_MISSING_OR_AMBIGUOUS_CHECK", 0)
+                  # No historical baseline exists for a new adverse check.
+                  # Provider revalidation cannot retroactively create one.
+                  + check_classes.get("UNBASELINED_ADVERSE_OBSERVED", 0)
                   + counts.get("CHECK_NOT_COMPLETED", 0)
                   + counts.get("OTHER_CONCLUSION_NOT_RESOLUTION", 0)
                   + sum(row.get("outcome") == "SOURCE_CHANGED_REQUIRES_NEW_COMPARISON"
