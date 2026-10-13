@@ -45,3 +45,30 @@ def observe_after_bounded_revision_race(api, repository):
         # A second branch movement, malformed response, auth issue or
         # exhausted budget remains a real failure. Never try a third time.
         return api.observe(repository), True
+
+
+# A missing or racing source is scoped to that one repository. GitHub-wide
+# access, rate, transport and unknown errors mean subsequent reads could be
+# unauthorized or amplify a provider outage: stop the monitor. The original
+# provider message MUST NOT be exported to reports, logs or GitHub artifacts.
+_LOCAL_SOURCE_CODES = frozenset({
+    "SOURCE_API_404", "SOURCE_REVISION_CHANGED",
+    "SOURCE_REVISION_UNAVAILABLE", "SOURCE_RESPONSE_TOO_LARGE",
+    "CHECK_COVERAGE_UNAVAILABLE", "CHECK_COVERAGE_TRUNCATED",
+    "CHECK_COVERAGE_CHANGED", "CHECK_COVERAGE_AMBIGUOUS",
+})
+_LOCAL_SCOPE = "REPOSITORY_LOCAL_READ_FAILED"
+_GLOBAL_SCOPE = "GLOBAL_OR_UNCLASSIFIED_SOURCE_STOP"
+
+
+def public_monitor_failure_scope(exc):
+    """Fixed, failure-only scope, based on known local GitHub read contracts.
+
+    No arbitrary exception class, provider message or HTTP header is copied
+    to result content. Unknown codes (including near matches) always stop.
+    """
+    if isinstance(exc, BrainError):
+        code = str(exc).partition(":")[0]
+        if code in _LOCAL_SOURCE_CODES:
+            return _LOCAL_SCOPE
+    return _GLOBAL_SCOPE
