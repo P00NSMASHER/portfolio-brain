@@ -22,8 +22,13 @@ def samples(repo=REPO, *, old="success", new="success", t0=T0, t1=T1,
                                          sha=revision or "b"*40)],
                         kind=kind, sha=revision or "b"*40)
     if duplicate:
+        from brain.core import digest
         before["payload"]["checks"].append(copy.deepcopy(before["payload"]["checks"][0]))
         afterward["payload"]["checks"].append(copy.deepcopy(afterward["payload"]["checks"][0]))
+        # Mutated synthetic payloads need fresh canonical event identities.
+        # Never manipulate an original immutable SQLite event to fake a match.
+        for item in (before, afterward):
+            item["id"] = item["kind"] + ":" + digest({**item, "id": ""})
     return before, afterward
 
 
