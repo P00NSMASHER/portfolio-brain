@@ -114,9 +114,59 @@ def write_private_test_log(output, contents):
     _write_private_bundle(output, {"tests.txt": contents}, names=_TEST_LOG_NAMES)
 
 
+def investigation_summary_lines(receipt):
+    """Human-readable private projection, never authority or a state update."""
+    require(receipt.get("scope") == "READ_ONLY_AUTONOMOUS_CHECK_REVALIDATION",
+            "INVESTIGATION_RECEIPT_SCOPE_INVALID")
+
+    def safe(value):
+        value = str(value).replace("\r", " ").replace("\n", " ")
+        value = value.replace("\\", "\\\\")
+        for char in ("*", "_", "[", "]", "<", ">", "`", "|"):
+            value = value.replace(char, "\\" + char)
+        return value
+
+    def label(value):
+        code = str(value)
+        if code and len(code) <= 100 and all(char in "ABCDEFGHIJKLMNOPQRSTUVWXYZ_" for char in code):
+            return "`" + code + "`"
+        return safe(value)
+    items = receipt.get("investigations", [])
+    require(type(items) is list and len(items) <= 3, "INVESTIGATION_RECEIPT_LIMIT")
+    lines = [
+        "", "## Autonomous read-only check revalidation", "",
+        "Observed checks are NOT root cause verification, production benefit or incident closure.",
+        "No repairs, merges, permission grants, trades or downstream GitHub writes occurred.",
+        f'Status: {label(receipt.get("status", "UNKNOWN"))}; '
+        f'Eligible: {receipt.get("eligible_count", 0)}; '
+        f'Investigated: {len(items)}; '
+        f'Deferred: {receipt.get("deferred_count", 0)}; '
+        f'Requests used: {receipt.get("requests_used", 0)}.',
+    ]
+    if not items:
+        lines.append("No eligible failure was revalidated in this one-shot pass.")
+    for row in items:
+        lines.append(
+            "- " + safe(row.get("repository", "UNKNOWN")) + ": "
+            + label(row.get("outcome", "UNKNOWN"))
+            + "; original revision " + safe(row.get("expected_revision", "UNKNOWN"))
+            + "; newly observed revision " + safe(row.get("observed_revision") or "UNAVAILABLE")
+            + "; original evidence " + safe((row.get("source_refs") or ["UNAVAILABLE"])[0])
+        )
+        for check in row.get("checks", []):
+            lines.append(
+                "  - Check " + safe(check.get("name", "UNKNOWN")) + ": "
+                + label(check.get("outcome", "UNKNOWN"))
+                + "; evidence " + safe(check.get("source_ref") or "UNAVAILABLE")
+            )
+    lines.append("Any successful check is an observation, not an independently confirmed resolution.")
+    return lines
+
 def write_report(report, output):
     raw=json.dumps(report,indent=2,sort_keys=True,ensure_ascii=False,allow_nan=False)
     lines=["# Portfolio Brain", "", f'Status: {report.get("status", "UNKNOWN")}', "", f'Source: {report.get("source_sha", "UNAVAILABLE")}', "", "Read-only research. Structural code evidence is not proof of production usefulness or revenue.", ""]
+    if report.get("scope") == "READ_ONLY_AUTONOMOUS_CHECK_REVALIDATION":
+        lines.extend(investigation_summary_lines(report))
     for repo in report.get("repositories",[]):
         failed=[x["name"] for x in repo["checks"] if x["conclusion"] not in {"success","neutral",None}]
         lines.append(f'- {repo["repository"]}: `{repo["head_sha"]}`; adverse checks: {", ".join(failed) or "none observed"}; [{repo["source_ref"]}]({repo["source_ref"]})')

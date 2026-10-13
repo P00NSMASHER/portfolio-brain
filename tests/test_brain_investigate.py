@@ -269,6 +269,45 @@ class AutonomousInvestigationTests(unittest.TestCase):
         self.assertEqual(transport.calls, [])
 
 
+class InvestigationPresentationTests(unittest.TestCase):
+    def test_diagnostics_are_human_visible_without_promising_fix_or_authority(self):
+        from brain.render import investigation_summary_lines
+        receipt = investigate(report(), api=GitHub(transport=Transport()), now=NOW)
+        self.assertEqual(receipt["scope"], "READ_ONLY_AUTONOMOUS_CHECK_REVALIDATION")
+        summary = "\n".join(investigation_summary_lines(receipt))
+        self.assertIn(REPO, summary)
+        self.assertIn("STILL_ADVERSE", summary)
+        self.assertIn("validate", summary)
+        self.assertIn("Deferred: 0", summary)
+        self.assertIn("NOT root cause", summary)
+        self.assertIn("No repairs", summary)
+
+    def test_untrusted_check_names_are_escaped_before_markdown(self):
+        from brain.render import investigation_summary_lines
+        altered = report()
+        altered["repository_changes"][0]["check_deteriorations"][0]["name"] = "<script> *urgent*"
+        receipt = investigate(altered, api=GitHub(transport=Transport()), now=NOW)
+        summary = "\n".join(investigation_summary_lines(receipt))
+        self.assertNotIn("<script>", summary)
+        self.assertNotIn("*urgent*", summary)
+        self.assertIn("\\<script\\>", summary)
+        self.assertIn("\\*urgent\\*", summary)
+
+    @unittest.skipUnless(hasattr(os, "O_DIRECTORY"), "POSIX private receipt test")
+    def test_private_human_bundle_preserves_machine_receipt_bytes(self):
+        from brain.render import write_report
+        receipt = investigate(report(), api=GitHub(transport=Transport()), now=NOW)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "report"
+            write_report(receipt, root)
+            self.assertEqual(json.loads((root / "report.json").read_text()), receipt)
+            html = (root / "report.html").read_text()
+            markdown = (root / "report.md").read_text()
+            self.assertIn("STILL_ADVERSE", markdown)
+            self.assertIn("STILL_ADVERSE", html)
+            self.assertEqual(os.stat(root).st_mode & 0o777, 0o700)
+            self.assertEqual(os.stat(root / "report.json").st_mode & 0o777, 0o600)
+
 class InvestigationCliTests(unittest.TestCase):
     def make_state(self, path):
         with patch("brain.core.utcnow", return_value=NOW):

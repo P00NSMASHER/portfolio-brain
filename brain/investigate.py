@@ -156,7 +156,8 @@ def investigate(report, *, api=None, now=None, max_investigations=3, stop_reques
     limits = policy()
     plans = _plan(report, now, limits)
     receipt = {
-        "schema_version": 1, "source_sha": report["source_sha"],
+        "schema_version": 1, "scope": "READ_ONLY_AUTONOMOUS_CHECK_REVALIDATION",
+        "source_sha": report["source_sha"],
         "state_sequence": report["state_sequence"], "checked_at": now,
         "status": "NO_ELIGIBLE_FAILURES", "investigations": [],
         "eligible_count": len(plans), "deferred_count": len(plans),
