@@ -135,9 +135,21 @@ def _revalidate(plan, observation):
         return result
     checks = observation.get("checks")
     require(type(checks) is list, "provider checks missing")
+    classes = plan.get("check_evidence_classes")
+    if classes is not None:
+        require(type(classes) is dict
+                and set(classes) == set(plan["check_names"])
+                and all(type(tag) is str and tag in {
+                    "EVIDENCE_GAP_REVALIDATION",
+                    "PERSISTENT_ADVERSE_OBSERVED",
+                    "RECOVERY_OBSERVED_NOT_RESOLUTION",
+                } for tag in classes.values()),
+                "CONTINUATION_PER_CHECK_CLASS_INVALID")
     for name in plan["check_names"]:
         matches = [row for row in checks if row.get("name") == name]
         checked = {"name": name}
+        if classes is not None:
+            checked["original_evidence_class"] = classes[name]
         if len(matches) != 1:
             checked["outcome"] = "UNVERIFIED_MISSING_OR_AMBIGUOUS_CHECK"
         else:
