@@ -299,9 +299,16 @@ def investigate(report, *, api=None, now=None, max_investigations=3, stop_reques
             history, plans, now=now,
             max_age=limits["max_source_age_seconds"],
         )
+    # Include a names-free original-source coverage watermark. A run with
+    # no eligible regressions is not proven healthy if report comparisons
+    # were stale, ambiguous, cross-revision or simply unavailable. This
+    # projection consumes neither provider GETs nor mutable state.
+    from .coverage import original_coverage
+    quality = original_coverage(report, now=now, limits=limits)
     receipt = {
         "schema_version": 1, "scope": "READ_ONLY_AUTONOMOUS_CHECK_REVALIDATION",
         "source_sha": report["source_sha"],
+        "original_comparison_coverage": quality,
         "state_sequence": report["state_sequence"], "checked_at": now,
         "status": "NO_ELIGIBLE_FAILURES", "investigations": [],
         "eligible_count": len(plans), "deferred_count": len(plans),
