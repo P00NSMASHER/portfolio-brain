@@ -19,6 +19,7 @@ _BANDS = {
     "SOURCE_COMPARABILITY_LOST": (0, "Obtain two fresh observations on the new commit before comparing CI outcomes."),
     "PROVIDER_EVIDENCE_UNAVAILABLE": (0, "Verify provider availability and rerun bounded public evidence collection; no diagnosis is established."),
     "NEW_ADVERSE_CHECK": (1, "Inspect the original same-commit transition and fresh completed CI logs; independently test before any repair."),
+    "UNBASELINED_ADVERSE_CHECK": (2, "A newly observed adverse CI check has no baseline. Independently establish its first qualifying source-bound result; do not call this a new regression or infer the failure began now."),
     "MISSING_OR_PENDING_CHECK": (2, "Revalidate the exact commit and confirm a uniquely identified completed check; keep the case open until evidence is complete."),
     "PERSISTENT_ADVERSE_CHECK": (3, "Compare the repeated adverse check observations and CI logs; distinguish repeated observation from elapsed downtime."),
     "ADVERSE_CHECK_NEEDS_CONTEXT": (3, "Inspect source-bound check results and current CI logs; do not infer root cause or impact."),
@@ -35,7 +36,8 @@ _VALID_REPO_OUTCOME = frozenset({
     "SOURCE_CHANGED_REQUIRES_NEW_COMPARISON", "UNVERIFIED_READ_FAILED",
 })
 _VALID_CLASS = frozenset({
-    "INITIAL_ADVERSE_TRANSITION", "EVIDENCE_GAP_REVALIDATION",
+    "INITIAL_ADVERSE_TRANSITION", "UNBASELINED_ADVERSE_OBSERVED",
+    "EVIDENCE_GAP_REVALIDATION",
     "PERSISTENT_ADVERSE_OBSERVED", "RECOVERY_OBSERVED_NOT_RESOLUTION",
 })
 _VALID_RECEIPT = frozenset({
@@ -237,6 +239,7 @@ def review_packet(receipt):
                        "REVIEW_LEGACY_CLASS_MISMATCH")
             if outcome == "STILL_ADVERSE":
                 band = ("NEW_ADVERSE_CHECK" if cls == "INITIAL_ADVERSE_TRANSITION"
+                        else "UNBASELINED_ADVERSE_CHECK" if cls == "UNBASELINED_ADVERSE_OBSERVED"
                         else "PERSISTENT_ADVERSE_CHECK" if cls == "PERSISTENT_ADVERSE_OBSERVED"
                         else "ADVERSE_CHECK_NEEDS_CONTEXT")
             elif outcome in {"CHECK_NOT_COMPLETED",
