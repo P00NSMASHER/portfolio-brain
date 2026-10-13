@@ -189,6 +189,8 @@ def write_report(report, output):
     lines=["# Portfolio Brain", "", f'Status: {report.get("status", "UNKNOWN")}', "", f'Source: {report.get("source_sha", "UNAVAILABLE")}', "", "Read-only research. Structural code evidence is not proof of production usefulness or revenue.", ""]
     if report.get("scope") == "READ_ONLY_AUTONOMOUS_CHECK_REVALIDATION":
         lines.extend(investigation_summary_lines(report))
+        from brain.review import review_lines
+        lines.extend(review_lines(report))
     for repo in report.get("repositories",[]):
         failed=[x["name"] for x in repo["checks"] if x["conclusion"] not in {"success","neutral",None}]
         lines.append(f'- {repo["repository"]}: `{repo["head_sha"]}`; adverse checks: {", ".join(failed) or "none observed"}; [{repo["source_ref"]}]({repo["source_ref"]})')
