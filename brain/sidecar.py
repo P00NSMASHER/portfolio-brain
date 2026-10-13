@@ -121,8 +121,12 @@ def prepare(original_delivery, source_sha, run_id, run_attempt, github_output):
     require(original.is_file() and not original.is_symlink()
             and 0 < original.stat().st_size <= 8192,
             "SIDECAR_ORIGINAL_RECEIPT_UNAVAILABLE")
-    data = json.loads(original.read_text(encoding="utf-8"))
+    raw = original.read_bytes()
+    require(0 < len(raw) <= 8192 and len(raw) == original.stat().st_size,
+            "SIDECAR_ORIGINAL_DELIVERY_BYTES_UNSTABLE")
+    data = json.loads(raw.decode("utf-8"))
     sha = validate_delivery(data, source_sha, run_id, run_attempt)
+    delivery_hash = hashlib.sha256(raw).hexdigest()
     target = Path(github_output)
     require(target.is_file() and not target.is_symlink(),
             "SIDECAR_UNTRUSTED_STEP_OUTPUT")
@@ -133,6 +137,7 @@ def prepare(original_delivery, source_sha, run_id, run_attempt, github_output):
         handle = os.open(target, os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0))
         with os.fdopen(handle, "w", encoding="ascii") as file:
             file.write("state_sha=" + sha + "\n")
+            file.write("delivery_sha256=" + delivery_hash + "\n")
     except OSError as exc:
         raise BrainError("SIDECAR_STEP_OUTPUT_FAILED") from exc
     return sha
@@ -378,7 +383,8 @@ def summarize(report, source_sha, downloaded, proven, state, investigated):
 
 
 def _original_delivery_binding(original_delivery, source_sha, run_id,
-                               run_attempt, published_state_sha):
+                               run_attempt, published_state_sha,
+                               expected_delivery_sha256):
     """Reverify the immutable core publication at public advisory finalization.
 
     Never use the original manifest as a state writer or a source of
@@ -396,6 +402,11 @@ def _original_delivery_binding(original_delivery, source_sha, run_id,
             "SIDECAR_FINAL_DELIVERY_UNSTABLE")
     parsed = json.loads(raw.decode("utf-8"))
     actual_state = validate_delivery(parsed, source_sha, run_id, run_attempt)
+    observed_digest = hashlib.sha256(raw).hexdigest()
+    require(type(expected_delivery_sha256) is str
+            and re.fullmatch(r"[0-9a-f]{64}", expected_delivery_sha256)
+            and observed_digest == expected_delivery_sha256,
+            "SIDECAR_FINAL_ORIGINAL_DELIVERY_CHANGED_SINCE_PIN")
     require(type(published_state_sha) is str and
             _SHA.fullmatch(published_state_sha) and
             published_state_sha == actual_state,
@@ -405,13 +416,14 @@ def _original_delivery_binding(original_delivery, source_sha, run_id,
         "original_core_run_id": run_id,
         "original_core_run_attempt": run_attempt,
         "published_state_sha": actual_state,
-        "original_delivery_sha256": hashlib.sha256(raw).hexdigest(),
+        "original_delivery_sha256": observed_digest,
     }
 
 
 def finalize(receipt_path, output_path, source_sha, downloaded, proven, state,
              investigated, *, original_delivery=None, original_run_id=None,
-             original_run_attempt=None, published_state_sha=None):
+             original_run_attempt=None, published_state_sha=None,
+             expected_delivery_sha256=None):
     """Emit a safe result, bound to an original core run when requested."""
     source = None
     original = Path(receipt_path)
@@ -423,7 +435,7 @@ def finalize(receipt_path, output_path, source_sha, downloaded, proven, state,
         source = None
     result = summarize(source, source_sha, downloaded, proven, state, investigated)
     originals = (original_delivery, original_run_id, original_run_attempt,
-                 published_state_sha)
+                 published_state_sha, expected_delivery_sha256)
     if any(item is not None for item in originals):
         # The production path always requests all four fields. A missing,
         # mismatched or altered manifest MUST produce a blocked advisory, not
@@ -435,6 +447,7 @@ def finalize(receipt_path, output_path, source_sha, downloaded, proven, state,
                 binding = _original_delivery_binding(
                     original_delivery, source_sha, original_run_id,
                     original_run_attempt, published_state_sha,
+                    expected_delivery_sha256,
                 )
                 if result["status"] != "BLOCKED_NO_VERIFIED_INVESTIGATION":
                     result.update(binding)
@@ -479,6 +492,7 @@ def main(argv=None):
     finish.add_argument("--original-run-id")
     finish.add_argument("--original-run-attempt")
     finish.add_argument("--published-state-sha")
+    finish.add_argument("--expected-delivery-sha256")
     for stage in ("downloaded", "proven", "state", "investigated"):
         finish.add_argument("--" + stage, required=True)
     args = parser.parse_args(argv)
@@ -495,6 +509,7 @@ def main(argv=None):
                 original_run_id=args.original_run_id,
                 original_run_attempt=args.original_run_attempt,
                 published_state_sha=args.published_state_sha,
+                expected_delivery_sha256=args.expected_delivery_sha256,
             )
             print(json.dumps({"status": result["status"], "checked": result["checked"]}))
         return 0
