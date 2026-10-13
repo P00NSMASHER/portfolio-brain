@@ -48,7 +48,7 @@ class SidecarTests(unittest.TestCase):
             src.write_text(json.dumps(delivery()))
             out.write_text("")
             self.assertEqual(prepare(src, SOURCE, RUN, "1", out), STATE)
-            self.assertEqual(out.read_text(), "state_sha=" + STATE + "\n")
+            self.assertEqual(out.read_text(), "state_sha=" + STATE + "\n" + "delivery_sha256=" + __import__("hashlib").sha256(src.read_bytes()).hexdigest() + "\n")
             self.assertEqual(json.loads(src.read_text()), delivery())
 
     def test_sanitized_advisory_outcome_not_incident_or_secret(self):
@@ -114,7 +114,7 @@ class SidecarCliTests(unittest.TestCase):
                              "--source-sha", SOURCE, "--run-id", RUN, "--run-attempt", "1",
                              "--github-output", str(github_output)])
             self.assertEqual(code, 0)
-            self.assertEqual(github_output.read_text(), "state_sha=" + STATE + "\n")
+            self.assertEqual(github_output.read_text(), "state_sha=" + STATE + "\n" + "delivery_sha256=" + __import__("hashlib").sha256(delivery_file.read_bytes()).hexdigest() + "\n")
             receipt = root / "report.json"
             receipt.write_text(json.dumps(observation()))
             status_file = root / "sidecar-status.json"
