@@ -136,3 +136,22 @@ production workflow or its signed acceptance process. No new scheduler,
 external calls, retries, credits, write authority, third-party execution,
 trading or spending is introduced. These are research-availability facts,
 not an assurance that a discovered source is licensed, correct or useful.
+
+## Exact immutable third-party code references and safe rendering
+
+V7 source review is now limited to an original, exact GitHub blob URL that
+matches the canonical candidate's repository, complete commit revision and
+literal code path. The stable repository:path key must also match.
+Unrelated GitHub pages, altered revisions, encoded traversal, query/fragment
+suffixes and lookalike hosts are excluded from review proposals. Other
+independently valid proposals remain reviewable after a malformed candidate.
+
+Exact link identity is **not** code testing, license permission, security
+verification or validated business value. The review proposal explicitly
+records those distinctions. The older private Markdown/HTML reusable-code
+list uses the same immutable link validator, escapes user/provider metadata
+and counts unsafe links it omits rather than rendering a deceptive hyperlink.
+
+The original machine receipt and optional names-free public sidecar remain
+unchanged. No code execution, network reads, additional schedules,
+downstream repair, spending, trading or production promotion was introduced.
