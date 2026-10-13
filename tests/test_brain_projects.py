@@ -2,9 +2,11 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from brain.__main__ import projects
-from brain.adapters import policy
+from brain.__main__ import main, projects
+from brain.adapters import event, policy
+from brain.core import Store
 from brain.projects import build_project_portfolio, extended_repositories, load_project_registry
 
 SHA = "a" * 40
@@ -119,6 +121,46 @@ class ProjectStageTests(unittest.TestCase):
         self.assertEqual(tuple(api.seen), extended_repositories())
         self.assertEqual(api.requests, 16)
         self.assertLessEqual(api.requests, policy()["max_requests_per_operation"])
+
+    def test_cli_projects_never_mutates_original_canonical_sqlite(self):
+        class API:
+            requests = 0
+            def observe(self, repository):
+                self.requests += 4
+                payload = dict(repo_row(repository))
+                payload.pop("key")
+                payload.pop("observed_at")
+                payload.pop("data_kind")
+                return payload, False
+
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "state.sqlite"
+            store = Store(database, visibility="PUBLIC")
+            try:
+                events = []
+                for repository in policy()["repositories"]:
+                    payload = dict(repo_row(repository))
+                    payload.pop("key")
+                    payload.pop("observed_at")
+                    payload.pop("data_kind")
+                    events.append(event("repository", repository, payload, SHA,
+                                        now="2026-10-13T20:00:00Z"))
+                store.submit(events, now="2026-10-13T20:00:00Z")
+                store.drain()
+                store.report(SHA, now="2026-10-13T20:00:00Z")
+            finally:
+                store.close()
+            before = database.read_bytes()
+            before_mtime = database.stat().st_mtime_ns
+            with patch("brain.__main__.source_sha", return_value=SHA), \
+                 patch("brain.__main__.GitHub", return_value=API()):
+                code = main([
+                    "projects", "--db", str(database),
+                    "--output", str(Path(directory) / "projects"),
+                ])
+            self.assertEqual(code, 0)
+            self.assertEqual(database.read_bytes(), before)
+            self.assertEqual(database.stat().st_mtime_ns, before_mtime)
 
 if __name__ == "__main__":
     unittest.main()
