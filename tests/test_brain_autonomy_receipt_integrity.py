@@ -157,6 +157,24 @@ class SanitizeReceiptIntegrityTests(unittest.TestCase):
         capped["eligible_count"] = 2
         self.verify_blocked(capped)
 
+    def test_source_drift_and_unknown_conclusions_are_partial_not_complete(self):
+        baseline = old_observation()
+        changed = copy.deepcopy(baseline)
+        changed["investigations"][0]["outcome"] = (
+            "SOURCE_CHANGED_REQUIRES_NEW_COMPARISON"
+        )
+        changed["investigations"][0]["checks"] = []
+        status = summarize(changed, SOURCE, *["success"] * 4)
+        self.assertEqual(status["status"], "PARTIAL_READ_ONLY")
+        self.assertIs(status["root_cause_verified"], False)
+        unknown = copy.deepcopy(baseline)
+        unknown["investigations"][0]["checks"][0]["outcome"] = (
+            "OTHER_CONCLUSION_NOT_RESOLUTION"
+        )
+        result = summarize(unknown, SOURCE, *["success"] * 4)
+        self.assertEqual(result["status"], "PARTIAL_READ_ONLY")
+        self.assertFalse(result["execution_authority"])
+
     def test_replayed_sidecar_source_is_kept_private(self):
         receipt = old_observation()
         self.assertEqual(summarize(receipt, SOURCE, *["success"] * 4)["status"],
