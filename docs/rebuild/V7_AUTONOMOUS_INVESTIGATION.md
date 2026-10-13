@@ -225,3 +225,37 @@ cursor, automatic repair, third-party-code execution, charge, trade,
 customer communication, merge or authorization** is introduced. All
 existing V6 production and V7 draft-only governance boundaries remain
 unchanged.
+
+## Duplicate check-name quarantine, without hiding independent regressions
+
+A real GitHub commit may have two check runs with an identical name. This
+makes **that check name** ambiguous, not necessarily the entire repository.
+Previously, the candidate's blanket `PARTIAL_AMBIGUOUS_CHECK_NAMES` exclusion
+could silently suppress independently unique and verified regressions.
+
+The V7 investigator now accepts original, ACTUAL_FRESH same-revision
+comparisons with this **explicit partial-coverage classification**. The
+canonical reducer already removes duplicate-named checks when creating
+transitions. For continuation, the ledger is independently replayed, and
+the old and new check lists are independently indexed. Only check names
+that were uniquely identifiable in **both** original observations may
+contribute persistent adverse or recovery evidence. A duplicate in the
+newer snapshot must **never** be misclassified as a missing, completed,
+adverse or recovered check. A formerly duplicated name does not establish
+a valid earlier baseline. Unique checks may still be revalidated in the
+existing one-GET-per-repository pass, including new failures mixed with
+persistent failures, recoveries and genuine evidence gaps.
+
+Every resulting investigation explicitly records the fixed Boolean
+`partial_check_coverage`. Its operator report clearly states that
+duplicate-name evidence was quarantined and **complete repository CI
+coverage is not established**. The optional public sidecar reports only
+`partial_check_coverage_repositories` as a bounded aggregate count and
+downgrades the entire status to `PARTIAL_READ_ONLY`, regardless of whether
+all individually selected checks were successfully revalidated. Malformed
+Boolean flags are **BLOCKED**, not interpreted as truthy success.
+
+All existing provider request limits, source gates, immutable original
+ledger, artifact confidentiality, fair selection, human repair approval,
+separate V6 acceptance, trading and spending restrictions remain intact.
+This remains **V7 draft-only** and cannot authorize a production release.
