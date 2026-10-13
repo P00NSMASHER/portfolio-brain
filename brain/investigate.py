@@ -218,11 +218,18 @@ def main(argv=None):
                 require(not target.samefile(args.db), "receipt aliases original state")
         sha = source_sha(args.expected_sha)
         with readonly_authority_snapshot(args.db) as snapshot:
-            store = Store(snapshot, visibility="PUBLIC")
-            try:
-                report = store.read_report(sha)
-            finally:
-                store.close()
+            # Snapshot contexts own any Store they yield. Never reopen that
+            # object as a filesystem path or construct a Store on authority.
+            snapshot_path = snapshot.path if isinstance(snapshot, Store) else Path(snapshot)
+            require(snapshot_path.resolve() != args.db.resolve(), "snapshot aliases original state")
+            if isinstance(snapshot, Store):
+                report = snapshot.read_report(sha)
+            else:
+                store = Store(snapshot_path, visibility="PUBLIC")
+                try:
+                    report = store.read_report(sha)
+                finally:
+                    store.close()
         receipt = investigate(report, max_investigations=args.max_investigations,
                               stop_requested=lambda: (args.db.parent / "STOP").exists())
         write_report(receipt, args.output)
