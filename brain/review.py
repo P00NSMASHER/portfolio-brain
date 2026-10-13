@@ -12,6 +12,7 @@ import re
 
 _MAX_REVIEWS = 12
 _MAX_PER_REPOSITORY = 4
+_MAX_COINCIDENCE_GROUPS = 4
 _REPO = re.compile(r"[A-Za-z0-9_.-]{1,39}/[A-Za-z0-9_.-]{1,100}\Z")
 _SHA = re.compile(r"[0-9a-f]{40}\Z")
 _BANDS = {
@@ -87,6 +88,13 @@ def _item(*, source_sha, repo, revision, check_name, reason,
           provider_outcome, original_class, checked_at, evidence_ref,
           original_pattern):
     order, next_review = _BANDS[reason]
+    # Same-revision case identity survives a new read or changed conclusion.
+    # It is a referent, NOT a stored incident or authorization to close one.
+    fingerprint = json.dumps(
+        ["CI_CHECK_REVIEW_ID_V1", repo, revision, check_name],
+        separators=(",", ":"), ensure_ascii=True,
+    )
+    case_key = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:24]
     identity = json.dumps(
         [source_sha, repo, revision, check_name, reason, provider_outcome,
          original_class, checked_at],
@@ -94,6 +102,8 @@ def _item(*, source_sha, repo, revision, check_name, reason,
     )
     return {
         "id": hashlib.sha256(identity.encode("utf-8")).hexdigest()[:20],
+        "case_key": case_key,
+        "case_identity_scope": "SOURCE_REVISION_CHECK_NAME_NOT_PERSISTED_CASE",
         "repository": repo,
         "check_name": check_name,
         "original_source_revision": revision,
@@ -253,6 +263,49 @@ def review_packet(receipt):
     selected = selected[:_MAX_REVIEWS]
     for i, item in enumerate(selected, 1):
         item["review_order_not_impact_rank"] = i
+
+    # Group only confirmed same-name, currently adverse check observations
+    # which have distinct repository-scoped original GitHub check-run links.
+    # This is a *coincidence of labels*, not evidence of shared infrastructure
+    # root cause, correlated outages, impact, incident closure or permission.
+    by_check_name = {}
+    for item in selected:
+        name = item["check_name"]
+        if name is None or item["observed_outcome"] != "STILL_ADVERSE":
+            continue
+        reference = item["evidence_ref"]
+        repository = item["repository"]
+        if not _source_ref(reference, repository):
+            continue
+        if not ("/actions/runs/" in reference or "/runs/" in reference):
+            continue
+        by_check_name.setdefault(name, {})[repository] = item
+    coincidences = []
+    for name, grouped in sorted(by_check_name.items()):
+        if len(grouped) < 2:
+            continue
+        identities = [grouped[repo]["case_key"] for repo in sorted(grouped)]
+        group_key = hashlib.sha256(json.dumps(
+            ["CI_CHECK_NAME_COINCIDENCE_V1", name, identities],
+            separators=(",", ":"), ensure_ascii=True,
+        ).encode("utf-8")).hexdigest()[:24]
+        coincidences.append({
+            "id": group_key,
+            "check_name": name,
+            "repositories": sorted(grouped),
+            "source_refs": sorted(item["evidence_ref"] for item in grouped.values()),
+            "source_bound_case_keys": sorted(identities),
+            "status": "SAME_NAME_OBSERVED_IN_MULTIPLE_REPOS",
+            "interpretation": "NAME_MATCH_NOT_SHARED_ROOT_CAUSE",
+            "proposed_human_review": (
+                "Independently compare the original check runs; identical CI "
+                "labels need not represent the same test or failure cause."
+            ),
+            "provider_reads_added": 0,
+            "execution_authority": False,
+        })
+    omitted_coincidences = max(0, len(coincidences) - _MAX_COINCIDENCE_GROUPS)
+    coincidences = coincidences[:_MAX_COINCIDENCE_GROUPS]
     return {
         "schema_version": 1,
         "scope": "PRIVATE_HUMAN_CHECK_REVIEW_ONLY",
@@ -260,6 +313,8 @@ def review_packet(receipt):
         "state_sequence": sequence,
         "status": "REVIEW_PROPOSALS_NOT_EXECUTED" if selected else "NO_ELIGIBLE_REVIEW",
         "items": selected,
+        "same_name_adverse_coincidences": coincidences,
+        "coincidence_groups_omitted_due_to_bounds": omitted_coincidences,
         "candidates_considered": candidates,
         "omitted_due_to_review_bounds": candidates - len(selected),
         "deferred_repositories_not_inspected": deferred,
@@ -302,6 +357,7 @@ def review_lines(receipt):
             + item["category"] + " — " + _safe(item["repository"])
             + (" / " + _safe(item["check_name"])
                if item["check_name"] is not None else "")
+            + ". Case reference: " + item["case_key"]
             + ". Observed: " + item["observed_outcome"]
             + ". Next manual check: " + item["proposed_human_review"]
             + " Original source: " + _safe(item["evidence_ref"])
@@ -316,6 +372,23 @@ def review_lines(receipt):
                 + ("; capped at 12" if sample["history_sample_cap_reached"] else "")
                 + ". Counts are NOT elapsed downtime, probabilities or diagnosis."
             )
+    lines.append(
+        "A matching adverse CI check name across repositories is not evidence of"
+        " a shared cause, outage, incident impact or common fix."
+    )
+    for group in packet["same_name_adverse_coincidences"]:
+        lines.append(
+            "- Shared check-name review (noncausal): " + _safe(group["check_name"])
+            + "; repositories " + ", ".join(_safe(repo) for repo in group["repositories"])
+            + "; case references " + ", ".join(group["source_bound_case_keys"])
+            + ". " + group["proposed_human_review"]
+        )
+    if packet["coincidence_groups_omitted_due_to_bounds"]:
+        lines.append(
+            "Additional same-name coincidences omitted by the fixed human"
+            " review bound: "
+            + str(packet["coincidence_groups_omitted_due_to_bounds"])
+        )
     lines.append(
         "Every proposed check requires human verification. No provider calls,"
         " state changes, PR mutations, notifications or incident closures were added."
