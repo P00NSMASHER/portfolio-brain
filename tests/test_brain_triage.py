@@ -213,6 +213,69 @@ class EvidenceGatedDecisionQueueTests(unittest.TestCase):
             self.assertEqual(machine, original, "canonical report JSON must remain unchanged")
             self.assertNotIn("decision_queue", machine)
 
+    def test_license_metadata_is_not_permission_and_all_caveats_render(self):
+        report = sample_report(candidates=[
+            candidate("agent-products", 1, license="MIT"),
+            candidate("freight-recovery", 2, license="UNKNOWN"),
+            candidate("school-tools", 3, license="NOASSERTION"),
+        ])
+        queue = decision_queue(report)
+        self.assertEqual(len(queue["items"]), 3)
+        statuses = {
+            item["metadata"]["target"]: item["metadata"]["license_review_status"]
+            for item in queue["items"]
+        }
+        self.assertEqual(
+            statuses["agent-products"],
+            "DECLARED_LICENSE_METADATA_NOT_INDEPENDENTLY_VERIFIED",
+        )
+        for target in ("freight-recovery", "school-tools"):
+            self.assertEqual(
+                statuses[target], "MISSING_OR_INCONCLUSIVE_LICENSE_METADATA",
+            )
+        self.assertTrue(all(
+            item["metadata"]["source_reuse_permission_confirmed"] is False
+            and item["action_authority"] is False
+            and item["verified_revenue"] is None
+            for item in queue["items"]
+        ))
+        with tempfile.TemporaryDirectory() as directory:
+            write_report(report, Path(directory) / "out")
+            out = Path(directory) / "out"
+            markdown = (out / "report.md").read_text()
+            html = (out / "report.html").read_text()
+            self.assertIn("Declared license metadata: MIT", markdown)
+            self.assertIn("unverified declaration; review rights before reuse", markdown)
+            self.assertIn("Declared license metadata: UNKNOWN", markdown)
+            self.assertIn("Declared license metadata: NOASSERTION", markdown)
+            self.assertEqual(
+                markdown.count("missing/inconclusive; review rights before reuse"), 2
+            )
+            # Existing renderer showed only the first generic limitation:
+            # now it must expose every rights and benefit caveat.
+            self.assertEqual(markdown.count("License metadata is not a grant of permission."), 3)
+            self.assertEqual(markdown.count(
+                "No customer demand, engineering time saved, revenue or safety measured."
+            ), 3)
+            self.assertIn("Declared license metadata: UNKNOWN", html)
+            self.assertEqual(json.loads((out / "report.json").read_text()), report)
+            self.assertNotIn("license_review_status", (out / "report.json").read_text())
+
+    def test_untrusted_license_text_escaped_and_malformed_metadata_rejected(self):
+        unsafe = candidate("school-tools", 1, license="<script>alert(1)</script>")
+        report = sample_report(candidates=[unsafe])
+        with tempfile.TemporaryDirectory() as directory:
+            write_report(report, Path(directory) / "out")
+            output = (Path(directory) / "out" / "report.html").read_text()
+            self.assertNotIn("<script>", output)
+            self.assertIn("&lt;", output)
+            self.assertEqual(json.loads(
+                (Path(directory) / "out" / "report.json").read_text()
+            ), report)
+        unsafe["license"] = ""
+        with self.assertRaisesRegex(ValueError, "license metadata malformed"):
+            decision_queue(report)
+
     def test_no_forged_ranking_on_empty_or_failed_report(self):
         self.assertEqual(decision_queue(sample_report())["items"], [])
         with tempfile.TemporaryDirectory() as d:
