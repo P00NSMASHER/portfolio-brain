@@ -121,6 +121,48 @@ class ReviewedSourceCandidateTests(unittest.TestCase):
         self.assertEqual(packet["items"][0]["metadata"]["code_bytes_independently_executed_or_tested"],False)
 
 
+
+    def test_bad_same_key_record_cannot_hide_valid_immutable_source(self):
+        valid = candidate("agent-products", 1)
+        invalid = {**valid, "source_ref": valid["source_ref"] + "#unsafe"}
+        for order in ([invalid, valid], [valid, invalid]):
+            with self.subTest(first=order[0]["source_ref"]):
+                packet = decision_queue(sample_report(candidates=order))
+                self.assertEqual(len(packet["items"]), 1)
+                self.assertEqual(packet["items"][0]["metadata"]["candidate_key"],
+                                 valid["key"])
+                self.assertTrue(packet["items"][0]["metadata"]
+                                ["immutable_repo_revision_path_pin_verified"])
+
+    def test_explicit_operator_decline_cannot_be_bypassed_by_duplicate(self):
+        valid = candidate("agent-products", 1)
+        declined = {**valid, "feedback": {
+            "basis": "OPERATOR_REPORTED", "outcome": "NOT_USEFUL"
+        }}
+        altered = {**valid, "source_ref": valid["source_ref"] + "?tampered",
+                   "feedback": declined["feedback"]}
+        for order in ([valid, declined], [declined, valid],
+                      [altered, valid], [valid, altered]):
+            with self.subTest(first=order[0]["source_ref"]):
+                packet = decision_queue(sample_report(candidates=order))
+                self.assertEqual(packet["items"], [])
+
+    def test_conflicting_qualified_revisions_are_order_deterministic(self):
+        old = candidate("agent-products", 1)
+        next_rev = {**old,
+            "head_sha": "c" * 40,
+            "source_ref": old["source_ref"].replace(
+                "/blob/" + old["head_sha"] + "/",
+                "/blob/" + "c" * 40 + "/",
+            )
+        }
+        one = decision_queue(sample_report(candidates=[old, next_rev]))
+        two = decision_queue(sample_report(candidates=[next_rev, old]))
+        self.assertEqual(one, two)
+        self.assertEqual(len(one["items"]), 1)
+        self.assertFalse(one["execution_authority"])
+
+
 class OriginalComparisonReferenceTests(unittest.TestCase):
     def test_exact_commit_refs_preserve_source_comparable_review(self):
         report=sample_report(changes=[change(repo="example/repository",failures=["validate"])])

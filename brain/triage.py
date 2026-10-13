@@ -159,13 +159,31 @@ def _candidate_proposals(candidates):
     # is structural only, not subjective priority, safety, rights or revenue.
     buckets = {}
     seen = set()
-    for candidate in candidates:
+    # An original explicit operator decision always overrides any duplicate
+    # candidate, including later records that omit or corrupt that feedback.
+    suppressed = {
+        row["key"] for row in candidates
+        if type(row) is dict and type(row.get("key")) is str
+        and type(row.get("feedback")) is dict
+        and row["feedback"].get("basis") == "OPERATOR_REPORTED"
+        and row["feedback"].get("outcome") in {"NOT_USEFUL", "INTEGRATED"}
+    }
+    # Source-index ordering is not user priority. It only makes conflicting
+    # same-key provider records deterministic, never proof of code quality.
+    def identity(row):
+        if type(row) is not dict:
+            return ("", "", "", "", "", "")
+        return tuple(str(row.get(k, "")) for k in (
+            "key", "head_sha", "source_ref", "code_sha256",
+            "target", "license",
+        ))
+
+    for candidate in sorted(candidates, key=identity):
         if type(candidate) is not dict:
             continue
         key = candidate.get("key")
-        if type(key) is not str or key in seen:
+        if type(key) is not str or key in seen or key in suppressed:
             continue
-        seen.add(key)
         repository = candidate.get("repository")
         revision = candidate.get("head_sha")
         source_path = candidate.get("path")
@@ -192,6 +210,9 @@ def _candidate_proposals(candidates):
                 and feedback.get("basis") == "OPERATOR_REPORTED"
                 and feedback.get("outcome") in {"NOT_USEFUL", "INTEGRATED"}):
             continue
+        # Rejected/forged original link metadata must never consume the
+        # only review slot for another, valid record with the same key.
+        seen.add(key)
         buckets.setdefault(target, []).append(candidate)
 
     for target in buckets:
