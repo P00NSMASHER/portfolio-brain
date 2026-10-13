@@ -77,8 +77,7 @@ def _eligible(row, now, limits):
     if (repo not in limits["repositories"]
             or row.get("evidence_quality") != "ACTUAL_FRESH"
             or row.get("check_comparison") not in {"COMPARABLE", "NO_SHARED_CHECK_NAMES"}
-            or row.get("revision_changed") is not False
-            or row.get("check_deteriorations")):
+            or row.get("revision_changed") is not False):
         return False
     revision = row.get("current_revision")
     require(type(revision) is str and _SHA.fullmatch(revision)
