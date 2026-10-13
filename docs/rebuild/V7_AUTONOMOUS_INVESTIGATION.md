@@ -348,3 +348,22 @@ rules, 3-repository/24-GET cap, STOP and writer credentials remain intact.
 The watermark is an evidence-coverage diagnostic **only**, not an
 unattested waiver of V6 acceptance or authorization to trade, spend, repair
 CI, merge a PR or deploy V7.
+
+
+## First-observed adverse checks (draft)
+
+A check that first appears completed with an adverse conclusion has **no
+prior comparable result** and must not be called a new regression. From the
+replayed canonical ledger, V7 selects only uniquely identifiable, actual,
+fresh, same-commit, public check observations whose names were absent from
+the earlier snapshot. Names duplicated in either snapshot, pending checks,
+or non-adverse conclusions never qualify.
+
+The fixed class `UNBASELINED_ADVERSE_OBSERVED` enters the queue after proven
+new deteriorations and before evidence gaps, persistent failure and observed
+recovery. Same-repository signals share one provider observation; strict
+three-repository/24-GET caps, STOP and fair rotation remain intact. Private
+operator guidance requires an independently verified baseline. The optional
+public sidecar emits only names-free fixed-class counts and remains PARTIAL
+for unbaselined evidence, even if a later GET reports success. No new
+incident diagnosis, repair, release or execution authority is created.
