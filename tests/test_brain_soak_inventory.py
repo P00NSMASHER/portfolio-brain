@@ -194,9 +194,9 @@ class SoakInventoryTests(unittest.TestCase):
         )
 
     def test_fractional_second_provider_updates_sort_by_actual_instant(self):
-        older = run(1, when="2026-10-13T13:00:00.9Z",
+        older = run(1, when="2026-10-13T13:00:00Z",
                     created="2026-10-13T12:59:00Z")
-        newer = run(2, when="2026-10-13T13:00:01Z",
+        newer = run(2, when="2026-10-13T13:00:00.9Z",
                     created="2026-10-13T12:59:00Z")
         self.assertEqual(
             [r["run_id"] for r in assess(newer, older)["run_rows"]],
