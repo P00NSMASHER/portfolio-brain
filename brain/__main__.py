@@ -144,11 +144,21 @@ def projects(store, sha, output, *, api=None):
                 "error_class": type(exc).__name__,
                 "error": str(exc)[:300],
             })
-    result = build_project_portfolio(canonical, snapshots, source_sha=sha)
+    from brain.projects import FOCUS
+    from brain.pr_intelligence import observe_priority_prs
+    observed = {
+        row["repository"]: row
+        for row in (*canonical.get("repositories", []), *snapshots)
+    }
+    focused = observe_priority_prs(api, observed, review_contracts=FOCUS)
+    result = build_project_portfolio(
+        canonical, snapshots, source_sha=sha, priority_prs=focused,
+    )
     result["operation"] = {
         "name": "projects",
         "requests": api.requests,
         "extended_repositories": list(extended_repositories()),
+        "priority_pr_review_coverage": result["priority_review_coverage"],
         "errors": errors,
     }
     if errors:

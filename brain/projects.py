@@ -7,6 +7,7 @@ baseline, or upgrades a technical candidate into a measured business outcome.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from brain.adapters import policy
@@ -121,7 +122,7 @@ def extended_repositories():
     ))
 
 
-def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha):
+def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha, priority_prs=None):
     """Build one honest improvement queue from canonical + ephemeral source evidence."""
     require(
         type(canonical_report) is dict
@@ -131,6 +132,40 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha)
         "PROJECT_CANONICAL_REPORT_NOT_CURRENT_PASS",
     )
     document = load_project_registry()
+    require(priority_prs is None or
+            (type(priority_prs) is dict and set(priority_prs) <= set(FOCUS)
+             and all(type(x) is dict for x in priority_prs.values())),
+            "PROJECT_FOCUSED_PR_INPUT_INVALID")
+    priority_prs = priority_prs or {}
+    for name, evidence in priority_prs.items():
+        require(type(evidence.get("checks")) is dict
+                and evidence.get("status") in {
+                    "SOURCE_UNOBSERVED", "GET_ADAPTER_UNAVAILABLE",
+                    "REQUEST_BUDGET_UNAVAILABLE", "PR_PAGE_UNVERIFIED",
+                    "NO_MATCHING_PR_IN_BOUNDED_SAMPLE",
+                    "PR_OBSERVED_CHECKS_UNVERIFIED", "PR_AND_CHECKS_OBSERVED",
+                }, "PROJECT_FOCUSED_PR_STATUS_INVALID")
+        if evidence.get("pr_number") is not None:
+            expected_repo = next(row["repository"] for row in document["projects"]
+                                 if row["id"] == name)
+            number = evidence["pr_number"]
+            sha = evidence.get("head_sha")
+            require(type(number) is int and 0 < number < 100000000
+                    and type(sha) is str
+                    and re.fullmatch("[0-9a-f]{40}", sha)
+                    and evidence.get("pr_url") ==
+                    f"https://github.com/{expected_repo}/pull/{number}"
+                    and evidence.get("production_merge_authority") is False
+                    and evidence.get("buyer_value_verified") is False
+                    and evidence.get("payment_or_external_contact_authority") is False,
+                    "PROJECT_FOCUSED_PR_PROVENANCE_INVALID")
+            if evidence["checks"].get("complete_single_page") is True:
+                require(evidence["checks"].get("checked_head_sha") == sha
+                        and evidence.get("status") == "PR_AND_CHECKS_OBSERVED",
+                        "PROJECT_FOCUSED_CHECK_HEAD_INVALID")
+        require(evidence.get("release_approved") is not True
+                and evidence.get("measured_revenue") is None,
+                "PROJECT_FOCUSED_FALSE_VALUE_CLAIM")
     repositories = {}
     for row in canonical_report.get("repositories", []):
         require(type(row) is dict and REPO.fullmatch(row.get("repository", "")), "PROJECT_CORE_SOURCE_INVALID")
@@ -181,6 +216,13 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha)
             next_action = "Measure the named success metric before changing the project."
 
         focus = FOCUS.get(item["id"])
+        focused_review = (priority_prs.get(item["id"], {
+            "status": "PR_EVIDENCE_NOT_COLLECTED",
+            "checks": {"status": "NOT_VERIFIED", "complete_single_page": False},
+        }) if source is not None else {
+            "status": "SOURCE_UNOBSERVED",
+            "checks": {"status": "NOT_VERIFIED", "complete_single_page": False},
+        })
         if focus and source is not None:
             next_action = focus["next_test"]
         projects.append({
@@ -196,6 +238,7 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha)
             "status": status,
             "source_check_state": _check_evidence(source),
             "focus_priority": focus["priority"] if focus else None,
+            "active_pr_review": focused_review if focus else None,
             "focus_workstream": focus["workstream"] if focus else None,
             "focus_next_test": focus["next_test"] if focus else None,
             "focus_required_evidence": focus["required_evidence"] if focus else None,
@@ -227,6 +270,7 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha)
                 "repository": row["repository"],
                 "observed_source_sha": row["repository_revision"],
                 "source_check_state": row["source_check_state"],
+                "active_pr_review": row["active_pr_review"],
                 "queue_status": row["status"],
                 "next_test": row["focus_next_test"],
                 "required_evidence": row["focus_required_evidence"],
@@ -244,6 +288,12 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha)
         "repository_count": len(repositories),
         "logical_project_count": len(projects),
         "missing_repositories": sorted(set(missing)),
+        "priority_review_coverage": (
+            "SOURCE_PINNED_CHECK_PAGES_OBSERVED_NOT_RELEASE_PROOF"
+            if all(priority_prs.get(k, {}).get("status") == "PR_AND_CHECKS_OBSERVED"
+                   for k in FOCUS)
+            else "INCOMPLETE_OR_UNVERIFIED"
+        ),
         "measurement_rule": "NO_IMPROVEMENT_CLAIM_WITHOUT_EXPLICIT_BEFORE_AFTER_EVIDENCE",
         "verified_revenue": None,
         "autonomous_downstream_writes": False,

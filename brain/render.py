@@ -162,6 +162,27 @@ def write_report(report, output):
     if report.get("scope") == "READ_ONLY_CROSS_PROJECT_IMPROVEMENT_QUEUE":
         lines.extend(["", "## RETALLY and Product Factory priority experiments", ""])
         for task in report.get("priority_improvements", []):
+            review = task.get("active_pr_review") or {}
+            if type(review.get("pr_number")) is int:
+                checks = review.get("checks", {})
+                parent = review.get("sampled_parent_pr")
+                dependency = (
+                    f"stacked on sampled PR #{parent}" if parent is not None
+                    else "unsampled parent branch" if review.get("stacked_on_nondefault_branch")
+                    else "based on observed default branch"
+                )
+                lines.append(
+                    f'- [Draft candidate PR #{review["pr_number"]}]({review["pr_url"]}) '
+                    f'@ {review["head_sha"][:12]}; {dependency}; '
+                    f'CI evidence: {checks.get("status", "NOT_VERIFIED")}; '
+                    f'draft={review["draft"]}. '
+                    f'{review.get("review_action", "Separate review required.")}'
+                )
+            else:
+                lines.append(
+                    f'- {task["project_id"]} PR evidence: '
+                    f'{review.get("status", "NOT_COLLECTED")} (not release evidence).'
+                )
             sha = task["observed_source_sha"]
             head = sha[:8] if isinstance(sha, str) else "UNOBSERVED"
             lines.append(

@@ -96,6 +96,44 @@ class ProjectRegistryTests(unittest.TestCase):
         self.assertEqual(result["status"], "BLOCKED")
         self.assertEqual(set(result["missing_repositories"]), set(extended_repositories()))
 
+    def test_focused_review_evidence_never_implies_measured_buyer_value(self):
+        evidence = {
+            "retally": {
+                "status": "PR_AND_CHECKS_OBSERVED", "pr_number": 460,
+                "pr_url": "https://github.com/P00NSMASHER/github-value-hunt-ledger/pull/460",
+                "head_sha": "b" * 40, "production_merge_authority": False,
+                "buyer_value_verified": False,
+                "payment_or_external_contact_authority": False,
+                "checks": {"status": "SKIPPED_CHECKS_NOT_ACCEPTANCE",
+                           "complete_single_page": True,
+                           "checked_head_sha": "b" * 40},
+            },
+        }
+        result = build_project_portfolio(
+            canonical_report(), [repo_row(r) for r in extended_repositories()],
+            source_sha=SHA, priority_prs=evidence,
+        )
+        self.assertEqual(result["priority_review_coverage"], "INCOMPLETE_OR_UNVERIFIED")
+        self.assertEqual(result["priority_improvements"][0]["active_pr_review"]["pr_number"],
+                         460)
+        self.assertIsNone(result["priority_improvements"][0]["measured_result"])
+        self.assertIsNone(result["verified_revenue"])
+
+    def test_forged_external_pr_link_cannot_be_rendered(self):
+        from brain.core import BrainError
+        with self.assertRaises(BrainError):
+            build_project_portfolio(
+                canonical_report(), [repo_row(r) for r in extended_repositories()],
+                source_sha=SHA, priority_prs={"retally": {
+                    "status": "PR_AND_CHECKS_OBSERVED", "pr_number": 460,
+                    "pr_url": "https://evil.invalid/redirect",
+                    "head_sha": "a" * 40, "checks": {"complete_single_page": True,
+                    "checked_head_sha": "a" * 40},
+                    "production_merge_authority": False, "buyer_value_verified": False,
+                    "payment_or_external_contact_authority": False,
+                }},
+            )
+
     def test_retally_and_factory_priority_is_not_customer_activation(self):
         report = build_project_portfolio(
             canonical_report(),

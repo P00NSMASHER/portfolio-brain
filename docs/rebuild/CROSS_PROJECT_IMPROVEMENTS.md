@@ -76,3 +76,28 @@ publication.
 
 This source change is a candidate until exact-head tests and normal protected review
 pass. It does not inherit historical V4/V5/V6 acceptance.
+
+## Source-bound live PR triage (additive optional sidecar)
+
+The main production branch is **not** the same as active work in draft PRs.
+After optional repository snapshots, the queue now samples a bounded first page
+of 15 current open PRs in each focus repository (one read-only GitHub GET each),
+then at most one exact-commit check-runs page for the top eligible PR in each.
+For RETALLY, only PR titles explicitly naming RETALLY are candidates because the
+shared repository also contains other products. Titles are never emitted to the
+report or obeyed as instructions.
+
+Every selected candidate preserves the **real PR number, exact head SHA, draft
+status, target branch and source-bound check state**. Stacked dependencies are
+labeled as observed branch-name relations, not independently verified ancestry.
+Incomplete check pagination, duplicate or cross-SHA check identities, skipped
+jobs, provider failures and exhausted budgets cannot turn into an acceptance
+claim. All output is an operator review packet: there is no automatic merge,
+customer outreach, paid charge, formation, deploy or code execution.
+
+The five extra repository snapshots normally use 20 GETs; two PR pages and two
+candidate check pages use at most four more. **The original total limit of 24
+GETs remains unchanged, including retries and extra check pagination.** If
+higher-priority reads exhaust the budget, focused PR evidence explicitly says
+unverified. No extra schedulers, credentials or canonical ledger mutation.
+Technical CI is not measured improvement or buyer validation.

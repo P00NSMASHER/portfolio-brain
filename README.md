@@ -99,3 +99,12 @@ read a provider dispatch without mistaking it for a completed core, see
 ## Historical v3 candidate (superseded by accepted v4)
 
 The v2 two-hour soak failed because one successful genuine automatic run was not followed by another within 90 minutes; see the immutable `brain-acceptance-v2` failure record. The isolated v3 candidate replaces one sparse cron with a full monitored core at `7,27,47 * * * *` and an independently scheduled GitHub watchdog at `16,36,56 * * * *`. The watchdog is read-only except for requesting a due core through existing Actions permissions; it validates GitHub provider run metadata and cannot change source, state or declare acceptance. The full core verifies the exact scheduled watchdog origin and preserves its receipt. False/manual scheduled claims are rejected. Passing CI only proves code regressions, not a completed unattended soak. The unchanged two-hour evidence gates and separate post-soak verification remain required. Cloud scheduling may still be delayed or dropped.
+
+### RETALLY and App Factory draft-source intelligence
+
+The optional read-only project report samples current open pull requests and
+exact-head CI for RETALLY and `x402-product-factory`, surfacing the highest-priority
+source-pinned review actions and stacked draft dependencies. Strict 24-GET bounds,
+untrusted-metadata validation and fail-closed CI labels preserve separate release,
+buyer-validation and protected-core acceptance requirements. Green CI does not
+imply production deployment, actual buyer value or autonomous external authority.

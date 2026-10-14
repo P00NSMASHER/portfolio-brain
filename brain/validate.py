@@ -40,6 +40,12 @@ def validate_policy():
     from brain.projects import load_project_registry
     projects=load_project_registry()
     require(projects["extended_observation_bound"]==5, "project observation bound changed")
+    from brain.pr_intelligence import FOCUS_REPOSITORIES, SAMPLE_SIZE
+    require(SAMPLE_SIZE==15 and
+            dict(FOCUS_REPOSITORIES)=={
+                "retally": "P00NSMASHER/github-value-hunt-ledger",
+                "product-factory": "P00NSMASHER/x402-product-factory",
+            }, "focus PR observation scope changed")
     source=(workflow_dir/"brain-cycle.yml").read_text()
     require("python -m brain projects" in source and "continue-on-error: true" in source,
             "cross-project read-only stage missing or allowed to block canonical publication")
