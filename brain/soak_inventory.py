@@ -163,6 +163,46 @@ def audit_run_inventory(rows, *, expected_sha, checked_at,
     }
 
 
+def project_native_actions_page(payload):
+    """Reduce one bounded, raw GitHub Actions API page to fixed, safe fields.
+
+    This projection does not certify the URL it came from, enumerate
+    unseen pages, authenticate Cloudflare, or prove job completion. The
+    optional audit remains advisory even if the provider count matches.
+    """
+    require(type(payload) is dict
+            and type(payload.get("total_count")) is int
+            and payload["total_count"] >= 0
+            and type(payload.get("workflow_runs")) is list
+            and len(payload["workflow_runs"]) <= _MAX_ROWS
+            and payload["total_count"] >= len(payload["workflow_runs"]),
+            "INVENTORY_GITHUB_PAGE_INVALID")
+    selected = []
+    for run in payload["workflow_runs"]:
+        require(type(run) is dict and type(run.get("name")) is str,
+                "INVENTORY_GITHUB_RUN_INVALID")
+        if run["name"] != "brain-cycle-v2":
+            continue
+        repository = run.get("repository")
+        require(type(repository) is dict
+                and repository.get("full_name") == "P00NSMASHER/portfolio-brain",
+                "INVENTORY_GITHUB_REPOSITORY_SCOPE_CHANGED")
+        # In particular, never copy actor details, branch tokens, commit
+        # messages, URLs, permission headers, logs, or arbitrary response data.
+        selected.append({
+            "run_id": run.get("id"),
+            "run_attempt": run.get("run_attempt"),
+            "workflow": run["name"],
+            "head_sha": run.get("head_sha"),
+            "event": run.get("event"),
+            "status": run.get("status"),
+            "conclusion": run.get("conclusion"),
+            "created_at": run.get("created_at"),
+            "updated_at": run.get("updated_at"),
+        })
+    return selected
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, required=True)
@@ -173,20 +213,26 @@ def main(argv=None):
     try:
         source, target = args.input, args.output
         require(source.is_file() and not source.is_symlink()
-                and 0 < source.stat().st_size <= 300000,
+                and 0 < source.stat().st_size <= 2000000,
                 "INVENTORY_INPUT_INVALID")
         require(source.resolve() != target.resolve(), "INVENTORY_ALIASED_OUTPUT")
         raw = source.read_bytes()
-        require(len(raw) == source.stat().st_size and len(raw) <= 300000,
+        require(len(raw) == source.stat().st_size and len(raw) <= 2000000,
                 "INVENTORY_INPUT_UNSTABLE")
         data = json.loads(raw.decode("utf-8"))
-        require(type(data) is dict and set(data) == {
-            "workflow_runs", "provider_pagination_complete",
-        }, "INVENTORY_INPUT_SCHEMA_INVALID")
+        require(type(data) is dict, "INVENTORY_INPUT_SCHEMA_INVALID")
+        if set(data) == {"workflow_runs", "provider_pagination_complete"}:
+            entries = data["workflow_runs"]
+            completeness = data["provider_pagination_complete"]
+        else:
+            # Raw single GitHub Actions API page. Never mistake one page
+            # for an authenticated complete provider-run inventory.
+            entries = project_native_actions_page(data)
+            completeness = False
         result = audit_run_inventory(
-            data["workflow_runs"], expected_sha=args.expected_sha,
+            entries, expected_sha=args.expected_sha,
             checked_at=args.checked_at,
-            provider_pagination_complete=data["provider_pagination_complete"],
+            provider_pagination_complete=completeness,
         )
         require(target.name == "soak-inventory-advisory.json"
                 and target.parent.is_dir() and not target.parent.is_symlink()
