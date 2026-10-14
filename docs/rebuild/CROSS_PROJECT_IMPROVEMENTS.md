@@ -2,7 +2,7 @@
 
 Portfolio Brain must convert research into falsifiable project work without becoming
 an unreviewed deployment bot. The canonical SQLite writer and four durable core
-repository observations remain unchanged. A separate read-only stage observes four
+repository observations remain unchanged. A separate read-only stage observes five
 additional active public repositories using a fresh bounded GitHub adapter, so the
 existing 24-request limit is not weakened and extended-source failures do not corrupt
 or stale the canonical ledger.
@@ -20,8 +20,9 @@ Extended read-only observation:
 - P00NSMASHER/permitplate-nyc
 - P00NSMASHER/StarBlox
 - P00NSMASHER/capturebrief
+- P00NSMASHER/x402-product-factory
 
-`brain/PROJECTS.json` maps those repositories to ten active logical projects,
+`brain/PROJECTS.json` maps those nine repositories to ten active logical projects,
 including Product Factory and Research Labs. Multiple logical projects may share a
 repository, but every project has one explicit research target, improvement focus,
 success metric, and desired direction.
@@ -32,7 +33,7 @@ The project queue distinguishes:
 - `SOURCE_UNOBSERVED`
 - `BASELINE_REQUIRED`
 - `CANDIDATE_NEEDS_PROJECT_TEST`
-- `MEASURED_OUTCOME_RECORDED`
+- `OPERATOR_FEEDBACK_RECORDED` (not verified measurement)
 
 A candidate is only structural evidence until project-specific tests run. An
 operator-reported outcome can change queue status but is not independent
@@ -44,6 +45,23 @@ provider failure is preserved in artifacts but cannot prevent the canonical Brai
 state transaction from publishing. It creates no new scheduler, writer, credential,
 permission, paid call, downstream mutation, customer message, trade, or production
 merge authority.
+
+## First-priority value experiments
+
+RETALLY: validate false recovery recommendations and reviewer workload on an
+exact-source labeled synthetic invoice fixture. Separately prove restricted
+staging role boundaries. First-customer activation (RETALLY issue #323) remains
+held; business registration is deliberately deferred until the first customer.
+
+Product Factory: observe P00NSMASHER/x402-product-factory directly rather than
+misattributing it to RETALLY. Audit source-pinned unmerged builds, mobile/desktop
+role-separated review, restart persistence and artifact integrity. Browser CI
+is not market demand. Actual buyer-confirmed pilots remain unmeasured.
+
+Both have null baselines/results and no live activation authority. Five optional
+sources normally require 20 GETs; the unchanged 24-GET adapter limit fails
+closed on unusually paginated checks or retries, without harming canonical
+publication.
 
 ## Intended operating loop
 

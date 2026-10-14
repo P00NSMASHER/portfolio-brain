@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "scope": "ACTIVE_REPO_BACKED_PROJECTS_WITH_EXPLICIT_MEASUREMENT_CONTRACTS",
-  "extended_observation_bound": 4,
+  "extended_observation_bound": 5,
   "projects": [
     {
       "id": "portfolio-brain",
@@ -35,9 +35,9 @@
       "name": "RETALLY",
       "repository": "P00NSMASHER/github-value-hunt-ledger",
       "research_target": "freight-recovery",
-      "improvement_focus": "review quality, evidence integrity and recovery workflow utility",
-      "success_metric": "useful findings minus avoidable review burden",
-      "direction": "UP"
+      "improvement_focus": "synthetic invoice accuracy, evidence integrity and secure first-customer readiness",
+      "success_metric": "incorrect recovery recommendations per 100 labeled synthetic invoices",
+      "direction": "DOWN"
     },
     {
       "id": "pips-classroom",
@@ -78,10 +78,10 @@
     {
       "id": "product-factory",
       "name": "Product Factory",
-      "repository": "P00NSMASHER/github-value-hunt-ledger",
+      "repository": "P00NSMASHER/x402-product-factory",
       "research_target": "agent-products",
-      "improvement_focus": "candidate-to-tested-product conversion",
-      "success_metric": "evidence-qualified candidates reaching measured tests",
+      "improvement_focus": "source-pinned app QA and independently confirmed buyer pilot value",
+      "success_metric": "buyer-confirmed pilot workflow completions",
       "direction": "UP"
     },
     {

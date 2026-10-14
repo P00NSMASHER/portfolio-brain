@@ -37,16 +37,17 @@ def canonical_report(candidates=None, outcomes=None):
     }
 
 class ProjectRegistryTests(unittest.TestCase):
-    def test_registry_covers_eight_repo_bindings_without_widening_core(self):
+    def test_registry_covers_nine_repo_bindings_without_widening_core(self):
         document = load_project_registry()
         repositories = {row["repository"] for row in document["projects"]}
-        self.assertEqual(len(repositories), 8)
+        self.assertEqual(len(repositories), 9)
         self.assertEqual(len(policy()["repositories"]), 4)
         self.assertEqual(set(extended_repositories()), {
             "P00NSMASHER/PipsQuestWorld",
             "P00NSMASHER/permitplate-nyc",
             "P00NSMASHER/StarBlox",
             "P00NSMASHER/capturebrief",
+            "P00NSMASHER/x402-product-factory",
         })
 
     def test_queue_never_invents_baseline_or_value(self):
@@ -56,7 +57,7 @@ class ProjectRegistryTests(unittest.TestCase):
             source_sha=SHA,
         )
         self.assertEqual(result["status"], "PASS")
-        self.assertEqual(result["repository_count"], 8)
+        self.assertEqual(result["repository_count"], 9)
         self.assertIsNone(result["verified_revenue"])
         for item in result["projects"]:
             self.assertIsNone(item["baseline_value"])
@@ -83,7 +84,8 @@ class ProjectRegistryTests(unittest.TestCase):
             source_sha=SHA,
         )
         retally = next(row for row in result["projects"] if row["id"] == "retally")
-        self.assertEqual(retally["status"], "MEASURED_OUTCOME_RECORDED")
+        self.assertEqual(retally["status"], "OPERATOR_FEEDBACK_RECORDED")
+        self.assertIsNone(retally["measured_result"])
         research_labs = next(row for row in result["projects"] if row["id"] == "research-labs")
         self.assertEqual(research_labs["operator_outcome_count"], 0)
         starblox = next(row for row in result["projects"] if row["id"] == "starblox")
@@ -93,6 +95,43 @@ class ProjectRegistryTests(unittest.TestCase):
         result = build_project_portfolio(canonical_report(), [], source_sha=SHA)
         self.assertEqual(result["status"], "BLOCKED")
         self.assertEqual(set(result["missing_repositories"]), set(extended_repositories()))
+
+    def test_retally_and_factory_priority_is_not_customer_activation(self):
+        report = build_project_portfolio(
+            canonical_report(),
+            [repo_row(r) for r in extended_repositories()],
+            source_sha=SHA,
+        )
+        work = report["priority_improvements"]
+        self.assertEqual([x["project_id"] for x in work], ["retally", "product-factory"])
+        self.assertEqual(work[1]["repository"], "P00NSMASHER/x402-product-factory")
+        self.assertEqual([x["priority"] for x in work], [1, 2])
+        self.assertIn("restricted runtime", work[0]["activation_gate"])
+        self.assertIn("buyer demand", work[1]["activation_gate"])
+        for task in work:
+            self.assertIsNone(task["baseline_value"])
+            self.assertIsNone(task["measured_result"])
+            self.assertFalse(task["real_customer_activation_authority"])
+
+    def test_factory_ci_failure_is_not_hidden(self):
+        snapshots = [repo_row(r) for r in extended_repositories()]
+        app = next(r for r in snapshots if r["repository"] ==
+                   "P00NSMASHER/x402-product-factory")
+        app["checks"] = [{"name": "factory", "status": "completed",
+                          "conclusion": "failure"}]
+        report = build_project_portfolio(canonical_report(), snapshots, source_sha=SHA)
+        self.assertEqual(report["priority_improvements"][1]["source_check_state"],
+                         "ADVERSE_CHECKS_OBSERVED")
+
+    def test_missing_factory_source_is_not_overclaimed(self):
+        snapshots = [repo_row(r) for r in extended_repositories()
+                     if r != "P00NSMASHER/x402-product-factory"]
+        report = build_project_portfolio(canonical_report(), snapshots, source_sha=SHA)
+        self.assertEqual(report["status"], "BLOCKED")
+        self.assertIsNone(report["priority_improvements"][1]["observed_source_sha"])
+        self.assertEqual(report["priority_improvements"][1]["queue_status"],
+                         "SOURCE_UNOBSERVED")
+
 
 class ProjectStageTests(unittest.TestCase):
     def test_projects_reads_only_extended_repositories_within_existing_budget(self):
@@ -119,7 +158,7 @@ class ProjectStageTests(unittest.TestCase):
             result = projects(Store(), SHA, Path(directory) / "projects", api=api)
         self.assertEqual(result["status"], "PASS")
         self.assertEqual(tuple(api.seen), extended_repositories())
-        self.assertEqual(api.requests, 16)
+        self.assertEqual(api.requests, 20)
         self.assertLessEqual(api.requests, policy()["max_requests_per_operation"])
 
     def test_cli_projects_never_mutates_original_canonical_sqlite(self):

@@ -39,7 +39,7 @@ def validate_policy():
             require(hashlib.sha256((ROOT/path).read_bytes()).hexdigest()==entry["sha256"], "archive workflow altered: "+path)
     from brain.projects import load_project_registry
     projects=load_project_registry()
-    require(projects["extended_observation_bound"]==4, "project observation bound changed")
+    require(projects["extended_observation_bound"]==5, "project observation bound changed")
     source=(workflow_dir/"brain-cycle.yml").read_text()
     require("python -m brain projects" in source and "continue-on-error: true" in source,
             "cross-project read-only stage missing or allowed to block canonical publication")

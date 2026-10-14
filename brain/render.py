@@ -160,6 +160,17 @@ def write_report(report, output):
     for candidate in report.get("reuse_candidates",[])[:10]:
         lines.append(f'- [{candidate["repository"]}/{candidate["path"]}]({candidate["source_ref"]}) — {candidate["target"]}; structural score {candidate["reuse_score"]}; license {candidate["license"]}; {candidate["utility_evidence"]}')
     if report.get("scope") == "READ_ONLY_CROSS_PROJECT_IMPROVEMENT_QUEUE":
+        lines.extend(["", "## RETALLY and Product Factory priority experiments", ""])
+        for task in report.get("priority_improvements", []):
+            sha = task["observed_source_sha"]
+            head = sha[:8] if isinstance(sha, str) else "UNOBSERVED"
+            lines.append(
+                f'- Priority {task["priority"]}: {task["project_id"]} @ {head}; '
+                f'{task["queue_status"]}; CI evidence: {task["source_check_state"]}. '
+                f'Next: {task["next_test"]} '
+                f'Required evidence: {task["required_evidence"]} '
+                f'Activation: {task["activation_gate"]}'
+            )
         lines.extend(["", "## Project improvement queue", ""])
         for project in report.get("projects", []):
             revision = project.get("repository_revision")
