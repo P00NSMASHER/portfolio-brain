@@ -128,3 +128,15 @@ source-pinned. This is bounded evidence rotation, not autonomous project
 deployment or verified commercial improvement.
 
 Offline GitHub artifact evidence verification: see `docs/rebuild/ORIGINAL_PROJECT_EVIDENCE.md`.
+
+### Autonomous repair handoff, not just finding generation
+
+The `projects` stage compiles the three highest-ranked distinct current
+RETALLY and App Factory source candidates into an **owner-directed fix-and-verify
+batch** of at most five concrete technical actions. Every action names an
+immutable PR revision, the accountable project owner, a separate QA owner,
+failing/unknown exact-head CI conditions, negative tests, release holds and
+stable deduplication IDs. Existing scheduled project owners may implement
+approved routine source fixes without further prompting; this module cannot
+authorize a GitHub token, merge protected code or contact real buyers. See
+`brain/repair_autonomy.py` and the original repair-control issue #689.

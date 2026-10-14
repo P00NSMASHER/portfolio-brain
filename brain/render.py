@@ -217,6 +217,28 @@ def write_report(report, output):
             "Work packets are operator review targets, not merged patches, executed "
             "downstream tests, verified revenue or approved production releases."
         )
+        execution = report.get("autonomous_repair_queue") or {}
+        if execution:
+            lines.extend(["", "## Owner-directed technical repair execution", ""])
+            lines.append(
+                f'{execution["selected_count"]} source-pinned actions selected; '
+                f'{execution["deferred_due_to_batch_bound"]} deferred by bounded batch; '
+                f'{execution["suppressed_duplicate_count"]} already reported exact fingerprints.'
+            )
+            for step in execution["actions"]:
+                lines.append(
+                    f'- [{step["project_id"]} PR #{step["candidate_pr_number"]}]'
+                    f'({step["candidate_pr_url"]}) @ {step["source_head_sha"][:12]}: '
+                    f'{step["stage"]}. Owner: {step["owner_task"]}; '
+                    f'independent gate: {step["independent_gate_owner"]}. '
+                    f'Next: {step["first_action"]} '
+                    f'Release hold: {step["required_release_gate"]}'
+                )
+            lines.append(
+                "These are source-bound implementation instructions for existing owners. "
+                "No upstream provider code was executed; no protected merge, "
+                "customer action, revenue, or live deployment has been approved."
+            )
         lines.extend(["", "## Project improvement queue", ""])
         for project in report.get("projects", []):
             revision = project.get("repository_revision")

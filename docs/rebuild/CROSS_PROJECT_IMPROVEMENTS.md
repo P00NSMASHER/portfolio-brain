@@ -171,3 +171,29 @@ check nor an incomplete source is misrepresented as production value.
 
 No new tasks, recurring triggers, external requests beyond the original bound,
 production mutation, secrets, paid services, customers or approval changes.
+
+## Closed-loop project repair handoff (October 14)
+
+The prior report produced high-quality *ideas for tests*, but its task output
+did not designate distinct implementation owners or concrete first failure
+steps. The new `brain/repair_autonomy.py` compiles source-pinned PR/CI
+observations and existing project-specific falsification tests into a bounded
+work batch for the **existing scheduled RETALLY and App Factory owners**.
+
+Each selected source has:
+- a stable issue deduplication key independent of successive source heads;
+- an exact-head/CI evidence key that changes on substantive new evidence;
+- an explicit task owner, a separate independent QA gate, and bounded urgency;
+- one next action: fix exact-source CI, obtain missing CI, reconcile the stack,
+  or inspect independent delivery evidence;
+- original source proof and owner-specific negative tests;
+- absolute release holds for actual customer/privacy/financial/production steps.
+
+Previously handled exact evidence may be supplied to suppress repetitive
+handoffs without erasing failures. Head/CI changes reopen the same stable issue
+identity for automatic revalidation. This compiles up to five work instructions
+**without extra GitHub GETs, persistent writes or new schedules**. It is a
+technically executable handoff to separately authorized tools, **not** a direct
+GitHub writer, automatic merge guarantee or business-value verification.
+The unresolved actual bottleneck is safe code patch execution and independently
+protected promotion; keep signed-soak and the real release gates distinct.

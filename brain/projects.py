@@ -311,6 +311,11 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha,
         len(row["actionable_review_packets"])
         for row in result["evidence_to_action_packets"]
     )
+    from brain.repair_autonomy import repair_batch
+    result["autonomous_repair_queue"] = repair_batch(result)
+    result["autonomous_repair_action_count"] = (
+        result["autonomous_repair_queue"]["selected_count"]
+    )
     result["measured_project_outcomes"] = 0
     result["real_buyer_confirmed_outcomes"] = None
     return result
