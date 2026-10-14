@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 from brain.core import BrainError
-from brain.soak_inventory import audit_run_inventory, main
+from brain.soak_inventory import audit_run_inventory, project_native_actions_page, main
 
 SHA = "f39a8b2ad88b6e1f0db246b586c89a9d611a566c"
 OLD = "a" * 40
@@ -202,6 +202,87 @@ class SoakInventoryTests(unittest.TestCase):
             [r["run_id"] for r in assess(newer, older)["run_rows"]],
             [1,2],
         )
+
+    def test_raw_github_page_is_source_scoped_and_strips_actor_details(self):
+        raw = {
+            "total_count": 100,
+            "workflow_runs": [
+                {
+                    **run(1, event="schedule", conclusion="success"),
+                    "id": 1, "name": "brain-cycle-v2",
+                    "repository": {"full_name": "P00NSMASHER/portfolio-brain"},
+                    "actor": {"login": "PRIVATE_ACTOR_SENTINEL"},
+                    "run_attempt": 1,
+                },
+                {
+                    **run(2, event="schedule", conclusion="failure"),
+                    "id": 2, "name": "brain-cycle-v2",
+                    "repository": {"full_name": "P00NSMASHER/portfolio-brain"},
+                    "secrets": "DO_NOT_EXPORT_SENTINEL",
+                },
+                {
+                    "name": "foundation-ci", "id": 88,
+                    "repository": {"full_name": "other/project"},
+                },
+            ],
+        }
+        selected = project_native_actions_page(raw)
+        self.assertEqual(len(selected), 2)
+        self.assertFalse(any("actor" in item or "secrets" in item
+                             for item in selected))
+        report = assess(*selected)
+        self.assertEqual(report["exact_source_failures_observed"], 1)
+        self.assertEqual(report["native_schedule_success_candidates"], 1)
+        self.assertNotIn("PRIVATE_ACTOR_SENTINEL", json.dumps(report))
+        self.assertNotIn("DO_NOT_EXPORT_SENTINEL", json.dumps(report))
+        self.assertFalse(report["production_accepted"])
+
+    def test_raw_github_page_rejects_other_repository_core_workflow(self):
+        candidate = {**run(1), "id":1, "name":"brain-cycle-v2",
+                     "repository":{"full_name":"attacker/forged"}}
+        with self.assertRaises(BrainError):
+            project_native_actions_page({
+                "total_count": 1, "workflow_runs": [candidate],
+            })
+
+    def test_raw_github_page_malformed_rows_do_not_claim_no_source_failures(self):
+        for bad in (
+            {"total_count": -1, "workflow_runs": []},
+            {"total_count": 0, "workflow_runs": [{}]},
+            {"total_count": 1, "workflow_runs": [None]},
+            {"total_count": True, "workflow_runs": []},
+            {"total_count": 0, "workflow_runs": "not a list"},
+        ):
+            with self.subTest(bad=bad), self.assertRaises(BrainError):
+                project_native_actions_page(bad)
+
+    @unittest.skipUnless(os.name=="posix", "private output permissions require POSIX")
+    def test_cli_accepts_raw_provider_page_without_calling_github(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            src = root/"raw-github.json"
+            out = root/"soak-inventory-advisory.json"
+            candidate = {**run(9, event="workflow_dispatch", conclusion="failure"),
+                         "id":9, "name":"brain-cycle-v2",
+                         "repository":{"full_name":"P00NSMASHER/portfolio-brain"},
+                         "actor":{"login":"SECRET_IN_PROVIDER_DATA"}}
+            src.write_text(json.dumps({
+                "total_count": 11602, "workflow_runs":[candidate],
+            }))
+            before = src.read_bytes()
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = main([
+                    "--input",str(src), "--output",str(out),
+                    "--expected-sha",SHA,"--checked-at",CHECKED,
+                ])
+            self.assertEqual(result, 0)
+            self.assertEqual(src.read_bytes(), before)
+            self.assertEqual(out.stat().st_mode & 0o777, 0o600)
+            payload = json.loads(out.read_text())
+            self.assertFalse(payload[
+                "caller_claims_pagination_complete_NOT_AUTHENTICATED"])
+            self.assertEqual(payload["exact_source_failures_observed"],1)
+            self.assertNotIn("SECRET_IN_PROVIDER_DATA",out.read_text())
 
     @unittest.skipUnless(os.name=="posix", "private output permissions on POSIX")
     def test_cli_new_private_advisory_does_not_modify_input(self):
