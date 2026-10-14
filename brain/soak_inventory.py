@@ -111,8 +111,11 @@ def audit_run_inventory(rows, *, expected_sha, checked_at,
     keys = [(entry["run_id"], entry["run_attempt"]) for entry in entries]
     require(len(set(keys)) == len(keys),
             "INVENTORY_DUPLICATE_PROVIDER_RUN_ATTEMPT")
+    # Normalize UTC instants: lexical sort misorders Z and fractional-Z
+    # timestamps with different precision, even on the same second.
     entries.sort(key=lambda entry: (
-        entry["provider_last_updated_at"], entry["run_id"], entry["run_attempt"],
+        timestamp(entry["provider_last_updated_at"]),
+        entry["run_id"], entry["run_attempt"],
     ))
     counts = {name: 0 for name in _CLASSES}
     for entry in entries:
