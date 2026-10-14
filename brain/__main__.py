@@ -116,18 +116,24 @@ def doctor(store, sha, output):
     return result
 
 def projects(store, sha, output, *, api=None):
-    """Observe extended repo-backed projects and build an honest improvement queue.
+    """Prioritize source-pinned RETALLY and Factory PR evidence before optional breadth.
 
-    Core canonical state remains owned by the existing monitor. Extended project
-    snapshots are read-only execution evidence and are not inserted into SQLite,
-    so an optional project's provider failure cannot corrupt or stale core state.
+    One existing GET-only adapter and at most 24 combined GitHub requests.
+    The canonical SQLite state remains an untouched isolated read; failures in
+    optional source observation cannot invent a successful value outcome.
     """
-    from brain.projects import build_project_portfolio, extended_repositories
+    from brain.projects import FOCUS, build_project_portfolio, extended_repositories
+    from brain.pr_intelligence import observe_priority_prs
+
     canonical = store.read_report(sha)
     api = api or GitHub(private=store.visibility == "PRIVATE")
     snapshots, errors = [], []
     observed_at = utcnow()
-    for repository in extended_repositories():
+    extended = extended_repositories()
+    factory = "P00NSMASHER/x402-product-factory"
+    require(extended and extended[0] == factory, "PROJECT_FOCUS_ORDER_INVALID")
+
+    def observe_one(repository):
         try:
             payload, private = api.observe(repository)
             require(private is False or store.visibility == "PRIVATE",
@@ -144,8 +150,12 @@ def projects(store, sha, output, *, api=None):
                 "error_class": type(exc).__name__,
                 "error": str(exc)[:300],
             })
-    from brain.projects import FOCUS
-    from brain.pr_intelligence import observe_priority_prs
+
+    # Factory is the one mandatory extended observation for the two focus
+    # projects; RETALLY is already in the four-repository canonical snapshot.
+    observe_one(factory)
+    requests_after_priority_source = api.requests
+
     observed = {
         row["repository"]: row
         for row in (*canonical.get("repositories", []), *snapshots)
@@ -156,17 +166,42 @@ def projects(store, sha, output, *, api=None):
     focused = observe_priority_prs(
         api, observed, review_contracts=FOCUS, cycle_index=cycle_index,
     )
+    requests_after_priority_prs = api.requests
+
+    # Collect remaining lower-priority project context only AFTER bounded
+    # priority PR evidence. Every source snapshot normally requires at least
+    # four calls; skip knowingly impossible attempts with an explicit gap.
+    for repository in extended[1:]:
+        if (type(api.requests) is int and
+                api.requests > policy()["max_requests_per_operation"] - 4):
+            errors.append({
+                "repository": repository,
+                "error_class": "OptionalSourceBudget",
+                "error": "OPTIONAL_SOURCE_NOT_ATTEMPTED_INSUFFICIENT_GET_BUDGET",
+            })
+            continue
+        observe_one(repository)
+
     result = build_project_portfolio(
         canonical, snapshots, source_sha=sha, priority_prs=focused,
     )
     result["operation"] = {
         "name": "projects",
         "requests": api.requests,
-        "extended_repositories": list(extended_repositories()),
+        "extended_repositories": list(extended),
+        "priority_sources_checked_first": [factory],
+        "requests_after_priority_source": requests_after_priority_source,
+        "requests_after_priority_prs": requests_after_priority_prs,
         "priority_pr_review_coverage": result["priority_review_coverage"],
         "ci_rotation_sequence": cycle_index,
         "errors": errors,
     }
+    result["focused_work_readiness"] = (
+        "SOURCE_PINNED_TECHNICAL_REVIEW_AVAILABLE_NOT_RELEASE_APPROVAL"
+        if result["priority_review_coverage"] ==
+           "SOURCE_PINNED_CHECK_PAGES_OBSERVED_NOT_RELEASE_PROOF"
+        else "FOCUSED_TECHNICAL_EVIDENCE_INCOMPLETE"
+    )
     if errors:
         result["status"] = "BLOCKED"
     write_report(result, output)

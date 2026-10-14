@@ -206,6 +206,117 @@ class ProjectStageTests(unittest.TestCase):
         self.assertEqual(api.requests, 20)
         self.assertLessEqual(api.requests, policy()["max_requests_per_operation"])
 
+    def test_priority_sources_and_pr_ci_precede_optional_project_observations(self):
+        from brain.projects import FOCUS
+
+        factory = "P00NSMASHER/x402-product-factory"
+        retally = "P00NSMASHER/github-value-hunt-ledger"
+
+        class Store:
+            visibility = "PUBLIC"
+            def read_report(self, sha):
+                return canonical_report()
+
+        class API:
+            def __init__(self, extra_optional_reads=0):
+                self.requests = 0
+                self.calls = []
+                self.extra_optional_reads = extra_optional_reads
+
+            def observe(self, repository):
+                self.calls.append("observe:" + repository)
+                self.requests += 4
+                if (repository != factory
+                        and self.extra_optional_reads):
+                    self.requests += self.extra_optional_reads
+                    self.extra_optional_reads = 0
+                if self.requests > policy()["max_requests_per_operation"]:
+                    raise RuntimeError("test should have skipped budget overrun")
+                payload = dict(repo_row(repository))
+                for key in ("key", "observed_at", "data_kind"):
+                    payload.pop(key)
+                return payload, False
+
+            def get(self, path):
+                self.calls.append("get:" + path)
+                self.requests += 1
+                if self.requests > policy()["max_requests_per_operation"]:
+                    raise RuntimeError("test should not exceed GET budget")
+                repository = retally if retally in path else factory
+                if "/pulls?" in path:
+                    number = 329 if repository == retally else 43
+                    title = ("RETALLY first-customer controls" if
+                             repository == retally else
+                             "Automate ideas and private deployment")
+                    return [{
+                        "number": number,
+                        "state": "open",
+                        "draft": True,
+                        "title": title,
+                        "updated_at": "2026-10-14T08:00:00Z",
+                        "html_url": f"https://github.com/{repository}/pull/{number}",
+                        "head": {"sha": SHA, "ref": "research/head",
+                                 "repo": {"full_name": repository}},
+                        "base": {"ref": "main",
+                                 "repo": {"full_name": repository}},
+                    }]
+                return {"total_count": 1, "check_runs": [
+                    {"id": 123, "head_sha": SHA, "status": "completed",
+                     "conclusion": "success"},
+                ]}
+
+        api = API()
+        with tempfile.TemporaryDirectory() as directory:
+            result = projects(Store(), SHA, Path(directory) / "report", api=api)
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(api.requests, 24)
+        self.assertEqual(result["operation"]["requests_after_priority_source"], 4)
+        self.assertEqual(result["operation"]["requests_after_priority_prs"], 8)
+        self.assertEqual(result["technical_review_packet_count"], 2)
+        self.assertEqual(
+            result["focused_work_readiness"],
+            "SOURCE_PINNED_TECHNICAL_REVIEW_AVAILABLE_NOT_RELEASE_APPROVAL",
+        )
+        self.assertTrue(api.calls[0].startswith("observe:" + factory))
+        self.assertTrue(all(call.startswith("get:") for call in api.calls[1:5]))
+        self.assertTrue(all(call.startswith("observe:") for call in api.calls[5:]))
+        self.assertFalse(result["autonomous_downstream_writes"])
+
+    def test_optional_extra_pagination_preserves_priority_and_never_fakes_completion(self):
+        class Store:
+            visibility = "PUBLIC"
+            def read_report(self, sha):
+                return canonical_report()
+
+        class API:
+            def __init__(self):
+                self.requests = 0
+                self.seen = []
+            def observe(self, repo):
+                self.seen.append(repo)
+                self.requests += 6 if repo != extended_repositories()[0] else 4
+                if self.requests > 24:
+                    raise RuntimeError("Budget overrun should be skipped")
+                payload = dict(repo_row(repo))
+                for key in ("key", "observed_at", "data_kind"):
+                    payload.pop(key)
+                return payload, False
+
+        api = API()
+        with tempfile.TemporaryDirectory() as directory:
+            result = projects(Store(), SHA, Path(directory) / "report", api=api)
+        self.assertEqual(api.seen[0], "P00NSMASHER/x402-product-factory")
+        self.assertLessEqual(api.requests, 24)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertEqual(result["focused_work_readiness"],
+                         "FOCUSED_TECHNICAL_EVIDENCE_INCOMPLETE")
+        self.assertTrue(any(
+            row["error"] == "OPTIONAL_SOURCE_NOT_ATTEMPTED_INSUFFICIENT_GET_BUDGET"
+            for row in result["operation"]["errors"]
+        ))
+        self.assertTrue(result["missing_repositories"])
+        self.assertEqual(result["verified_revenue"], None)
+
     def test_cli_projects_never_mutates_original_canonical_sqlite(self):
         class API:
             requests = 0

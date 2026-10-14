@@ -153,3 +153,21 @@ skips, partial results, and unknown CI are kept separate from passing gates,
 deployed features, buyer demand, actual savings, and operator-reviewed releases.
 No additional scheduler, state table, credential, cloud deployment, or
 downstream modification authority.
+
+## Priority-first GET allocation for measurable downstream usefulness
+
+The read-only project stage now resolves the first-priority App Factory
+default-branch source first, then collects bounded exact-head RETALLY and
+App Factory pull-request/CI evidence, **before** observing unrelated optional
+research repositories. The canonical four-repository state remains unchanged
+and the same original adapter, credentials, 24-GET cap and workflow are reused.
+
+The stage explicitly records request counts at each priority milestone.
+When pagination or retry leaves fewer than four GETs for an optional snapshot,
+it records an unobserved gap rather than spending beyond its approved budget.
+Such a report is BLOCKED for complete portfolio coverage but still includes
+the independently labeled focused-review result; neither a green technical
+check nor an incomplete source is misrepresented as production value.
+
+No new tasks, recurring triggers, external requests beyond the original bound,
+production mutation, secrets, paid services, customers or approval changes.
