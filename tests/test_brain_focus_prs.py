@@ -92,6 +92,88 @@ class FocusSourceTests(unittest.TestCase):
             self.assertFalse(record["payment_or_external_contact_authority"])
             self.assertFalse(record["buyer_value_verified"])
 
+    def test_canonical_sequence_rotates_ci_across_three_distinct_themes(self):
+        retally_rows = [
+            pr(RET, 329, SHA_A, "first", "main",
+               title="RETALLY first-customer onboarding"),
+            pr(RET, 343, SHA_B, "invoice", "main",
+               title="Review cross-shipment invoice reuse"),
+            pr(RET, 460, "c" * 40, "m55", "research/m54",
+               title="RETALLY journal replay"),
+        ]
+        expected = [329, 343, 460, 329, 343, 460]
+        for sequence, pr_number in enumerate(expected):
+            with self.subTest(sequence=sequence):
+                record = _candidate_from_list(
+                    retally_rows, RET, "retally", "main",
+                    check_rank=sequence,
+                )
+                self.assertEqual(record["pr_number"], pr_number)
+                self.assertEqual(record["selected_ci_review_rank"], sequence % 3 + 1)
+                self.assertEqual(record["selected_ci_review_pool"], 3)
+                self.assertEqual([x["pr_number"]
+                                  for x in record["ranked_opportunities"]],
+                                 [329, 343, 460])
+                self.assertEqual(record["ci_rotation_basis"],
+                                 "CANONICAL_SEQUENCE_ROUND_ROBIN_NOT_VALUE_EVIDENCE")
+
+    def test_rotation_cannot_be_negative_boolean_or_unbounded(self):
+        rows = [pr(RET, 329, SHA_A, "first", "main",
+                   title="RETALLY first-customer onboarding")]
+        for index in (-1, True, 2**63, "1", None):
+            with self.subTest(index=index), self.assertRaises(BrainError):
+                _candidate_from_list(rows, RET, "retally", "main",
+                                     check_rank=index)
+        for index in (True, -1, 2**63):
+            with self.subTest(index=index), self.assertRaises(BrainError):
+                observe_priority_prs(Adapter(), sources(),
+                                     review_contracts=FOCUS,
+                                     cycle_index=index)
+
+    def test_rotating_evidence_spends_no_additional_provider_reads(self):
+        class RotatingAPI:
+            def __init__(self):
+                self.requests = 20
+                self.calls = []
+            def get(self, path):
+                self.calls.append(path)
+                self.requests += 1
+                if "/pulls?" in path:
+                    repo = RET if RET in path else FACT
+                    if repo == RET:
+                        return [
+                            pr(RET, 329, SHA_A, "first", "main",
+                               title="RETALLY first-customer onboarding"),
+                            pr(RET, 343, SHA_B, "invoices", "main",
+                               title="Review cross-shipment invoice reuse"),
+                        ]
+                    return [
+                        pr(FACT, 43, SHA_A, "idea-deploy", "stack",
+                           title="Automate ideas and private deployments"),
+                        pr(FACT, 46, SHA_B, "buyer", "stack",
+                           title="Unify buyer evidence and pilots"),
+                    ]
+                if "/check-runs?" in path:
+                    sha = path.split("/commits/", 1)[1].split("/", 1)[0]
+                    return {"total_count": 1, "check_runs": [check(100, sha)]}
+                raise AssertionError("unexpected provider GET")
+        api = RotatingAPI()
+        result = observe_priority_prs(
+            api, sources(), review_contracts=FOCUS, cycle_index=1,
+        )
+        self.assertEqual(api.requests, 24)
+        self.assertEqual(len(api.calls), 4)
+        self.assertTrue(all("/pulls?" in path for path in api.calls[:2]))
+        self.assertTrue(all("/check-runs?" in path for path in api.calls[2:]))
+        self.assertEqual(result["retally"]["pr_number"], 343)
+        self.assertEqual(result["product-factory"]["pr_number"], 46)
+        for record in result.values():
+            self.assertEqual(record["checks"]["status"],
+                             "CHECKS_GREEN_NOT_RELEASE_OR_BUSINESS_ACCEPTANCE")
+            self.assertFalse(record["buyer_value_verified"])
+            self.assertFalse(record["production_merge_authority"])
+            self.assertFalse(record["payment_or_external_contact_authority"])
+
     def test_full_budget_skips_both_without_network_access(self):
         api = Adapter(requests=24)
         report = observe_priority_prs(api, sources(), review_contracts=FOCUS)

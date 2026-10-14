@@ -128,9 +128,11 @@ def _strict_pr(raw, repo):
     }
 
 
-def _candidate_from_list(rows, repo, project_id, default_branch):
+def _candidate_from_list(rows, repo, project_id, default_branch, *, check_rank=0):
     require(type(rows) is list and len(rows) <= SAMPLE_SIZE,
             "FOCUS_PR_BOUNDED_PAGE_INVALID")
+    require(type(check_rank) is int and 0 <= check_rank <= 2**63-1,
+            "FOCUS_ROTATION_INVALID")
     valid, invalid, ids = [], 0, set()
     for raw in rows:
         try:
@@ -177,7 +179,13 @@ def _candidate_from_list(rows, repo, project_id, default_branch):
     }
     if not matching:
         return dict(base, status="NO_MATCHING_PR_IN_BOUNDED_SAMPLE")
-    top = matching[0]
+    # A stable sequence rotates proof work across distinct high-value themes.
+    # Do NOT turn the latest candidate or a single repeatedly green PR into
+    # evidence that every useful project idea has been checked.
+    probe_count = min(3, len(shortlisted))
+    selected_rank = check_rank % probe_count
+    selected_number = shortlisted[selected_rank]["pr_number"]
+    top = next(p for p in matching if p["number"] == selected_number)
     parent = next((p["number"] for p in valid
                    if p["number"] != top["number"]
                    and p["head_ref"] == top["base_ref"]), None)
@@ -191,6 +199,9 @@ def _candidate_from_list(rows, repo, project_id, default_branch):
         base_ref=top["base_ref"],
         draft=top["draft"],
         updated_at=top["updated_at"],
+        selected_ci_review_rank=selected_rank + 1,
+        selected_ci_review_pool=probe_count,
+        ci_rotation_basis="CANONICAL_SEQUENCE_ROUND_ROBIN_NOT_VALUE_EVIDENCE",
         opportunity_theme=top["opportunity_theme"],
         heuristic_relevance=top["heuristic_relevance"],
         fixed_rationale=top["fixed_rationale"],
@@ -262,7 +273,7 @@ def _action(review, experiment):
     return f"Independently review PR #{number}; then " + experiment
 
 
-def observe_priority_prs(api, observed_sources, *, review_contracts):
+def observe_priority_prs(api, observed_sources, *, review_contracts, cycle_index=0):
     """Two bounded PR pages then up to two exact-head check pages.
 
     No extra adapter, state writer, schedule, provider scope, or authority.
@@ -270,7 +281,9 @@ def observe_priority_prs(api, observed_sources, *, review_contracts):
     """
     ceiling = policy()["max_requests_per_operation"]
     require(ceiling == 24 and type(observed_sources) is dict
-            and type(review_contracts) is dict, "FOCUS_INPUT_INVALID")
+            and type(review_contracts) is dict
+            and type(cycle_index) is int and 0 <= cycle_index <= 2**63-1,
+            "FOCUS_INPUT_INVALID")
     reports = {}
     for project, repo in FOCUS_REPOSITORIES:
         source = observed_sources.get(repo)
@@ -293,7 +306,9 @@ def observe_priority_prs(api, observed_sources, *, review_contracts):
                 f"/repos/{repo}/pulls?state=open&per_page={SAMPLE_SIZE}"
                 "&sort=updated&direction=desc"
             )
-            report = _candidate_from_list(page, repo, project, default)
+            report = _candidate_from_list(
+                page, repo, project, default, check_rank=cycle_index,
+            )
             if "pr_number" not in report:
                 report["checks"] = _unavailable("NOT_SELECTED")["checks"]
             reports[project] = report

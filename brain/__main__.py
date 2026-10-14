@@ -150,7 +150,12 @@ def projects(store, sha, output, *, api=None):
         row["repository"]: row
         for row in (*canonical.get("repositories", []), *snapshots)
     }
-    focused = observe_priority_prs(api, observed, review_contracts=FOCUS)
+    cycle_index = canonical.get("state_sequence")
+    require(type(cycle_index) is int and 0 <= cycle_index <= 2**63 - 1,
+            "PROJECT_SOURCE_SEQUENCE_UNVERIFIED")
+    focused = observe_priority_prs(
+        api, observed, review_contracts=FOCUS, cycle_index=cycle_index,
+    )
     result = build_project_portfolio(
         canonical, snapshots, source_sha=sha, priority_prs=focused,
     )
@@ -159,6 +164,7 @@ def projects(store, sha, output, *, api=None):
         "requests": api.requests,
         "extended_repositories": list(extended_repositories()),
         "priority_pr_review_coverage": result["priority_review_coverage"],
+        "ci_rotation_sequence": cycle_index,
         "errors": errors,
     }
     if errors:

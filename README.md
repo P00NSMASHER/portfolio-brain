@@ -120,3 +120,9 @@ pinning three review packets to precise PR and source commit identities.
 Each packet includes proposed tests, adverse controls, a measurable acceptance
 metric and real production/business holds. The queue does not patch downstream
 code, message buyers, spend funds or count green CI as realized value.
+
+The optional focused PR reviewer rotates its exact-head CI checks among
+the top three distinct RETALLY and App Factory opportunity themes using the
+canonical sequence. Ranking stays relevance-only and every check remains
+source-pinned. This is bounded evidence rotation, not autonomous project
+deployment or verified commercial improvement.

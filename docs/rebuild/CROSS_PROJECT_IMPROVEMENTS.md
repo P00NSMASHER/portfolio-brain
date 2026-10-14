@@ -135,3 +135,21 @@ Measurement baseline, before/after improvement, independently verified buyer
 outcomes, savings and revenue remain null/unknown until established by actual
 project-specific tests and authorized evidence. Existing synthetic workflows
 and historical CI cannot satisfy those independent gates.
+
+## Fair source-bound CI evidence across active project work
+
+The selected exact-head PR check is now rotated by the **verified canonical
+state sequence modulo up to three distinct high-priority themes** per project.
+The relevance-ranked shortlist is unchanged: only which candidate gets this
+run's one read-only check-page query changes. This mitigates blind spots where
+new first-customer and buyer-evidence drafts are ranked second behind their
+more mature parent initiatives. The rotation does **not guarantee** temporal
+coverage if canonical sequence steps repeatedly land on the same residue;
+reports expose the selected rank and sequence rather than claiming otherwise.
+
+No new GitHub GETs: five extended repositories, two PR pages and two selected
+exact-commit check pages still share the hard 24-request bound. Source checks,
+skips, partial results, and unknown CI are kept separate from passing gates,
+deployed features, buyer demand, actual savings, and operator-reviewed releases.
+No additional scheduler, state table, credential, cloud deployment, or
+downstream modification authority.
