@@ -30,6 +30,51 @@ def _branch(value):
     return value
 
 
+def _heuristic_theme(repo, title):
+    """Operator triage heuristic, NOT a verified outcome or buyer-demand model.
+
+    No external text appears in output. Fixed high-impact categories keep
+    sequential research experiments from crowding out real adoption blockers.
+    """
+    words = title.casefold()
+    def has(*terms):
+        return any(re.search(r"(?<![a-z0-9])" + re.escape(term) +
+                             r"(?![a-z0-9])", words) for term in terms)
+    if repo == FOCUS_REPOSITORIES[0][1]:
+        if has("first-customer", "first customer", "onboarding",
+               "engagement", "commercial", "authorization"):
+            return ("FIRST_CUSTOMER_CONTROLS", 96,
+                    "CUSTOMER_READINESS_HYPOTHESIS")
+        if has("invoice", "duplicate", "recovery", "carrier",
+               "shipment", "billing", "fee"):
+            return ("RECOVERY_ACCURACY", 88,
+                    "RECOVERY_CORRECTNESS_HYPOTHESIS")
+        if has("journal", "rollback", "replay", "checkpoint",
+               "security", "cryptographic", "audit"):
+            return ("SECURITY_CONTINUITY", 78,
+                    "SECURITY_RELIABILITY_HYPOTHESIS")
+        if has("social", "marketing", "brand", "website"):
+            return ("MARKETING_EVIDENCE", 35,
+                    "MARKETING_HYPOTHESIS")
+        return ("UNCATEGORIZED_RETALLY", 25, "UNCATEGORIZED_HYPOTHESIS")
+    ideas = has("idea", "ideas", "research", "novelty")
+    deploy = has("deploy", "deployment", "deployments", "hosting", "launch")
+    if ideas and deploy:
+        return ("IDEA_TO_DEPLOYMENT", 96, "SUPPLY_AND_DEPLOYMENT_HYPOTHESIS")
+    if has("buyer", "pilot", "pilots", "sales", "demand", "customer"):
+        return ("BUYER_VALIDATION", 95, "BUYER_EVIDENCE_HYPOTHESIS")
+    if deploy:
+        return ("DEPLOYMENT_READINESS", 88, "DEPLOYMENT_HYPOTHESIS")
+    if ideas:
+        return ("IDEA_QUALITY", 84, "IDEA_QUALITY_HYPOTHESIS")
+    if has("cycle", "cycles", "recover", "recovery", "automation",
+           "autonomous", "persist", "replenish", "build", "builds"):
+        return ("AUTOMATION_RELIABILITY", 74, "AUTOMATION_HYPOTHESIS")
+    if has("family", "inventory", "quote", "app", "saas"):
+        return ("APPLICATION_DEPTH", 55, "APPLICATION_DEPTH_HYPOTHESIS")
+    return ("UNCATEGORIZED_FACTORY", 25, "UNCATEGORIZED_HYPOTHESIS")
+
+
 def _strict_pr(raw, repo):
     """Keep only safe provider identity facts; never emit PR titles or body."""
     require(type(raw) is dict and type(raw.get("number")) is int
@@ -62,16 +107,24 @@ def _strict_pr(raw, repo):
     title = raw.get("title")
     require(type(title) is str and len(title) <= 500,
             "FOCUS_PR_TITLE_INVALID")
+    theme, relevance, rationale = _heuristic_theme(repo, title)
     return {
         "number": number,
         "head_sha": sha,
+        "opportunity_theme": theme,
+        "heuristic_relevance": relevance,
+        "fixed_rationale": rationale,
+        "opportunity_basis": "UNTRUSTED_TITLE_HEURISTIC_ONLY",
         "head_ref": href,
         "base_ref": bref,
         "updated_at": updated,
         "draft": raw["draft"],
         "url": f"https://github.com/{repo}/pull/{number}",
         # The RETALLY ledger contains unrelated projects; title only filters.
-        "retally_named": "retally" in title.casefold(),
+        "retally_named": bool(re.search(
+            r"(?<![a-z0-9])(retally|invoice|freight|carrier|shipment)"
+            r"(?![a-z0-9])", title.casefold())),
+
     }
 
 
@@ -87,13 +140,40 @@ def _candidate_from_list(rows, repo, project_id, default_branch):
             valid.append(pr)
         except (BrainError, KeyError, TypeError, UnicodeError, ValueError):
             invalid += 1
-    valid.sort(key=lambda p: (p["updated_at"], p["number"]), reverse=True)
+    # Rank by fixed project priorities, not recency alone. Diversify the
+    # shortlist by theme so repeated adjacent security labs do not erase
+    # customer conversion work. The score is *relevance only*, never ROI.
+    valid.sort(key=lambda p: (p["heuristic_relevance"],
+                              p["updated_at"], p["number"]), reverse=True)
     matching = [p for p in valid
                 if project_id != "retally" or p["retally_named"]]
+    shortlisted, covered = [], set()
+    for entry in matching:
+        if entry["opportunity_theme"] in covered:
+            continue
+        covered.add(entry["opportunity_theme"])
+        shortlisted.append({
+            "pr_number": entry["number"],
+            "pr_url": entry["url"],
+            "head_sha": entry["head_sha"],
+            "opportunity_theme": entry["opportunity_theme"],
+            "heuristic_relevance": entry["heuristic_relevance"],
+            "fixed_rationale": entry["fixed_rationale"],
+            "draft": entry["draft"],
+            "base_ref": entry["base_ref"],
+            "ci_status": "NOT_CHECKED_IN_PRIORITY_SAMPLE",
+            "buyer_value_verified": False,
+            "measured_revenue": None,
+        })
+        if len(shortlisted) == 4:
+            break
     base = {
         "sampled_count": len(rows),
+        "eligible_count": len(matching),
         "discarded_rows": invalid,
         "sampling_scope": "LATEST_15_OPEN_PRS_NOT_EXHAUSTIVE",
+        "ranking_basis": "FIXED_TITLE_HEURISTIC_NO_CUSTOMER_OR_ROI_EVIDENCE",
+        "ranked_opportunities": shortlisted,
     }
     if not matching:
         return dict(base, status="NO_MATCHING_PR_IN_BOUNDED_SAMPLE")
@@ -111,6 +191,10 @@ def _candidate_from_list(rows, repo, project_id, default_branch):
         base_ref=top["base_ref"],
         draft=top["draft"],
         updated_at=top["updated_at"],
+        opportunity_theme=top["opportunity_theme"],
+        heuristic_relevance=top["heuristic_relevance"],
+        fixed_rationale=top["fixed_rationale"],
+        opportunity_basis=top["opportunity_basis"],
         stacked_on_nondefault_branch=top["base_ref"] != default_branch,
         sampled_parent_pr=parent,
         dependency_scope="BRANCH_REFERENCE_ONLY_NOT_VERIFIED_GIT_ANCESTRY",

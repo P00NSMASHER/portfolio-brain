@@ -192,6 +192,31 @@ def write_report(report, output):
                 f'Required evidence: {task["required_evidence"]} '
                 f'Activation: {task["activation_gate"]}'
             )
+        lines.extend(["", "## Source-pinned improvement work packets", ""])
+        for project in report.get("evidence_to_action_packets", []):
+            lines.append(
+                f'- {project["project_id"]}: '
+                f'{len(project["actionable_review_packets"])} candidate work packets; '
+                f'{project["missing_evidence"]}.'
+            )
+            for work in project["actionable_review_packets"][:3]:
+                lines.append(
+                    f'  - [PR #{work["source_pr_number"]}]({work["source_pr_url"]}) '
+                    f'@ {work["source_head_sha"][:12]} — '
+                    f'{work["theme"]}; heuristic relevance '
+                    f'{work["heuristic_relevance"]}/100 (NOT measured value); '
+                    f'CI: {work["source_ci_status"]}; next gate: {work["action_gate"]}. '
+                    f'Change: {work["next_reviewable_change"]} '
+                    f'Metric: {work["target_metric"]}. '
+                    f'Proof: {work["required_proof_artifact"]}. '
+                    f'Hold: {work["required_release_gate"]}'
+                )
+                for step in work["verification_steps"]:
+                    lines.append(f'    - Proposed validation: {step}')
+        lines.append(
+            "Work packets are operator review targets, not merged patches, executed "
+            "downstream tests, verified revenue or approved production releases."
+        )
         lines.extend(["", "## Project improvement queue", ""])
         for project in report.get("projects", []):
             revision = project.get("repository_revision")

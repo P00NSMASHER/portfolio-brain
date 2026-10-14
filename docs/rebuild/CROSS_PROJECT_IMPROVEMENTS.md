@@ -101,3 +101,37 @@ GETs remains unchanged, including retries and extra check pagination.** If
 higher-priority reads exhaust the budget, focused PR evidence explicitly says
 unverified. No extra schedulers, credentials or canonical ledger mutation.
 Technical CI is not measured improvement or buyer validation.
+
+## Value-first opportunity discovery and delivery packets
+
+The optional source observer now ranks all qualifying PRs in the **latest 15
+open PRs per priority repository** with a transparent project-specific title
+heuristic. This is a *triage relevance score*, not independently established
+demand, monetary return or probability of success. It prioritizes:
+
+- RETALLY: first-customer onboarding and controls, independent invoice/fee
+  review correctness, rollback/replay security, then marketing evidence.
+- App Factory: joint idea discovery + deploy rehearsal, consented buyer
+  validation, deployment proof, genuinely differentiated ideas and finally
+  automation reliability.
+
+Up to four distinct opportunity themes per project are retained and at most
+three are converted into exact-PR-and-SHA-pinned operator work packets. Each
+packet names the first reviewable change, a measurable falsification metric,
+an explicit before/after or hostile test procedure, source artifacts to keep,
+CI and stacked-branch evidence limitations, and actual business activation
+holds. A secondary candidate never borrows the primary candidate's observed
+CI. Malformed paths, forged URLs, duplicate identities and unverified hashes
+cannot become actionable proof.
+
+The App Factory is observed *first* in the five extended-repository phase so
+optional research source pagination cannot starve the user's priority system.
+The four canonical repositories and 24-total-GET bound remain untouched.
+
+This is a technical **proposal-to-review** capability, not autonomous source
+patching or approved downstream deployments. The report's technical review
+packet count measures work packets **created**, not verified project adoption.
+Measurement baseline, before/after improvement, independently verified buyer
+outcomes, savings and revenue remain null/unknown until established by actual
+project-specific tests and authorized evidence. Existing synthetic workflows
+and historical CI cannot satisfy those independent gates.

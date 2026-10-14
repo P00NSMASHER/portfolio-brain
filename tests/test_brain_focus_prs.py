@@ -177,6 +177,57 @@ class FocusSourceTests(unittest.TestCase):
         self.assertNotIn("script", str(value))
         self.assertNotIn("external instruction", str(value))
 
+    def test_first_customer_and_invoice_transfer_outrank_incremental_labs(self):
+        rows = [
+            pr(RET, 460, SHA_A, "research/m55", "research/m54",
+               title="RETALLY Lab M55 journal replay",
+               updated="2026-10-14T00:59:00Z"),
+            pr(RET, 343, SHA_B, "safe/review", "main",
+               title="Portfolio Brain transfer: review cross-shipment invoice ID reuse",
+               updated="2026-10-13T22:00:00Z"),
+            pr(RET, 329, SHA_B, "retally/first", "main",
+               title="RETALLY first-customer controls and onboarding",
+               updated="2026-10-13T20:00:00Z"),
+        ]
+        report = _candidate_from_list(rows, RET, "retally", "main")
+        self.assertEqual(report["pr_number"], 329)
+        self.assertEqual(report["opportunity_theme"], "FIRST_CUSTOMER_CONTROLS")
+        top = report["ranked_opportunities"]
+        self.assertEqual([x["pr_number"] for x in top], [329, 343, 460])
+        self.assertTrue(all(x["buyer_value_verified"] is False for x in top))
+        self.assertTrue(all(x["measured_revenue"] is None for x in top))
+
+    def test_dual_idea_deployment_outranks_recent_unverified_factory_build(self):
+        rows = [
+            pr(FACT, 37, SHA_A, "factory/ideas", "factory/base",
+               title="Continuously replenish researched app ideas",
+               updated="2026-10-14T02:30:00Z"),
+            pr(FACT, 43, SHA_B, "factory/idea-deploy", "factory/base",
+               title="Automate evidence-backed app ideas and rehearse private deployments",
+               updated="2026-10-14T01:00:00Z"),
+            pr(FACT, 35, SHA_A, "factory/buyer", "factory/base",
+               title="Connect buyer research and attested demand",
+               updated="2026-10-13T19:00:00Z"),
+        ]
+        report = _candidate_from_list(rows, FACT, "product-factory", "main")
+        self.assertEqual(report["pr_number"], 43)
+        self.assertEqual([x["opportunity_theme"]
+                          for x in report["ranked_opportunities"]],
+                         ["IDEA_TO_DEPLOYMENT", "BUYER_VALIDATION", "IDEA_QUALITY"])
+        self.assertEqual(report["ranking_basis"],
+                         "FIXED_TITLE_HEURISTIC_NO_CUSTOMER_OR_ROI_EVIDENCE")
+
+    def test_keyword_repetition_does_not_fabricate_higher_buyer_impact(self):
+        one = _candidate_from_list([
+            pr(FACT, 50, SHA_B, "new", "main",
+               title="Automate evidence-backed app ideas and private deployments"),
+        ], FACT, "product-factory", "main")
+        repeated = _candidate_from_list([
+            pr(FACT, 51, SHA_B, "newer", "main",
+               title="Automate ideas ideas ideas deployments deployments"),
+        ], FACT, "product-factory", "main")
+        self.assertEqual(one["heuristic_relevance"], repeated["heuristic_relevance"])
+
     def test_retally_ignores_more_recent_unrelated_ledger_pr(self):
         review = _candidate_from_list([
             pr(RET, 12, SHA_B, "unrelated", "main",

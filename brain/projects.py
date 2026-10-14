@@ -117,9 +117,13 @@ def load_project_registry():
 def extended_repositories():
     document = load_project_registry()
     core = set(policy()["repositories"])
-    return tuple(dict.fromkeys(
+    repositories = tuple(dict.fromkeys(
         row["repository"] for row in document["projects"] if row["repository"] not in core
     ))
+    # Protect the actual App Factory source from starvation under the fixed
+    # 24-GET observation budget; retain all other registration order.
+    factory = "P00NSMASHER/x402-product-factory"
+    return tuple(sorted(repositories, key=lambda r: (r != factory, repositories.index(r))))
 
 
 def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha, priority_prs=None):
@@ -254,7 +258,7 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha,
             "customer_or_external_message_authority": False,
         })
 
-    return {
+    result = {
         "schema_version": 1,
         "status": "PASS" if not missing else "BLOCKED",
         "scope": "READ_ONLY_CROSS_PROJECT_IMPROVEMENT_QUEUE",
@@ -299,3 +303,14 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha,
         "autonomous_downstream_writes": False,
         "trading_authority": False,
     }
+    from brain.value_actions import build_action_packets
+    result["evidence_to_action_packets"] = build_action_packets(
+        result["priority_improvements"]
+    )
+    result["technical_review_packet_count"] = sum(
+        len(row["actionable_review_packets"])
+        for row in result["evidence_to_action_packets"]
+    )
+    result["measured_project_outcomes"] = 0
+    result["real_buyer_confirmed_outcomes"] = None
+    return result

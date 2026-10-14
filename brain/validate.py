@@ -41,6 +41,10 @@ def validate_policy():
     projects=load_project_registry()
     require(projects["extended_observation_bound"]==5, "project observation bound changed")
     from brain.pr_intelligence import FOCUS_REPOSITORIES, SAMPLE_SIZE
+    from brain.value_actions import CONTRACTS
+    require(set(CONTRACTS)=={"retally", "product-factory"}
+            and all(len(v)>=4 for v in CONTRACTS.values()),
+            "focused action contract missing or altered")
     require(SAMPLE_SIZE==15 and
             dict(FOCUS_REPOSITORIES)=={
                 "retally": "P00NSMASHER/github-value-hunt-ledger",

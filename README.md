@@ -108,3 +108,15 @@ source-pinned review actions and stacked draft dependencies. Strict 24-GET bound
 untrusted-metadata validation and fail-closed CI labels preserve separate release,
 buyer-validation and protected-core acceptance requirements. Green CI does not
 imply production deployment, actual buyer value or autonomous external authority.
+
+### Focused evidence-to-action queue
+
+The read-only `brain projects` stage now prioritizes high-leverage
+RETALLY first-customer/accuracy/security work and App Factory
+idea→deployment/buyer-proof work using **bounded exact-open-PR evidence**.
+Instead of defaulting to the newest PR, a transparent fixed-category
+heuristic ranks up to four distinct opportunity themes for each project,
+pinning three review packets to precise PR and source commit identities.
+Each packet includes proposed tests, adverse controls, a measurable acceptance
+metric and real production/business holds. The queue does not patch downstream
+code, message buyers, spend funds or count green CI as realized value.

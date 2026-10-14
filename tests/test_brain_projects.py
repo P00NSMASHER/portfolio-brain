@@ -37,6 +37,10 @@ def canonical_report(candidates=None, outcomes=None):
     }
 
 class ProjectRegistryTests(unittest.TestCase):
+    def test_app_factory_extended_observation_has_priority_under_get_budget(self):
+        self.assertEqual(extended_repositories()[0],
+                         "P00NSMASHER/x402-product-factory")
+
     def test_registry_covers_nine_repo_bindings_without_widening_core(self):
         document = load_project_registry()
         repositories = {row["repository"] for row in document["projects"]}
@@ -59,6 +63,9 @@ class ProjectRegistryTests(unittest.TestCase):
         self.assertEqual(result["status"], "PASS")
         self.assertEqual(result["repository_count"], 9)
         self.assertIsNone(result["verified_revenue"])
+        self.assertEqual(result["technical_review_packet_count"], 0)
+        self.assertEqual(result["measured_project_outcomes"], 0)
+        self.assertIsNone(result["real_buyer_confirmed_outcomes"])
         for item in result["projects"]:
             self.assertIsNone(item["baseline_value"])
             self.assertIsNone(item["measured_result"])
