@@ -126,3 +126,5 @@ the top three distinct RETALLY and App Factory opportunity themes using the
 canonical sequence. Ranking stays relevance-only and every check remains
 source-pinned. This is bounded evidence rotation, not autonomous project
 deployment or verified commercial improvement.
+
+Offline GitHub artifact evidence verification: see `docs/rebuild/ORIGINAL_PROJECT_EVIDENCE.md`.
