@@ -69,6 +69,9 @@ class SixHourNotProductionAcceptanceTests(unittest.TestCase):
 
     def test_missing_one_hourly_cycle_breaks_ninety_minute_gap(self):
         entries=[run(i) for i in range(7) if i!=3]
+        # Preserve valid publication ancestry to isolate the clock gap test;
+        # an actual missing Git state commit is an independent hard failure.
+        entries[3]["state"]["parent"]=entries[2]["state"]["commit"]
         result=window(entries)
         self.assertEqual(result["status"],"FAIL")
         self.assertEqual(result["reason"],"AUTOMATIC_DELIVERY_GAP_EXCEEDED")
