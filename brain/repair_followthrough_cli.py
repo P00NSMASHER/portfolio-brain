@@ -52,19 +52,25 @@ def main(argv=None):
     if type(old) is dict and "next_history" in old:
         old = old["next_history"]
     receipt = _safe_json(args.provider) if args.provider else None
+    original_checks = []
     if type(receipt) is dict:
         require(receipt.get("scope") == "ORIGINAL_GITHUB_READ_ONLY_REPAIR_PROOFS"
                 and receipt.get("automatic_merge_or_deployment_authority") is False
                 and receipt.get("customer_or_external_action_authority") is False
                 and type(receipt.get("proofs")) is list
+                and type(receipt.get("source_checks")) is list
                 and receipt.get("original_api_response_not_signed") is True,
                 "REPAIR_CONTINUATION_PROVIDER_ENVELOPE_UNTRUSTED")
+        original_checks = receipt["source_checks"]
         receipt = receipt["proofs"]
     result = follow_through(
         _safe_json(args.current), cycle=args.cycle,
         history=old,
         provider_receipts=receipt,
     )
+    if original_checks:
+        from brain.repair_provider import apply_original_ci_to_owner_queue
+        result = apply_original_ci_to_owner_queue(result, original_checks)
     write_report(result, args.output)
     print(json.dumps({
         "status": result["status"],

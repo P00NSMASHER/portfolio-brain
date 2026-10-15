@@ -271,6 +271,15 @@ def write_report(report, output):
                 f'gaps={len(source_facts.get("gaps", []))}; '
                 f'GETs={source_facts.get("requests_used", 0)}.'
             )
+            for source_ci in source_facts.get("source_checks", []):
+                lines.append(
+                    f'- {source_ci["repository"]} PR #{source_ci["pr_number"]} '
+                    f'@ {source_ci["source_head_sha"][:12]}: '
+                    f'{source_ci["status"]}; '
+                    f'adverse={source_ci["adverse_count"]}, '
+                    f'incomplete={source_ci["incomplete_count"]}. '
+                    f'Owner must correct source or verify next gate.'
+                )
             lines.append(
                 "Original CI and merge metadata are not production or "
                 "commercial acceptance."

@@ -44,8 +44,8 @@ schedule, ChatGPT task, provider subscription or credentials are created.
   `/pulls/N`, `/branches/main`, and exact
   `/commits/40hex/check-runs?per_page=100`.
   The host is exactly `https://api.github.com`; redirects are refused.
-- At most **8** distinct source PRs and **20** transport requests per owner
-  invocation (usually 5 PRs, 2 cached main lookups = 7 GETs).
+- At most **6** distinct source PRs and **20** transport requests per owner
+  invocation (usually 5 PRs, 5 exact-head check pages and 2 cached main lookups = 12 GETs).
   This is a distinct owner task budget; it never adds calls to the canonical
   Brain's protected **24 GET** main observation operation.
 - One error, 404, stale head, wrong base, fork, unsupported provider shape,
@@ -102,9 +102,10 @@ unchanged **24-GitHub-GET** project-stage cap.
 The existing `python -m brain projects` stage uses remaining read slots to
 check **one source-pinned RETALLY or App Factory PR each normal core run**.
 It rotates the selected source on the trusted native run sequence, not by PR
-recency alone. A typical unmerged PR requires only two original provider GETs:
-actual PR identity and actual latest `main` head. A merged PR on exactly
-current main additionally requires its full original check page.
+recency alone. A typical unmerged PR requires three original provider GETs:
+exact PR identity, latest `main`, and the original exact-head check page.
+A merged PR on exactly current main needs one additional original main
+check page (four GETs total).
 
 When paging/retries leave fewer than three GET slots, original confirmation is
 explicitly `NOT_CHECKED_OR_REQUEST_BUDGET_UNAVAILABLE`, never silently
@@ -116,3 +117,30 @@ bundle. Revalidation can occur on the next unchanged scheduled run without
 adding a cron, new ChatGPT task, paid API, independent verifier bypass or
 production mutation. The existing authorized project owners remain
 responsible for actually implementing and independently releasing repairs.
+
+## Automatic exact-head failure triage
+
+A selected repair PR now yields the original GitHub Actions check page for
+**that candidate SHA**, not merely its merge state. The controller verifies
+each unique check ID, exact head SHA, completion/conclusion, and source
+GitHub App identity. It then checks the original mandatory named jobs:
+RETALLY `release-gate` and `freight`; Factory `test`, `browser`,
+`manufacturing`, `pilot`, and `candidate-build`. No PR title or
+untrusted check name becomes an executable instruction.
+
+- Actual failed/cancelled source CI: `REPRODUCE_AND_FIX_REAL_FAILED_HEAD_CI`
+  for the already-assigned implementation owner, without asking again.
+- Incomplete or missing exact-head CI: restore the source-specific check,
+  never treat skipped/missing tests as approval.
+- Required trusted-App exact-head CI green: proceed to **separate independent
+  QA and existing commercial/release holds**, not directly to merge.
+- An original external/legal/payment hold stays held regardless of new CI
+  status; exhausted corrective retries cannot silently restart.
+- Private `next_history` records the factual CI_RED/CI_GREEN status for the
+  next existing owner run, rather than losing it when the selected PR rotates
+  out of the latest-open sample.
+
+Original merge/main proof, actual live deployment, user value, payments,
+commercial permissions and independent V6 acceptance are separate facts.
+No release, extra provider subscription, new task, token scope or spend
+authority was added.

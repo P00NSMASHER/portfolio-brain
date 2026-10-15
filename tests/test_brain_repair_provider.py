@@ -8,7 +8,7 @@ from brain.repair_autonomy import repair_batch
 from brain.repair_followthrough import follow_through
 from brain.repair_provider import (
     collect_original_proofs, github_transport, MAX_REQUESTS, _work_inputs,
-    _unique_json_pairs,
+    _unique_json_pairs, apply_original_ci_to_owner_queue,
 )
 from test_brain_repair_autonomy import fixture, A, B, RET, FAC
 
@@ -28,7 +28,7 @@ def pr_for(repo, number, sha=A, merged=False, merge=None, state=None):
 
 def original_checks(repo, sha, *, wrong_app=False):
     labels = ("release-gate", "freight") if repo == RET else (
-        "test", "browser", "manufacturing"
+        "test", "browser", "manufacturing", "pilot", "candidate-build"
     )
     return {"total_count": len(labels), "check_runs": [
         {"id": i+1, "name": label, "head_sha": sha,
@@ -68,6 +68,8 @@ def rig():
         number = task["candidate_pr_number"]
         api.put(repo, f"/pulls/{number}", pr_for(repo, number))
         api.put(repo, "/branches/main", {"commit": {"sha": MAIN}})
+        api.put(repo, f"/commits/{A}/check-runs?per_page=100",
+                original_checks(repo, A))
     return plan, api
 
 
@@ -76,7 +78,7 @@ class OriginalProviderEvidenceTests(unittest.TestCase):
         current, api = rig()
         result = collect_original_proofs(current, transport=api)
         self.assertEqual(result["observed_pr_count"], 5)
-        self.assertEqual(result["requests_used"], 7)
+        self.assertEqual(result["requests_used"], 12)
         self.assertEqual(len(result["gaps"]), 0)
         self.assertFalse(result["automatic_merge_or_deployment_authority"])
         self.assertFalse(result["customer_or_external_action_authority"])
@@ -207,10 +209,12 @@ class OriginalProviderEvidenceTests(unittest.TestCase):
             "last_progress_cycle":1,"source_revision_attempts":1
         }
         api.put(FAC,"/pulls/999",pr_for(FAC,999,sha=B))
+        api.put(FAC,f"/commits/{B}/check-runs?per_page=100",
+                original_checks(FAC,B))
         res=collect_original_proofs(current,prior=[missing],
                                     transport=api,max_jobs=6)
         self.assertEqual(res["observed_pr_count"],6)
-        self.assertEqual(res["requests_used"],8)
+        self.assertEqual(res["requests_used"],14)
         self.assertEqual(api.calls[0],(FAC,"/pulls/999"))
 
     def test_read_limit_is_bounded_and_unseen_jobs_not_marked_done(self):
@@ -253,6 +257,167 @@ class OriginalProviderEvidenceTests(unittest.TestCase):
         with self.assertRaises(BrainError):
             json.loads('{"merged":false,"merged":true}',
                        object_pairs_hook=_unique_json_pairs)
+
+    def test_adverse_original_ci_is_source_pinned_action_not_approval(self):
+        current, api = rig()
+        task=current["actions"][0]
+        repo=task["repository"]
+        page=original_checks(repo,A)
+        page["check_runs"][0]["conclusion"]="failure"
+        api.put(repo,f"/commits/{A}/check-runs?per_page=100",page)
+        outcome=collect_original_proofs(current,transport=api)
+        found=next(x for x in outcome["source_checks"]
+                   if x["repository"]==repo)
+        self.assertEqual(found["status"],
+                         "ADVERSE_EXACT_HEAD_CHECKS_NEED_REPAIR")
+        self.assertEqual(found["adverse_count"],1)
+        self.assertTrue(found["technical_only_not_release"])
+        self.assertFalse(found["external_contact_or_financial_authority"])
+        self.assertTrue(all(x["merged"] is False for x in outcome["proofs"]))
+
+    def test_incomplete_or_wrong_app_ci_is_never_green(self):
+        for issue in ("queued","wrong_app","missing"):
+            current, api=rig()
+            repo=current["actions"][0]["repository"]
+            page=original_checks(repo,A)
+            if issue=="queued":
+                page["check_runs"][0]["status"]="queued"
+                page["check_runs"][0]["conclusion"]=None
+            if issue=="wrong_app":
+                page["check_runs"][0]["app"]["id"]=123
+            if issue=="missing":
+                page["check_runs"].pop()
+                page["total_count"]-=1
+            api.put(repo,f"/commits/{A}/check-runs?per_page=100",page)
+            result=collect_original_proofs(current,transport=api)
+            evidence=next(x for x in result["source_checks"]
+                          if x["repository"]==repo)
+            with self.subTest(issue=issue):
+                self.assertNotEqual(evidence["status"],
+                                    "EXACT_HEAD_TECHNICAL_CHECKS_GREEN_NOT_RELEASE")
+
+    def test_duplicate_or_cross_commit_head_ci_fails_closed(self):
+        for issue in ("duplicate","cross_source","truncated"):
+            current, api=rig()
+            repo=current["actions"][0]["repository"]
+            page=original_checks(repo,A)
+            if issue=="duplicate":
+                page["check_runs"][1]["id"]=page["check_runs"][0]["id"]
+            if issue=="cross_source":
+                page["check_runs"][0]["head_sha"]=B
+            if issue=="truncated":
+                page["total_count"]=101
+            api.put(repo,f"/commits/{A}/check-runs?per_page=100",page)
+            with self.subTest(issue=issue),self.assertRaises(BrainError):
+                collect_original_proofs(current,transport=api)
+
+    def test_native_single_pr_correction_needs_only_three_gets(self):
+        current, api=rig()
+        result=collect_original_proofs(
+            current,transport=api,max_jobs=1,max_requests=3,
+            selection_sequence=100,
+        )
+        self.assertEqual(result["observed_pr_count"],1)
+        self.assertEqual(result["requests_used"],3)
+        self.assertEqual(len(result["source_checks"]),1)
+        self.assertEqual(result["source_checks"][0]["status"],
+                         "EXACT_HEAD_TECHNICAL_CHECKS_GREEN_NOT_RELEASE")
+        self.assertEqual(result["selection_sequence"],100)
+
+    def test_fair_rotation_checks_all_distinct_original_heads_over_cycles(self):
+        keys=set()
+        for cycle in range(5):
+            current, api=rig()
+            result=collect_original_proofs(
+                current,transport=api,max_jobs=1,max_requests=3,
+                selection_sequence=cycle,
+            )
+            self.assertEqual(result["observed_pr_count"],1)
+            keys.add((result["proofs"][0]["repository"],
+                      result["proofs"][0]["pr_number"]))
+        self.assertEqual(len(keys),5)
+
+    def test_real_check_receipt_drives_next_owner_action_without_merge(self):
+        work, api = rig()
+        source = collect_original_proofs(work,transport=api)
+        baseline=follow_through(work,cycle=20,
+                                provider_receipts=source["proofs"])
+        result=apply_original_ci_to_owner_queue(
+            baseline,source["source_checks"]
+        )
+        self.assertEqual(result["original_ci_bound_actions"],5)
+        self.assertTrue(all(x["next_operation"] ==
+            "GET_INDEPENDENT_QA_AND_VERIFY_RELEASE_HOLDS"
+            for x in result["actions"]))
+        self.assertTrue(all(x["state"] == "CI_GREEN"
+                            for x in result["next_history"]))
+        self.assertFalse(result["merge_or_deployment_authority"])
+        self.assertFalse(result["real_buyer_or_revenue_verified"])
+
+    def test_failed_original_check_is_routed_to_code_repair(self):
+        work, api = rig()
+        task=work["actions"][0]
+        repo=task["repository"]
+        page=original_checks(repo,A)
+        page["check_runs"][0]["conclusion"]="failure"
+        api.put(repo,f"/commits/{A}/check-runs?per_page=100",page)
+        packet=collect_original_proofs(work,transport=api)
+        result=apply_original_ci_to_owner_queue(
+            follow_through(work,cycle=24),packet["source_checks"]
+        )
+        case=next(x for x in result["actions"]
+                  if x["repository"]==repo)
+        self.assertEqual(case["next_operation"],
+                         "REPRODUCE_AND_FIX_REAL_FAILED_HEAD_CI")
+        history=next(x for x in result["next_history"]
+                     if x["repository"]==repo)
+        self.assertEqual(history["state"],"CI_RED")
+        self.assertFalse(case["live_deployment_verified"])
+
+    def test_external_hold_and_exhausted_retry_survive_ci_updates(self):
+        work, api = rig()
+        task=work["actions"][0]
+        page=original_checks(task["repository"],A)
+        page["check_runs"][0]["conclusion"]="failure"
+        api.put(task["repository"],f"/commits/{A}/check-runs?per_page=100",page)
+        packet=collect_original_proofs(work,transport=api)
+        original=follow_through(work,cycle=30)
+        external=copy.deepcopy(original)
+        held=next(x for x in external["next_history"]
+                  if x["repository"]==task["repository"])
+        held["state"]="BLOCKED_EXTERNAL"
+        result=apply_original_ci_to_owner_queue(
+            external,packet["source_checks"]
+        )
+        case=next(x for x in result["actions"]
+                  if x["repository"]==task["repository"])
+        self.assertEqual(case["next_operation"],
+                         "PRESERVE_EXTERNAL_HOLD_FIX_NEXT")
+        self.assertEqual(held["state"],"BLOCKED_EXTERNAL")
+        attempts=copy.deepcopy(original)
+        old=next(x for x in attempts["next_history"]
+                 if x["repository"]==task["repository"])
+        old["state"]="CI_RED"
+        old["source_revision_attempts"]=2
+        blocked=apply_original_ci_to_owner_queue(
+            attempts,packet["source_checks"]
+        )
+        chosen=next(x for x in blocked["actions"]
+                    if x["repository"]==task["repository"])
+        self.assertEqual(chosen["next_operation"],
+                         "ESCALATE_REPRODUCIBLE_FAILURE_WITH_LOGS")
+
+    def test_wrong_app_or_forged_status_never_gains_reviewer_authority(self):
+        work, api=rig()
+        packet=collect_original_proofs(work,transport=api)
+        bad=copy.deepcopy(packet["source_checks"])
+        bad[0]["trusted_app_id"]=999
+        with self.assertRaises(BrainError):
+            apply_original_ci_to_owner_queue(follow_through(work,cycle=5),bad)
+        bad=copy.deepcopy(packet["source_checks"])
+        bad[0]["status"]="PAID_CUSTOMER_VALIDATED"
+        with self.assertRaises(BrainError):
+            apply_original_ci_to_owner_queue(follow_through(work,cycle=5),bad)
 
 if __name__=="__main__":
     unittest.main()

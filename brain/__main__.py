@@ -205,7 +205,7 @@ def projects(store, sha, output, *, api=None,
     original = {
         "scope": "ORIGINAL_GITHUB_READ_ONLY_REPAIR_PROOFS",
         "status": "NOT_CHECKED_OR_REQUEST_BUDGET_UNAVAILABLE",
-        "proofs": [], "gaps": [],
+        "proofs": [], "source_checks": [], "gaps": [],
         "requests_used": 0,
         "automatic_merge_or_deployment_authority": False,
         "customer_or_external_action_authority": False,
@@ -216,7 +216,7 @@ def projects(store, sha, output, *, api=None,
             and result["autonomous_repair_queue"]["actions"]
             and type(api.requests) is int
             and policy()["max_requests_per_operation"] - api.requests >= 3):
-        from brain.repair_provider import collect_original_proofs
+        from brain.repair_provider import collect_original_proofs, apply_original_ci_to_owner_queue
         from brain.repair_followthrough import follow_through
         try:
             remaining = min(4, policy()["max_requests_per_operation"] - api.requests)
@@ -226,11 +226,19 @@ def projects(store, sha, output, *, api=None,
                 max_jobs=1, max_requests=remaining,
                 selection_sequence=rotation["index"],
             )
-            original["status"] = "BOUNDED_ORIGINAL_PR_EVIDENCE_OBSERVED"
-            result["autonomous_repair_followthrough"] = follow_through(
+            original["status"] = (
+                "BOUNDED_ORIGINAL_PR_EVIDENCE_OBSERVED"
+                if original["proofs"] else "ORIGINAL_PR_EVIDENCE_UNAVAILABLE"
+            )
+            base_continuation = follow_through(
                 result["autonomous_repair_queue"],
                 cycle=rotation["index"],
                 provider_receipts=original["proofs"],
+            )
+            result["autonomous_repair_followthrough"] = (
+                apply_original_ci_to_owner_queue(
+                    base_continuation, original["source_checks"]
+                )
             )
         except (BrainError, KeyError, ValueError, TypeError):
             # A provider or schema failure must not terminate canonical core

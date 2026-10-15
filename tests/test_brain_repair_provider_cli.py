@@ -29,7 +29,11 @@ class RepairProviderCliTests(unittest.TestCase):
             self.assertEqual(packet["scope"],
                              "ORIGINAL_GITHUB_READ_ONLY_REPAIR_PROOFS")
             self.assertEqual(packet["observed_pr_count"], 5)
-            self.assertEqual(packet["requests_used"], 7)
+            self.assertEqual(packet["requests_used"], 12)
+            self.assertEqual(len(packet["source_checks"]), 5)
+            self.assertTrue(all(x["status"] ==
+                "EXACT_HEAD_TECHNICAL_CHECKS_GREEN_NOT_RELEASE"
+                for x in packet["source_checks"]))
             self.assertEqual(stat.S_IMODE(artifact.stat().st_mode), 0o700)
             self.assertEqual(stat.S_IMODE(
                 (artifact / "report.json").stat().st_mode), 0o600)
@@ -43,8 +47,9 @@ class RepairProviderCliTests(unittest.TestCase):
             state = json.loads((nxt / "report.json").read_text())
             self.assertEqual(state["unfinished_count"], 5)
             self.assertEqual(len(state["next_history"]), 5)
-            self.assertTrue(all(p["state"] == "OBSERVED"
+            self.assertTrue(all(p["state"] == "CI_GREEN"
                                 for p in state["next_history"]))
+            self.assertEqual(state["original_ci_bound_actions"],5)
             self.assertFalse(state["merge_or_deployment_authority"])
 
     def test_original_prior_report_recovers_unsampled_work_without_reasking(self):

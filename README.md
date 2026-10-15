@@ -180,3 +180,9 @@ candidates. It checks one rotated RETALLY or App Factory source per core run,
 while enforcing the same strict 24-request cap, and explicitly labels
 unverified, stale or merged-but-not-current results. Original provider evidence
 updates the private owner follow-through queue, never self-approves a merge.
+
+The same bounded original-source lookup also reads the chosen candidate PR's
+own exact-head GitHub Actions checks. A verified red source check becomes an
+owner-directed regression repair; green mandatory checks move only to
+independent QA and unchanged release holds. A false, missing or incomplete
+check cannot promote a draft into an active service.

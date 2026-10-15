@@ -22,8 +22,15 @@ from brain.render import write_report
 ROOT_URL = "https://api.github.com/repos/"
 SHA = re.compile("[0-9a-f]{40}")
 REPOS = frozenset(row[0] for row in FOCUS.values())
-MAX_JOBS = 8
+MAX_JOBS = 6
 MAX_REQUESTS = 20
+TRUSTED_CHECK_APP = 15368
+REQUIRED_HEAD_CHECKS = {
+    "P00NSMASHER/github-value-hunt-ledger":
+        frozenset({"release-gate", "freight"}),
+    "P00NSMASHER/x402-product-factory":
+        frozenset({"test", "browser", "manufacturing", "pilot", "candidate-build"}),
+}
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -128,6 +135,151 @@ def _work_inputs(queue, prior, limit):
     return carryovers + active, limit
 
 
+def _head_ci_receipt(raw, repository, pr_number, head_sha):
+    """Original exact-commit CI: diagnose work, NEVER approve deployment."""
+    require(repository in REPOS
+            and type(pr_number) is int and pr_number > 0
+            and type(head_sha) is str and SHA.fullmatch(head_sha)
+            and type(raw) is dict
+            and type(raw.get("total_count")) is int
+            and 0 <= raw["total_count"] <= 100
+            and type(raw.get("check_runs")) is list
+            and len(raw["check_runs"]) == raw["total_count"],
+            "REPAIR_EXACT_HEAD_CI_PAGE_INCOMPLETE")
+    seen, successful, adverse, incomplete = set(), set(), 0, 0
+    bad = {"failure", "cancelled", "timed_out", "action_required",
+           "startup_failure", "stale"}
+    conclusions = bad | {"success", "neutral", "skipped", None}
+    statuses = {"completed", "queued", "in_progress", "pending", "waiting"}
+    for row in raw["check_runs"]:
+        require(type(row) is dict
+                and type(row.get("id")) is int and row["id"] > 0
+                and row["id"] not in seen
+                and row.get("head_sha") == head_sha
+                and type(row.get("name")) is str
+                and 1 <= len(row["name"]) <= 128
+                and type(row.get("app")) is dict
+                and type(row["app"].get("id")) is int
+                and row["app"]["id"] > 0
+                and row.get("status") in statuses
+                and row.get("conclusion") in conclusions,
+                "REPAIR_EXACT_HEAD_CI_ROW_INVALID")
+        seen.add(row["id"])
+        if row["status"] != "completed" or row["conclusion"] is None:
+            incomplete += 1
+        elif row["conclusion"] in bad:
+            adverse += 1
+        elif (row["app"]["id"] == TRUSTED_CHECK_APP
+              and row["status"] == "completed"
+              and row["conclusion"] == "success"):
+            successful.add(row["name"])
+    required = REQUIRED_HEAD_CHECKS[repository]
+    missing = sorted(required - successful)
+    state = (
+        "ADVERSE_EXACT_HEAD_CHECKS_NEED_REPAIR" if adverse else
+        "INCOMPLETE_EXACT_HEAD_CHECKS" if incomplete else
+        "MISSING_REQUIRED_EXACT_HEAD_CHECKS" if missing else
+        "EXACT_HEAD_TECHNICAL_CHECKS_GREEN_NOT_RELEASE"
+    )
+    return {
+        "repository": repository,
+        "pr_number": pr_number,
+        "source_head_sha": head_sha,
+        "status": state,
+        "required_check_names": sorted(required),
+        "required_not_successful": missing,
+        "checked_count": len(seen),
+        "adverse_count": adverse,
+        "incomplete_count": incomplete,
+        "trusted_app_id": TRUSTED_CHECK_APP,
+        "technical_only_not_release": True,
+        "external_contact_or_financial_authority": False,
+    }
+
+
+def apply_original_ci_to_owner_queue(continuation, source_checks):
+    """Convert verified PR-head facts into owner next steps, not approval."""
+    import copy
+    require(type(continuation) is dict
+            and continuation.get("scope") ==
+                "BOUNDED_EXISTING_OWNER_FOLLOWTHROUGH_ONLY"
+            and continuation.get("merge_or_deployment_authority") is False
+            and type(continuation.get("actions")) is list
+            and type(continuation.get("next_history")) is list
+            and type(source_checks) is list and len(source_checks) <= MAX_JOBS,
+            "REPAIR_SOURCE_CI_BINDING_SCOPE_INVALID")
+    result = copy.deepcopy(continuation)
+    matched, seen = 0, set()
+    for evidence in source_checks:
+        require(type(evidence) is dict
+                and evidence.get("repository") in REPOS
+                and type(evidence.get("pr_number")) is int
+                and type(evidence.get("source_head_sha")) is str
+                and SHA.fullmatch(evidence["source_head_sha"])
+                and evidence.get("trusted_app_id") == TRUSTED_CHECK_APP
+                and evidence.get("technical_only_not_release") is True
+                and evidence.get("external_contact_or_financial_authority") is False
+                and evidence.get("status") in {
+                    "ADVERSE_EXACT_HEAD_CHECKS_NEED_REPAIR",
+                    "INCOMPLETE_EXACT_HEAD_CHECKS",
+                    "MISSING_REQUIRED_EXACT_HEAD_CHECKS",
+                    "EXACT_HEAD_TECHNICAL_CHECKS_GREEN_NOT_RELEASE",
+                },
+                "REPAIR_SOURCE_CI_RECEIPT_UNTRUSTED")
+        key = (evidence["repository"], evidence["pr_number"],
+               evidence["source_head_sha"])
+        require(key not in seen, "REPAIR_SOURCE_CI_RECEIPT_DUPLICATE")
+        seen.add(key)
+        targets = [
+            task for task in result["actions"]
+            if (task["repository"], task["source_pr"],
+                task["source_head_sha"]) == key
+        ]
+        if not targets:
+            # Ignore an already superseded PR: do not reassign an issue.
+            continue
+        require(len(targets) == 1, "REPAIR_SOURCE_CI_OWNER_AMBIGUOUS")
+        task = targets[0]
+        if task["technical_main_source_verified"]:
+            continue
+        condition = evidence["status"]
+        task["original_source_ci_status"] = condition
+        history = [
+            row for row in result["next_history"]
+            if row["repository"] == evidence["repository"]
+            and row["pr_number"] == evidence["pr_number"]
+            and row["head_sha"] == evidence["source_head_sha"]
+        ]
+        require(len(history) == 1, "REPAIR_SOURCE_CI_HISTORY_MISSING")
+        prior_state = history[0]["state"]
+        if prior_state == "BLOCKED_EXTERNAL":
+            task["next_operation"] = "PRESERVE_EXTERNAL_HOLD_FIX_NEXT"
+        elif (prior_state == "CI_RED"
+              and history[0]["source_revision_attempts"] == 2
+              and condition == "ADVERSE_EXACT_HEAD_CHECKS_NEED_REPAIR"):
+            task["next_operation"] = "ESCALATE_REPRODUCIBLE_FAILURE_WITH_LOGS"
+        elif condition == "ADVERSE_EXACT_HEAD_CHECKS_NEED_REPAIR":
+            task["next_operation"] = "REPRODUCE_AND_FIX_REAL_FAILED_HEAD_CI"
+            history[0]["state"] = "CI_RED"
+            history[0]["last_progress_cycle"] = result["cycle"]
+        elif condition == "EXACT_HEAD_TECHNICAL_CHECKS_GREEN_NOT_RELEASE":
+            if prior_state not in {"INDEPENDENT_GREEN", "DELIVERY_REQUESTED"}:
+                task["next_operation"] = "GET_INDEPENDENT_QA_AND_VERIFY_RELEASE_HOLDS"
+                history[0]["state"] = "CI_GREEN"
+                history[0]["last_progress_cycle"] = result["cycle"]
+        else:
+            if prior_state not in {"INDEPENDENT_GREEN", "DELIVERY_REQUESTED"}:
+                task["next_operation"] = "RESTORE_MISSING_OR_INCOMPLETE_EXACT_CI"
+                history[0]["state"] = "OBSERVED"
+                history[0]["last_progress_cycle"] = result["cycle"]
+        matched += 1
+    result["original_ci_bound_actions"] = matched
+    result["original_ci_provider_readonly"] = True
+    result["merge_or_deployment_authority"] = False
+    result["real_buyer_or_revenue_verified"] = False
+    return result
+
+
 def collect_original_proofs(queue, *, prior=None, transport,
                             max_jobs=MAX_JOBS, max_requests=MAX_REQUESTS,
                             selection_sequence=0):
@@ -147,7 +299,7 @@ def collect_original_proofs(queue, *, prior=None, transport,
         start = selection_sequence % len(work)
         work = [work[(start + offset) % len(work)]
                 for offset in range(len(work))]
-    requests, proofs, gaps, cache = 0, [], [], {}
+    requests, proofs, gaps, source_checks, cache = 0, [], [], [], {}
 
     def get(repo, path):
         nonlocal requests
@@ -211,6 +363,22 @@ def collect_original_proofs(queue, *, prior=None, transport,
                     "REPAIR_PROVIDER_MAIN_SHA_UNVERIFIED")
             cache[repo] = main_sha
         main_sha = cache[repo]
+        # Independent original candidate CI is the crucial missing link
+        # between a detected defect and an actual patch/test instruction.
+        # One bounded read can diagnose a source failure without GitHub writes.
+        try:
+            raw_head = get(
+                repo, f"/commits/{expected}/check-runs?per_page=100",
+            )
+        except (OSError, urllib.error.URLError, BrainError, ValueError):
+            gaps.append({
+                "repository": repo, "pr_number": number,
+                "status": "EXACT_HEAD_CHECKS_UNAVAILABLE_NOT_GREEN",
+            })
+        else:
+            source_checks.append(
+                _head_ci_receipt(raw_head, repo, number, expected)
+            )
         checks = []
         if merged:
             if main_sha != merge_sha:
@@ -269,6 +437,7 @@ def collect_original_proofs(queue, *, prior=None, transport,
         "observed_pr_count": len(proofs),
         "unsampled_due_to_job_limit": max(0, len(work) - limit),
         "proofs": proofs,
+        "source_checks": source_checks,
         "gaps": gaps,
         "original_api_response_not_signed": True,
         "automatic_merge_or_deployment_authority": False,

@@ -421,8 +421,11 @@ class ProjectStageTests(unittest.TestCase):
         self.assertEqual(result["status"],"PASS")
         self.assertEqual(result["repository_count"],8)
         self.assertLessEqual(api.requests,24)
-        self.assertEqual(api.requests,22)
-        self.assertEqual(result["operation"]["original_repair_requests"],2)
+        self.assertEqual(api.requests,23)
+        self.assertEqual(result["operation"]["original_repair_requests"],3)
+        self.assertEqual(len(result["original_repair_proof"]["source_checks"]),1)
+        self.assertEqual(result["original_repair_proof"]["source_checks"][0]
+                         ["source_head_sha"],SHA)
         self.assertEqual(result["original_repair_proof"]["observed_pr_count"],1)
         self.assertEqual(len(result["original_repair_proof"]["proofs"]),1)
         self.assertFalse(result["original_repair_proof"]["proofs"][0]["merged"])
