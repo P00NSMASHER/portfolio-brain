@@ -30,7 +30,8 @@ def git_hash(contents):
 
 def _get_blob(api, blob_sha, *, max_size):
     sha40(blob_sha)
-    require(type(max_size) is int and 0 < max_size <= CHUNK_BYTES + 32768,
+    require(type(max_size) is int
+            and 0 < max_size <= max(CHUNK_BYTES + 32768, 2_000_000),
             "EVIDENCE_BLOB_BOUND_INVALID")
     raw_response = api.get(
         f"/git/blobs/{blob_sha}",
