@@ -124,7 +124,7 @@ class IndependentChunkedStateTests(unittest.TestCase):
     def test_git_blob_byte_tampering_fails_and_removes_partial_file(self):
         source = self.fake.chunks[1]["git_sha"]
         self.fake.blobs[source] += b"tampering"
-        with self.assertRaisesRegex(EvidenceError, "GIT_BLOB_SIZE_MISMATCH"):
+        with self.assertRaisesRegex(EvidenceError, "GIT_BLOB_METADATA_INVALID"):
             audit.verify_original_state(self.fake, state_commit=COMMIT,
                                         target=self.path)
         self.assertFalse(self.path.exists())
