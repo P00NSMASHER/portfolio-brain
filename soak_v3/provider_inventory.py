@@ -52,9 +52,15 @@ def collect_core_run_inventory(api, *, started_at, ended_at, max_pages=MAX_PAGES
             continue
         require(run.get("event") in ALLOWED_EVENTS,
                 "INVENTORY_UNEXPECTED_CORE_TRIGGER")
-        require(run.get("run_attempt") in (None,1) or
-                (type(run["run_attempt"]) is int and run["run_attempt"]>1),
+        attempt = run.get("run_attempt")
+        require(type(attempt) is int and attempt >= 1,
                 "INVENTORY_RUN_ATTEMPT_INVALID")
+        # The runs collection exposes the latest attempt only. A successful
+        # retry must never erase a mandatory failure from acceptance history.
+        # This bounded metadata reader does not fetch attempt-level evidence;
+        # require that separate audit before claiming complete coverage.
+        require(attempt == 1,
+                "INVENTORY_RERUN_REQUIRES_ATTEMPT_CENSUS")
         core.append({
             "run_id": run["id"],
             "event": run["event"],
