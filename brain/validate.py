@@ -16,8 +16,20 @@ def validate_policy():
     for name in ("downstream_write_authority","trading_authority","external_message_authority","discovered_code_execution","license_discovery_filter","public_state_accepts_private_inputs"):
         require(p[name] is False, "forbidden authority/filter: "+name)
     workflow_dir=ROOT/".github/workflows"
-    expected={"foundation-ci.yml","portfolio-independent-verifier.yml","x402-gateway-ci.yml","x402-render-gateway-smoke.yml","brain-cycle.yml","brain-clock.yml"}
+    expected={"foundation-ci.yml","portfolio-independent-verifier.yml","portfolio-bot-knowledge-verifier.yml","x402-gateway-ci.yml","x402-render-gateway-smoke.yml","brain-cycle.yml","brain-clock.yml"}
     require({x.name for x in workflow_dir.iterdir() if x.suffix in {".yml",".yaml"}}==expected, "active workflow inventory changed")
+    bot_review=(workflow_dir/"portfolio-bot-knowledge-verifier.yml").read_text()
+    require("workflow_dispatch:" in bot_review
+            and "schedule:" not in bot_review
+            and "workflow_run:" not in bot_review
+            and "github.ref == 'refs/heads/main'" in bot_review
+            and "verification.bot_knowledge_admission import inspect" in bot_review
+            and "verification.bot_knowledge_admission import foundation_green" in bot_review
+            and "--network none" in bot_review
+            and "trusted/verification/independent_verifier.py" in bot_review
+            and 'sha="$CANDIDATE_SHA"' in bot_review
+            and "PORTFOLIO_VERIFIER_PRIVATE_KEY" in bot_review,
+            "bot reviewer changed protected independent-source admission")
     from operations.validate_operating_mode import scheduled_workflow_inventory
     require(scheduled_workflow_inventory(workflow_dir)=={"brain-cycle":[p["cron"]], "brain-clock":[p["watchdog_cron"]]}, "only reviewed native Brain execution and watchdog may recur")
     source=(workflow_dir/"brain-cycle.yml").read_text()
