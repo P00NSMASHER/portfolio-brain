@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "scope": "ACTIVE_REPO_BACKED_PROJECTS_WITH_EXPLICIT_MEASUREMENT_CONTRACTS",
-  "extended_observation_bound": 5,
+  "extended_observation_bound": 4,
   "projects": [
     {
       "id": "portfolio-brain",
@@ -55,15 +55,6 @@
       "research_target": "permit-intelligence",
       "improvement_focus": "security, provenance and licensing-data correctness",
       "success_metric": "blocking security or provenance findings",
-      "direction": "DOWN"
-    },
-    {
-      "id": "starblox",
-      "name": "StarBlox",
-      "repository": "P00NSMASHER/StarBlox",
-      "research_target": "game-quality",
-      "improvement_focus": "client-verified gameplay and UI release quality",
-      "success_metric": "verified client-proof release gaps",
       "direction": "DOWN"
     },
     {

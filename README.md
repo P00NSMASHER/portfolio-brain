@@ -173,3 +173,10 @@ source verified. See
 [Original repair provider](docs/rebuild/ORIGINAL_REPAIR_PROVIDER.md).
 No additional schedule, production release, customer contact, spending,
 credentials, canonical-state writes, or signed-soak bypass is authorized.
+
+The project stage now spends the freed read budget from retired-game
+monitoring on exact, original GitHub PR/merge/CI confirmation for repair
+candidates. It checks one rotated RETALLY or App Factory source per core run,
+while enforcing the same strict 24-request cap, and explicitly labels
+unverified, stale or merged-but-not-current results. Original provider evidence
+updates the private owner follow-through queue, never self-approves a merge.

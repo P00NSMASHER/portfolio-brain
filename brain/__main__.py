@@ -115,7 +115,8 @@ def doctor(store, sha, output):
     write_report(result,output)
     return result
 
-def projects(store, sha, output, *, api=None):
+def projects(store, sha, output, *, api=None,
+             verify_original_repairs=None):
     """Prioritize source-pinned RETALLY and Factory PR evidence before optional breadth.
 
     One existing GET-only adapter and at most 24 combined GitHub requests.
@@ -128,6 +129,10 @@ def projects(store, sha, output, *, api=None):
 
     canonical = store.read_report(sha)
     real_adapter = api is None
+    if verify_original_repairs is None:
+        verify_original_repairs = real_adapter
+    require(type(verify_original_repairs) is bool,
+            "ORIGINAL_REPAIR_VERIFICATION_FLAG_INVALID")
     api = api or GitHub(private=store.visibility == "PRIVATE")
     snapshots, errors = [], []
     observed_at = utcnow()
@@ -194,6 +199,44 @@ def projects(store, sha, output, *, api=None):
         canonical, snapshots, source_sha=sha, priority_prs=focused,
         repair_cycle_index=rotation["index"],
     )
+    # Original provider evidence uses ONLY the remaining native GitHub GET
+    # budget. Retired optional project reads free the necessary room. The
+    # collector selects one fair-rotated exact PR and cannot write a branch.
+    original = {
+        "scope": "ORIGINAL_GITHUB_READ_ONLY_REPAIR_PROOFS",
+        "status": "NOT_CHECKED_OR_REQUEST_BUDGET_UNAVAILABLE",
+        "proofs": [], "gaps": [],
+        "requests_used": 0,
+        "automatic_merge_or_deployment_authority": False,
+        "customer_or_external_action_authority": False,
+        "original_api_response_not_signed": True,
+    }
+    original_requests_before = api.requests
+    if (verify_original_repairs and callable(getattr(api, "get", None))
+            and result["autonomous_repair_queue"]["actions"]
+            and type(api.requests) is int
+            and policy()["max_requests_per_operation"] - api.requests >= 3):
+        from brain.repair_provider import collect_original_proofs
+        from brain.repair_followthrough import follow_through
+        try:
+            remaining = min(4, policy()["max_requests_per_operation"] - api.requests)
+            original = collect_original_proofs(
+                result["autonomous_repair_queue"],
+                transport=lambda repo, suffix: api.get(f"/repos/{repo}{suffix}"),
+                max_jobs=1, max_requests=remaining,
+                selection_sequence=rotation["index"],
+            )
+            original["status"] = "BOUNDED_ORIGINAL_PR_EVIDENCE_OBSERVED"
+            result["autonomous_repair_followthrough"] = follow_through(
+                result["autonomous_repair_queue"],
+                cycle=rotation["index"],
+                provider_receipts=original["proofs"],
+            )
+        except (BrainError, KeyError, ValueError, TypeError):
+            # A provider or schema failure must not terminate canonical core
+            # state publication. Project repair proof stays explicitly unknown.
+            original["status"] = "ORIGINAL_PR_EVIDENCE_UNVERIFIED"
+    result["original_repair_proof"] = original
     result["operation"] = {
         "name": "projects",
         "requests": api.requests,
@@ -206,6 +249,8 @@ def projects(store, sha, output, *, api=None):
         "ci_rotation_basis": rotation["basis"],
         "canonical_state_sequence": cycle_index,
         "rotation_extra_requests": rotation["extra_provider_requests"],
+        "original_repair_requests": api.requests - original_requests_before,
+        "original_repair_provider_status": original["status"],
         "errors": errors,
     }
     result["focused_work_readiness"] = (

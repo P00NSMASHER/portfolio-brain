@@ -41,15 +41,15 @@ class ProjectRegistryTests(unittest.TestCase):
         self.assertEqual(extended_repositories()[0],
                          "P00NSMASHER/x402-product-factory")
 
-    def test_registry_covers_nine_repo_bindings_without_widening_core(self):
+    def test_registry_excludes_retired_game_from_active_get_budget(self):
         document = load_project_registry()
         repositories = {row["repository"] for row in document["projects"]}
-        self.assertEqual(len(repositories), 9)
+        self.assertEqual(len(repositories), 8)
+        self.assertNotIn("P00NSMASHER/StarBlox",repositories)
         self.assertEqual(len(policy()["repositories"]), 4)
         self.assertEqual(set(extended_repositories()), {
             "P00NSMASHER/PipsQuestWorld",
             "P00NSMASHER/permitplate-nyc",
-            "P00NSMASHER/StarBlox",
             "P00NSMASHER/capturebrief",
             "P00NSMASHER/x402-product-factory",
         })
@@ -61,7 +61,7 @@ class ProjectRegistryTests(unittest.TestCase):
             source_sha=SHA,
         )
         self.assertEqual(result["status"], "PASS")
-        self.assertEqual(result["repository_count"], 9)
+        self.assertEqual(result["repository_count"], 8)
         self.assertIsNone(result["verified_revenue"])
         self.assertEqual(result["technical_review_packet_count"], 0)
         self.assertEqual(result["measured_project_outcomes"], 0)
@@ -95,8 +95,8 @@ class ProjectRegistryTests(unittest.TestCase):
         self.assertIsNone(retally["measured_result"])
         research_labs = next(row for row in result["projects"] if row["id"] == "research-labs")
         self.assertEqual(research_labs["operator_outcome_count"], 0)
-        starblox = next(row for row in result["projects"] if row["id"] == "starblox")
-        self.assertEqual(starblox["operator_outcome_count"], 0)
+        self.assertFalse(any(row["id"] == "starblox" for row in result["projects"]))
+        self.assertTrue(any(row["id"] == "pips-classroom" for row in result["projects"]))
 
     def test_missing_extended_source_blocks_project_queue_only(self):
         result = build_project_portfolio(canonical_report(), [], source_sha=SHA)
@@ -203,7 +203,7 @@ class ProjectStageTests(unittest.TestCase):
             result = projects(Store(), SHA, Path(directory) / "projects", api=api)
         self.assertEqual(result["status"], "PASS")
         self.assertEqual(tuple(api.seen), extended_repositories())
-        self.assertEqual(api.requests, 20)
+        self.assertEqual(api.requests, 16)
         self.assertLessEqual(api.requests, policy()["max_requests_per_operation"])
 
     def test_priority_sources_and_pr_ci_precede_optional_project_observations(self):
@@ -269,7 +269,7 @@ class ProjectStageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             result = projects(Store(), SHA, Path(directory) / "report", api=api)
         self.assertEqual(result["status"], "PASS")
-        self.assertEqual(api.requests, 24)
+        self.assertEqual(api.requests, 20)
         self.assertEqual(result["operation"]["requests_after_priority_source"], 4)
         self.assertEqual(result["operation"]["requests_after_priority_prs"], 8)
         self.assertEqual(result["technical_review_packet_count"], 2)
@@ -294,7 +294,7 @@ class ProjectStageTests(unittest.TestCase):
                 self.seen = []
             def observe(self, repo):
                 self.seen.append(repo)
-                self.requests += 6 if repo != extended_repositories()[0] else 4
+                self.requests += 9 if repo != extended_repositories()[0] else 4
                 if self.requests > 24:
                     raise RuntimeError("Budget overrun should be skipped")
                 payload = dict(repo_row(repo))
@@ -356,6 +356,118 @@ class ProjectStageTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertEqual(database.read_bytes(), before)
             self.assertEqual(database.stat().st_mtime_ns, before_mtime)
+
+
+    def test_native_budget_reuses_four_freed_gets_for_original_pr_proof(self):
+        ret = "P00NSMASHER/github-value-hunt-ledger"
+        fac = "P00NSMASHER/x402-product-factory"
+        class Store:
+            visibility = "PUBLIC"
+            def read_report(self, sha):
+                return canonical_report()
+        class API:
+            def __init__(self):
+                self.requests = 0
+                self.calls = []
+            def observe(self, repository):
+                self.calls.append("observe:" + repository)
+                self.requests += 4
+                row = dict(repo_row(repository))
+                for name in ("key", "observed_at", "data_kind"):
+                    row.pop(name)
+                return row, False
+            def get(self, path):
+                self.calls.append("get:" + path)
+                self.requests += 1
+                self.assert_budget()
+                repo = ret if ret in path else fac
+                if "/pulls?state=open" in path:
+                    number = 329 if repo == ret else 43
+                    return [{
+                        "number":number,"state":"open","draft":True,
+                        "title":("RETALLY first-customer onboarding" if repo==ret
+                                 else "Factory buyer pilots"),
+                        "updated_at":"2026-10-14T08:00:00Z",
+                        "html_url":f"https://github.com/{repo}/pull/{number}",
+                        "head":{"sha":SHA,"ref":"feature/repair",
+                                "repo":{"full_name":repo}},
+                        "base":{"ref":"main","repo":{"full_name":repo}},
+                    }]
+                if "/check-runs?" in path:
+                    return {"total_count":1,"check_runs":[{
+                        "id":123,"head_sha":SHA,"name":"validate",
+                        "status":"completed","conclusion":"success",
+                        "app":{"id":15368},
+                    }]}
+                if "/pulls/" in path:
+                    number=int(path.split("/pulls/",1)[1])
+                    return {
+                        "number":number,"state":"open","merged":False,
+                        "merge_commit_sha":None,
+                        "head":{"sha":SHA,"repo":{"full_name":repo}},
+                        "base":{"ref":"main","repo":{"full_name":repo}},
+                    }
+                if "/branches/main" in path:
+                    return {"commit":{"sha":SHA}}
+                raise AssertionError("unexpected provider GET "+path)
+            def assert_budget(self):
+                self_assert = self.requests <= policy()["max_requests_per_operation"]
+                if not self_assert:
+                    raise AssertionError("exceeded the protected GET budget")
+        api=API()
+        with tempfile.TemporaryDirectory() as directory:
+            result=projects(Store(),SHA,Path(directory)/"project",
+                            api=api,verify_original_repairs=True)
+        self.assertEqual(result["status"],"PASS")
+        self.assertEqual(result["repository_count"],8)
+        self.assertLessEqual(api.requests,24)
+        self.assertEqual(api.requests,22)
+        self.assertEqual(result["operation"]["original_repair_requests"],2)
+        self.assertEqual(result["original_repair_proof"]["observed_pr_count"],1)
+        self.assertEqual(len(result["original_repair_proof"]["proofs"]),1)
+        self.assertFalse(result["original_repair_proof"]["proofs"][0]["merged"])
+        self.assertFalse(result["autonomous_downstream_writes"])
+        self.assertEqual(len(result["autonomous_repair_followthrough"]["actions"]),2)
+
+    def test_budget_exhaustion_skips_original_review_instead_of_calling_any_provider(self):
+        from brain.core import BrainError
+        class Store:
+            visibility = "PUBLIC"
+            def read_report(self, sha):
+                return canonical_report()
+        class API:
+            def __init__(self):
+                self.requests=0
+                self.calls=[]
+            def observe(self, repo):
+                self.calls.append("observe:"+repo)
+                self.requests+=4 if repo==extended_repositories()[0] else 9
+                if self.requests>24:
+                    raise BrainError("REQUEST_BUDGET_EXHAUSTED")
+                row=dict(repo_row(repo))
+                for key in ("key","observed_at","data_kind"):
+                    row.pop(key)
+                return row,False
+            def get(self, path):
+                self.calls.append("get:"+path)
+                self.requests += 1
+                if self.requests > 24:
+                    raise AssertionError("unbounded original provider call")
+                if "/pulls?state=open" in path:
+                    return []
+                raise AssertionError("original PR checks should not run")
+        api=API()
+        with tempfile.TemporaryDirectory() as directory:
+            result=projects(Store(),SHA,Path(directory)/"project",
+                            api=api,verify_original_repairs=True)
+        self.assertLessEqual(api.requests,24)
+        self.assertEqual(result["status"],"BLOCKED")
+        self.assertEqual(result["operation"]["original_repair_requests"],0)
+        self.assertEqual(result["original_repair_proof"]["proofs"],[])
+        self.assertEqual(result["operation"]["original_repair_provider_status"],
+                         "NOT_CHECKED_OR_REQUEST_BUDGET_UNAVAILABLE")
+        self.assertFalse(result["autonomous_downstream_writes"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -129,14 +129,24 @@ def _work_inputs(queue, prior, limit):
 
 
 def collect_original_proofs(queue, *, prior=None, transport,
-                            max_jobs=MAX_JOBS, max_requests=MAX_REQUESTS):
+                            max_jobs=MAX_JOBS, max_requests=MAX_REQUESTS,
+                            selection_sequence=0):
     """Read exact original PR and main checks without mutation or replays."""
     require(callable(transport)
-            and type(max_requests) is int and 3 <= max_requests <= MAX_REQUESTS,
+            and type(max_requests) is int and 3 <= max_requests <= MAX_REQUESTS
+            and type(selection_sequence) is int
+            and 0 <= selection_sequence < 2**63,
             "REPAIR_PROVIDER_GET_BUDGET_INVALID")
     work, limit = _work_inputs(
         queue, [] if prior is None else prior, max_jobs,
     )
+    # The ordinary owner collector checks every case when it fits. The live
+    # native Brain stage has budget for one, so rotate fairly rather than
+    # reading the same top-ranked PR forever.
+    if len(work) > limit:
+        start = selection_sequence % len(work)
+        work = [work[(start + offset) % len(work)]
+                for offset in range(len(work))]
     requests, proofs, gaps, cache = 0, [], [], {}
 
     def get(repo, path):
@@ -254,6 +264,8 @@ def collect_original_proofs(queue, *, prior=None, transport,
         "requests_used": requests,
         "request_limit": max_requests,
         "max_jobs": max_jobs,
+        "selection_sequence": selection_sequence,
+        "selection_rule": "CYCLIC_SOURCE_FAIRNESS_WITHIN_BOUNDED_GET_BUDGET",
         "observed_pr_count": len(proofs),
         "unsampled_due_to_job_limit": max(0, len(work) - limit),
         "proofs": proofs,

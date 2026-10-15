@@ -262,6 +262,19 @@ def write_report(report, output):
                 "disappear; technical main CI is not proof of production or "
                 "commercial effectiveness."
             )
+        source_facts = report.get("original_repair_proof")
+        if source_facts:
+            lines.extend(["", "## Original repair PR evidence", ""])
+            lines.append(
+                f'Original status: {source_facts.get("status", "UNKNOWN")}; '
+                f'PRs={len(source_facts.get("proofs", []))}; '
+                f'gaps={len(source_facts.get("gaps", []))}; '
+                f'GETs={source_facts.get("requests_used", 0)}.'
+            )
+            lines.append(
+                "Original CI and merge metadata are not production or "
+                "commercial acceptance."
+            )
         lines.extend(["", "## Project improvement queue", ""])
         for project in report.get("projects", []):
             revision = project.get("repository_revision")

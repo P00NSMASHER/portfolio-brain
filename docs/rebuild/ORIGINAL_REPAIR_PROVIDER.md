@@ -90,3 +90,29 @@ original closure/merge proof rather than reporting the same finding forever.
 This code does **not** implement GitHub writes or grant release authority.
 The existing signed V6 source acceptance freeze and original project-specific
 QA remain in force. No human-only action is secretly bypassed.
+
+## Reuse the existing core-cycle budget automatically
+
+The active project registry now excludes the retired StarBlox project without
+deleting or modifying that repository or any Roblox experience. The portfolio
+stage has **eight active repository bindings** (four canonical and four
+extended) rather than nine. This normally frees four read slots under the
+unchanged **24-GitHub-GET** project-stage cap.
+
+The existing `python -m brain projects` stage uses remaining read slots to
+check **one source-pinned RETALLY or App Factory PR each normal core run**.
+It rotates the selected source on the trusted native run sequence, not by PR
+recency alone. A typical unmerged PR requires only two original provider GETs:
+actual PR identity and actual latest `main` head. A merged PR on exactly
+current main additionally requires its full original check page.
+
+When paging/retries leave fewer than three GET slots, original confirmation is
+explicitly `NOT_CHECKED_OR_REQUEST_BUDGET_UNAVAILABLE`, never silently
+treated as complete. A stale head, changed base, cross-repository fork, closed
+unmerged PR, advanced main, missing or adverse trusted-App check, provider
+unavailability, or too-large check page becomes a source-specific gap. Both
+proposed actions and original facts are rendered in the existing private report
+bundle. Revalidation can occur on the next unchanged scheduled run without
+adding a cron, new ChatGPT task, paid API, independent verifier bypass or
+production mutation. The existing authorized project owners remain
+responsible for actually implementing and independently releasing repairs.
