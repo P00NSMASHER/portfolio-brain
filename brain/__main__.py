@@ -61,21 +61,77 @@ def research(store, sha, output, *, api=None, repository=None):
     targets=policy()["research_targets"]
     # Fair rotation persists in analytical history, rather than a second scheduler.
     previous=store.db.execute("SELECT count(*) FROM attempts WHERE operation='research' AND status='PASS'").fetchone()[0]
-    target=dict(targets[previous%len(targets)])
-    # Protected knowledge upgrades improve retrieval using measured source terms;
-    # inspected facts remain in SQLite, not inferred from the shipped knowledge file.
+    first_index=previous%len(targets)
+    # Failed research cannot advance the canonical PASS counter. A volatile
+    # optional search index must not strand every following signed cycle on
+    # the same uninspectable target.
     knowledge=json.loads((ROOT/'brain/REUSE_KNOWLEDGE.json').read_text())
-    support={}
-    for item in knowledge['sources']:
-        if item['target']==target['project']:
-            for term in item['matched_terms']:
-                if term in target['terms']:
-                    support[term]=support.get(term,0)+1
-    if support:
-        strongest=sorted(support,key=lambda term:(-support[term],term))[0]
-        if strongest not in target['query'].lower():
-            target['query']+=' '+strongest
-    found=api.discover(target,repository=repository)
+    def reviewed_target(index):
+        selected=dict(targets[index])
+        support={}
+        for item in knowledge['sources']:
+            if item['target']==selected['project']:
+                for term in item['matched_terms']:
+                    if term in selected['terms']:
+                        support[term]=support.get(term,0)+1
+        if support:
+            strongest=sorted(support,key=lambda term:(-support[term],term))[0]
+            if strongest not in selected['query'].lower():
+                selected['query']+=' '+strongest
+        return selected
+
+    requested=reviewed_target(first_index)
+    target=requested
+    skipped=[]
+    first_unavailable=None
+    found=None
+    # Up to two alternative reviewed targets, not a blanket 404 bypass.
+    # Preserve original 24-GET operation limit with >=7 GETs left for
+    # each independent search, branch, tree and original blob inspection.
+    # Explicit/private scope, malformed provider payloads, nonempty branch
+    # 404, 403, identity and all other authority errors NEVER fall back.
+    for offset in range(min(3,len(targets))):
+        target=reviewed_target((first_index+offset)%len(targets))
+        before=api.requests
+        try:
+            inspected=api.discover(target,repository=repository)
+        except BrainError as exc:
+            recoverable=(str(exc).startswith("DISCOVERY_ALL_SEARCH_RESULTS_UNAVAILABLE:")
+                         and repository is None and store.visibility=="PUBLIC"
+                         and not getattr(api,"private",False))
+            if not recoverable:
+                raise
+            if first_unavailable is None:
+                first_unavailable=exc
+            skipped.append({
+                "target":target["project"],
+                "classification":"PUBLIC_SEARCH_RESULTS_UNINSPECTABLE",
+                "get_requests":api.requests-before,
+                "source_gaps":list(getattr(api,"discovery_unavailable",[])),
+                "verified_candidates":0,
+            })
+            if offset==min(3,len(targets))-1 or api.requests>17:
+                raise first_unavailable
+        else:
+            # An empty alternate search is truthfully empty; it does not
+            # cure the original missing evidence. Require a genuinely
+            # source-hashed candidate before claiming fallback recovery.
+            if offset and not inspected:
+                skipped.append({
+                    "target":target["project"],
+                    "classification":"ALTERNATE_SEARCH_NO_SOURCE_INSPECTED",
+                    "get_requests":api.requests-before,
+                    "source_gaps":[],
+                    "verified_candidates":0,
+                })
+                if offset==min(3,len(targets))-1 or api.requests>17:
+                    raise first_unavailable
+                continue
+            found=inspected
+            break
+    require(found is not None, "DISCOVERY_NO_VERIFIED_ALTERNATIVE")
+    # Original genuinely empty searches preserve the former NO_MATCHES path.
+    # Alternate recovery requires actual source/hash inspection.
     items=[event("candidate",p["repository"]+":"+p["path"],p,sha,private=private) for p,private in found]
     report=persist(store,items,sha,output)
     unavailable=list(getattr(api,"discovery_unavailable",[]))
@@ -85,9 +141,22 @@ def research(store, sha, output, *, api=None, repository=None):
     result=("OBSERVED_WITH_SEARCH_RESULT_GAPS" if unavailable else
             "OBSERVED_WITH_BOUNDED_TREE_COVERAGE" if bounded else
             "OBSERVED" if items else "NO_MATCHES")
-    report["operation"]={"name":"research","requests":api.requests,"target":target["project"],"candidates_observed":len(items),"result":result,"unavailable_search_results":unavailable,"bounded_tree_scans":bounded,"license_filter_applied":False}
+    if skipped:
+        require(items, "DISCOVERY_FALLBACK_WITHOUT_VERIFIED_SOURCE")
+        result="VERIFIED_ALTERNATE_SOURCE_AFTER_SEARCH_FAILURE"
+    report["operation"]={
+        "name":"research","requests":api.requests,
+        "target":target["project"],"original_target":requested["project"],
+        "candidates_observed":len(items),"result":result,
+        "unavailable_search_results":unavailable,
+        "prior_unavailable_targets":skipped,
+        "bounded_tree_scans":bounded,"license_filter_applied":False,
+    }
     write_report(report,output)
-    store.attempt("research","PASS",source_sha=sha)
+    store.attempt("research","PASS",source_sha=sha,
+                  details={"inspected_target":target["project"],
+                           "original_target":requested["project"],
+                           "fallback_used":bool(skipped)})
     return report
 
 def experiment(store, sha, output):
