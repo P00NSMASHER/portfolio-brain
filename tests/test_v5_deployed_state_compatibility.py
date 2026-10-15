@@ -177,6 +177,30 @@ class DeployedV5ReadOnlyProof(unittest.TestCase):
                 original, expected_source=recorded_source
             )
             self.assertGreater(before["sequence"], 210)
+            # Real source-bound, OFFLINE and READ-ONLY migration rehearsal.
+            # The genuine immutable state is copied into disposable storage;
+            # compress/restore can NEVER mutate the remote state branch.
+            from brain.state_archive import CHUNK_BYTES, FORMAT, pack, restore
+            shadow_dir = Path(temp) / "chunked-migration-proof"
+            shadow_dir.mkdir()
+            shutil.copyfile(original, shadow_dir / "state.sqlite")
+            transport = pack(shadow_dir)
+            self.assertEqual(transport["raw_sha256"], raw_sha256)
+            self.assertEqual(transport["raw_size"], len(raw))
+            self.assertFalse((shadow_dir / "state.sqlite").exists())
+            self.assertGreaterEqual(transport["chunks"], 1)
+            self.assertTrue(all(
+                p.stat().st_size <= CHUNK_BYTES + 32768
+                for p in (shadow_dir / "state-chunks").iterdir()
+            ))
+            restored = restore(shadow_dir)
+            self.assertEqual(restored["storage_format"], FORMAT)
+            self.assertEqual(restored["raw_sha256"], raw_sha256)
+            self.assertEqual(
+                physical_ledger_snapshot(
+                    shadow_dir / "state.sqlite", expected_source=recorded_source
+                ), before, "Real immutable ledger changed across chunk migration"
+            )
             disposable = Path(temp) / "analysis-copy.sqlite"
             shutil.copyfile(original, disposable)
             os.chmod(disposable, 0o600)
@@ -226,5 +250,7 @@ class DeployedV5ReadOnlyProof(unittest.TestCase):
             "recorded_state_source": recorded_source,
             "recorded_source_is_protected_main": recorded_source == main,
             "pending_current_source_core_if_ancestor": recorded_source != main,
+            "chunked_migration_shadow_verified": True,
+            "chunked_migration_shadow_parts": transport["chunks"],
             "production_writes": 0, "scheduled_acceptance": False,
         }, sort_keys=True))
