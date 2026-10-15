@@ -39,7 +39,11 @@ def validate_policy():
             require(hashlib.sha256((ROOT/path).read_bytes()).hexdigest()==entry["sha256"], "archive workflow altered: "+path)
     from brain.projects import load_project_registry
     projects=load_project_registry()
-    require(projects["extended_observation_bound"]==5, "project observation bound changed")
+    require(projects["extended_observation_bound"]==4
+            and len(projects["projects"])==9
+            and len({row["repository"] for row in projects["projects"]})==8
+            and not any(row["id"]=="starblox" for row in projects["projects"]),
+            "active eight-repository focus or retired-game exclusion changed")
     from brain.pr_intelligence import FOCUS_REPOSITORIES, SAMPLE_SIZE
     from brain.value_actions import CONTRACTS
     require(set(CONTRACTS)=={"retally", "product-factory"}
