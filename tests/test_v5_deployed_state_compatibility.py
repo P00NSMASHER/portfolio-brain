@@ -23,6 +23,60 @@ from test_v5_live_state_compatibility import (
 V4_ACCEPTANCE_SHA = "b1b9f63dc8136f259abdc1b9ad18fcd47cf3b681"
 
 
+
+def _original_state_at_commit(commit):
+    """Read exact Git objects, including a sharded future branch, without writes.
+
+    Fetches only a depth-one state ref. Every raw Git blob is independently
+    hashed before the archived SQLite bytes are passed to application code.
+    """
+    names = set(git("ls-tree", "--name-only", commit).splitlines())
+    legacy = "state.sqlite" in names
+    archived = "state-manifest.json" in names
+    if legacy == archived:
+        raise AssertionError("State branch must have exactly one storage format")
+    if legacy:
+        blob = git("rev-parse", f"{commit}:state.sqlite")
+        raw = git("show", f"{commit}:state.sqlite", raw=True)
+        expected = hashlib.sha1(b"blob " + str(len(raw)).encode()
+                                + b"\x00" + raw).hexdigest()
+        if blob != expected or not raw.startswith(b"SQLite format 3\x00"):
+            raise AssertionError("Original legacy Git blob identity mismatch")
+        return raw, blob, "legacy_sqlite", None
+
+    from brain.state_archive import _read_manifest, restore
+    import re
+    manifest_blob = git("rev-parse", f"{commit}:state-manifest.json")
+    document = git("show", f"{commit}:state-manifest.json", raw=True)
+    expected = hashlib.sha1(b"blob " + str(len(document)).encode()
+                            + b"\x00" + document).hexdigest()
+    if manifest_blob != expected:
+        raise AssertionError("Original manifest Git blob identity mismatch")
+    with tempfile.TemporaryDirectory(prefix="brain-original-archive-") as tmp:
+        folder = Path(tmp)
+        (folder / "state-manifest.json").write_bytes(document)
+        verified = _read_manifest(folder)
+        chunks = folder / "state-chunks"
+        chunks.mkdir()
+        for item in verified["chunks"]:
+            name = item["name"]
+            if not re.fullmatch(r"part-[0-9]{6}\.z", name):
+                raise AssertionError("Unsafe original chunk name")
+            path = f"state-chunks/{name}"
+            oid = git("rev-parse", f"{commit}:{path}")
+            value = git("show", f"{commit}:{path}", raw=True)
+            actual = hashlib.sha1(b"blob " + str(len(value)).encode()
+                                  + b"\x00" + value).hexdigest()
+            if oid != actual:
+                raise AssertionError("Original Git chunk identity mismatch")
+            (chunks / name).write_bytes(value)
+        restored = restore(folder)
+        if restored["raw_sha256"] != verified["raw_sha256"]:
+            raise AssertionError("Original decompressed database mismatch")
+        raw = (folder / "state.sqlite").read_bytes()
+    return raw, None, "sqlite-zlib-chunks-v1", manifest_blob
+
+
 class DeployedV5ReadOnlyProof(unittest.TestCase):
     def test_current_source_and_sqlite_replay_without_production_writes(self):
         if os.environ.get("GITHUB_ACTIONS") != "true":
@@ -64,15 +118,20 @@ class DeployedV5ReadOnlyProof(unittest.TestCase):
                 self.assertEqual(parents, [main, source],
                                  "Virtual merge parent identities are wrong")
 
-        git("fetch", "--quiet", "--no-tags", "origin", STATE_REF)
+        # The earlier full-history fetch timed out against years of large
+        # state-branch blobs. A pinned shallow tip includes the entire exact
+        # current tree/blob identity without downloading the full history.
+        state_remote = git("ls-remote", "origin", STATE_REF).split()[0]
+        git("fetch", "--quiet", "--no-tags", "--depth=1", "origin", STATE_REF)
         state_commit = git("rev-parse", "FETCH_HEAD")
-        blob = git("rev-parse", f"{state_commit}:state.sqlite")
-        raw = git("show", f"{state_commit}:state.sqlite", raw=True)
+        self.assertEqual(state_commit, state_remote, "State head drift on fetch")
+        raw, blob, storage_format, manifest_blob = _original_state_at_commit(
+            state_commit
+        )
         self.assertTrue(raw.startswith(b"SQLite format 3\x00"))
-        self.assertEqual(blob, hashlib.sha1(
-            b"blob " + str(len(raw)).encode() + b"\x00" + raw
-        ).hexdigest(), "Git blob source identity mismatch")
         raw_sha256 = hashlib.sha256(raw).hexdigest()
+        self.assertEqual(git("ls-remote", "origin", STATE_REF).split()[0],
+                         state_commit, "State branch drift during immutable replay")
         self.assertEqual(git("ls-remote", "origin", "refs/heads/main").split()[0],
                          main, "Main drift during snapshot")
         if branch_ref is not None:
@@ -118,6 +177,30 @@ class DeployedV5ReadOnlyProof(unittest.TestCase):
                 original, expected_source=recorded_source
             )
             self.assertGreater(before["sequence"], 210)
+            # Real source-bound, OFFLINE and READ-ONLY migration rehearsal.
+            # The genuine immutable state is copied into disposable storage;
+            # compress/restore can NEVER mutate the remote state branch.
+            from brain.state_archive import CHUNK_BYTES, FORMAT, pack, restore
+            shadow_dir = Path(temp) / "chunked-migration-proof"
+            shadow_dir.mkdir()
+            shutil.copyfile(original, shadow_dir / "state.sqlite")
+            transport = pack(shadow_dir)
+            self.assertEqual(transport["raw_sha256"], raw_sha256)
+            self.assertEqual(transport["raw_size"], len(raw))
+            self.assertFalse((shadow_dir / "state.sqlite").exists())
+            self.assertGreaterEqual(transport["chunks"], 1)
+            self.assertTrue(all(
+                p.stat().st_size <= CHUNK_BYTES + 32768
+                for p in (shadow_dir / "state-chunks").iterdir()
+            ))
+            restored = restore(shadow_dir)
+            self.assertEqual(restored["storage_format"], FORMAT)
+            self.assertEqual(restored["raw_sha256"], raw_sha256)
+            self.assertEqual(
+                physical_ledger_snapshot(
+                    shadow_dir / "state.sqlite", expected_source=recorded_source
+                ), before, "Real immutable ledger changed across chunk migration"
+            )
             disposable = Path(temp) / "analysis-copy.sqlite"
             shutil.copyfile(original, disposable)
             os.chmod(disposable, 0o600)
@@ -159,12 +242,15 @@ class DeployedV5ReadOnlyProof(unittest.TestCase):
             "status": "PASS_READONLY_COMPATIBILITY_NOT_ACCEPTANCE",
             "trigger": trigger, "reviewed_source": source,
             "protected_main": main, "state_commit": state_commit,
-            "sqlite_blob": blob, "sqlite_sha256": raw_sha256,
+            "sqlite_blob": blob, "manifest_blob": manifest_blob,
+            "storage_format": storage_format, "sqlite_sha256": raw_sha256,
             "sqlite_bytes": len(raw), "sequence": before["sequence"],
             "canonical_hash": before["canonical_hash"],
             "pending_events": 0, "v4_acceptance_ref_intact": True,
             "recorded_state_source": recorded_source,
             "recorded_source_is_protected_main": recorded_source == main,
             "pending_current_source_core_if_ancestor": recorded_source != main,
+            "chunked_migration_shadow_verified": True,
+            "chunked_migration_shadow_parts": transport["chunks"],
             "production_writes": 0, "scheduled_acceptance": False,
         }, sort_keys=True))
