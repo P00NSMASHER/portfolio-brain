@@ -108,7 +108,8 @@ jobs:
       - name: Validate restoration and capture publication parent
         run: |
           set -euo pipefail
-          test -f state/state.sqlite || { echo "STATE_UNAVAILABLE: restore the verified brain-state-v2 seed; no implicit bootstrap"; exit 1; }
+          mkdir -p /tmp/brain
+          python -m brain.state_archive restore --root state --status /tmp/brain/state-restoration.json
           echo "BRAIN_STATE_PARENT=$(git -C state rev-parse HEAD)" >> "$GITHUB_ENV"
           python - <<'PY'
           import sqlite3
@@ -151,6 +152,11 @@ jobs:
                   raise SystemExit("STATE_CORRUPT: publication backup failed integrity check")
           os.replace("/tmp/brain-publication.sqlite", "state/state.sqlite")
           PY
+      - name: Verify and pack durable state into bounded Git blobs
+        run: |
+          set -euo pipefail
+          python -m brain.state_archive pack --root state --status /tmp/brain/state-publication.json
+          test ! -f state/state.sqlite || { echo "STATE_RAW_FILE_NOT_REMOVED"; exit 1; }
       - name: Publish one nonsecret state transaction without force
         env:
           GH_TOKEN: ${{ github.token }}
@@ -158,7 +164,13 @@ jobs:
           set -euo pipefail
           git -C state config user.name "portfolio-brain-state"
           git -C state config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C state add -- state.sqlite
+          git -C state add --all -- .
+          git -C state diff --cached --name-only | while IFS= read -r changed; do
+            case "$changed" in
+              state.sqlite|state-manifest.json|state-chunks/part-*.z) ;;
+              *) echo "STATE_STAGING_UNEXPECTED_PATH: refusing unrelated state-branch write"; exit 1 ;;
+            esac
+          done
           if git -C state diff --cached --quiet; then
             echo "NO_STATE_CHANGE: no new durable commit required"
           else
