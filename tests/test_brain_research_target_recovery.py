@@ -48,6 +48,9 @@ class SearchFixture:
                         "items":[self.hit(name,0) for name in BAD]}
             if self.alternate == "no_matches":
                 return {"incomplete_results":False,"items":[]}
+            if (self.alternate == "second_empty_third_source"
+                    and "x402%20python" in path):
+                return {"incomplete_results":False,"items":[]}
             return {"incomplete_results":False,"items":[self.hit(GOOD,42)]}
         if any(path == f"/repos/{name}/branches/main" for name in BAD):
             raise urllib.error.HTTPError("https://api.github.com/"+path,404,
@@ -117,7 +120,27 @@ class ResearchRecoveredOnlyByRealSourceTests(unittest.TestCase):
         self.assertEqual(self.store.db.execute("SELECT count(*) FROM events").fetchone()[0],0)
         self.assertEqual(self.store.db.execute("SELECT count(*) FROM attempts").fetchone()[0],0)
         self.assertLessEqual(api.requests,24)
-        self.assertEqual(sum(path.startswith("/search/repositories?") for path in transport.paths),2)
+        self.assertEqual(sum(path.startswith("/search/repositories?") for path in transport.paths),3)
+
+    def test_second_domain_empty_but_third_real_hash_verified_source_succeeds(self):
+        transport=SearchFixture(alternate="second_empty_third_source")
+        api=GitHub(transport=transport)
+        with redirect_stderr(io.StringIO()):
+            report=research(self.store,SHA,self.output,api=api)
+        self.assertEqual(report["operation"]["target"],"school-tools")
+        self.assertEqual(report["operation"]["original_target"],"freight-recovery")
+        self.assertEqual(report["operation"]["result"],
+                         "VERIFIED_ALTERNATE_SOURCE_AFTER_SEARCH_FAILURE")
+        self.assertEqual(report["operation"]["requests"],8)
+        self.assertEqual(report["operation"]["candidates_observed"],1)
+        self.assertEqual(
+            [x["classification"] for x in report["operation"]["prior_unavailable_targets"]],
+            ["PUBLIC_SEARCH_RESULTS_UNINSPECTABLE",
+             "ALTERNATE_SEARCH_NO_SOURCE_INSPECTED"],
+        )
+        self.assertEqual(self.store.db.execute(
+            "SELECT count(*) FROM events").fetchone()[0],1)
+        self.assertEqual(len(transport.paths),8)
 
     def test_nonempty_index_branch_404_still_fatal_and_does_not_try_other_domain(self):
         transport=SearchFixture(first_size=100)
@@ -142,18 +165,21 @@ class ResearchRecoveredOnlyByRealSourceTests(unittest.TestCase):
         self.assertEqual(report["operation"]["requests"],1)
         self.assertEqual(len(transport.paths),1)
 
-    def test_alternative_empty_search_is_disclosed_without_invented_candidate(self):
+    def test_empty_alternates_cannot_launder_primary_source_failure(self):
         transport=SearchFixture(alternate="no_matches")
         api=GitHub(transport=transport)
         with redirect_stderr(io.StringIO()):
-            report=research(self.store,SHA,self.output,api=api)
-        self.assertEqual(report["operation"]["result"],
-                         "EMPTY_ALTERNATE_SEARCH_AFTER_SOURCE_FAILURE")
-        self.assertEqual(report["operation"]["candidates_observed"],0)
-        self.assertEqual(report["operation"]["original_target"],"freight-recovery")
-        self.assertEqual(report["operation"]["target"],"agent-products")
-        self.assertEqual(self.store.db.execute("SELECT count(*) FROM events").fetchone()[0],0)
-        self.assertEqual(api.requests,4)
+            with self.assertRaisesRegex(
+                BrainError,"DISCOVERY_ALL_SEARCH_RESULTS_UNAVAILABLE"
+            ):
+                research(self.store,SHA,self.output,api=api)
+        self.assertEqual(self.store.db.execute(
+            "SELECT count(*) FROM events").fetchone()[0],0)
+        self.assertEqual(self.store.db.execute(
+            "SELECT count(*) FROM attempts").fetchone()[0],0)
+        self.assertEqual(api.requests,5)
+        self.assertEqual(sum(p.startswith("/search/repositories?")
+                             for p in transport.paths),3)
 
     def test_low_get_budget_preserves_original_failure_without_extra_provider_call(self):
         transport=SearchFixture()
