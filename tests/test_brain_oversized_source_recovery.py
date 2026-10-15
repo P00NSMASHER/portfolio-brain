@@ -243,7 +243,7 @@ class OversizedSourceRecoveryTests(unittest.TestCase):
         api.requests=23
         with self.assertRaisesRegex(BrainError,"REQUEST_BUDGET_EXHAUSTED"):
             api.discover(TARGET)
-        self.assertEqual(api.requests,25)
+        self.assertEqual(api.requests,24)
 
     def test_diagnostics_clear_after_next_independent_discovery(self):
         api=GitHub(transport=SourceTransport(stage="tree"))

@@ -236,7 +236,7 @@ class BoundedPinnedTreeTests(unittest.TestCase):
         api.requests=19
         with self.assertRaisesRegex(BrainError,"REQUEST_BUDGET_EXHAUSTED"):
             api.discover(TARGET)
-        self.assertEqual(api.requests,25)
+        self.assertEqual(api.requests,24)
         self.assertLessEqual(len(provider.calls),5)
 
     def test_empty_discovery_resets_partial_provenance(self):

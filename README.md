@@ -11,8 +11,8 @@ issue #210 is a separate acceptance track and is not marked complete by this reb
 
 ## What it does
 
-- Keeps the four canonical repositories in durable state and adds a separate bounded read-only observation of five more active repo-backed repositories every core cycle, covering nine active repository bindings without widening the canonical write path.
-- Builds an explicit improvement queue for ten active logical projects, with named success metrics, candidate counts, operator-reported outcomes, and empty baseline/result fields until genuine before/after evidence exists.
+- Keeps the four canonical repositories in durable state and adds a separate bounded read-only observation of four more active repo-backed repositories every core cycle, covering eight active repository bindings without widening the canonical write path.
+- Builds an explicit improvement queue for nine active logical projects, with named success metrics, candidate counts, operator-reported outcomes, and empty baseline/result fields until genuine before/after evidence exists.
 - Rotates business-focused searches across freight recovery, agent products, school tools, Portfolio Brain reliability, trading data, Roblox quality, permit intelligence, and document workflows.
 - Inspects actual source blobs and test paths, preserving source hashes and license classifications. No license type filters discovery.
 - Ranks reusable code from transparent structural evidence, stores observations and outcomes, and produces experiment plans and commercial hypotheses.
