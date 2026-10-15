@@ -22,6 +22,13 @@ FOCUS = {
     "retally": {
         "priority": 1,
         "workstream": "FIRST_CUSTOMER_READINESS",
+        "commercial_north_star": "first real paying freight-recovery pilot",
+        "independent_revenue_gates": (
+            "original consented inbound buyer request",
+            "signed customer pilot authorization",
+            "verified real invoice review outcome",
+            "payment-provider-confirmed settled customer revenue net of refunds",
+        ),
         "next_test": ("On labeled synthetic invoices, compare incorrect recovery "
                       "suggestions per 100 and reviewer minutes before/after "
                       "deduplication; separately test restricted-role staging access."),
@@ -35,6 +42,13 @@ FOCUS = {
     "product-factory": {
         "priority": 2,
         "workstream": "VERIFIED_BUILDS_TO_BUYER_VALUE",
+        "commercial_north_star": "first real paying buyer for a shipped App Factory product",
+        "independent_revenue_gates": (
+            "original inbound buyer interest",
+            "buyer-consented live pilot with source-pinned workflow proof",
+            "independently observed repeat use or buyer acceptance",
+            "payment-provider-confirmed settled product revenue net of refunds",
+        ),
         "next_test": ("Pin each unmerged candidate SHA, re-run native mobile/desktop "
                       "operator/reviewer flows, restart persistence and package "
                       "integrity; validate buyer pilots independently."),
@@ -247,6 +261,9 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha,
             "focus_workstream": focus["workstream"] if focus else None,
             "focus_next_test": focus["next_test"] if focus else None,
             "focus_required_evidence": focus["required_evidence"] if focus else None,
+            "commercial_north_star": focus["commercial_north_star"] if focus else None,
+            "independent_revenue_gates": list(focus["independent_revenue_gates"]) if focus else [],
+            "revenue_evidence_status": "NOT_VERIFIED",
             "activation_gate": focus["activation_gate"] if focus else None,
             "real_customer_activation_authority": False,
             "current_candidate_count": len(matched),
@@ -279,6 +296,9 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha,
                 "queue_status": row["status"],
                 "next_test": row["focus_next_test"],
                 "required_evidence": row["focus_required_evidence"],
+                "commercial_north_star": row["commercial_north_star"],
+                "independent_revenue_gates": row["independent_revenue_gates"],
+                "revenue_evidence_status": row["revenue_evidence_status"],
                 "activation_gate": row["activation_gate"],
                 "baseline_value": None,
                 "measured_result": None,
