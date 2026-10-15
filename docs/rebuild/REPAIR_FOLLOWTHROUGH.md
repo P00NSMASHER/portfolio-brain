@@ -108,3 +108,16 @@ Keep the Portfolio Brain signed six-hour V6 acceptance source frozen until
 the independent acceptance path closes. Preserve original failure histories,
 15 existing task cadences, disabled alerts and child privacy. Treat a
 technical-main PASS as different from actual production-runtime verification.
+
+## Guaranteed bounded overflow rotation
+
+The original top-five repair batch could repeatedly defer the sixth work item
+when all six observations remained source-stable. The active project run now
+keeps the top **four** items fixed by urgency and rotates the fifth available
+slot across the remaining eligible items using the same actual GitHub workflow
+run number described in the cross-project improvement contract. For a
+one-action run, that single slot cycles across all six candidates. As a
+result, backlog candidates do not remain unseen indefinitely simply because
+their relative heuristic score remains lower. No additional GitHub GET, task,
+paid service, credential or release privilege is needed. Candidate evidence
+and an independent owner/gate remain required.

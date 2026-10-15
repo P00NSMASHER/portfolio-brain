@@ -223,7 +223,9 @@ def write_report(report, output):
             lines.append(
                 f'{execution["selected_count"]} source-pinned actions selected; '
                 f'{execution["deferred_due_to_batch_bound"]} deferred by bounded batch; '
-                f'{execution["suppressed_duplicate_count"]} already reported exact fingerprints.'
+                f'{execution["suppressed_duplicate_count"]} already reported exact fingerprints; '
+                f'overflow slot {execution.get("rotated_overflow_index")!s} '
+                f'from cycle {execution.get("rotation_cycle_index", "UNKNOWN")}.'
             )
             for step in execution["actions"]:
                 lines.append(

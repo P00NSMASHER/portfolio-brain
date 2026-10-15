@@ -126,7 +126,8 @@ def extended_repositories():
     return tuple(sorted(repositories, key=lambda r: (r != factory, repositories.index(r))))
 
 
-def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha, priority_prs=None):
+def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha,
+                            priority_prs=None, repair_cycle_index=None):
     """Build one honest improvement queue from canonical + ephemeral source evidence."""
     require(
         type(canonical_report) is dict
@@ -312,14 +313,17 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha,
         for row in result["evidence_to_action_packets"]
     )
     from brain.repair_autonomy import repair_batch
-    result["autonomous_repair_queue"] = repair_batch(result)
+    cycle = (canonical_report.get("state_sequence", 0)
+             if repair_cycle_index is None else repair_cycle_index)
+    require(type(cycle) is int and 0 <= cycle < 2**63,
+            "REPAIR_SOURCE_CYCLE_SEQUENCE_INVALID")
+    result["autonomous_repair_queue"] = repair_batch(
+        result, cycle_index=cycle,
+    )
     result["autonomous_repair_action_count"] = (
         result["autonomous_repair_queue"]["selected_count"]
     )
     from brain.repair_followthrough import follow_through
-    cycle = canonical_report.get("state_sequence", 0)
-    require(type(cycle) is int and 0 <= cycle < 2**63,
-            "REPAIR_SOURCE_CYCLE_SEQUENCE_INVALID")
     result["autonomous_repair_followthrough"] = follow_through(
         result["autonomous_repair_queue"], cycle=cycle,
     )

@@ -192,6 +192,7 @@ def projects(store, sha, output, *, api=None):
 
     result = build_project_portfolio(
         canonical, snapshots, source_sha=sha, priority_prs=focused,
+        repair_cycle_index=rotation["index"],
     )
     result["operation"] = {
         "name": "projects",

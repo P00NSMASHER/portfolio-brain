@@ -122,7 +122,8 @@ def _action(case):
     )
 
 
-def repair_batch(project_report, *, previous_evidence=None, max_batch=LIMIT):
+def repair_batch(project_report, *, previous_evidence=None, max_batch=LIMIT,
+                 cycle_index=0):
     """Compile up to five independent owner actions with stable dedupe IDs.
 
     previous_evidence holds exact PR/head/CI fingerprints already acted on
@@ -132,6 +133,8 @@ def repair_batch(project_report, *, previous_evidence=None, max_batch=LIMIT):
     """
     require(type(max_batch) is int and 1 <= max_batch <= LIMIT,
             "REPAIR_BATCH_BOUND_INVALID")
+    require(type(cycle_index) is int and 0 <= cycle_index < 2**63,
+            "REPAIR_CYCLE_ROTATION_INVALID")
     require(type(project_report) is dict
             and project_report.get("scope") ==
                 "READ_ONLY_CROSS_PROJECT_IMPROVEMENT_QUEUE"
@@ -208,13 +211,26 @@ def repair_batch(project_report, *, previous_evidence=None, max_batch=LIMIT):
         -x["urgency"], -x["heuristic_relevance"],
         x["project_id"], x["candidate_pr_number"],
     ))
-    selected = actions[:max_batch]
+    # Preserve the highest-priority N-1 actions while rotating the final
+    # bounded slot through the remaining candidates. Without this, the 6th
+    # source is permanently starved by a fixed top-five batch each run.
+    rotated_slot = None
+    if len(actions) > max_batch:
+        rotated_slot = max_batch - 1 + (
+            cycle_index % (len(actions) - max_batch + 1)
+        )
+        selected = actions[:max_batch-1] + [actions[rotated_slot]]
+    else:
+        selected = actions
     return {
         "schema_version": 1,
         "status": "ACTIONABLE_TECHNICAL_REPAIRS" if selected
                   else "NO_NEW_SOURCE_BOUND_TECHNICAL_ACTION",
         "scope": "OWNER_TASK_FIX_AND_VERIFY_NO_RELEASE_AUTHORITY",
         "max_actions_per_run": max_batch,
+        "rotation_cycle_index": cycle_index,
+        "rotated_overflow_index": rotated_slot,
+        "rotation_rule": "HIGHEST_PRIORITY_N_MINUS_ONE_PLUS_ONE_FAIR_OVERFLOW_SLOT",
         "actionable_count": len(actions),
         "selected_count": len(selected),
         "deferred_due_to_batch_bound": len(actions) - len(selected),

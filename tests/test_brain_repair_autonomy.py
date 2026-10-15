@@ -187,5 +187,37 @@ class RepairControllerTests(unittest.TestCase):
                 repair_batch(fixture(), previous_evidence=value)
 
 
+    def test_overflow_slot_alternates_to_prevent_source_starvation(self):
+        even = repair_batch(fixture(), cycle_index=100)
+        odd = repair_batch(fixture(), cycle_index=101)
+        self.assertEqual(even["selected_count"], 5)
+        self.assertEqual(odd["selected_count"], 5)
+        self.assertEqual(even["rotated_overflow_index"], 4)
+        self.assertEqual(odd["rotated_overflow_index"], 5)
+        ids = lambda row: {x["dedupe_key"] for x in row["actions"]}
+        self.assertEqual(len(ids(even) | ids(odd)), 6)
+        self.assertEqual(len(ids(even) & ids(odd)), 4)
+        self.assertEqual(even["rotation_rule"],
+                         "HIGHEST_PRIORITY_N_MINUS_ONE_PLUS_ONE_FAIR_OVERFLOW_SLOT")
+        self.assertFalse(even["authority_to_merge_or_deploy"])
+        self.assertFalse(odd["authority_to_merge_or_deploy"])
+
+    def test_single_action_budget_eventually_samples_every_source(self):
+        reports=[repair_batch(fixture(), max_batch=1, cycle_index=index)
+                 for index in range(6)]
+        self.assertEqual(
+            len({r["actions"][0]["dedupe_key"] for r in reports}), 6
+        )
+        self.assertTrue(all(r["max_actions_per_run"] == 1 for r in reports))
+        self.assertTrue(all(not r["authority_to_merge_or_deploy"]
+                            for r in reports))
+
+    def test_rotation_index_does_not_accept_fake_or_negative_sequences(self):
+        for value in (-1, True, "0", None, 2**63):
+            with self.subTest(value=value), self.assertRaises(BrainError):
+                repair_batch(fixture(), cycle_index=value)
+
+
+
 if __name__ == "__main__":
     unittest.main()
