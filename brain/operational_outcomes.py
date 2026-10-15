@@ -154,17 +154,21 @@ def collect_outcomes(get, project_ids, *, started_at, ended_at):
         grouped = {}
         for row in project['runs']:
             if row['status'] == 'completed' and row['conclusion'] in ADVERSE:
-                grouped.setdefault(row['workflow_path'], []).append(row['source_ref'])
-        for path, refs in grouped.items():
+                grouped.setdefault((row['workflow_path'], row['source_sha']), []).append(row['source_ref'])
+        for (path, source), refs in grouped.items():
+            current = source == project['current_main_sha']
             signals.append({
                 'project_id': project['project_id'], 'repository': project['repository'],
+                'source_sha': source, 'current_source': current,
                 'workflow_path': path, 'adverse_terminal_runs': len(refs),
                 'original_run_refs': refs, 'root_cause_verified': False,
                 'attempt_history_complete': project['attempt_history_complete'],
-                'next_operation': 'DIAGNOSE_ORIGINAL_JOBS_AND_ARTIFACTS',
+                'next_operation': ('DIAGNOSE_ORIGINAL_JOBS_AND_ARTIFACTS' if current
+                                   else 'VERIFY_CURRENT_SOURCE_RECOVERY'),
                 'customer_value': None,
             })
-    signals.sort(key=lambda s: (-s['adverse_terminal_runs'], s['project_id'], s['workflow_path']))
+    signals.sort(key=lambda s: (not s['current_source'], -s['adverse_terminal_runs'],
+                               s['project_id'], s['workflow_path'], s['source_sha']))
     return {
         'schema_version': 1, 'scope': 'WORKFLOW_OUTCOMES_NOT_UPTIME_OR_BUSINESS_VALUE',
         'started_at': started_at, 'ended_at': ended_at, 'projects': projects,

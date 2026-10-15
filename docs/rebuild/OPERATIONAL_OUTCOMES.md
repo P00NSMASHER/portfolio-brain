@@ -31,6 +31,12 @@ school content freshness, real users, buyer value or revenue. All such unmeasure
 fields remain null. Per-workflow paths and source revisions are retained so a
 reviewer can distinguish build checks from genuine workload observations.
 
+Diagnostic priorities are grouped by exact source revision and workflow path.
+Current-source failures precede historical failures. Older-source failures are
+preserved with `VERIFY_CURRENT_SOURCE_RECOVERY`, never silently relabelled as
+fixed or automatically treated as an instruction to repair current code. Only
+original jobs/artifacts and live release evidence can establish actual recovery.
+
 The transport never reads schoolwork, student names, email, payment records or
 analytics identities. It retains only bounded public workflow identities and
 conclusions, not provider titles, actors, logs or payloads. Ingesting commercial

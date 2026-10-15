@@ -126,3 +126,14 @@ class OutcomeTests(unittest.TestCase):
         with self.assertRaisesRegex(BrainError, 'OUTCOME_INVENTORY_CHANGED'):
             self.collect(Changed([]))
 
+    def test_old_source_failures_do_not_trigger_current_source_repair_priority(self):
+        historical = [dict(run(i, 'failure'), head_sha='b' * 40) for i in [1, 2]]
+        result = self.collect(Provider(historical + [run(3), run(4, 'failure')]))
+        current, old = result['priority_signals']
+        self.assertEqual(current['source_sha'], SHA)
+        self.assertTrue(current['current_source'])
+        self.assertEqual(current['adverse_terminal_runs'], 1)
+        self.assertFalse(old['current_source'])
+        self.assertEqual(old['next_operation'], 'VERIFY_CURRENT_SOURCE_RECOVERY')
+        self.assertEqual(old['adverse_terminal_runs'], 2)
+
