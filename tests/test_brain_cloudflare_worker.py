@@ -63,15 +63,27 @@ globalThis.fetch=async (url,options) => {
   assert.equal(options.redirect,'manual');
   return {ok:false,status:302};
 };
-await assert.rejects(
-  () => tick({scheduledTime:Date.now(),cron:'*/10 * * * *'},{GITHUB_ACTIONS_TOKEN:'fake-test-token'}),
-  /GITHUB_GET_302/
-);
+const start=Date.now();
+let timer;
+try {
+  await Promise.race([
+    assert.rejects(
+      () => tick({scheduledTime:Date.now(),cron:'*/10 * * * *'},{GITHUB_ACTIONS_TOKEN:'fake-test-token'}),
+      /GITHUB_GET_302/
+    ),
+    new Promise((_,reject) => { timer=setTimeout(()=>reject(new Error('REDIRECT_TEST_INTERNAL_TIMEOUT')),5000); })
+  ]);
+} finally {
+  clearTimeout(timer);
+}
+assert.ok(Date.now()-start < 5000,'redirect must fail immediately without network follow');
 assert.equal(requests,1);
 console.log('CLOUDFLARE_REDIRECT_FAIL_CLOSED_PASS');
 """
+        # Allow loaded GitHub runners to start Node; retain a stricter
+        # 5-second execution deadline inside the JS redirect assertion.
         done=subprocess.run(["node","--input-type=module","-e",js],
-            cwd=WORKER.parents[2],capture_output=True,text=True,timeout=15)
+            cwd=WORKER.parents[2],capture_output=True,text=True,timeout=45)
         self.assertEqual(done.returncode,0,done.stderr)
         self.assertIn('CLOUDFLARE_REDIRECT_FAIL_CLOSED_PASS',done.stdout)
 
