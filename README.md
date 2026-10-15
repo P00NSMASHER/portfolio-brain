@@ -140,3 +140,17 @@ stable deduplication IDs. Existing scheduled project owners may implement
 approved routine source fixes without further prompting; this module cannot
 authorize a GitHub token, merge protected code or contact real buyers. See
 `brain/repair_autonomy.py` and the original repair-control issue #689.
+
+### Reopening stalled repairs without manual prompts
+
+The project-stage output now includes a restart-safe, owner-bound repair
+continuation state machine. An unresolved source/CI fingerprint cannot silently
+vanish after a report, failed CI, or a PR dropping from the open sample. Source
+changes reopen the existing issue, current-main checks must be separately
+verified, and every owner gets an explicit next technical step rather than a
+new status-only finding. The private
+[repair follow-through contract](docs/rebuild/REPAIR_FOLLOWTHROUGH.md) shows
+how existing scheduled owners reuse the previous report's `next_history` and
+fresh direct GitHub evidence without adding tasks, credentials or permissions.
+This remains independent-gate guarded; it is not blanket authority to merge
+financial/production changes or certify real buyer value.

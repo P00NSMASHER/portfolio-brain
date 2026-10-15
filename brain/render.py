@@ -239,6 +239,27 @@ def write_report(report, output):
                 "No upstream provider code was executed; no protected merge, "
                 "customer action, revenue, or live deployment has been approved."
             )
+        continuation = report.get("autonomous_repair_followthrough") or {}
+        if continuation:
+            lines.extend(["", "## Restart-safe repair follow-through", ""])
+            lines.append(
+                f'{continuation["unfinished_count"]} unfinished actions; '
+                f'{continuation["carried_forward_count"]} carried from previous '
+                f'unsampled issues; {continuation["technical_main_verified_count"]} '
+                f'main sources with explicit technical-check evidence.'
+            )
+            for task in continuation["actions"]:
+                lines.append(
+                    f'- {task["project_id"]} PR #{task["source_pr"]} '
+                    f'@ {task["source_head_sha"][:12]}: '
+                    f'{task["next_operation"]}; {task["provider_status"]}. '
+                    f'Implementation owner: {task["owner_task"]}.'
+                )
+            lines.append(
+                "Unchanged uncompleted work must resume rather than silently "
+                "disappear; technical main CI is not proof of production or "
+                "commercial effectiveness."
+            )
         lines.extend(["", "## Project improvement queue", ""])
         for project in report.get("projects", []):
             revision = project.get("repository_revision")

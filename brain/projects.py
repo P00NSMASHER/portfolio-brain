@@ -316,6 +316,13 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha,
     result["autonomous_repair_action_count"] = (
         result["autonomous_repair_queue"]["selected_count"]
     )
+    from brain.repair_followthrough import follow_through
+    cycle = canonical_report.get("state_sequence", 0)
+    require(type(cycle) is int and 0 <= cycle < 2**63,
+            "REPAIR_SOURCE_CYCLE_SEQUENCE_INVALID")
+    result["autonomous_repair_followthrough"] = follow_through(
+        result["autonomous_repair_queue"], cycle=cycle,
+    )
     result["measured_project_outcomes"] = 0
     result["real_buyer_confirmed_outcomes"] = None
     return result
