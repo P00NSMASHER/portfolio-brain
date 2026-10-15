@@ -54,6 +54,14 @@ class ProjectRegistryTests(unittest.TestCase):
             "P00NSMASHER/x402-product-factory",
         })
 
+    def test_grade_2_app_and_roblox_are_active_not_retired_starblox(self):
+        registry = load_project_registry()
+        by_id = {item["id"]: item for item in registry["projects"]}
+        self.assertEqual(by_id["abvm"]["name"], "ABVM Grade 2 Learning App")
+        self.assertIn("daily teacher curriculum/homework refresh", by_id["abvm"]["improvement_focus"])
+        self.assertEqual(by_id["pips-classroom"]["name"], "ABVM Grade 2 Roblox Classroom")
+        self.assertFalse(any("StarBlox" in item["name"] for item in registry["projects"]))
+
     def test_queue_never_invents_baseline_or_value(self):
         result = build_project_portfolio(
             canonical_report(),
@@ -153,6 +161,11 @@ class ProjectRegistryTests(unittest.TestCase):
         self.assertEqual([x["priority"] for x in work], [1, 2])
         self.assertIn("restricted runtime", work[0]["activation_gate"])
         self.assertIn("buyer demand", work[1]["activation_gate"])
+        self.assertIn("paying freight-recovery pilot", work[0]["commercial_north_star"])
+        self.assertIn("paying buyer", work[1]["commercial_north_star"])
+        self.assertEqual(work[0]["independent_revenue_gates"][-1],
+                         "payment-provider-confirmed settled customer revenue net of refunds")
+        self.assertTrue(all(item["revenue_evidence_status"] == "NOT_VERIFIED" for item in work))
         for task in work:
             self.assertIsNone(task["baseline_value"])
             self.assertIsNone(task["measured_result"])
