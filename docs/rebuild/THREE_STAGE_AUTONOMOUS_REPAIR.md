@@ -72,3 +72,28 @@ authorization is changed. Portfolio Brain's signed V6 production acceptance
 remains frozen and independently governed. Actual customer-value learning
 requires separate, consented original outcome evidence; this first learner
 covers independently checked TECHNICAL repair results only.
+
+## Completed technical stages and release status (October 15, 2026)
+
+- **Stage 1:** Implemented and regression-tested source-hash-bound
+  deterministic workflow repair, plus a verified failing-before/passing-after
+  security test. Applies only inside an isolated clean worktree and cannot
+  push or merge.
+- **Stage 2:** Original PR, exact source, mandatory job and independently
+  installed verifier identities, branch mergeability and post-merge main checks
+  are assessed separately. GitHub's current PR base pointer may advance after
+  a successful merge, so a genuinely closed+merged candidate is verified using
+  the actual merge commit/main-head evidence instead of incorrectly requiring
+  the original base pointer to stay unchanged. Open stale-base PRs still HOLD.
+- **Stage 3:** Repeatable technical results feed only a bounded, matching
+  repair recipe priority after at least three distinct source-verified
+  examples. Pending drafts are not failures, and business outcomes cannot be
+  inferred. No qualifying real buyer/revenue evidence has been collected.
+
+These three implementation stages have a green hosted Foundation and separate
+Brain independent check on the draft source, not a production cutover.
+Protected Brain main remains fixed while V6 six-hour signed acceptance is
+pending. RETALLY and App Factory also need actual source-specific
+independent approval; Brain's own reviewer App check does not magically
+establish downstream acceptance. Do not mark the outcome-learning stage
+as live-calibrated until real original cases, not synthetic fixtures, exist.

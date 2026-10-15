@@ -168,6 +168,35 @@ class ClosedLoopDeliveryTests(unittest.TestCase):
                 self.assertFalse(result["live_service_verified"])
                 self.assertFalse(result["actual_customer_value_verified"])
 
+    def test_after_merge_changed_base_metadata_requires_merge_main_proof_not_old_base(self):
+        # GitHub PR base.sha can point at advanced main after a squash merge.
+        patch, pr, files, checks = fixture()
+        pr["state"] = "closed"
+        pr["merged"] = True
+        pr["base"]["sha"] = MERGE
+        pr["merge_commit_sha"] = MERGE
+        actual_main_checks = copy.deepcopy(checks)
+        for item in actual_main_checks["check_runs"]:
+            item["head_sha"] = MERGE
+        outcome = evaluate(
+            patch, pr, files, checks,
+            current_main_sha=MERGE, main_checks=actual_main_checks,
+        )
+        self.assertTrue(outcome["technical_main_verified"])
+        self.assertEqual(
+            outcome["status"],
+            "MAIN_SOURCE_TECHNICALLY_VERIFIED_NOT_LIVE_DEPLOYMENT",
+        )
+        self.assertFalse(outcome["live_service_verified"])
+        pr["state"] = "open"
+        pr["merged"] = False
+        pr["merge_commit_sha"] = None
+        still_open = evaluate(patch, pr, files, checks)
+        self.assertFalse(still_open["technical_main_verified"])
+        self.assertEqual(
+            still_open["next_action"], "REBASE_AND_REPLAY_PATCH_ON_CURRENT_MAIN",
+        )
+
     def test_closed_source_with_adverse_main_is_not_verified(self):
         patch,pr,files,checks=fixture()
         pr["state"]="closed";pr["merged"]=True

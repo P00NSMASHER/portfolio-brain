@@ -143,9 +143,15 @@ def evaluate_delivery(patch, pr, observed_files, candidate_checks, *,
         "merge_or_release_authority_granted": False,
         "money_or_contact_authority_granted": False,
     }
-    if base_sha != patch["source_head_sha"]:
+    if (pr["state"] == "open"
+            and base_sha != patch["source_head_sha"]):
         result["next_action"] = "REBASE_AND_REPLAY_PATCH_ON_CURRENT_MAIN"
         return result
+    # A merged PR's base.sha is not a frozen historical reference: GitHub
+    # can advance the target branch after merge. Closed, genuinely merged
+    # proposals must instead pass exact merge SHA + current-main + main-CI
+    # verification below. This exception never authorizes an open stale PR.
+
     if ci["status"] != "EXACT_HEAD_TECHNICAL_CHECKS_GREEN_NOT_RELEASE":
         result["next_action"] = "REPAIR_EXACT_HEAD_CI_OR_RESTORE_REQUIRED_TESTS"
         return result
