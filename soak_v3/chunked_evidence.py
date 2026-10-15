@@ -145,9 +145,12 @@ def verify_original_state(api, *, state_commit, target):
     manifest_sha = sha40(entry.get("sha"))
     raw_manifest = _get_blob(api, manifest_sha, max_size=2_000_000)
     try:
-        document = _manifest(json.loads(raw_manifest))
+        parsed_manifest = json.loads(raw_manifest)
     except (ValueError, TypeError) as exc:
         raise EvidenceError("STATE_MANIFEST_JSON_INVALID") from exc
+    # EvidenceError subclasses ValueError: do not disguise an authentic
+    # manifest schema/hash/bound failure as a JSON syntax problem.
+    document = _manifest(parsed_manifest)
     paths = {f"state-chunks/{c['name']}" for c in document["chunks"]}
     actual = {name for name in rows if name.startswith("state-chunks/")}
     require(paths == {name for name in actual if rows[name].get("type") == "blob"},
