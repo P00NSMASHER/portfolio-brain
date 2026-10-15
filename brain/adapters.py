@@ -265,12 +265,16 @@ class GitHub:
             repos=[self.get("/repos/"+repository)]
         else:
             query=target["query"]+('' if self.private else ' is:public')
-            response=self.get("/search/repositories?q="+urllib.parse.quote(query,safe="")+"&per_page=2&sort=updated")
+            response=self.get("/search/repositories?q="+urllib.parse.quote(query,safe="")+"&per_page=8&sort=updated")
             require(response.get("incomplete_results") is False, "DISCOVERY_INCOMPLETE")
             require(type(response.get("items")) is list, "DISCOVERY_RESPONSE_INVALID")
             repos=response["items"]
         found=[]
-        for meta in repos[:2]:
+        # Search ranking may put newly created/deleted empty repositories
+        # first. Inspect up to eight search hits, but retain at most two
+        # independently hash-verified source candidates, within the same
+        # strict 24-GET budget. No missing source may become an observation.
+        for meta in repos[:8]:
             require(type(meta) is dict and type(meta.get("full_name")) is str
                     and REPO.fullmatch(meta["full_name"]), "DISCOVERY_RESULT_IDENTITY_INVALID")
             name=meta["full_name"]
@@ -330,6 +334,8 @@ class GitHub:
                         "child_trees_inspected":bounded_child_count,
                         "scope":"PARTIAL_TREE_ORIGINAL_BLOB_VERIFIED",
                     })
+                if not repository and len(found) >= 2:
+                    break
             except BrainError as exc:
                 # Only a never-initialized, public, search-derived branch
                 # may disappear without a fatal error. Nonempty or malformed
