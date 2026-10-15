@@ -123,7 +123,7 @@ def _action(case):
 
 
 def repair_batch(project_report, *, previous_evidence=None, max_batch=LIMIT,
-                 cycle_index=0):
+                 cycle_index=0, outcome_episodes=None):
     """Compile up to five independent owner actions with stable dedupe IDs.
 
     previous_evidence holds exact PR/head/CI fingerprints already acted on
@@ -152,6 +152,10 @@ def repair_batch(project_report, *, previous_evidence=None, max_batch=LIMIT,
                     for x in previous_evidence),
             "REPAIR_PRIOR_EVIDENCE_INVALID")
     seen_before = set(previous_evidence)
+    learned = None
+    if outcome_episodes is not None:
+        from brain.repair_outcome_learning import learn_from_repairs
+        learned = learn_from_repairs(outcome_episodes)
     actions, suppressed, missing, identities = [], [], [], set()
     for project in projects:
         name = project["project_id"]
@@ -177,6 +181,14 @@ def repair_batch(project_report, *, previous_evidence=None, max_batch=LIMIT,
                 suppressed.append(case["dedupe"])
                 continue
             stage, urgency, instruction = _action(case)
+            delta = 0
+            if learned is not None:
+                scoped = learned["projects"][repo]
+                if (scoped["priority_adjustment_enabled"]
+                        and case["theme"] == scoped["relevant_theme"]
+                        and stage != "REPAIR_EXACT_SOURCE_CI"):
+                    delta = scoped["priority_adjustment"]
+            urgency = min(100, max(0, urgency + delta))
             # This is only authority to recommend a code fix, NOT a grant of
             # GitHub mutation credentials, protected merge or customer actions.
             actions.append({
@@ -193,6 +205,7 @@ def repair_batch(project_report, *, previous_evidence=None, max_batch=LIMIT,
                 "opportunity_theme": case["theme"],
                 "heuristic_relevance": case["heuristic_relevance"],
                 "urgency": urgency,
+                "learned_technical_priority_delta": delta,
                 "stage": stage,
                 "first_action": instruction,
                 "negative_and_acceptance_tests":
@@ -237,6 +250,7 @@ def repair_batch(project_report, *, previous_evidence=None, max_batch=LIMIT,
         "suppressed_duplicate_count": len(suppressed),
         "missing": missing,
         "actions": selected,
+        "replayed_repair_learning": learned,
         "repeat_handling": "EXACT_SOURCE_CI_CHANGE_REOPENS_ONLY",
         "independent_quality_gate_required": True,
         "autonomous_fix_proposal_only": True,

@@ -11,7 +11,7 @@ import unittest
 
 from brain.core import BrainError
 from brain.repair_patch_executor import (
-    CHECKOUT, NODE, apply_to_isolated_worktree, generate,
+    CHECKOUT, NODE, apply_to_isolated_worktree, generate, main as repair_cli,
 )
 
 REPO = "P00NSMASHER/x402-product-factory"
@@ -190,6 +190,46 @@ class DeterministicRepairTests(unittest.TestCase):
             artifact = generate(request(), FIXTURE.encode())
             with self.assertRaises((BrainError, subprocess.CalledProcessError)):
                 apply_to_isolated_worktree(root, artifact)
+
+
+    def test_cli_can_apply_complete_repair_to_isolated_uncommitted_branch(self):
+        import json
+        with tempfile.TemporaryDirectory() as folder:
+            parent=Path(folder)
+            root=parent/"source"
+            root.mkdir()
+            subprocess.run(["git","init","-q",str(root)],check=True)
+            subprocess.run(["git","config","user.email","ci@example.net"],
+                           cwd=root,check=True)
+            subprocess.run(["git","config","user.name","Test Only"],
+                           cwd=root,check=True)
+            target=root/PATH
+            target.parent.mkdir(parents=True)
+            (root/"tests").mkdir()
+            target.write_text(FIXTURE)
+            subprocess.run(["git","add","."],cwd=root,check=True)
+            subprocess.run(["git","commit","-qm","base"],cwd=root,check=True)
+            head=subprocess.check_output(["git","rev-parse","HEAD"],
+                                         cwd=root,text=True).strip()
+            req=parent/"request.json"
+            req.write_text(json.dumps(request(source_head_sha=head)))
+            result_dir=parent/"result"
+            code=repair_cli([
+                "--request",str(req),"--source",str(target),
+                "--apply-root",str(root),"--output",str(result_dir),
+            ])
+            self.assertEqual(code,0)
+            data=json.loads((result_dir/"report.json").read_text())
+            self.assertEqual(data["isolated_apply_receipt"]["status"],
+                             "ISOLATED_CODE_AND_TEST_EDITED_AWAITING_CI")
+            generated=root/data["test_path"]
+            self.assertTrue(generated.is_file())
+            self.assertIn(CHECKOUT,target.read_text())
+            self.assertEqual(subprocess.run(
+                [sys.executable,str(generated)],
+                capture_output=True,timeout=8).returncode,0)
+            self.assertEqual(head,subprocess.check_output(
+                ["git","rev-parse","HEAD"],cwd=root,text=True).strip())
 
 
 if __name__ == "__main__":

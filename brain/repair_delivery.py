@@ -191,3 +191,40 @@ def evaluate_delivery(patch, pr, observed_files, candidate_checks, *,
     result["next_action"] = "VERIFY_ACTUAL_RELEASE_OR_PRIVATE_PREVIEW_SEPARATELY"
     result["technical_main_verified"] = True
     return result
+
+
+
+def main(argv=None):
+    """Offline local private evidence gate; never performs a GitHub action."""
+    import argparse
+    import json
+    from pathlib import Path
+    from brain.repair_followthrough_cli import _safe_json
+    from brain.render import write_report
+    parser = argparse.ArgumentParser(description="Review exact-source repair delivery")
+    parser.add_argument("--bundle", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args(argv)
+    record = _safe_json(args.bundle)
+    require(type(record) is dict and set(record) == {
+        "patch", "original_source", "pr", "file_hashes",
+        "candidate_checks", "main_sha", "main_checks",
+    } and type(record["original_source"]) is str
+            and len(record["original_source"]) <= 24000,
+            "REPAIR_DELIVERY_INPUT_BUNDLE_UNTRUSTED")
+    outcome = evaluate_delivery(
+        record["patch"], record["pr"], record["file_hashes"],
+        record["candidate_checks"],
+        original_source_bytes=record["original_source"].encode(),
+        current_main_sha=record["main_sha"], main_checks=record["main_checks"],
+    )
+    write_report(outcome, args.output)
+    print(json.dumps({
+        "status": outcome["status"],
+        "merge_authority": False, "live_verified": False,
+    }, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

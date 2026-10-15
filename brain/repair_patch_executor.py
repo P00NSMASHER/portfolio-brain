@@ -223,6 +223,7 @@ def main(argv=None):
     ap.add_argument("--request", required=True, type=Path)
     ap.add_argument("--source", required=True, type=Path)
     ap.add_argument("--output", required=True, type=Path)
+    ap.add_argument("--apply-root", type=Path)
     args = ap.parse_args(argv)
     from brain.repair_followthrough_cli import _safe_json
     from brain.render import write_report
@@ -230,6 +231,14 @@ def main(argv=None):
             and 32 <= args.source.stat().st_size <= MAX_BYTES,
             "AUTOFIX_SOURCE_FILE_UNSAFE")
     result = generate(_safe_json(args.request), args.source.read_bytes())
+    if args.apply_root:
+        root = args.apply_root.resolve()
+        destination = args.output.resolve()
+        require(root not in destination.parents and destination != root,
+                "AUTOFIX_REPORT_MUST_BE_OUTSIDE_WORKTREE")
+        result["isolated_apply_receipt"] = apply_to_isolated_worktree(
+            root, result,
+        )
     write_report(result, args.output)
     print(json.dumps({"status": result["status"],
                       "paths": [result["source_path"], result["test_path"]],

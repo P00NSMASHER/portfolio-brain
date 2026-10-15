@@ -186,3 +186,13 @@ own exact-head GitHub Actions checks. A verified red source check becomes an
 owner-directed regression repair; green mandatory checks move only to
 independent QA and unchanged release holds. A false, missing or incomplete
 check cannot promote a draft into an active service.
+
+### Repair-code, independent-delivery, and technical-learning handoff
+
+The draft repair loop has three executable offline modules: a narrowly scoped,
+SHA-256-verified local code patcher that generates regressions; an original
+GitHub/independent-gate SHA-guarded delivery evaluator; and a learning engine
+that updates matching repair priority only after several distinct externally
+verified technical outcomes. It never equates a green PR with a live service
+or technical tests with customer revenue. For commands and limitations, see
+[Three-stage autonomous repair](docs/rebuild/THREE_STAGE_AUTONOMOUS_REPAIR.md).
