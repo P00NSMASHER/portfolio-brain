@@ -179,7 +179,8 @@ class Evaluation:
     maximum_gap_observed: int
 
 def evaluate_window(records, *, source_sha, current_main, first_state_parent,
-                    started_at, deadline_at, now):
+                    started_at, deadline_at, now,
+                    minimum_span_seconds=MIN_SPAN_SECONDS):
     """Fail closed on *all* exact-source runs, including inconvenient failures.
 
     Records are externally authenticated run/step/artifact/state attestations. This
@@ -188,6 +189,9 @@ def evaluate_window(records, *, source_sha, current_main, first_state_parent,
     sha40(source_sha)
     sha40(current_main)
     sha40(first_state_parent)
+    require(type(minimum_span_seconds) is int
+            and MIN_SPAN_SECONDS <= minimum_span_seconds <= 21600,
+            "SOAK_REQUIRED_DURATION_INVALID")
     if source_sha != current_main:
         return Evaluation("FAIL", "MAIN_DRIFT", (), 0, 0)
     start, deadline, instant = utc(started_at), utc(deadline_at), utc(now)
@@ -274,7 +278,7 @@ def evaluate_window(records, *, source_sha, current_main, first_state_parent,
     # A missed second/third cycle is already a terminal failure at the original
     # 90-minute gap, even when fewer than three runs have arrived.
     # Once the two-hour span is legitimately complete, proceed to postvalidation.
-    if automatic and span < MIN_SPAN_SECONDS:
+    if automatic and span < minimum_span_seconds:
         elapsed_since_latest=(instant-automatic[-1][0]).total_seconds()
         if elapsed_since_latest > MAX_GAP_SECONDS:
             return Evaluation("FAIL","AUTOMATIC_DELIVERY_GAP_EXCEEDED",ids,span,
@@ -282,7 +286,7 @@ def evaluate_window(records, *, source_sha, current_main, first_state_parent,
     if len(automatic) < MIN_CYCLES:
         return Evaluation("BLOCKED" if instant >= deadline else "WAITING",
                           "INSUFFICIENT_GENUINE_AUTOMATIC_CYCLES",ids,span,maximum)
-    if span < MIN_SPAN_SECONDS:
+    if span < minimum_span_seconds:
         return Evaluation("BLOCKED" if instant >= deadline else "WAITING", "SOAK_DURATION_INCOMPLETE", ids, span, maximum)
     if instant > deadline:
         return Evaluation("BLOCKED", "DEADLINE_EXPIRED_BEFORE_POST_VALIDATION", ids, span, maximum)
