@@ -79,8 +79,10 @@ class GitHub:
     def get(self, path):
         require(path.startswith("/") and not path.startswith("//") and "://" not in path and ".." not in path.split("/"), "unsafe API path")
         for attempt in range(2):
+            # An exhausted budget cannot increment the reported request
+            # counter beyond the policy limit. No provider request is sent.
+            require(self.requests < 24, "REQUEST_BUDGET_EXHAUSTED")
             self.requests+=1
-            require(self.requests <= 24, "REQUEST_BUDGET_EXHAUSTED")
             try:
                 if self.transport:
                     return self.transport(path)

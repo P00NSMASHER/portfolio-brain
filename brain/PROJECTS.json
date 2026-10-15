@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "scope": "ACTIVE_REPO_BACKED_PROJECTS_WITH_EXPLICIT_MEASUREMENT_CONTRACTS",
+  "extended_observation_bound": 4,
+  "projects": [
+    {
+      "id": "portfolio-brain",
+      "name": "Portfolio Brain",
+      "repository": "P00NSMASHER/portfolio-brain",
+      "research_target": "portfolio-reliability",
+      "improvement_focus": "production reliability and durable state continuity",
+      "success_metric": "verified reliability incidents",
+      "direction": "DOWN"
+    },
+    {
+      "id": "trading-platform",
+      "name": "Trading Platform",
+      "repository": "P00NSMASHER/trading-platform",
+      "research_target": "trading-data",
+      "improvement_focus": "market-data completeness and reproducibility",
+      "success_metric": "unresolved required data rows",
+      "direction": "DOWN"
+    },
+    {
+      "id": "abvm",
+      "name": "ABVM Grade 2 Learning App",
+      "repository": "P00NSMASHER/abvmschoolstarworld",
+      "research_target": "school-tools",
+      "improvement_focus": "verified daily teacher curriculum/homework refresh and accurate Grade 2 learning materials",
+      "success_metric": "live curriculum/homework freshness and source accuracy failures",
+      "direction": "DOWN"
+    },
+    {
+      "id": "retally",
+      "name": "RETALLY",
+      "repository": "P00NSMASHER/github-value-hunt-ledger",
+      "research_target": "freight-recovery",
+      "improvement_focus": "synthetic invoice accuracy, evidence integrity and secure first-customer readiness",
+      "success_metric": "incorrect recovery recommendations per 100 labeled synthetic invoices",
+      "direction": "DOWN"
+    },
+    {
+      "id": "pips-classroom",
+      "name": "ABVM Grade 2 Roblox Classroom",
+      "repository": "P00NSMASHER/PipsQuestWorld",
+      "research_target": "roblox-school",
+      "improvement_focus": "photo-faithful classroom, safe teacher avatar and Roblox publish validation",
+      "success_metric": "verified reference-parity gaps",
+      "direction": "DOWN"
+    },
+    {
+      "id": "permitplate",
+      "name": "PermitPlate",
+      "repository": "P00NSMASHER/permitplate-nyc",
+      "research_target": "permit-intelligence",
+      "improvement_focus": "security, provenance and licensing-data correctness",
+      "success_metric": "blocking security or provenance findings",
+      "direction": "DOWN"
+    },
+    {
+      "id": "capturebrief",
+      "name": "CaptureBrief",
+      "repository": "P00NSMASHER/capturebrief",
+      "research_target": "document-workflows",
+      "improvement_focus": "capture, evidence and publication integrity",
+      "success_metric": "blocking release or evidence defects",
+      "direction": "DOWN"
+    },
+    {
+      "id": "product-factory",
+      "name": "Product Factory",
+      "repository": "P00NSMASHER/x402-product-factory",
+      "research_target": "agent-products",
+      "improvement_focus": "source-pinned app QA and independently confirmed buyer pilot value",
+      "success_metric": "buyer-confirmed pilot workflow completions",
+      "direction": "UP"
+    },
+    {
+      "id": "research-labs",
+      "name": "Research Labs",
+      "repository": "P00NSMASHER/github-value-hunt-ledger",
+      "research_target": "research-methods",
+      "improvement_focus": "experiment validity and measured learning",
+      "success_metric": "independently supported experiment outcomes",
+      "direction": "UP"
+    }
+  ]
+}

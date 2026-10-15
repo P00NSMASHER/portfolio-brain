@@ -1,0 +1,146 @@
+# Original provider readback closes the repair evidence gap
+
+The Brain's existing technical repair queue and restart-safe owner
+follow-through can now collect **real GitHub PR/merge/CI facts** without a
+human compiling provider JSON. This is an owner-invoked GET-only helper for
+the standing RETALLY and App Factory source repair tasks, not another cron.
+
+## Existing task procedure
+
+1. Use the newest **exact-source** Brain project stage artifact (not a
+   cached or hallucinated chat status). Extract `autonomous_repair_queue`
+   to a private `queue.json`.
+2. Use the existing owner-authorized read-only GitHub token. The helper
+   accepts the prior private follow-through `report.json` directly when
+   available and first retries unfinished *unsampled* source PRs.
+3. Run:
+
+```sh
+python -m brain.repair_provider \
+  --current /absolute/private/queue.json \
+  --previous /absolute/private/earlier/report.json \
+  --output /absolute/private/provider-proofs
+
+python -m brain.repair_followthrough_cli \
+  --current /absolute/private/queue.json \
+  --history /absolute/private/earlier/report.json \
+  --provider /absolute/private/provider-proofs/report.json \
+  --cycle 2000 \
+  --output /absolute/private/next-owners
+```
+
+The cycle number must come from the actual verified canonical state or trusted
+native workflow run. Omit `--previous` and `--history` for the first
+invocation. This procedure can be executed by the existing project-owning
+scheduled agents without requesting a fresh prompt. No new GitHub Actions
+schedule, ChatGPT task, provider subscription or credentials are created.
+
+## Strict source and request rules
+
+- Fixed eligible repositories:
+  `P00NSMASHER/github-value-hunt-ledger` (RETALLY) and
+  `P00NSMASHER/x402-product-factory` (App Factory).
+- Allowlisted **GET** endpoints only:
+  `/pulls/N`, `/branches/main`, and exact
+  `/commits/40hex/check-runs?per_page=100`.
+  The host is exactly `https://api.github.com`; redirects are refused.
+- At most **6** distinct source PRs and **20** transport requests per owner
+  invocation (usually 5 PRs, 5 exact-head check pages and 2 cached main lookups = 12 GETs).
+  This is a distinct owner task budget; it never adds calls to the canonical
+  Brain's protected **24 GET** main observation operation.
+- One error, 404, stale head, wrong base, fork, unsupported provider shape,
+  partial check page, unsafe redirect or permission block becomes a clearly
+  labeled **gap or fail-closed refusal**, not an implied resolved defect.
+- The helper independently binds the original PR number, same-repository
+  head/base, current exact SHA, true GitHub `merged` state, merge SHA,
+  current main SHA, and a full <=100-check original page to named check ID,
+  app identity and head SHA. No provider text, PR title, body or file contents
+  become executable instructions.
+- If a merge SHA is **not the latest main**, the provider proof remains a
+  historical merge observation. Current-main reachability and source
+  correctness are unverified; the system must not label it current production.
+- `brain.repair_followthrough_cli` consumes the private original-proof
+  envelope directly. The existing independent source check names/app IDs
+  remain mandatory for `MAIN_TECHNICALLY_VERIFIED`: RETALLY
+  `release-gate` and `freight`; Factory `test`, `browser`, and
+  `manufacturing`. Other check failures cannot be ignored.
+- The provider credential is already supplied by the operator's authorized
+  environment. The code neither creates/touches secrets nor requests extra
+  scopes. The entire transport is read-only and emits private 0700/0600
+  report files.
+
+**Verification meaning:** Original GitHub observations are not signed merely
+because they were retrieved through HTTPS. Their schema is validated and
+their source identity cross-bound, but the caller must use an authenticated
+approved account and source freshness. Technical main checks never establish
+real customer success, online service health, legal status, money recovered
+or an approved production release.
+
+## Autonomous continuation
+
+A scheduled owner is expected to examine `next_operation` and continue:
+reproduce a live defect, patch the actual source and regression, inspect red
+checks and revise the exact head, obtain independent gate evidence, or use an
+existing SHA-guarded normal merge path when legitimately allowed. An external
+legal/payment/consent/one-time Roblox publication hold does not block the next
+safe engineering task. If the PR disappears from the latest open sample, the
+earlier `next_history` carries it forward, so the owner can obtain its
+original closure/merge proof rather than reporting the same finding forever.
+
+This code does **not** implement GitHub writes or grant release authority.
+The existing signed V6 source acceptance freeze and original project-specific
+QA remain in force. No human-only action is secretly bypassed.
+
+## Reuse the existing core-cycle budget automatically
+
+The active project registry now excludes the retired StarBlox project without
+deleting or modifying that repository or any Roblox experience. The portfolio
+stage has **eight active repository bindings** (four canonical and four
+extended) rather than nine. This normally frees four read slots under the
+unchanged **24-GitHub-GET** project-stage cap.
+
+The existing `python -m brain projects` stage uses remaining read slots to
+check **one source-pinned RETALLY or App Factory PR each normal core run**.
+It rotates the selected source on the trusted native run sequence, not by PR
+recency alone. A typical unmerged PR requires three original provider GETs:
+exact PR identity, latest `main`, and the original exact-head check page.
+A merged PR on exactly current main needs one additional original main
+check page (four GETs total).
+
+When paging/retries leave fewer than three GET slots, original confirmation is
+explicitly `NOT_CHECKED_OR_REQUEST_BUDGET_UNAVAILABLE`, never silently
+treated as complete. A stale head, changed base, cross-repository fork, closed
+unmerged PR, advanced main, missing or adverse trusted-App check, provider
+unavailability, or too-large check page becomes a source-specific gap. Both
+proposed actions and original facts are rendered in the existing private report
+bundle. Revalidation can occur on the next unchanged scheduled run without
+adding a cron, new ChatGPT task, paid API, independent verifier bypass or
+production mutation. The existing authorized project owners remain
+responsible for actually implementing and independently releasing repairs.
+
+## Automatic exact-head failure triage
+
+A selected repair PR now yields the original GitHub Actions check page for
+**that candidate SHA**, not merely its merge state. The controller verifies
+each unique check ID, exact head SHA, completion/conclusion, and source
+GitHub App identity. It then checks the original mandatory named jobs:
+RETALLY `release-gate` and `freight`; Factory `test`, `browser`,
+`manufacturing`, `pilot`, and `candidate-build`. No PR title or
+untrusted check name becomes an executable instruction.
+
+- Actual failed/cancelled source CI: `REPRODUCE_AND_FIX_REAL_FAILED_HEAD_CI`
+  for the already-assigned implementation owner, without asking again.
+- Incomplete or missing exact-head CI: restore the source-specific check,
+  never treat skipped/missing tests as approval.
+- Required trusted-App exact-head CI green: proceed to **separate independent
+  QA and existing commercial/release holds**, not directly to merge.
+- An original external/legal/payment hold stays held regardless of new CI
+  status; exhausted corrective retries cannot silently restart.
+- Private `next_history` records the factual CI_RED/CI_GREEN status for the
+  next existing owner run, rather than losing it when the selected PR rotates
+  out of the latest-open sample.
+
+Original merge/main proof, actual live deployment, user value, payments,
+commercial permissions and independent V6 acceptance are separate facts.
+No release, extra provider subscription, new task, token scope or spend
+authority was added.

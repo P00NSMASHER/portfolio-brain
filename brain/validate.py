@@ -37,6 +37,26 @@ def validate_policy():
         for entry in entries:
             path=entry.get("archive") or entry.get("archive_path") or entry.get("archived_path")
             require(hashlib.sha256((ROOT/path).read_bytes()).hexdigest()==entry["sha256"], "archive workflow altered: "+path)
+    from brain.projects import load_project_registry
+    projects=load_project_registry()
+    require(projects["extended_observation_bound"]==4
+            and len(projects["projects"])==9
+            and len({row["repository"] for row in projects["projects"]})==8
+            and not any(row["id"]=="starblox" for row in projects["projects"]),
+            "active eight-repository focus or retired-game exclusion changed")
+    from brain.pr_intelligence import FOCUS_REPOSITORIES, SAMPLE_SIZE
+    from brain.value_actions import CONTRACTS
+    require(set(CONTRACTS)=={"retally", "product-factory"}
+            and all(len(v)>=4 for v in CONTRACTS.values()),
+            "focused action contract missing or altered")
+    require(SAMPLE_SIZE==15 and
+            dict(FOCUS_REPOSITORIES)=={
+                "retally": "P00NSMASHER/github-value-hunt-ledger",
+                "product-factory": "P00NSMASHER/x402-product-factory",
+            }, "focus PR observation scope changed")
+    source=(workflow_dir/"brain-cycle.yml").read_text()
+    require("python -m brain projects" in source and "continue-on-error: true" in source,
+            "cross-project read-only stage missing or allowed to block canonical publication")
     knowledge=json.loads((ROOT/'brain/REUSE_KNOWLEDGE.json').read_text())
     require(set(knowledge)=={'schema_version','scope','sources','fingerprint'} and knowledge['schema_version']==2,'knowledge contract changed')
     require(knowledge['scope']=='STRUCTURAL_REUSE_KNOWLEDGE_NOT_EXECUTED_OR_REVENUE_VERIFIED' and type(knowledge['sources']) is list and len(knowledge['sources'])<=12,'knowledge scope/bound changed')
@@ -49,4 +69,4 @@ def validate_policy():
         require(item['source_ref']==f"https://github.com/{item['repository']}/blob/{item['head_sha']}/{item['path']}",'knowledge provenance invalid')
         require(item['target'] in {t['project'] for t in p['research_targets']} and set(item['matched_terms'])<=set(next(t['terms'] for t in p['research_targets'] if t['project']==item['target'])),'knowledge target/terms outside approved research')
         require(item['test_paths'] and len(item['matched_terms'])>=2,'knowledge minimum structural evidence missing')
-    return {"status":"PASS","scope":"POLICY_VALIDATION_ONLY_NOT_LIVE_READINESS","components":3,"recurring_workflows":2,"paid_calls":0,"read_only_discovery":True,"production_accepted":False,"soak_started":False}
+    return {"status":"PASS","scope":"POLICY_VALIDATION_ONLY_NOT_LIVE_READINESS","components":4,"recurring_workflows":2,"paid_calls":0,"read_only_discovery":True,"production_accepted":False,"soak_started":False}

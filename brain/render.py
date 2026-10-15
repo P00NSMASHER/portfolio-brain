@@ -159,6 +159,147 @@ def write_report(report, output):
     lines.extend(["", "## Reusable code to evaluate", ""])
     for candidate in report.get("reuse_candidates",[])[:10]:
         lines.append(f'- [{candidate["repository"]}/{candidate["path"]}]({candidate["source_ref"]}) — {candidate["target"]}; structural score {candidate["reuse_score"]}; license {candidate["license"]}; {candidate["utility_evidence"]}')
+    if report.get("scope") == "READ_ONLY_CROSS_PROJECT_IMPROVEMENT_QUEUE":
+        lines.extend(["", "## RETALLY and Product Factory priority experiments", ""])
+        for task in report.get("priority_improvements", []):
+            review = task.get("active_pr_review") or {}
+            if type(review.get("pr_number")) is int:
+                checks = review.get("checks", {})
+                parent = review.get("sampled_parent_pr")
+                dependency = (
+                    f"stacked on sampled PR #{parent}" if parent is not None
+                    else "unsampled parent branch" if review.get("stacked_on_nondefault_branch")
+                    else "based on observed default branch"
+                )
+                lines.append(
+                    f'- [Draft candidate PR #{review["pr_number"]}]({review["pr_url"]}) '
+                    f'@ {review["head_sha"][:12]}; {dependency}; '
+                    f'CI evidence: {checks.get("status", "NOT_VERIFIED")}; '
+                    f'draft={review["draft"]}. '
+                    f'{review.get("review_action", "Separate review required.")}'
+                )
+            else:
+                lines.append(
+                    f'- {task["project_id"]} PR evidence: '
+                    f'{review.get("status", "NOT_COLLECTED")} (not release evidence).'
+                )
+            sha = task["observed_source_sha"]
+            head = sha[:8] if isinstance(sha, str) else "UNOBSERVED"
+            lines.append(
+                f'- Priority {task["priority"]}: {task["project_id"]} @ {head}; '
+                f'{task["queue_status"]}; CI evidence: {task["source_check_state"]}. '
+                f'Next: {task["next_test"]} '
+                f'Required evidence: {task["required_evidence"]} '
+                f'Activation: {task["activation_gate"]}'
+            )
+        lines.extend(["", "## Source-pinned improvement work packets", ""])
+        for project in report.get("evidence_to_action_packets", []):
+            lines.append(
+                f'- {project["project_id"]}: '
+                f'{len(project["actionable_review_packets"])} candidate work packets; '
+                f'{project["missing_evidence"]}.'
+            )
+            for work in project["actionable_review_packets"][:3]:
+                lines.append(
+                    f'  - [PR #{work["source_pr_number"]}]({work["source_pr_url"]}) '
+                    f'@ {work["source_head_sha"][:12]} — '
+                    f'{work["theme"]}; heuristic relevance '
+                    f'{work["heuristic_relevance"]}/100 (NOT measured value); '
+                    f'CI: {work["source_ci_status"]}; next gate: {work["action_gate"]}. '
+                    f'Change: {work["next_reviewable_change"]} '
+                    f'Metric: {work["target_metric"]}. '
+                    f'Proof: {work["required_proof_artifact"]}. '
+                    f'Hold: {work["required_release_gate"]}'
+                )
+                for step in work["verification_steps"]:
+                    lines.append(f'    - Proposed validation: {step}')
+        lines.append(
+            "Work packets are operator review targets, not merged patches, executed "
+            "downstream tests, verified revenue or approved production releases."
+        )
+        execution = report.get("autonomous_repair_queue") or {}
+        if execution:
+            lines.extend(["", "## Owner-directed technical repair execution", ""])
+            lines.append(
+                f'{execution["selected_count"]} source-pinned actions selected; '
+                f'{execution["deferred_due_to_batch_bound"]} deferred by bounded batch; '
+                f'{execution["suppressed_duplicate_count"]} already reported exact fingerprints; '
+                f'overflow slot {execution.get("rotated_overflow_index")!s} '
+                f'from cycle {execution.get("rotation_cycle_index", "UNKNOWN")}.'
+            )
+            for step in execution["actions"]:
+                lines.append(
+                    f'- [{step["project_id"]} PR #{step["candidate_pr_number"]}]'
+                    f'({step["candidate_pr_url"]}) @ {step["source_head_sha"][:12]}: '
+                    f'{step["stage"]}. Owner: {step["owner_task"]}; '
+                    f'independent gate: {step["independent_gate_owner"]}. '
+                    f'Next: {step["first_action"]} '
+                    f'Release hold: {step["required_release_gate"]}'
+                )
+            lines.append(
+                "These are source-bound implementation instructions for existing owners. "
+                "No upstream provider code was executed; no protected merge, "
+                "customer action, revenue, or live deployment has been approved."
+            )
+        continuation = report.get("autonomous_repair_followthrough") or {}
+        if continuation:
+            lines.extend(["", "## Restart-safe repair follow-through", ""])
+            lines.append(
+                f'{continuation["unfinished_count"]} unfinished actions; '
+                f'{continuation["carried_forward_count"]} carried from previous '
+                f'unsampled issues; {continuation["technical_main_verified_count"]} '
+                f'main sources with explicit technical-check evidence.'
+            )
+            for task in continuation["actions"]:
+                lines.append(
+                    f'- {task["project_id"]} PR #{task["source_pr"]} '
+                    f'@ {task["source_head_sha"][:12]}: '
+                    f'{task["next_operation"]}; {task["provider_status"]}. '
+                    f'Implementation owner: {task["owner_task"]}.'
+                )
+            lines.append(
+                "Unchanged uncompleted work must resume rather than silently "
+                "disappear; technical main CI is not proof of production or "
+                "commercial effectiveness."
+            )
+        source_facts = report.get("original_repair_proof")
+        if source_facts:
+            lines.extend(["", "## Original repair PR evidence", ""])
+            lines.append(
+                f'Original status: {source_facts.get("status", "UNKNOWN")}; '
+                f'PRs={len(source_facts.get("proofs", []))}; '
+                f'gaps={len(source_facts.get("gaps", []))}; '
+                f'GETs={source_facts.get("requests_used", 0)}.'
+            )
+            for source_ci in source_facts.get("source_checks", []):
+                lines.append(
+                    f'- {source_ci["repository"]} PR #{source_ci["pr_number"]} '
+                    f'@ {source_ci["source_head_sha"][:12]}: '
+                    f'{source_ci["status"]}; '
+                    f'adverse={source_ci["adverse_count"]}, '
+                    f'incomplete={source_ci["incomplete_count"]}. '
+                    f'Owner must correct source or verify next gate.'
+                )
+            lines.append(
+                "Original CI and merge metadata are not production or "
+                "commercial acceptance."
+            )
+        lines.extend(["", "## Project improvement queue", ""])
+        for project in report.get("projects", []):
+            revision = project.get("repository_revision")
+            revision_text = revision[:8] if isinstance(revision, str) else "unobserved"
+            lines.append(
+                f'- {project["name"]} ({project["repository"]}@{revision_text}) — '
+                f'{project["status"]}; metric: {project["success_metric"]} '
+                f'({project["direction"]}); candidates: {project["current_candidate_count"]}; '
+                f'operator outcomes: {project["operator_outcome_count"]}. '
+                f'{project["next_action"]}'
+            )
+        lines.append(
+            "Baseline and measured-result fields remain empty until explicit before/after "
+            "evidence exists. This queue cannot write downstream repositories, merge code, "
+            "send messages, trade, spend money, or manufacture value claims."
+        )
     lines.extend(["", "## Business opportunities", ""])
     for opportunity in report.get("business_opportunities",[]):
         lines.append(f'- {opportunity["target"]}: {opportunity["hypothesis"]} Customer demand {opportunity["customer_demand"]}; revenue {opportunity["revenue"]}.')

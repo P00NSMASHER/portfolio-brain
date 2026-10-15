@@ -51,6 +51,76 @@
         "schedule",
         "study"
       ]
+    },
+    {
+      "project": "portfolio-reliability",
+      "query": "github actions state reliability python",
+      "terms": [
+        "workflow",
+        "state",
+        "replay",
+        "reliability"
+      ]
+    },
+    {
+      "project": "trading-data",
+      "query": "market data validation corporate actions python",
+      "terms": [
+        "market",
+        "shares",
+        "options",
+        "validation"
+      ]
+    },
+    {
+      "project": "roblox-school",
+      "query": "roblox luau school environment qa",
+      "terms": [
+        "roblox",
+        "luau",
+        "classroom",
+        "quality"
+      ]
+    },
+    {
+      "project": "permit-intelligence",
+      "query": "permit licensing data validation",
+      "terms": [
+        "permit",
+        "license",
+        "provenance",
+        "validation"
+      ]
+    },
+    {
+      "project": "game-quality",
+      "query": "roblox game ui camera testing",
+      "terms": [
+        "roblox",
+        "camera",
+        "ui",
+        "testing"
+      ]
+    },
+    {
+      "project": "document-workflows",
+      "query": "document capture evidence workflow",
+      "terms": [
+        "document",
+        "capture",
+        "evidence",
+        "workflow"
+      ]
+    },
+    {
+      "project": "research-methods",
+      "query": "experiment validation reproducible benchmark",
+      "terms": [
+        "experiment",
+        "benchmark",
+        "replay",
+        "evidence"
+      ]
     }
   ],
   "watchdog_cron": "16,36,56 * * * *"

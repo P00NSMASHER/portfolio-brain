@@ -115,6 +115,164 @@ def doctor(store, sha, output):
     write_report(result,output)
     return result
 
+def projects(store, sha, output, *, api=None,
+             verify_original_repairs=None):
+    """Prioritize source-pinned RETALLY and Factory PR evidence before optional breadth.
+
+    One existing GET-only adapter and at most 24 combined GitHub requests.
+    The canonical SQLite state remains an untouched isolated read; failures in
+    optional source observation cannot invent a successful value outcome.
+    """
+    from brain.projects import FOCUS, build_project_portfolio, extended_repositories
+    from brain.pr_intelligence import observe_priority_prs
+    from brain.fair_ci_rotation import rotation_counter
+
+    canonical = store.read_report(sha)
+    real_adapter = api is None
+    if verify_original_repairs is None:
+        verify_original_repairs = real_adapter
+    require(type(verify_original_repairs) is bool,
+            "ORIGINAL_REPAIR_VERIFICATION_FLAG_INVALID")
+    api = api or GitHub(private=store.visibility == "PRIVATE")
+    snapshots, errors = [], []
+    observed_at = utcnow()
+    extended = extended_repositories()
+    factory = "P00NSMASHER/x402-product-factory"
+    require(extended and extended[0] == factory, "PROJECT_FOCUS_ORDER_INVALID")
+
+    def observe_one(repository):
+        try:
+            payload, private = api.observe(repository)
+            require(private is False or store.visibility == "PRIVATE",
+                    "PROJECT_PRIVATE_SOURCE_REFUSED")
+            snapshots.append({
+                "key": repository,
+                "observed_at": observed_at,
+                "data_kind": "ACTUAL",
+                **payload,
+            })
+        except (BrainError, KeyError, UnicodeError, TypeError) as exc:
+            errors.append({
+                "repository": repository,
+                "error_class": type(exc).__name__,
+                "error": str(exc)[:300],
+            })
+
+    # Factory is the one mandatory extended observation for the two focus
+    # projects; RETALLY is already in the four-repository canonical snapshot.
+    observe_one(factory)
+    requests_after_priority_source = api.requests
+
+    observed = {
+        row["repository"]: row
+        for row in (*canonical.get("repositories", []), *snapshots)
+    }
+    cycle_index = canonical.get("state_sequence")
+    require(type(cycle_index) is int and 0 <= cycle_index <= 2**63 - 1,
+            "PROJECT_SOURCE_SEQUENCE_UNVERIFIED")
+    rotation = rotation_counter(
+        cycle_index,
+        environment=dict(os.environ) if real_adapter else {},
+        real_adapter=real_adapter,
+    )
+    focused = observe_priority_prs(
+        api, observed, review_contracts=FOCUS,
+        cycle_index=rotation["index"],
+    )
+    requests_after_priority_prs = api.requests
+
+    # Collect remaining lower-priority project context only AFTER bounded
+    # priority PR evidence. Every source snapshot normally requires at least
+    # four calls; skip knowingly impossible attempts with an explicit gap.
+    for repository in extended[1:]:
+        if (type(api.requests) is int and
+                api.requests > policy()["max_requests_per_operation"] - 4):
+            errors.append({
+                "repository": repository,
+                "error_class": "OptionalSourceBudget",
+                "error": "OPTIONAL_SOURCE_NOT_ATTEMPTED_INSUFFICIENT_GET_BUDGET",
+            })
+            continue
+        observe_one(repository)
+
+    result = build_project_portfolio(
+        canonical, snapshots, source_sha=sha, priority_prs=focused,
+        repair_cycle_index=rotation["index"],
+    )
+    # Original provider evidence uses ONLY the remaining native GitHub GET
+    # budget. Retired optional project reads free the necessary room. The
+    # collector selects one fair-rotated exact PR and cannot write a branch.
+    original = {
+        "scope": "ORIGINAL_GITHUB_READ_ONLY_REPAIR_PROOFS",
+        "status": "NOT_CHECKED_OR_REQUEST_BUDGET_UNAVAILABLE",
+        "proofs": [], "source_checks": [], "gaps": [],
+        "requests_used": 0,
+        "automatic_merge_or_deployment_authority": False,
+        "customer_or_external_action_authority": False,
+        "original_api_response_not_signed": True,
+    }
+    original_requests_before = api.requests
+    if (verify_original_repairs and callable(getattr(api, "get", None))
+            and result["autonomous_repair_queue"]["actions"]
+            and type(api.requests) is int
+            and policy()["max_requests_per_operation"] - api.requests >= 3):
+        from brain.repair_provider import collect_original_proofs, apply_original_ci_to_owner_queue
+        from brain.repair_followthrough import follow_through
+        try:
+            remaining = min(4, policy()["max_requests_per_operation"] - api.requests)
+            original = collect_original_proofs(
+                result["autonomous_repair_queue"],
+                transport=lambda repo, suffix: api.get(f"/repos/{repo}{suffix}"),
+                max_jobs=1, max_requests=remaining,
+                selection_sequence=rotation["index"],
+            )
+            original["status"] = (
+                "BOUNDED_ORIGINAL_PR_EVIDENCE_OBSERVED"
+                if original["proofs"] else "ORIGINAL_PR_EVIDENCE_UNAVAILABLE"
+            )
+            base_continuation = follow_through(
+                result["autonomous_repair_queue"],
+                cycle=rotation["index"],
+                provider_receipts=original["proofs"],
+            )
+            result["autonomous_repair_followthrough"] = (
+                apply_original_ci_to_owner_queue(
+                    base_continuation, original["source_checks"]
+                )
+            )
+        except (BrainError, KeyError, ValueError, TypeError):
+            # A provider or schema failure must not terminate canonical core
+            # state publication. Project repair proof stays explicitly unknown.
+            original["status"] = "ORIGINAL_PR_EVIDENCE_UNVERIFIED"
+    result["original_repair_proof"] = original
+    result["operation"] = {
+        "name": "projects",
+        "requests": api.requests,
+        "extended_repositories": list(extended),
+        "priority_sources_checked_first": [factory],
+        "requests_after_priority_source": requests_after_priority_source,
+        "requests_after_priority_prs": requests_after_priority_prs,
+        "priority_pr_review_coverage": result["priority_review_coverage"],
+        "ci_rotation_sequence": rotation["index"],
+        "ci_rotation_basis": rotation["basis"],
+        "canonical_state_sequence": cycle_index,
+        "rotation_extra_requests": rotation["extra_provider_requests"],
+        "original_repair_requests": api.requests - original_requests_before,
+        "original_repair_provider_status": original["status"],
+        "errors": errors,
+    }
+    result["focused_work_readiness"] = (
+        "SOURCE_PINNED_TECHNICAL_REVIEW_AVAILABLE_NOT_RELEASE_APPROVAL"
+        if result["priority_review_coverage"] ==
+           "SOURCE_PINNED_CHECK_PAGES_OBSERVED_NOT_RELEASE_PROOF"
+        else "FOCUSED_TECHNICAL_EVIDENCE_INCOMPLETE"
+    )
+    if errors:
+        result["status"] = "BLOCKED"
+    write_report(result, output)
+    return result
+
+
 def preflight(output, expected=None):
     sha=source_sha(expected)
     from brain.validate import validate_policy
@@ -130,7 +288,7 @@ def preflight(output, expected=None):
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description="Read-only autonomous business portfolio intelligence")
-    parser.add_argument("command",choices=["init","ingest","cycle","monitor","research","experiment","doctor","preflight","backup","service","feedback","evolve","transfer-review"])
+    parser.add_argument("command",choices=["init","ingest","cycle","monitor","research","experiment","doctor","projects","preflight","backup","service","feedback","evolve","transfer-review"])
     parser.add_argument("--db",default="brain-local/state.sqlite")
     parser.add_argument("--output",default="brain-local/report")
     parser.add_argument("--input")
@@ -147,7 +305,7 @@ def main(argv=None):
             result=preflight(args.output,args.expected_sha)
         else:
             sha=source_sha(args.expected_sha)
-            if args.command == "transfer-review":
+            if args.command in {"transfer-review", "projects"}:
                 from brain.transfer import readonly_authority_snapshot
                 # Store() mutates DB permissions/journal/meta even for reads;
                 # never construct it with the original authority pathname.
@@ -157,7 +315,7 @@ def main(argv=None):
             store=Store(isolated_db,visibility="PRIVATE" if args.private else "PUBLIC")
             # A transfer review is a pure inspection. It must not apply pending
             # inputs or write feedback, attempts, reports or other canonical state.
-            if args.command not in {"transfer-review", "backup"}:
+            if args.command not in {"transfer-review", "projects", "backup"}:
                 store.drain()
             if args.command=="init":
                 result={"status":"PASS","scope":"EMPTY_STATE_BOOTSTRAP_NOT_OPERATIONAL","pending_events":store.pending(),"source_sha":sha}
@@ -185,6 +343,8 @@ def main(argv=None):
                 write_report(result,args.output)
             elif args.command=="doctor":
                 result=doctor(store,sha,args.output)
+            elif args.command=="projects":
+                result=projects(store,sha,args.output)
             elif args.command=="transfer-review":
                 from brain.transfer import review_transfer, write_transfer_review
                 require(args.input is not None and args.repository is None,
@@ -205,7 +365,7 @@ def main(argv=None):
                 count=0
                 while not (Path(args.db).parent/"STOP").exists():
                     source_sha(sha)
-                    for name,fn in (("monitor",monitor),("research",research),("experiment",experiment),("doctor",doctor)):
+                    for name,fn in (("monitor",monitor),("research",research),("experiment",experiment),("doctor",doctor),("projects",projects)):
                         try:
                             store.drain()
                             fn(store,sha,Path(args.output)/name)
@@ -229,7 +389,7 @@ def main(argv=None):
         print(json.dumps({k:result[k] for k in ("status","source_sha","pending_events","state_sequence","phase") if k in result},sort_keys=True))
         return 0
     except (BrainError,KeyError,TypeError,UnicodeError,json.JSONDecodeError) as exc:
-        if store and args.command not in {"transfer-review", "backup"}:
+        if store and args.command not in {"transfer-review", "projects", "backup"}:
             store.attempt(args.command,"FAIL",type(exc).__name__,source_sha=locals().get("sha"))
         # Output-path security failures must not trigger secondary writes in
         # the very directory we just rejected. Transfer review is read-only.
@@ -237,7 +397,7 @@ def main(argv=None):
             isinstance(exc, BrainError)
             and str(exc).startswith("REPORT_OUTPUT_")
         )
-        if args.command not in {"transfer-review", "backup"} and not unsafe_output:
+        if args.command not in {"transfer-review", "projects", "backup"} and not unsafe_output:
             write_report({"status":"FAIL","error_class":type(exc).__name__,"error":str(exc)[:500],"operation":args.command,"soak_completed":False},Path(args.output)/"failure")
         print(f'{type(exc).__name__}: {str(exc)[:500]}',file=sys.stderr)
         return 1
