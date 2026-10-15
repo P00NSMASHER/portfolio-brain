@@ -1,0 +1,168 @@
+name: portfolio-bot-knowledge-verifier
+
+# Main-owned independent verification for bot-created, knowledge-only PRs.
+# This is an explicit dispatch, not another schedule or a branch-owned workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        required: true
+        type: string
+      head_sha:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: portfolio-bot-knowledge-${{ inputs.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PR_NUMBER: ${{ inputs.pr_number }}
+      CANDIDATE_SHA: ${{ inputs.head_sha }}
+    steps:
+      - name: Checkout trusted main controls without credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          path: trusted
+          persist-credentials: false
+
+      - name: Authenticate narrow bot-only and exact data patch before execution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]{0,8}$ ]] || exit 1
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          mkdir -p verifier-results
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > verifier-results/pr.json
+          gh api "repos/$GITHUB_REPOSITORY/branches/main" > verifier-results/main.json
+          MAIN_SHA="$(python3 -c 'import json;print(json.load(open("verifier-results/main.json"))["commit"]["sha"])')"
+          gh api "repos/$GITHUB_REPOSITORY/compare/$MAIN_SHA...$CANDIDATE_SHA" > verifier-results/compare.json
+          gh api "repos/$GITHUB_REPOSITORY/contents/brain/REUSE_KNOWLEDGE.json?ref=$CANDIDATE_SHA" --jq .content | base64 -d > verifier-results/candidate-data.json
+          python3 - "$PR_NUMBER" "$CANDIDATE_SHA" <<'PY'
+          import json,sys
+          sys.path.insert(0,"trusted")
+          from verification.bot_knowledge_admission import inspect
+          load=lambda name:json.load(open("verifier-results/"+name+".json"))
+          data=open("verifier-results/candidate-data.json","rb").read()
+          inspect(load("pr"),load("main"),load("compare"),data,
+                  number=int(sys.argv[1]),head_sha=sys.argv[2])
+          print("Narrow bot-authored knowledge patch admitted; independent validation remains required.")
+          PY
+
+      - name: Wait for exact-head Foundation check from trusted GitHub Actions app
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 45); do
+            gh api "repos/$GITHUB_REPOSITORY/commits/$CANDIDATE_SHA/check-runs?per_page=100" > verifier-results/checks.json
+            if python3 - "$CANDIDATE_SHA" <<'PY'
+          import json,sys
+          sys.path.insert(0,"trusted")
+          from verification.bot_knowledge_admission import foundation_green
+          foundation_green(json.load(open("verifier-results/checks.json")),sys.argv[1])
+          PY
+            then break; fi
+            if [ "$attempt" = 45 ]; then
+              echo "Exact-head Foundation evidence unavailable; no independent check or merge."
+              exit 1
+            fi
+            sleep 12
+          done
+
+      - name: Checkout exact candidate isolated from credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.head_sha }}
+          path: candidate
+          persist-credentials: false
+
+      - name: Execute candidate regressions only in network-disabled container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull python:3.12-bookworm
+          set +e
+          docker run --rm --network none --cap-drop=ALL --security-opt=no-new-privileges \
+            -v "$PWD/candidate:/src:ro" python:3.12-bookworm \
+            sh -lc 'mkdir /work; cp -R --no-preserve=ownership /src/. /work/; cd /work; python -I -c "import sys,unittest;sys.path.insert(0,\"/work\");r=unittest.TextTestRunner(verbosity=1).run(unittest.defaultTestLoader.discover(\"/work/tests\",pattern=\"test_*.py\"));raise SystemExit(not r.wasSuccessful())"' \
+            > verifier-results/full.txt 2>&1
+          echo "$?" > verifier-results/full.exit
+          docker run --rm --network none --cap-drop=ALL --security-opt=no-new-privileges \
+            -v "$PWD/candidate:/src:ro" python:3.12-bookworm \
+            sh -lc 'mkdir /work; cp -R --no-preserve=ownership /src/. /work/; cd /work; python -I -c "import sys,unittest;sys.path.insert(0,\"/work\");r=unittest.TextTestRunner().run(unittest.defaultTestLoader.discover(\"/work/tests\",pattern=\"test_phase1_*.py\"));raise SystemExit(not r.wasSuccessful())"' \
+            > verifier-results/phase1.txt 2>&1
+          echo "$?" > verifier-results/phase1.exit
+          docker run --rm --network none --cap-drop=ALL --security-opt=no-new-privileges \
+            -v "$PWD/candidate:/src:ro" python:3.12-bookworm \
+            sh -lc 'mkdir /work; cp -R --no-preserve=ownership /src/. /work/; cd /work; python -I -c "import sys;sys.path.insert(0,\"/work\");from operations.validate_operating_mode import validate_operating_mode;validate_operating_mode()"' \
+            > verifier-results/operating.txt 2>&1
+          echo "$?" > verifier-results/operating.exit
+          set -e
+          test "$(cat verifier-results/full.exit)" = 0
+          test "$(cat verifier-results/phase1.exit)" = 0
+          test "$(cat verifier-results/operating.exit)" = 0
+
+      - name: Mint separate scoped verifier app token after tests pass
+        id: verifier-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: "5121826"
+          private-key: ${{ secrets.PORTFOLIO_VERIFIER_PRIVATE_KEY }}
+          owner: P00NSMASHER
+          repositories: portfolio-brain
+
+      - name: Publish trusted exact-head independent gate
+        env:
+          PORTFOLIO_VERIFIER_TOKEN: ${{ steps.verifier-token.outputs.token }}
+        run: |
+          python3 trusted/verification/independent_verifier.py \
+            --pr-number "$PR_NUMBER" --head-sha "$CANDIDATE_SHA" \
+            --full-exit-file verifier-results/full.exit \
+            --phase1-exit-file verifier-results/phase1.exit \
+            --operating-exit-file verifier-results/operating.exit
+
+      - name: Merge only the exact validated knowledge PR through GitHub protections
+        env:
+          GH_TOKEN: ${{ steps.verifier-token.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api -X PUT "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge" \
+            -f merge_method=merge -f sha="$CANDIDATE_SHA" > verifier-results/merge.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open("verifier-results/merge.json"))
+          if d.get("merged") is not True:
+              raise SystemExit("Protected merge response did not confirm merged=true")
+          print("Exact-head data-only upgrade integrated through separate verifier App.")
+          PY
+
+      - name: Preserve sanitized verifier output
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bot-knowledge-review-${{ inputs.head_sha }}-${{ github.run_id }}
+          path: |
+            verifier-results/full.txt
+            verifier-results/phase1.txt
+            verifier-results/operating.txt
+            verifier-results/full.exit
+            verifier-results/phase1.exit
+            verifier-results/operating.exit
+          retention-days: 14
+          if-no-files-found: warn
