@@ -160,3 +160,16 @@ The focused PR/CI sampler now prefers the monotonic GitHub
 ledger sequence, which can advance in multiples of three and starve an
 opportunity theme. Injected/synthetic tests stay deterministic; no extra
 provider calls, authority, or scheduled tasks are introduced.
+
+### Original GitHub repair evidence without user-built JSON
+
+Existing RETALLY and Factory owners can now use the offline/restricted
+`brain.repair_provider` helper to fetch exact source PR/merge/current-main
+and original named check results via **bounded read-only GitHub GETs**. Its
+private evidence envelope replays directly through
+`brain.repair_followthrough_cli`, carrying unresolved work across runs and
+requiring the original trusted App checks before marking a *technical* main
+source verified. See
+[Original repair provider](docs/rebuild/ORIGINAL_REPAIR_PROVIDER.md).
+No additional schedule, production release, customer contact, spending,
+credentials, canonical-state writes, or signed-soak bypass is authorized.
