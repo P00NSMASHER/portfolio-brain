@@ -53,6 +53,8 @@ class StateArchiveTests(unittest.TestCase):
     def test_missing_or_corrupted_chunk_fails_closed_without_creating_state(self):
         for mutate in ("remove", "tamper"):
             with self.subTest(mutate=mutate):
+                if not self.raw.exists():
+                    self.raw.write_bytes(self.original)
                 archive.pack(self.root)
                 part = sorted((self.root / archive.PARTS).iterdir())[0]
                 if mutate == "remove":
@@ -64,8 +66,6 @@ class StateArchiveTests(unittest.TestCase):
                 with self.assertRaises(archive.StateArchiveError):
                     archive.restore(self.root)
                 self.assertFalse(self.raw.exists())
-                if mutate == "remove":
-                    break
 
     def test_ambiguous_dual_format_refused(self):
         archive.pack(self.root)
