@@ -23,11 +23,11 @@
     },
     {
       "id": "abvm",
-      "name": "ABVM School Star",
+      "name": "ABVM Grade 2 Learning App",
       "repository": "P00NSMASHER/abvmschoolstarworld",
       "research_target": "school-tools",
-      "improvement_focus": "school-data integrity and learner-facing correctness",
-      "success_metric": "verified content or calendar conflicts",
+      "improvement_focus": "verified daily teacher curriculum/homework refresh and accurate Grade 2 learning materials",
+      "success_metric": "live curriculum/homework freshness and source accuracy failures",
       "direction": "DOWN"
     },
     {
@@ -41,10 +41,10 @@
     },
     {
       "id": "pips-classroom",
-      "name": "PipsQuestWorld Classroom",
+      "name": "ABVM Grade 2 Roblox Classroom",
       "repository": "P00NSMASHER/PipsQuestWorld",
       "research_target": "roblox-school",
-      "improvement_focus": "photo-faithful environment and release validation",
+      "improvement_focus": "photo-faithful classroom, safe teacher avatar and Roblox publish validation",
       "success_metric": "verified reference-parity gaps",
       "direction": "DOWN"
     },
