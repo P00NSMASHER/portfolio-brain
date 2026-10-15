@@ -91,6 +91,11 @@ class OutcomeTests(unittest.TestCase):
             collect_outcomes(Provider([]), ['portfolio-brain'] * 2,
                              started_at=START, ended_at=END)
 
+    def test_date_only_strings_cannot_claim_explicit_utc_window(self):
+        with self.assertRaisesRegex(BrainError, 'OUTCOME_UTC_REQUIRED'):
+            collect_outcomes(Provider([]), ['portfolio-brain'],
+                             started_at='2026-10-15Z', ended_at='2026-10-16Z')
+
     def test_repeated_failures_create_source_bound_diagnostic_priority(self):
         result = self.collect(Provider([run(1, 'failure'), run(2, 'failure'), run(3)]))
         signal = result['priority_signals'][0]

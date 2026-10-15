@@ -29,7 +29,9 @@ SHA = re.compile(r'[0-9a-f]{40}\Z')
 
 
 def _time(value):
-    require(type(value) is str and value.endswith('Z'), 'OUTCOME_UTC_REQUIRED')
+    require(type(value) is str and re.fullmatch(
+        r'[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?Z',
+        value), 'OUTCOME_UTC_REQUIRED')
     try:
         return datetime.fromisoformat(value[:-1] + '+00:00')
     except ValueError as exc:
