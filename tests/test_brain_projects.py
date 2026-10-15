@@ -360,8 +360,13 @@ class ProjectStageTests(unittest.TestCase):
                 store.close()
             before = database.read_bytes()
             before_mtime = database.stat().st_mtime_ns
+            # This is an immutability test, not a wall-clock freshness test.
+            # Freeze both clock bindings at the fixture's report timestamp so
+            # the regression cannot expire 48 hours after its source commit.
             with patch("brain.__main__.source_sha", return_value=SHA), \
-                 patch("brain.__main__.GitHub", return_value=API()):
+                 patch("brain.__main__.GitHub", return_value=API()), \
+                 patch("brain.core.utcnow", return_value="2026-10-13T20:00:00Z"), \
+                 patch("brain.__main__.utcnow", return_value="2026-10-13T20:00:00Z"):
                 code = main([
                     "projects", "--db", str(database),
                     "--output", str(Path(directory) / "projects"),
