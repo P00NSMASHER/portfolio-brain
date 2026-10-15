@@ -136,6 +136,19 @@ jobs:
             --phase1-exit-file verifier-results/phase1.exit \
             --operating-exit-file verifier-results/operating.exit
 
+      - name: Require signed-source acceptance handoff before protected promotion
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATE="$(gh api "repos/$GITHUB_REPOSITORY/issues/684" --jq .state)"
+          if [[ "$STATE" != closed ]]; then
+            echo "SOURCE_FREEZE_ACTIVE: independent tests may pass but V6 acceptance is pending; do not merge."
+            exit 1
+          fi
+          echo "Acceptance tracker is closed; separate source-bound release gates still apply."
+
       - name: Merge only the exact validated knowledge PR through GitHub protections
         env:
           GH_TOKEN: ${{ steps.verifier-token.outputs.token }}

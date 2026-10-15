@@ -237,6 +237,10 @@ class UpgradeEndToEndTests(unittest.TestCase):
      if path.endswith('/actions/workflows/foundation-ci.yml/dispatches') and method=='POST':
       if self.fail_dispatch:self.fail_dispatch=False;raise BrainError('UPGRADE_API_503: delivery interrupted')
       return {}
+     if path.endswith('/actions/workflows/portfolio-bot-knowledge-verifier.yml/dispatches') and method=='POST':
+      assert body['ref']=='main'
+      assert body['inputs']=={'pr_number':'100','head_sha':self.head}
+      return {}
      raise AssertionError(path)
    try:
     result=evolve(store,SHA,api=API());self.assertEqual(result['status'],'CANDIDATE_PR_CREATED');self.assertEqual(result['independent_review'],'PENDING')
@@ -245,7 +249,9 @@ class UpgradeEndToEndTests(unittest.TestCase):
     create=[c for c in calls if c[0].endswith('/pulls') and c[1]=='POST'][0]
     self.assertEqual(create[2]['base'],'main');self.assertIn('AUTO_REPAIR_FINGERPRINT:',create[2]['body'])
     dispatched=[c for c in calls if c[0].endswith('/dispatches')]
-    self.assertEqual(len(dispatched),1);self.assertEqual(dispatched[0][2]['ref'],create[2]['head'])
+    self.assertEqual(len(dispatched),2)
+    self.assertEqual(dispatched[0][2]['ref'],create[2]['head'])
+    self.assertEqual(dispatched[1][2],{'ref':'main','inputs':{'pr_number':'100','head_sha':'e'*40}})
     self.assertEqual(result['validation_dispatch'],'DELIVERED')
     # An interrupted dispatch resumes the same verified branch/PR once after an
     # hour, without creating another proposal or dropping the weekly cooldown.
@@ -261,7 +267,7 @@ class UpgradeEndToEndTests(unittest.TestCase):
      self.assertEqual(evolve(recovery,SHA,api=api)['status'],'COOLDOWN')
     self.assertEqual(sum(p.endswith('/git/refs') and m=='POST' for p,m,_ in calls),1)
     self.assertEqual(sum(p.endswith('/pulls') and m=='POST' for p,m,_ in calls),1)
-    self.assertEqual(sum(p.endswith('/dispatches') for p,m,_ in calls),2)
+    self.assertEqual(sum(p.endswith('/dispatches') for p,m,_ in calls),3)
     recovery.close()
    finally:store.close()
  def test_doctor_rejects_partial_monitor_borrowing_old_full_coverage(self):

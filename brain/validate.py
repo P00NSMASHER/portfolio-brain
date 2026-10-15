@@ -28,7 +28,8 @@ def validate_policy():
             and "--network none" in bot_review
             and "trusted/verification/independent_verifier.py" in bot_review
             and 'sha="$CANDIDATE_SHA"' in bot_review
-            and "PORTFOLIO_VERIFIER_PRIVATE_KEY" in bot_review,
+            and "PORTFOLIO_VERIFIER_PRIVATE_KEY" in bot_review
+            and "SOURCE_FREEZE_ACTIVE" in bot_review,
             "bot reviewer changed protected independent-source admission")
     from operations.validate_operating_mode import scheduled_workflow_inventory
     require(scheduled_workflow_inventory(workflow_dir)=={"brain-cycle":[p["cron"]], "brain-clock":[p["watchdog_cron"]]}, "only reviewed native Brain execution and watchdog may recur")

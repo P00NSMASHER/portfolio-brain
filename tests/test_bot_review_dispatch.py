@@ -61,6 +61,8 @@ class BotReviewDispatchTests(unittest.TestCase):
         self.assertNotIn("workflow_run:",s)
         self.assertNotIn("repository_dispatch:",s)
         self.assertNotIn("contents: write",s)
+        self.assertIn("SOURCE_FREEZE_ACTIVE",s)
+        self.assertIn("issues/684",s)
 
     def test_pin_action_source_and_never_execute_candidate_in_privileged_runner(self):
         s=WORKFLOW.read_text(encoding="utf-8")
