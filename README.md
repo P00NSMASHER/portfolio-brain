@@ -154,3 +154,9 @@ how existing scheduled owners reuse the previous report's `next_history` and
 fresh direct GitHub evidence without adding tasks, credentials or permissions.
 This remains independent-gate guarded; it is not blanket authority to merge
 financial/production changes or certify real buyer value.
+
+The focused PR/CI sampler now prefers the monotonic GitHub
+`brain-cycle-v2` run number for fair proof rotation rather than the event
+ledger sequence, which can advance in multiples of three and starve an
+opportunity theme. Injected/synthetic tests stay deterministic; no extra
+provider calls, authority, or scheduled tasks are introduced.

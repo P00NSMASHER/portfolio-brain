@@ -197,3 +197,22 @@ technically executable handoff to separately authorized tools, **not** a direct
 GitHub writer, automatic merge guarantee or business-value verification.
 The unresolved actual bottleneck is safe code patch execution and independently
 protected promotion; keep signed-soak and the real release gates distinct.
+
+## Eliminate perpetual CI-sampling blind spots
+
+A canonical event ledger can increment by three observations per active
+cycle. Selecting `state_sequence % 3` would then inspect the same PR
+theme forever. The optional priority observation now uses the monotonically
+incrementing native `GITHUB_RUN_NUMBER` only in the real
+`brain-cycle-v2` workflow context. Every normal run rotates to the next
+distinct ranked source. A synthetic adapter or missing/malformed runtime
+metadata falls back to the original canonical sequence with an explicit
+uncertainty label. This costs **zero extra GitHub GETs**, preserves the
+existing 24-request ceiling, and grants no mutation permission.
+
+The private `brain.repair_followthrough_cli` can replay the previous
+`report.json` directly to keep unfinished source-bound owner work live,
+including PRs that disappear from open lists after closure. Terminal
+technical source verification requires named exact merge/main checks
+from the real GitHub Actions App and remains distinct from service
+deployment, payment approval, buyer adoption and V6 acceptance.

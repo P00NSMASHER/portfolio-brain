@@ -124,8 +124,10 @@ def projects(store, sha, output, *, api=None):
     """
     from brain.projects import FOCUS, build_project_portfolio, extended_repositories
     from brain.pr_intelligence import observe_priority_prs
+    from brain.fair_ci_rotation import rotation_counter
 
     canonical = store.read_report(sha)
+    real_adapter = api is None
     api = api or GitHub(private=store.visibility == "PRIVATE")
     snapshots, errors = [], []
     observed_at = utcnow()
@@ -163,8 +165,14 @@ def projects(store, sha, output, *, api=None):
     cycle_index = canonical.get("state_sequence")
     require(type(cycle_index) is int and 0 <= cycle_index <= 2**63 - 1,
             "PROJECT_SOURCE_SEQUENCE_UNVERIFIED")
+    rotation = rotation_counter(
+        cycle_index,
+        environment=dict(os.environ) if real_adapter else {},
+        real_adapter=real_adapter,
+    )
     focused = observe_priority_prs(
-        api, observed, review_contracts=FOCUS, cycle_index=cycle_index,
+        api, observed, review_contracts=FOCUS,
+        cycle_index=rotation["index"],
     )
     requests_after_priority_prs = api.requests
 
@@ -193,7 +201,10 @@ def projects(store, sha, output, *, api=None):
         "requests_after_priority_source": requests_after_priority_source,
         "requests_after_priority_prs": requests_after_priority_prs,
         "priority_pr_review_coverage": result["priority_review_coverage"],
-        "ci_rotation_sequence": cycle_index,
+        "ci_rotation_sequence": rotation["index"],
+        "ci_rotation_basis": rotation["basis"],
+        "canonical_state_sequence": cycle_index,
+        "rotation_extra_requests": rotation["extra_provider_requests"],
         "errors": errors,
     }
     result["focused_work_readiness"] = (

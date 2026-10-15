@@ -16,7 +16,7 @@ from brain.render import write_report
 
 
 def _safe_json(path):
-    require(type(path) is Path and path.is_file() and not path.is_symlink(),
+    require(isinstance(path, Path) and path.is_file() and not path.is_symlink(),
             "REPAIR_CONTINUATION_SOURCE_FILE_UNSAFE")
     info = path.stat()
     require(info.st_nlink == 1 and 0 < info.st_size <= 1_000_000,
