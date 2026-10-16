@@ -8,7 +8,7 @@
       "name": "Portfolio Brain",
       "repository": "P00NSMASHER/portfolio-brain",
       "research_target": "portfolio-reliability",
-      "improvement_focus": "production reliability and durable state continuity",
+      "improvement_focus": "autonomous verified research, useful upgrades and repairs across all current projects with durable state continuity",
       "success_metric": "verified reliability incidents",
       "direction": "DOWN"
     },
@@ -35,7 +35,7 @@
       "name": "RETALLY",
       "repository": "P00NSMASHER/github-value-hunt-ledger",
       "research_target": "freight-recovery",
-      "improvement_focus": "synthetic invoice accuracy, evidence integrity and secure first-customer readiness",
+      "improvement_focus": "invoice accuracy, evidence integrity, secure usable workflows and reliable repairs",
       "success_metric": "incorrect recovery recommendations per 100 labeled synthetic invoices",
       "direction": "DOWN"
     },
@@ -71,8 +71,8 @@
       "name": "Product Factory",
       "repository": "P00NSMASHER/x402-product-factory",
       "research_target": "agent-products",
-      "improvement_focus": "source-pinned app QA and independently confirmed buyer pilot value",
-      "success_metric": "buyer-confirmed pilot workflow completions",
+      "improvement_focus": "reliable useful applications, source-pinned QA, maintainable architecture and autonomous repairs",
+      "success_metric": "independently verified application workflow completions",
       "direction": "UP"
     },
     {

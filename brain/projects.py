@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+from copy import deepcopy
 from pathlib import Path
 
 from brain.adapters import policy
@@ -21,8 +22,8 @@ REGISTRY_PATH = ROOT / "brain" / "PROJECTS.json"
 FOCUS = {
     "retally": {
         "priority": 1,
-        "workstream": "FIRST_CUSTOMER_READINESS",
-        "commercial_north_star": "first real paying freight-recovery pilot",
+        "workstream": "RELIABILITY_ACCURACY_AND_USEFUL_UPGRADES",
+        "commercial_north_star": None,
         "independent_revenue_gates": (
             "original consented inbound buyer request",
             "signed customer pilot authorization",
@@ -41,8 +42,8 @@ FOCUS = {
     },
     "product-factory": {
         "priority": 2,
-        "workstream": "VERIFIED_BUILDS_TO_BUYER_VALUE",
-        "commercial_north_star": "first real paying buyer for a shipped App Factory product",
+        "workstream": "MAINTAINABLE_USEFUL_APPLICATIONS_AND_REPAIRS",
+        "commercial_north_star": None,
         "independent_revenue_gates": (
             "original inbound buyer interest",
             "buyer-consented live pilot with source-pinned workflow proof",
@@ -51,9 +52,9 @@ FOCUS = {
         ),
         "next_test": ("Pin each unmerged candidate SHA, re-run native mobile/desktop "
                       "operator/reviewer flows, restart persistence and package "
-                      "integrity; validate buyer pilots independently."),
+                      "integrity; verify useful application behavior independently."),
         "required_evidence": ("Exact-source native browser/restart/package receipts "
-                              "plus separately consented buyer pilot completions."),
+                              "and before/after correctness or usability observations."),
         "activation_gate": ("HOLD: passing app builds are not buyer demand; "
                             "no unsolicited outreach, live users, launch, charge "
                             "or procurement without reviewed authorization."),
@@ -306,7 +307,12 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha,
             "customer_or_external_message_authority": False,
         })
 
+    from brain.mission import MISSION, mission_priorities
     result = {
+        "mission": deepcopy(MISSION),
+        "mission_priorities": mission_priorities(
+            projects, cycle=(canonical_report.get("state_sequence", 0)
+                             if repair_cycle_index is None else repair_cycle_index)),
         "schema_version": 1,
         "status": "PASS" if not missing else "BLOCKED",
         "scope": "READ_ONLY_CROSS_PROJECT_IMPROVEMENT_QUEUE",
