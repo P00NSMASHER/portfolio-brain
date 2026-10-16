@@ -14,7 +14,7 @@ import zlib
 from soak_v3.audit import EvidenceError, require, sha40, sha64
 
 CHUNK_BYTES = 8 * 1024 * 1024
-MAX_RAW_BYTES = 256 * 1024 * 1024
+MAX_RAW_BYTES = 5 * 1024 * 1024 * 1024
 MAX_CHUNKS = MAX_RAW_BYTES // CHUNK_BYTES
 # Base64 expands by4/3; GitHub JSON also escapes line wrapping. Bound both
 # decoded bytes and their envelope rather than rejecting supported8MiB chunks.
@@ -76,7 +76,7 @@ def _manifest(doc):
     require(type(raw_size) is int and CHUNK_BYTES < raw_size <= MAX_RAW_BYTES,
             "STATE_MANIFEST_RAW_BOUND")
     require(type(compressed_size) is int
-            and 0 < compressed_size <= MAX_RAW_BYTES + 1024 * 1024,
+            and 0 < compressed_size <= MAX_RAW_BYTES + MAX_CHUNKS * 32768,
             "STATE_MANIFEST_COMPRESSED_BOUND")
     sha64(doc["raw_sha256"])
     sha64(doc["compressed_sha256"])
@@ -134,7 +134,7 @@ def verify_original_state(api, *, state_commit, target):
     require(inventory.get("sha") == tree_sha
             and inventory.get("truncated") is False
             and type(inventory.get("tree")) is list
-            and len(inventory["tree"]) <= 100,
+            and len(inventory["tree"]) <= MAX_CHUNKS + 16,
             "STATE_ORIGINAL_TREE_INVALID")
     rows = {}
     for entry in inventory["tree"]:

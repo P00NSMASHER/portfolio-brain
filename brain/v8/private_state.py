@@ -9,6 +9,9 @@ import tempfile
 from brain.core import canonical,digest,require
 from brain.v8.contracts import HASH,matches
 
+MAX_RECORDS = 256
+MAX_DIRECTORY_ENTRIES = 2 * MAX_RECORDS + 1
+
 
 class PrivateFiles:
     def __init__(self,root):
@@ -67,8 +70,17 @@ class PrivateFiles:
 
     def write(self,namespace,ident,body):
         path=self.path(namespace,ident)
-        require(len(list(self.root.iterdir()))<=512,'V8_PRIVATE_RECORD_BOUND')
-        if path.exists() or path.is_symlink(): self.read(namespace,ident)
+        existing=path.exists() or path.is_symlink()
+        if existing:
+            # Full stores must still reconcile existing durable intents.
+            self.read(namespace,ident)
+        else:
+            count=0
+            for number,entry in enumerate(self.root.iterdir(),1):
+                require(number<MAX_DIRECTORY_ENTRIES,'V8_PRIVATE_RECORD_BOUND')
+                if entry.name.startswith(namespace+'-') and entry.name.endswith('.json'):
+                    count+=1
+                    require(count<MAX_RECORDS,'V8_PRIVATE_RECORD_BOUND')
         raw=canonical(dict(body=body,sha256=digest(body))).encode('utf-8')
         require(len(raw)<=1048576,'V8_PRIVATE_FILE_BOUND')
         fd,temp=tempfile.mkstemp(prefix='.pending-',dir=self.root)
@@ -85,7 +97,17 @@ class PrivateFiles:
         finally:
             if os.path.exists(temp): os.unlink(temp)
 
+    def iter_records(self,namespace):
+        require(namespace in {'automation','outcome'},'V8_PRIVATE_ID_INVALID')
+        self._check_root()
+        paths=[]
+        for number,path in enumerate(self.root.iterdir(),1):
+            require(number<=MAX_DIRECTORY_ENTRIES,'V8_PRIVATE_RECORD_BOUND')
+            if path.name.startswith(namespace+'-') and path.name.endswith('.json'):
+                paths.append(path)
+                require(len(paths)<=MAX_RECORDS,'V8_PRIVATE_RECORD_BOUND')
+        for path in sorted(paths):
+            yield self.read(namespace,path.stem[len(namespace)+1:])
+
     def records(self,namespace):
-        paths=list(self.root.glob(namespace+'-*.json'))
-        require(len(paths)<=256,'V8_PRIVATE_RECORD_BOUND')
-        return [self.read(namespace,p.stem[len(namespace)+1:]) for p in sorted(paths)]
+        return list(self.iter_records(namespace))

@@ -20,6 +20,7 @@ OP_FIELDS = {'schema_version','operation_id','work','expected_state','occurred_a
 OUTCOMES = {'LOCAL_COMMITTED','EXTERNAL_INTENT','EXTERNAL_CONFIRMED','EXTERNAL_UNKNOWN'}
 MUTABLE = {'state','evidence_ids','updated_at','attempts','blocker'}
 MAX_RECORDS = 10000
+MAX_FILE_BYTES = 64 * 1024 * 1024
 CLAIM_FIELDS = {'resource','owner','operation_id','source_sha','now','expires_at'}
 RELEASE_FIELDS = {'resource','owner','operation_id','now'}
 
@@ -69,7 +70,7 @@ def _private_path(path):
     if path.exists():
         st=path.stat()
         require(stat.S_ISREG(st.st_mode) and st.st_nlink==1 and st.st_uid==os.getuid()
-                and st.st_mode & 0o077==0 and st.st_size<=64*1024*1024,
+                and st.st_mode & 0o077==0 and st.st_size<=MAX_FILE_BYTES,
                 'V8_PRIVATE_REGULAR_FILE_REQUIRED')
     return path
 
@@ -293,6 +294,11 @@ class KernelJournal:
                 (sequence,kind,record_id,canonical(op),digest(op),previous,chain))
             self.db.execute('UPDATE kernel_head SET sequence=?,chain_hash=? WHERE slot=1',
                             (sequence,chain))
+            # SQLite's projected main-file size is visible inside this transaction.
+            # Refuse before commit so the next restart can still read the journal.
+            require(self.db.execute('PRAGMA page_count').fetchone()[0] *
+                    self.db.execute('PRAGMA page_size').fetchone()[0] <= MAX_FILE_BYTES,
+                    'V8_JOURNAL_SIZE_BOUND')
             return self._receipt(dict(sequence=sequence,operation=op,chain_hash=chain))
 
     def claim(self,*,resource,owner,operation_id,source_sha,now,expires_at):

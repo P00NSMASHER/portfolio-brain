@@ -118,7 +118,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         result = verify_source_state(
-            GitHubReadOnly(os.environ.get("GITHUB_TOKEN", ""), max_calls=48),
+            GitHubReadOnly(os.environ.get("GITHUB_TOKEN", ""), max_calls=656),
             state_commit=args.state_commit,
             source_sha=args.source_sha,
             expected_parent=args.expected_parent,

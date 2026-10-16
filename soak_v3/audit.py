@@ -74,9 +74,9 @@ def verify_sqlite(path, *, expected_sequence, expected_chain, expected_source,
     sha64(expected_chain)
     require(type(expected_sequence) is int and expected_sequence >= 0, "SEQUENCE_INVALID")
     # Historical callers retain the prior 25 MB cap; a dedicated chunked
-    # audit may explicitly opt in to 256 MiB. Avoid loading the database into
+    # audit may explicitly opt in to 5 GiB. Avoid loading the database into
     # Python memory before independent SQLite replay.
-    require(type(max_bytes) is int and 0 < max_bytes <= 256*1024*1024,
+    require(type(max_bytes) is int and 0 < max_bytes <= 5*1024*1024*1024,
             "STATE_SIZE_BOUND_INVALID")
     require(type(strict_event_ids) is bool, "STATE_IDENTITY_MODE_INVALID")
     original = Path(path)

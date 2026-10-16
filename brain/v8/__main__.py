@@ -78,7 +78,8 @@ def main(argv=None):
                 elif op['outcome']=='EXTERNAL_CONFIRMED': pending.discard(op['work']['work_id'])
             result=dict(record_count=len(records),unresolved_external_count=len(pending),
                         chain_tip=records[-1]['chain_hash'] if records else '0'*64)
-        print(json.dumps(dict(result,**envelope,status='PASS'),allow_nan=False,sort_keys=True))
+        print(json.dumps(dict(result,**envelope,status=result.get('status','PASS'),
+                              command_status='PASS'),allow_nan=False,sort_keys=True))
         return 0
     except (BrainError,OSError,ValueError,RecursionError,sqlite3.Error):
         print(json.dumps(dict(envelope,status='BLOCKED',error='V8_LOCAL_INPUT_OR_JOURNAL_INVALID'),sort_keys=True))

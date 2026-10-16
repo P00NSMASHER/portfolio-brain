@@ -16,7 +16,10 @@ def validate_policy():
     for name in ("downstream_write_authority","trading_authority","external_message_authority","discovered_code_execution","license_discovery_filter","public_state_accepts_private_inputs"):
         require(p[name] is False, "forbidden authority/filter: "+name)
     workflow_dir=ROOT/".github/workflows"
-    expected={"foundation-ci.yml","portfolio-independent-verifier.yml","x402-gateway-ci.yml","x402-render-gateway-smoke.yml","brain-cycle.yml","brain-clock.yml"}
+    expected={"foundation-ci.yml","portfolio-independent-verifier.yml",
+              "x402-gateway-ci.yml","x402-render-gateway-smoke.yml",
+              "brain-cycle.yml","brain-clock.yml",
+              "state-capacity-qualification.yml"}
     require({x.name for x in workflow_dir.iterdir() if x.suffix in {".yml",".yaml"}}==expected, "active workflow inventory changed")
     from operations.validate_operating_mode import scheduled_workflow_inventory
     require(scheduled_workflow_inventory(workflow_dir)=={"brain-cycle":[p["cron"]], "brain-clock":[p["watchdog_cron"]]}, "only reviewed native Brain execution and watchdog may recur")

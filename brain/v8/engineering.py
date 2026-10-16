@@ -1,5 +1,4 @@
 """One engineering entry point: existing recipes, kernel planning and owner handoffs."""
-import hashlib
 from pathlib import Path
 import subprocess
 import sys

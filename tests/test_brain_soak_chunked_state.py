@@ -179,7 +179,7 @@ class IndependentChunkedStateTests(unittest.TestCase):
 
     def test_manifest_size_bomb_is_rejected_before_decoding(self):
         fake = MockOriginalGit()
-        fake.manifest["raw_size"] = 300 * 1024 * 1024
+        fake.manifest["raw_size"] = audit.MAX_RAW_BYTES + 1
         fake.refresh()
         with self.assertRaisesRegex(EvidenceError, "STATE_MANIFEST_RAW_BOUND"):
             audit.verify_original_state(fake, state_commit=COMMIT, target=self.path)

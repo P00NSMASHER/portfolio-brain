@@ -43,9 +43,12 @@ class AutomationReconciler:
                 'V8_TASK_OPERATION_INVALID')
         body=row['request']
         require(set(body)=={'task_id','before','after','changes'} and digest(body)==ident
+                and type(body['task_id']) is str
                 and body['task_id'] in self.owned,'V8_TASK_OPERATION_NOT_OWNED')
         _task(body['before']); _task(body['after'])
-        require(set(body['changes'])=={'prompt'} and dict(body['before'],**body['changes'])==body['after']
+        require(type(body['changes']) is dict and set(body['changes'])=={'prompt'}
+                and dict(body['before'],**body['changes'])==body['after']
+                and type(row['status']) is str
                 and row['status'] in {'STAGED','INTENT','UNKNOWN','APPLIED','CONFLICT',
                                      'ROLLBACK_INTENT','ROLLBACK_UNKNOWN','ROLLED_BACK'},
                 'V8_TASK_OPERATION_INVALID')
@@ -64,10 +67,11 @@ class AutomationReconciler:
             # A provider may complete after timeout or process death. Reserve
             # the task across operations until its durable intent is reconciled.
             unresolved={'INTENT','UNKNOWN','ROLLBACK_INTENT','ROLLBACK_UNKNOWN'}
-            for other in self.files.records('automation'):
+            for other in self.files.iter_records('automation'):
                 require(type(other) is dict and set(other)=={'request','status'}
                         and type(other['request']) is dict
-                        and type(other['request'].get('task_id')) is str,
+                        and type(other['request'].get('task_id')) is str
+                        and type(other['status']) is str,
                         'V8_TASK_OPERATION_INVALID')
                 if (other['request']['task_id']==request['task_id']
                         and digest(other['request'])!=ident and other['status'] in unresolved):

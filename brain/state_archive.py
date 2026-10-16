@@ -167,7 +167,9 @@ def restore(root):
         document = _extract(root, temporary)
         os.replace(temporary, raw)
     return {"storage_format": FORMAT, "raw_size": document["raw_size"],
-            "raw_sha256": document["raw_sha256"], "chunks": len(document["chunks"]),
+            "raw_sha256": document["raw_sha256"],
+            "compressed_size": document["compressed_size"],
+            "chunks": len(document["chunks"]),
             "restored": True}
 
 
