@@ -1,4 +1,4 @@
-"""Prepare a compacted public snapshot; never edit the source or publish state.
+"""Compact public snapshots or disposable working copies; never publish state.
 
 Keeps latest 128 reports, latest per source, and every non-PASS report. Immutable
 Git snapshots remain the historical authority. Receipt lists removed report hashes.
@@ -11,7 +11,9 @@ import os
 from pathlib import Path
 import sqlite3
 import tempfile
+import zlib
 from brain.core import canonical, digest, require
+from brain.state_archive import CHUNK_BYTES
 
 MAX_BYTES = 5 * 1024 * 1024 * 1024
 # Exact live brain-state-v2 image independently restored and replayed from
@@ -19,6 +21,29 @@ MAX_BYTES = 5 * 1024 * 1024 * 1024
 VERIFIED_PRODUCTION_RAW_BYTES = 120_512_512
 VERIFIED_PRODUCTION_COMPRESSED_BYTES = 20_602_941
 COMPACTION_TRIGGER_BYTES = 80 * 1024 * 1024
+COMPACTION_TRIGGER_COMPRESSED_BYTES = VERIFIED_PRODUCTION_COMPRESSED_BYTES * 3 // 4
+COMPACTION_TRIGGER_REPORTS = 256
+
+def storage_pressure(source):
+    """Measure the production codec with one bounded chunk in memory."""
+    source=Path(source)
+    require(not source.is_symlink() and source.is_file()
+            and 0<source.stat().st_size<=MAX_BYTES,'capacity source invalid')
+    require(not any(Path(str(source)+suffix).exists() for suffix in ('-wal','-journal')),
+            'source must be an immutable snapshot')
+    packed=0
+    with source.open('rb') as stream:
+        while chunk:=stream.read(CHUNK_BYTES):
+            packed+=len(zlib.compress(chunk,level=6))
+    with sqlite3.connect(source.resolve().as_uri()+'?mode=ro&immutable=1',uri=True) as db:
+        reports=db.execute('SELECT count(*) FROM reports').fetchone()[0]
+    raw=source.stat().st_size
+    return dict(raw_bytes=raw,compressed_bytes=packed,reports=reports,
+        raw_headroom_bytes=VERIFIED_PRODUCTION_RAW_BYTES-raw,
+        compressed_headroom_bytes=VERIFIED_PRODUCTION_COMPRESSED_BYTES-packed,
+        capacity_warning=('LOW_VERIFIED_HEADROOM' if
+            raw*5>=VERIFIED_PRODUCTION_RAW_BYTES*4 or
+            packed*5>=VERIFIED_PRODUCTION_COMPRESSED_BYTES*4 else None))
 
 def image_hash(path):
     with path.open('rb') as stream:
@@ -92,12 +117,18 @@ def maintain_within_verified_capacity(
             'capacity trigger invalid')
     require(type(verified_raw_bytes) is int and trigger_bytes<verified_raw_bytes<=MAX_BYTES,
             'verified raw capacity invalid')
-    require(not source.is_symlink() and source.is_file(),
-            'capacity source invalid')
-    before=source.stat().st_size
-    if before<=trigger_bytes:
+    pressure=storage_pressure(source)
+    before=pressure['raw_bytes']
+    reasons=[]
+    if before>trigger_bytes: reasons.append('RAW_SIZE')
+    if pressure['compressed_bytes']>COMPACTION_TRIGGER_COMPRESSED_BYTES:
+        reasons.append('COMPRESSED_SIZE')
+    if pressure['reports']>COMPACTION_TRIGGER_REPORTS:
+        reasons.append('REPORT_COUNT')
+    if not reasons:
         return dict(status='WITHIN_VERIFIED_PRODUCTION_CAPACITY',
             source_bytes=before,target_bytes=before,compacted=False,
+            storage_pressure=pressure,compaction_reasons=[],
             verified_raw_capacity_bytes=verified_raw_bytes,
             verified_compressed_capacity_bytes=VERIFIED_PRODUCTION_COMPRESSED_BYTES,
             remote_writes=0,published=False)
@@ -107,11 +138,15 @@ def maintain_within_verified_capacity(
         receipt=compact_snapshot(source,target,keep_recent=keep_recent)
         require(receipt['target_bytes']<=verified_raw_bytes,
                 'compacted state exceeds verified production capacity')
+        after=storage_pressure(target)
+        require(after['compressed_bytes']<=VERIFIED_PRODUCTION_COMPRESSED_BYTES,
+                'compacted state exceeds verified compressed capacity')
         os.replace(target,source)
     finally:
         target.unlink(missing_ok=True)
     return dict(receipt,status='COMPACTED_TO_VERIFIED_PRODUCTION_CAPACITY',
-        compacted=True,verified_raw_capacity_bytes=verified_raw_bytes,
+        compacted=True,compaction_reasons=reasons,storage_pressure=after,
+        verified_raw_capacity_bytes=verified_raw_bytes,
         verified_compressed_capacity_bytes=VERIFIED_PRODUCTION_COMPRESSED_BYTES,
         published=False)
 
@@ -131,6 +166,8 @@ def validate_publication_receipt(receipt):
     return dict(status='VERIFIED_PRODUCTION_CAPACITY_ENVELOPE_PASS',
         raw_size=receipt['raw_size'],compressed_size=receipt['compressed_size'],
         chunks=receipt['chunks'],
+        raw_headroom_bytes=VERIFIED_PRODUCTION_RAW_BYTES-receipt['raw_size'],
+        compressed_headroom_bytes=VERIFIED_PRODUCTION_COMPRESSED_BYTES-receipt['compressed_size'],
         verified_raw_capacity_bytes=VERIFIED_PRODUCTION_RAW_BYTES,
         verified_compressed_capacity_bytes=VERIFIED_PRODUCTION_COMPRESSED_BYTES,
         published=False)

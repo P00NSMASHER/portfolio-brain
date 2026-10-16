@@ -4,10 +4,11 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 from brain.core import BrainError, digest
 from brain.state_maintenance import (compact_snapshot,
     main as maintenance_main,maintain_within_verified_capacity,
-    validate_publication_receipt)
+    storage_pressure,validate_publication_receipt)
 from tests import test_brain_soak_v3 as fixture_module
 
 class MaintenanceTests(unittest.TestCase):
@@ -65,6 +66,39 @@ class MaintenanceTests(unittest.TestCase):
         self.assertEqual(result['status'],'WITHIN_VERIFIED_PRODUCTION_CAPACITY')
         self.assertFalse(result['compacted'])
         self.assertEqual(hashlib.sha256(self.source.read_bytes()).hexdigest(),self.original)
+
+    def test_packed_pressure_compacts_before_raw_trigger(self):
+        with patch('brain.state_maintenance.COMPACTION_TRIGGER_COMPRESSED_BYTES',1):
+            result=maintain_within_verified_capacity(self.source,keep_recent=2)
+        self.assertEqual(result['compaction_reasons'],['COMPRESSED_SIZE'])
+        self.assertLess(result['target_bytes'],result['source_bytes'])
+
+    def test_report_growth_compacts_before_size_triggers(self):
+        with patch('brain.state_maintenance.COMPACTION_TRIGGER_REPORTS',10):
+            result=maintain_within_verified_capacity(self.source,keep_recent=2)
+        self.assertEqual(result['compaction_reasons'],['REPORT_COUNT'])
+        self.assertEqual(result['storage_pressure']['reports'],4)
+
+    def test_packed_capacity_failure_preserves_original(self):
+        with patch('brain.state_maintenance.COMPACTION_TRIGGER_COMPRESSED_BYTES',1), \
+             patch('brain.state_maintenance.VERIFIED_PRODUCTION_COMPRESSED_BYTES',1):
+            with self.assertRaisesRegex(BrainError,'exceeds verified compressed capacity'):
+                maintain_within_verified_capacity(self.source,keep_recent=2)
+        self.assertEqual(hashlib.sha256(self.source.read_bytes()).hexdigest(),self.original)
+        self.assertEqual(list(self.source.parent.glob('.capacity-*.sqlite')),[])
+
+    def test_pressure_matches_actual_production_codec(self):
+        from brain.state_archive import pack
+        pressure=storage_pressure(self.source)
+        root=self.source.parent/'archive';root.mkdir()
+        (root/'state.sqlite').write_bytes(self.source.read_bytes())
+        receipt=pack(root)
+        self.assertEqual(pressure['raw_bytes'],receipt['raw_size'])
+        self.assertEqual(pressure['compressed_bytes'],receipt['compressed_size'])
+
+    def test_pressure_refuses_live_journal_even_below_trigger(self):
+        Path(str(self.source)+'-journal').touch()
+        with self.assertRaises(BrainError): maintain_within_verified_capacity(self.source)
 
     def test_unachievable_capacity_leaves_source_untouched(self):
         before=self.source.read_bytes()
