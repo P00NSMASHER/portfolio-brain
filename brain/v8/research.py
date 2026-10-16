@@ -2,6 +2,7 @@
 import re
 from brain.core import digest,require
 from brain.intelligence import related_test_paths
+from brain.v8.contracts import HASH,matches
 
 SOURCE=re.compile(r'https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/blob/([0-9a-f]{40})/([^?#%\\\s]+)\Z')
 
@@ -10,8 +11,13 @@ def research_actions(projects,candidates,history):
     require(type(projects) is list and len(projects)<=16
             and type(candidates) is list and len(candidates)<=128
             and type(history) is list and len(history)<=256,'V8_RESEARCH_BOUND')
-    suppressed={r.get('finding_id') for r in history if type(r) is dict
-                and r.get('outcome') in {'FAILED','NOT_USEFUL','INTEGRATED'}}
+    suppressed=set()
+    for row in history:
+        require(type(row) is dict and set(row)=={'finding_id','outcome'}
+                and matches(HASH,row['finding_id']) and type(row['outcome']) is str
+                and row['outcome'] in {'FAILED','NOT_USEFUL','INTEGRATED','UNKNOWN'},
+                'V8_RESEARCH_HISTORY_INVALID')
+        if row['outcome']!='UNKNOWN': suppressed.add(row['finding_id'])
     result=[]
     seen=set()
     for p in projects:

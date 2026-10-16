@@ -142,7 +142,7 @@ class PublicOriginalSnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(EvidenceError,"API_CALL_BUDGET"):
             api.get("/repos/example/over-budget")
         with self.assertRaisesRegex(EvidenceError,"API_CALL_BOUND_INVALID"):
-            GitHubReadOnly("",transport=lambda _:b"{}",max_calls=49)
+            GitHubReadOnly("",transport=lambda _:b"{}",max_calls=657)
 
 
 if __name__ == "__main__":

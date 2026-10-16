@@ -64,7 +64,7 @@ class AutomationReconciler:
             # A provider may complete after timeout or process death. Reserve
             # the task across operations until its durable intent is reconciled.
             unresolved={'INTENT','UNKNOWN','ROLLBACK_INTENT','ROLLBACK_UNKNOWN'}
-            for other in self.files.records('automation'):
+            for other in self.files.iter_records('automation'):
                 require(type(other) is dict and set(other)=={'request','status'}
                         and type(other['request']) is dict
                         and type(other['request'].get('task_id')) is str,

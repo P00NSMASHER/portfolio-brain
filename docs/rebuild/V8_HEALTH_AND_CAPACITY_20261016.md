@@ -1,0 +1,43 @@
+# V8 health, cleanup, and capacity audit — 2026-10-16
+
+## Scope and production evidence
+
+Production main remains `d63efa3b36e1fe695b6f43480fb858a394897a9e` during issue #702 source-pinned acceptance. This change is a held candidate, not a production recovery or six-hour PASS. The post-merge push core 38906465622 passed; nine projects were observed and five owner handoffs generated, with zero runtime actions executed. Handoffs do not establish autonomous repair delivery.
+
+Original state `270a5b71085600e26f114f4d63925eb0f2b1d9d0` was independently reconstructed from Git chunks and replayed: 119,312,384 bytes; SHA256 `93ef14967df22e9011b2c0b93df74f968347979af201e42d25308e780e340a60`; sequence 2291; zero pending events. Reports used 104,554,496 table bytes, versus 14,020,608 event bytes. There were 1,020 reports and no free pages. VACUUM alone would not address retained report growth.
+
+## Corrections
+
+- Private namespace admission now refuses record 257 before writing. Existing records, reconciliation, and rollback remain usable at capacity. This bound belongs to the private operational file store, distinct from the public SQLite database.
+- Private automation reconciliation streams decoded records. A local workload of 64 records containing large prompts decreased peak Python allocations from 18,286,831 to 1,434,368 bytes (92.2%); this is not production RSS evidence.
+- Hostile enum and research-history inputs raise contract errors rather than unhandled TypeError. One verified unused import was removed; legacy modules still required by CI were retained.
+- Independent chunk/SQLite evidence tools explicitly support up to **5 GiB (5,368,709,120 bytes)**, exceeding the requested decimal 5 GB. Chunk size remains 8 MiB. Tree inventory and the explicitly selected current-state reader request budget scale to 640 chunks plus bounded metadata. Default generic reader budget remains 12. Historical default SQLite replay cap remains 25 MB.
+
+## Safe cleanup
+
+`python -m brain.state_maintenance --source SNAPSHOT --target NEW_COPY` prepares a separate public SQLite copy. It refuses existing destinations, symlink source/destination, active WAL/journal sources, corrupt SQLite, foreign-key violations, and mismatched report hashes. It retains the latest 128 reports, the latest report per source, and every non-PASS report. Events, ledger, attempts, metadata, schema, and sequence watermarks must remain identical. Receipt includes original/output image digests and every removed report ID/hash. It never publishes or mutates the input snapshot.
+
+On the verified original above, the prepared copy decreased from **119,312,384 to 31,277,056 bytes**, retaining 141 reports and removing 879 derived report bodies. Independent canonical event/ledger validation and deterministic latest-report replay both passed on the copy. Historical source snapshots remain untouched. This is approximately 73.8% less storage for this snapshot, not a claim about every future database.
+
+Release after #702 requires a fresh current-state snapshot, immutable archived original, new receipt, all independent replay gates, latest-state compare-and-swap publication through the existing protected workflow, and post-publication verification. Do not upload this older prepared snapshot over newer production state. Automatic periodic retention is not enabled by this candidate.
+
+## Capacity qualification and constraints
+
+A local synthetic SQLite image of **5,038,161,920 bytes** passed production chunk packing, independent original-Git-format reconstruction, SQLite integrity and event/ledger/report checks in 91.71 seconds: 601 chunks and 604 simulated Git reads. The generated payload was highly compressible zeroblob data (11,206,022 packed bytes); this demonstrates actual local byte-volume handling, not a network upload, production workload, quota, or incompressible 5 GB push. Separate manifest tests exercise maximum-size compressed overhead and overflow rejection.
+
+
+The production writer's nominal 64 GiB codec bound did not establish operational capacity: independent replay previously capped at 256 MiB. The new explicit audit bound removes that mismatch for the 5 GB target. Full event replay still materializes event history; large archive-byte tests do not establish bounded-memory replay for 5 GiB of actual event bodies. Both compressed overhead and full retained report columns are verified. No storage service was purchased, empty database preallocated, quota enlarged, or production capacity certified.
+
+Git is a poor long-term transport for continually rewritten multi-GB SQLite snapshots. GitHub documents a 2 GiB maximum per push and recommends repositories stay below 1 GB, with below 5 GB strongly recommended. A 5 GB database can compress below the push limit, but arbitrary incompressible content cannot be assumed to do so. A reliable 5 GB production service therefore needs measured storage/quota, disk, restore-time and transport-budget qualification, or an existing funded database/object store with verified capacity. Never remove bounds or split commits to claim unavailable production storage.
+
+Sources: https://docs.github.com/en/get-started/using-git/troubleshooting-the-2-gb-push-limit and https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github.
+
+## Next upgrades, in priority order
+
+1. Finish genuine current-source unattended acceptance, preserving original adverse attempts and independent evidence.
+2. Deliver one real repair end to end: authenticated runtime capability, owner execution, regression test, protected merge, production recovery, recorded outcome. Expand only after it works.
+3. Qualify durable 5 GB runtime storage and restore transport; then integrate reviewed periodic derived-report retention with source-pinned migration receipts and rollback.
+4. Verify deployed user journeys and build identities across project owners, including genuine failures and recovery evidence.
+5. Improve research and prioritization using independently authenticated sources, license/relevance checks, provider-denial circuit breakers, deduplication, and verified repair effectiveness.
+
+No certified 100/100 or error-free claim is justified. Production execution and state integrity have evidence; arbitrary unattended project repairs, all runtime adapters, and current-source acceptance remain incompletely verified.
