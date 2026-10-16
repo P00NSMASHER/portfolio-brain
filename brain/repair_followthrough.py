@@ -228,8 +228,8 @@ def follow_through(queue, *, cycle, history=None, provider_receipts=None,
         state, verified = _verified_main(work, observed)
         if verified:
             op = "MAIN_TECHNICAL_SOURCE_VERIFIED_REVIEW_RUNTIME_SEPARATELY"
-        elif (prior and prior["state"] == "MAIN_TECHNICALLY_VERIFIED"
-              and observed is not None):
+        elif (observed is not None and observed["merged"]
+              and (not prior or prior["state"] != "BLOCKED_EXTERNAL")):
             op = "REVERIFY_PREVIOUSLY_VERIFIED_MAIN"
         results.append(dict(
             dedupe_key=key, evidence_key=work["exact_evidence_key"],
@@ -266,7 +266,9 @@ def follow_through(queue, *, cycle, history=None, provider_receipts=None,
             next_operation=("MAIN_TECHNICAL_SOURCE_VERIFIED_REVIEW_RUNTIME_SEPARATELY"
                             if verified else
                             "REVERIFY_PREVIOUSLY_VERIFIED_MAIN"
-                            if prior["state"] == "MAIN_TECHNICALLY_VERIFIED" else
+                            if (prior["state"] == "MAIN_TECHNICALLY_VERIFIED"
+                                or (observed is not None and observed["merged"]
+                                    and prior["state"] != "BLOCKED_EXTERNAL")) else
                             "PRESERVE_EXTERNAL_HOLD_FIX_NEXT"
                             if prior["state"] == "BLOCKED_EXTERNAL" else
                             "REOBSERVE_UNFINISHED_PR_ABSENT_FROM_OPEN_SAMPLE"),

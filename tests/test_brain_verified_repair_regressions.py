@@ -78,6 +78,12 @@ class VerifiedRepairRegressionTests(unittest.TestCase):
         self.assertEqual(plan["actions"][0]["next_operation"], "REVERIFY_PREVIOUSLY_VERIFIED_MAIN")
         self.assertEqual(plan["next_history"][0]["state"], "OBSERVED")
         self.assertFalse(plan["real_buyer_or_revenue_verified"])
+        # Revalidation survives replay; old green PR CI cannot regain priority.
+        again = follow_through(queue, cycle=12, history=plan["next_history"],
+                               provider_receipts=proof["proofs"])
+        again = apply_original_ci_to_owner_queue(again, proof["source_checks"])
+        self.assertEqual(again["actions"][0]["next_operation"], "REVERIFY_PREVIOUSLY_VERIFIED_MAIN")
+        self.assertEqual(again["next_history"][0]["state"], "OBSERVED")
 
     def test_busy_queue_reserves_bounded_recheck_without_starving_unfinished_work(self):
         queue, api = rig()
