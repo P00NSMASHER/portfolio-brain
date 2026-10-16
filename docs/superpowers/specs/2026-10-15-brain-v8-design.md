@@ -1,6 +1,7 @@
 # Portfolio Brain v8: autonomous project engineering
 
-Status: architecture approved in chat; this written specification awaits review.
+Status: architecture and written specification approved under the user's
+explicit delegated review instruction, 2026-10-15. No release approval implied.
 This is a design, not an implemented or accepted production release.
 Design date: 2026-10-15, America/New_York.
 
@@ -241,8 +242,10 @@ licensing/privacy, quota, egress and safe failure behavior are verified.
 
 The release evidence must demonstrate, not merely describe:
 
-- Deterministic full replay and exactly-once effects after crash/restart at every
-  transition; conflicting duplicate operations are rejected.
+- Deterministic full replay and exactly-once internal ledger effects after
+  crash/restart at every transition; conflicting duplicates are rejected.
+  External API calls with uncertain outcomes require reconciliation before retry,
+  because generic external exactly-once execution cannot be guaranteed.
 - Safe refusal of wrong source, forged identity, stale capability, cross-project
   ownership, unknown fields, prompt injection and attempted policy escalation.
 - Fair coverage of every registered project with critical incidents ahead of
@@ -277,6 +280,9 @@ Use the existing authorized Chat owner bridge and supported deterministic recipe
 where they suffice; capability gaps remain explicit while other work continues.
 
 This artifact approves no release and changes no runtime, tasks, state or clocks.
-Next design gate: user review of this written specification. After approval,
-write the staged kernel implementation plan and select its execution method
-before product implementation, as required by the design workflow.
+The user delegated review and full approval of this written specification.
+Review completed against the approved architecture: explicit interfaces,
+preserved history and policy boundaries, actionable acceptance criteria and
+honest capability limits. External exactly-once wording was corrected above.
+Next design gate: review the staged kernel implementation plan and select its
+execution method before product implementation.
