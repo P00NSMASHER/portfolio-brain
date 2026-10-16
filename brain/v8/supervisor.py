@@ -15,6 +15,7 @@ def supervise(inventory, *, source_sha, now):
                 source_sha=source_sha,production_accepted=False,automatic_action_executed=False)
     if inventory['total_count']!=len(inventory['workflow_runs']): return result
     relevant=[]
+    unverified_scope=False
     seen=set()
     for row in inventory['workflow_runs']:
         require(type(row) is dict and type(row.get('id')) is int and row['id']>0
@@ -28,6 +29,12 @@ def supervise(inventory, *, source_sha, now):
                 or (row['status']!='completed' and row.get('conclusion') is None),
                 'V8_SUPERVISOR_CONCLUSION_INVALID')
         if row.get('name')=='brain-cycle-v2' and row['head_sha']==source_sha:
+            if (row.get('path')!='.github/workflows/brain-cycle.yml'
+                    or row.get('head_branch')!='main'
+                    or type(row.get('repository')) is not dict
+                    or row['repository'].get('full_name')!='P00NSMASHER/portfolio-brain'):
+                unverified_scope=True
+                continue
             relevant.append((row,end))
     if any(row['run_attempt']>1 for row,end in relevant):
         result.update(status='ATTEMPT_CENSUS_REQUIRED',next_action='FETCH_EVERY_ORIGINAL_ATTEMPT')
@@ -35,8 +42,13 @@ def supervise(inventory, *, source_sha, now):
         result.update(status='ADVERSE_ORIGINAL_RUN',next_action='DIAGNOSE_ORIGINAL_FAILURE')
     elif any(row['status']!='completed' and (current-end).total_seconds()<=5400 for row,end in relevant):
         result.update(status='CORE_IN_PROGRESS',next_action='WAIT_FOR_ORIGINAL_RUN')
-    elif any(row['conclusion']=='success' and (current-end).total_seconds()<=5400 for row,end in relevant):
+    elif any(row['conclusion']=='success' and row.get('event')=='schedule'
+             and (current-end).total_seconds()<=5400 for row,end in relevant):
         result.update(status='RECENT_CORE_OBSERVED',next_action='VERIFY_ORIGINAL_PROVENANCE_AND_STATE')
+    elif any(row.get('event')=='workflow_dispatch' and (current-end).total_seconds()<=5400 for row,end in relevant):
+        result.update(status='AUTOMATIC_ORIGIN_UNVERIFIED',next_action='VERIFY_ORIGINAL_AUTOMATIC_ORIGIN')
+    elif unverified_scope:
+        result.update(status='CORE_SCOPE_UNVERIFIED',next_action='VERIFY_ORIGINAL_WORKFLOW_MAIN_AND_REPOSITORY')
     else:
         result.update(status='CORE_STALLED_OR_UNOBSERVED',next_action='USE_EXISTING_WATCHDOG')
     return result

@@ -22,7 +22,7 @@ def project(pid='abvm',repo=REPO,state='NO_ADVERSE_CHECKS_OBSERVED_NOT_RELEASE_A
     return dict(id=pid,repository=repo,repository_revision=SHA,source_check_state=state)
 
 def run(ident=1,**changes):
-    row=dict(id=ident,name='brain-cycle-v2',head_sha=SHA,status='completed',conclusion='success',run_attempt=1,event='schedule',created_at='2026-10-16T06:49:00Z',updated_at='2026-10-16T06:50:00Z')
+    row=dict(id=ident,name='brain-cycle-v2',path='.github/workflows/brain-cycle.yml',head_branch='main',repository={'full_name':'P00NSMASHER/portfolio-brain'},head_sha=SHA,status='completed',conclusion='success',run_attempt=1,event='schedule',created_at='2026-10-16T06:49:00Z',updated_at='2026-10-16T06:50:00Z')
     row.update(changes)
     return row
 
@@ -88,6 +88,17 @@ class EngineeringTests(unittest.TestCase):
         self.assertFalse(good['production_accepted'])
         old=run(updated_at='2026-10-16T05:00:00Z',created_at='2026-10-16T04:59:00Z')
         self.assertEqual(fn({'total_count':1,'workflow_runs':[old]},source_sha=SHA,now=NOW)['next_action'],'USE_EXISTING_WATCHDOG')
+
+    def test_manual_and_unrelated_workflows_do_not_refresh_automatic_execution(self):
+        fn=self.component('supervisor').supervise
+        for rows in [[run(event='workflow_dispatch')],
+                     [run(event='workflow_dispatch'),run(2,updated_at='2026-10-16T04:00:00Z',created_at='2026-10-16T03:59:00Z')],
+                     [run(path='.github/workflows/fake.yml')],
+                     [run(head_branch='untrusted-branch')]]:
+            with self.subTest(rows=rows):
+                result=fn({'total_count':len(rows),'workflow_runs':rows},source_sha=SHA,now=NOW)
+                self.assertNotEqual(result['status'],'RECENT_CORE_OBSERVED')
+                self.assertFalse(result['production_accepted'])
 
     def test_supervisor_refuses_duplicate_future_and_malformed_run(self):
         fn=self.component('supervisor').supervise

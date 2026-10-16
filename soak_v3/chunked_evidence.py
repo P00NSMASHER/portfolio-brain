@@ -16,7 +16,13 @@ from soak_v3.audit import EvidenceError, require, sha40, sha64
 CHUNK_BYTES = 8 * 1024 * 1024
 MAX_RAW_BYTES = 256 * 1024 * 1024
 MAX_CHUNKS = MAX_RAW_BYTES // CHUNK_BYTES
-MAX_JSON_BYTES = 4_000_000
+# Base64 expands by4/3; GitHub JSON also escapes line wrapping. Bound both
+# decoded bytes and their envelope rather than rejecting supported8MiB chunks.
+def _json_bound(size):
+    encoded=4*((size+2)//3)
+    return encoded+4*((encoded+59)//60)+131072
+
+MAX_JSON_BYTES = _json_bound(CHUNK_BYTES + 32768)
 PART = re.compile(r"part-[0-9]{6}\.z\Z")
 MANIFEST = "state-manifest.json"
 FORMAT = "sqlite-zlib-chunks-v1"
@@ -35,7 +41,7 @@ def _get_blob(api, blob_sha, *, max_size):
             "EVIDENCE_BLOB_BOUND_INVALID")
     raw_response = api.get(
         f"/git/blobs/{blob_sha}",
-        limit=min(MAX_JSON_BYTES, (max_size * 4 // 3) + 131072),
+        limit=min(MAX_JSON_BYTES, _json_bound(max_size)),
     )
     require(len(raw_response) <= MAX_JSON_BYTES, "GIT_BLOB_JSON_TOO_LARGE")
     try:

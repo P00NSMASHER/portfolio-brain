@@ -213,5 +213,19 @@ class IndependentChunkedStateTests(unittest.TestCase):
         self.assertEqual(self.path.read_bytes(), b"already here")
 
 
+class FullSizeChunkTests(unittest.TestCase):
+    def test_supported_incompressible_chunk_and_wrapped_base64_fit_bounded_transport(self):
+        import random
+        packed=zlib.compress(random.Random(1).randbytes(8*1024*1024))
+        sha=audit.git_hash(packed)
+        payload=json.dumps(dict(sha=sha,encoding='base64',size=len(packed),
+            content=base64.encodebytes(packed).decode())).encode()
+        class OriginalBlob:
+            def get(self,path,*,limit):
+                if len(payload)>limit: raise EvidenceError('REAL_SIZE_JSON_RESPONSE_TOO_LARGE')
+                return payload
+        self.assertEqual(audit._get_blob(OriginalBlob(),sha,max_size=len(packed)),packed)
+
+
 if __name__ == "__main__":
     unittest.main()

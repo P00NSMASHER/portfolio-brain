@@ -102,3 +102,27 @@ class AutomationTests(unittest.TestCase):
             result=control.apply(ident,unavailable,lambda *a:self.fail('must not write'))
             self.assertEqual(result['status'],'READ_UNAVAILABLE')
             self.assertNotIn('private provider diagnostics',json.dumps(result))
+
+    def test_unknown_write_reserves_task_against_previously_staged_other_operation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            control=self.controller(folder)
+            a=control.stage('task-one',BEFORE,{'prompt':'first delayed'})
+            b=control.stage('task-one',BEFORE,{'prompt':'second write'})
+            def pending(*args): raise TimeoutError()
+            control.apply(a,lambda task:BEFORE,pending)
+            result=self.controller(folder).apply(b,lambda task:BEFORE,lambda *a:self.fail('overlapping uncertain task write'))
+            self.assertEqual(result['status'],'TASK_RECONCILIATION_REQUIRED')
+
+    def test_unknown_rollback_reserves_task_and_lock_refuses_second_local_writer(self):
+        with tempfile.TemporaryDirectory() as folder:
+            control=self.controller(folder)
+            a=control.stage('task-one',BEFORE,{'prompt':'new'})
+            state=copy.deepcopy(BEFORE)
+            def update(task,changes): state.update(changes)
+            control.apply(a,lambda task:copy.deepcopy(state),update)
+            def pending(*args): raise TimeoutError()
+            self.assertEqual(control.rollback(a,lambda task:copy.deepcopy(state),pending)['status'],'ROLLBACK_UNKNOWN')
+            b=control.stage('task-one',state,{'prompt':'second write'})
+            self.assertEqual(control.apply(b,lambda task:copy.deepcopy(state),lambda *a:self.fail('overlapping rollback'))['status'],'TASK_RECONCILIATION_REQUIRED')
+            with control.files.lock(),self.assertRaises(BrainError):
+                self.controller(folder).apply(a,lambda task:state,lambda *a:self.fail('concurrent writer'))

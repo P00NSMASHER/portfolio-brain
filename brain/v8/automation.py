@@ -61,6 +61,17 @@ class AutomationReconciler:
         with self.files.lock():
             row=self._load(ident)
             request=row['request']
+            # A provider may complete after timeout or process death. Reserve
+            # the task across operations until its durable intent is reconciled.
+            unresolved={'INTENT','UNKNOWN','ROLLBACK_INTENT','ROLLBACK_UNKNOWN'}
+            for other in self.files.records('automation'):
+                require(type(other) is dict and set(other)=={'request','status'}
+                        and type(other['request']) is dict
+                        and type(other['request'].get('task_id')) is str,
+                        'V8_TASK_OPERATION_INVALID')
+                if (other['request']['task_id']==request['task_id']
+                        and digest(other['request'])!=ident and other['status'] in unresolved):
+                    return self._receipt(ident,row,'TASK_RECONCILIATION_REQUIRED')
             try: current=_task(read(request['task_id']))
             except (OSError,ValueError): return self._receipt(ident,row,'READ_UNAVAILABLE')
             expected=request['after'] if rollback else request['before']
