@@ -161,8 +161,8 @@ class ProjectRegistryTests(unittest.TestCase):
         self.assertEqual([x["priority"] for x in work], [1, 2])
         self.assertIn("restricted runtime", work[0]["activation_gate"])
         self.assertIn("buyer demand", work[1]["activation_gate"])
-        self.assertIn("paying freight-recovery pilot", work[0]["commercial_north_star"])
-        self.assertIn("paying buyer", work[1]["commercial_north_star"])
+        self.assertIsNone(work[0]["commercial_north_star"])
+        self.assertIsNone(work[1]["commercial_north_star"])
         self.assertEqual(work[0]["independent_revenue_gates"][-1],
                          "payment-provider-confirmed settled customer revenue net of refunds")
         self.assertTrue(all(item["revenue_evidence_status"] == "NOT_VERIFIED" for item in work))

@@ -1,8 +1,10 @@
 # Portfolio Brain
 
-A small, autonomous business-portfolio intelligence engine. It observes projects,
-finds reusable implementations, keeps evidence-backed memory, runs bounded
-experiments, and produces engineering and business research reports.
+An autonomous research, upgrade and repair engine for all current projects.
+It observes failures, researches useful improvements, prepares scoped repairs
+through existing owners, and requires independent checks and actual delivery
+verification. Success means reliable useful projects and less user intervention.
+Revenue is optional project context, not the portfolio objective.
 
 The active implementation is **`brain/`**. The former workflow control plane is
 retired. Its code and historical evidence remain available for recovery and offline
@@ -13,9 +15,9 @@ issue #210 is a separate acceptance track and is not marked complete by this reb
 
 - Keeps the four canonical repositories in durable state and adds a separate bounded read-only observation of four more active repo-backed repositories every core cycle, covering eight active repository bindings without widening the canonical write path.
 - Builds an explicit improvement queue for nine active logical projects, with named success metrics, candidate counts, operator-reported outcomes, and empty baseline/result fields until genuine before/after evidence exists.
-- Rotates business-focused searches across freight recovery, agent products, school tools, Portfolio Brain reliability, trading data, Roblox quality, permit intelligence, and document workflows.
+- Rotates project-focused searches across freight recovery, useful applications, school tools, Portfolio Brain reliability, trading data, Roblox quality, permit intelligence, and document workflows.
 - Inspects actual source blobs and test paths, preserving source hashes and license classifications. No license type filters discovery.
-- Ranks reusable code from transparent structural evidence, stores observations and outcomes, and produces experiment plans and commercial hypotheses.
+- Ranks reusable code from transparent structural evidence, stores observations and outcomes, and produces experiment plans and useful upgrade hypotheses.
 - Runs a reviewed invoice-deduplication experiment with positive and adversarial simulated cases, comparing correctness and operation counts.
 - Refreshes its reusable-code knowledge through at most one evidence-qualified protected PR per week. The existing independently credentialed verifier may merge eligible bot proposals only after required checks.
 - Automatically drains acknowledged interrupted work on restart. Failed source reads never advance source observations; other sources continue.
