@@ -62,3 +62,23 @@ class PlanningTests(unittest.TestCase):
         out=select_work([work(state='FAILED'),work('other',state='LEARNED')],cycle=0,limit=5)
         self.assertEqual(out['selected'],[])
         self.assertEqual(select_work([],cycle=0,limit=1)['selected'],[])
+
+    def test_shared_completed_dependency_graph_finishes_within_bound(self):
+        import subprocess,sys
+        code="""import sys
+sys.path.insert(0,'tests')
+from test_brain_v8_contracts import work
+from brain.v8.planning import select_work
+rows=[]
+for i in range(40):
+ row=work('p'+str(i),state='LEARNED')
+ row['dependencies']=[r['work_id'] for r in rows[-2:]]
+ rows.append(row)
+rows[-1]['state']='OBSERVED'
+assert len(select_work(rows,cycle=0,limit=1)['selected'])==1
+"""
+        try:
+            result=subprocess.run([sys.executable,'-c',code],capture_output=True,text=True,timeout=5)
+        except subprocess.TimeoutExpired:
+            self.fail('bounded shared dependency graph exceeded five seconds')
+        self.assertEqual(result.returncode,0,result.stderr)

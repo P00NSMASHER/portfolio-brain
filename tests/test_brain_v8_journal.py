@@ -179,3 +179,99 @@ class ClaimTests(unittest.TestCase):
                 with self.assertRaises(BrainError): journal.release_claim(**dict(release,**change))
             journal.release_claim(resource='c'*64,owner='school-owner',operation_id='2'*64,now=LATER)
             self.assertEqual(journal.replay()[-1]['kind'],'CLAIM_RELEASE')
+
+
+class ReviewRegressionTests(unittest.TestCase):
+    setUp=JournalTests.setUp
+
+    def test_committed_tail_truncation_is_rejected(self):
+        with KernelJournal(self.path,create=True) as journal: journal.append(operation())
+        with sqlite3.connect(self.path) as db: db.execute('DELETE FROM kernel_events')
+        with self.assertRaises(BrainError):
+            with KernelJournal(self.path) as journal: journal.replay()
+
+    def test_sqlite_like_wildcard_cannot_hide_unrecognized_trigger(self):
+        with KernelJournal(self.path,create=True) as journal: journal.append(operation())
+        with sqlite3.connect(self.path) as db:
+            db.execute('CREATE TRIGGER sqliteXhidden AFTER INSERT ON kernel_events BEGIN DELETE FROM kernel_events; END')
+        before=self.path.read_bytes()
+        with self.assertRaises(BrainError): KernelJournal(self.path)
+        self.assertEqual(self.path.read_bytes(),before)
+
+    def test_completed_action_cannot_be_claimed_for_new_resource(self):
+        with KernelJournal(self.path,create=True) as journal:
+            journal.append(operation())
+            journal.append(operation(work('other',resource='8'*64),ident='4'))
+            with self.assertRaises(BrainError):
+                journal.claim(resource='8'*64,owner='school-owner',operation_id='1'*64,
+                    source_sha='a'*40,now=NOW,expires_at=LATER)
+
+    def test_one_action_identity_cannot_be_claimed_across_resources(self):
+        with KernelJournal(self.path,create=True) as journal:
+            journal.append(operation())
+            journal.append(operation(work('other',resource='8'*64),ident='4'))
+            journal.claim(resource='c'*64,owner='school-owner',operation_id='2'*64,
+                source_sha='a'*40,now=NOW,expires_at=LATER)
+            with self.assertRaises(BrainError):
+                journal.claim(resource='8'*64,owner='school-owner',operation_id='2'*64,
+                    source_sha='a'*40,now=NOW,expires_at=LATER)
+
+    def test_foreign_wal_database_rejection_creates_no_sidecars(self):
+        import shutil
+        source=Path(self.tmp.name)/'foreign-live.sqlite'
+        live=sqlite3.connect(source)
+        try:
+            live.execute('PRAGMA journal_mode=WAL')
+            live.execute('CREATE TABLE meta(key TEXT,value TEXT)')
+            live.execute("INSERT INTO meta VALUES('schema_version','2')")
+            live.commit()
+            shutil.copyfile(source,self.path)
+            shutil.copyfile(str(source)+'-wal',str(self.path)+'-wal')
+            self.path.chmod(0o600)
+            names=set(Path(self.tmp.name).iterdir())
+            before=self.path.read_bytes()
+            with self.assertRaises(BrainError): KernelJournal(self.path,readonly=True)
+            self.assertEqual(set(Path(self.tmp.name).iterdir()),names)
+            self.assertEqual(self.path.read_bytes(),before)
+        finally: live.close()
+
+    def test_terminal_attempt_cannot_start_new_external_intent(self):
+        with KernelJournal(self.path,create=True) as journal:
+            journal.append(operation())
+            failed=work(state='FAILED',updated_at=LATER)
+            journal.append(operation(failed,ident='2',expected='OBSERVED'))
+            failed['updated_at']='2026-10-15T20:02:00Z'
+            with self.assertRaises(BrainError):
+                journal.append(operation(failed,ident='3',expected='FAILED',outcome='EXTERNAL_INTENT'))
+
+    def test_failed_attempt_can_still_reconcile_existing_external_intent(self):
+        with KernelJournal(self.path,create=True) as journal:
+            journal.append(operation(outcome='EXTERNAL_INTENT'))
+            failed=work(state='FAILED',updated_at=LATER)
+            journal.append(operation(failed,ident='2',expected='OBSERVED',outcome='EXTERNAL_UNKNOWN'))
+            failed['updated_at']='2026-10-15T20:02:00Z'
+            result=journal.append(operation(failed,ident='3',expected='FAILED',outcome='EXTERNAL_CONFIRMED'))
+            self.assertFalse(result['reconciliation_required'])
+            self.assertEqual(journal.replay()[-1]['operation']['work']['state'],'FAILED')
+
+    def test_replay_uses_one_snapshot_during_concurrent_append(self):
+        from concurrent.futures import ThreadPoolExecutor,TimeoutError
+        with KernelJournal(self.path,create=True) as journal: journal.append(operation())
+        def append_next():
+            with KernelJournal(self.path) as writer:
+                writer.append(operation(work(state='DIAGNOSED',updated_at=LATER),ident='2',expected='OBSERVED'))
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with KernelJournal(self.path,readonly=True) as reader:
+                pending=[]
+                def between_rows_and_tip(sql):
+                    if sql.startswith('SELECT slot,sequence,chain_hash') and not pending:
+                        pending.append(pool.submit(append_next))
+                        try: pending[0].result(timeout=1)
+                        except TimeoutError: pass
+                reader.db.set_trace_callback(between_rows_and_tip)
+                try: rows=reader.replay()
+                except BrainError as exc: self.fail('concurrent append must not corrupt valid replay: '+str(exc))
+                self.assertIn(len(rows),[1,2])
+                reader.db.set_trace_callback(None)
+            pending[0].result(timeout=6)
+        with KernelJournal(self.path) as journal: self.assertEqual(len(journal.replay()),2)

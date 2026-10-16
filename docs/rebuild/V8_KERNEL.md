@@ -51,3 +51,24 @@ Next comes source-bound repair adapter integration, then private automation
 reconciliation, research/learning and dependency-proven legacy consolidation.
 Do not delete historical state or old execution code merely because this
 package exists. The approved design and implementation plan define the scope.
+
+## Review hardening and limits
+
+A fresh read-only branch review found planner complexity, schema allowlist,
+truncation, action-identity and foreign-WAL read-side-effect gaps. Reproducing
+regressions failed before correction and passed afterward. An additional
+concurrent-reader regression reproduced a mixed-snapshot tip mismatch and was
+corrected with a single read transaction. Terminal attempts refuse new external
+intents while still accepting reconciliation of an existing uncertain action.
+
+The journal now atomically maintains an expected count/hash tip and checks it
+against replay. This detects an accidentally truncated surviving prefix; it
+cannot authenticate wholesale rollback or coordinated rewriting of the database
+and checkpoint. That requires an independently retained trusted tip before
+production adoption. Exact schema allowlisting rejects extra tables/views/triggers,
+including names that resemble SQLite internal names. Foreign main-file identity
+and WAL mode are checked before opening SQLite. WAL journals are unsupported and
+refused; this local v8 format uses rollback mode only.
+
+Local verification: 40 focused tests PASS; full suite1943 tests PASS,2 platform
+skips, exit0. These are source-level observations, not production acceptance.

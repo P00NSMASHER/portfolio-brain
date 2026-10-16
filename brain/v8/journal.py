@@ -8,12 +8,14 @@ import sqlite3
 import stat
 from brain.core import BrainError, canonical, digest, require
 from brain.v8 import SCOPE
-from brain.v8.contracts import HASH, ID, SHA, matches, validate_work, advance, parse_utc
+from brain.v8.contracts import HASH, ID, SHA, STOP_STATES, matches, validate_work, advance, parse_utc
 
 APPLICATION_ID = 0x42523830
 SCHEMA = '''CREATE TABLE kernel_events (
 seq INTEGER PRIMARY KEY, kind TEXT NOT NULL, operation_id TEXT NOT NULL UNIQUE,
 body TEXT NOT NULL, body_hash TEXT NOT NULL, prev_hash TEXT NOT NULL, chain_hash TEXT NOT NULL)'''
+HEAD_SCHEMA = '''CREATE TABLE kernel_head (
+slot INTEGER PRIMARY KEY CHECK(slot=1), sequence INTEGER NOT NULL, chain_hash TEXT NOT NULL)'''
 OP_FIELDS = {'schema_version','operation_id','work','expected_state','occurred_at','outcome'}
 OUTCOMES = {'LOCAL_COMMITTED','EXTERNAL_INTENT','EXTERNAL_CONFIRMED','EXTERNAL_UNKNOWN'}
 MUTABLE = {'state','evidence_ids','updated_at','attempts','blocker'}
@@ -37,9 +39,13 @@ def _apply_claim(kind, op, state, pending, claims, completed):
                       and r['owner']==op['owner'] and r['source_sha']==op['source_sha']]
         require(bool(matches_work), 'V8_CLAIM_OWNER_OR_SOURCE_UNOBSERVED')
         require(all(now>=parse_utc(r['updated_at']) for r in matches_work), 'V8_CLAIM_TIME_REVERSED')
+        require(op['operation_id'] not in completed and op['operation_id'] not in pending.values()
+                and not any(c['operation_id']==op['operation_id'] for c in claims.values()),
+                'V8_CLAIM_ACTION_REUSED')
         if old:
             require(now>=parse_utc(old['expires_at']), 'V8_CLAIM_CONFLICT')
-            require(old['operation_id'] in completed and not any(
+            identity={k:old[k] for k in ('resource','owner','source_sha')}
+            require(completed.get(old['operation_id'])==identity and not any(
                 state[k]['resource']==op['resource'] for k in pending),
                 'V8_CLAIM_RECONCILIATION_REQUIRED')
         claims[op['resource']]=deepcopy(op)
@@ -105,6 +111,7 @@ def _apply_work(op, state, pending):
             require(op['outcome']!='LOCAL_COMMITTED', 'V8_NO_PROGRESS_OPERATION')
     outcome=op['outcome']
     if outcome=='EXTERNAL_INTENT':
+        require(row['state'] not in STOP_STATES,'V8_TERMINAL_ATTEMPT')
         require(key not in pending and not any(
             state[other]['resource']==row['resource'] for other in pending),
             'V8_EXTERNAL_RECONCILIATION_REQUIRED')
@@ -133,6 +140,16 @@ class KernelJournal:
         self.identity=(self.path.stat().st_dev,self.path.stat().st_ino)
         try:
             if not fresh:
+                # Inspect the main-file header before SQLite can create WAL/shm
+                # sidecars. This format supports rollback-mode journals only.
+                fd=os.open(self.path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+                try: header=os.read(fd,100)
+                finally: os.close(fd)
+                require(len(header)==100 and header[:16]==b'SQLite format 3\0'
+                        and int.from_bytes(header[68:72],'big')==APPLICATION_ID
+                        and int.from_bytes(header[60:64],'big')==1,
+                        'V8_FOREIGN_DATABASE_REFUSED')
+                require(header[18:20]==b'\x01\x01', 'V8_WAL_JOURNAL_UNSUPPORTED')
                 probe=sqlite3.connect(self.path.as_uri()+'?mode=ro',uri=True,timeout=5)
                 try:
                     self._schema(probe)
@@ -145,6 +162,8 @@ class KernelJournal:
             if fresh:
                 with self._transaction():
                     self.db.execute(SCHEMA)
+                    self.db.execute(HEAD_SCHEMA)
+                    self.db.execute('INSERT INTO kernel_head VALUES(1,0,?)',('0'*64,))
                     self.db.execute('PRAGMA application_id='+str(APPLICATION_ID))
                     self.db.execute('PRAGMA user_version=1')
                 fd=os.open(self.path.parent,os.O_RDONLY|os.O_DIRECTORY)
@@ -166,8 +185,8 @@ class KernelJournal:
         require(db.execute('PRAGMA application_id').fetchone()[0]==APPLICATION_ID
                 and db.execute('PRAGMA user_version').fetchone()[0]==1,
                 'V8_FOREIGN_DATABASE_REFUSED')
-        objects=db.execute("SELECT type,name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'").fetchall()
-        require(len(objects)==1 and tuple(objects[0])==('table','kernel_events',SCHEMA),
+        objects=db.execute("SELECT type,name,sql FROM sqlite_master WHERE name NOT GLOB 'sqlite_*' ORDER BY name").fetchall()
+        require([tuple(o) for o in objects]==[('table','kernel_events',SCHEMA),('table','kernel_head',HEAD_SCHEMA)],
                 'V8_JOURNAL_SCHEMA_INVALID')
         require(db.execute('PRAGMA quick_check').fetchone()[0]=='ok','V8_SQLITE_CORRUPT')
 
@@ -186,10 +205,11 @@ class KernelJournal:
             raise
 
     def _scan(self):
+        self._schema(self.db)
         rows=self.db.execute('SELECT * FROM kernel_events ORDER BY seq LIMIT ?',
                              (MAX_RECORDS+1,)).fetchall()
         require(len(rows)<=MAX_RECORDS,'V8_JOURNAL_RECORD_BOUND')
-        records,state,pending,claims,completed=[],{},{},{},set()
+        records,state,pending,claims,completed=[],{},{},{},{}
         previous='0'*64
         for number,stored in enumerate(rows,1):
             require(stored['seq']==number and stored['prev_hash']==previous,
@@ -206,6 +226,9 @@ class KernelJournal:
             records.append(dict(sequence=number,kind=stored['kind'],operation=op,
                                 record_id=stored['operation_id'],chain_hash=stored['chain_hash']))
             previous=stored['chain_hash']
+        head=self.db.execute('SELECT slot,sequence,chain_hash FROM kernel_head').fetchall()
+        require(len(head)==1 and tuple(head[0])==(1,len(records),previous),
+                'V8_JOURNAL_TIP_MISMATCH')
         return records,state,pending,claims,completed
 
     @staticmethod
@@ -224,16 +247,23 @@ class KernelJournal:
                 require(op['operation_id']==claim['operation_id'],'V8_CLAIM_OPERATION_CONFLICT')
         original=pending.get(row['work_id'])
         _apply_work(op,state,pending)
+        identity={k:row[k] for k in ('resource','owner','source_sha')}
         if op['outcome']=='LOCAL_COMMITTED':
-            completed.add(op['operation_id'])
+            completed[op['operation_id']]=identity
         elif op['outcome']=='EXTERNAL_CONFIRMED':
-            completed.add(original)
+            completed[original]=identity
 
     def replay(self):
+        own_snapshot=not self.db.in_transaction
         try:
+            if own_snapshot:
+                self.db.execute('BEGIN')
             return self._scan()[0]
         except sqlite3.Error as exc:
             raise BrainError('V8_JOURNAL_UNREADABLE') from exc
+        finally:
+            if own_snapshot and self.db.in_transaction:
+                self.db.execute('ROLLBACK')
 
     @staticmethod
     def _receipt(record):
@@ -261,6 +291,8 @@ class KernelJournal:
             chain=digest(frame)
             self.db.execute('INSERT INTO kernel_events VALUES(?,?,?,?,?,?,?)',
                 (sequence,kind,record_id,canonical(op),digest(op),previous,chain))
+            self.db.execute('UPDATE kernel_head SET sequence=?,chain_hash=? WHERE slot=1',
+                            (sequence,chain))
             return self._receipt(dict(sequence=sequence,operation=op,chain_hash=chain))
 
     def claim(self,*,resource,owner,operation_id,source_sha,now,expires_at):

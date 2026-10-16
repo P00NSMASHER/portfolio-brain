@@ -12,18 +12,24 @@ def select_work(items, *, cycle, limit):
     by_id={r['work_id']:r for r in rows}
     require(len(by_id)==len(rows), 'V8_PLAN_DUPLICATE_WORK')
 
+    cache={}
     def dependency_gap(ident, visiting):
         if ident in visiting:
             return 'DEPENDENCY_CYCLE'
+        if ident in cache:
+            return cache[ident]
         if ident not in by_id:
             return 'DEPENDENCY_UNKNOWN'
         row=by_id[ident]
         for dep in row['dependencies']:
             gap=dependency_gap(dep,visiting|{ident})
             if gap:
+                cache[ident]=gap
                 return gap
         if any(by_id[dep]['state']!='LEARNED' for dep in row['dependencies']):
+            cache[ident]='DEPENDENCY_UNFINISHED'
             return 'DEPENDENCY_UNFINISHED'
+        cache[ident]=None
         return None
 
     eligible,blocked=[],[]
