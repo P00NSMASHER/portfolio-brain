@@ -17,6 +17,7 @@ from brain.adapters import NoRedirect, related_test_paths
 REPOSITORY='P00NSMASHER/portfolio-brain'
 PATH='brain/REUSE_KNOWLEDGE.json'
 VALIDATION='actions/workflows/foundation-ci.yml/dispatches'
+BOT_REVIEW='actions/workflows/portfolio-bot-knowledge-verifier.yml/dispatches'
 BRANCH=re.compile(r'factory/auto-repair-v2-knowledge-[0-9a-f]{16}')
 
 def balanced_knowledge_sources(candidates, limit=12):
@@ -69,7 +70,7 @@ class UpgradeAPI:
         # Precisely bounded GitHub mutations; no arbitrary repository/URL or force update.
         if method!='GET':
             suffix=path.split(REPOSITORY+'/')[1]
-            require((method=='POST' and suffix in {'git/refs','pulls',VALIDATION}) or (method=='PUT' and suffix==f'contents/{PATH}'), 'upgrade mutation forbidden')
+            require((method=='POST' and suffix in {'git/refs','pulls',VALIDATION,BOT_REVIEW}) or (method=='PUT' and suffix==f'contents/{PATH}'), 'upgrade mutation forbidden')
             require(type(payload) is dict, 'upgrade payload invalid')
             if suffix=='git/refs':
                 require(set(payload)=={'ref','sha'} and payload['ref'].startswith('refs/heads/') and BRANCH.fullmatch(payload['ref'][11:]) and re.fullmatch('[0-9a-f]{40}',payload['sha']), 'upgrade ref forbidden')
@@ -78,7 +79,18 @@ class UpgradeAPI:
             if suffix=='pulls':
                 require(set(payload)=={'head','base','title','body'} and BRANCH.fullmatch(payload['head']) and payload['base']=='main' and 'AUTO_REPAIR_FINGERPRINT:' in payload['body'], 'upgrade pull target forbidden')
             if suffix==VALIDATION:
-                require(set(payload)=={'ref'} and BRANCH.fullmatch(payload['ref']), 'upgrade validation ref forbidden')
+                require(set(payload)=={'ref'} and BRANCH.fullmatch(payload['ref']),
+                        'upgrade validation ref forbidden')
+            if suffix==BOT_REVIEW:
+                inputs=payload.get('inputs')
+                require(set(payload)=={'ref','inputs'} and payload['ref']=='main'
+                        and type(inputs) is dict
+                        and set(inputs)=={'pr_number','head_sha'}
+                        and type(inputs['pr_number']) is str
+                        and re.fullmatch('[1-9][0-9]{0,8}',inputs['pr_number'])
+                        and type(inputs['head_sha']) is str
+                        and re.fullmatch('[0-9a-f]{40}',inputs['head_sha']),
+                        'bot reviewer dispatch outside exact knowledge proposal')
         if self.transport:return self.transport(path,method,payload)
         body=None if payload is None else json.dumps(payload).encode()
         request=urllib.request.Request('https://api.github.com'+path,data=body,method=method,headers={'Authorization':'Bearer '+self.token,'User-Agent':'PortfolioBrain-v2-protected-knowledge-upgrade','Accept':'application/vnd.github+json','Content-Type':'application/json'})
@@ -148,5 +160,9 @@ Source main: `{source_sha}`. Candidate head: `{head}`. Existing exact-head Found
     # Token-created PR events may require approval. Explicitly dispatch the existing
     # Foundation entry point once; its exact-head independent verifier stays mandatory.
     api.request(f'/repos/{REPOSITORY}/{VALIDATION}','POST',{'ref':branch})
+    api.request(f'/repos/{REPOSITORY}/{BOT_REVIEW}','POST',{
+        'ref':'main',
+        'inputs':{'pr_number':str(pr['number']),'head_sha':head},
+    })
     store.attempt('evolve','PASS',source_sha=source_sha,details={'pr_number':pr['number'],'head_sha':head,'fingerprint':fingerprint,'phase':'VALIDATION_DELIVERED'})
-    return {'status':'CANDIDATE_PR_CREATED','url':pr['html_url'],'head_sha':head,'source_sha':source_sha,'validation_dispatch':'DELIVERED','independent_review':'PENDING','authority_widened':False}
+    return {'status':'CANDIDATE_PR_CREATED','url':pr['html_url'],'head_sha':head,'source_sha':source_sha,'validation_dispatch':'DELIVERED','review_dispatch':'DELIVERED','independent_review':'PENDING','authority_widened':False}
