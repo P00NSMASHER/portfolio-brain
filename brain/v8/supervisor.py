@@ -23,7 +23,7 @@ def supervise(inventory, *, source_sha, now):
                 and type(row.get('status')) is str and row['status'] in STATUSES and type(row.get('run_attempt')) is int
                 and row['run_attempt']>=1,'V8_SUPERVISOR_RUN_INVALID')
         seen.add(row['id'])
-        created,end=map(parse_utc,(row['created_at'],row['updated_at']))
+        created,end=map(parse_utc,(row.get('created_at'),row.get('updated_at')))
         require(created<=end<=current,'V8_SUPERVISOR_TIME_INVALID')
         require((row['status']=='completed' and type(row.get('conclusion')) is str and row['conclusion'] in CONCLUSIONS)
                 or (row['status']!='completed' and row.get('conclusion') is None),

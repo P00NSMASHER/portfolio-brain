@@ -23,12 +23,14 @@ def record_outcome(private_root,record):
         old=files.read('outcome',ident)
         require(old is None or old==record,'V8_OUTCOME_CONFLICT')
         if old is None: files.write('outcome',ident,record)
-        rows=files.records('outcome')
-    return dict(record_id=ident,counts=dict(observed=len(rows),
-        failed=sum(r['outcome']=='FAILED' for r in rows),
-        rolled_back=sum(r['outcome']=='ROLLED_BACK' for r in rows),
-        actual_live_verified=0,
-        reported_actual_live=sum(r['outcome']=='LIVE_VERIFIED' and r['data_kind']=='ACTUAL' for r in rows),
-        unknown=sum(r['outcome']=='UNKNOWN' or r['data_kind']=='UNKNOWN' for r in rows)),
+        counts=dict(observed=0,failed=0,rolled_back=0,actual_live_verified=0,
+                    reported_actual_live=0,unknown=0)
+        for row in files.iter_records('outcome'):
+            counts['observed']+=1
+            counts['failed']+=row['outcome']=='FAILED'
+            counts['rolled_back']+=row['outcome']=='ROLLED_BACK'
+            counts['reported_actual_live']+=row['outcome']=='LIVE_VERIFIED' and row['data_kind']=='ACTUAL'
+            counts['unknown']+=row['outcome']=='UNKNOWN' or row['data_kind']=='UNKNOWN'
+    return dict(record_id=ident,counts=counts,
         evidence_authentication='REQUIRES_INDEPENDENT_PROVIDER_ADAPTER',causal_benefit=None,
         production_accepted=False)
