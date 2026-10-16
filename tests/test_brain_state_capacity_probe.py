@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from brain import state_capacity_probe as probe
 from brain import state_archive
+from brain.validate import validate_policy
 
 
 class CapacityProbeTests(unittest.TestCase):
@@ -93,6 +94,9 @@ class CapacityProbeTests(unittest.TestCase):
                     probe, "restore", return_value=changed), self.assertRaisesRegex(
                         probe.CapacityProbeError, "RESTORE_MISMATCH"):
                 probe.verify(self.root, minimum_bytes=1024 * 1024)
+
+    def test_nonrecurring_capacity_gate_is_in_active_workflow_inventory(self):
+        self.assertEqual(validate_policy()["status"], "PASS")
 
 
 if __name__ == "__main__":
