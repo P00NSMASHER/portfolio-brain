@@ -224,10 +224,13 @@ def follow_through(queue, *, cycle, history=None, provider_receipts=None,
                     and prior["pr_number"] == work["candidate_pr_number"],
                     "FOLLOWTHROUGH_REASSIGNMENT_DENIED")
         op = _next(prior, work, cycle)
-        state, verified = _verified_main(
-            work, proof.get((work["repository"], work["candidate_pr_number"])))
+        observed = proof.get((work["repository"], work["candidate_pr_number"]))
+        state, verified = _verified_main(work, observed)
         if verified:
             op = "MAIN_TECHNICAL_SOURCE_VERIFIED_REVIEW_RUNTIME_SEPARATELY"
+        elif (prior and prior["state"] == "MAIN_TECHNICALLY_VERIFIED"
+              and observed is not None):
+            op = "REVERIFY_PREVIOUSLY_VERIFIED_MAIN"
         results.append(dict(
             dedupe_key=key, evidence_key=work["exact_evidence_key"],
             project_id=work["project_id"],
@@ -241,14 +244,19 @@ def follow_through(queue, *, cycle, history=None, provider_receipts=None,
             financial_or_external_action_authorized=False,
         ))
     for key, prior in known.items():
-        if key in active or prior["state"] == "MAIN_TECHNICALLY_VERIFIED":
+        if key in active:
+            continue
+        observed = proof.get((prior["repository"], prior["pr_number"]))
+        if prior["state"] == "MAIN_TECHNICALLY_VERIFIED" and observed is None:
             continue
         project = next(k for k,v in FOCUS.items() if v[0] == prior["repository"])
         status, verified = _verified_main(
             dict(repository=prior["repository"], candidate_pr_number=prior["pr_number"],
                  source_head_sha=prior["head_sha"]),
-            proof.get((prior["repository"], prior["pr_number"])),
+            observed,
         )
+        if prior["state"] == "MAIN_TECHNICALLY_VERIFIED" and verified:
+            continue
         results.append(dict(
             dedupe_key=key, evidence_key=prior["exact_evidence_key"],
             project_id=project, repository=prior["repository"],
@@ -257,6 +265,8 @@ def follow_through(queue, *, cycle, history=None, provider_receipts=None,
             source_pr=prior["pr_number"], source_head_sha=prior["head_sha"],
             next_operation=("MAIN_TECHNICAL_SOURCE_VERIFIED_REVIEW_RUNTIME_SEPARATELY"
                             if verified else
+                            "REVERIFY_PREVIOUSLY_VERIFIED_MAIN"
+                            if prior["state"] == "MAIN_TECHNICALLY_VERIFIED" else
                             "PRESERVE_EXTERNAL_HOLD_FIX_NEXT"
                             if prior["state"] == "BLOCKED_EXTERNAL" else
                             "REOBSERVE_UNFINISHED_PR_ABSENT_FROM_OPEN_SAMPLE"),
@@ -266,9 +276,13 @@ def follow_through(queue, *, cycle, history=None, provider_receipts=None,
             financial_or_external_action_authorized=False,
         ))
     results.sort(key=lambda row: (
-        row["next_operation"] != "REOBSERVE_UNFINISHED_PR_ABSENT_FROM_OPEN_SAMPLE",
+        row["next_operation"] not in {
+            "REOBSERVE_UNFINISHED_PR_ABSENT_FROM_OPEN_SAMPLE",
+            "REVERIFY_PREVIOUSLY_VERIFIED_MAIN",
+        },
         row["next_operation"] not in {
             "PATCH_EXACT_FAILED_REGRESSION",
+            "REVERIFY_PREVIOUSLY_VERIFIED_MAIN",
             "VERIFY_PROTECTED_MERGE_AND_ACTUAL_MAIN",
             "RESUME_STALLED_OWNER_CHECK_PR_AND_LOGS",
         },
@@ -288,6 +302,10 @@ def follow_through(queue, *, cycle, history=None, provider_receipts=None,
             attempts = prior["source_revision_attempts"]
         if task["technical_main_source_verified"]:
             state, progress_cycle = "MAIN_TECHNICALLY_VERIFIED", cycle
+        elif task["next_operation"] == "REVERIFY_PREVIOUSLY_VERIFIED_MAIN":
+            # New original proof invalidates the old completion, not history.
+            # Current-main ancestry/check gaps are not an inferred root cause.
+            state, progress_cycle, attempts = "OBSERVED", cycle, 0
         records.append({
             "dedupe_key": task["dedupe_key"],
             "exact_evidence_key": task["evidence_key"],

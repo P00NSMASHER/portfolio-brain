@@ -3,7 +3,7 @@ import copy
 import unittest
 from brain.core import BrainError, digest
 from brain.repair_followthrough import follow_through
-from brain.repair_provider import collect_original_proofs
+from brain.repair_provider import collect_original_proofs, apply_original_ci_to_owner_queue
 from test_brain_repair_followthrough import active, prior, receipt, getwork
 from test_brain_repair_provider import rig, pr_for, original_checks, MAIN
 from test_brain_repair_autonomy import B
@@ -74,6 +74,8 @@ class VerifiedRepairRegressionTests(unittest.TestCase):
         self.assertEqual(proof["observed_pr_count"], 1)
         self.assertEqual(proof["requests_used"], 4)
         plan = follow_through(queue, cycle=11, history=history, provider_receipts=proof["proofs"])
+        plan = apply_original_ci_to_owner_queue(plan, proof["source_checks"])
+        self.assertEqual(plan["actions"][0]["next_operation"], "REVERIFY_PREVIOUSLY_VERIFIED_MAIN")
         self.assertEqual(plan["next_history"][0]["state"], "OBSERVED")
         self.assertFalse(plan["real_buyer_or_revenue_verified"])
 
