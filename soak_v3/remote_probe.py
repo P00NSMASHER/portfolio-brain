@@ -25,8 +25,10 @@ class DropCredentialRedirect(request.HTTPRedirectHandler):
         return request.Request(newurl, headers={'User-Agent':'Mozilla/5.0', 'Accept':'application/zip'})
 
 class GitHubReadOnly:
-    def __init__(self, token, *, transport=None):
+    def __init__(self, token, *, transport=None, max_calls=12):
         require(isinstance(token, str) and len(token)>0 or transport is not None, 'GITHUB_TOKEN_REQUIRED')
+        require(type(max_calls) is int and 1 <= max_calls <= 48, 'API_CALL_BOUND_INVALID')
+        self.max_calls=max_calls
         self.token=token
         self.transport=transport
         self.calls=0
@@ -34,7 +36,7 @@ class GitHubReadOnly:
     def get(self, suffix, *, limit=2_000_000):
         require(type(suffix) is str and suffix.startswith('/') and '://' not in suffix and '..' not in suffix.split('/'), 'API_PATH_INVALID')
         self.calls+=1
-        require(self.calls<=12, 'API_CALL_BUDGET')
+        require(self.calls<=self.max_calls, 'API_CALL_BUDGET')
         if self.transport:
             return self.transport(suffix)
         req=request.Request(API+suffix,headers={'Authorization':'Bearer '+self.token,

@@ -63,7 +63,8 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True,
                                      separators=(",", ":"), allow_nan=False).encode()).hexdigest()
 
-def verify_sqlite(path, *, expected_sequence, expected_chain, expected_source):
+def verify_sqlite(path, *, expected_sequence, expected_chain, expected_source,
+                  max_bytes=25_000_000, strict_event_ids=False):
     """Read immutable downloaded state without opening a writable DB or trusting reports.
 
     The caller must separately bind bytes to the GitHub state commit it fetched.
@@ -72,13 +73,23 @@ def verify_sqlite(path, *, expected_sequence, expected_chain, expected_source):
     sha40(expected_source)
     sha64(expected_chain)
     require(type(expected_sequence) is int and expected_sequence >= 0, "SEQUENCE_INVALID")
-    raw = Path(path).read_bytes()
-    require(0 < len(raw) <= 25_000_000, "STATE_SIZE_INVALID")
-    sqlite_sha256 = hashlib.sha256(raw).hexdigest()
+    # Historical callers retain the prior 25 MB cap; a dedicated chunked
+    # audit may explicitly opt in to 256 MiB. Avoid loading the database into
+    # Python memory before independent SQLite replay.
+    require(type(max_bytes) is int and 0 < max_bytes <= 256*1024*1024,
+            "STATE_SIZE_BOUND_INVALID")
+    require(type(strict_event_ids) is bool, "STATE_IDENTITY_MODE_INVALID")
+    original = Path(path)
+    require(not original.is_symlink() and original.is_file(),
+            "STATE_FILE_INVALID")
+    require(0 < original.stat().st_size <= max_bytes, "STATE_SIZE_INVALID")
+    with original.open("rb") as image:
+        sqlite_sha256 = hashlib.file_digest(image, "sha256").hexdigest()
     conn = sqlite3.connect(f"file:{Path(path).resolve().as_posix()}?mode=ro&immutable=1", uri=True)
     conn.row_factory = sqlite3.Row
     try:
         require(conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok", "SQLITE_CORRUPT")
+        require(conn.execute("PRAGMA foreign_key_check").fetchone() is None, "SQLITE_FOREIGN_KEY_VIOLATION")
         schema = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
         visibility = conn.execute("SELECT value FROM meta WHERE key='visibility'").fetchone()
         require(schema and schema[0] == "2" and visibility and visibility[0] == "PUBLIC", "STATE_SCHEMA_OR_VISIBILITY_INVALID")
@@ -96,6 +107,13 @@ def verify_sqlite(path, *, expected_sequence, expected_chain, expected_source):
             except (ValueError, TypeError) as exc:
                 raise EvidenceError("STATE_EVENT_JSON_INVALID") from exc
             require(event.get("visibility") == "PUBLIC" and row["id"] == event.get("id"), "STATE_EVENT_IDENTITY_INVALID")
+            if strict_event_ids:
+                require(type(event.get("kind")) is str and row["id"] ==
+                        event["kind"] + ":" + digest({**event, "id": ""}),
+                        "STATE_CANONICAL_EVENT_ID_INVALID")
+                require(row["body"] == json.dumps(event, sort_keys=True,
+                        separators=(",", ":"), ensure_ascii=False, allow_nan=False),
+                        "STATE_CANONICAL_EVENT_BODY_INVALID")
             require(digest(event) == row["hash"], "STATE_EVENT_DIGEST_INVALID")
             require(row["prev_hash"] == prior, "STATE_CHAIN_PARENT_INVALID")
             prior = digest({"seq": seq, "event_hash": row["hash"], "previous": prior})
@@ -161,7 +179,8 @@ class Evaluation:
     maximum_gap_observed: int
 
 def evaluate_window(records, *, source_sha, current_main, first_state_parent,
-                    started_at, deadline_at, now):
+                    started_at, deadline_at, now,
+                    minimum_span_seconds=MIN_SPAN_SECONDS):
     """Fail closed on *all* exact-source runs, including inconvenient failures.
 
     Records are externally authenticated run/step/artifact/state attestations. This
@@ -170,6 +189,9 @@ def evaluate_window(records, *, source_sha, current_main, first_state_parent,
     sha40(source_sha)
     sha40(current_main)
     sha40(first_state_parent)
+    require(type(minimum_span_seconds) is int
+            and MIN_SPAN_SECONDS <= minimum_span_seconds <= 21600,
+            "SOAK_REQUIRED_DURATION_INVALID")
     if source_sha != current_main:
         return Evaluation("FAIL", "MAIN_DRIFT", (), 0, 0)
     start, deadline, instant = utc(started_at), utc(deadline_at), utc(now)
@@ -256,7 +278,7 @@ def evaluate_window(records, *, source_sha, current_main, first_state_parent,
     # A missed second/third cycle is already a terminal failure at the original
     # 90-minute gap, even when fewer than three runs have arrived.
     # Once the two-hour span is legitimately complete, proceed to postvalidation.
-    if automatic and span < MIN_SPAN_SECONDS:
+    if automatic and span < minimum_span_seconds:
         elapsed_since_latest=(instant-automatic[-1][0]).total_seconds()
         if elapsed_since_latest > MAX_GAP_SECONDS:
             return Evaluation("FAIL","AUTOMATIC_DELIVERY_GAP_EXCEEDED",ids,span,
@@ -264,7 +286,7 @@ def evaluate_window(records, *, source_sha, current_main, first_state_parent,
     if len(automatic) < MIN_CYCLES:
         return Evaluation("BLOCKED" if instant >= deadline else "WAITING",
                           "INSUFFICIENT_GENUINE_AUTOMATIC_CYCLES",ids,span,maximum)
-    if span < MIN_SPAN_SECONDS:
+    if span < minimum_span_seconds:
         return Evaluation("BLOCKED" if instant >= deadline else "WAITING", "SOAK_DURATION_INCOMPLETE", ids, span, maximum)
     if instant > deadline:
         return Evaluation("BLOCKED", "DEADLINE_EXPIRED_BEFORE_POST_VALIDATION", ids, span, maximum)
