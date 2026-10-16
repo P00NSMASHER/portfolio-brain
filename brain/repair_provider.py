@@ -252,6 +252,10 @@ def apply_original_ci_to_owner_queue(continuation, source_checks):
         ]
         require(len(history) == 1, "REPAIR_SOURCE_CI_HISTORY_MISSING")
         prior_state = history[0]["state"]
+        if task["next_operation"] == "REVERIFY_PREVIOUSLY_VERIFIED_MAIN":
+            # Green CI on the historical PR cannot erase newer main evidence.
+            matched += 1
+            continue
         if prior_state == "BLOCKED_EXTERNAL":
             task["next_operation"] = "PRESERVE_EXTERNAL_HOLD_FIX_NEXT"
         elif (prior_state == "CI_RED"
@@ -289,16 +293,32 @@ def collect_original_proofs(queue, *, prior=None, transport,
             and type(selection_sequence) is int
             and 0 <= selection_sequence < 2**63,
             "REPAIR_PROVIDER_GET_BUDGET_INVALID")
-    work, limit = _work_inputs(
-        queue, [] if prior is None else prior, max_jobs,
-    )
-    # The ordinary owner collector checks every case when it fits. The live
-    # native Brain stage has budget for one, so rotate fairly rather than
-    # reading the same top-ranked PR forever.
-    if len(work) > limit:
-        start = selection_sequence % len(work)
+    history = [] if prior is None else prior
+    work, limit = _work_inputs(queue, history, max_jobs)
+    active_keys = {key for key, _ in work}
+    completed = {}
+    for row in history:
+        key = (row["repository"], row["pr_number"])
+        if row["state"] == "MAIN_TECHNICALLY_VERIFIED" and key not in active_keys:
+            require(key not in completed or completed[key] == row["head_sha"],
+                    "REPAIR_PROVIDER_ARCHIVED_SOURCE_CONFLICT")
+            completed[key] = row["head_sha"]
+    archived = sorted(completed.items())
+    recheck = None
+    if archived and (not work or selection_sequence % 6 == 5):
+        archive_index = selection_sequence if not work else selection_sequence // 6
+        recheck = archived[archive_index % len(archived)]
+    ordinary_limit = limit - int(recheck is not None)
+    # Five cycles prioritize unfinished repairs; one cycle can revalidate a
+    # completed record. Remove those reserved ticks from the ordinary index
+    # so an unfinished slot can never be permanently starved by modulo aliasing.
+    ordinary_sequence = (selection_sequence - selection_sequence // 6
+                         if archived else selection_sequence)
+    if work and len(work) > ordinary_limit:
+        start = ordinary_sequence % len(work)
         work = [work[(start + offset) % len(work)]
                 for offset in range(len(work))]
+    selected = work[:ordinary_limit] + ([recheck] if recheck is not None else [])
     requests, proofs, gaps, source_checks, cache = 0, [], [], [], {}
 
     def get(repo, path):
@@ -308,7 +328,7 @@ def collect_original_proofs(queue, *, prior=None, transport,
         requests += 1
         return transport(repo, path)
 
-    for (repo, number), expected in work[:limit]:
+    for (repo, number), expected in selected:
         # A provider 404 or missing permission is an explicit gap, never
         # equivalent to closed, merged, released or fixed.
         try:
@@ -433,9 +453,11 @@ def collect_original_proofs(queue, *, prior=None, transport,
         "request_limit": max_requests,
         "max_jobs": max_jobs,
         "selection_sequence": selection_sequence,
-        "selection_rule": "CYCLIC_SOURCE_FAIRNESS_WITHIN_BOUNDED_GET_BUDGET",
+        "selection_rule": "UNFINISHED_FIRST_WITH_BOUNDED_COMPLETED_REVALIDATION",
+        "completed_recheck_count": int(recheck is not None),
+        "unfinished_sample_count": len(selected) - int(recheck is not None),
         "observed_pr_count": len(proofs),
-        "unsampled_due_to_job_limit": max(0, len(work) - limit),
+        "unsampled_due_to_job_limit": max(0, len(work) + len(archived) - len(selected)),
         "proofs": proofs,
         "source_checks": source_checks,
         "gaps": gaps,
@@ -450,6 +472,7 @@ def main(argv=None):
     parser.add_argument("--current", required=True, type=Path)
     parser.add_argument("--previous", type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--selection-sequence", type=int, default=0)
     args = parser.parse_args(argv)
     from brain.repair_followthrough_cli import _safe_json
     current = _safe_json(args.current)
@@ -459,6 +482,7 @@ def main(argv=None):
     token = os.environ.get("GITHUB_TOKEN", "")
     result = collect_original_proofs(
         current, prior=previous, transport=github_transport(token),
+        selection_sequence=args.selection_sequence,
     )
     write_report(result, args.output)
     print(json.dumps({
