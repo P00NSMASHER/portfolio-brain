@@ -47,17 +47,23 @@ def main(argv=None):
     try:
         parser=Parser(description='Local v8 kernel; no production actions')
         commands=parser.add_subparsers(dest='command',required=True)
-        for command in ('validate','plan'):
+        for command in ('validate','plan','cycle'):
             cmd=commands.add_parser(command)
             cmd.add_argument('--input',required=True,type=Path)
-            if command=='plan':
+            if command in ('plan','cycle'):
                 cmd.add_argument('--cycle',required=True,type=int)
-                cmd.add_argument('--limit',required=True,type=int)
+                if command=='plan': cmd.add_argument('--limit',required=True,type=int)
+            if command=='cycle':
+                cmd.add_argument('--source-sha',required=True)
+                cmd.add_argument('--now',required=True)
         commands.add_parser('replay').add_argument('--journal',required=True,type=Path)
         args=parser.parse_args(argv)
         if args.command=='validate':
             row=validate_work(_load(args.input))
             result=dict(work_id=row['work_id'],state=row['state'])
+        elif args.command=='cycle':
+            from brain.v8.engineering import build_cycle
+            result=build_cycle(_load(args.input),source_sha=args.source_sha,cycle=args.cycle,now=args.now)
         elif args.command=='plan':
             result=select_work(_load(args.input),cycle=args.cycle,limit=args.limit)
         else:

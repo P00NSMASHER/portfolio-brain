@@ -117,6 +117,11 @@ def write_private_test_log(output, contents):
 def write_report(report, output):
     raw=json.dumps(report,indent=2,sort_keys=True,ensure_ascii=False,allow_nan=False)
     lines=["# Portfolio Brain", "", f'Status: {report.get("status", "UNKNOWN")}', "", f'Source: {report.get("source_sha", "UNAVAILABLE")}', "", "Read-only research. Structural code evidence is not proof of production usefulness or revenue.", ""]
+    if report.get("mission"):
+        lines.extend(["## Mission: research, upgrade and repair every current project", "",
+                      "Success means verified repairs, useful delivered upgrades, fewer recurring failures and less user intervention. Revenue is optional project context.", ""])
+        for task in report.get("mission_priorities", []):
+            lines.append(f'- {task["project_id"]}: {task["next_operation"]}; {task["improvement_focus"]}. Metric: {task["success_metric"]}; delivery remains unverified.')
     for repo in report.get("repositories",[]):
         failed=[x["name"] for x in repo["checks"] if x["conclusion"] not in {"success","neutral",None}]
         lines.append(f'- {repo["repository"]}: `{repo["head_sha"]}`; adverse checks: {", ".join(failed) or "none observed"}; [{repo["source_ref"]}]({repo["source_ref"]})')

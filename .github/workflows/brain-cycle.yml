@@ -136,6 +136,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python -m brain projects --db state/state.sqlite --output /tmp/brain/projects --expected-sha "$BRAIN_SOURCE_SHA"
+      - name: Build bounded v8 engineering owner handoffs
+        continue-on-error: true
+        run: |
+          python -m brain.v8 cycle --input /tmp/brain/projects/report.json --source-sha "$BRAIN_SOURCE_SHA" --cycle "$GITHUB_RUN_NUMBER" --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /tmp/brain/v8-engineering.json
       - name: Propose a measured protected knowledge upgrade when eligible
         env:
           GITHUB_TOKEN: ${{ github.token }}

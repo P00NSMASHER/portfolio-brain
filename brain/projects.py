@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+from copy import deepcopy
 from pathlib import Path
 
 from brain.adapters import policy
@@ -21,8 +22,8 @@ REGISTRY_PATH = ROOT / "brain" / "PROJECTS.json"
 FOCUS = {
     "retally": {
         "priority": 1,
-        "workstream": "FIRST_CUSTOMER_READINESS",
-        "commercial_north_star": "first real paying freight-recovery pilot",
+        "workstream": "RELIABILITY_ACCURACY_AND_USEFUL_UPGRADES",
+        "commercial_north_star": None,
         "independent_revenue_gates": (
             "original consented inbound buyer request",
             "signed customer pilot authorization",
@@ -41,8 +42,8 @@ FOCUS = {
     },
     "product-factory": {
         "priority": 2,
-        "workstream": "VERIFIED_BUILDS_TO_BUYER_VALUE",
-        "commercial_north_star": "first real paying buyer for a shipped App Factory product",
+        "workstream": "MAINTAINABLE_USEFUL_APPLICATIONS_AND_REPAIRS",
+        "commercial_north_star": None,
         "independent_revenue_gates": (
             "original inbound buyer interest",
             "buyer-consented live pilot with source-pinned workflow proof",
@@ -51,9 +52,9 @@ FOCUS = {
         ),
         "next_test": ("Pin each unmerged candidate SHA, re-run native mobile/desktop "
                       "operator/reviewer flows, restart persistence and package "
-                      "integrity; validate buyer pilots independently."),
+                      "integrity; verify useful application behavior independently."),
         "required_evidence": ("Exact-source native browser/restart/package receipts "
-                              "plus separately consented buyer pilot completions."),
+                              "and before/after correctness or usability observations."),
         "activation_gate": ("HOLD: passing app builds are not buyer demand; "
                             "no unsolicited outreach, live users, launch, charge "
                             "or procurement without reviewed authorization."),
@@ -140,6 +141,24 @@ def extended_repositories():
     return tuple(sorted(repositories, key=lambda r: (r != factory, repositories.index(r))))
 
 
+def _has_bounded_domain_reuse_evidence(row):
+    """Hash-inspected code alone does not establish a usable project match.
+
+    Metadata search ranking, small source size, or source filename is insufficient:
+    require at least two different target terms observed IN the exact source body
+    and at least one source-listed related test path. These are structural
+    signals only; tests have not been executed or verified by the Brain.
+    """
+    terms = row.get("matched_terms")
+    paths = row.get("test_paths")
+    return (
+        type(terms) is list
+        and len({term.lower() for term in terms if type(term) is str}) >= 2
+        and type(paths) is list
+        and len(paths) > 0
+    )
+
+
 def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha,
                             priority_prs=None, repair_cycle_index=None):
     """Build one honest improvement queue from canonical + ephemeral source evidence."""
@@ -217,6 +236,10 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha,
             row for row in candidates
             if row.get("target") == item["research_target"]
         ]
+        # Preserve the original source observations and reported feedback.
+        # The project improvement queue must not call unrelated sources
+        # (e.g., an inspected Fashion-MNIST script from a permit query) reusable.
+        qualified = [row for row in matched if _has_bounded_domain_reuse_evidence(row)]
         measured = [
             feedback_by_key[row["key"]] for row in matched
             if row.get("key") in feedback_by_key
@@ -227,9 +250,15 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha,
         elif measured:
             status = "OPERATOR_FEEDBACK_RECORDED"
             next_action = "Operator feedback is not a measured result; capture project-specific before/after evidence."
-        elif matched:
+        elif qualified:
             status = "CANDIDATE_NEEDS_PROJECT_TEST"
             next_action = "Run a project-specific before/after correctness test before proposing adoption."
+        elif matched:
+            status = "INSPECTED_CODE_NOT_RELEVANT"
+            next_action = (
+                "Reject source-metadata-only matches; inspect a different exact-source "
+                "implementation with matching code terms and observed test paths."
+            )
         else:
             status = "BASELINE_REQUIRED"
             next_action = "Measure the named success metric before changing the project."
@@ -267,6 +296,8 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha,
             "activation_gate": focus["activation_gate"] if focus else None,
             "real_customer_activation_authority": False,
             "current_candidate_count": len(matched),
+            "domain_reuse_evidence_candidate_count": len(qualified),
+            "unqualified_source_observation_count": len(matched) - len(qualified),
             "operator_outcome_count": len(measured),
             "baseline_value": None,
             "measured_result": None,
@@ -276,7 +307,12 @@ def build_project_portfolio(canonical_report, extended_snapshots, *, source_sha,
             "customer_or_external_message_authority": False,
         })
 
+    from brain.mission import MISSION, mission_priorities
     result = {
+        "mission": deepcopy(MISSION),
+        "mission_priorities": mission_priorities(
+            projects, cycle=(canonical_report.get("state_sequence", 0)
+                             if repair_cycle_index is None else repair_cycle_index)),
         "schema_version": 1,
         "status": "PASS" if not missing else "BLOCKED",
         "scope": "READ_ONLY_CROSS_PROJECT_IMPROVEMENT_QUEUE",
