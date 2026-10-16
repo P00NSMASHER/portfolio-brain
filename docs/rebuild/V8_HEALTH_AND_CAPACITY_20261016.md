@@ -27,6 +27,12 @@ A local synthetic SQLite image of **5,038,161,920 bytes** passed production chun
 
 The `state-capacity-qualification` workflow makes this a repeatable exact-source gate. One job creates and packs at least 5,000,000,000 real SQLite bytes with the production codec, transfers only the exact packed chunks through a one-day Actions artifact, and a separate job restores and replays them inside a network-disabled container. Its receipt deliberately remains `production_capacity_verified:false` until a durable backend is independently read back in production. Temporary Actions artifacts are qualification transport, not the database authority.
 
+### Verified durable production envelope
+
+The actual `brain-state-v2` head `3de54070a8256073e667bfbf481170d693b6663a` was fetched back from Git on October 16 and independently reconstructed from 15 chunks. Its **120,512,512 raw bytes** and **20,602,941 compressed bytes** passed SHA-256, SQLite integrity, strict canonical event/ledger replay through sequence 2312, zero-pending-event verification, and deterministic latest-report replay against main `d63efa3b36e1fe695b6f43480fb858a394897a9e`. These measured sizes are the current verified production lower bound, not GitHub's theoretical limit.
+
+Brain now uses that honest envelope for publication. Above 80 MiB, the expendable working copy compacts derived reports before packing while retaining the latest 128, the latest report per source, and every non-PASS report. It then refuses publication if either raw or compressed output exceeds the independently observed production envelope. The exact live snapshot compacted to **30,883,840 bytes** in a copy-only test while all 2,312 events and ledger rows, 1,033 attempts, schema, canonical hash, and latest report replay remained unchanged. Historical Git state commits remain the full audit archive.
+
 
 The production writer's nominal 64 GiB codec bound did not establish operational capacity: independent replay previously capped at 256 MiB. The new explicit audit bound removes that mismatch for the 5 GB target. Full event replay still materializes event history; large archive-byte tests do not establish bounded-memory replay for 5 GiB of actual event bodies. Both compressed overhead and full retained report columns are verified. No storage service was purchased, empty database preallocated, quota enlarged, or production capacity certified.
 

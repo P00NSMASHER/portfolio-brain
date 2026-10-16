@@ -144,6 +144,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python -m brain evolve --db state/state.sqlite --output /tmp/brain/upgrade --expected-sha "$BRAIN_SOURCE_SHA"
+      - name: Bound working state to independently verified production capacity
+        run: |
+          python -m brain.state_maintenance --source state/state.sqlite \
+            --apply-capacity-bound --receipt /tmp/brain/state-maintenance.json
       - name: Verify main and state parent before publication
         env:
           GH_TOKEN: ${{ github.token }}
@@ -166,6 +170,16 @@ jobs:
           set -euo pipefail
           python -m brain.state_archive pack --root state --status /tmp/brain/state-publication.json
           test ! -f state/state.sqlite || { echo "STATE_RAW_FILE_NOT_REMOVED"; exit 1; }
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from brain.state_maintenance import validate_publication_receipt
+          from brain.core import canonical
+          receipt=json.loads(Path('/tmp/brain/state-publication.json').read_text())
+          proof=validate_publication_receipt(receipt)
+          with Path('/tmp/brain/state-capacity.json').open('x') as output:
+              output.write(canonical(proof)+'\n')
+          PY
       - name: Publish one nonsecret state transaction without force
         env:
           GH_TOKEN: ${{ github.token }}

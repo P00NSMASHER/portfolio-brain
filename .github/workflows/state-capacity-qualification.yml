@@ -5,10 +5,13 @@ on:
     paths:
       - brain/state_archive.py
       - brain/state_capacity_probe.py
+      - brain/state_maintenance.py
       - soak_v3/audit.py
       - soak_v3/chunked_evidence.py
       - tests/test_brain_state_capacity.py
       - tests/test_brain_state_capacity_probe.py
+      - tests/test_brain_state_maintenance.py
+      - .github/workflows/brain-cycle.yml
       - .github/workflows/state-capacity-qualification.yml
   workflow_dispatch:
 

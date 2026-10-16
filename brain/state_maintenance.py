@@ -10,9 +10,15 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import tempfile
 from brain.core import canonical, digest, require
 
 MAX_BYTES = 5 * 1024 * 1024 * 1024
+# Exact live brain-state-v2 image independently restored and replayed from
+# commit 3de54070a8256073e667bfbf481170d693b6663a on 2026-10-16.
+VERIFIED_PRODUCTION_RAW_BYTES = 120_512_512
+VERIFIED_PRODUCTION_COMPRESSED_BYTES = 20_602_941
+COMPACTION_TRIGGER_BYTES = 80 * 1024 * 1024
 
 def image_hash(path):
     with path.open('rb') as stream:
@@ -77,11 +83,77 @@ def compact_snapshot(source, target, *, keep_recent=128):
         target_bytes=target.stat().st_size,kept_reports=len(keep),removed_reports=removed,
         canonical_tables_unchanged=True,remote_writes=0)
 
-def main():
+def maintain_within_verified_capacity(
+        source, *, trigger_bytes=COMPACTION_TRIGGER_BYTES,
+        verified_raw_bytes=VERIFIED_PRODUCTION_RAW_BYTES, keep_recent=128):
+    """Atomically bound a working copy before the guarded state publication."""
+    source=Path(source)
+    require(type(trigger_bytes) is int and trigger_bytes>0,
+            'capacity trigger invalid')
+    require(type(verified_raw_bytes) is int and trigger_bytes<verified_raw_bytes<=MAX_BYTES,
+            'verified raw capacity invalid')
+    require(not source.is_symlink() and source.is_file(),
+            'capacity source invalid')
+    before=source.stat().st_size
+    if before<=trigger_bytes:
+        return dict(status='WITHIN_VERIFIED_PRODUCTION_CAPACITY',
+            source_bytes=before,target_bytes=before,compacted=False,
+            verified_raw_capacity_bytes=verified_raw_bytes,
+            verified_compressed_capacity_bytes=VERIFIED_PRODUCTION_COMPRESSED_BYTES,
+            remote_writes=0,published=False)
+    fd,name=tempfile.mkstemp(prefix='.capacity-',suffix='.sqlite',dir=source.parent)
+    os.close(fd);target=Path(name);target.unlink()
+    try:
+        receipt=compact_snapshot(source,target,keep_recent=keep_recent)
+        require(receipt['target_bytes']<=verified_raw_bytes,
+                'compacted state exceeds verified production capacity')
+        os.replace(target,source)
+    finally:
+        target.unlink(missing_ok=True)
+    return dict(receipt,status='COMPACTED_TO_VERIFIED_PRODUCTION_CAPACITY',
+        compacted=True,verified_raw_capacity_bytes=verified_raw_bytes,
+        verified_compressed_capacity_bytes=VERIFIED_PRODUCTION_COMPRESSED_BYTES,
+        published=False)
+
+def validate_publication_receipt(receipt):
+    """Refuse a packed publication outside the measured durable envelope."""
+    require(type(receipt) is dict
+            and type(receipt.get('raw_size')) is int
+            and type(receipt.get('compressed_size')) is int
+            and type(receipt.get('chunks')) is int,
+            'publication capacity receipt invalid')
+    require(0<receipt['raw_size']<=VERIFIED_PRODUCTION_RAW_BYTES,
+            'publication exceeds verified raw capacity')
+    require(0<receipt['compressed_size']<=VERIFIED_PRODUCTION_COMPRESSED_BYTES,
+            'publication exceeds verified compressed capacity')
+    require(receipt['chunks']>0 and receipt.get('published') is False,
+            'publication capacity receipt invalid')
+    return dict(status='VERIFIED_PRODUCTION_CAPACITY_ENVELOPE_PASS',
+        raw_size=receipt['raw_size'],compressed_size=receipt['compressed_size'],
+        chunks=receipt['chunks'],
+        verified_raw_capacity_bytes=VERIFIED_PRODUCTION_RAW_BYTES,
+        verified_compressed_capacity_bytes=VERIFIED_PRODUCTION_COMPRESSED_BYTES,
+        published=False)
+
+def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source',type=Path,required=True)
-    parser.add_argument('--target',type=Path,required=True)
-    args=parser.parse_args()
-    print(canonical(compact_snapshot(args.source,args.target)))
+    operation=parser.add_mutually_exclusive_group(required=True)
+    operation.add_argument('--target',type=Path)
+    operation.add_argument('--apply-capacity-bound',action='store_true')
+    parser.add_argument('--receipt',type=Path)
+    args=parser.parse_args(argv)
+    if args.apply_capacity_bound:
+        require(args.receipt is not None and not args.receipt.exists()
+                and not args.receipt.is_symlink()
+                and args.receipt.parent.is_dir()
+                and not args.receipt.parent.is_symlink(), 'new receipt required')
+        result=maintain_within_verified_capacity(args.source)
+        with args.receipt.open('x',encoding='utf-8') as output:
+            output.write(canonical(result)+'\n')
+    else:
+        require(args.receipt is None,'prepare mode does not write a receipt')
+        result=compact_snapshot(args.source,args.target)
+    print(canonical(result))
 
 if __name__=='__main__': main()

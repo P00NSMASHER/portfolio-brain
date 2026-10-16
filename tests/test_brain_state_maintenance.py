@@ -1,10 +1,13 @@
 import hashlib
+import json
 from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
 from brain.core import BrainError, digest
-from brain.state_maintenance import compact_snapshot
+from brain.state_maintenance import (compact_snapshot,
+    main as maintenance_main,maintain_within_verified_capacity,
+    validate_publication_receipt)
 from tests import test_brain_soak_v3 as fixture_module
 
 class MaintenanceTests(unittest.TestCase):
@@ -43,3 +46,50 @@ class MaintenanceTests(unittest.TestCase):
             db.execute("CREATE TRIGGER change_report AFTER DELETE ON reports BEGIN UPDATE reports SET body='{}' WHERE id=11; END")
         with self.assertRaises(BrainError): compact_snapshot(self.source,self.target,keep_recent=2)
         self.assertFalse(self.target.exists())
+
+    def test_working_copy_is_atomically_compacted_inside_verified_capacity(self):
+        before=self.source.stat().st_size
+        result=maintain_within_verified_capacity(
+            self.source,trigger_bytes=1,verified_raw_bytes=before,keep_recent=2)
+        self.assertEqual(result['status'],'COMPACTED_TO_VERIFIED_PRODUCTION_CAPACITY')
+        self.assertTrue(result['compacted'])
+        self.assertLess(self.source.stat().st_size,before)
+        with sqlite3.connect(self.source) as db:
+            self.assertEqual(db.execute('PRAGMA integrity_check').fetchone(),('ok',))
+            self.assertEqual(db.execute('SELECT count(*) FROM events').fetchone()[0],1)
+
+    def test_working_copy_below_trigger_is_unchanged(self):
+        result=maintain_within_verified_capacity(
+            self.source,trigger_bytes=self.source.stat().st_size,
+            verified_raw_bytes=self.source.stat().st_size+1)
+        self.assertEqual(result['status'],'WITHIN_VERIFIED_PRODUCTION_CAPACITY')
+        self.assertFalse(result['compacted'])
+        self.assertEqual(hashlib.sha256(self.source.read_bytes()).hexdigest(),self.original)
+
+    def test_unachievable_capacity_leaves_source_untouched(self):
+        before=self.source.read_bytes()
+        with self.assertRaisesRegex(BrainError,'exceeds verified production capacity'):
+            maintain_within_verified_capacity(
+                self.source,trigger_bytes=1,verified_raw_bytes=2)
+        self.assertEqual(self.source.read_bytes(),before)
+        self.assertEqual(list(self.source.parent.glob('.capacity-*.sqlite')),[])
+
+    def test_packed_publication_must_fit_both_verified_bounds(self):
+        valid=dict(raw_size=100,compressed_size=50,chunks=1,published=False)
+        self.assertEqual(validate_publication_receipt(valid)['status'],
+                         'VERIFIED_PRODUCTION_CAPACITY_ENVELOPE_PASS')
+        for field,value in (('raw_size',120_512_513),
+                            ('compressed_size',20_602_942),('chunks',False)):
+            with self.subTest(field=field),self.assertRaises(BrainError):
+                validate_publication_receipt(dict(valid,**{field:value}))
+
+    def test_capacity_cli_writes_new_auditable_receipt(self):
+        receipt=self.source.with_name('capacity-receipt.json')
+        maintenance_main(['--source',str(self.source),'--apply-capacity-bound',
+                          '--receipt',str(receipt)])
+        body=json.loads(receipt.read_text())
+        self.assertEqual(body['status'],'WITHIN_VERIFIED_PRODUCTION_CAPACITY')
+        self.assertFalse(body['published'])
+        with self.assertRaises(BrainError):
+            maintenance_main(['--source',str(self.source),'--apply-capacity-bound',
+                              '--receipt',str(receipt)])
