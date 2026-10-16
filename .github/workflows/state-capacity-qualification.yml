@@ -81,6 +81,7 @@ jobs:
           docker pull python:3.12-bookworm
           docker run --rm --network none --cap-drop=ALL \
             --security-opt=no-new-privileges \
+            --user "$(id -u):$(id -g)" \
             -e CAPACITY_SOURCE_SHA \
             -v "$PWD:/src:ro" -v /tmp/brain-capacity:/capacity \
             python:3.12-bookworm sh -lc \

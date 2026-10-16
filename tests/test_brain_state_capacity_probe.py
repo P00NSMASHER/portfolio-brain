@@ -97,6 +97,9 @@ class CapacityProbeTests(unittest.TestCase):
 
     def test_nonrecurring_capacity_gate_is_in_active_workflow_inventory(self):
         self.assertEqual(validate_policy()["status"], "PASS")
+        workflow = Path(".github/workflows/state-capacity-qualification.yml").read_text()
+        self.assertIn('--user "$(id -u):$(id -g)"', workflow)
+        self.assertIn("--network none --cap-drop=ALL", workflow)
 
 
 if __name__ == "__main__":
