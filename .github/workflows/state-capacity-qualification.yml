@@ -1,0 +1,95 @@
+name: state-capacity-qualification
+
+on:
+  pull_request:
+    paths:
+      - brain/state_archive.py
+      - brain/state_capacity_probe.py
+      - soak_v3/audit.py
+      - soak_v3/chunked_evidence.py
+      - tests/test_brain_state_capacity.py
+      - tests/test_brain_state_capacity_probe.py
+      - .github/workflows/state-capacity-qualification.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: state-capacity-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  build-five-gb-archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CAPACITY_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Require enough ephemeral disk for source and verified copy
+        run: |
+          python - <<'PY'
+          import shutil
+          free = shutil.disk_usage('/tmp').free
+          if free < 11 * 1024**3:
+              raise SystemExit(f'CAPACITY_RUNNER_DISK_INSUFFICIENT:{free}')
+          PY
+      - name: Build with production codec
+        run: |
+          test "$(git rev-parse HEAD)" = "$CAPACITY_SOURCE_SHA"
+          mkdir -p /tmp/brain-capacity
+          python -m brain.state_capacity_probe build \
+            --root /tmp/brain-capacity \
+            --output /tmp/brain-capacity/build-receipt.json \
+            --source-sha "$CAPACITY_SOURCE_SHA"
+      - name: Upload exact packed archive for independent job
+        uses: actions/upload-artifact@v4
+        with:
+          name: brain-state-five-gb-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/brain-capacity/
+          retention-days: 1
+          compression-level: 0
+
+  independently-restore-five-gb:
+    needs: build-five-gb-archive
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CAPACITY_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: brain-state-five-gb-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/brain-capacity
+      - name: Restore transferred bytes and replay without network
+        run: |
+          test "$(git rev-parse HEAD)" = "$CAPACITY_SOURCE_SHA"
+          docker pull python:3.12-bookworm
+          docker run --rm --network none --cap-drop=ALL \
+            --security-opt=no-new-privileges \
+            -e CAPACITY_SOURCE_SHA \
+            -v "$PWD:/src:ro" -v /tmp/brain-capacity:/capacity \
+            python:3.12-bookworm sh -lc \
+            'cd /src && PYTHONPATH=/src python -m brain.state_capacity_probe verify \
+              --root /capacity --output /capacity/independent-verification.json \
+              --source-sha "$CAPACITY_SOURCE_SHA"'
+      - name: Preserve bounded qualification receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: brain-state-five-gb-verification-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/brain-capacity/independent-verification.json
+          retention-days: 90

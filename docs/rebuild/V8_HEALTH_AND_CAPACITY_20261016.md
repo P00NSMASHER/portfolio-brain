@@ -25,6 +25,8 @@ Release after #702 requires a fresh current-state snapshot, immutable archived o
 
 A local synthetic SQLite image of **5,038,161,920 bytes** passed production chunk packing, independent original-Git-format reconstruction, SQLite integrity and event/ledger/report checks in 91.71 seconds: 601 chunks and 604 simulated Git reads. The generated payload was highly compressible zeroblob data (11,206,022 packed bytes); this demonstrates actual local byte-volume handling, not a network upload, production workload, quota, or incompressible 5 GB push. Separate manifest tests exercise maximum-size compressed overhead and overflow rejection.
 
+The `state-capacity-qualification` workflow makes this a repeatable exact-source gate. One job creates and packs at least 5,000,000,000 real SQLite bytes with the production codec, transfers only the exact packed chunks through a one-day Actions artifact, and a separate job restores and replays them inside a network-disabled container. Its receipt deliberately remains `production_capacity_verified:false` until a durable backend is independently read back in production. Temporary Actions artifacts are qualification transport, not the database authority.
+
 
 The production writer's nominal 64 GiB codec bound did not establish operational capacity: independent replay previously capped at 256 MiB. The new explicit audit bound removes that mismatch for the 5 GB target. Full event replay still materializes event history; large archive-byte tests do not establish bounded-memory replay for 5 GiB of actual event bodies. Both compressed overhead and full retained report columns are verified. No storage service was purchased, empty database preallocated, quota enlarged, or production capacity certified.
 
