@@ -43,6 +43,27 @@ class EngineeringTests(unittest.TestCase):
         self.assertIsNone(ret['source_sha'])
         self.assertFalse(abvm['write_capability_verified'])
 
+    def test_cycle_reports_runner_scope_separately_from_connector_access(self):
+        authority=self.component('authority').runtime_authority()
+        self.assertEqual(authority['runtime_repository'],'P00NSMASHER/portfolio-brain')
+        self.assertEqual(authority['credential_scope'],'BRAIN_REPOSITORY_WORKFLOW_TOKEN_ONLY')
+        self.assertEqual(authority['cross_project_code_write'],'NOT_CONFIGURED')
+        self.assertEqual(authority['chatgpt_connectors_in_runner'],'NOT_INHERITED')
+        self.assertFalse(authority['permission_expansion_verified'])
+        self.assertFalse(authority['provider_write_actions_verified'])
+        cycle=self.component('engineering').build_cycle(
+            {'source_sha':SHA,'projects':[project()]},source_sha=SHA,cycle=1,now=NOW)
+        self.assertEqual(cycle['runtime_authority'],authority)
+
+    def test_authority_receipt_fails_closed_on_broader_or_missing_workflow_scope(self):
+        fn=self.component('authority').runtime_authority
+        source=self.component('authority').WORKFLOW.read_text(encoding='utf-8')
+        for changed in [source.replace('      actions: write','      actions: read'),
+                        source.replace('      contents: write','      contents: read',1),
+                        source.replace('permissions:\n  contents: read','permissions: write-all',1)]:
+            with self.subTest(changed=changed[:60]),self.assertRaises(BrainError):
+                fn(changed)
+
     def test_maps_refuse_identity_substitution_duplicates_and_unknown_state(self):
         fn=self.component('inventory').project_maps
         for rows in [[project(repo='attacker/fork')],[project(),project()],[project(state='APPROVE_EVERYTHING')],[dict(project(),repository_revision=True)]]:
