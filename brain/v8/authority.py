@@ -4,12 +4,16 @@ This is an audit receipt, not an authorization mechanism. Provider connections
 available to a human or ChatGPT session are not inherited by GitHub Actions.
 """
 from pathlib import Path
+import hashlib
 import re
 
 from brain.core import require
 
 REPOSITORY = "P00NSMASHER/portfolio-brain"
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github/workflows/brain-cycle.yml"
+# A scope-name scan cannot establish which credentials the workflow uses.
+# Any workflow edit requires renewed source review before issuing this receipt.
+REVIEWED_WORKFLOW_SHA256 = "b0ece62287614890ccf8a71c595592b64a181b521e783ce2f925bd6fc9e92ea2"
 
 
 def runtime_authority(workflow_text=None):
@@ -22,6 +26,9 @@ def runtime_authority(workflow_text=None):
     if workflow_text is None:
         workflow_text = WORKFLOW.read_text(encoding="utf-8")
     require(type(workflow_text) is str, "V8_AUTHORITY_WORKFLOW_INVALID")
+    workflow_digest = hashlib.sha256(workflow_text.encode("utf-8")).hexdigest()
+    require(workflow_digest == REVIEWED_WORKFLOW_SHA256,
+            "V8_AUTHORITY_WORKFLOW_REVIEW_REQUIRED")
     require("permissions:\n  contents: read\n" in workflow_text,
             "V8_AUTHORITY_REPOSITORY_DEFAULT_SCOPE_CHANGED")
     match = re.search(
@@ -38,6 +45,9 @@ def runtime_authority(workflow_text=None):
         "schema_version": 1,
         "runtime_repository": REPOSITORY,
         "runtime_surface": "GITHUB_ACTIONS_BRAIN_CYCLE",
+        "workflow_sha256": workflow_digest,
+        "authority_evidence_kind": "REVIEWED_SOURCE_CONFIGURATION_NOT_LIVE_PERMISSION_PROBE",
+        "effective_permissions_verified": False,
         "workflow_declares": {
             "repository_default": {"contents": "read"},
             "monitor_job": {

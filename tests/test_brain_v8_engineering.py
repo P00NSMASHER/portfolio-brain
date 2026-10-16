@@ -64,6 +64,24 @@ class EngineeringTests(unittest.TestCase):
             with self.subTest(changed=changed[:60]),self.assertRaises(BrainError):
                 fn(changed)
 
+    def test_authority_rejects_extra_scopes_and_substituted_credentials(self):
+        authority=self.component('authority')
+        source=authority.WORKFLOW.read_text(encoding='utf-8')
+        changes=[
+            source.replace('      actions: write', '      actions: write\n      issues: write', 1),
+            source.replace('          GITHUB_TOKEN: ${{ github.token }}',
+                           '          GITHUB_TOKEN: ${{ secrets.CROSS_PROJECT_TOKEN }}', 1),
+            source.replace('permissions:\n  contents: read',
+                           'permissions:\n  contents: read\n  id-token: write', 1),
+        ]
+        for changed in changes:
+            self.assertNotEqual(source,changed)
+            with self.assertRaisesRegex(BrainError,'V8_AUTHORITY_WORKFLOW_REVIEW_REQUIRED'):
+                authority.runtime_authority(changed)
+        receipt=authority.runtime_authority()
+        self.assertEqual(receipt['workflow_sha256'],hashlib.sha256(source.encode()).hexdigest())
+        self.assertFalse(receipt['effective_permissions_verified'])
+
     def test_maps_refuse_identity_substitution_duplicates_and_unknown_state(self):
         fn=self.component('inventory').project_maps
         for rows in [[project(repo='attacker/fork')],[project(),project()],[project(state='APPROVE_EVERYTHING')],[dict(project(),repository_revision=True)]]:
