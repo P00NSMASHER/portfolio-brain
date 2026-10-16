@@ -121,3 +121,61 @@ class JournalTests(unittest.TestCase):
         public.mkdir(mode=0o755)
         with self.assertRaises(BrainError): KernelJournal(public/'new.sqlite',create=True)
         self.assertFalse((public/'new.sqlite').exists())
+
+
+class ClaimTests(unittest.TestCase):
+    setUp = JournalTests.setUp
+    def test_competing_connections_cannot_claim_one_resource(self):
+        self.assertTrue(callable(getattr(KernelJournal,'claim',None)),'v8 claims are missing')
+        with KernelJournal(self.path,create=True) as journal:
+            journal.append(operation())
+            journal.append(operation(work('second',owner='second-owner'),ident='4'))
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        barrier=Barrier(2)
+        def compete(owner):
+            with KernelJournal(self.path) as journal:
+                barrier.wait(timeout=5)
+                try:
+                    journal.claim(resource='c'*64,owner=owner,operation_id='2'*64,
+                        source_sha='a'*40,now=NOW,expires_at=LATER)
+                    return 'claimed'
+                except BrainError: return 'conflict'
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures=[pool.submit(compete,o) for o in ['school-owner','second-owner']]
+            results=[f.result(timeout=10) for f in futures]
+        self.assertEqual(sorted(results),['claimed','conflict'])
+
+    def test_expired_claim_with_unresolved_intent_is_not_stolen(self):
+        self.assertTrue(callable(getattr(KernelJournal,'claim',None)),'v8 claims are missing')
+        with KernelJournal(self.path,create=True) as journal:
+            journal.append(operation())
+            journal.append(operation(work('second',owner='second-owner'),ident='4'))
+            journal.claim(resource='c'*64,owner='school-owner',operation_id='2'*64,
+                source_sha='a'*40,now=NOW,expires_at='2026-10-15T20:00:30Z')
+            journal.append(operation(ident='2',expected='OBSERVED',outcome='EXTERNAL_INTENT'))
+        with KernelJournal(self.path) as journal:
+            with self.assertRaisesRegex(BrainError,'RECONCILIATION'):
+                journal.claim(resource='c'*64,owner='second-owner',operation_id='5'*64,
+                    source_sha='a'*40,now=LATER,expires_at='2026-10-15T20:02:00Z')
+            with self.assertRaises(BrainError):
+                journal.release_claim(resource='c'*64,owner='school-owner',operation_id='2'*64,now=LATER)
+            journal.append(operation(work(updated_at=LATER),ident='3',expected='OBSERVED',outcome='EXTERNAL_CONFIRMED'))
+            result=journal.claim(resource='c'*64,owner='second-owner',operation_id='5'*64,
+                source_sha='a'*40,now=LATER,expires_at='2026-10-15T20:02:00Z')
+            self.assertFalse(result['automatic_execution_authority'])
+
+    def test_wrong_claim_identity_or_release_preserves_owner(self):
+        self.assertTrue(callable(getattr(KernelJournal,'claim',None)),'v8 claims are missing')
+        with KernelJournal(self.path,create=True) as journal:
+            journal.append(operation())
+            args=dict(resource='c'*64,owner='school-owner',operation_id='2'*64,source_sha='a'*40,now=NOW,expires_at=LATER)
+            for change in [dict(source_sha='f'*40),dict(expires_at=NOW),dict(owner='unknown')]:
+                with self.assertRaises(BrainError): journal.claim(**dict(args,**change))
+            first=journal.claim(**args)
+            self.assertEqual(journal.claim(**args),first)
+            for change in [dict(owner='other'),dict(operation_id='3'*64),dict(resource='9'*64),dict(now='2026-10-14T20:00:00Z')]:
+                release={k:args[k] for k in ['resource','owner','operation_id','now']}
+                with self.assertRaises(BrainError): journal.release_claim(**dict(release,**change))
+            journal.release_claim(resource='c'*64,owner='school-owner',operation_id='2'*64,now=LATER)
+            self.assertEqual(journal.replay()[-1]['kind'],'CLAIM_RELEASE')

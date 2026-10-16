@@ -8,7 +8,7 @@ import sqlite3
 import stat
 from brain.core import BrainError, canonical, digest, require
 from brain.v8 import SCOPE
-from brain.v8.contracts import HASH, matches, validate_work, advance, parse_utc
+from brain.v8.contracts import HASH, ID, SHA, matches, validate_work, advance, parse_utc
 
 APPLICATION_ID = 0x42523830
 SCHEMA = '''CREATE TABLE kernel_events (
@@ -18,6 +18,40 @@ OP_FIELDS = {'schema_version','operation_id','work','expected_state','occurred_a
 OUTCOMES = {'LOCAL_COMMITTED','EXTERNAL_INTENT','EXTERNAL_CONFIRMED','EXTERNAL_UNKNOWN'}
 MUTABLE = {'state','evidence_ids','updated_at','attempts','blocker'}
 MAX_RECORDS = 10000
+CLAIM_FIELDS = {'resource','owner','operation_id','source_sha','now','expires_at'}
+RELEASE_FIELDS = {'resource','owner','operation_id','now'}
+
+
+def _apply_claim(kind, op, state, pending, claims, completed):
+    fields=CLAIM_FIELDS if kind=='CLAIM' else RELEASE_FIELDS
+    require(type(op) is dict and set(op)==fields, 'V8_CLAIM_FIELDS_INVALID')
+    require(matches(HASH,op['resource']) and matches(ID,op['owner'])
+            and matches(HASH,op['operation_id']), 'V8_CLAIM_IDENTITY_INVALID')
+    now=parse_utc(op['now'])
+    old=claims.get(op['resource'])
+    if kind=='CLAIM':
+        require(matches(SHA,op['source_sha']), 'V8_CLAIM_SOURCE_INVALID')
+        duration=(parse_utc(op['expires_at'])-now).total_seconds()
+        require(0<duration<=3600, 'V8_CLAIM_DURATION_INVALID')
+        matches_work=[r for r in state.values() if r['resource']==op['resource']
+                      and r['owner']==op['owner'] and r['source_sha']==op['source_sha']]
+        require(bool(matches_work), 'V8_CLAIM_OWNER_OR_SOURCE_UNOBSERVED')
+        require(all(now>=parse_utc(r['updated_at']) for r in matches_work), 'V8_CLAIM_TIME_REVERSED')
+        if old:
+            require(now>=parse_utc(old['expires_at']), 'V8_CLAIM_CONFLICT')
+            require(old['operation_id'] in completed and not any(
+                state[k]['resource']==op['resource'] for k in pending),
+                'V8_CLAIM_RECONCILIATION_REQUIRED')
+        claims[op['resource']]=deepcopy(op)
+    else:
+        require(old is not None and all(op[k]==old[k] for k in ('owner','operation_id','resource')),
+                'V8_CLAIM_RELEASE_CONFLICT')
+        relevant=[r for r in state.values() if r['resource']==op['resource']]
+        require(now>=parse_utc(old['now']) and all(now>=parse_utc(r['updated_at']) for r in relevant),
+                'V8_CLAIM_TIME_REVERSED')
+        require(not any(state[k]['resource']==op['resource'] for k in pending),
+                'V8_CLAIM_RECONCILIATION_REQUIRED')
+        del claims[op['resource']]
 
 
 def _private_path(path):
@@ -155,7 +189,7 @@ class KernelJournal:
         rows=self.db.execute('SELECT * FROM kernel_events ORDER BY seq LIMIT ?',
                              (MAX_RECORDS+1,)).fetchall()
         require(len(rows)<=MAX_RECORDS,'V8_JOURNAL_RECORD_BOUND')
-        records,state,pending=[],{},{}
+        records,state,pending,claims,completed=[],{},{},{},set()
         previous='0'*64
         for number,stored in enumerate(rows,1):
             require(stored['seq']==number and stored['prev_hash']==previous,
@@ -166,12 +200,34 @@ class KernelJournal:
                     'V8_JOURNAL_BODY_TAMPERED')
             frame={k:stored[k] for k in ('seq','kind','operation_id','body_hash','prev_hash')}
             require(stored['chain_hash']==digest(frame),'V8_JOURNAL_CHAIN_TAMPERED')
-            require(stored['kind']=='WORK' and stored['operation_id']==op.get('operation_id'),
-                    'V8_JOURNAL_OPERATION_INVALID')
-            _apply_work(op,state,pending)
-            records.append(dict(sequence=number,kind=stored['kind'],operation=op,chain_hash=stored['chain_hash']))
+            self._apply_record(stored['kind'],op,state,pending,claims,completed)
+            expected_id=op['operation_id'] if stored['kind']=='WORK' else digest(dict(kind=stored['kind'],operation=op))
+            require(stored['operation_id']==expected_id,'V8_JOURNAL_OPERATION_INVALID')
+            records.append(dict(sequence=number,kind=stored['kind'],operation=op,
+                                record_id=stored['operation_id'],chain_hash=stored['chain_hash']))
             previous=stored['chain_hash']
-        return records,state,pending
+        return records,state,pending,claims,completed
+
+    @staticmethod
+    def _apply_record(kind,op,state,pending,claims,completed):
+        require(kind in {'WORK','CLAIM','CLAIM_RELEASE'},'V8_JOURNAL_KIND_INVALID')
+        if kind!='WORK':
+            _apply_claim(kind,op,state,pending,claims,completed)
+            return
+        _operation(op)
+        row=op['work']
+        claim=claims.get(row['resource'])
+        if claim:
+            require(row['owner']==claim['owner'] and row['source_sha']==claim['source_sha'],
+                    'V8_CLAIM_WORK_CONFLICT')
+            if op['outcome']=='EXTERNAL_INTENT':
+                require(op['operation_id']==claim['operation_id'],'V8_CLAIM_OPERATION_CONFLICT')
+        original=pending.get(row['work_id'])
+        _apply_work(op,state,pending)
+        if op['outcome']=='LOCAL_COMMITTED':
+            completed.add(op['operation_id'])
+        elif op['outcome']=='EXTERNAL_CONFIRMED':
+            completed.add(original)
 
     def replay(self):
         try:
@@ -183,26 +239,38 @@ class KernelJournal:
     def _receipt(record):
         return dict(sequence=record['sequence'],operation_id=record['operation']['operation_id'],
                     chain_hash=record['chain_hash'],scope=SCOPE,automatic_execution_authority=False,
-                    reconciliation_required=record['operation']['outcome'] in {'EXTERNAL_INTENT','EXTERNAL_UNKNOWN'})
+                    reconciliation_required=record['operation'].get('outcome') in {'EXTERNAL_INTENT','EXTERNAL_UNKNOWN'})
 
     def append(self,operation):
         op=_operation(operation)
+        return self._append_record('WORK',op,op['operation_id'])
+
+    def _append_record(self,kind,op,record_id):
         with self._transaction():
-            records,state,pending=self._scan()
+            records,state,pending,claims,completed=self._scan()
             for record in records:
-                if record['operation']['operation_id']==op['operation_id']:
-                    require(record['operation']==op,'V8_OPERATION_IDEMPOTENCY_CONFLICT')
+                if record['record_id']==record_id:
+                    require(record['operation']==op and record['kind']==kind,'V8_OPERATION_IDEMPOTENCY_CONFLICT')
                     return self._receipt(record)
             require(len(records)<MAX_RECORDS,'V8_JOURNAL_RECORD_BOUND')
-            _apply_work(op,state,pending)
+            self._apply_record(kind,op,state,pending,claims,completed)
             sequence=len(records)+1
             previous=records[-1]['chain_hash'] if records else '0'*64
-            frame=dict(seq=sequence,kind='WORK',operation_id=op['operation_id'],
+            frame=dict(seq=sequence,kind=kind,operation_id=record_id,
                        body_hash=digest(op),prev_hash=previous)
             chain=digest(frame)
             self.db.execute('INSERT INTO kernel_events VALUES(?,?,?,?,?,?,?)',
-                (sequence,'WORK',op['operation_id'],canonical(op),digest(op),previous,chain))
+                (sequence,kind,record_id,canonical(op),digest(op),previous,chain))
             return self._receipt(dict(sequence=sequence,operation=op,chain_hash=chain))
+
+    def claim(self,*,resource,owner,operation_id,source_sha,now,expires_at):
+        op=dict(resource=resource,owner=owner,operation_id=operation_id,
+                source_sha=source_sha,now=now,expires_at=expires_at)
+        return self._append_record('CLAIM',op,digest(dict(kind='CLAIM',operation=op)))
+
+    def release_claim(self,*,resource,owner,operation_id,now):
+        op=dict(resource=resource,owner=owner,operation_id=operation_id,now=now)
+        return self._append_record('CLAIM_RELEASE',op,digest(dict(kind='CLAIM_RELEASE',operation=op)))
 
     def close(self):
         if self.db is not None:
