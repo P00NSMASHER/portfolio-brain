@@ -51,3 +51,33 @@ The user requires the upgrade plan to finish before a new six-hour acceptance
 run starts. Candidate preparation and CI do not start that run. Preserve current
 production schedules and historical evidence; unresolved runtime prerequisites
 must remain explicit blockers rather than being marked complete by unit tests.
+
+## Provider provisioning observed 2026-10-17 UTC
+
+Authenticated GitHub settings show runtime App `portfolio-brain-v8-runtime`
+(App ID `5352505`) installed on the owner's **all current and future repositories**
+as installation `172257326`. The owner chose this scope. Observed permissions:
+contents and pull requests read/write; actions, checks, statuses and metadata
+read. The Actions secret name `PORTFOLIO_RUNTIME_PRIVATE_KEY` is present in
+`P00NSMASHER/portfolio-brain`; its value was not inspected or tested here.
+The independent verifier remains App `5121826`, installation `166155679`.
+
+The earlier provisioning prerequisite is now satisfied at the settings level.
+It is not proof that the stored credential authenticates in an unattended runner.
+
+Candidate `v8-runtime-preflight` is manual-only and main-only. After protected
+review/merge, it mints a short-lived **read-only, one-repository** token for each
+of the eight explicit reviewed repositories. It rejects unexpected App identity
+or token inventory, reads exact source and capability endpoints, emits only a
+sanitized summary, and revokes the token at job completion. Its explicit token
+scope prevents the all-repositories installation from automatically including
+future projects. Provider response reads are bounded and redirects rejected.
+No private key reaches project code or test processes; only the pinned token
+creation action consumes it.
+
+This candidate does not alter recurring Brain schedules, permit repairs, merge,
+deploy, edit ChatGPT tasks, or start acceptance. The main-only runtime canary
+cannot run from this draft branch. After its real run passes, independently
+verify the original run receipt before preparing a separately gated draft-PR
+write canary. No runtime authentication, repair success, or production health
+improvement is claimed from the offline tests.

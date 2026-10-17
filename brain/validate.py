@@ -19,7 +19,7 @@ def validate_policy():
     expected={"foundation-ci.yml","portfolio-independent-verifier.yml",
               "x402-gateway-ci.yml","x402-render-gateway-smoke.yml",
               "brain-cycle.yml","brain-clock.yml",
-              "state-capacity-qualification.yml"}
+              "state-capacity-qualification.yml", "v8-runtime-preflight.yml"}
     require({x.name for x in workflow_dir.iterdir() if x.suffix in {".yml",".yaml"}}==expected, "active workflow inventory changed")
     from operations.validate_operating_mode import scheduled_workflow_inventory
     require(scheduled_workflow_inventory(workflow_dir)=={"brain-cycle":[p["cron"]], "brain-clock":[p["watchdog_cron"]]}, "only reviewed native Brain execution and watchdog may recur")
