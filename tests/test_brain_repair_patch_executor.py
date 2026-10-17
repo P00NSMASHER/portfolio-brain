@@ -145,9 +145,9 @@ class DeterministicRepairTests(unittest.TestCase):
 
     def test_benign_deployment_label_allowed_only_for_original_permitplate_regression(self):
         fixture = FIXTURE.replace(
-            "      - uses: actions/checkout@v4\\n",
-            "      - name: Verify public deployment boundary\\n"
-            "      - uses: actions/checkout@v4\\n",
+            "      - uses: actions/checkout@v4\n",
+            "      - name: Verify public deployment boundary\n"
+            "      - uses: actions/checkout@v4\n",
         )
         approved = request(
             fixture,
@@ -164,7 +164,7 @@ class DeterministicRepairTests(unittest.TestCase):
             generate(request(fixture), fixture.encode())
 
         # The exception never masks an executable deployment command.
-        privileged = fixture + "      - run: ./deploy.sh\\n"
+        privileged = fixture + "      - run: ./deploy.sh\n"
         with self.assertRaisesRegex(BrainError, "AUTOFIX_PRIVILEGED"):
             generate(
                 request(
