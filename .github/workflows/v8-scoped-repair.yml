@@ -1,0 +1,71 @@
+name: v8-scoped-repair-proposal
+
+# Existing automatic Brain core is the only trigger. No new cron or PR secret path.
+on:
+  workflow_run:
+    workflows: ["brain-cycle-v2"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v8-capturebrief-source-bound-intent
+  cancel-in-progress: false
+
+jobs:
+  propose-only:
+    if: >-
+      ${{ github.repository == 'P00NSMASHER/portfolio-brain' && github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_sha == github.sha && (github.event.workflow_run.event == 'schedule' || github.event.workflow_run.event == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout exact protected current main, without credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Pin independently reviewed core admission and scoped repair code
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(git hash-object brain/v8/repair_core_origin.py)" = "d216e938c3e301042a13c97ed6fa0111be905230"
+          test "$(git hash-object brain/v8/repair_runtime.py)" = "ffcb288500ce7de65bb0cd1bab6e09aaaf4daa33"
+          install -m 0500 brain/v8/repair_core_origin.py "$RUNNER_TEMP/v8-origin.py"
+          install -m 0500 brain/v8/repair_runtime.py "$RUNNER_TEMP/v8-repair.py"
+      - name: Authenticate original current-source automatic core before token mint
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRAIN_RUN_ID: ${{ github.event.workflow_run.id }}
+          BRAIN_SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: python -I "$RUNNER_TEMP/v8-origin.py"
+      - name: Mint one-CaptureBrief-repository short-lived draft-only contents token
+        id: runtime
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: '5352505'
+          private-key: ${{ secrets.PORTFOLIO_RUNTIME_PRIVATE_KEY }}
+          owner: P00NSMASHER
+          repositories: capturebrief
+          permission-contents: write
+          permission-pull-requests: write
+          skip-token-revoke: false
+      - name: Reobserve canonical docs and create ONLY source-bound draft PR
+        env:
+          GH_TOKEN: ${{ steps.runtime.outputs.token }}
+          INSTALLATION_ID: ${{ steps.runtime.outputs.installation-id }}
+          APP_SLUG: ${{ steps.runtime.outputs.app-slug }}
+        run: python -I "$RUNNER_TEMP/v8-repair.py"
+      - name: Preserve non-secret provider and repair reconciliation receipts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: v8-source-bound-repair-${{ github.event.workflow_run.id }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/v8-origin.json
+            ${{ runner.temp }}/v8-capturebrief-repair.json
+          if-no-files-found: warn
+          retention-days: 30
