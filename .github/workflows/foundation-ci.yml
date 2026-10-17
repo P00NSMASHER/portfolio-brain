@@ -149,6 +149,7 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           import json, os, re, subprocess
+          from urllib.parse import quote
           repo = "P00NSMASHER/portfolio-brain"
           sha = os.environ["EXPECTED_SHA"]
           branch = "feature/v8-authority-map-20261016"
@@ -159,7 +160,7 @@ jobs:
               raw = subprocess.check_output(["gh", "api", path], text=True, timeout=25)
               return json.loads(raw)
 
-          current = api(f"repos/{repo}/branches/{branch}")
+          current = api(f"repos/{repo}/branches/{quote(branch, safe='')}")
           assert current.get("commit", {}).get("sha") == sha, "source branch moved"
           pr = api(f"repos/{repo}/pulls/710")
           assert (pr.get("state") == "open" and pr.get("head", {}).get("sha") == sha
