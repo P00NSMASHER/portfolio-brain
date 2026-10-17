@@ -186,11 +186,15 @@ class CaptureBriefScopeTests(unittest.TestCase):
                 self.assertEqual(payload["sha"],r.EXPECTED_RELEASE_BLOB)
                 return {"commit":{"sha":repaired_sha},
                         "content":{"sha":r.digest_blob(raw_doc)}}
+            if method=="GET" and path==prefix+"git/commits/"+repaired_sha:
+                return {"sha":repaired_sha,
+                        "parents":[{"sha":r.EXPECTED_TARGET_HEAD}]}
             if method=="GET" and path==prefix+"contents/"+r.DOC+"?ref="+repaired_sha:
                 return {"fixture": "after"}
             if method=="GET" and path==prefix+"compare/"+r.EXPECTED_TARGET_HEAD+"..."+repaired_sha:
                 return {"files":[{"filename":r.DOC,"status":"modified"}],
-                        "merge_base_commit":{"sha":r.EXPECTED_TARGET_HEAD}}
+                        "merge_base_commit":{"sha":r.EXPECTED_TARGET_HEAD},
+                        "ahead_by":1,"behind_by":0}
             if method=="POST" and path==prefix+"pulls":
                 self.assertTrue(payload["draft"])
                 self.assertEqual(payload["base"],"main")

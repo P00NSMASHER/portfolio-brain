@@ -49,8 +49,13 @@ No arbitrary source code is retrieved or executed, and the provider API
 route allowlist excludes workflow files, other repositories, merges, releases,
 deletes, branch overrides, payments, secrets, and third-party endpoints.
 No website files, private customer records, tasks or production main are
-modified by the proposal job. Unfinished/ambiguous intents are blocked for
-owner reconciliation rather than blindly retried or duplicated.
+modified by the proposal job. An existing **exactly source-matched, single-
+parent, one-file bot-authored branch** may be resumed after independent
+immutable Git commit, exact document blob, one-file comparison and unchanged
+main checks. Only a missing draft PR may be created; the document and branch
+are never rewritten in that recovery path. A mismatch, extra file, changed
+main, multiple PRs, non-bot author or non-404 provider error blocks the
+reconciliation without mutating source.
 
 ## What counts as verified completion
 
@@ -83,3 +88,44 @@ its additional Actions execution may consume plan-specific minutes; verify
 account billing independently rather than assuming an unconditional $0 cost.
 All existing protected-main, original six-hour acceptance, private-data
 boundaries and no-bypass rules remain active.
+
+
+## October 17: real partial-intent failure and bounded follow-through
+
+The first genuine signed automatic V8 core run #39019511097 passed and
+was independently anchored at 2026-10-17T09:02:11Z for deployed source
+1a310ebfd0bf3aadffc74ae178582f0c235c9ab9. Immediately following,
+the scoped job #39019596693 failed after original-core authorization and
+short-lived one-repository App token issuance had succeeded.
+
+Original authenticated GitHub readback proved the bot created CaptureBrief
+branch v8-capturebrief-hosting-doc-4a7c5d6c223b, with exact intended
+PUBLIC-RELEASE.md change at child 33a0b2cd26921935bfca11a0b35e566ad0c735f1,
+direct parent 4a7c5d6c223b8488995ab221dc169ba32ae828f8. The one-file
+compare showed no other changed file, main remained untouched, and no PR
+existed. The original runner suppressed detailed provider errors, so the
+failure stage after the document write was not proven; do not claim a
+specific undocumented GitHub outage or permission error.
+
+A new guarded source review narrowly allows the same App to:
+1. reauthenticate a newly completed signed original V8 core and a token
+   limited to CaptureBrief;
+2. reread the existing source pinned branch, prove a single exact-main
+   commit parent, exact corrected document Git blob and one-file comparison;
+3. create one missing draft PR; prove its original bot author, head SHA,
+   base, state and no merge;
+4. on a successful repeat, verify the exact existing bot draft with zero
+   writes, rather than duplicating it.
+
+Only original GETs for a fixed immutable commit or document may have
+bounded three-attempt 404 retries; writes are never blindly retried. A
+denied POST exposes only its numeric provider HTTP status without logging
+tokens, response contents or secrets. This is a repair of source-bound
+intent recovery, **not** expanded edit, workflow, merge or publication
+authority.
+
+Any guarded merge changes the Brain production source and makes the old
+09:02:11Z six-hour observation historical. Start a new window at the
+first genuine automatically completed original core on the new source.
+Preserve old failures and all independently signed evidence. Do not
+transfer acceptance or fabricate a true customer-facing deployment.
