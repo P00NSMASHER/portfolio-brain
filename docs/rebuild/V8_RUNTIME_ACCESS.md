@@ -72,7 +72,9 @@ canary passed later; neither proof establishes deploy permissions or autonomous
 repair delivery.
 
 Candidate `v8-runtime-preflight` is manual-only and main-only. After protected
-review/merge, it mints a short-lived **read-only, one-repository** token for each
+review/merge, it first checks the exact reviewed Git blob of the standalone
+probe, then runs it with isolated Python (`-I`) outside the repository package.
+It mints a short-lived **read-only, one-repository** token for each
 of the eight explicit reviewed repositories. It rejects unexpected App identity
 or token inventory, reads exact source and capability endpoints, emits only a
 sanitized summary, and revokes the token at job completion. Its explicit token
@@ -107,3 +109,23 @@ after successful hosted verification.
 - Independent repository readback after cleanup: CaptureBrief main `4a7c5d6c223b8488995ab221dc169ba32ae828f8`, Portfolio Brain main `98cce23ac031ccf9ffa7008a83e9a9b25571d568`; neither changed. One-shot PR activation marker, temporary CI job and temporary implementation/tests were removed from the candidate branch. Original non-secret evidence remains in the GitHub provider run and issue tracker.
 
 This is **proof of one reversible, repository-scoped draft-PR write capability**. It is **not** proof of autonomous code repair, production merges/deploys, installed target-specific repair orchestration, a private task service, an active new soak, or an overall V8 release certification. Independent release/acceptance gates remain in force.
+
+## Focused code audit: response integrity and credential isolation
+
+The previous read-only probe validated repository inventory and source, but
+accepted a successful HTTP response for Actions, Checks, Statuses or Pull
+Requests **without validating its response body**. A malformed HTTP 200
+response could falsely produce `AUTHENTICATED_READ_CANARY_PASSED`. That
+false-positive path is now closed by explicit response schemas, exact source
+status SHA checking, and adversarial tests covering incomplete, wrong-type,
+wrong-count, misidentified and error-shaped responses.
+
+The GitHub Actions workflow checks the reviewed Git object digest of
+`brain/v8/runtime_probe.py` **before** minting any App credential, copies
+only that approved stdlib-only code outside the repository checkout, and runs
+it with `python -I`. The trusted token action stays pinned and automatically
+revokes the per-repository read-only token. Manual/main-only triggers,
+production scheduling, existing release gates and the all-project registry
+remain unchanged. GitHub-hosted final-head CI and independent verifier checks
+are required after this audit change; the original historical canary receipts
+remain tied only to their original tested sources.

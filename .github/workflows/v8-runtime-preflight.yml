@@ -25,6 +25,11 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      - name: Verify immutable reviewed probe before any token is minted
+        run: |
+          set -euo pipefail
+          test "$(git hash-object brain/v8/runtime_probe.py)" = "81324120a20caccbfaa265abc01e2d787ad9127d"
+          install -m 0500 brain/v8/runtime_probe.py "$RUNNER_TEMP/v8-runtime-probe.py"
       - name: Mint one-repository read-only runtime token
         id: runtime
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
@@ -45,4 +50,4 @@ jobs:
           INSTALLATION_ID: ${{ steps.runtime.outputs.installation-id }}
           APP_SLUG: ${{ steps.runtime.outputs.app-slug }}
           PROBE_REPOSITORY: ${{ matrix.repository }}
-        run: python -m brain.v8.runtime_probe >> "$GITHUB_STEP_SUMMARY"
+        run: python -I "$RUNNER_TEMP/v8-runtime-probe.py" >> "$GITHUB_STEP_SUMMARY"
