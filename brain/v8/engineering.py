@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 from brain.core import digest,require
+from brain.v8.authority import runtime_authority
 from brain.repair_patch_executor import generate
 from brain.v8.contracts import SHA,matches,parse_utc
 from brain.v8.inventory import project_maps
@@ -79,6 +80,7 @@ def build_cycle(report, *, source_sha,cycle,now):
             owner_runtime_access_verified=False,merge_or_deployment_authority=False))
     return dict(schema_version=1,source_sha=source_sha,cycle=cycle,
         status='OWNER_BRIDGE_READY_WITH_GAPS' if gaps else 'OWNER_BRIDGE_READY',
+        runtime_authority=runtime_authority(),
         project_maps=maps,work_items=work,owner_jobs=jobs,coverage_gaps=gaps,
         coverage=dict(registered=len(maps),observed=len(work),missing=len(gaps)),
         source_freshness='REOBSERVE_BEFORE_OWNER_ACTION',provider_calls=0,runtime_actions_executed=0,

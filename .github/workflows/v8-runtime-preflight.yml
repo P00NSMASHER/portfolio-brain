@@ -1,0 +1,53 @@
+name: v8-runtime-preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v8-runtime-read-preflight
+  cancel-in-progress: false
+
+jobs:
+  read-canary:
+    if: github.ref == 'refs/heads/main' && github.repository == 'P00NSMASHER/portfolio-brain'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        repository: [portfolio-brain, trading-platform, abvmschoolstarworld, github-value-hunt-ledger, PipsQuestWorld, permitplate-nyc, capturebrief, x402-product-factory]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify immutable reviewed probe before any token is minted
+        run: |
+          set -euo pipefail
+          test "$(git hash-object brain/v8/runtime_probe.py)" = "81324120a20caccbfaa265abc01e2d787ad9127d"
+          install -m 0500 brain/v8/runtime_probe.py "$RUNNER_TEMP/v8-runtime-probe.py"
+      - name: Mint one-repository read-only runtime token
+        id: runtime
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: '5352505'
+          private-key: ${{ secrets.PORTFOLIO_RUNTIME_PRIVATE_KEY }}
+          owner: P00NSMASHER
+          repositories: ${{ matrix.repository }}
+          permission-contents: read
+          permission-actions: read
+          permission-checks: read
+          permission-pull-requests: read
+          permission-statuses: read
+          skip-token-revoke: false
+      - name: Verify authenticated reads and token repository boundary
+        env:
+          GH_TOKEN: ${{ steps.runtime.outputs.token }}
+          INSTALLATION_ID: ${{ steps.runtime.outputs.installation-id }}
+          APP_SLUG: ${{ steps.runtime.outputs.app-slug }}
+          PROBE_REPOSITORY: ${{ matrix.repository }}
+        run: python -I "$RUNNER_TEMP/v8-runtime-probe.py" >> "$GITHUB_STEP_SUMMARY"
