@@ -115,3 +115,70 @@ jobs:
           path: hunting/out/license_admission_receipt.json
           if-no-files-found: error
           retention-days: 30
+
+  v8-terminal-readiness-smoke:
+    name: v8-terminal-readiness-review-only
+    needs: validate
+    if: >-
+      ${{ github.event_name == 'pull_request' && github.repository == 'P00NSMASHER/portfolio-brain' && github.event.pull_request.number == 713 && github.event.pull_request.head.repo.full_name == 'P00NSMASHER/portfolio-brain' && github.event.pull_request.head.ref == 'review/v8-terminal-acceptance-ready-20261017' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout exact reviewed acceptance-kit candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Pin the reviewed read-only source
+        run: |
+          set -euo pipefail
+          test "$(git hash-object verification/v8_terminal_readiness.py)" = "3bb7dbd14a17d83b3e67ee5d921d661689e4d6a6"
+      - name: Independently prove real GitHub original ZIP download and CRC
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api repos/P00NSMASHER/portfolio-brain/actions/artifacts/12094917804/zip > "$RUNNER_TEMP/v8-readiness-original-push.zip"
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, os, zipfile, json
+          path=Path(os.environ['RUNNER_TEMP'])/'v8-readiness-original-push.zip'
+          data=path.read_bytes()
+          expected='c0a92b0e32419f7717eb14771bce8c6f3fcf97fbae59f5f7b0a235161f6a9377'
+          assert hashlib.sha256(data).hexdigest()==expected, 'original GitHub ZIP digest mismatch'
+          assert len(data)==150465, 'original GitHub ZIP byte count changed'
+          with zipfile.ZipFile(path) as z:
+              assert z.testzip() is None
+              doc=json.loads(z.read('delivery.json'))
+              assert doc['source_sha']=='1a310ebfd0bf3aadffc74ae178582f0c235c9ab9'
+              assert doc['run_id']=='39017489995'
+              assert doc['soak_completed'] is False
+          print('Verified authentic original GitHub push ZIP for binary transport smoke; PUSH IS NOT ACCEPTANCE.')
+          PY
+      - name: Check live same-source automatic census read-only without accepting
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -I verification/v8_terminal_readiness.py --output "$RUNNER_TEMP/v8-terminal-status.json"
+          python - <<'PY'
+          from pathlib import Path
+          import json,os
+          data=json.loads((Path(os.environ['RUNNER_TEMP'])/'v8-terminal-status.json').read_text())
+          assert data['production_source']=='1a310ebfd0bf3aadffc74ae178582f0c235c9ab9'
+          assert data['acceptance_pass'] is False
+          assert data['release_or_merge_authorized'] is False
+          assert data['external_cloudflare_provider_accepted'] is False
+          print('Source-bound original-provider preflight status:',data['status'])
+          PY
+      - name: Keep only sanitized audit readiness receipt
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: v8-terminal-readiness-${{ github.run_id }}
+          path: ${{ runner.temp }}/v8-terminal-status.json
+          if-no-files-found: warn
+          retention-days: 30
