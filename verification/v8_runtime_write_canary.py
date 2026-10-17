@@ -108,7 +108,8 @@ def run(client, installed_id, app_slug, run_id, source_sha):
 
     branch = "v8-runtime-canary-" + run_id
     path = ".v8-runtime-write-proof/" + run_id + ".txt"
-    ref = "/repos/" + TARGET + "/git/refs/heads/" + branch
+    ref = "/repos/" + TARGET + "/git/ref/heads/" + branch
+    delete_ref = "/repos/" + TARGET + "/git/refs/heads/" + branch
     _, old = client.request("GET", ref, errors=(404,))
     if old:
         raise FailClosed("CANARY_BRANCH_EXISTS")
@@ -194,7 +195,7 @@ def run(client, installed_id, app_slug, run_id, source_sha):
             try:
                 status, found = client.request("GET", ref, errors=(404,))
                 if status == 200:
-                    client.request("DELETE", ref)
+                    client.request("DELETE", delete_ref)
                 gone, _ = client.request("GET", ref, errors=(404,))
                 if gone != 404:
                     raise FailClosed("CANARY_BRANCH_NOT_DELETED")
