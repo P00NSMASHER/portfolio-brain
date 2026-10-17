@@ -5,12 +5,6 @@ on:
     branches: ["main", "step*-*"]
   pull_request:
   workflow_dispatch:
-    inputs:
-      verify_v8_runtime:
-        description: "Opt-in: read-only GitHub App credential check after both independent exact-source gates"
-        type: boolean
-        required: false
-        default: false
 
 permissions:
   contents: read
@@ -126,7 +120,7 @@ jobs:
     name: v8-read-canary / ${{ matrix.repository }}
     needs: validate
     if: >-
-      ${{ github.event_name == 'workflow_dispatch' && inputs.verify_v8_runtime == true && github.repository == 'P00NSMASHER/portfolio-brain' && github.ref == 'refs/heads/feature/v8-authority-map-20261016' }}
+      ${{ github.event_name == 'workflow_dispatch' && github.repository == 'P00NSMASHER/portfolio-brain' && github.ref == 'refs/heads/feature/v8-authority-map-20261016' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
