@@ -19,18 +19,19 @@ repair executor and its credential must not be reused for repairs.
 
 ## Cross-project repair activation
 
-An administrator must provision a separate supported runtime installation for
-the repair executor, restricted to explicitly selected project repositories.
-Start with repository contents and pull request access sufficient to propose
-repairs. Do not grant administration, secrets management, verification-check
+A separate runtime App installation is now present, but cross-project write
+execution is not enabled or verified. Its installation covers all owner
+repositories; mint only explicit one-repository tokens for approved targets.
+Contents and pull request write access must be proved by a separately reviewed,
+reversible draft-PR canary before enabling repair proposals. Do not grant administration, secrets management, verification-check
 publication, or protection bypass. Grant workflow editing or deployment access
 only through a separately reviewed project-specific adapter and release gates.
 
 Keep credentials in the provider's supported secret store; never place them in
-source, reports, issue comments, or chat. The current Chat GitHub connector does
-not expose installation/credential provisioning, and its session authorization
-cannot be transferred to a GitHub Actions runner. User approval already exists;
-the missing step is provider-side provisioning, not another general approval.
+source, reports, issue comments, or chat. The Chat GitHub connector's session authorization cannot be transferred to
+GitHub Actions. Provider-side runtime App provisioning and read-only token
+minting have now been independently exercised; runtime write execution remains
+a separate capability requiring original provider evidence.
 
 Before enabling writes, verify the installation's actual repository inventory
 and permissions, exact source, protected branch rules, and independent verifier
@@ -59,11 +60,13 @@ Authenticated GitHub settings show runtime App `portfolio-brain-v8-runtime`
 as installation `172257326`. The owner chose this scope. Observed permissions:
 contents and pull requests read/write; actions, checks, statuses and metadata
 read. The Actions secret name `PORTFOLIO_RUNTIME_PRIVATE_KEY` is present in
-`P00NSMASHER/portfolio-brain`; its value was not inspected or tested here.
+`P00NSMASHER/portfolio-brain`. Its value was never inspected; its ability to
+authenticate was subsequently verified in the original hosted run below.
 The independent verifier remains App `5121826`, installation `166155679`.
 
-The earlier provisioning prerequisite is now satisfied at the settings level.
-It is not proof that the stored credential authenticates in an unattended runner.
+Provisioning and bounded read-only unattended authentication have now been
+verified with original hosted provider evidence. This is not proof of runtime
+write actions, deploy permissions, or autonomous repair delivery.
 
 Candidate `v8-runtime-preflight` is manual-only and main-only. After protected
 review/merge, it mints a short-lived **read-only, one-repository** token for each
@@ -76,8 +79,17 @@ No private key reaches project code or test processes; only the pinned token
 creation action consumes it.
 
 This candidate does not alter recurring Brain schedules, permit repairs, merge,
-deploy, edit ChatGPT tasks, or start acceptance. The main-only runtime canary
-cannot run from this draft branch. After its real run passes, independently
-verify the original run receipt before preparing a separately gated draft-PR
-write canary. No runtime authentication, repair success, or production health
-improvement is claimed from the offline tests.
+deploy, edit ChatGPT tasks, or start acceptance. Its permanent main-only manual
+workflow cannot run from the draft branch before protected adoption. The
+one-time draft-branch test path used the exact immutable probe and was removed
+after successful hosted verification.
+
+## Original hosted read-only verification — 2026-10-17 UTC
+
+- Original [Foundation Actions run 38992354373](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38992354373), attempt 1, completed SUCCESS, candidate head `dd18eaa35fdb4cf40ee08b9da3093fd8441e50ae`.
+- Foundation `validate` and all **eight of eight** `v8-read-canary` jobs completed SUCCESS. The immutable reviewed `brain/v8/runtime_probe.py` Git blob was `c479f8c4f422a4e7de9bcb558127f8a2ab56378f`.
+- Before private-key use, each job checked the original reviewed PR head plus completed exact-source `validate` (Foundation App `15368`) and `portfolio-phase1-gate` (separate verifier App `5121826`). Each minted and automatically revoked a one-repository, read-only short-lived token using App `5352505` / installation `172257326` and the stored GitHub secret.
+- Authenticated reads verified App identity, token inventory of exactly one expected repository, default-branch source, and Actions, Checks, Statuses and Pull Requests endpoint access. The token read probes executed with isolated Python standard-library code. No private-key or token contents were collected or published.
+- The one-time PR-body activation marker was removed, and the temporary Foundation-CI integration and its temporary tests were reverted to the existing `main` definition. Permanent `v8-runtime-preflight.yml` stays manual-only, main-only and pending protected review.
+- **Verified:** runtime secret authentication and bounded read-only observation for eight sources. **Not verified:** runtime source writes, draft-PR creation, deployment, merge, private task API, outcome learning, terminal production acceptance or five-gigabyte live storage. Production `main`, scheduled cores, existing tasks and acceptance clocks were not changed by this proof.
+
