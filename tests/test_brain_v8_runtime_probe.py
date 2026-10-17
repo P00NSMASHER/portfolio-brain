@@ -91,10 +91,9 @@ class RuntimeCredentialCanaryWorkflowTests(unittest.TestCase):
         cls.canary = cls.workflow.split('  v8-runtime-credential-canary:', 1)[1]
 
     def test_manual_only_disabled_by_default_and_bound_to_reviewed_branch(self):
-        self.assertIn('verify_v8_runtime:', self.workflow)
-        self.assertIn('default: false', self.workflow)
+        self.assertIn('  workflow_dispatch:\n', self.workflow)
+        self.assertNotIn('verify_v8_runtime:', self.workflow)
         self.assertIn("github.event_name == 'workflow_dispatch'", self.canary)
-        self.assertIn('inputs.verify_v8_runtime == true', self.canary)
         self.assertIn("github.repository == 'P00NSMASHER/portfolio-brain'", self.canary)
         self.assertIn("github.ref == 'refs/heads/feature/v8-authority-map-20261016'", self.canary)
         self.assertIn('needs: validate', self.canary)
@@ -102,6 +101,7 @@ class RuntimeCredentialCanaryWorkflowTests(unittest.TestCase):
 
     def test_exact_source_original_independent_checks_precede_credential(self):
         self.assertIn('pulls/710', self.canary)
+        self.assertIn("quote(branch, safe='')", self.canary)
         self.assertIn('get("sha") == sha', self.canary)
         self.assertIn('get("total_count") == len(checks)', self.canary)
         self.assertIn('("validate", 15368)', self.canary)
