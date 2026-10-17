@@ -143,6 +143,38 @@ class DeterministicRepairTests(unittest.TestCase):
             with self.subTest(fragment=fragment), self.assertRaises(BrainError):
                 generate(request(text), text.encode())
 
+    def test_benign_deployment_label_allowed_only_for_original_permitplate_regression(self):
+        fixture = FIXTURE.replace(
+            "      - uses: actions/checkout@v4\n",
+            "      - name: Verify public deployment boundary\n"
+            "      - uses: actions/checkout@v4\n",
+        )
+        approved = request(
+            fixture,
+            repository="P00NSMASHER/permitplate-nyc",
+            path=".github/workflows/permitplate-tests.yml",
+        )
+        patched = generate(approved, fixture.encode())
+        self.assertIn("Verify public deployment boundary", patched["changed_content"])
+        self.assertIn(CHECKOUT, patched["changed_content"])
+        self.assertIn("persist-credentials: false", patched["changed_content"])
+
+        # A similarly worded label in another repository remains forbidden.
+        with self.assertRaisesRegex(BrainError, "AUTOFIX_PRIVILEGED"):
+            generate(request(fixture), fixture.encode())
+
+        # The exception never masks an executable deployment command.
+        privileged = fixture + "      - run: ./deploy.sh\n"
+        with self.assertRaisesRegex(BrainError, "AUTOFIX_PRIVILEGED"):
+            generate(
+                request(
+                    privileged,
+                    repository="P00NSMASHER/permitplate-nyc",
+                    path=".github/workflows/permitplate-tests.yml",
+                ),
+                privileged.encode(),
+            )
+
     def test_unclear_yaml_shape_is_not_autocorrected(self):
         samples = [
             FIXTURE.replace("  pull_request:\n", ""),
