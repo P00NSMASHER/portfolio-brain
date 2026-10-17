@@ -4,6 +4,7 @@ on:
   push:
     branches: ["main", "step*-*"]
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
 
 permissions:
@@ -113,5 +114,93 @@ jobs:
         with:
           name: license-admission-${{ github.sha }}
           path: hunting/out/license_admission_receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
+  v8-runtime-write-canary:
+    name: v8-runtime-write-canary
+    needs: validate
+    if: >-
+      ${{ github.event_name == 'pull_request' && github.event.action == 'edited' && github.repository == 'P00NSMASHER/portfolio-brain' && github.event.pull_request.number == 710 && github.event.pull_request.head.ref == 'feature/v8-authority-map-20261016' && github.event.pull_request.head.repo.full_name == 'P00NSMASHER/portfolio-brain' && contains(github.event.pull_request.body, 'V8_WRITE_CANARY_ONESHOT_710') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: read
+    steps:
+      - name: Require both original exact-head checks and approved PR identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_MARKER: V8_WRITE_CANARY_ONESHOT_710
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, re, subprocess
+          repo="P00NSMASHER/portfolio-brain"
+          sha=os.environ["SOURCE_SHA"]
+          assert re.fullmatch("[0-9a-f]{40}",sha), "Invalid exact head"
+          def api(path):
+              return json.loads(subprocess.check_output(
+                  ["gh","api",path],text=True,timeout=25))
+          pr=api(f"repos/{repo}/pulls/710")
+          assert (pr.get("state")=="open" and pr.get("draft") is True
+                  and pr.get("head",{}).get("sha")==sha
+                  and pr.get("head",{}).get("ref")=="feature/v8-authority-map-20261016"
+                  and pr.get("head",{}).get("repo",{}).get("full_name")==repo
+                  and pr.get("base",{}).get("ref")=="main"
+                  and pr.get("base",{}).get("repo",{}).get("full_name")==repo
+                  and os.environ["PR_MARKER"] in (pr.get("body") or "")
+                  ),"Reviewed draft PR/source or one-shot marker changed"
+          checks=api(f"repos/{repo}/commits/{sha}/check-runs?per_page=100")
+          rows=checks.get("check_runs")
+          assert (isinstance(rows,list) and checks.get("total_count")==len(rows)
+                  ),"Check-run census incomplete"
+          for name,app in (("validate",15368),("portfolio-phase1-gate",5121826)):
+              matches=[c for c in rows
+                       if c.get("name")==name and c.get("app",{}).get("id")==app
+                       and c.get("head_sha")==sha]
+              assert (len(matches)==1 and matches[0].get("status")=="completed"
+                      and matches[0].get("conclusion")=="success"),"Independent gate not green: "+name
+          print("Exact-source Foundation and independent verifier App gates PASS; write canary may proceed.")
+          PY
+      - name: Checkout exact reviewed source without saved token
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Copy exact reviewed, non-executable canary out of candidate workspace
+        run: |
+          set -euo pipefail
+          test "$(git hash-object verification/v8_runtime_write_canary.py)" = "697176b34ea9ddf8745a6e1d00550c2e6f4f0753"
+          install -m 0500 verification/v8_runtime_write_canary.py "$RUNNER_TEMP/v8-runtime-write-canary.py"
+      - name: Mint one-repository ephemeral write token with automatic revocation
+        id: runtime
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: '5352505'
+          private-key: ${{ secrets.PORTFOLIO_RUNTIME_PRIVATE_KEY }}
+          owner: P00NSMASHER
+          repositories: capturebrief
+          permission-contents: write
+          permission-pull-requests: write
+          skip-token-revoke: false
+      - name: Prove denied external write and reversible target draft PR
+        env:
+          GH_TOKEN: ${{ steps.runtime.outputs.token }}
+          INSTALLATION_ID: ${{ steps.runtime.outputs.installation-id }}
+          APP_SLUG: ${{ steps.runtime.outputs.app-slug }}
+          CANDIDATE_SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          python -I "$RUNNER_TEMP/v8-runtime-write-canary.py" > "$RUNNER_TEMP/v8-runtime-write-receipt.json"
+          cat "$RUNNER_TEMP/v8-runtime-write-receipt.json" >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain non-secret original write/cleanup receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: v8-runtime-write-canary-${{ github.run_id }}
+          path: ${{ runner.temp }}/v8-runtime-write-receipt.json
           if-no-files-found: error
           retention-days: 30
