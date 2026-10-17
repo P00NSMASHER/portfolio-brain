@@ -126,6 +126,11 @@ only that approved stdlib-only code outside the repository checkout, and runs
 it with `python -I`. The trusted token action stays pinned and automatically
 revokes the per-repository read-only token. Manual/main-only triggers,
 production scheduling, existing release gates and the all-project registry
-remain unchanged. GitHub-hosted final-head CI and independent verifier checks
-are required after this audit change; the original historical canary receipts
-remain tied only to their original tested sources.
+remain unchanged. GitHub-hosted final-head CI and independent verifier checks are required
+for each changed commit. Historical original canary receipts are source-bound.
+
+## Live stricter runtime readback — original provider PASS
+
+- [GitHub Actions original run 38999469004](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38999469004) (attempt 1, SUCCESS) tested candidate source `0aef2d03a0aa3065f3b3ef807e48834fd09479ba`. Both exact-head Foundation App 15368 and independent verifier App 5121826 checks passed before minting credentials.
+- All **eight of eight** repository-scoped matrix jobs completed SUCCESS with the **revised** strict response validator and isolated `python -I` execution. The App tokens were read-only, minted per repository and automatically revoked. Original job conclusions were independently read from GitHub; the one-shot PR marker and temporary CI job were then removed.
+- The production `main` source, recurring schedules, state branch, external clock and acceptance evidence were unchanged. This confirms the reviewed credential can perform strictly validated **read operations**; it does not authorize automatic code repair, merges/deployment, or certify six-hour unattended recovery. Future production source requires its own independent validation and acceptance.
