@@ -4,6 +4,7 @@ on:
   push:
     branches: ["main", "step*-*"]
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
 
 permissions:
@@ -115,3 +116,84 @@ jobs:
           path: hunting/out/license_admission_receipt.json
           if-no-files-found: error
           retention-days: 30
+
+  v8-strict-read-canary:
+    name: v8-strict-read / ${{ matrix.repository }}
+    needs: validate
+    if: >-
+      ${{ github.event_name == 'pull_request' && github.event.action == 'edited' && github.repository == 'P00NSMASHER/portfolio-brain' && github.event.pull_request.number == 710 && github.event.pull_request.head.ref == 'feature/v8-authority-map-20261016' && github.event.pull_request.head.repo.full_name == 'P00NSMASHER/portfolio-brain' && contains(github.event.pull_request.body, 'V8_STRICT_READ_CANARY_ONESHOT_710') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: read
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        repository: [portfolio-brain, trading-platform, abvmschoolstarworld, github-value-hunt-ledger, PipsQuestWorld, permitplate-nyc, capturebrief, x402-product-factory]
+    steps:
+      - name: Check original independent exact-source gates and reviewed PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, re, subprocess
+          repo="P00NSMASHER/portfolio-brain"
+          sha=os.environ["EXACT_HEAD"]
+          assert re.fullmatch("[a-f0-9]{40}",sha)
+          def read(path):
+              return json.loads(subprocess.check_output(["gh","api",path],text=True,timeout=25))
+          pr=read(f"repos/{repo}/pulls/710")
+          assert (pr.get("state")=="open" and pr.get("draft") is True
+                  and pr.get("head",{}).get("sha")==sha
+                  and pr.get("head",{}).get("ref")=="feature/v8-authority-map-20261016"
+                  and pr.get("head",{}).get("repo",{}).get("full_name")==repo
+                  and pr.get("base",{}).get("ref")=="main"
+                  and pr.get("base",{}).get("repo",{}).get("full_name")==repo
+                  and "V8_STRICT_READ_CANARY_ONESHOT_710" in (pr.get("body") or "")),"SOURCE_OR_APPROVAL_MISMATCH"
+          checks=read(f"repos/{repo}/commits/{sha}/check-runs?per_page=100")
+          rows=checks.get("check_runs")
+          assert (type(rows) is list and checks.get("total_count")==len(rows)),"CHECK_CENSUS_MISMATCH"
+          for name,app in (("validate",15368),("portfolio-phase1-gate",5121826)):
+              hits=[row for row in rows if row.get("name")==name and row.get("app",{}).get("id")==app and row.get("head_sha")==sha]
+              assert (hits and all(row.get("status")=="completed" and row.get("conclusion")=="success" for row in hits)),"EXACT_HEAD_GATES_INCOMPLETE: "+name
+          print("Reviewed exact-head independent gates satisfied.")
+          PY
+      - name: Checkout exact candidate without credentials
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Pin strictly validated probe before token creation
+        run: |
+          set -euo pipefail
+          test "$(git hash-object brain/v8/runtime_probe.py)" = "81324120a20caccbfaa265abc01e2d787ad9127d"
+          install -m 0500 brain/v8/runtime_probe.py "$RUNNER_TEMP/v8-strict-probe.py"
+      - name: Mint short-lived isolated read-only GitHub App token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        id: runtime
+        with:
+          app-id: '5352505'
+          private-key: ${{ secrets.PORTFOLIO_RUNTIME_PRIVATE_KEY }}
+          owner: P00NSMASHER
+          repositories: ${{ matrix.repository }}
+          permission-contents: read
+          permission-actions: read
+          permission-checks: read
+          permission-pull-requests: read
+          permission-statuses: read
+          skip-token-revoke: false
+      - name: Validate authenticated provider schemas with isolated code
+        env:
+          GH_TOKEN: ${{ steps.runtime.outputs.token }}
+          INSTALLATION_ID: ${{ steps.runtime.outputs.installation-id }}
+          APP_SLUG: ${{ steps.runtime.outputs.app-slug }}
+          PROBE_REPOSITORY: ${{ matrix.repository }}
+        run: |
+          set -euo pipefail
+          python -I "$RUNNER_TEMP/v8-strict-probe.py" >> "$GITHUB_STEP_SUMMARY"
