@@ -90,10 +90,14 @@ class RuntimeCredentialCanaryWorkflowTests(unittest.TestCase):
         cls.workflow = Path('.github/workflows/foundation-ci.yml').read_text()
         cls.canary = cls.workflow.split('  v8-runtime-credential-canary:', 1)[1]
 
-    def test_manual_only_disabled_by_default_and_bound_to_reviewed_branch(self):
+    def test_one_shot_optin_limited_to_manual_branch_or_reviewed_pr_edit(self):
         self.assertIn('  workflow_dispatch:\n', self.workflow)
-        self.assertNotIn('verify_v8_runtime:', self.workflow)
+        self.assertIn('types: [opened, synchronize, reopened, edited]', self.workflow)
         self.assertIn("github.event_name == 'workflow_dispatch'", self.canary)
+        self.assertIn("github.event_name == 'pull_request'", self.canary)
+        self.assertIn("github.event.action == 'edited'", self.canary)
+        self.assertIn("github.event.pull_request.number == 710", self.canary)
+        self.assertIn("V8_RUNTIME_READ_CANARY_ONESHOT_710", self.canary)
         self.assertIn("github.repository == 'P00NSMASHER/portfolio-brain'", self.canary)
         self.assertIn("github.ref == 'refs/heads/feature/v8-authority-map-20261016'", self.canary)
         self.assertIn('needs: validate', self.canary)
@@ -107,6 +111,8 @@ class RuntimeCredentialCanaryWorkflowTests(unittest.TestCase):
         self.assertIn('("validate", 15368)', self.canary)
         self.assertIn('("portfolio-phase1-gate", 5121826)', self.canary)
         self.assertIn('c.get("head_sha") == sha', self.canary)
+        self.assertIn("github.event.pull_request.head.sha || github.sha", self.canary)
+        self.assertIn("github.event.pull_request.head.ref", self.canary)
         self.assertIn('c.get("conclusion") == "success"', self.canary)
         self.assertLess(self.canary.index('Require both original exact-head CI checks'),
                         self.canary.index('Mint scoped read-only GitHub App token'))
