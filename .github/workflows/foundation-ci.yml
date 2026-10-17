@@ -4,7 +4,6 @@ on:
   push:
     branches: ["main", "step*-*"]
   pull_request:
-    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
 
 permissions:
@@ -114,55 +113,5 @@ jobs:
         with:
           name: license-admission-${{ github.sha }}
           path: hunting/out/license_admission_receipt.json
-          if-no-files-found: error
-          retention-days: 30
-
-  independent-terminal-replay:
-    name: v8-sixhour-terminal-once
-    needs: validate
-    if: >-
-      ${{ github.event_name == 'pull_request' && github.event.action == 'edited' && github.repository == 'P00NSMASHER/portfolio-brain' && github.event.pull_request.number == 710 && github.event.pull_request.head.ref == 'feature/v8-authority-map-20261016' && github.event.pull_request.head.repo.full_name == 'P00NSMASHER/portfolio-brain' && contains(github.event.pull_request.body, 'V8_TERMINAL_ACCEPTANCE_ONESHOT_710') }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 12
-    permissions:
-      contents: read
-      actions: read
-      checks: read
-      pull-requests: read
-    steps:
-      - name: Checkout exact reviewed PR candidate without credentials
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          persist-credentials: false
-      - name: Pin original independent offline acceptance collector
-        run: |
-          set -euo pipefail
-          test "$(git hash-object soak_v3/terminal_acceptance_oneshot.py)" = "9973596fe860015a2f7d230922d03fea368f920e"
-          install -m 0500 soak_v3/terminal_acceptance_oneshot.py "$RUNNER_TEMP/v8-terminal-acceptance.py"
-      - name: Checkout immutable protected source without credentials
-        uses: actions/checkout@v4
-        with:
-          ref: 98cce23ac031ccf9ffa7008a83e9a9b25571d568
-          path: canonical
-          persist-credentials: false
-      - name: Checkout original published terminal state snapshot without credentials
-        uses: actions/checkout@v4
-        with:
-          ref: 302a0b1b7f365f89ca320e6f516884ef4cb10c66
-          path: terminal
-          persist-credentials: false
-      - name: Independently replay original GitHub census and immutable terminal SQLite
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REVIEWED_PR_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          python -I "$RUNNER_TEMP/v8-terminal-acceptance.py"
-      - name: Preserve original independent sanitized terminal replay receipt
-        uses: actions/upload-artifact@v4
-        with:
-          name: v8-terminal-original-${{ github.event.pull_request.head.sha }}-${{ github.run_id }}
-          path: ${{ runner.temp }}/v8-independent-terminal-replay.json
           if-no-files-found: error
           retention-days: 30
