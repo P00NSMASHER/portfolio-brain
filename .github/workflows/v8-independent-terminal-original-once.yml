@@ -1,0 +1,83 @@
+name: v8-independent-terminal-original-once
+
+on:
+  push:
+    branches: [review/v8-terminal-original-once-20261017]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  independent-terminal:
+    if: ${{ github.repository == 'P00NSMASHER/portfolio-brain' && github.ref == 'refs/heads/review/v8-terminal-original-once-20261017' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout immutable reviewer code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: review
+          persist-credentials: false
+      - name: Verify reviewed original-census and replay script blob
+        run: |
+          set -euo pipefail
+          test "$(git -C review hash-object verification/v8_terminal_readiness.py)" = "3bb7dbd14a17d83b3e67ee5d921d661689e4d6a6"
+      - name: Checkout immutable production source
+        uses: actions/checkout@v4
+        with:
+          ref: 1a310ebfd0bf3aadffc74ae178582f0c235c9ab9
+          path: canonical
+          persist-credentials: false
+      - name: Independently census every original automatic run and freeze terminal state child
+        id: freeze
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -I review/verification/v8_terminal_readiness.py --output "$RUNNER_TEMP/v8-original-census.json"
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os, re
+          from pathlib import Path
+          d=json.loads(Path(os.environ['RUNNER_TEMP'], 'v8-original-census.json').read_text())
+          assert d['status']=='SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED'
+          assert d['production_source']=='1a310ebfd0bf3aadffc74ae178582f0c235c9ab9'
+          assert int(d['completion_span_seconds']) >= 21600 and int(d['maximum_gap_seconds']) <= 5400
+          sha=d['last_state_commit']
+          assert re.fullmatch('[0-9a-f]{40}',sha)
+          print('state_sha='+sha)
+          print('original_terminal_run='+str(d['latest_run']))
+          PY
+      - name: Checkout exact provider-verified immutable terminal Git state
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.freeze.outputs.state_sha }}
+          path: terminal
+          persist-credentials: false
+      - name: Restore original raw SQLite and independently replay canonical ledger and report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -I review/verification/v8_terminal_readiness.py --source-dir canonical --terminal-dir terminal --output "$RUNNER_TEMP/v8-terminal-proof.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          v=json.loads(Path(os.environ['RUNNER_TEMP'], 'v8-terminal-proof.json').read_text())
+          assert v['status']=='SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED'
+          assert v['terminal_replay']['status']=='ORIGINAL_TERMINAL_RAW_SQLITE_REPLAY_VERIFIED'
+          print('original_run_count',v['verified_original_cores'])
+          print('observed_seconds',v['completion_span_seconds'])
+          print('maximum_gap_seconds',v['maximum_gap_seconds'])
+          print('canonical_sequence',v['terminal_replay']['sequence'])
+          print('restored_sqlite_sha256',v['terminal_replay']['restored_sqlite_sha256'])
+          print('production_release_authorized',v['terminal_replay']['authorizes_production_release'])
+          PY
+      - name: Preserve immutable sanitized independent terminal proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: v8-terminal-original-once-${{ github.run_id }}
+          path: ${{ runner.temp }}/v8-terminal-proof.json
+          retention-days: 30
+          if-no-files-found: error
