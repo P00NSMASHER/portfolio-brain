@@ -128,9 +128,82 @@ def check_scope(inventory, installation, slug):
             "TOKEN_MUST_HAVE_EXACTLY_ONE_TARGET_REPOSITORY")
 
 
+def immutable_git_get(api, path):
+    """Retry only a temporarily invisible identical SHA, not a mutation."""
+    for retry in range(3):
+        try:
+            return api("GET", path)
+        except urllib.error.HTTPError as exc:
+            if exc.code != 404 or retry == 2:
+                raise
+            import time
+            time.sleep(1)
+    raise ValueError("IMMUTABLE_GITHUB_OBJECT_NEVER_BECAME_VISIBLE")
+
+
+def checked_candidate(api, *, prefix, main_sha, branch_sha, fixed):
+    """Reconcile only the unchanged direct child containing precisely one doc edit."""
+    require(type(branch_sha) is str and GIT_SHA.fullmatch(branch_sha),
+            "EXISTING_BRANCH_COMMIT_UNVERIFIED")
+    original_commit = immutable_git_get(api, prefix + "git/commits/" + branch_sha)
+    require(type(original_commit) is dict
+            and original_commit.get("sha") == branch_sha
+            and type(original_commit.get("parents")) is list
+            and len(original_commit["parents"]) == 1
+            and original_commit["parents"][0].get("sha") == main_sha,
+            "EXISTING_BRANCH_NOT_EXACT_CHILD_OF_REVIEWED_MAIN")
+    observed = immutable_git_get(
+        api, prefix + "contents/" + DOC + "?ref=" + branch_sha)
+    actual, original_blob = checked_document(observed, "REPAIRED")
+    expected_blob = digest_blob(fixed.encode("utf-8"))
+    require(actual == fixed and original_blob == expected_blob,
+            "EXISTING_BRANCH_BYTES_DIFFER_FROM_APPROVED_REPAIR")
+    comparison = api("GET", prefix + "compare/" + main_sha + "..." + branch_sha)
+    files = comparison.get("files") if type(comparison) is dict else None
+    require(type(files) is list and len(files) == 1
+            and type(files[0]) is dict
+            and files[0].get("filename") == DOC
+            and files[0].get("status") == "modified"
+            and comparison.get("merge_base_commit", {}).get("sha") == main_sha
+            and comparison.get("ahead_by") == 1
+            and comparison.get("behind_by") == 0,
+            "EXISTING_BRANCH_HAS_UNAPPROVED_CHANGE_OR_ANCESTRY")
+    return expected_blob
+
+
+def checked_draft(api, *, prefix, number, branch, branch_sha, main_sha):
+    """A bot-owned original draft is not a delivery, merge or production change."""
+    require(type(number) is int and 0 < number < 10**9,
+            "ORIGINAL_DRAFT_NUMBER_INVALID")
+    verified = None
+    for retry in range(3):
+        try:
+            verified = api("GET", prefix + "pulls/" + str(number))
+            break
+        except urllib.error.HTTPError as exc:
+            if exc.code != 404 or retry == 2:
+                raise
+            import time
+            time.sleep(1)
+    require(type(verified) is dict
+            and verified.get("number") == number
+            and verified.get("state") == "open"
+            and verified.get("draft") is True
+            and verified.get("merged") is False
+            and verified.get("head", {}).get("sha") == branch_sha
+            and verified.get("head", {}).get("ref") == branch
+            and verified.get("head", {}).get("repo", {}).get("full_name") == TARGET
+            and verified.get("base", {}).get("sha") == main_sha
+            and verified.get("base", {}).get("ref") == "main"
+            and verified.get("user", {}).get("login") == APP_SLUG + "[bot]",
+            "ORIGINAL_BOT_DRAFT_NOT_VERIFIED")
+    return True
+
+
 def execute(api, *, installation, slug):
-    """Execute one bounded docs-only draft proposal; never production delivery."""
-    check_scope(api("GET", "installation/repositories?per_page=100"), installation, slug)
+    """One exact-source, resumable, doc-only draft proposal; never delivery."""
+    check_scope(api("GET", "installation/repositories?per_page=100"),
+                installation, slug)
     prefix = "repos/" + TARGET + "/"
     info = api("GET", "repos/" + TARGET)
     require(type(info) is dict and info.get("full_name") == TARGET
@@ -144,8 +217,6 @@ def execute(api, *, installation, slug):
         return {"status": "TARGET_SOURCE_CHANGED_NO_MUTATION",
                 "repository": TARGET, "target_source": main_sha,
                 "provider_writes": 0, "merged": False, "deployed": False}
-
-    # Both original Git blobs are SHA-checked; provider text is data, never code.
     original_source, canonical_blob = checked_document(
         api("GET", prefix + "contents/" + CANONICAL + "?ref=" + main_sha),
         "CANONICAL")
@@ -161,97 +232,102 @@ def execute(api, *, installation, slug):
                 "target_source": main_sha, "provider_writes": 0,
                 "merged": False, "deployed": False}
     branch = BRANCH_PREFIX + main_sha[:12]
-    existing = api("GET", prefix + "pulls?state=open&per_page=100")
-    require(type(existing) is list and len(existing) < 100
-            and all(type(row) is dict for row in existing),
-            "PR_CENSUS_INCOMPLETE")
-    if any(type(row.get("head")) is dict
-           and type(row["head"].get("ref")) is str
-           and row["head"]["ref"].startswith(BRANCH_PREFIX)
-           for row in existing):
-        return {"status": "EXISTING_DRAFT_REQUIRES_RECONCILIATION",
-                "repository": TARGET, "target_source": main_sha,
-                "provider_writes": 0, "merged": False, "deployed": False}
-    # No duplicate attempts after uncertain publication: a branch cannot be
-    # repurposed or overwritten by this bounded recipe.
+    expected_blob = digest_blob(fixed.encode("utf-8"))
+    prs = api("GET", prefix + "pulls?state=open&per_page=100")
+    require(type(prs) is list and len(prs) < 100
+            and all(type(item) is dict for item in prs),
+            "ORIGINAL_OPEN_PR_CENSUS_INCOMPLETE")
+    matches = [p for p in prs
+               if type(p.get("head")) is dict
+               and type(p["head"].get("ref")) is str
+               and p["head"]["ref"].startswith(BRANCH_PREFIX)]
+    require(len(matches) <= 1
+            and (not matches or matches[0].get("head", {}).get("ref") == branch),
+            "UNRELATED_OR_MULTIPLE_BOT_REPAIR_PRS")
     try:
-        existing_branch = api("GET", prefix + "branches/" + branch)
+        existing = api("GET", prefix + "branches/" + branch)
     except urllib.error.HTTPError as exc:
         require(exc.code == 404, "TARGET_BRANCH_READ_FAILED")
-    else:
-        require(type(existing_branch) is dict,
-                "TARGET_BRANCH_STATE_INVALID")
-        return {"status": "EXISTING_BRANCH_REQUIRES_RECONCILIATION",
-                "repository": TARGET, "target_source": main_sha,
-                "provider_writes": 0, "merged": False, "deployed": False}
+        existing = None
 
-    current = api("GET", prefix + "branches/main")
-    require(current.get("commit", {}).get("sha") == main_sha,
-            "SOURCE_ADVANCED_BEFORE_FIRST_WRITE")
-    expected_raw = fixed.encode("utf-8")
-    expected_blob = digest_blob(expected_raw)
-    created = api("POST", prefix + "git/refs", {
-        "ref": "refs/heads/" + branch, "sha": main_sha})
-    require(type(created) is dict and created.get("ref") == "refs/heads/" + branch
-            and created.get("object", {}).get("sha") == main_sha,
-            "BRANCH_CREATION_NOT_VERIFIED")
-    applied = api("PUT", prefix + "contents/" + DOC, {
-        "message": "docs: flag obsolete Netlify release instructions",
-        "content": base64.b64encode(expected_raw).decode("ascii"),
-        "sha": old_blob, "branch": branch})
-    commit_sha = applied.get("commit", {}).get("sha")
-    require(type(commit_sha) is str and GIT_SHA.fullmatch(commit_sha) is not None
-            and applied.get("content", {}).get("sha") == expected_blob,
-            "REPAIR_COMMIT_NOT_VERIFIED")
-    observed, observed_blob = checked_document(
-        api("GET", prefix + "contents/" + DOC + "?ref=" + commit_sha),
-        "REPAIRED")
-    require(observed == fixed and observed_blob == expected_blob,
-            "REPAIR_BYTE_READBACK_MISMATCH")
-    comparison = api("GET", prefix + "compare/" + main_sha + "..." + commit_sha)
-    files = comparison.get("files")
-    require(type(files) is list and len(files) == 1
-            and files[0].get("filename") == DOC
-            and files[0].get("status") == "modified"
-            and comparison.get("merge_base_commit", {}).get("sha") == main_sha,
-            "PATCH_EXCEEDED_APPROVED_ONE_FILE")
+    if existing is not None:
+        require(type(existing) is dict
+                and type(existing.get("commit")) is dict,
+                "EXISTING_TARGET_BRANCH_UNTRUSTED")
+        branch_sha = existing["commit"].get("sha")
+        checked_candidate(api, prefix=prefix, main_sha=main_sha,
+                          branch_sha=branch_sha, fixed=fixed)
+        print("V8_SAFE_STAGE: EXISTING_EXACT_BRANCH_RECONCILED", flush=True)
+        writes = 0
+    else:
+        require(not matches, "DRAFT_WITHOUT_EXPECTED_BRANCH_NOT_VERIFIED")
+        live = api("GET", prefix + "branches/main")
+        require(live.get("commit", {}).get("sha") == main_sha,
+                "TARGET_MAIN_DRIFT_BEFORE_CREATE")
+        created = api("POST", prefix + "git/refs", {
+            "ref": "refs/heads/" + branch, "sha": main_sha})
+        require(type(created) is dict
+                and created.get("ref") == "refs/heads/" + branch
+                and created.get("object", {}).get("sha") == main_sha,
+                "ORIGINAL_BRANCH_WRITE_NOT_VERIFIED")
+        print("V8_SAFE_STAGE: BRANCH_CREATED", flush=True)
+        applied = api("PUT", prefix + "contents/" + DOC, {
+            "message": "docs: flag obsolete Netlify release instructions",
+            "content": base64.b64encode(fixed.encode("utf-8")).decode("ascii"),
+            "sha": old_blob, "branch": branch})
+        branch_sha = applied.get("commit", {}).get("sha") if type(applied) is dict else None
+        require(type(branch_sha) is str and GIT_SHA.fullmatch(branch_sha)
+                and applied.get("content", {}).get("sha") == expected_blob,
+                "ORIGINAL_REPAIR_COMMIT_NOT_VERIFIED")
+        print("V8_SAFE_STAGE: EXACT_DOCUMENT_WRITE_ACCEPTED", flush=True)
+        checked_candidate(api, prefix=prefix, main_sha=main_sha,
+                          branch_sha=branch_sha, fixed=fixed)
+        writes = 2
+
+    if matches:
+        p = matches[0]
+        number = p.get("number")
+        checked_draft(api, prefix=prefix, number=number, branch=branch,
+                      branch_sha=branch_sha, main_sha=main_sha)
+        return {"status": "ORIGINAL_AUTHENTICATED_DRAFT_REPAIR_VERIFIED",
+                "repository": TARGET, "target_source": main_sha,
+                "canonical_blob": canonical_blob, "previous_blob": old_blob,
+                "changed_blob": expected_blob, "repair_commit": branch_sha,
+                "draft_pr": number, "provider_writes": 0,
+                "resumed_from_verified_existing_branch": True,
+                "merged": False, "deployed": False}
     fresh = api("GET", prefix + "branches/main")
     require(fresh.get("commit", {}).get("sha") == main_sha,
-            "TARGET_MAIN_DRIFT_DURING_REPAIR")
-    opened = api("POST", prefix + "pulls", {
-        "title": "docs: correct outdated CaptureBrief deployment instructions",
-        "head": branch, "base": "main", "draft": True,
-        "maintainer_can_modify": False,
-        "body": (
-            "Original source defect: PUBLIC-RELEASE.md incorrectly names "
-            "Netlify as current hosting. DEPLOYMENT-TARGET.md identifies "
-            "GitHub Pages/gh-pages. This deterministic bounded proposal "
-            "changes ONLY PUBLIC-RELEASE.md and preserves historical build "
-            "instructions as explicitly historical. Independent "
-            "project-specific QA and protected review are REQUIRED. "
-            "AUTO_REPAIR_FINGERPRINT: " + main_sha + "/" + old_blob
-            + "\nNo automated merge, deployment, customer contact, or paid API."
-        )})
-    number = opened.get("number")
-    require(type(number) is int and number > 0,
-            "PR_CREATION_NOT_VERIFIED")
-    verified = api("GET", prefix + "pulls/" + str(number))
-    require(verified.get("number") == number
-            and verified.get("state") == "open"
-            and verified.get("draft") is True
-            and verified.get("merged") is False
-            and verified.get("head", {}).get("sha") == commit_sha
-            and verified.get("head", {}).get("ref") == branch
-            and verified.get("head", {}).get("repo", {}).get("full_name") == TARGET
-            and verified.get("base", {}).get("sha") == main_sha
-            and verified.get("base", {}).get("ref") == "main"
-            and verified.get("user", {}).get("login") == APP_SLUG + "[bot]",
-            "DRAFT_PR_OR_AUTHOR_READBACK_INVALID")
+            "TARGET_MAIN_DRIFT_BEFORE_DRAFT")
+    print("V8_SAFE_STAGE: SUBMITTING_ONE_DRAFT_PR", flush=True)
+    try:
+        opened = api("POST", prefix + "pulls", {
+            "title": "docs: correct outdated CaptureBrief deployment instructions",
+            "head": branch, "base": "main", "draft": True,
+            "maintainer_can_modify": False,
+            "body": (
+                "Original source defect: PUBLIC-RELEASE.md incorrectly names "
+                "Netlify as current hosting. DEPLOYMENT-TARGET.md identifies "
+                "GitHub Pages/gh-pages. This deterministic bounded proposal "
+                "changes ONLY PUBLIC-RELEASE.md and preserves historical build "
+                "instructions as explicitly historical. Independent "
+                "project-specific QA and protected review are REQUIRED. "
+                "AUTO_REPAIR_FINGERPRINT: " + main_sha + "/" + old_blob
+                + "\nNo automated merge, deployment, customer contact, or paid API."
+            )})
+    except urllib.error.HTTPError as exc:
+        # Numeric status only; never print provider JSON, token or headers.
+        print("V8_SAFE_DRAFT_PROVIDER_STATUS: " + str(exc.code),flush=True)
+        raise
+    number = opened.get("number") if type(opened) is dict else None
+    checked_draft(api, prefix=prefix, number=number, branch=branch,
+                  branch_sha=branch_sha, main_sha=main_sha)
     return {"status": "ORIGINAL_AUTHENTICATED_DRAFT_REPAIR_VERIFIED",
             "repository": TARGET, "target_source": main_sha,
             "canonical_blob": canonical_blob, "previous_blob": old_blob,
-            "changed_blob": expected_blob, "repair_commit": commit_sha,
-            "draft_pr": number, "provider_writes": 3,
+            "changed_blob": expected_blob, "repair_commit": branch_sha,
+            "draft_pr": number, "provider_writes": writes + 1,
+            "resumed_from_verified_existing_branch": existing is not None,
             "merged": False, "deployed": False}
 
 
@@ -282,6 +358,7 @@ class GitHubAPI:
                            or re.fullmatch(r"pulls/[1-9][0-9]{0,8}", item) is not None
                            or re.fullmatch(r"contents/(?:PUBLIC-RELEASE|DEPLOYMENT-TARGET)\.md\?ref=[0-9a-f]{40}", item) is not None
                            or re.fullmatch(r"compare/[0-9a-f]{40}\.\.\.[0-9a-f]{40}", item) is not None
+                           or re.fullmatch(r"git/commits/[0-9a-f]{40}", item) is not None
                        )))
         else:
             allowed = path.startswith(prefix)
