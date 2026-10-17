@@ -33,7 +33,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.sha }}"
           test "$(git hash-object brain/v8/repair_core_origin.py)" = "d216e938c3e301042a13c97ed6fa0111be905230"
-          test "$(git hash-object brain/v8/repair_runtime.py)" = "726340ab44a3e5aad7b6f8feea7ae81f1e38fe66"
+          test "$(git hash-object brain/v8/repair_runtime.py)" = "79f4deab37a259e828ccf9ecaf34ff493d0859c7"
           install -m 0500 brain/v8/repair_core_origin.py "$RUNNER_TEMP/v8-origin.py"
           install -m 0500 brain/v8/repair_runtime.py "$RUNNER_TEMP/v8-repair.py"
       - name: Authenticate original current-source automatic core before token mint
