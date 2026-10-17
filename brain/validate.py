@@ -19,8 +19,32 @@ def validate_policy():
     expected={"foundation-ci.yml","portfolio-independent-verifier.yml",
               "x402-gateway-ci.yml","x402-render-gateway-smoke.yml",
               "brain-cycle.yml","brain-clock.yml",
-              "state-capacity-qualification.yml", "v8-runtime-preflight.yml"}
+              "state-capacity-qualification.yml", "v8-runtime-preflight.yml",
+              "v8-scoped-repair.yml"}
     require({x.name for x in workflow_dir.iterdir() if x.suffix in {".yml",".yaml"}}==expected, "active workflow inventory changed")
+    scoped=(workflow_dir/"v8-scoped-repair.yml").read_text(encoding="utf-8")
+    for phrase in (
+        "workflow_run:", 'workflows: ["brain-cycle-v2"]',
+        "types: [completed]", "cancel-in-progress: false",
+        "github.event.workflow_run.conclusion == 'success'",
+        "github.event.workflow_run.head_branch == 'main'",
+        "github.event.workflow_run.head_sha == github.sha",
+        "github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain'",
+        "persist-credentials: false", "actions: read",
+        "d216e938c3e301042a13c97ed6fa0111be905230",
+        "ffcb288500ce7de65bb0cd1bab6e09aaaf4daa33",
+        "repositories: capturebrief", "permission-contents: write",
+        "permission-pull-requests: write", "skip-token-revoke: false",
+        "PORTFOLIO_RUNTIME_PRIVATE_KEY", "python -I",
+    ):
+        require(phrase in scoped, "reviewed scoped repair source or token gate changed: "+phrase)
+    require("schedule:" not in scoped and "workflow_dispatch:" not in scoped
+            and "pull_request:" not in scoped and "pull_request_target:" not in scoped
+            and "permission-workflows:" not in scoped and "id-token: write" not in scoped
+            and "PORTFOLIO_VERIFIER_PRIVATE_KEY" not in scoped
+            and "gh pr merge" not in scoped and "merge_pull_request" not in scoped
+            and "permissions:\n  contents: read" in scoped,
+            "scoped repair has an unreviewed trigger, permission or release action")
     from operations.validate_operating_mode import scheduled_workflow_inventory
     require(scheduled_workflow_inventory(workflow_dir)=={"brain-cycle":[p["cron"]], "brain-clock":[p["watchdog_cron"]]}, "only reviewed native Brain execution and watchdog may recur")
     source=(workflow_dir/"brain-cycle.yml").read_text()

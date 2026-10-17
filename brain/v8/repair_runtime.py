@@ -16,6 +16,9 @@ TARGET = "P00NSMASHER/capturebrief"
 OWNER = "P00NSMASHER"
 APP_SLUG = "portfolio-brain-v8-runtime"
 INSTALLATION = "172257326"
+EXPECTED_TARGET_HEAD = "4a7c5d6c223b8488995ab221dc169ba32ae828f8"
+EXPECTED_CANONICAL_BLOB = "f4182f742af5e793cb98efcf4b3dac5bfc0d9dd9"
+EXPECTED_RELEASE_BLOB = "11eb0d1674bc7b2cf9ccb1a5aa907060f1e833c1"
 DOC = "PUBLIC-RELEASE.md"
 CANONICAL = "DEPLOYMENT-TARGET.md"
 BRANCH_PREFIX = "v8-capturebrief-hosting-doc-"
@@ -35,6 +38,22 @@ CORRECTION = (
 )
 
 
+HANDOFF_START = "## Existing-site handoff\n\n"
+HANDOFF_END = "## Fulfillment readiness corrections"
+HANDOFF_CORRECTION = (
+    "## Current GitHub Pages release handoff\n\n"
+    "The older Netlify release ZIP remains historical packaging evidence only,\n"
+    "not a GitHub Pages deployment instruction. The authoritative website\n"
+    "must be changed from its actual gh-pages branch, never from product-engine\n"
+    "main or by uploading the older Netlify artifact bundle.\n"
+    "Use the existing gh-pages site-quality workflow for independent website QA.\n\n"
+    "After an authorized Pages release, independently verify the served homepage,\n"
+    "sample page and assets at https://p00nsmasher.github.io/capturebrief/.\n"
+    "CI success or deployment acknowledgement is not proof of publication.\n"
+    "Do not submit test forms, contact customers or send messages without approval.\n\n"
+)
+
+
 def require(condition, reason):
     if not condition:
         raise ValueError(reason)
@@ -46,7 +65,7 @@ def digest_blob(raw):
 
 
 def plan(source, original):
-    """The only allowed content mutation, requiring authoritative exact text."""
+    """Only correct the one source-pinned contradiction and obsolete handoff."""
     require(type(source) is str and type(original) is str
             and len(source) <= 12000 and len(original) <= 60000,
             "SOURCE_BOUNDS_INVALID")
@@ -59,13 +78,24 @@ def plan(source, original):
             and "## Build and publication are separate\n" in original,
             "RELEASE_DOCUMENT_SHAPE_CHANGED")
     if CORRECTION in original and MISLEADING not in original:
+        require(HANDOFF_CORRECTION in original, "PARTIALLY_REPAIRED_DOCUMENT")
         return None
-    require(original.count(MISLEADING) == 1 and CORRECTION not in original,
+    require(original.count(MISLEADING) == 1 and CORRECTION not in original
+            and original.count(HANDOFF_START) == 1
+            and original.count(HANDOFF_END) == 1,
             "RELEASE_DOCUMENT_DEFECT_NOT_IDENTICAL")
-    corrected = original.replace(MISLEADING, CORRECTION, 1)
+    before, rest = original.split(HANDOFF_START, 1)
+    obsolete, tail = rest.split(HANDOFF_END, 1)
+    require("manual deployment to the" in obsolete
+            and "existing project's Deploys page" in obsolete
+            and "Do not submit test forms or send notification emails" in obsolete,
+            "UNREVIEWED_OBSOLETE_HANDOFF")
+    corrected = (before.replace(MISLEADING, CORRECTION, 1)
+                 + HANDOFF_CORRECTION + HANDOFF_END + tail)
     require(corrected != original and MISLEADING not in corrected
             and corrected.count(CORRECTION) == 1
-            and corrected.endswith(original.split(MISLEADING, 1)[1]),
+            and corrected.count(HANDOFF_CORRECTION) == 1
+            and corrected.split(HANDOFF_END, 1)[1] == tail,
             "REPAIR_CHANGED_UNREVIEWED_CONTENT")
     return corrected
 
@@ -110,6 +140,10 @@ def execute(api, *, installation, slug):
     main_sha = before.get("commit", {}).get("sha")
     require(type(main_sha) is str and GIT_SHA.fullmatch(main_sha) is not None,
             "TARGET_MAIN_NOT_VERIFIED")
+    if main_sha != EXPECTED_TARGET_HEAD:
+        return {"status": "TARGET_SOURCE_CHANGED_NO_MUTATION",
+                "repository": TARGET, "target_source": main_sha,
+                "provider_writes": 0, "merged": False, "deployed": False}
 
     # Both original Git blobs are SHA-checked; provider text is data, never code.
     original_source, canonical_blob = checked_document(
@@ -118,6 +152,9 @@ def execute(api, *, installation, slug):
     previous, old_blob = checked_document(
         api("GET", prefix + "contents/" + DOC + "?ref=" + main_sha),
         "RELEASE_DOC")
+    require(canonical_blob == EXPECTED_CANONICAL_BLOB
+            and old_blob == EXPECTED_RELEASE_BLOB,
+            "REVIEWED_SOURCE_BLOBS_MOVED")
     fixed = plan(original_source, previous)
     if fixed is None:
         return {"status": "ALREADY_CORRECT", "repository": TARGET,
@@ -235,12 +272,23 @@ class GitHubAPI:
         self.count += 1
         require(self.count <= MAX_REQUESTS, "PROVIDER_BUDGET_EXCEEDED")
         prefix = "repos/" + TARGET + "/"
-        allowed = (path == "installation/repositories?per_page=100"
-                   or path == "repos/" + TARGET
-                   or path.startswith(prefix))
+        item = path[len(prefix):] if path.startswith(prefix) else None
+        if method == "GET":
+            allowed = (path in {"installation/repositories?per_page=100",
+                               "repos/" + TARGET}
+                       or item in {"branches/main", "pulls?state=open&per_page=100"}
+                       or (type(item) is str and (
+                           re.fullmatch(r"branches/v8-capturebrief-hosting-doc-[0-9a-f]{12}", item) is not None
+                           or re.fullmatch(r"pulls/[1-9][0-9]{0,8}", item) is not None
+                           or re.fullmatch(r"contents/(?:PUBLIC-RELEASE|DEPLOYMENT-TARGET)\.md\?ref=[0-9a-f]{40}", item) is not None
+                           or re.fullmatch(r"compare/[0-9a-f]{40}\.\.\.[0-9a-f]{40}", item) is not None
+                       )))
+        else:
+            allowed = path.startswith(prefix)
         require(method in {"GET", "POST", "PUT"} and allowed
                 and all(x not in path for x in ("..", "%", "\n", "\r", "#")),
                 "PROVIDER_ENDPOINT_OUT_OF_SCOPE")
+        require((method == "GET") == (body is None), "PROVIDER_REQUEST_METHOD_BODY_INVALID")
         if method == "POST":
             require(path in {prefix + "git/refs", prefix + "pulls"},
                     "POST_NOT_APPROVED")
