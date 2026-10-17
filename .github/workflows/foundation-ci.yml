@@ -4,6 +4,7 @@ on:
   push:
     branches: ["main", "step*-*"]
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
 
 permissions:
@@ -120,7 +121,7 @@ jobs:
     name: v8-read-canary / ${{ matrix.repository }}
     needs: validate
     if: >-
-      ${{ github.event_name == 'workflow_dispatch' && github.repository == 'P00NSMASHER/portfolio-brain' && github.ref == 'refs/heads/feature/v8-authority-map-20261016' }}
+      ${{ github.repository == 'P00NSMASHER/portfolio-brain' && ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feature/v8-authority-map-20261016') || (github.event_name == 'pull_request' && github.event.action == 'edited' && github.event.pull_request.number == 710 && github.event.pull_request.head.ref == 'feature/v8-authority-map-20261016' && github.event.pull_request.head.repo.full_name == 'P00NSMASHER/portfolio-brain' && contains(github.event.pull_request.body, 'V8_RUNTIME_READ_CANARY_ONESHOT_710'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -137,8 +138,8 @@ jobs:
       - name: Require both original exact-head CI checks and reviewed PR identity
         env:
           GH_TOKEN: ${{ github.token }}
-          EXPECTED_SHA: ${{ github.sha }}
-          EXPECTED_REF: ${{ github.ref }}
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          EXPECTED_REF: ${{ github.event_name == 'pull_request' && format('refs/heads/{0}', github.event.pull_request.head.ref) || github.ref }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -177,7 +178,7 @@ jobs:
       - name: Checkout exact candidate without saved credentials
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - name: Copy only the reviewed, immutable probe outside the checkout
         run: |
