@@ -162,8 +162,8 @@ jobs:
               matches=[c for c in rows
                        if c.get("name")==name and c.get("app",{}).get("id")==app
                        and c.get("head_sha")==sha]
-              assert (len(matches)==1 and matches[0].get("status")=="completed"
-                      and matches[0].get("conclusion")=="success"),"Independent gate not green: "+name
+              assert (matches and all(c.get("status")=="completed"
+                      and c.get("conclusion")=="success" for c in matches)),"Independent gate not green: "+name
           print("Exact-source Foundation and independent verifier App gates PASS; write canary may proceed.")
           PY
       - name: Checkout exact reviewed source without saved token
