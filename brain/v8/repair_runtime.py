@@ -362,9 +362,23 @@ class GitHubAPI:
                        )))
         else:
             allowed = path.startswith(prefix)
-        require(method in {"GET", "POST", "PUT"} and allowed
-                and all(x not in path for x in ("..", "%", "\n", "\r", "#")),
-                "PROVIDER_ENDPOINT_OUT_OF_SCOPE")
+        # SHA...SHA is GitHub's exact immutable comparison syntax, not a
+        # traversal. The GET-only full-path allowlist must match before this
+        # narrow exception; no other dot-containing route is admitted.
+        exact_sha_compare = (
+            method == "GET"
+            and type(item) is str
+            and re.fullmatch(
+                r"compare/[0-9a-f]{40}\.\.\.[0-9a-f]{40}", item
+            ) is not None
+        )
+        require(
+            method in {"GET", "POST", "PUT"}
+            and allowed
+            and (exact_sha_compare or ".." not in path)
+            and all(x not in path for x in ("%", "\n", "\r", "#")),
+            "PROVIDER_ENDPOINT_OUT_OF_SCOPE",
+        )
         require((method == "GET") == (body is None), "PROVIDER_REQUEST_METHOD_BODY_INVALID")
         if method == "POST":
             require(path in {prefix + "git/refs", prefix + "pulls"},
