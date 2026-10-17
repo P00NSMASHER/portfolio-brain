@@ -5,6 +5,12 @@ on:
     branches: ["main", "step*-*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      verify_v8_runtime:
+        description: "Opt-in: read-only GitHub App credential check after both independent exact-source gates"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -115,3 +121,92 @@ jobs:
           path: hunting/out/license_admission_receipt.json
           if-no-files-found: error
           retention-days: 30
+
+  v8-runtime-credential-canary:
+    name: v8-read-canary / ${{ matrix.repository }}
+    needs: validate
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && inputs.verify_v8_runtime == true && github.repository == 'P00NSMASHER/portfolio-brain' && github.ref == 'refs/heads/feature/v8-authority-map-20261016' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: read
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        repository: [portfolio-brain, trading-platform, abvmschoolstarworld, github-value-hunt-ledger, PipsQuestWorld, permitplate-nyc, capturebrief, x402-product-factory]
+    steps:
+      - name: Require both original exact-head CI checks and reviewed PR identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, re, subprocess
+          repo = "P00NSMASHER/portfolio-brain"
+          sha = os.environ["EXPECTED_SHA"]
+          branch = "feature/v8-authority-map-20261016"
+          assert re.fullmatch("[0-9a-f]{40}", sha), "invalid exact source"
+          assert os.environ["EXPECTED_REF"] == "refs/heads/" + branch, "wrong ref"
+
+          def api(path):
+              raw = subprocess.check_output(["gh", "api", path], text=True, timeout=25)
+              return json.loads(raw)
+
+          current = api(f"repos/{repo}/branches/{branch}")
+          assert current.get("commit", {}).get("sha") == sha, "source branch moved"
+          pr = api(f"repos/{repo}/pulls/710")
+          assert (pr.get("state") == "open" and pr.get("head", {}).get("sha") == sha
+                  and pr.get("head", {}).get("ref") == branch
+                  and pr.get("head", {}).get("repo", {}).get("full_name") == repo
+                  and pr.get("base", {}).get("ref") == "main"
+                  and pr.get("base", {}).get("repo", {}).get("full_name") == repo), "reviewed PR/source mismatch"
+          payload = api(f"repos/{repo}/commits/{sha}/check-runs?per_page=100")
+          checks = payload.get("check_runs")
+          assert (isinstance(checks, list) and checks
+                  and payload.get("total_count") == len(checks)), "incomplete original check census"
+          for name, app_id in (("validate", 15368), ("portfolio-phase1-gate", 5121826)):
+              matched = [c for c in checks
+                         if c.get("name") == name and c.get("app", {}).get("id") == app_id
+                         and c.get("head_sha") == sha]
+              assert matched and all(c.get("status") == "completed" and
+                                     c.get("conclusion") == "success" for c in matched), "exact-source gate failed: " + name
+          print("Original Foundation and independent App checks PASS for the exact reviewed head. Read-only credential probe may proceed.")
+          PY
+      - name: Checkout exact candidate without saved credentials
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Copy only the reviewed, immutable probe outside the checkout
+        run: |
+          set -euo pipefail
+          test "$(git hash-object brain/v8/runtime_probe.py)" = "c479f8c4f422a4e7de9bcb558127f8a2ab56378f"
+          install -m 0500 brain/v8/runtime_probe.py "$RUNNER_TEMP/v8-runtime-probe.py"
+      - name: Mint scoped read-only GitHub App token; revoke after use
+        id: runtime
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: '5352505'
+          private-key: ${{ secrets.PORTFOLIO_RUNTIME_PRIVATE_KEY }}
+          owner: P00NSMASHER
+          repositories: ${{ matrix.repository }}
+          permission-contents: read
+          permission-actions: read
+          permission-checks: read
+          permission-pull-requests: read
+          permission-statuses: read
+          skip-token-revoke: false
+      - name: Probe exactly one allowed repository with isolated standard-library code
+        env:
+          GH_TOKEN: ${{ steps.runtime.outputs.token }}
+          INSTALLATION_ID: ${{ steps.runtime.outputs.installation-id }}
+          APP_SLUG: ${{ steps.runtime.outputs.app-slug }}
+          PROBE_REPOSITORY: ${{ matrix.repository }}
+        run: python -I "$RUNNER_TEMP/v8-runtime-probe.py" >> "$GITHUB_STEP_SUMMARY"
