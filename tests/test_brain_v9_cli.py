@@ -46,7 +46,7 @@ class MissionCLITests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / 'input.json'
-            for contents in ('{"work":[],"work":[]}', '{}', 'null', 'NaN'):
+            for contents in ('{"work":[],"work":[]}', '{}', 'null', 'NaN', '[' * 2000 + '0' + ']' * 2000):
                 source.write_text(contents)
                 code, result = self.invoke(['compile', '--input', str(source)])
                 self.assertEqual(code, 2)
@@ -54,6 +54,23 @@ class MissionCLITests(unittest.TestCase):
             code, result = self.invoke(['compile', '--input', str(root / 'missing')])
             self.assertEqual(code, 2)
             self.assertFalse(result['production_accepted'])
+
+    def test_missing_journal_does_not_create_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            from brain.v9.missions import compile_mission
+            root = Path(directory)
+            row = work()
+            heads = {row['repository']: row['source_sha']}
+            manifest = root / 'mission.json'
+            manifest.write_text(json.dumps(compile_mission([row], source_heads=heads)))
+            headfile = root / 'heads.json'
+            headfile.write_text(json.dumps(heads))
+            missing = root / 'missing.sqlite'
+            code, result = self.invoke(['plan', '--mission', str(manifest),
+                '--heads', str(headfile), '--journal', str(missing), '--now', LATER])
+            self.assertEqual(code, 2)
+            self.assertEqual(result['status'], 'BLOCKED')
+            self.assertFalse(missing.exists())
 
 
 if __name__ == '__main__':

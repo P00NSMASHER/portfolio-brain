@@ -1,6 +1,7 @@
 """Explicit offline v9 mission tools; no executor or release authority."""
 import argparse
 import json
+import sqlite3
 from pathlib import Path
 from brain.core import BrainError, require
 from brain.v8.__main__ import _load, Parser
@@ -34,7 +35,7 @@ def main(argv=None):
                               automatic_execution_authority=False,
                               production_accepted=False), sort_keys=True))
         return 0
-    except (BrainError, OSError, ValueError, TypeError, KeyError) as exc:
+    except (BrainError, OSError, ValueError, TypeError, KeyError, RecursionError, sqlite3.Error) as exc:
         code = str(exc) if isinstance(exc, BrainError) else 'V9_INPUT_UNAVAILABLE'
         print(json.dumps(dict(status='BLOCKED', code=code,
                               automatic_execution_authority=False,
