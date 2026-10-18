@@ -1,0 +1,2241 @@
+{
+  "schema_version": 1,
+  "baseline_source": "d25b54041341089482ad55e5d270171879e186b1",
+  "scope": "Full v9 requirements. NOT_STARTED means not verified against the full requirement, not absence of historical code. Component evidence is tracked separately.",
+  "authority": "REPORT_ONLY_NOT_RELEASE_AUTHORIZATION",
+  "capabilities": [
+    {
+      "id": 1,
+      "tier": 1,
+      "name": "Portfolio-Wide Autonomous Coding",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/v8/repair_runtime.py"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 2,
+      "tier": 1,
+      "name": "Complete Autonomous Repair-to-Production",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/repair_delivery.py"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 3,
+      "tier": 1,
+      "name": "Specialized AI Engineering Departments",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/v8/inventory.py"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 4,
+      "tier": 1,
+      "name": "Real Computer and Application Testing",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 5,
+      "tier": 1,
+      "name": "Autonomous Multi-Repository Upgrades",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 6,
+      "tier": 1,
+      "name": "Self-Improving Engineering Intelligence",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/v8/learning.py"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 7,
+      "tier": 1,
+      "name": "Predictive Failure Prevention",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/watchdog.py"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 8,
+      "tier": 1,
+      "name": "Autonomous Cybersecurity Department",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 9,
+      "tier": 1,
+      "name": "Digital Twins of Applications",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 10,
+      "tier": 1,
+      "name": "Permanent Engineering Memory",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/core.py",
+        "brain/v8/journal.py"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 11,
+      "tier": 1,
+      "name": "Autonomous Product Innovation",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 12,
+      "tier": 1,
+      "name": "Autonomous Chief Technology Officer",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/mission.py"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 13,
+      "tier": 2,
+      "name": "Capability Forge",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 14,
+      "tier": 2,
+      "name": "Autonomous Architecture Evolution",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 15,
+      "tier": 2,
+      "name": "Portfolio Supergraph",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "graph/"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 16,
+      "tier": 2,
+      "name": "Massively Parallel Engineering Laboratory",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 17,
+      "tier": 2,
+      "name": "Formal Verification Engine",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 18,
+      "tier": 2,
+      "name": "Autonomous Infrastructure Architect",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 19,
+      "tier": 2,
+      "name": "Multimodal Intelligence",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 20,
+      "tier": 2,
+      "name": "Synthetic Universe Generator",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/experiments.py"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 21,
+      "tier": 2,
+      "name": "Self-Optimizing Intelligence",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 22,
+      "tier": 2,
+      "name": "Predictive Portfolio Simulator",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 23,
+      "tier": 2,
+      "name": "Autonomous Migration Engine",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 24,
+      "tier": 2,
+      "name": "Engineering Knowledge Transfer",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/transfer.py"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 25,
+      "tier": 2,
+      "name": "Autonomous Product Research Laboratory",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/v8/research.py"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 26,
+      "tier": 2,
+      "name": "Self-Healing Infrastructure Network",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "reliability/cloudflare/"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 27,
+      "tier": 2,
+      "name": "Portfolio Mission Compiler",
+      "status": "SPECIFIED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/v8/contracts.py",
+        "brain/v8/journal.py"
+      ],
+      "remaining_dependency": "Local mission foundation only; runtime execution adapters, external ownership enforcement, independent acceptance and production integration remain required."
+    },
+    {
+      "id": 28,
+      "tier": 3,
+      "name": "Autonomous Venture Foundry",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 29,
+      "tier": 3,
+      "name": "Portfolio Command OS",
+      "status": "SPECIFIED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/v8/engineering.py"
+      ],
+      "remaining_dependency": "Local mission foundation only; runtime execution adapters, external ownership enforcement, independent acceptance and production integration remain required."
+    },
+    {
+      "id": 30,
+      "tier": 3,
+      "name": "Universal Product Composer",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 31,
+      "tier": 3,
+      "name": "Autonomous Chief Scientist",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 32,
+      "tier": 3,
+      "name": "AI Executive Council",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 33,
+      "tier": 3,
+      "name": "Outcome-Based Autonomy",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/operational_outcomes.py"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 34,
+      "tier": 3,
+      "name": "Global Portfolio Optimizer",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 35,
+      "tier": 3,
+      "name": "Autonomous Product Evolution",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 36,
+      "tier": 3,
+      "name": "Self-Scaling AI Workforce",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 37,
+      "tier": 3,
+      "name": "Real-World Intelligence Network",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/operational_outcomes.py"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 38,
+      "tier": 3,
+      "name": "Autonomous Systems Integration",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 39,
+      "tier": 3,
+      "name": "Disaster Simulation Command",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 40,
+      "tier": 3,
+      "name": "Long-Horizon Strategic Intelligence",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/v8/journal.py"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 41,
+      "tier": 3,
+      "name": "Recursive Innovation Engine",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 42,
+      "tier": 3,
+      "name": "Verified Self-Governance",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/v8/authority.py"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 43,
+      "tier": 4,
+      "name": "Recursive Intelligence Foundry",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 44,
+      "tier": 4,
+      "name": "Autonomous Model Foundry",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 45,
+      "tier": 4,
+      "name": "Artificial Scientist",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 46,
+      "tier": 4,
+      "name": "Causal World Simulator",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 47,
+      "tier": 4,
+      "name": "10,000 Futures Engine",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 48,
+      "tier": 4,
+      "name": "Digital Evolution Arena",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 49,
+      "tier": 4,
+      "name": "Universal Software Compiler",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 50,
+      "tier": 4,
+      "name": "Proof-Carrying Software",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "verification/"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 51,
+      "tier": 4,
+      "name": "Synthetic Civilization",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 52,
+      "tier": 4,
+      "name": "Software Time Machine",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "state_journal/"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 53,
+      "tier": 4,
+      "name": "Multimodal Reality Laboratory",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 54,
+      "tier": 4,
+      "name": "Autonomous Sandbox Fabric",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        ".github/workflows/portfolio-independent-verifier.yml"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 55,
+      "tier": 4,
+      "name": "Agent Swarm Economy",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 56,
+      "tier": 4,
+      "name": "Self-Generating Toolchain",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 57,
+      "tier": 4,
+      "name": "Software Genome Engine",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 58,
+      "tier": 4,
+      "name": "Adaptive Infrastructure Organism",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 59,
+      "tier": 4,
+      "name": "Antifragile Chaos Laboratory",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "hostile/"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 60,
+      "tier": 4,
+      "name": "Continuous Invention Tournament",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "challenger/"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 61,
+      "tier": 4,
+      "name": "Portfolio-Wide Formal Reasoning",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 62,
+      "tier": 4,
+      "name": "Technological Horizon Scanner",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/v8/research.py"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 63,
+      "tier": 4,
+      "name": "Self-Directed Research Missions",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 64,
+      "tier": 4,
+      "name": "Cryptographic Proof of Improvement",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/cloudflare_clock.py"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 65,
+      "tier": 4,
+      "name": "Constitutional Autonomy Firewall",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [
+        "brain/v8/authority.py",
+        "verification/independent_verifier.py"
+      ],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    },
+    {
+      "id": 66,
+      "tier": 4,
+      "name": "Open-Ended Innovation Engine",
+      "status": "NOT_STARTED",
+      "required_tools": [
+        "Repository-specific source access",
+        "Independent exact-source verification"
+      ],
+      "required_permissions": [
+        "Explicit repository and action scope"
+      ],
+      "execution_environment": "NOT_ESTABLISHED_FOR_COMPLETE_CAPABILITY",
+      "supported_operations": [],
+      "resource_limits": {
+        "new_spending": 0,
+        "new_scheduled_tasks": 0
+      },
+      "security_constraints": [
+        "No self-approval",
+        "No authority expansion",
+        "Protected delivery only"
+      ],
+      "test_coverage": [],
+      "verification_requirements": [
+        "Original source-bound tests",
+        "Independent security and permission review",
+        "Observed behavior at claimed maturity"
+      ],
+      "evidence": [],
+      "reusable_components": [],
+      "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
+    }
+  ]
+}
