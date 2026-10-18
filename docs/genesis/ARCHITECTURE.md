@@ -91,3 +91,21 @@ requires PRs and resolved threads, and requires strict exact-source checks
 The observed required approving-review count is zero; this does not waive the
 user's separate independent review and source-specific acceptance requirements.
 Only Portfolio Brain repository permissions were checked in this increment.
+
+## Offline entry points
+
+`python -m brain.v9 compile --input input.json` emits a JSON envelope whose
+`result` is the mission manifest. Input has exactly `work` (validated v8 rows),
+`source_heads` (repository-to-immutable-SHA map), and `max_parallel` (1–5).
+Preserve that result as mission.json in the existing authorized private workspace;
+the compiler does not create a second state store.
+
+`python -m brain.v9 plan --mission mission.json --heads heads.json --journal /private/kernel.sqlite --now 2026-10-18T04:00:00Z`
+reopens the existing private journal read-only and emits the plan. The heads file
+is an independently collected observation supplied by the caller, not a permission
+grant. The command neither executes jobs nor authenticates those observations.
+Same-repository tasks serialize conservatively, including case-insensitive aliases.
+All replay event times, including released claims, must precede the projection time.
+
+On malformed input, unknown writes, stale source or corrupt state, retain the
+original manifest/journal and obtain fresh evidence; never edit history to unblock.

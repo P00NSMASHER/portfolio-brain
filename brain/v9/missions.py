@@ -23,6 +23,8 @@ def _heads(heads):
     require(type(heads) is dict and 0 < len(heads) <= MAX_WORK
             and all(matches(REPO, repo) and matches(SHA, sha)
                     for repo, sha in heads.items()), 'V9_SOURCE_HEADS_INVALID')
+    require(len({repo.casefold() for repo in heads}) == len(heads),
+            'V9_REPOSITORY_ALIAS')
     return dict(sorted(heads.items()))
 
 
@@ -83,6 +85,7 @@ def project_mission(mission, journal, *, source_heads, now):
 
     Current heads are supplied observations, not authenticated access evidence.
     Held claims block even after expiry, until explicitly reconciled and released.
+    Repository-wide exclusion is conservative until verified path scopes exist.
     """
     _validate_mission(mission)
     current = parse_utc(now)
@@ -91,12 +94,18 @@ def project_mission(mission, journal, *, source_heads, now):
     records = journal.replay()
     state, pending, claims, completed = {}, {}, {}, {}
     for record in records:
+        op = record['operation']
+        require(parse_utc(op['occurred_at'] if record['kind'] == 'WORK' else op['now']) <= current,
+                'V9_PROJECTION_TIME_REVERSED')
         KernelJournal._apply_record(record['kind'], record['operation'],
                                     state, pending, claims, completed)
     require(all(parse_utc(row['updated_at']) <= current for row in state.values())
             and all(parse_utc(claim['now']) <= current for claim in claims.values()),
             'V9_PROJECTION_TIME_REVERSED')
     unresolved = {state[key]['resource'] for key in pending}
+    pending_repos = {state[key]['repository'].casefold() for key in pending}
+    claimed_repos = {row['repository'].casefold() for row in state.values()
+                     if row['resource'] in claims}
     membership = {row['work_id']: row for row in mission['work']}
     for key, identity in membership.items():
         require(key not in state or _identity(state[key]) == identity,
@@ -110,9 +119,9 @@ def project_mission(mission, journal, *, source_heads, now):
         result = None
         if row is None:
             result = 'WORK_NOT_OBSERVED'
-        elif row['resource'] in unresolved:
+        elif row['resource'] in unresolved or row['repository'].casefold() in pending_repos:
             result = 'EXTERNAL_RECONCILIATION_REQUIRED'
-        elif row['resource'] in claims:
+        elif row['resource'] in claims or row['repository'].casefold() in claimed_repos:
             result = 'RESOURCE_CLAIM_HELD'
         elif row['state'] not in LOCAL_STATES or row['blocker'] is not None:
             result = 'NONLOCAL_OR_BLOCKED_STATE'
@@ -123,7 +132,7 @@ def project_mission(mission, journal, *, source_heads, now):
         return result
 
     selected, blocked, deferred, local_completed = [], [], [], []
-    resources = set()
+    resources, repositories = set(), set()
     ordered = sorted(membership, key=lambda key: (membership[key]['priority_tier'], key))
     for key in ordered:
         why = reason(key)
@@ -133,10 +142,13 @@ def project_mission(mission, journal, *, source_heads, now):
             local_completed.append(key)
         elif membership[key]['resource'] in resources:
             deferred.append(dict(work_id=key, reason='RESOURCE_COLLISION'))
+        elif membership[key]['repository'].casefold() in repositories:
+            deferred.append(dict(work_id=key, reason='REPOSITORY_COLLISION'))
         elif len(selected) >= mission['max_parallel']:
             deferred.append(dict(work_id=key, reason='PARALLEL_BOUND'))
         else:
             resources.add(membership[key]['resource'])
+            repositories.add(membership[key]['repository'].casefold())
             selected.append(dict(work_id=key, source_sha=state[key]['source_sha'],
                                  next_local_state=LOCAL_STATES[LOCAL_STATES.index(state[key]['state']) + 1]))
     return dict(mission_id=mission['mission_id'], scope=SCOPE, observed_at=now,

@@ -124,7 +124,9 @@ class MissionTests(unittest.TestCase):
 
     def test_resource_conflicts_and_parallel_limit(self):
         same = work('same')
-        independent = work('independent', resource='f' * 64)
+        independent = work('independent', resource='f' * 64,
+                           repository='P00NSMASHER/portfolio-brain')
+        self.heads[independent['repository']] = independent['source_sha']
         self.seed([self.a, same, independent])
         result = self.project(self.compile([self.a, same, independent], max_parallel=5))
         self.assertEqual(len(result['selected']), 2)
@@ -173,6 +175,36 @@ class MissionTests(unittest.TestCase):
         result = self.project(mission)
         self.assertEqual(result['selected'], [])
         self.assertEqual(len(result['blocked']), 2)
+
+
+    def test_repository_alias_and_distinct_resources_do_not_bypass_exclusion(self):
+        other = work('different-resource', resource='e' * 64)
+        self.seed([self.a, other])
+        mission = self.compile([self.a, other], max_parallel=5)
+        result = self.project(mission)
+        self.assertEqual(len(result['selected']), 1)
+        self.assertEqual(result['deferred'][0]['reason'], 'REPOSITORY_COLLISION')
+        with KernelJournal(self.path) as journal:
+            journal.append(operation(other, ident='3', expected='OBSERVED',
+                                     outcome='EXTERNAL_INTENT'))
+        self.assertEqual(self.project(mission)['selected'], [])
+        alias = work('alias', repository=self.a['repository'].lower())
+        with self.assertRaises(BrainError):
+            compile_mission([self.a, alias], source_heads={
+                self.a['repository']: self.a['source_sha'],
+                alias['repository']: alias['source_sha']})
+
+    def test_future_released_claim_rejected_at_past_projection_time(self):
+        mission = self.compile([self.a])
+        self.seed([self.a])
+        with KernelJournal(self.path) as journal:
+            journal.claim(resource=self.a['resource'], owner=self.a['owner'],
+                          operation_id='2' * 64, source_sha=self.a['source_sha'],
+                          now=NOW, expires_at=LATER)
+            journal.release_claim(resource=self.a['resource'], owner=self.a['owner'],
+                                  operation_id='2' * 64, now='2026-10-15T20:10:00Z')
+        with self.assertRaises(BrainError):
+            self.project(mission)
 
 
 if __name__ == '__main__':
