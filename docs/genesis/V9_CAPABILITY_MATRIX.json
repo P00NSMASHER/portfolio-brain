@@ -2372,6 +2372,43 @@
         "No maturity promotion or release authority"
       ],
       "production_verified": false
+    },
+    {
+      "id": "pending-draft-reconciliation",
+      "full_capabilities": [
+        1,
+        2,
+        27,
+        29,
+        64
+      ],
+      "status": "TESTED",
+      "source_paths": [
+        "brain/v9/reconciliation.py",
+        "brain/v9/pending_review.py"
+      ],
+      "test_paths": [
+        "tests/test_brain_v9_reconciliation.py",
+        "tests/test_brain_v9_pending_review.py"
+      ],
+      "environment": "Explicit read-only Python process; private KernelJournal; authorized GitHub credential required",
+      "permissions": [
+        "Per-repository pull permission only",
+        "Read local private journal; no journal writes"
+      ],
+      "operations": [
+        "Observe exact draft commit/files/author/source",
+        "Bind observation to unchanged pending intent without clearing uncertainty"
+      ],
+      "evidence": [
+        "docs/genesis/PROVIDER_RECONCILIATION.md"
+      ],
+      "limitations": [
+        "Injected transport tests are not authenticated runtime execution",
+        "No independent execution admission or retry/release authority",
+        "Sequential provider observations are not an atomic snapshot"
+      ],
+      "production_verified": false
     }
   ]
 }
