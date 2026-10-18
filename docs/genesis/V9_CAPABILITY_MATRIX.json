@@ -2265,7 +2265,8 @@
       "evidence": [
         "https://github.com/P00NSMASHER/portfolio-brain/actions/runs/39095870348"
       ],
-      "production_verified": false
+      "production_verified": false,
+      "source_revision": "aaa4bd8982eb594bbdefa6374c430823075853e0"
     },
     {
       "id": "durable-fixed-local-recipe",
@@ -2302,6 +2303,73 @@
         "Local implementation-session tests; exact-head hosted CI required",
         "No authenticated provider execution or target source mutation",
         "Cooperative locking only; no independent acceptance"
+      ],
+      "production_verified": false,
+      "source_revision": "aaa4bd8982eb594bbdefa6374c430823075853e0"
+    },
+    {
+      "id": "github-source-observer",
+      "full_capabilities": [
+        1,
+        15,
+        27,
+        29
+      ],
+      "status": "TESTED",
+      "source_paths": [
+        "brain/v9/github_observer.py",
+        "brain/v9/__main__.py"
+      ],
+      "test_paths": [
+        "tests/test_brain_v9_github_observer.py",
+        "tests/test_brain_v9_observed_plan.py"
+      ],
+      "environment": "Explicit local Python process with existing authorized GitHub read credential",
+      "permissions": [
+        "Repository-specific pull permission; no write authority"
+      ],
+      "operations": [
+        "Observe stable default heads and immutable file digests",
+        "Read-only source-bound mission planning"
+      ],
+      "evidence": [
+        "docs/genesis/SOURCE_OBSERVATION.md"
+      ],
+      "limitations": [
+        "Direct HTTPS transport not live-authenticated in this session",
+        "No unattended runtime credential established",
+        "Cooperative deadlines, no hard OS sandbox"
+      ],
+      "production_verified": false
+    },
+    {
+      "id": "capability-registry-validator",
+      "full_capabilities": [
+        29,
+        33,
+        42,
+        65
+      ],
+      "status": "TESTED",
+      "source_paths": [
+        "brain/v9/registry.py"
+      ],
+      "test_paths": [
+        "tests/test_brain_v9_registry.py"
+      ],
+      "environment": "Local read-only Python process",
+      "permissions": [
+        "Read local registry and referenced repository files"
+      ],
+      "operations": [
+        "Validate declared maturity and unknown-preserving scorecard"
+      ],
+      "evidence": [
+        "docs/genesis/SOURCE_OBSERVATION.md"
+      ],
+      "limitations": [
+        "Structural validation does not authenticate evidence",
+        "No maturity promotion or release authority"
       ],
       "production_verified": false
     }

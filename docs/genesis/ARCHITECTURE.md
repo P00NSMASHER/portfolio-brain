@@ -117,3 +117,10 @@ on the next authorized run. Existing v9 tests were rerun locally, and a fixed lo
 recipe runner now persists actual results and resumes them without duplicate execution.
 This does not activate production v9 or expand external authority. The capability
 matrix now records tested components separately from full-requirement maturity.
+
+## Third increment
+
+See [source observations and executable registry](SOURCE_OBSERVATION.md). The d25
+source-specific hold has passed; new production source still needs fresh acceptance.
+Read-only authenticated observations now feed mission planning through an explicit
+credential-bound command. Runtime authentication remains separately unverified.
