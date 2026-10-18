@@ -142,7 +142,9 @@ def validate_registry(matrix: dict, scorecard: dict, *, repository_root: Path) -
         for path in _strings(row.get('reusable_components')):
             _file(root, path, directory=path.endswith('/'))
         if row['status'] == 'BLOCKED':
-            require(bool(row.get('remaining_dependency')), 'V9_REGISTRY_BLOCKER')
+            dependency = row.get('remaining_dependency')
+            require(type(dependency) is str and 0 < len(dependency.strip()) <= 2048,
+                    'V9_REGISTRY_BLOCKER')
         ids.add(number)
         names.add(name.casefold().strip())
     components = matrix.get('components', [])
@@ -158,7 +160,9 @@ def validate_registry(matrix: dict, scorecard: dict, *, repository_root: Path) -
                 and all(type(item) is int and item in ids for item in related)
                 and len(set(related)) == len(related), 'V9_REGISTRY_COMPONENT_LINK')
         for field in ('source_paths', 'test_paths'):
-            for path in _strings(row.get(field), nonempty=row['status'] in EVIDENCED):
+            required = row['status'] in EVIDENCED or (
+                field == 'source_paths' and row['status'] == 'IMPLEMENTED')
+            for path in _strings(row.get(field), nonempty=required):
                 _file(root, path)
         require(type(row.get('production_verified')) is bool
                 and row['production_verified'] == (row['status'] in

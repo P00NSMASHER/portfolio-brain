@@ -63,6 +63,27 @@ class RegistryTests(unittest.TestCase):
                 component.clear()
                 component.update(saved)
 
+    def test_implemented_component_requires_existing_source(self):
+        component = self.matrix['components'][0]
+        component.update(status='IMPLEMENTED', evidence=[], test_paths=[])
+        self.validate()  # Implementation does not claim tests have passed.
+        for paths in ([], ['brain/missing-source.py']):
+            with self.subTest(paths=paths):
+                component['source_paths'] = paths
+                with self.assertRaises(BrainError):
+                    self.validate()
+
+    def test_blocked_capability_requires_textual_dependency(self):
+        row = self.matrix['capabilities'][0]
+        row['status'] = 'BLOCKED'
+        for dependency in (True, 1, ['approval'], {}, '', '   '):
+            with self.subTest(dependency=dependency):
+                row['remaining_dependency'] = dependency
+                with self.assertRaises(BrainError):
+                    self.validate()
+        row['remaining_dependency'] = 'An independently authorized runtime credential is unavailable.'
+        self.validate()
+
     def test_source_revision_is_preserved_but_never_inferred_from_baseline(self):
         component = self.matrix['components'][0]
         component['source_revision'] = 'a' * 40
