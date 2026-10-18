@@ -1,0 +1,123 @@
+name: PermitPlate deterministic regression
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify bounded x402 directory receipts (offline)
+        run: python3 -m unittest discover -s tests -p 'test_pa_entity_directory_bounding.py'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify public deployment boundary
+        run: node build-site.test.js
+
+      - name: Verify GitHub Pages checkout and conversion constraints
+        run: node pipeline/public-conversion.test.js
+
+      - name: Verify retired legacy offers stay denylisted
+        run: node operations/legacy-offer-retirement.test.js
+
+      - name: Run model regression
+        run: node model-v7.test.js
+
+      - name: Run delivery verifier regression
+        run: node operations/delivery-verifier.test.js
+
+      - name: Run source observation regression
+        run: node operations/socrata-observer.test.js
+
+      - name: Run NYC source adapter regression
+        run: node pipeline/source-adapters.test.js
+
+      - name: Run ProjectSignal corroboration regression
+        run: node pipeline/project-signal.test.js
+
+      - name: Run end-to-end engine regression
+        run: node pipeline/engine.test.js
+
+      - name: Run Socrata reader regression
+        run: node pipeline/socrata-reader.test.js
+
+      - name: Run candidate graph regression
+        run: node pipeline/candidate-builder.test.js
+
+      - name: Run graph-bound subscriber delivery canary
+        run: node pipeline/delivery-plan.test.js
+
+      - name: Run persistent detection ledger regression
+        run: node pipeline/detection-ledger.test.js
+
+      - name: Run detection-to-delivery candidate package canary
+        run: node pipeline/candidate-package.test.js
+
+      - name: Run persistent opportunity ledger regression
+        run: node pipeline/opportunity-ledger.test.js
+
+      - name: Verify private operational state boundary
+        run: node pipeline/private-state-boundary.test.js
+
+      - name: Run subscriber profile contract regression
+        run: node pipeline/subscriber-profile.test.js
+
+      - name: Run subscriber artifact no-send regression
+        run: node pipeline/subscriber-artifact.test.js
+
+      - name: Run Stripe subscriber adapter regression
+        run: node pipeline/stripe-subscriber.test.js
+
+      - name: Run private first-subscriber intake regression
+        run: node pipeline/run-subscriber-intake.test.js
+
+
+      - name: Run private sheet mapping regression
+        run: node pipeline/private-sheet-mapping.test.js
+
+      - name: Run customer digest renderer regression
+        run: node pipeline/customer-message.test.js
+
+      - name: Run explicit transport authorization regression
+        run: node pipeline/transport-authorization.test.js
+
+      - name: Run provider reconciliation regression
+        run: node pipeline/provider-reconciliation.test.js
+
+      - name: Run launch readiness controller regression
+        run: node pipeline/launch-readiness.test.js
+
+      - name: Run founder-curated paid offer regression
+        run: node pipeline/founder-curated-offer.test.js
+
+      - name: Run commercial fit receipt regression
+        run: node pipeline/commercial-fit.test.js
+
+      - name: Run versioned scoring and receipt regression
+        run: node pipeline/scoring.test.js
+
+      - name: Run current-evidence shadow scoring regression
+        run: node pipeline/shadow-scoring-v3.test.js
+
+      - name: Run adversarial scoring invariants
+        run: node pipeline/scoring-invariants.test.js
+
+      - name: Run 47-case historical shadow scoring replay
+        run: node pipeline/historical-shadow-score-benchmark.test.js
+
+      - name: Run controlled scoring promotion policy regression
+        run: node pipeline/scoring-policy.test.js

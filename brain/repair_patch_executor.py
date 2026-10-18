@@ -69,25 +69,63 @@ def _source(data, *, repository, path):
     return source
 
 
+def _action_lines(lines, action):
+    """Recognize only literal list steps or a two-line plain named step.
+
+    This is deliberately not a general YAML parser. Unknown indentation,
+    multiline names and checkout options require a separately reviewed recipe.
+    """
+    found = []
+    for i, line in enumerate(lines):
+        bare = re.fullmatch(r"( {4,10})- uses: " + re.escape(action) + r"\n", line)
+        if bare:
+            found.append((i, len(bare[1]), False))
+            continue
+        named = re.fullmatch(r"( {6,12})uses: " + re.escape(action) + r"\n", line)
+        if named:
+            width = len(named[1]) - 2
+            # Named-step support is deliberately restricted to canonical
+            # jobs.<job>.steps indentation. Do not rewrite action-looking text
+            # nested inside a shell/YAML block scalar.
+            def parent(index, indent):
+                return next(((j, lines[j]) for j in range(index - 1, -1, -1)
+                             if lines[j].strip() and not lines[j].lstrip().startswith('#')
+                             and len(lines[j]) - len(lines[j].lstrip(' ')) < indent), (-1, ''))
+            steps_index, outer = parent(i - 1, width)
+            job_index, job_line = parent(steps_index, 4)
+            _, root_line = parent(job_index, 2)
+            require(width == 6 and outer == '    steps:\n'
+                    and re.fullmatch(r'  [A-Za-z_][A-Za-z0-9_-]*:\n', job_line)
+                    and root_line == 'jobs:\n'
+                    and i > 0 and re.fullmatch(
+                r" {" + str(width) + r"}- name: [A-Za-z0-9][A-Za-z0-9 _()./-]{0,119}\n",
+                lines[i - 1]), "AUTOFIX_NAMED_ACTION_AMBIGUOUS")
+            found.append((i, width, True))
+    return found
+
+
 def _change(source: str):
     lines = source.splitlines(keepends=True)
-    checkout = [i for i, line in enumerate(lines)
-                if re.fullmatch(r" {4,10}- uses: actions/checkout@v4\n", line)]
+    checkout = _action_lines(lines, "actions/checkout@v4")
     require(len(checkout) == 1, "AUTOFIX_CHECKOUT_V4_NOT_UNAMBIGUOUS")
-    i = checkout[0]
-    width = len(lines[i]) - len(lines[i].lstrip(" "))
+    i, width, named = checkout[0]
     require(i + 1 < len(lines)
             and not re.match(r"^ {" + str(width + 2) + r",}with:", lines[i + 1]),
             "AUTOFIX_CUSTOM_CHECKOUT_OPTIONS_REFUSED")
-    lines[i] = " " * width + "- uses: " + CHECKOUT + "\n"
+    if named:
+        following = next((line for line in lines[i + 1:] if line.strip()), "")
+        require(not following or
+                len(following) - len(following.lstrip(" ")) <= width,
+                "AUTOFIX_CUSTOM_CHECKOUT_OPTIONS_REFUSED")
+    lines[i] = " " * (width + 2 if named else width) + ("uses: " if named else "- uses: ") + CHECKOUT + "\n"
     lines.insert(i + 1, " " * (width + 2) + "with:\n")
     lines.insert(i + 2, " " * (width + 4) + "persist-credentials: false\n")
     steps = ["PIN_CHECKOUT_ACTION", "DENY_PERSISTED_CREDENTIALS"]
-    nodes = [i for i, line in enumerate(lines)
-             if re.fullmatch(r" {4,10}- uses: actions/setup-node@v4\n", line)]
+    nodes = _action_lines(lines, "actions/setup-node@v4")
     require(len(nodes) <= 1, "AUTOFIX_NODE_ACTION_AMBIGUOUS")
     if nodes:
-        lines[nodes[0]] = lines[nodes[0]].replace("actions/setup-node@v4", NODE)
+        node_index = nodes[0][0]
+        lines[node_index] = lines[node_index].replace("actions/setup-node@v4", NODE)
         steps.append("PIN_SETUP_NODE_ACTION")
     changed = "".join(lines)
     require(changed != source and changed.count(CHECKOUT) == 1

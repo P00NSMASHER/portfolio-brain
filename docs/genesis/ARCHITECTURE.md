@@ -109,3 +109,11 @@ All replay event times, including released claims, must precede the projection t
 
 On malformed input, unknown writes, stale source or corrupt state, retain the
 original manifest/journal and obtain fresh evidence; never edit history to unblock.
+
+## Second increment
+
+See [durable local recipe execution](LOCAL_RECIPE_EXECUTION.md). The executor recovered
+on the next authorized run. Existing v9 tests were rerun locally, and a fixed local
+recipe runner now persists actual results and resumes them without duplicate execution.
+This does not activate production v9 or expand external authority. The capability
+matrix now records tested components separately from full-requirement maturity.

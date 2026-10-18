@@ -2237,5 +2237,73 @@
       "reusable_components": [],
       "remaining_dependency": "Implement and independently demonstrate full v9 requirement; reusable historical components are not full-capability certification."
     }
+  ],
+  "components": [
+    {
+      "id": "local-mission-foundation",
+      "status": "TESTED",
+      "full_capabilities": [
+        27,
+        29
+      ],
+      "source_paths": [
+        "brain/v9/missions.py",
+        "brain/v9/__main__.py"
+      ],
+      "test_paths": [
+        "tests/test_brain_v9_missions.py",
+        "tests/test_brain_v9_cli.py"
+      ],
+      "environment": "Python 3 standard library; local existing private KernelJournal",
+      "permissions": [
+        "Local private filesystem only"
+      ],
+      "operations": [
+        "Compile bounded source-bound DAG",
+        "Project validated journal progress"
+      ],
+      "evidence": [
+        "https://github.com/P00NSMASHER/portfolio-brain/actions/runs/39095870348"
+      ],
+      "production_verified": false
+    },
+    {
+      "id": "durable-fixed-local-recipe",
+      "status": "TESTED",
+      "full_capabilities": [
+        2,
+        13,
+        27,
+        29
+      ],
+      "source_paths": [
+        "brain/v9/local_recipe.py",
+        "brain/repair_patch_executor.py"
+      ],
+      "test_paths": [
+        "tests/test_brain_v9_local_recipe.py",
+        "tests/test_brain_v9_named_recipe.py",
+        "tests/test_brain_v9_cli.py"
+      ],
+      "environment": "Local Python fixed generated-regression subprocess; not OS sandbox",
+      "permissions": [
+        "Local private filesystem only; no provider calls"
+      ],
+      "operations": [
+        "Durable intent before fixed recipe",
+        "Persist generated patch and regression",
+        "Resume saved result without rerun",
+        "Refuse unknown outcomes and conflicting work"
+      ],
+      "evidence": [
+        "docs/genesis/receipts/local-permitplate-recipe-20261018.json"
+      ],
+      "limitations": [
+        "Local implementation-session tests; exact-head hosted CI required",
+        "No authenticated provider execution or target source mutation",
+        "Cooperative locking only; no independent acceptance"
+      ],
+      "production_verified": false
+    }
   ]
 }
