@@ -1,6 +1,6 @@
 # Guarded GitHub-native auto-merge admission — v9 candidate
 
-**Status: source and tests only; not a deployed autonomous writer.** This component does not install a scheduler, add repository secrets, modify production workflows, or alter branch protection. The repository-level \`allow_auto_merge\` setting was observed **false** on 2026-10-19. No GitHub connector action available in this session can change that setting.
+**Status: guarded controller, event-only workflow and adversarial tests are in a DRAFT PR; not yet merged into production.** This component does not install a scheduler, add repository secrets, modify existing production workflows, or alter branch protection. The proposed new workflow responds only to successful completion of the already-existing independent verifier, executes pinned trusted-main code, and holds all enrollment until exact-source acceptance. The repository-level \`allow_auto_merge\` setting was observed **false** on 2026-10-19. No GitHub connector action available in this session can change that setting.
 
 ## Authorization model
 
@@ -24,13 +24,13 @@ python -m brain.v9.guarded_merge --pr 123 --expected-main <exact-accepted-produc
 python -m brain.v9.guarded_merge --pr 123 --expected-main <same-SHA> --apply
 \`\`\`
 
-No GitHub Actions job or automatic trigger invokes this CLI yet. Do not run it from candidate PR source. Turn on the GitHub repository setting **Settings → General → Pull Requests → Allow auto-merge** only through a user-authorized administrator connection; do not use an unrelated runtime secret or weaken rulesets. After enabling the setting, observe \`allow_auto_merge=true\` via GitHub readback before enabling any unattended enrollment path.
+The candidate adds `.github/workflows/v9-guarded-native-automerge.yml`: on successful completion of the existing independent verifier, it checks out exact trusted main without persisted credentials, verifies SHA-1 blob pins for both controllers, enumerates at most three opted-in PRs and applies the same admission rules. It is **not scheduled** and adds no paid resource. It uses the minimum repository-scoped `GITHUB_TOKEN` permissions (`contents:read`, `pull-requests:write`). No candidate PR code is executed. The workflow itself cannot run in production until a separate protected merge and new-source acceptance; absent native setting or acceptance the controller performs **zero writes**. Turn on the GitHub repository setting **Settings → General → Pull Requests → Allow auto-merge** only through a user-authorized administrator connection; do not use an unrelated runtime secret or weaken rulesets. After enabling the setting, observe \`allow_auto_merge=true\` via GitHub readback before enabling any unattended enrollment path.
 
 ## Safety and activation gates
 
 - Source acceptance for newly merged \`59417cbd…\` is pending. The accepted \`0c1184d2…\` receipt does not transfer.
-- The current code must pass exact-head Foundation and independently issued verifier checks, then the guarded protected merge procedure. Once merged, it starts another new-source acceptance period.
-- A future independently reviewed workflow may invoke this code on trusted-main only, after runtime token scope is established, with no PR-source execution. It must never self-issue its approval or mint verifier checks. No new ChatGPT tasks or paid resources are created.
+- The candidate must pass exact-head Foundation and independently issued verifier checks before any protected merge. That merge starts a **new** source-specific acceptance period. This workflow will not issue automatic enrollment without the matching independently recorded acceptance of that new source.
+- The proposed event-only workflow is itself reviewed under `brain.validate` for exact blob pins, trusted-main checkout, restricted permissions and absence of direct merge API, Cron or untrusted PR triggers. No new ChatGPT tasks or paid resources are created.
 - A PR that changes after admission, fails check provenance, has unreviewed files, altered acceptance or unresolved threads **fails closed**; missing data never proves a safe merge.
 - When a GraphQL enrollment write has an uncertain outcome, reconcile actual PR state before any retry. There is no automatic retry in this component.
 - Enrollment is not a product deployment or a v9 capability completion claim. Deployment requires project-specific tests, publication readback and fresh source-bound reliability acceptance.
