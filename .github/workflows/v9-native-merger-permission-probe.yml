@@ -42,6 +42,12 @@ jobs:
               with urllib.request.urlopen(req,timeout=12) as f:
                 status=f.status;body=f.read(1048576)
               result=json.loads(body)
+              if label=="repository":
+                print("repository_meta:",json.dumps({
+                    "id":result.get("id"),"name":result.get("full_name"),
+                    "auto_merge":result.get("allow_auto_merge","FIELD_ABSENT"),
+                    "permissions":result.get("permissions","FIELD_ABSENT")},
+                    sort_keys=True))
               if label=="candidate_check_runs":
                 ok=type(result)==dict and result.get("total_count",0)>=1
               elif label=="acceptance_matching_refs":
