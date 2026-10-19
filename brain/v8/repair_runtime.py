@@ -171,10 +171,12 @@ def checked_candidate(api, *, prefix, main_sha, branch_sha, fixed):
     return expected_blob
 
 
-def checked_draft(api, *, prefix, number, branch, branch_sha, main_sha):
+def checked_draft(api, *, prefix, number, branch, branch_sha, main_sha, base_sha=None):
     """A bot-owned original draft is not a delivery, merge or production change."""
     require(type(number) is int and 0 < number < 10**9,
             "ORIGINAL_DRAFT_NUMBER_INVALID")
+    require(base_sha is None or (type(base_sha) is str and GIT_SHA.fullmatch(base_sha)),
+            "DRAFT_BASE_SOURCE_INVALID")
     verified = None
     for retry in range(3):
         try:
@@ -193,11 +195,65 @@ def checked_draft(api, *, prefix, number, branch, branch_sha, main_sha):
             and verified.get("head", {}).get("sha") == branch_sha
             and verified.get("head", {}).get("ref") == branch
             and verified.get("head", {}).get("repo", {}).get("full_name") == TARGET
-            and verified.get("base", {}).get("sha") == main_sha
+            and verified.get("base", {}).get("sha") == (main_sha if base_sha is None else base_sha)
             and verified.get("base", {}).get("ref") == "main"
             and verified.get("user", {}).get("login") == APP_SLUG + "[bot]",
             "ORIGINAL_BOT_DRAFT_NOT_VERIFIED")
     return True
+
+
+
+def readback_original_draft_after_source_drift(api, *, prefix, current_main):
+    """Read-only proof that the original bot draft survived unrelated main drift.
+
+    This never retargets a writer, rebases, retries or declares delivery. A
+    changed source document or absent original draft preserves the ordinary
+    no-mutation drift outcome. Malformed evidence fails closed.
+    """
+    require(type(current_main) is str and GIT_SHA.fullmatch(current_main)
+            and current_main != EXPECTED_TARGET_HEAD,
+            "DRIFT_SOURCE_INVALID")
+    branch = BRANCH_PREFIX + EXPECTED_TARGET_HEAD[:12]
+    source, canonical_blob = checked_document(
+        api("GET", prefix + "contents/" + CANONICAL + "?ref=" + current_main),
+        "DRIFT_CANONICAL")
+    original, original_blob = checked_document(
+        api("GET", prefix + "contents/" + DOC + "?ref=" + current_main),
+        "DRIFT_RELEASE_DOC")
+    if (canonical_blob != EXPECTED_CANONICAL_BLOB
+            or original_blob != EXPECTED_RELEASE_BLOB):
+        return None
+    corrected = plan(source, original)
+    if corrected is None:
+        return None
+    census = api("GET", prefix + "pulls?state=open&per_page=100")
+    require(type(census) is list and len(census) < 100
+            and all(type(p) is dict for p in census),
+            "DRIFT_OPEN_PR_CENSUS_INCOMPLETE")
+    matches = [p for p in census
+               if type(p.get("head")) is dict
+               and p["head"].get("ref") == branch]
+    if not matches:
+        return None
+    require(len(matches) == 1, "DRIFT_ORIGINAL_DRAFT_AMBIGUOUS")
+    branch_row = api("GET", prefix + "branches/" + branch)
+    require(type(branch_row) is dict and type(branch_row.get("commit")) is dict,
+            "DRIFT_ORIGINAL_BRANCH_UNVERIFIED")
+    candidate_sha = branch_row["commit"].get("sha")
+    checked_candidate(api, prefix=prefix, main_sha=EXPECTED_TARGET_HEAD,
+                      branch_sha=candidate_sha, fixed=corrected)
+    number = matches[0].get("number")
+    checked_draft(api, prefix=prefix, number=number, branch=branch,
+                  branch_sha=candidate_sha, main_sha=EXPECTED_TARGET_HEAD,
+                  base_sha=current_main)
+    latest = api("GET", prefix + "branches/main")
+    require(type(latest) is dict and latest.get("commit", {}).get("sha") == current_main,
+            "DRIFT_TARGET_MAIN_MOVED_DURING_READBACK")
+    return {"status": "ORIGINAL_BOT_DRAFT_STILL_PENDING_AFTER_TARGET_DRIFT",
+            "repository": TARGET, "target_source": current_main,
+            "original_source": EXPECTED_TARGET_HEAD, "draft_pr": number,
+            "repair_commit": candidate_sha, "source_documents_unchanged": True,
+            "provider_writes": 0, "merged": False, "deployed": False}
 
 
 def execute(api, *, installation, slug):
@@ -214,6 +270,10 @@ def execute(api, *, installation, slug):
     require(type(main_sha) is str and GIT_SHA.fullmatch(main_sha) is not None,
             "TARGET_MAIN_NOT_VERIFIED")
     if main_sha != EXPECTED_TARGET_HEAD:
+        pending = readback_original_draft_after_source_drift(
+            api, prefix=prefix, current_main=main_sha)
+        if pending is not None:
+            return pending
         return {"status": "TARGET_SOURCE_CHANGED_NO_MUTATION",
                 "repository": TARGET, "target_source": main_sha,
                 "provider_writes": 0, "merged": False, "deployed": False}
