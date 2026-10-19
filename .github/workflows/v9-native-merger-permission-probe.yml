@@ -60,5 +60,24 @@ jobs:
               status="unavailable";ok=False
             print(label+": STATUS="+str(status)+" ACCEPTED="+str(ok))
             all_ok &= ok
-          raise SystemExit(0 if all_ok else 1)
+          query='{ repository(owner: "P00NSMASHER", name: "portfolio-brain") { databaseId nameWithOwner autoMergeAllowed isArchived } }'
+          request=urllib.request.Request("https://api.github.com/graphql",
+            data=json.dumps({"query":query}).encode("utf-8"),
+            headers={"Authorization":"Bearer "+token,"Content-Type":"application/json",
+              "Accept":"application/vnd.github+json","User-Agent":"v9-native-merge-probe"},
+            method="POST")
+          try:
+            with urllib.request.urlopen(request,timeout=12) as f:
+              graphql=json.loads(f.read(40960))
+            payload=graphql.get("data",{}).get("repository")
+            graphql_ok=(type(payload)==dict and payload.get("databaseId")==1387747549
+              and payload.get("nameWithOwner")=="P00NSMASHER/portfolio-brain"
+              and payload.get("autoMergeAllowed") is True
+              and payload.get("isArchived") is False
+              and not graphql.get("errors"))
+            print("graphql_native_auto_merge:",json.dumps({"verified":graphql_ok,"data":payload,"errors":graphql.get("errors")},sort_keys=True))
+          except Exception as exc:
+            graphql_ok=False
+            print("graphql_native_auto_merge:",type(exc).__name__)
+          raise SystemExit(0 if all_ok and graphql_ok else 1)
           PY
