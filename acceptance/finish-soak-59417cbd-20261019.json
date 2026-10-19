@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "decision_date_utc": "2026-10-19",
+  "decision": "RELEASED",
+  "status": "PASS",
+  "scope": "SOURCE_SPECIFIC_UNATTENDED_PRODUCTION_CORE_RELIABILITY_ONLY",
+  "source_sha": "59417cbd9637a8ee2cf0f663cd37594e6100a39a",
+  "protected_main_observed_at_decision": true,
+  "approval_basis": "Owner-authorized governed acceptance decision separate from the producer/verifier. Original GitHub jobs/artifacts, isolated terminal SQLite and deterministic report replay, and independently authenticated Cloudflare scheduled-origin telemetry were reviewed. No claim of an independent human third-party signature.",
+  "criteria": {
+    "minimum_completed_span_seconds": 21600,
+    "maximum_intercore_gap_seconds": 5400,
+    "verified_exact_source_protected_main": true,
+    "excludes_push_from_automatic_acceptance": true,
+    "requires_original_artifact_crc_digest_sha_and_state_ancestry": true,
+    "requires_separate_hosted_original_SQLite_and_event_ledger_replay": true,
+    "requires_external_Cloudflare_origin_checks": true
+  },
+  "original_run_evidence": {
+    "original_qualifying_cores": 14,
+    "original_signed_cloudflare_dispatched_cores": 13,
+    "original_github_native_schedule_cores": 1,
+    "all_success_attempt_one": true,
+    "first_original_run_id": 39208431247,
+    "first_original_monitor_completed_utc": "2026-10-19T06:12:08Z",
+    "terminal_original_run_id": 39251350902,
+    "terminal_original_monitor_completed_utc": "2026-10-19T12:22:25Z",
+    "completed_span_seconds": 22217,
+    "maximum_gap_seconds": 1982,
+    "all_original_core_state_parent_child_links_contiguous": true,
+    "original_artifacts_sha256_size_and_crc_all_verified": true,
+    "original_job_required_steps_all_pass": true,
+    "original_provider_reads_each_full_audit": 73,
+    "source_specific_result": "SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED"
+  },
+  "terminal_state_replay": {
+    "last_state_commit": "7f52b86119e624c9347c56e118206a3a9d660a66",
+    "direct_parent": "130291a4f8464349c98efe3696a005fa750e36b4",
+    "source_sha": "59417cbd9637a8ee2cf0f663cd37594e6100a39a",
+    "reconstructed_raw_sqlite_sha256": "30216f54275ff197753283d9137ff8bc032cb17655ec009c7ff0960624c1216b",
+    "canonical_sequence": 3253,
+    "canonical_hash": "c98cefadac953539d75959fea314d4001319b8e7934e3984cd6b5808ed3f6eaf",
+    "pending_events": 0,
+    "sqlite_integrity": "PASS",
+    "foreign_keys": "PASS",
+    "strict_event_identity_and_ledger_replay": "PASS",
+    "deterministic_report_reproduction": "PASS",
+    "terminal_replay_status": "ORIGINAL_TERMINAL_RAW_SQLITE_REPLAY_VERIFIED"
+  },
+  "external_cloudflare_provider": {
+    "observability_source": "Authenticated Cloudflare Workers provider telemetry, separately queried from original GitHub Actions artifact receipts",
+    "interval_start_utc": "2026-10-19T06:05:00Z",
+    "interval_end_utc": "2026-10-19T12:27:00Z",
+    "scheduled_worker_invocations_with_outcome_ok": 35,
+    "scheduled_worker_invocations_with_non_ok_outcome": 0,
+    "exact_source_dispatch_ack_count": 13,
+    "exact_source_dispatch_acks_uniquely_correlated_to_completed_successful_original_GitHub_runs": 13,
+    "scheduled_origin_accepted_as_completion": false,
+    "terminal_cloudflare_scheduled_at_utc": "2026-10-19T12:20:50Z",
+    "terminal_cloudflare_request_id": "9075aeba19fb350dce55e9f13cdc4ba9",
+    "original_job_signed_origin_step_passed": true
+  },
+  "proof": {
+    "technical_workflow_run_id": 39250683747,
+    "technical_workflow_run_attempt": 2,
+    "technical_workflow_conclusion": "success",
+    "technical_audit_url": "https://github.com/P00NSMASHER/portfolio-brain/actions/runs/39250683747",
+    "immutable_review_only_commit": "6d6a2a100372a3235da1aed74c913942b4e33b3b",
+    "proof_artifact_id": 12185597949,
+    "proof_zip_sha256": "cd6d908b0678bda2252201f290a8c64c076f8dccae999b9762e500c5b0a99f0f",
+    "proof_zip_crc": "PASS",
+    "proof_contains": [
+      "proof-census.json",
+      "proof-terminal.json"
+    ],
+    "original_initial_audit_attempt_preserved": {
+      "attempt": 1,
+      "status": "failure",
+      "cause": "WINDOW_RUNNING_NOT_ACCEPTED",
+      "completed_span_seconds": 20408,
+      "seconds_below_minimum": 1192,
+      "never_claimed_acceptance": true
+    },
+    "original_verifier_explicitly_did_not_self_approve": true
+  },
+  "authority_limits": {
+    "authorizes_current_source_reliability_acceptance_only": true,
+    "source_change_requires_new_original_evidence_and_independent_acceptance": true,
+    "no_new_software_deployment_or_merge_authority_from_this_record": true,
+    "no_ruleset_or_verifier_bypass": true,
+    "no_new_secrets_schedules_or_paid_spending": true,
+    "no_automatic_customer_contact": true,
+    "no_certification_of_66_full_v9_capabilities": true,
+    "no_certification_of_cross_repository_write_adapters": true,
+    "no_certification_of_real_repair_outcome": true,
+    "pending_PR_721_and_PR_722_remain_separately_reviewed": true
+  }
+}
