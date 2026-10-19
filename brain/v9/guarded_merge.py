@@ -133,6 +133,15 @@ def accepted_source(api, main):
             and commit["parents"][0].get("sha") == main,
             "ACCEPTANCE_COMMIT_ANCESTRY")
     path = "acceptance/finish-soak-" + short + "-" + date + ".json"
+    compare = api.get("repos/" + REPO + "/compare/" + main + "..." + tip)
+    changed = compare.get("files") if type(compare) is dict else None
+    require(type(changed) is list and len(changed) == 1
+            and changed[0].get("filename") == path
+            and changed[0].get("status") == "added"
+            and compare.get("ahead_by") == 1
+            and compare.get("behind_by") == 0
+            and compare.get("merge_base_commit", {}).get("sha") == main,
+            "ACCEPTANCE_BRANCH_SCOPE")
     data = api.get("repos/" + REPO + "/contents/" + path + "?ref=" + tip)
     raw = checked_document(data)
     try:
@@ -282,6 +291,8 @@ def observe(api, number, expected_main):
     checked_threads(api.graphql(THREADS_QUERY, {"id": pr["node_id"]}), pr["node_id"])
     # Single final source/PR reread; native GitHub protection independently
     # enforces up-to-date checks even if another actor races this observer.
+    # Repeat the trusted platform ruleset on the last read boundary.
+    ruleset_passes(api.get(root + "rulesets/" + str(RULESET_ID)))
     live = api.get(root + "branches/main")
     again = api.get(root + "pulls/" + str(number))
     require(live.get("commit", {}).get("sha") == expected_main
@@ -312,18 +323,27 @@ def run(api, *, number, expected_main, apply=False):
             "AUTO_MERGE_WRITE_UNCERTAIN_READBACK_REQUIRED")
     current = api.get("repos/" + REPO + "/pulls/" + str(number))
     require(type(current) is dict
-            and current.get("head", {}).get("sha") == proof["head_sha"]
-            and current.get("auto_merge", {}).get("merge_method") == "squash"
+            and current.get("head", {}).get("sha") == proof["head_sha"],
+            "AUTO_MERGE_PROVIDER_READBACK_UNVERIFIED")
+    # GitHub may merge immediately when the required checks are already green.
+    # Treat that outcome as a merge only after the original provider says so.
+    if current.get("state") == "closed" and current.get("merged") is True:
+        require(type(current.get("merge_commit_sha")) is str
+                and SHA.fullmatch(current["merge_commit_sha"]),
+                "AUTO_MERGE_COMPLETION_UNVERIFIED")
+        return {"status": "NATIVE_AUTO_MERGE_COMPLETED",
+                "number": number, "head_sha": proof["head_sha"],
+                "base_sha": expected_main, "provider_writes": 1,
+                "enrolled": True, "merged": True,
+                "merge_commit_sha": current["merge_commit_sha"]}
+    require(current.get("auto_merge") is not None
+            and current["auto_merge"].get("merge_method") == "squash"
             and current.get("state") == "open",
             "AUTO_MERGE_PROVIDER_READBACK_UNVERIFIED")
     return {"status": "NATIVE_AUTO_MERGE_ENROLLED",
             "number": number, "head_sha": proof["head_sha"],
             "base_sha": expected_main, "provider_writes": 1,
             "enrolled": True, "merged": False}
-
-
-class NoRedirect(http.client.HTTPConnection):
-    pass
 
 
 class GitHub:
@@ -389,7 +409,7 @@ def main(argv=None):
                      number=args.pr, expected_main=args.expected_main, apply=args.apply)
         print(json.dumps(result, sort_keys=True))
         return 0 if result["status"] in ("ADMISSIBLE", "ALREADY_ENROLLED",
-                                         "NATIVE_AUTO_MERGE_ENROLLED") else 2
+                                         "NATIVE_AUTO_MERGE_ENROLLED", "NATIVE_AUTO_MERGE_COMPLETED") else 2
     except Denied as exc:
         print(json.dumps({"status": "BLOCKED", "reason": str(exc),
                           "provider_writes": 0}, sort_keys=True))
