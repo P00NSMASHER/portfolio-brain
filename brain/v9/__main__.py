@@ -26,6 +26,10 @@ def main(argv=None):
         exercise.add_argument('--mission', required=True, type=Path)
         exercise.add_argument('--journal', required=True, type=Path)
         exercise.add_argument('--now', required=True)
+        reconcile = commands.add_parser('review-pending')
+        reconcile.add_argument('--mission', required=True, type=Path)
+        reconcile.add_argument('--journal', required=True, type=Path)
+        reconcile.add_argument('--intent', required=True, type=Path)
         observed = commands.add_parser('observe-plan')
         observed.add_argument('--mission', required=True, type=Path)
         observed.add_argument('--journal', required=True, type=Path)
@@ -44,6 +48,13 @@ def main(argv=None):
                     'V9_COMPILE_INPUT_FIELDS')
             result = compile_mission(data['work'], source_heads=data['source_heads'],
                                      max_parallel=data['max_parallel'])
+        elif args.command == 'review-pending':
+            from brain.v9.pending_review import review_pending_draft
+            mission, intent = _load(args.mission), _load(args.intent)
+            with KernelJournal(args.journal, readonly=True) as journal:
+                result = review_pending_draft(mission, journal, intent,
+                    token=os.environ.get('V9_GITHUB_READ_TOKEN', ''),
+                    now=datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))
         elif args.command == 'observe-plan':
             from brain.v9.github_observer import observe_repositories
             from brain.v9.missions import _validate_mission
@@ -72,7 +83,7 @@ def main(argv=None):
             mission, heads = _load(args.mission), _load(args.heads)
             with KernelJournal(args.journal, readonly=True) as journal:
                 result = project_mission(mission, journal, source_heads=heads, now=args.now)
-        print(json.dumps(dict(status='READ_ONLY_OBSERVATION' if args.command == 'observe-plan' else 'LOCAL_ONLY', result=result,
+        print(json.dumps(dict(status='READ_ONLY_OBSERVATION' if args.command in ('observe-plan', 'review-pending') else 'LOCAL_ONLY', result=result,
                               automatic_execution_authority=False,
                               production_accepted=False), sort_keys=True))
         return 0
