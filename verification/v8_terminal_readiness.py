@@ -445,5 +445,12 @@ def main():
 if __name__=="__main__":
     try:
         main()
-    except Exception:
-        raise SystemExit("V8_TERMINAL_PREFLIGHT_FAILED_CLOSED; NO_ACCEPTANCE") from None
+    except Hold as exc:
+        # Only enumerated, nonsecret audit failure codes; never print provider
+        # response bodies or any token from a hosted read-only review.
+        print("V8_TERMINAL_PREFLIGHT_HOLD: " + str(exc), file=sys.stderr)
+        raise SystemExit("NO_ACCEPTANCE") from None
+    except Exception as exc:
+        print("V8_TERMINAL_PREFLIGHT_EXCEPTION_CLASS: "
+              + type(exc).__name__, file=sys.stderr)
+        raise SystemExit("NO_ACCEPTANCE") from None
