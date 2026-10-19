@@ -41,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.sha }}"
-          test "$(git hash-object brain/v9/guarded_merge.py)" = "ad963773aff6363a85d1430b6d07ff5971c1195e"
+          test "$(git hash-object brain/v9/guarded_merge.py)" = "586d8f7be166602c15a6a05b9e05d59605f2384f"
           test "$(git hash-object brain/v9/guarded_merge_runner.py)" = "72e51fff09043ea9993ee2d36b2f8de3296891a7"
       - name: Python 3.12
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065

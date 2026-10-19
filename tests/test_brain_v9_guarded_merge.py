@@ -299,6 +299,37 @@ class GuardedAdmissionTests(unittest.TestCase):
         self.assertEqual(result["status"], "ALREADY_ENROLLED")
         self.assertEqual(f.mutations, 0)
 
+    def test_only_exact_SHA_compare_admitted_without_network(self):
+        from unittest.mock import patch
+        class Response:
+            status = 200
+            def read(self, _):
+                return b'{"ok":true}'
+        class Connection:
+            def __init__(self):
+                self.paths = []
+            def request(self, method, path, **kwargs):
+                self.paths.append((method, path))
+            def getresponse(self):
+                return Response()
+            def close(self):
+                pass
+        fake = Connection()
+        client = gm.GitHub("a" * 32)
+        with patch("brain.v9.guarded_merge.http.client.HTTPSConnection",
+                   return_value=fake):
+            path = ROOT + "compare/" + BASE + "..." + HEAD
+            self.assertEqual(client.get(path), {"ok": True})
+            self.assertEqual(fake.paths, [("GET", "/" + path)])
+            for suffix in (
+                BASE + ".." + HEAD, BASE + "...." + HEAD,
+                BASE + "..." + HEAD + "/../secrets",
+                BASE + "..." + HEAD + "?path=../secrets",
+            ):
+                with self.subTest(suffix=suffix), self.assertRaises(gm.Denied):
+                    client.get(ROOT + "compare/" + suffix)
+            self.assertEqual(len(fake.paths), 1)
+
     def test_http_client_no_password_or_arbitrary_repo(self):
         with self.assertRaisesRegex(gm.Denied, "GITHUB_TOKEN_MISSING"):
             gm.GitHub("")
