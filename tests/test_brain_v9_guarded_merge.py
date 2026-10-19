@@ -33,6 +33,8 @@ class FakeProvider:
         self.change_head = False
         self.bad_threads = False
         self.provider_fail = False
+        self.extra_acceptance_file = False
+        self.immediate_merge = False
         self.repo = {"id": gm.REPO_ID, "full_name": gm.REPO, "default_branch": "main",
                      "archived": False, "allow_auto_merge": True}
         self.main = {"protected": True, "commit": {"sha": BASE}}
@@ -91,12 +93,24 @@ class FakeProvider:
             return copy.deepcopy(self.refs)
         if path == ROOT + "git/commits/" + REVIEW_TIP:
             return copy.deepcopy(self.commit)
+        if path == ROOT + "compare/" + BASE + "..." + REVIEW_TIP:
+            file = "acceptance/finish-soak-" + BASE[:8] + "-20261019.json"
+            changes = [{"filename": file, "status": "added"}]
+            if self.extra_acceptance_file:
+                changes.append({"filename": ".github/workflows/unsafe.yml", "status": "added"})
+            return {"files": changes, "ahead_by": 1, "behind_by": 0,
+                    "merge_base_commit": {"sha": BASE}}
         if path == ROOT + "contents/acceptance/finish-soak-" + BASE[:8] + "-20261019.json?ref=" + REVIEW_TIP:
             return content(json.dumps(self.record).encode("utf-8"))
         if path == ROOT + "pulls/" + str(PR):
             p = copy.deepcopy(self.pr)
             if self.enabled:
-                p["auto_merge"] = {"merge_method": "squash"}
+                if self.immediate_merge:
+                    p["state"] = "closed"
+                    p["merged"] = True
+                    p["merge_commit_sha"] = "e" * 40
+                else:
+                    p["auto_merge"] = {"merge_method": "squash"}
             if self.change_head and sum(1 for m, q in self.calls if q == path) > 1:
                 p["head"]["sha"] = "d" * 40
             return p
@@ -153,6 +167,15 @@ class GuardedAdmissionTests(unittest.TestCase):
         self.assertEqual(f.mutations, 1)
         self.assertTrue(any(c == ("GRAPHQL", "write") for c in f.calls))
 
+    def test_immediate_platform_merge_must_be_provider_verified(self):
+        f = FakeProvider()
+        f.immediate_merge = True
+        result = gm.run(f, number=PR, expected_main=BASE, apply=True)
+        self.assertEqual(result["status"], "NATIVE_AUTO_MERGE_COMPLETED")
+        self.assertTrue(result["merged"])
+        self.assertEqual(result["merge_commit_sha"], "e" * 40)
+        self.assertEqual(f.mutations, 1)
+
     def test_repository_setting_disabled_means_no_write(self):
         f = FakeProvider()
         f.disabled = True
@@ -168,12 +191,14 @@ class GuardedAdmissionTests(unittest.TestCase):
 
     def test_source_or_branch_ambiguity_blocks(self):
         f = FakeProvider()
-        self.assert_blocked(f, "SHA_INVALID" if False else "PROTECTED_MAIN_SOURCE_MOVED") if False else None
         f.main["commit"]["sha"] = "e" * 40
         self.assert_blocked(f, "PROTECTED_MAIN_SOURCE_MOVED")
         f = FakeProvider()
         f.refs.append(copy.deepcopy(f.refs[0]))
         self.assert_blocked(f, "ACCEPTANCE_BRANCH_NOT_UNIQUE")
+        f = FakeProvider()
+        f.extra_acceptance_file = True
+        self.assert_blocked(f, "ACCEPTANCE_BRANCH_SCOPE")
 
     def test_protection_bypass_or_independent_check_mutation_blocks(self):
         f = FakeProvider()
