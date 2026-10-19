@@ -209,7 +209,8 @@ class GuardedAdmissionTests(unittest.TestCase):
         result = gm.run(f, number=PR, expected_main=BASE, apply=True)
         self.assertEqual(result["status"], "REPOSITORY_AUTO_MERGE_SETTING_DISABLED")
         self.assertEqual(f.mutations, 0)
-        self.assertEqual(len(f.calls), 1)
+        self.assertEqual(len(f.calls), 2)
+        self.assertIn(("GRAPHQL", "read"), f.calls)
 
     def test_actual_workflow_token_omits_rest_setting_but_graphql_verifies_true(self):
         f = FakeProvider()
