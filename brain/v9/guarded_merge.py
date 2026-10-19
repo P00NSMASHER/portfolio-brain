@@ -249,6 +249,45 @@ def checked_threads(response, node_id):
             "UNRESOLVED_OR_INCOMPLETE_REVIEW_THREADS")
 
 
+def checked_git_tree_files(api, head, files):
+    """Traverse Git trees by exact SHAs; Contents API alone can dereference symlinks."""
+    root = "repos/" + REPO + "/"
+    commit = api.get(root + "git/commits/" + head)
+    require(type(commit) is dict and commit.get("sha") == head
+            and type(commit.get("tree")) is dict,
+            "PR_TREE_COMMIT_INVALID")
+    root_tree = sha(commit["tree"].get("sha"))
+    cache = {}
+    def tree(tree_sha):
+        if tree_sha not in cache:
+            response = api.get(root + "git/trees/" + tree_sha)
+            require(type(response) is dict and response.get("sha") == tree_sha
+                    and response.get("truncated") is False
+                    and type(response.get("tree")) is list
+                    and len(response["tree"]) <= 1000,
+                    "PR_GIT_TREE_INCOMPLETE")
+            cache[tree_sha] = response["tree"]
+        return cache[tree_sha]
+    for item in files:
+        parts = item["filename"].split("/")
+        current = root_tree
+        for index, part in enumerate(parts):
+            matches = [entry for entry in tree(current)
+                       if type(entry) is dict and entry.get("path") == part]
+            require(len(matches) == 1, "PR_GIT_TREE_PATH_MISSING")
+            entry = matches[0]
+            if index < len(parts) - 1:
+                require(entry.get("mode") == "040000"
+                        and entry.get("type") == "tree",
+                        "PR_PATH_NOT_DIRECTORY")
+                current = sha(entry.get("sha"))
+            else:
+                require(entry.get("mode") == "100644"
+                        and entry.get("type") == "blob"
+                        and entry.get("sha") == item["sha"],
+                        "PR_FILE_NOT_REGULAR_BLOB")
+
+
 def check_files(api, number, head, expected):
     root = "repos/" + REPO + "/"
     files = api.get(root + "pulls/" + str(number) + "/files?per_page=100")
@@ -260,6 +299,9 @@ def check_files(api, number, head, expected):
         path = checked_path(file.get("filename"))
         require(path not in seen, "PR_DUPLICATE_FILE")
         seen.add(path)
+    checked_git_tree_files(api, head, files)
+    for file in files:
+        path = file["filename"]
         content = api.get(root + "contents/" + quote(path, safe="/") + "?ref=" + head)
         raw = checked_document(content)
         require(content["sha"] == file.get("sha")
