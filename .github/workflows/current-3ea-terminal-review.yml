@@ -1,0 +1,86 @@
+name: Independent 3ea terminal state replay (review only)
+
+# Isolated review-branch proof. Never merge this workflow into protected main.
+on:
+  push:
+    branches:
+      - review/portfolio-3ea-terminal-20261019
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: review-3ea-terminal-replay
+  cancel-in-progress: false
+
+jobs:
+  terminal-replay-read-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout review-only verifier source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Verify terminal-toolkit adversarial regressions
+        run: python -m unittest discover -s tests -p test_v8_terminal_readiness.py -v
+      - name: Checkout immutable protected production source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 3ea4dc4d0ddcb3470dc0d884bb2702efaef6dc4d
+          path: production-source
+          persist-credentials: false
+      - name: Checkout current state branch read-only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: brain-state-v2
+          path: terminal-state
+          persist-credentials: false
+      - name: Verify source pin and original GitHub jobs and artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git -C production-source rev-parse HEAD)" = "3ea4dc4d0ddcb3470dc0d884bb2702efaef6dc4d"
+          python -m verification.v8_terminal_readiness --output "$RUNNER_TEMP/proof-census.json"
+          cat "$RUNNER_TEMP/proof-census.json"
+      - name: Pin independently observed terminal Git state commit
+        run: |
+          set -euo pipefail
+          SHA=$(python -c 'import json,os;print(json.load(open(os.environ["RUNNER_TEMP"]+"/proof-census.json"))["last_state_commit"])')
+          echo "$SHA" | grep -Eq '^[0-9a-f]{40}$'
+          git -C terminal-state fetch --depth=1 origin "$SHA"
+          git -C terminal-state checkout --detach "$SHA"
+          test "$(git -C terminal-state rev-parse HEAD)" = "$SHA"
+      - name: Re-audit and replay original terminal SQLite and ledger
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -m verification.v8_terminal_readiness --source-dir production-source --terminal-dir terminal-state --output "$RUNNER_TEMP/proof-terminal.json"
+          cat "$RUNNER_TEMP/proof-terminal.json"
+          python - <<'PY'
+          import json,os
+          root=os.environ["RUNNER_TEMP"]
+          first=json.load(open(root+"/proof-census.json"))
+          final=json.load(open(root+"/proof-terminal.json"))
+          if first.get("last_state_commit")!=final.get("last_state_commit"):raise SystemExit("PROVIDER_TERMINAL_RACE_FAIL_CLOSED")
+          if final.get("status")!="SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED" or final.get("terminal_replay",{}).get("status")!="ORIGINAL_TERMINAL_RAW_SQLITE_REPLAY_VERIFIED":raise SystemExit("TERMINAL_REPLAY_INCOMPLETE")
+          if final.get("acceptance_pass") is not False or final.get("release_or_merge_authorized") is not False:raise SystemExit("RELEASE_AUTHORITY_ESCALATION")
+          print("TERMINAL_SOURCE_PINNED_REPLAY_PASS")
+          PY
+      - name: Retain sanitized source-specific audit proofs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-3ea-terminal-readonly-receipts
+          path: |
+            ${{ runner.temp }}/proof-census.json
+            ${{ runner.temp }}/proof-terminal.json
+          if-no-files-found: warn
+          retention-days: 30
