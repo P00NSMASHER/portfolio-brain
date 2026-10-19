@@ -20,7 +20,7 @@ def validate_policy():
               "x402-gateway-ci.yml","x402-render-gateway-smoke.yml",
               "brain-cycle.yml","brain-clock.yml",
               "state-capacity-qualification.yml", "v8-runtime-preflight.yml",
-              "v8-scoped-repair.yml"}
+              "v8-scoped-repair.yml", "v9-guarded-native-automerge.yml"}
     require({x.name for x in workflow_dir.iterdir() if x.suffix in {".yml",".yaml"}}==expected, "active workflow inventory changed")
     scoped=(workflow_dir/"v8-scoped-repair.yml").read_text(encoding="utf-8")
     for phrase in (
@@ -45,6 +45,34 @@ def validate_policy():
             and "gh pr merge" not in scoped and "merge_pull_request" not in scoped
             and "permissions:\n  contents: read" in scoped,
             "scoped repair has an unreviewed trigger, permission or release action")
+    native = (workflow_dir/"v9-guarded-native-automerge.yml").read_text(encoding="utf-8")
+    for fragment in (
+        "workflow_run:", 'workflows: ["portfolio-independent-verifier"]',
+        "types: [completed]", "cancel-in-progress: false",
+        "github.event.workflow_run.conclusion == 'success'",
+        "github.event.workflow_run.head_branch == 'main'",
+        "github.event.workflow_run.head_sha == github.sha",
+        "github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain'",
+        "ref: ${{ github.sha }}", "persist-credentials: false",
+        "GH_TOKEN: ${{ github.token }}",
+        "586d8f7be166602c15a6a05b9e05d59605f2384f",
+        "72e51fff09043ea9993ee2d36b2f8de3296891a7",
+        "contents: read", "pull-requests: write",
+        "python -m brain.v9.guarded_merge_runner",
+    ):
+        require(fragment in native, "guarded native merge original controls changed: "+fragment)
+    require("schedule:" not in native
+            and "workflow_dispatch:" not in native
+            and "pull_request_target:" not in native
+            and "pull_request:" not in native
+            and "merge_pull_request" not in native
+            and "gh pr merge" not in native
+            and "permission-workflows:" not in native
+            and "id-token: write" not in native
+            and "contents: write" not in native
+            and "PORTFOLIO_RUNTIME_PRIVATE_KEY" not in native
+            and "PORTFOLIO_VERIFIER_PRIVATE_KEY" not in native,
+            "guarded native merger adds forbidden trigger, privilege or direct merge")
     from operations.validate_operating_mode import scheduled_workflow_inventory
     require(scheduled_workflow_inventory(workflow_dir)=={"brain-cycle":[p["cron"]], "brain-clock":[p["watchdog_cron"]]}, "only reviewed native Brain execution and watchdog may recur")
     source=(workflow_dir/"brain-cycle.yml").read_text()
