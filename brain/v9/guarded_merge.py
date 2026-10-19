@@ -144,8 +144,15 @@ def accepted_source(api, main):
             "ACCEPTANCE_BRANCH_SCOPE")
     data = api.get("repos/" + REPO + "/contents/" + path + "?ref=" + tip)
     raw = checked_document(data)
+    def reject_duplicate(pairs):
+        data = {}
+        for key, value in pairs:
+            require(key not in data, "ACCEPTANCE_DUPLICATE_KEY")
+            data[key] = value
+        return data
     try:
-        record = json.loads(raw)
+        record = json.loads(raw, object_pairs_hook=reject_duplicate,
+                            parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
     except (ValueError, UnicodeError):
         raise Denied("ACCEPTANCE_JSON_INVALID") from None
     require(type(record) is dict
@@ -411,8 +418,12 @@ def main(argv=None):
         return 0 if result["status"] in ("ADMISSIBLE", "ALREADY_ENROLLED",
                                          "NATIVE_AUTO_MERGE_ENROLLED", "NATIVE_AUTO_MERGE_COMPLETED") else 2
     except Denied as exc:
-        print(json.dumps({"status": "BLOCKED", "reason": str(exc),
-                          "provider_writes": 0}, sort_keys=True))
+        reason = str(exc)
+        # A lost GraphQL response may hide a real successful enrollment.
+        # Never describe an uncertain external write as a verified zero-write.
+        effect = ("UNKNOWN_AFTER_POST" if reason.startswith("AUTO_MERGE_") else 0)
+        print(json.dumps({"status": "BLOCKED", "reason": reason,
+                          "provider_writes": effect}, sort_keys=True))
         return 2
 
 
