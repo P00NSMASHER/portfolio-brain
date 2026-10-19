@@ -1,0 +1,58 @@
+name: v9-native-merger-permission-probe-review-only
+
+on:
+  push:
+    branches: [review/v9-native-merger-api-permissions-20261019]
+
+permissions:
+  contents: read
+
+jobs:
+  bounded-provider-reads:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Read-only original GitHub API scope test
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import json,os,urllib.request,urllib.error
+          base="https://api.github.com/repos/P00NSMASHER/portfolio-brain"
+          token=os.environ["GH_TOKEN"]
+          endpoints=[
+            ("repository",base),
+            ("ruleset",base+"/rulesets/24182301"),
+            ("protected_main",base+"/branches/main"),
+            ("candidate_check_runs",base+"/commits/893b60a4d5c3299a3821894df490057840a7cefb/check-runs?per_page=100"),
+            ("candidate_pr",base+"/pulls/723"),
+            ("candidate_files",base+"/pulls/723/files?per_page=100"),
+            ("acceptance_matching_refs",base+"/git/matching-refs/heads/brain-acceptance-3ea4dc4d-"),
+          ]
+          all_ok=True
+          for label,url in endpoints:
+            req=urllib.request.Request(url,headers={
+              "Authorization":"Bearer "+token,
+              "Accept":"application/vnd.github+json",
+              "User-Agent":"v9-guarded-review-readonly-probe"})
+            try:
+              with urllib.request.urlopen(req,timeout=12) as f:
+                status=f.status;body=f.read(8192)
+              result=json.loads(body)
+              if label=="candidate_check_runs":
+                ok=type(result)==dict and result.get("total_count",0)>=1
+              elif label=="acceptance_matching_refs":
+                ok=status in (200,404)
+              else:
+                ok=status==200
+            except urllib.error.HTTPError as e:
+              status=e.code;ok=(label=="acceptance_matching_refs" and status==404)
+            except Exception:
+              status="unavailable";ok=False
+            print(label+": STATUS="+str(status)+" ACCEPTED="+str(ok))
+            all_ok &= ok
+          raise SystemExit(0 if all_ok else 1)
+          PY
