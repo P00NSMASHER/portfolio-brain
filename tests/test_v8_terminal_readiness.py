@@ -146,6 +146,65 @@ class SourceBoundWindow(unittest.TestCase):
                 "status":"WINDOW_RUNNING_NOT_ACCEPTED"})
 
 
+
+    def test_cancelled_original_preserved_and_new_clean_six_hour_window(self):
+        rows = [model_row(i) for i in range(20)]
+        def verdict(api, row):
+            if row["id"] == 6:
+                return {"adverse": True, "run_id": 6,
+                        "conclusion": "cancelled",
+                        "created_at": row["created_at"]}
+            return validated_run(api, row)
+        with (patch.object(audit, "original_census", return_value=rows),
+              patch.object(audit, "checked_original_run", side_effect=verdict),
+              patch.object(audit, "checked_zip", side_effect=source_receipt)):
+            result = audit.evaluate(MockOriginalProvider())
+        self.assertEqual(result["status"], "SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED")
+        self.assertEqual(result["anchor_run"], 7)
+        self.assertEqual(result["verified_original_cores"], 14)
+        self.assertEqual(result["completion_span_seconds"], 23_400)
+        self.assertEqual(result["superseded_earlier_successful_cores"], 5)
+        self.assertEqual(result["source_run_census_count"], 20)
+        self.assertEqual(result["historical_adverse_automatic_cores"][0]["conclusion"],
+                         "cancelled")
+        self.assertFalse(result["acceptance_pass"])
+
+    def test_cancellation_cannot_borrow_elapsed_time_from_prior_good_cores(self):
+        rows = [model_row(i) for i in range(14)]
+        def verdict(api, row):
+            if row["id"] == 6:
+                return {"adverse": True, "run_id": 6,
+                        "conclusion": "cancelled",
+                        "created_at": row["created_at"]}
+            return validated_run(api, row)
+        with (patch.object(audit, "original_census", return_value=rows),
+              patch.object(audit, "checked_original_run", side_effect=verdict),
+              patch.object(audit, "checked_zip", side_effect=source_receipt)):
+            result = audit.evaluate(MockOriginalProvider())
+        self.assertEqual(result["status"], "WINDOW_RUNNING_NOT_ACCEPTED")
+        self.assertEqual(result["anchor_run"], 7)
+        self.assertEqual(result["completion_span_seconds"], 12_600)
+        self.assertEqual(result["seconds_remaining_minimum"], 9_000)
+        self.assertEqual(len(result["historical_adverse_automatic_cores"]), 1)
+
+    def test_authenticated_cancellation_is_an_adverse_original_not_a_success(self):
+        rid = 39278587557
+        class Original:
+            def get(self, suffix):
+                self_path = "actions/runs/" + str(rid)
+                assert suffix == self_path
+                return {"id": rid, "head_sha": SOURCE,
+                        "head_branch": "main", "name": "brain-cycle-v2",
+                        "path": ".github/workflows/brain-cycle.yml",
+                        "event": "workflow_dispatch", "status": "completed",
+                        "conclusion": "cancelled", "run_attempt": 1,
+                        "created_at": "2026-10-19T15:30:58Z"}
+        result = audit.checked_original_run(Original(), {"id": rid})
+        self.assertTrue(result["adverse"])
+        self.assertEqual(result["conclusion"], "cancelled")
+        self.assertEqual(result["run_id"], rid)
+
+
 class ProviderIntegrity(unittest.TestCase):
     def test_gh_read_only_allowlist_rejects_mutations_and_other_repos(self):
         good = (
