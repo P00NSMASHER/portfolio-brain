@@ -38,3 +38,9 @@ The candidate adds `.github/workflows/v9-guarded-native-automerge.yml`: on succe
 ## Recovery
 
 Discard the unmerged candidate branch to roll back development. Once deployed, disable the future workflow and revoke its scoped runtime token if admission behaves incorrectly; GitHub native per-PR auto-merge state must be inspected separately. Do not reset protected main or history.
+
+### Authenticated repository setting readback under GitHub Actions
+
+The original guarded workflow initially returned `REPOSITORY_AUTO_MERGE_SETTING_DISABLED` even though the owner-enabled setting was true: an actual `GITHUB_TOKEN` REST GET returned repository identity but **omitted** the admin-only `allow_auto_merge` field. This is not proof of disabled auto-merge. Independent read-only GitHub Actions probe 39269404271 confirmed the same scoped token can query GraphQL `Repository.autoMergeAllowed=true`, together with the exact numeric repository ID, canonical name and non-archived state; original REST ruleset/check/PR reads also passed.
+
+The controller now requires the authenticated GraphQL result and rejects missing, malformed, conflicting or wrong-repository responses; it never infers enabled status from a missing REST field. This increments GitHub API usage but does not broaden scopes, grants, schedules, merge commands or accepted source reliability. The fix stays in an independently gated candidate until a new protected release.
