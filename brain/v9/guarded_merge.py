@@ -407,9 +407,18 @@ class GitHub:
 
     def _request(self, method, path, body=None):
         self.calls += 1
+        root = "repos/" + REPO + "/"
+        # GitHub's immutable compare API uses SHA...SHA. Admit only that
+        # exact syntax; unrelated double dots still fail the traversal guard.
+        exact_compare = (type(path) is str and method == "GET" and
+                         re.fullmatch(re.escape(root)
+                                      + r"compare/[a-f0-9]{40}\.\.\.[a-f0-9]{40}",
+                                      path) is not None)
+        bad_dots = type(path) is str and ".." in path and not exact_compare
         require(self.calls <= MAX_REQUESTS and method in ("GET", "POST")
-                and type(path) is str and not any(x in path for x in ("..", "%2e", "#", "\r", "\n"))
-                and (path == "graphql" or path.startswith("repos/" + REPO + "/")
+                and type(path) is str and not bad_dots
+                and not any(x in path for x in ("%2e", "%2E", "#", "\r", "\n"))
+                and (path == "graphql" or path.startswith(root)
                      or path == "repos/" + REPO),
                 "GITHUB_ROUTE_NOT_ALLOWLISTED")
         require((method == "POST") == (path == "graphql")
