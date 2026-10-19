@@ -175,9 +175,16 @@ def checked_original_run(api, row):
     require(event in {"schedule", "workflow_dispatch"},
             "UNVERIFIED_MANUAL_ORIGIN_WITHIN_WINDOW")
     require(genuine.get("status") == "completed"
-            and genuine.get("conclusion") == "success"
             and genuine.get("run_attempt") == 1,
-            "ORIGINAL_AUTOMATIC_RUN_NOT_SUCCESS_FIRST_ATTEMPT")
+            "ORIGINAL_AUTOMATIC_RUN_NOT_COMPLETED_FIRST_ATTEMPT")
+    if genuine.get("conclusion") != "success":
+        # Original adverse outcomes stay recorded; they invalidate all
+        # earlier candidate completions, never convert into success.
+        require(genuine.get("conclusion") in ("cancelled", "failure", "timed_out"),
+                "ORIGINAL_AUTOMATIC_RUN_CONCLUSION_UNRECOGNIZED")
+        return {"adverse": True, "run_id": rid,
+                "conclusion": genuine["conclusion"],
+                "created_at": genuine.get("created_at")}
     jobs = api.get("actions/runs/" + str(rid) + "/jobs?per_page=100")
     data = jobs.get("jobs") if type(jobs) is dict else None
     require(type(jobs) is dict and jobs.get("total_count") == 1
@@ -268,9 +275,21 @@ def evaluate(api):
     complete = []
     parent = None
     last_seq = -1
+    historical_adverse = []
+    superseded_good_cores = 0
     for row in listing:
         event = checked_original_run(api, row)
         if event is None:
+            continue
+        if event.get("adverse") is True:
+            # A canceled/failed original cycle does NOT vanish. Record the
+            # provider conclusion and restart at the first subsequently
+            # completed, original, successful automatic core.
+            historical_adverse.append(event)
+            superseded_good_cores += len(complete)
+            complete = []
+            parent = None
+            last_seq = -1
             continue
         evidence = checked_zip(api, event["run_id"])
         receipt, doctor = evidence["delivery"], evidence["doctor"]
@@ -304,6 +323,8 @@ def evaluate(api):
     if not complete:
         return {"status":"WAITING_FIRST_ORIGINAL_AUTOMATIC_COMPLETION",
                 "production_source": FINAL_SOURCE,
+                "historical_adverse_automatic_cores": historical_adverse,
+                "superseded_earlier_successful_cores": superseded_good_cores,
                 "acceptance_pass": False, "completed_cores": 0}
     times = [r["completed"] for r in complete]
     gaps = [(end-start).total_seconds() for start,end in zip(times,times[1:])]
@@ -323,6 +344,9 @@ def evaluate(api):
         "last_sequence": last_seq,
         "last_canonical_hash": complete[-1]["doctor"]["canonical_hash"],
         "last_raw_sha256": complete[-1]["publication"]["raw_sha256"],
+        "historical_adverse_automatic_cores": historical_adverse,
+        "superseded_earlier_successful_cores": superseded_good_cores,
+        "source_run_census_count": len(listing),
         "acceptance_pass": False,
     }
     if span < MINIMUM_SPAN:
