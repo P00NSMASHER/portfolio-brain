@@ -11,6 +11,7 @@ HEAD = "b" * 40
 REVIEW_TIP = "c" * 40
 PR = 812
 NODE = "PR_" + "f" * 28
+ROOT_TREE, DOCS_TREE, GENESIS_TREE = "1" * 40, "2" * 40, "3" * 40
 FILE = "docs/genesis/NOTES.md"
 RAW = b"# Low-risk review note\nNo code or workflow changes.\n"
 BLOB = gm.git_blob_sha(RAW)
@@ -35,6 +36,7 @@ class FakeProvider:
         self.provider_fail = False
         self.extra_acceptance_file = False
         self.immediate_merge = False
+        self.symlink = False
         self.repo = {"id": gm.REPO_ID, "full_name": gm.REPO, "default_branch": "main",
                      "archived": False, "allow_auto_merge": True}
         self.main = {"protected": True, "commit": {"sha": BASE}}
@@ -118,6 +120,18 @@ class FakeProvider:
             return copy.deepcopy(self.checks)
         if path == ROOT + "pulls/" + str(PR) + "/files?per_page=100":
             return copy.deepcopy(self.files)
+        if path == ROOT + "git/commits/" + HEAD:
+            return {"sha": HEAD, "tree": {"sha": ROOT_TREE}}
+        if path == ROOT + "git/trees/" + ROOT_TREE:
+            return {"sha": ROOT_TREE, "truncated": False, "tree": [
+                {"path": "docs", "type": "tree", "mode": "040000", "sha": DOCS_TREE}]}
+        if path == ROOT + "git/trees/" + DOCS_TREE:
+            return {"sha": DOCS_TREE, "truncated": False, "tree": [
+                {"path": "genesis", "type": "tree", "mode": "040000", "sha": GENESIS_TREE}]}
+        if path == ROOT + "git/trees/" + GENESIS_TREE:
+            return {"sha": GENESIS_TREE, "truncated": False, "tree": [
+                {"path": "NOTES.md", "type": "blob",
+                 "mode": "120000" if self.symlink else "100644", "sha": BLOB}]}
         if path == ROOT + "contents/" + FILE + "?ref=" + HEAD:
             return content(RAW)
         raise AssertionError("UNREVIEWED_PROVIDER_ROUTE: " + path)
@@ -257,7 +271,10 @@ class GuardedAdmissionTests(unittest.TestCase):
         self.assert_blocked(f, "PR_CHANGE_BOUNDS")
         f = FakeProvider()
         f.files[0]["sha"] = "f" * 40
-        self.assert_blocked(f, "PR_CHANGED_FILE_MISMATCH")
+        self.assert_blocked(f, "PR_FILE_NOT_REGULAR_BLOB")
+        f = FakeProvider()
+        f.symlink = True
+        self.assert_blocked(f, "PR_FILE_NOT_REGULAR_BLOB")
 
     def test_unresolved_threads_or_races_block(self):
         f = FakeProvider()
