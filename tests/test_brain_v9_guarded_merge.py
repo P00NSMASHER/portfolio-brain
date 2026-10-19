@@ -313,5 +313,93 @@ class GuardedAdmissionTests(unittest.TestCase):
                 gm.checked_path(path)
 
 
+
+class EventRunnerProvider(FakeProvider):
+    def __init__(self):
+        super().__init__()
+        self.open_rows = [copy.deepcopy(self.pr)]
+
+    def get(self, path):
+        if path == ROOT + "pulls?state=open&per_page=100":
+            self.calls.append(("GET", path))
+            return copy.deepcopy(self.open_rows)
+        return super().get(path)
+
+
+class EventRunnerTests(unittest.TestCase):
+    def test_event_runner_enrolls_only_opted_in_trusted_pr(self):
+        from brain.v9 import guarded_merge_runner as runner
+        f = EventRunnerProvider()
+        result = runner.dispatch_once(lambda: f, BASE, apply=True)
+        self.assertEqual(result["status"], "OBSERVED")
+        self.assertEqual(result["candidate_count"], 1)
+        self.assertEqual(result["processed"], 1)
+        self.assertEqual(result["provider_writes"], 1)
+        self.assertEqual(f.mutations, 1)
+
+    def test_no_label_stops_before_native_github_mutation(self):
+        from brain.v9 import guarded_merge_runner as runner
+        f = EventRunnerProvider()
+        f.open_rows[0]["labels"] = []
+        result = runner.dispatch_once(lambda: f, BASE, apply=True)
+        self.assertEqual(result["candidate_count"], 0)
+        self.assertEqual(result["provider_writes"], 0)
+        self.assertEqual(f.mutations, 0)
+
+    def test_source_acceptance_hold_stops_native_enrollment(self):
+        from brain.v9 import guarded_merge_runner as runner
+        f = EventRunnerProvider()
+        f.no_acceptance = True
+        result = runner.dispatch_once(lambda: f, BASE, apply=True)
+        self.assertEqual(result["decisions"][0]["status"],
+                         "BLOCKED:SOURCE_ACCEPTANCE_NOT_YET_RECORDED")
+        self.assertEqual(f.mutations, 0)
+
+    def test_ambiguous_write_halts_other_candidates(self):
+        from brain.v9 import guarded_merge_runner as runner
+        f = EventRunnerProvider()
+        f.provider_fail = True
+        result = runner.dispatch_once(lambda: f, BASE, apply=True)
+        self.assertEqual(result["status"],
+                         "POST_WRITE_UNCERTAIN_MANUAL_RECONCILIATION")
+        self.assertEqual(result["provider_writes"], "UNKNOWN")
+        self.assertEqual(f.mutations, 1)
+
+    def test_changed_main_and_duplicate_candidate_fail_closed(self):
+        from brain.v9 import guarded_merge_runner as runner
+        f = EventRunnerProvider()
+        f.main["commit"]["sha"] = "f" * 40
+        with self.assertRaisesRegex(gm.Denied, "RUNNER_PROTECTED_MAIN_MOVED"):
+            runner.dispatch_once(lambda: f, BASE, apply=True)
+        self.assertEqual(f.mutations, 0)
+        f = EventRunnerProvider()
+        f.open_rows.append(copy.deepcopy(f.open_rows[0]))
+        with self.assertRaisesRegex(gm.Denied, "RUNNER_DUPLICATE_CANDIDATES"):
+            runner.dispatch_once(lambda: f, BASE, apply=True)
+
+    def test_native_setting_disabled_yields_no_extra_reads_or_writes(self):
+        from brain.v9 import guarded_merge_runner as runner
+        f = EventRunnerProvider()
+        f.disabled = True
+        result = runner.dispatch_once(lambda: f, BASE, apply=True)
+        self.assertEqual(result["status"], "REPOSITORY_AUTO_MERGE_SETTING_DISABLED")
+        self.assertEqual(result["provider_writes"], 0)
+        self.assertEqual(f.mutations, 0)
+        self.assertEqual(len(f.calls), 1)
+
+    def test_reviewed_workflow_pins_exact_source_and_has_no_untrusted_trigger(self):
+        from pathlib import Path
+        workflow = Path(".github/workflows/v9-guarded-native-automerge.yml").read_text()
+        for path in ("brain/v9/guarded_merge.py", "brain/v9/guarded_merge_runner.py"):
+            expected = gm.git_blob_sha(Path(path).read_bytes())
+            self.assertIn(expected, workflow)
+        self.assertIn('workflows: ["portfolio-independent-verifier"]', workflow)
+        self.assertIn("github.event.workflow_run.head_sha == github.sha", workflow)
+        self.assertIn("persist-credentials: false", workflow)
+        self.assertIn("pull-requests: write", workflow)
+        self.assertNotIn("contents: write", workflow)
+        for forbidden in ("schedule:", "pull_request_target:", "workflow_dispatch:"):
+            self.assertNotIn(forbidden, workflow)
+
 if __name__ == "__main__":
     unittest.main()
