@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "decision_date_utc": "2026-10-19",
+  "decision": "RELEASED",
+  "status": "PASS",
+  "scope": "SOURCE_SPECIFIC_UNATTENDED_PRODUCTION_CORE_RELIABILITY_ONLY",
+  "source_sha": "0c1184d2e3c614de48a0cb8ce0e5d059a87c72ee",
+  "source_protected_main_at_decision": true,
+  "reviewer_basis": "Separate owner-directed governed decision after separately hosted read-only terminal verification and authenticated original GitHub and Cloudflare evidence. Not a human third-party signature, self-issued CI check, or delegation of protected-merge authority.",
+  "prior_gate": "SOURCE_SPECIFIC_ACCEPTANCE_HOLD",
+  "acceptance_gate_result": "RELEASED_PASS_FOR_EXACT_SOURCE_ONLY",
+  "criteria": {
+    "minimum_completion_span_seconds": 21600,
+    "maximum_intercore_gap_seconds": 5400,
+    "original_workflow_attempt_policy": "Only completed first-attempt qualifying native-schedule or signed-origin dispatch cores; push and ACK-only excluded",
+    "required": "complete original source/run/attempt/job/ZIP/state ancestry census, original external Cloudflare provider corroboration, immutable terminal SQLite and deterministic report replay"
+  },
+  "original_run_evidence": {
+    "first_qualifying_run_id": 39150114642,
+    "first_monitor_completed_at_utc": "2026-10-18T17:34:27Z",
+    "terminal_qualifying_run_id": 39199864707,
+    "terminal_monitor_completed_at_utc": "2026-10-19T04:32:16Z",
+    "completed_span_seconds": 39469,
+    "maximum_gap_seconds": 2075,
+    "original_first_attempt_successful_qualifying_cores": 25,
+    "verified_signed_cloudflare_dispatches": 20,
+    "original_native_schedule_cores": 5,
+    "original_push_smoke_excluded": 1,
+    "original_artifact_ZIPs_provider_size_sha256_and_CRC_verified": 25,
+    "each_original_job_required_steps_success": true,
+    "all_success_attempt_one": true,
+    "all_original_core_state_parent_child_links_contiguous": true,
+    "all_original_cores_zero_pending_events": true,
+    "github_original_provider_GETs_in_each_of_two_hosted_censuses": 128,
+    "trace_run": "https://github.com/P00NSMASHER/portfolio-brain/actions/runs/39202032382"
+  },
+  "external_cloudflare_provider_evidence": {
+    "source": "Authenticated Cloudflare Workers observability query against portfolio-brain-recovery, independently of GitHub CI evidence",
+    "window_utc": [
+      "2026-10-18T17:30:00Z",
+      "2026-10-19T05:10:00Z"
+    ],
+    "worker_scheduled_invocations": 68,
+    "worker_scheduled_outcome_ok": 68,
+    "worker_scheduled_outcome_non_ok": 0,
+    "prior_source_dispatch_ACKs_excluded": 1,
+    "exact_source_dispatch_ACKs": 21,
+    "exact_source_ACKs_correlated_to_unique_successful_GitHub_runs": 21,
+    "correlation_run_creation_delay_seconds_range": [
+      3,
+      5
+    ],
+    "ACK_is_not_completion": true,
+    "required_original_signed_origin_step_confirmed": true
+  },
+  "terminal_state_replay": {
+    "terminal_git_commit": "463ecb0a4988cc5b9063a8be920fb3e7cafa6a62",
+    "terminal_git_parent": "3e130593eced20f5338410d292850642d4016dcf",
+    "pristine_SQLite_bytes": 44920832,
+    "pristine_SQLite_sha256": "6997cbeadbc5863a4d36cdef37af88a259324c85f522c82e369e97713b053876",
+    "canonical_sequence": 3152,
+    "canonical_hash": "ee829852a56b4be49ec8873ed83ea2f6259453ed50e56b9ce969b343e5b48a7a",
+    "pending_events": 0,
+    "sqlite_integrity": "PASS",
+    "foreign_keys": "PASS",
+    "strict_event_identity_hash_ledger_replay": "PASS",
+    "deterministic_report_reproduction": "PASS",
+    "full_original_binary_reconstruction_on_separate_hosted_runner": true
+  },
+  "post_terminal_freshness": {
+    "later_successful_original_core_id": 39202352944,
+    "later_attempt": 1,
+    "later_completion_conclusion": "success",
+    "later_provider_zip_artifact_id": 12164048686,
+    "later_zip_sha256": "6b76a26afdf39f2b50b31d5629afe5012c89f944b26a9d66d2f061d04c1fdbbf",
+    "later_zip_CRC": "PASS",
+    "later_zero_backlog_event_sequence": 3159,
+    "later_zero_backlog_pending": 0,
+    "later_direct_state_child": "d84b8a2f164fb7cea56eb6a09898ddae47fe2b53",
+    "later_direct_state_parent": "463ecb0a4988cc5b9063a8be920fb3e7cafa6a62",
+    "cloudflare_original_slot": 2987310,
+    "cloudflare_original_scheduled_at_utc": "2026-10-19T05:00:50.000Z",
+    "this_is_post_terminal_compatibility_evidence_not_new_clock_anchor": true
+  },
+  "proof": {
+    "technical_read_only_workflow_url": "https://github.com/P00NSMASHER/portfolio-brain/actions/runs/39202032382",
+    "technical_workflow_conclusion": "success",
+    "technical_workflow_ref": "review/portfolio-0c-terminal-20261019",
+    "technical_workflow_source_commit": "c31663f392b093b34d3aadc71f340465a29c5826",
+    "original_proof_artifact_id": 12164525543,
+    "original_proof_artifact_SHA256": "a6ba83865ffc678249d42bc1a5f756a20861267fc20e186be18a348d940666ba",
+    "independent_download_crc": "PASS",
+    "original_proof_files": [
+      "proof-census.json",
+      "proof-terminal.json"
+    ],
+    "note": "Proof files intentionally state acceptance_pass=false and release_or_merge_authorized=false; separate reviewer decision is recorded here rather than changing producer output or backfilling self-approval.",
+    "github_evidence_issue": "https://github.com/P00NSMASHER/portfolio-brain/issues/702#issuecomment-6260038340"
+  },
+  "release_scope_constraints": {
+    "authorizes_no_production_source_mutation": true,
+    "no_change_to_existing_tasks_or_schedules": true,
+    "no_new_credentials_permissions_or_spending": true,
+    "never_grants_automatic_PR_merge": true,
+    "pending_PRs_719_and_721_remain_separately_reviewed_and_unmerged": true,
+    "does_not_certify_v9_66_capabilities_or_unattended_cross_repository_writes": true,
+    "does_not_certify_customer_ready_product_or_commercial_results": true,
+    "future_main_commit_requires_new_source_specific_acceptance": true,
+    "future_state_issues_must_be_audited_independently": true
+  },
+  "historical_preservation": "Older accepted or failed source windows are unmodified; this PASS applies only to 0c1184d2 and terminal 463ecb0a snapshot, with a separately corroborated post-terminal child."
+}
