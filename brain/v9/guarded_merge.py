@@ -364,16 +364,19 @@ def run(api, *, number, expected_main, apply=False):
     node_id = proof["node_id"]
     try:
         result = api.graphql(ENABLE_MUTATION, {"id": node_id})
+        field = result.get("data") if type(result) is dict and not result.get("errors") else None
+        result_pr = (field.get("enablePullRequestAutoMerge")
+                     if type(field) is dict else None)
+        observed_id = (result_pr.get("pullRequest", {}).get("id")
+                       if type(result_pr) is dict else None)
+        require(observed_id == node_id, "AUTO_MERGE_PROVIDER_RESPONSE_INVALID")
+        current = api.get("repos/" + REPO + "/pulls/" + str(number))
+        require(type(current) is dict
+                and current.get("head", {}).get("sha") == proof["head_sha"],
+                "AUTO_MERGE_PROVIDER_READBACK_UNVERIFIED")
     except Exception:
+        # The write may have succeeded: never claim zero mutations or retry.
         raise Denied("AUTO_MERGE_WRITE_UNCERTAIN_READBACK_REQUIRED") from None
-    require(type(result) is dict and not result.get("errors")
-            and result.get("data", {}).get("enablePullRequestAutoMerge", {})
-                .get("pullRequest", {}).get("id") == node_id,
-            "AUTO_MERGE_WRITE_UNCERTAIN_READBACK_REQUIRED")
-    current = api.get("repos/" + REPO + "/pulls/" + str(number))
-    require(type(current) is dict
-            and current.get("head", {}).get("sha") == proof["head_sha"],
-            "AUTO_MERGE_PROVIDER_READBACK_UNVERIFIED")
     # GitHub may merge immediately when the required checks are already green.
     # Treat that outcome as a merge only after the original provider says so.
     if current.get("state") == "closed" and current.get("merged") is True:
