@@ -1,0 +1,69 @@
+name: V9 accepted-current-source docs canary dry-run (read only)
+
+on:
+  push:
+    branches: [review/v9-35ad-accepted-canary-dryrun-20261020]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  verify-real-github-token-with-no-mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout immutable accepted trusted source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 35ad71868f74e6d4f749a35630a1b86802b91ed0
+          persist-credentials: false
+      - name: Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Verify trusted commit and pinned policy
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "35ad71868f74e6d4f749a35630a1b86802b91ed0"
+          test "$(git hash-object brain/v9/guarded_merge.py)" = "1b5aeda0486d406e18841c708d6c81b2287021db"
+      - name: Run complete original-provider controller admission without allowing a write
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import json,os
+          from brain.v9 import guarded_merge as gm
+
+          class ReadOnlyController(gm.GitHub):
+              def __init__(self,token):
+                  super().__init__(token)
+                  self.mutation_count=0
+              def _request(self,method,path,body=None):
+                  if method=="GET" and body is None:
+                      return super()._request(method,path,body)
+                  if (method=="POST" and path=="graphql"
+                       and type(body) is dict
+                       and body.get("query") in (gm.SETTINGS_QUERY,gm.RULESET_QUERY,gm.THREADS_QUERY)):
+                      return super()._request(method,path,body)
+                  raise gm.Denied("REVIEW_WRITE_ROUTE_FORBIDDEN")
+
+          api=ReadOnlyController(os.environ["GH_TOKEN"])
+          source="35ad71868f74e6d4f749a35630a1b86802b91ed0"
+          decision=gm.run(api,number=723,expected_main=source,apply=False)
+          if (decision.get("status")!="ADMISSIBLE"
+                  or decision.get("head_sha")!="b2fceeb41fd108b97bb3d5ec7f5fc1d8169f7ae4"
+                  or decision.get("base_sha")!=source
+                  or decision.get("provider_writes")!=0
+                  or decision.get("enrolled") is not False
+                  or decision.get("acceptance",{}).get("acceptance_ref")!="brain-acceptance-35ad7186-20261020"
+                  or api.mutation_count!=0):
+              raise SystemExit("TRUSTED_CONTROLLER_ADMISSION_NOT_PROVEN")
+          print("SOURCE_ACCEPTED_CANARY_ELIGIBLE_READONLY_PROVEN")
+          print(json.dumps({"status":decision["status"],"reviewed_main":source,
+                            "canary_head":decision["head_sha"],
+                            "acceptance_ref":decision["acceptance"]["acceptance_ref"],
+                            "provider_reads":api.calls,
+                            "native_auto_merge_writes":0,
+                            "actual_enrollment_performed":False},sort_keys=True))
+          PY
