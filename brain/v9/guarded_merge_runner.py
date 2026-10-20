@@ -8,7 +8,10 @@ import json
 import os
 import sys
 
-from brain.v9.guarded_merge import Denied, GitHub, LABEL, REPO, TRUSTED_AUTHORS, run, sha
+from brain.v9.guarded_merge import (
+    Denied, GitHub, LABEL, REPO, TRUSTED_AUTHORS, run, sha,
+    native_auto_merge_enabled,
+)
 
 MAX_CANDIDATES = 3
 
@@ -18,7 +21,7 @@ def dispatch_once(make_client, expected_main, *, apply=True):
     enumeration = make_client()
     root = "repos/" + REPO + "/"
     info = enumeration.get("repos/" + REPO)
-    if info.get("allow_auto_merge") is not True:
+    if not native_auto_merge_enabled(enumeration, info):
         return {"status": "REPOSITORY_AUTO_MERGE_SETTING_DISABLED",
                 "candidate_count": 0, "provider_writes": 0, "decisions": []}
     main = enumeration.get(root + "branches/main")

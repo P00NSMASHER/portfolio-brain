@@ -37,6 +37,9 @@ class FakeProvider:
         self.extra_acceptance_file = False
         self.immediate_merge = False
         self.symlink = False
+        self.repo_setting_hidden = False
+        self.graphql_setting_override = None
+        self.graphql_wrong_identity = False
         self.repo = {"id": gm.REPO_ID, "full_name": gm.REPO, "default_branch": "main",
                      "archived": False, "allow_auto_merge": True}
         self.main = {"protected": True, "commit": {"sha": BASE}}
@@ -84,6 +87,8 @@ class FakeProvider:
             r = copy.deepcopy(self.repo)
             if self.disabled:
                 r["allow_auto_merge"] = False
+            if self.repo_setting_hidden:
+                r.pop("allow_auto_merge", None)
             return r
         if path == ROOT + "rulesets/" + str(gm.RULESET_ID):
             return copy.deepcopy(self.rules)
@@ -137,7 +142,15 @@ class FakeProvider:
         raise AssertionError("UNREVIEWED_PROVIDER_ROUTE: " + path)
 
     def graphql(self, query, variables):
-        self.calls.append(("GRAPHQL", "read" if query == gm.THREADS_QUERY else "write"))
+        self.calls.append(("GRAPHQL", "read" if query in
+                           (gm.THREADS_QUERY, gm.SETTINGS_QUERY) else "write"))
+        if query == gm.SETTINGS_QUERY:
+            setting = (not self.disabled if self.graphql_setting_override is None
+                       else self.graphql_setting_override)
+            return {"data": {"repository": {
+                "databaseId": 0 if self.graphql_wrong_identity else gm.REPO_ID,
+                "nameWithOwner": gm.REPO,
+                "autoMergeAllowed": setting, "isArchived": False}}}
         if query == gm.THREADS_QUERY:
             return {"data": {"node": {"id": NODE, "reviewThreads": {
                 "pageInfo": {"hasNextPage": False},
@@ -196,7 +209,44 @@ class GuardedAdmissionTests(unittest.TestCase):
         result = gm.run(f, number=PR, expected_main=BASE, apply=True)
         self.assertEqual(result["status"], "REPOSITORY_AUTO_MERGE_SETTING_DISABLED")
         self.assertEqual(f.mutations, 0)
-        self.assertEqual(len(f.calls), 1)
+        self.assertEqual(len(f.calls), 2)
+        self.assertIn(("GRAPHQL", "read"), f.calls)
+
+    def test_actual_workflow_token_omits_rest_setting_but_graphql_verifies_true(self):
+        f = FakeProvider()
+        f.repo_setting_hidden = True
+        result = gm.run(f, number=PR, expected_main=BASE)
+        self.assertEqual(result["status"], "ADMISSIBLE")
+        self.assertEqual(f.mutations, 0)
+        self.assertTrue(any(c == ("GRAPHQL", "read") for c in f.calls))
+        f = EventRunnerProvider()
+        f.repo_setting_hidden = True
+        result = __import__("brain.v9.guarded_merge_runner", fromlist=["dispatch_once"]).dispatch_once(
+            lambda: f, BASE, apply=True)
+        self.assertEqual(result["provider_writes"], 1)
+        self.assertEqual(f.mutations, 1)
+
+    def test_graphql_setting_denial_conflict_and_forged_identity_block(self):
+        f = FakeProvider()
+        f.repo_setting_hidden = True
+        f.graphql_setting_override = False
+        result = gm.run(f, number=PR, expected_main=BASE, apply=True)
+        self.assertEqual(result["status"], "REPOSITORY_AUTO_MERGE_SETTING_DISABLED")
+        self.assertEqual(f.mutations, 0)
+        f = FakeProvider()
+        f.graphql_setting_override = False
+        self.assert_blocked(f, "REPOSITORY_SETTING_CONFLICT")
+        f = FakeProvider()
+        f.graphql_wrong_identity = True
+        self.assert_blocked(f, "REPOSITORY_GRAPHQL_SETTING_UNVERIFIED")
+
+    def test_graphql_query_cannot_be_escalated_to_unreviewed_actions(self):
+        f = FakeProvider()
+        f.repo_setting_hidden = True
+        self.assertTrue(gm.native_auto_merge_enabled(f, f.get("repos/" + gm.REPO)))
+        self.assertEqual(f.mutations, 0)
+        with self.assertRaisesRegex(gm.Denied, "GITHUB_GRAPHQL_NOT_APPROVED"):
+            gm.GitHub("a" * 32).graphql("mutation { createRepository(input:{name:\"x\"}) { clientMutationId } }", {})
 
     def test_unaccepted_source_blocks_every_mutation(self):
         f = FakeProvider()
@@ -416,7 +466,8 @@ class EventRunnerTests(unittest.TestCase):
         self.assertEqual(result["status"], "REPOSITORY_AUTO_MERGE_SETTING_DISABLED")
         self.assertEqual(result["provider_writes"], 0)
         self.assertEqual(f.mutations, 0)
-        self.assertEqual(len(f.calls), 1)
+        self.assertEqual(len(f.calls), 2)
+        self.assertIn(("GRAPHQL", "read"), f.calls)
 
     def test_reviewed_workflow_pins_exact_source_and_has_no_untrusted_trigger(self):
         from pathlib import Path
