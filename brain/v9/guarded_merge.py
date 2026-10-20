@@ -337,6 +337,8 @@ def native_auto_merge_enabled(api, info):
 THREADS_QUERY = """query($id: ID!) {
   node(id: $id) { ... on PullRequest {
     id
+    viewerCanEnableAutoMerge
+    mergeStateStatus
     reviewThreads(first: 100) {
       pageInfo { hasNextPage }
       nodes { isResolved }
@@ -359,6 +361,16 @@ def checked_threads(response, node_id):
             and len(rows["nodes"]) <= 100
             and all(type(x) is dict and x.get("isResolved") is True for x in rows["nodes"]),
             "UNRESOLVED_OR_INCOMPLETE_REVIEW_THREADS")
+    # Native GitHub exposes enrollment only when the executing principal
+    # can currently enable it. A fully mergeable CLEAN PR can legitimately
+    # report False despite all exact independent checks already being green.
+    # Detect that condition from the original provider *before* any mutation.
+    require(type(node.get("viewerCanEnableAutoMerge")) is bool
+            and type(node.get("mergeStateStatus")) is str
+            and 1 <= len(node["mergeStateStatus"]) <= 32,
+            "NATIVE_AUTOMERGE_ELIGIBILITY_UNVERIFIED")
+    require(node["viewerCanEnableAutoMerge"] is True,
+            "NATIVE_AUTOMERGE_UNAVAILABLE_ON_CURRENT_PR")
 
 
 def checked_git_tree_files(api, head, files):
@@ -465,6 +477,9 @@ def observe(api, number, expected_main):
             and again.get("auto_merge") is None
             and {x.get("name") for x in again.get("labels", []) if type(x) is dict} >= {LABEL},
             "PR_CHANGED_DURING_ADMISSION")
+    # Eligibility can change between the earlier first read and the
+    # enrollment boundary. No native GraphQL mutation on a stale/false flag.
+    checked_threads(api.graphql(THREADS_QUERY, {"id": pr["node_id"]}), pr["node_id"])
     return {"status": "ADMISSIBLE", "number": number,
             "node_id": pr["node_id"], "head_sha": head,
             "base_sha": expected_main, "acceptance": acceptance,
