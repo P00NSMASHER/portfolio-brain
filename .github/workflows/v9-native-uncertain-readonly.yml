@@ -65,7 +65,7 @@ jobs:
             }
           }"""
           assert Q.lstrip().startswith("query ") and not re.search(r"\bmutation\b", Q, re.I)
-          allowed_gets = {BASE, BASE + "/pulls/" + str(n) for n in EXPECTED}
+          allowed_gets = {BASE} | {BASE + "/pulls/" + str(n) for n in EXPECTED}
           allowed_gets.update(BASE + "/commits/" + EXPECTED[n] + "/check-runs?per_page=100" for n in (688,641,723))
           n_calls = 0
           def api(method, path, body=None):
