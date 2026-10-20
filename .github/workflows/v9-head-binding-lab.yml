@@ -1,0 +1,60 @@
+name: V9 exact-head safety review lab
+on:
+  push:
+    branches: [review/v9-head-binding-lab-20261020]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout immutable reviewed candidate without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 7ad50146267e4ed573230537b1450ded5c245d96
+          persist-credentials: false
+      - name: Preserve exact public source for isolated regression testing
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "7ad50146267e4ed573230537b1450ded5c245d96"
+          test "$(git hash-object brain/v9/guarded_merge.py)" = "9fffdb01e8176c1e661cfb4d1b520f6748b3965b"
+          mkdir review-evidence
+          git archive --format=tar.gz HEAD > review-evidence/source-7ad50146.tar.gz
+          test "$(stat -c %s review-evidence/source-7ad50146.tar.gz)" -lt 100000000
+          sha256sum review-evidence/source-7ad50146.tar.gz > review-evidence/SHA256SUMS
+      - name: Read live native input schema only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import http.client, json, os
+          from pathlib import Path
+          query = 'query NativeHeadConditionSchema { __type(name: "EnablePullRequestAutoMergeInput") { name inputFields { name type { kind name ofType { kind name } } } } }'
+          assert query.startswith('query ') and 'mutation' not in query.lower()
+          connection = http.client.HTTPSConnection('api.github.com', timeout=20)
+          try:
+              connection.request('POST', '/graphql', body=json.dumps({'query':query}).encode(), headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Content-Type':'application/json','User-Agent':'portfolio-brain-readonly-schema-lab'})
+              response = connection.getresponse()
+              raw = response.read(65537)
+              assert response.status == 200 and len(raw) <= 65536
+              data = json.loads(raw)
+              assert isinstance(data, dict) and not data.get('errors')
+              schema = data['data']['__type']
+              assert schema['name'] == 'EnablePullRequestAutoMergeInput'
+              fields = {field['name']:field['type'] for field in schema['inputFields']}
+              assert fields.get('expectedHeadOid',{}).get('name') == 'GitObjectID'
+              proof = {'status':'READONLY_SCHEMA_VERIFIED','expectedHeadOid':fields['expectedHeadOid'],'permissions':'contents:read,pull-requests:write','native_mutation_attempted':False,'provider_writes':0,'mutation_authority_proven':False,'run_id':os.environ['GITHUB_RUN_ID'],'workflow_sha':os.environ['GITHUB_SHA']}
+              Path('review-evidence/native-schema.json').write_text(json.dumps(proof, sort_keys=True)+'\n')
+              print(json.dumps(proof, sort_keys=True))
+          finally:
+              connection.close()
+          PY
+      - name: Retain immutable source and read-only schema evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: v9-head-binding-review-source
+          path: review-evidence/
+          if-no-files-found: error
+          retention-days: 7
