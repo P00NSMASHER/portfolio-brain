@@ -89,15 +89,44 @@ class NativeAdmissionReviewTests(unittest.TestCase):
         snap["pr"]["graphql_merge_state"] = "BEHIND"
         self.assert_hold(snap, "GITHUB_NATIVE_EARLY_ELIGIBILITY_NOT_PROVEN")
 
+    def test_real_provider_blocked_one_success_other_not_yet_issued(self):
+        # The issuer-pinned phase1 App check is absent, not failed or forged.
+        # GitHub's ruleset still prevents protected merge until it arrives.
+        snap = sample()
+        snap["check_runs"] = [snap["check_runs"][0]]
+        got = decision(snap)
+        self.assertEqual(got.status, "REVIEW_ONLY_EARLY_ADMISSION_CANDIDATE")
+        self.assertEqual(got.provider_writes, 0)
+        self.assertFalse(got.merge_authorized)
+
+    def test_unissued_required_check_may_become_queued_between_rereads(self):
+        initial = sample()
+        initial["check_runs"] = [initial["check_runs"][0]]
+        final = sample()
+        final["check_runs"][1]["status"] = "queued"
+        got = decision(initial, final)
+        self.assertEqual(got.status, "REVIEW_ONLY_EARLY_ADMISSION_CANDIDATE")
+        self.assertFalse(got.merge_authorized)
+
+    def test_unissued_required_check_without_independent_success_cannot_admit(self):
+        snap = sample()
+        snap["check_runs"] = [snap["check_runs"][1]]
+        self.assert_hold(snap, "MUST_HAVE_ONE_SUCCESS_AND_ONE_REQUIRED_CHECK_OUTSTANDING")
+
+    def test_unhashable_forged_author_fails_closed(self):
+        snap = sample()
+        snap["pr"]["author"] = ["P00NSMASHER"]
+        self.assert_hold(snap, "ORIGINAL_PR_ADMISSION_IDENTITY_UNVERIFIED")
+
     def test_two_green_checks_do_not_create_a_fake_early_window(self):
         snap = sample()
         snap["check_runs"][1].update(status="completed", conclusion="success")
-        self.assert_hold(snap, "MUST_HAVE_ONE_SUCCESS_AND_ONE_GENUINELY_PENDING_CHECK")
+        self.assert_hold(snap, "MUST_HAVE_ONE_SUCCESS_AND_ONE_REQUIRED_CHECK_OUTSTANDING")
 
     def test_two_pending_checks_fail_until_first_independent_success(self):
         snap = sample()
         snap["check_runs"][0].update(status="queued", conclusion=None)
-        self.assert_hold(snap, "MUST_HAVE_ONE_SUCCESS_AND_ONE_GENUINELY_PENDING_CHECK")
+        self.assert_hold(snap, "MUST_HAVE_ONE_SUCCESS_AND_ONE_REQUIRED_CHECK_OUTSTANDING")
 
     def test_failed_cancelled_skipped_and_ambiguous_check_cannot_pass(self):
         for status, conclusion in [
@@ -124,7 +153,7 @@ class NativeAdmissionReviewTests(unittest.TestCase):
     def test_absent_duplicate_and_malformed_check_census_fail(self):
         cases = []
         s = sample()
-        s["check_runs"] = [s["check_runs"][0]]
+        s["check_runs"] = []
         cases.append(s)
         s = sample()
         s["check_runs"].append(dict(s["check_runs"][1]))
