@@ -78,10 +78,11 @@ def checked_path(path):
     return path
 
 
-def ruleset_passes(r):
+def ruleset_passes(api, r):
     require(type(r) is dict and r.get("id") == RULESET_ID
             and r.get("enforcement") == "active"
-            and r.get("bypass_actors") == []
+            and ("bypass_actors" not in r or
+                 (type(r.get("bypass_actors")) is list and r["bypass_actors"] == []))
             and r.get("conditions", {}).get("ref_name") == {
                 "include": ["refs/heads/main"], "exclude": []
             }, "PROTECTED_RULESET_MISMATCH")
@@ -100,6 +101,7 @@ def ruleset_passes(r):
             "INDEPENDENT_CHECK_GATE_MISSING")
     required = {(x.get("context"), x.get("integration_id")) for x in listed}
     require(set(REQUIRED_CHECKS.items()) <= required, "INDEPENDENT_CHECK_ISSUER_MISSING")
+    verified_ruleset_bypass_actors(api, r)
 
 
 def accepted_source(api, main):
@@ -230,6 +232,74 @@ SETTINGS_QUERY = """query {
     isArchived
   }
 }"""
+
+
+RULESET_QUERY = """query {
+  repository(owner: "P00NSMASHER", name: "portfolio-brain") {
+    databaseId
+    nameWithOwner
+    isArchived
+    rulesets(first: 100) {
+      pageInfo { hasNextPage }
+      nodes {
+        databaseId
+        name
+        enforcement
+        bypassActors(first: 100) {
+          totalCount
+          pageInfo { hasNextPage }
+        }
+      }
+    }
+  }
+}"""
+
+
+def verified_ruleset_bypass_actors(api, rest):
+    """Require real scoped-token GraphQL zero-bypass proof for exact ruleset.
+
+    GitHub Actions' restricted token may omit the REST bypass_actors field.
+    Missing is *unknown*. Never infer zero bypass actors from absence.
+    Validate the REST rules separately, then corroborate bypass census through
+    the authenticated read-only repository GraphQL connection. Any conflicting
+    visible REST bypass, partial GraphQL census or changed identity fails shut.
+    """
+    require(type(rest) is dict and rest.get("id") == RULESET_ID,
+            "PROTECTED_RULESET_MISMATCH")
+    if "bypass_actors" in rest:
+        require(type(rest["bypass_actors"]) is list
+                and rest["bypass_actors"] == [],
+                "PROTECTED_RULESET_MISMATCH")
+    response = api.graphql(RULESET_QUERY, {})
+    require(type(response) is dict and not response.get("errors"),
+            "PROTECTED_RULESET_GRAPHQL_UNVERIFIED")
+    data = response.get("data")
+    identity = data.get("repository") if type(data) is dict else None
+    require(type(identity) is dict
+            and identity.get("databaseId") == REPO_ID
+            and identity.get("nameWithOwner") == REPO
+            and identity.get("isArchived") is False,
+            "PROTECTED_RULESET_GRAPHQL_UNVERIFIED")
+    collection = identity.get("rulesets")
+    require(type(collection) is dict
+            and type(collection.get("pageInfo")) is dict
+            and collection["pageInfo"].get("hasNextPage") is False
+            and type(collection.get("nodes")) is list
+            and len(collection["nodes"]) <= 100,
+            "PROTECTED_RULESET_GRAPHQL_UNVERIFIED")
+    matching = [item for item in collection["nodes"]
+                if type(item) is dict and item.get("databaseId") == RULESET_ID]
+    require(len(matching) == 1
+            and matching[0].get("name") == "portfolio-main-protection"
+            and matching[0].get("enforcement") == "ACTIVE",
+            "PROTECTED_RULESET_GRAPHQL_UNVERIFIED")
+    bypass = matching[0].get("bypassActors")
+    require(type(bypass) is dict
+            and type(bypass.get("totalCount")) is int
+            and bypass["totalCount"] == 0
+            and type(bypass.get("pageInfo")) is dict
+            and bypass["pageInfo"].get("hasNextPage") is False,
+            "PROTECTED_RULESET_GRAPHQL_UNVERIFIED")
 
 
 def native_auto_merge_enabled(api, info):
@@ -363,7 +433,7 @@ def observe(api, number, expected_main):
     if not native_auto_merge_enabled(api, info):
         return {"status": "REPOSITORY_AUTO_MERGE_SETTING_DISABLED",
                 "provider_writes": 0, "enrolled": False}
-    ruleset_passes(api.get(root + "rulesets/" + str(RULESET_ID)))
+    ruleset_passes(api, api.get(root + "rulesets/" + str(RULESET_ID)))
     main = api.get(root + "branches/main")
     require(main.get("protected") is True
             and main.get("commit", {}).get("sha") == expected_main,
@@ -383,7 +453,7 @@ def observe(api, number, expected_main):
     # Single final source/PR reread; native GitHub protection independently
     # enforces up-to-date checks even if another actor races this observer.
     # Repeat the trusted platform ruleset on the last read boundary.
-    ruleset_passes(api.get(root + "rulesets/" + str(RULESET_ID)))
+    ruleset_passes(api, api.get(root + "rulesets/" + str(RULESET_ID)))
     require(native_auto_merge_enabled(api, api.get("repos/" + REPO)),
             "REPOSITORY_SETTING_CHANGED_DURING_ADMISSION")
     live = api.get(root + "branches/main")
@@ -497,7 +567,8 @@ class GitHub:
         return self._request("GET", path)
 
     def graphql(self, query, variables):
-        require((query == SETTINGS_QUERY and variables == {})
+        require((query in (SETTINGS_QUERY, RULESET_QUERY)
+                 and type(variables) is dict and variables == {})
                 or (query in (THREADS_QUERY, ENABLE_MUTATION)
                     and type(variables) is dict and set(variables) == {"id"}),
                 "GITHUB_GRAPHQL_NOT_APPROVED")
