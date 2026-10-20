@@ -38,10 +38,17 @@ class Decision:
     reason: str
     provider_writes: int = 0
     merge_authorized: bool = False
+    revocation_authorized: bool = False
 
 
 def _hold(reason):
     return Decision("HOLD", reason)
+
+
+def _revoke(reason):
+    # Advisory only: a future controller would need separate authority,
+    # an exact-head conditional mutation and original-provider readback.
+    return Decision("REVIEW_ONLY_REVOCATION_REQUIRED", reason)
 
 
 def _sha(value):
@@ -179,6 +186,118 @@ def interpret_provider_readback(record, *, expected_number, expected_head):
         return Decision("GITHUB_REPORTED_MERGED_REQUIRES_INDEPENDENT_PROVENANCE",
                         "CHECK_ORIGINAL_NATIVE_MERGE_EVENTS_PROTECTED_MAIN_AND_FINAL_ISSUER_CHECKS")
     return _hold("PROVIDER_READBACK_UNRESOLVED")
+
+
+def plan_post_enrollment_monitor(receipt, current):
+    """Fail closed after visible enrollment without performing any provider write.
+
+    The receipt is the immutable identity observed when native SQUASH enrollment
+    became visible. The current value must be a newly derived, complete original-
+    provider snapshot. A revocation result is an advisory escalation only; it
+    deliberately carries no authority to disable enrollment or merge.
+    """
+    if not (type(receipt) is dict
+            and receipt.get("repository") == REPOSITORY
+            and type(receipt.get("repository_id")) is int
+            and receipt.get("repository_id") == REPOSITORY_ID
+            and type(receipt.get("ruleset_id")) is int
+            and receipt.get("ruleset_id") == RULESET_ID
+            and receipt.get("source_sha") == SOURCE_SHA
+            and type(receipt.get("number")) is int
+            and 0 < receipt["number"] < 10**9
+            and _sha(receipt.get("head_sha"))
+            and receipt["head_sha"] != SOURCE_SHA
+            and receipt.get("base_sha") == SOURCE_SHA
+            and receipt.get("merge_method") == "squash"):
+        return _hold("ENROLLMENT_RECEIPT_IDENTITY_UNVERIFIED")
+
+    if type(current) is not dict:
+        return _revoke("CURRENT_PROVIDER_SNAPSHOT_UNREADABLE")
+    if not (current.get("repository") == REPOSITORY
+            and type(current.get("repository_id")) is int
+            and current.get("repository_id") == REPOSITORY_ID
+            and type(current.get("ruleset_id")) is int
+            and current.get("ruleset_id") == RULESET_ID
+            and current.get("main_sha") == SOURCE_SHA
+            and current.get("source_acceptance_sha") == SOURCE_SHA
+            and current.get("protected_main") is True
+            and type(current.get("required_check_issuers")) is dict
+            and current["required_check_issuers"] == CHECK_ISSUERS):
+        return _revoke("REPOSITORY_RULESET_OR_SOURCE_CHANGED")
+    for key in PROOF_KEYS:
+        if current.get(key) is not True:
+            return _revoke("PROVIDER_PROOF_INVALID_" + key.upper())
+
+    pr = current.get("pr")
+    if type(pr) is not dict:
+        return _revoke("CURRENT_PR_IDENTITY_UNREADABLE")
+    if pr.get("number") != receipt["number"]:
+        return _revoke("PR_NUMBER_CHANGED_AFTER_ENROLLMENT")
+    if pr.get("head_sha") != receipt["head_sha"]:
+        return _revoke("HEAD_CHANGED_AFTER_ENROLLMENT")
+    if (pr.get("base_branch") != "main"
+            or pr.get("base_sha") != receipt["base_sha"]):
+        return _revoke("BASE_CHANGED_AFTER_ENROLLMENT")
+
+    if (pr.get("state") == "closed" and pr.get("merged") is True
+            and _sha(pr.get("merge_commit_sha"))):
+        return Decision(
+            "GITHUB_REPORTED_MERGED_REQUIRES_INDEPENDENT_PROVENANCE",
+            "CHECK_ORIGINAL_NATIVE_MERGE_EVENTS_PROTECTED_MAIN_AND_FINAL_ISSUER_CHECKS",
+        )
+    if not (pr.get("state") == "open"
+            and pr.get("draft") is False
+            and pr.get("merged") is False
+            and pr.get("mergeable") is True):
+        return _revoke("PR_STATE_NO_LONGER_SAFE_AFTER_ENROLLMENT")
+    if type(pr.get("author")) is not str or pr["author"] not in TRUSTED_AUTHORS:
+        return _revoke("TRUSTED_AUTHOR_CHANGED_AFTER_ENROLLMENT")
+    if (type(pr.get("labels")) is not list
+            or any(type(label) is not str for label in pr["labels"])
+            or LABEL not in pr["labels"]):
+        return _revoke("OPT_IN_LABEL_REMOVED")
+
+    auto = pr.get("auto_merge")
+    if auto is None:
+        return _hold("NOT_ENROLLED_DO_NOT_RETRY_UNCERTAIN_POST")
+    if type(auto) is not dict or auto.get("merge_method") != receipt["merge_method"]:
+        return _revoke("FOREIGN_OR_UNVERIFIED_ENROLLMENT")
+
+    runs = current.get("check_runs")
+    if (type(runs) is not list or not (1 <= len(runs) < 100)
+            or type(current.get("check_total_count")) is not int
+            or current["check_total_count"] != len(runs)
+            or any(type(run) is not dict for run in runs)):
+        return _revoke("ORIGINAL_REQUIRED_CHECK_CENSUS_INCOMPLETE")
+
+    states = []
+    for name, app_id in CHECK_ISSUERS.items():
+        matches = [run for run in runs if run.get("name") == name]
+        if len(matches) > 1:
+            return _revoke("REQUIRED_CHECK_MISSING_OR_AMBIGUOUS")
+        if not matches:
+            states.append("not_issued")
+            continue
+        run = matches[0]
+        if not (run.get("head_sha") == receipt["head_sha"]
+                and type(run.get("app_id")) is int
+                and run["app_id"] == app_id):
+            return _revoke("REQUIRED_CHECK_WRONG_HEAD_OR_ISSUER")
+        if (run.get("status") == "completed"
+                and run.get("conclusion") == "success"):
+            states.append("success")
+        elif (run.get("status") in ("queued", "in_progress")
+                and run.get("conclusion") is None):
+            states.append("pending")
+        else:
+            return _revoke("REQUIRED_CHECK_FAILED_AMBIGUOUS_OR_CANCELLED")
+
+    if "success" not in states:
+        return _revoke("NO_INDEPENDENT_REQUIRED_CHECK_SUCCESS")
+    return Decision(
+        "REVIEW_ONLY_ENROLLMENT_MONITOR",
+        "WAIT_FOR_GITHUB_PROTECTED_FINAL_CHECKS_AND_INDEPENDENT_READBACK",
+    )
 
 
 if __name__ == "__main__":
