@@ -10,3 +10,5 @@ This is a harmless documentation-only verification change.
 - A successful test requires original provider evidence of native auto-merge enrollment and the resulting protected merge.
 
 A passing test does not authorize broader automatic source or customer deployments.
+
+- This documentation-only update initiates fresh independent verification; it grants no merge or deployment authority.
