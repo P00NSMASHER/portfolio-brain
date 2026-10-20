@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "decision_date_utc": "2026-10-20",
+  "decision": "RELEASED",
+  "status": "PASS",
+  "scope": "SOURCE_SPECIFIC_UNATTENDED_PRODUCTION_CORE_RELIABILITY_ONLY",
+  "source_sha": "4393488059c8f7f02ce665a514a10198feae270c",
+  "protected_main_observed_at_decision": true,
+  "approval_basis": "Separate owner-directed governed reliability decision after authenticated independent provider observations and immutable source-pinned GitHub-hosted technical proof. The original verifier explicitly did not self-approve. No claim of any third-party human's signature, customer deployment certification, authorization for protected merge or future-source reliability.",
+  "criteria": {
+    "minimum_completed_span_seconds": 21600,
+    "maximum_intercore_gap_seconds": 5400,
+    "verified_exact_source_protected_main": true,
+    "excludes_push_from_automatic_acceptance": true,
+    "requires_original_artifact_crc_digest_sha_and_state_ancestry": true,
+    "requires_separate_hosted_original_SQLite_and_event_ledger_replay": true,
+    "requires_external_Cloudflare_origin_checks": true
+  },
+  "original_run_evidence": {
+    "original_qualifying_cores": 14,
+    "original_signed_cloudflare_dispatched_cores": 12,
+    "original_github_native_schedule_cores": 2,
+    "all_success_attempt_one": true,
+    "first_original_run_id": 39347813668,
+    "first_original_monitor_completed_utc": "2026-10-20T00:29:27Z",
+    "terminal_original_run_id": 39382788017,
+    "terminal_original_monitor_completed_utc": "2026-10-20T06:52:21Z",
+    "completed_span_seconds": 22974,
+    "maximum_gap_seconds": 1967,
+    "all_original_core_state_parent_child_links_contiguous": true,
+    "original_artifacts_sha256_size_and_crc_all_verified": true,
+    "original_job_required_steps_all_pass": true,
+    "original_provider_reads_each_full_audit": 73,
+    "complete_source_run_census_count": 15,
+    "source_specific_result": "SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED",
+    "historical_prior_source_cancellation": {
+      "run_id": 39278587557,
+      "source_sha": "3ea4dc4d0ddcb3470dc0d884bb2702efaef6dc4d",
+      "classification": "HISTORICAL_ADVERSE_DIFFERENT_SOURCE_NOT_COUNTED_TOWARD_439_WINDOW",
+      "retained_not_reclassified": true
+    },
+    "current_source_historical_adverse_automatic_cores": []
+  },
+  "terminal_state_replay": {
+    "last_state_commit": "a2d9f0b89a2c0f60cb7dd76fa312272cdcd61cad",
+    "direct_parent": "2adf97f6488adb36aafc2a18b952f62ec7e0481a",
+    "source_sha": "4393488059c8f7f02ce665a514a10198feae270c",
+    "reconstructed_raw_sqlite_sha256": "a55197cd6e252d49682a4e4c7e6107750d5c1164250e68df8714fe1c8f743574",
+    "canonical_sequence": 3492,
+    "canonical_hash": "b6c26c2be90bcb3d6421e9398870eef3a27a1fa07b90b3622246e3e8150b2490",
+    "pending_events": 0,
+    "sqlite_integrity": "PASS",
+    "foreign_keys": "PASS",
+    "strict_event_identity_and_ledger_replay": "PASS",
+    "deterministic_report_reproduction": "PASS",
+    "terminal_replay_status": "ORIGINAL_TERMINAL_RAW_SQLITE_REPLAY_VERIFIED"
+  },
+  "external_cloudflare_provider": {
+    "source": "Independently authenticated Cloudflare GraphQL workersInvocationsAdaptive using exact-second Worker identity plus original GitHub HMAC-signed Cloudflare origin artifacts",
+    "account_scope": "Authenticated existing account, no credentials in retained receipt",
+    "source_script_name": "portfolio-brain-recovery",
+    "interval_start_utc": "2026-10-20T00:28:00Z",
+    "interval_end_utc": "2026-10-20T06:55:00Z",
+    "graphql_worker_invocation_rows_observed": 39,
+    "original_signed_cloudflare_dispatch_count": 12,
+    "original_signed_cloudflare_dispatch_exact_times_utc": [
+      "2026-10-20T01:00:50Z",
+      "2026-10-20T01:30:50Z",
+      "2026-10-20T02:00:50Z",
+      "2026-10-20T02:30:50Z",
+      "2026-10-20T03:00:50Z",
+      "2026-10-20T03:30:50Z",
+      "2026-10-20T04:00:50Z",
+      "2026-10-20T04:30:50Z",
+      "2026-10-20T05:00:50Z",
+      "2026-10-20T05:50:50Z",
+      "2026-10-20T06:20:50Z",
+      "2026-10-20T06:50:50Z"
+    ],
+    "graphql_exact_script_timestamp_request_count_verified": 12,
+    "graphql_matching_slots_with_nonzero_errors": 0,
+    "graphql_original_worker_errors_sum": 0,
+    "missing_original_provider_exact_second_records": 0,
+    "scheduled_origin_accepted_as_completion": false,
+    "original_github_signed_origin_steps_all_pass": true
+  },
+  "proof": {
+    "technical_workflow_run_id": 39383844166,
+    "technical_workflow_run_attempt": 1,
+    "technical_workflow_conclusion": "success",
+    "technical_audit_url": "https://github.com/P00NSMASHER/portfolio-brain/actions/runs/39383844166",
+    "immutable_review_only_commit": "4a6310fdd29ab80fef74deb83383033ef878291c",
+    "proof_artifact_id": 12246870885,
+    "proof_zip_sha256": "7fcf219b184c600f3bb5848408b8a587a31922a6491686f95f929b8540d65876",
+    "proof_zip_bytes": 1808,
+    "proof_zip_crc": "PASS",
+    "proof_contains": [
+      "proof-census.json",
+      "proof-terminal.json"
+    ],
+    "original_verifier_explicitly_did_not_self_approve": true,
+    "earlier_incomplete_source_review_runs_preserved": [
+      39352597842,
+      39352950709,
+      39353083299,
+      39353767011,
+      39354084546
+    ]
+  },
+  "authority_limits": {
+    "authorizes_current_source_reliability_acceptance_only": true,
+    "source_change_requires_new_original_evidence_and_independent_acceptance": true,
+    "no_new_software_deployment_or_merge_authority_from_this_record": true,
+    "no_ruleset_or_verifier_bypass": true,
+    "no_new_secrets_schedules_or_paid_spending": true,
+    "no_automatic_customer_contact": true,
+    "no_certification_of_66_full_v9_capabilities": true,
+    "no_certification_of_cross_repository_write_adapters": true,
+    "no_certification_of_real_repair_outcome": true,
+    "pending_PR_725_requires_separate_exact_head_checks_review_and_protected_release": true,
+    "pending_docs_canary_PR_723_requires_repaired_new_main_own_acceptance": true
+  }
+}
