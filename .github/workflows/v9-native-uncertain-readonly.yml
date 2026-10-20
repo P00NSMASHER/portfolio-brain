@@ -1,0 +1,101 @@
+name: V9 native auto-merge uncertainty — real-provider read-only reconciliation
+
+on:
+  push:
+    branches: [review/v9-automerge-native-reconcile-20261020]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout exact immutable deployed controller
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 35ad71868f74e6d4f749a35630a1b86802b91ed0
+          persist-credentials: false
+      - name: Confirm trusted main and pinned original controller
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "35ad71868f74e6d4f749a35630a1b86802b91ed0"
+          test "$(git hash-object brain/v9/guarded_merge.py)" = "1b5aeda0486d406e18841c708d6c81b2287021db"
+      - name: Reconcile PR 723 and GraphQL native auto-merge without any mutation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import http.client,json,os
+          token=os.environ["GH_TOKEN"]
+          headers={"Authorization":"Bearer "+token,"Accept":"application/vnd.github+json",
+                   "X-GitHub-Api-Version":"2022-11-28",
+                   "User-Agent":"portfolio-brain-v9-native-reconcile"}
+          host="api.github.com"
+          def fixed(method,path,body=None):
+              assert method in ("GET","POST")
+              if method=="POST":
+                  assert path=="/graphql" and type(body) is dict
+                  assert type(body.get("query")) is str and body["query"].startswith("query ")
+                  assert "mutation" not in body["query"].lower()
+              else:
+                  assert path in ("/repos/P00NSMASHER/portfolio-brain",
+                       "/repos/P00NSMASHER/portfolio-brain/pulls/723")
+              c=http.client.HTTPSConnection(host,timeout=15)
+              h=dict(headers)
+              data=None
+              if body is not None:
+                  data=json.dumps(body).encode("utf8")
+                  h["Content-Type"]="application/json"
+              try:
+                  c.request(method,path,body=data,headers=h)
+                  response=c.getresponse()
+                  payload=response.read(200000)
+                  if response.status!=200:
+                      raise SystemExit("READ_ONLY_PROVIDER_HTTP_"+str(response.status))
+                  return json.loads(payload)
+              finally:
+                  c.close()
+          meta=fixed("GET","/repos/P00NSMASHER/portfolio-brain")
+          pr=fixed("GET","/repos/P00NSMASHER/portfolio-brain/pulls/723")
+          query="""query NativeState {
+            repository(owner:"P00NSMASHER",name:"portfolio-brain") {
+              databaseId nameWithOwner autoMergeAllowed
+              pullRequest(number:723) {
+                id number state isDraft mergeable mergeStateStatus
+                autoMergeRequest { enabledAt mergeMethod }
+              }
+            }
+          }"""
+          data=fixed("POST","/graphql",{"query":query})
+          assert type(data) is dict and not data.get("errors"), "READ_GRAPHQL_OR_SCHEMA_ERROR"
+          repo=data.get("data",{}).get("repository")
+          if not (type(repo) is dict and repo.get("databaseId")==1387747549
+                  and repo.get("nameWithOwner")=="P00NSMASHER/portfolio-brain"
+                  and type(repo.get("autoMergeAllowed")) is bool):
+              raise SystemExit("REPOSITORY_IDENTITY_OR_SETTING_UNVERIFIED")
+          native=repo.get("pullRequest")
+          if not (type(native) is dict and native.get("number")==723
+                  and type(native.get("mergeable")) is str
+                  and type(native.get("mergeStateStatus")) is str):
+              raise SystemExit("NATIVE_PR_SCHEMA_UNVERIFIED")
+          if (pr.get("head",{}).get("sha")!="19aff3921b85690eae44ce9be239d5c917b57030"
+                  or pr.get("base",{}).get("sha")!="35ad71868f74e6d4f749a35630a1b86802b91ed0"):
+              raise SystemExit("PROVIDER_PR_HEAD_OR_BASE_DRIFT")
+          result={"source":"35ad71868f74e6d4f749a35630a1b86802b91ed0",
+                  "pr":723,"rest_state":pr.get("state"),
+                  "rest_merged":pr.get("merged"),
+                  "rest_auto_merge_enrolled":pr.get("auto_merge") is not None,
+                  "rest_mergeable_state":pr.get("mergeable_state"),
+                  "graphql_state":native.get("state"),
+                  "graphql_mergeable":native.get("mergeable"),
+                  "graphql_merge_state_status":native.get("mergeStateStatus"),
+                  "graphql_auto_merge_enrolled":native.get("autoMergeRequest") is not None,
+                  "auto_merge_setting":repo.get("autoMergeAllowed"),
+                  "native_enable_mutation_attempted":False,
+                  "provider_writes":0}
+          print("READ_ONLY_NATIVE_PROVIDER_RECONCILIATION")
+          print(json.dumps(result,sort_keys=True))
+          PY
