@@ -16,7 +16,7 @@ jobs:
       - name: Checkout pinned digest-only proposal
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: 187c2f3671a5f1c8909bcfd2c92d1b31233bbda6
+          ref: 9d4d799c819f142d12d8f439822116f4b5521c70
           persist-credentials: false
       - name: Python 3.12
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -26,7 +26,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "187c2f3671a5f1c8909bcfd2c92d1b31233bbda6"
+          test "$(git rev-parse HEAD)" = "9d4d799c819f142d12d8f439822116f4b5521c70"
           python -m unittest discover -s tests -p test_v9_release_report.py -v
       - name: Fetch original immutable GitHub replay artifact without modifications
         env:
@@ -35,14 +35,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/retained"
-          gh api repos/P00NSMASHER/portfolio-brain/actions/artifacts/12233874719/zip > "$RUNNER_TEMP/retained/original.zip"
+          gh api repos/P00NSMASHER/portfolio-brain/actions/artifacts/12250972015/zip > "$RUNNER_TEMP/retained/original.zip"
           python - <<'PY'
           import hashlib,os,pathlib,zipfile
           root=pathlib.Path(os.environ["RUNNER_TEMP"])/"retained"
           p=root/"original.zip"
           blob=p.read_bytes()
           if not (0<len(blob)<=5000000 and
-                  hashlib.sha256(blob).hexdigest()=="b8f24f9d95783c07460e3bccccc717c757aaaa38f4e1da81f543623175df9f57"):
+                  hashlib.sha256(blob).hexdigest()=="8710d3af6898beda098bb38998e2869a2b3e469849e4794cc74a4cc33cc6937c"):
               raise SystemExit("ORIGINAL_PROVIDER_ZIP_SHA_MISMATCH")
           with zipfile.ZipFile(p) as z:
               names=z.namelist()
@@ -61,7 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m verification.v9_release_report \
-            --source 4393488059c8f7f02ce665a514a10198feae270c \
+            --source 35ad71868f74e6d4f749a35630a1b86802b91ed0 \
             --census "$RUNNER_TEMP/retained/proof-census.json" \
             --replay "$RUNNER_TEMP/retained/proof-provisional.json" \
             --output "$RUNNER_TEMP/retained/report.json"
@@ -69,10 +69,10 @@ jobs:
           import json,os,pathlib
           r=json.loads((pathlib.Path(os.environ["RUNNER_TEMP"])/"retained"/"report.json").read_text())
           if (r.get("technical_window")!="WINDOW_RUNNING_NOT_ACCEPTED"
-                  or r.get("original_automatic_core_count")!=3
-                  or r.get("completed_span_seconds")!=3766
-                  or r.get("last_sequence")!=3425
-                  or r.get("source_sha")!="4393488059c8f7f02ce665a514a10198feae270c"
+                  or r.get("original_automatic_core_count")!=2
+                  or r.get("completed_span_seconds")!=1804
+                  or r.get("last_sequence")!=3511
+                  or r.get("source_sha")!="35ad71868f74e6d4f749a35630a1b86802b91ed0"
                   or r.get("merge_authorized") is not False
                   or r.get("production_accepted") is not False
                   or r.get("external_provider_authenticated_by_this_module") is not False):
