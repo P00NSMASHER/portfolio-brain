@@ -134,7 +134,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git -C staged-candidate rev-parse HEAD)" = "24ae3d2ffae4175b200e364035dc85facea170da"
-          test "$(git -C staged-candidate rev-list --parents -n 1 HEAD)" = "24ae3d2ffae4175b200e364035dc85facea170da 4393488059c8f7f02ce665a514a10198feae270c"
+          git -C staged-candidate cat-file -p HEAD | grep -Fx "parent 4393488059c8f7f02ce665a514a10198feae270c"
           echo "EXACT_UNMERGED_CANDIDATE_CHECKOUT_VERIFIED; REVIEW_ONLY"
       - name: Python 3.12
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
