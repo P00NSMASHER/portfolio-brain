@@ -1,143 +1,153 @@
-name: V9 native auto-merge uncertainty — real-provider read-only reconciliation
+name: V9 native eligibility read-only blocked-PR token probe
 
+# Review branch only: no production controller event, no native merge mutation.
 on:
   push:
-    branches: [review/v9-automerge-native-reconcile-20261020]
+    branches: [review/v9-native-eligibility-blocked-20261020]
 
 permissions:
   contents: read
   pull-requests: write
 
 jobs:
-  reconcile:
+  restricted-token-proof:
+    if: ${{ github.repository == 'P00NSMASHER/portfolio-brain' && github.ref_name == 'review/v9-native-eligibility-blocked-20261020' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 6
     steps:
-      - name: Checkout exact immutable deployed controller
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: 35ad71868f74e6d4f749a35630a1b86802b91ed0
-          persist-credentials: false
-      - name: Confirm trusted main and pinned original controller
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "35ad71868f74e6d4f749a35630a1b86802b91ed0"
-          test "$(git hash-object brain/v9/guarded_merge.py)" = "1b5aeda0486d406e18841c708d6c81b2287021db"
-      - name: Reconcile PR 723 and GraphQL native auto-merge without any mutation
+      - name: Read original GitHub PR eligibility, required statuses, and viewer privilege (no mutations)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python - <<'PY'
-          import http.client,json,os
-          token=os.environ["GH_TOKEN"]
-          headers={"Authorization":"Bearer "+token,"Accept":"application/vnd.github+json",
-                   "X-GitHub-Api-Version":"2022-11-28",
-                   "User-Agent":"portfolio-brain-v9-native-reconcile"}
-          host="api.github.com"
-          def fixed(method,path,body=None):
-              assert method in ("GET","POST")
-              if method=="POST":
-                  assert path=="/graphql" and type(body) is dict
-                  assert type(body.get("query")) is str and body["query"].startswith("query ")
-                  assert "mutation" not in body["query"].lower()
-              else:
-                  assert path in ("/repos/P00NSMASHER/portfolio-brain",
-                       "/repos/P00NSMASHER/portfolio-brain/pulls/723")
-              c=http.client.HTTPSConnection(host,timeout=15)
-              h=dict(headers)
-              data=None
-              if body is not None:
-                  data=json.dumps(body).encode("utf8")
-                  h["Content-Type"]="application/json"
-              try:
-                  c.request(method,path,body=data,headers=h)
-                  response=c.getresponse()
-                  payload=response.read(200000)
-                  if response.status!=200:
-                      raise SystemExit("READ_ONLY_PROVIDER_HTTP_"+str(response.status))
-                  return json.loads(payload)
-              finally:
-                  c.close()
-          meta=fixed("GET","/repos/P00NSMASHER/portfolio-brain")
-          pr=fixed("GET","/repos/P00NSMASHER/portfolio-brain/pulls/723")
-          query="""query NativeState {
-            repository(owner:"P00NSMASHER",name:"portfolio-brain") {
+          import http.client, json, os, re
+          REPO = "P00NSMASHER/portfolio-brain"
+          EXPECTED = {
+              688: "b2ff42f33bef213512ab8c1b42880f9ead93d577",
+              641: "1da258459ef8de87cf5bfc7aa6f43169e370a1a3",
+              723: "19aff3921b85690eae44ce9be239d5c917b57030",
+              729: "7ad50146267e4ed573230537b1450ded5c245d96",
+              472: "c6c1138ea31ae64a9bbf41050be47fcc23d014cf",
+          }
+          assert os.environ.get("GITHUB_REPOSITORY") == REPO
+          assert os.environ.get("GITHUB_REF_NAME") == "review/v9-native-eligibility-blocked-20261020"
+          token = os.environ["GH_TOKEN"]
+          assert 20 <= len(token) <= 4096
+          BASE = "/repos/" + REPO
+          Q = """query ActualRestrictedPrincipalNativeAutoMergeEligibility {
+            repository(owner: "P00NSMASHER", name: "portfolio-brain") {
               databaseId nameWithOwner autoMergeAllowed
-              pullRequest(number:723) {
-                id number state isDraft mergeable mergeStateStatus
-                autoMergeRequest { enabledAt mergeMethod }
+              p688: pullRequest(number: 688) {
+                number state isDraft headRefOid baseRefOid
+                mergeable mergeStateStatus viewerCanEnableAutoMerge
+                autoMergeRequest { enabledAt }
+              }
+              p641: pullRequest(number: 641) {
+                number state isDraft headRefOid baseRefOid
+                mergeable mergeStateStatus viewerCanEnableAutoMerge
+                autoMergeRequest { enabledAt }
+              }
+              p723: pullRequest(number: 723) {
+                number state isDraft headRefOid baseRefOid
+                mergeable mergeStateStatus viewerCanEnableAutoMerge
+                autoMergeRequest { enabledAt }
+              }
+              p729: pullRequest(number: 729) {
+                number state isDraft headRefOid baseRefOid
+                mergeable mergeStateStatus viewerCanEnableAutoMerge
+                autoMergeRequest { enabledAt }
+              }
+              p472: pullRequest(number: 472) {
+                number state isDraft headRefOid baseRefOid
+                mergeable mergeStateStatus viewerCanEnableAutoMerge
+                autoMergeRequest { enabledAt }
               }
             }
           }"""
-          data=fixed("POST","/graphql",{"query":query})
-          assert type(data) is dict and not data.get("errors"), "READ_GRAPHQL_OR_SCHEMA_ERROR"
-          repo=data.get("data",{}).get("repository")
-          if not (type(repo) is dict and repo.get("databaseId")==1387747549
-                  and repo.get("nameWithOwner")=="P00NSMASHER/portfolio-brain"
-                  and type(repo.get("autoMergeAllowed")) is bool):
-              raise SystemExit("REPOSITORY_IDENTITY_OR_SETTING_UNVERIFIED")
-          native=repo.get("pullRequest")
-          if not (type(native) is dict and native.get("number")==723
-                  and type(native.get("mergeable")) is str
-                  and type(native.get("mergeStateStatus")) is str):
-              raise SystemExit("NATIVE_PR_SCHEMA_UNVERIFIED")
-          if (pr.get("head",{}).get("sha")!="19aff3921b85690eae44ce9be239d5c917b57030"
-                  or pr.get("base",{}).get("sha")!="35ad71868f74e6d4f749a35630a1b86802b91ed0"):
-              raise SystemExit("PROVIDER_PR_HEAD_OR_BASE_DRIFT")
-          result={"source":"35ad71868f74e6d4f749a35630a1b86802b91ed0",
-                  "pr":723,"rest_state":pr.get("state"),
-                  "rest_merged":pr.get("merged"),
-                  "rest_auto_merge_enrolled":pr.get("auto_merge") is not None,
-                  "rest_mergeable_state":pr.get("mergeable_state"),
-                  "graphql_state":native.get("state"),
-                  "graphql_mergeable":native.get("mergeable"),
-                  "graphql_merge_state_status":native.get("mergeStateStatus"),
-                  "graphql_auto_merge_enrolled":native.get("autoMergeRequest") is not None,
-                  "auto_merge_setting":repo.get("autoMergeAllowed"),
-                  "native_enable_mutation_attempted":False,
-                  "provider_writes":0}
-          print("READ_ONLY_NATIVE_PROVIDER_RECONCILIATION")
-          print(json.dumps(result,sort_keys=True))
-          PY
-
-      - name: Query fixed GraphQL viewer native-merge eligibility (read-only)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python - <<'PY'
-          import http.client,json,os
-          query="""query ViewerCanEnableAutoMerge {
-            repository(owner:"P00NSMASHER",name:"portfolio-brain") {
-              databaseId
-              pullRequest(number:723) {
-                id state mergeable mergeStateStatus viewerCanEnableAutoMerge
-              }
-            }
-          }"""
-          conn=http.client.HTTPSConnection("api.github.com",timeout=15)
-          try:
-              conn.request("POST","/graphql",
-                 body=json.dumps({"query":query}).encode(),
-                 headers={"Authorization":"Bearer "+os.environ["GH_TOKEN"],
-                          "Accept":"application/vnd.github+json",
-                          "Content-Type":"application/json",
-                          "User-Agent":"portfolio-brain-readonly-native-eligibility"})
-              resp=conn.getresponse()
-              data=json.loads(resp.read(200000))
-          finally:
-              conn.close()
-          if resp.status!=200 or data.get("errors"):
-              print("READONLY_VIEWER_NATIVE_ELIGIBILITY_FIELD_NOT_AVAILABLE")
-          else:
-              repository=data.get("data",{}).get("repository")
-              if repository.get("databaseId")!=1387747549:
-                  raise SystemExit("UNTRUSTED_REPO_GRAPHQL_IDENTITY")
-              pr=repository.get("pullRequest")
-              if not isinstance(pr,dict) or type(pr.get("viewerCanEnableAutoMerge")) is not bool:
-                  raise SystemExit("UNVERIFIED_NATIVE_ELIGIBILITY_TYPE")
-              print("READONLY_VIEWER_NATIVE_ELIGIBILITY",
-                    json.dumps({"viewer_can_enable":pr["viewerCanEnableAutoMerge"],
-                                "mergeable":pr.get("mergeable"),
-                                "merge_state":pr.get("mergeStateStatus"),
-                                "writes":0},sort_keys=True))
+          assert Q.lstrip().startswith("query ") and not re.search(r"\bmutation\b", Q, re.I)
+          allowed_gets = {BASE, BASE + "/pulls/" + str(n) for n in EXPECTED}
+          allowed_gets.update(BASE + "/commits/" + EXPECTED[n] + "/check-runs?per_page=100" for n in (688,641,723))
+          n_calls = 0
+          def api(method, path, body=None):
+              global n_calls
+              n_calls += 1
+              assert n_calls <= 18
+              assert (method == "POST" and path == "/graphql"
+                      and isinstance(body, dict) and body.get("query") == Q) or (
+                       method == "GET" and path in allowed_gets and body is None)
+              headers = {
+                "Authorization": "Bearer " + token,
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "User-Agent": "portfolio-brain-v9-readonly-native-eligibility"}
+              if body is not None:
+                  headers["Content-Type"] = "application/json"
+              conn = http.client.HTTPSConnection("api.github.com",timeout=15)
+              try:
+                  conn.request(method, path, body=json.dumps(body).encode() if body else None, headers=headers)
+                  response = conn.getresponse()
+                  data = response.read(250000)
+                  if response.status != 200:
+                      raise RuntimeError("READONLY_GITHUB_HTTP_" + str(response.status))
+                  result = json.loads(data)
+                  if type(result) not in (dict,list):
+                      raise RuntimeError("PROVIDER_NOT_JSON_OBJECT_OR_LIST")
+                  return result
+              finally:
+                  conn.close()
+          meta = api("GET", BASE)
+          assert meta.get("id") == 1387747549 and meta.get("full_name") == REPO
+          result = api("POST","/graphql",{"query":Q})
+          assert not result.get("errors"), "PROVIDER_GRAPHQL_QUERY_REJECTED"
+          repo = result.get("data",{}).get("repository")
+          assert type(repo) is dict and repo.get("databaseId")==1387747549
+          assert repo.get("nameWithOwner")==REPO and repo.get("autoMergeAllowed") is True
+          observations = []
+          for number, expected_sha in EXPECTED.items():
+              row=repo.get("p"+str(number))
+              assert type(row) is dict and row.get("number")==number
+              assert type(row.get("viewerCanEnableAutoMerge")) is bool
+              assert type(row.get("mergeStateStatus")) is str
+              assert type(row.get("isDraft")) is bool
+              assert row.get("headRefOid")==expected_sha
+              original=api("GET",BASE+"/pulls/"+str(number))
+              assert original.get("number")==number and original.get("head",{}).get("sha")==expected_sha
+              assert original.get("draft")==row["isDraft"]
+              assert original.get("state")=="open" and row.get("state")=="OPEN"
+              assert original.get("auto_merge") is None and row.get("autoMergeRequest") is None
+              detail={
+                "pr":number, "head_sha":expected_sha,
+                "draft":row["isDraft"],
+                "rest_mergeable":original.get("mergeable"),
+                "rest_mergeable_state":original.get("mergeable_state"),
+                "graphql_mergeable":row.get("mergeable"),
+                "graphql_merge_state":row["mergeStateStatus"],
+                "viewer_can_enable":row["viewerCanEnableAutoMerge"],
+                "native_enrolled":False}
+              if number in (688,641,723):
+                  original_checks=api("GET",BASE+"/commits/"+expected_sha+"/check-runs?per_page=100")
+                  assert type(original_checks) is dict and type(original_checks.get("check_runs")) is list
+                  detail["checks"]=[{
+                    "name":x.get("name"),"app_id":x.get("app",{}).get("id"),
+                    "conclusion":x.get("conclusion"),"status":x.get("status")}
+                    for x in original_checks["check_runs"] if type(x) is dict]
+              observations.append(detail)
+          print("READONLY_RESTRICTED_GITHUB_ACTIONS_NATIVE_ELIGIBILITY")
+          for x in observations:
+              print(json.dumps(x,sort_keys=True))
+          blocked=[x for x in observations if x["draft"] is False
+                   and x["rest_mergeable_state"] not in ("clean","unknown")
+                   and x["graphql_merge_state"] not in ("CLEAN","UNKNOWN")]
+          print("BLOCKED_NOT_READY_CANDIDATES",json.dumps([{"pr":x["pr"],
+                "rest_mergeable_state":x["rest_mergeable_state"],
+                "graphql_merge_state":x["graphql_merge_state"],
+                "viewer_can_enable":x["viewer_can_enable"]} for x in blocked],sort_keys=True))
+          print("PROBE_PROVENANCE",json.dumps({
+            "source":os.environ.get("GITHUB_SHA"),
+            "branch":os.environ.get("GITHUB_REF_NAME"),
+            "scope":"contents:read,pull-requests:write",
+            "graphql_operation":"query_only",
+            "native_mutation_attempted":False,
+            "provider_writes":0,
+            "observed_pr_count":len(observations)},sort_keys=True))
           PY
