@@ -98,12 +98,14 @@ jobs:
           # Sample exact ruleset node with namespaced identity + bypass census;
           # if the return type rejects this shape, do not invent a result.
           try:
-              doc=graphql({'query':'query { repository(owner:"P00NSMASHER",name:"portfolio-brain") { databaseId nameWithOwner rulesets(first:100) { nodes { databaseId name enforcement bypassActors(first:100) { totalCount pageInfo { hasNextPage } } } } } }'})
+              doc=graphql({'query':'query { repository(owner:"P00NSMASHER",name:"portfolio-brain") { databaseId nameWithOwner isArchived rulesets(first:100) { pageInfo { hasNextPage } nodes { databaseId name enforcement bypassActors(first:100) { totalCount pageInfo { hasNextPage } } } } } }'})
               repo=doc.get('data',{}).get('repository')
               rows=(repo or {}).get('rulesets',{}).get('nodes',[]) if type(repo) is dict else []
               print('GRAPHQL_BYPASS_SAMPLE:',json.dumps({
                   'repo_id':repo.get('databaseId') if type(repo) is dict else None,
                   'repo_name':repo.get('nameWithOwner') if type(repo) is dict else None,
+                  'repo_archived':repo.get('isArchived') if type(repo) is dict else None,
+                  'rulesets_have_more':repo.get('rulesets',{}).get('pageInfo',{}).get('hasNextPage') if type(repo) is dict else None,
                   'rulesets':[{'id':z.get('databaseId'),'name':z.get('name'),
                                'enforcement':z.get('enforcement'),
                                'bypass_count':(z.get('bypassActors') or {}).get('totalCount'),
