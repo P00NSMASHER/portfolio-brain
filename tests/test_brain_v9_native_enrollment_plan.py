@@ -326,5 +326,97 @@ class NativeAdmissionReviewTests(unittest.TestCase):
                 self.assertEqual(x.provider_writes,0)
 
 
+class PostEnrollmentMonitorTests(unittest.TestCase):
+
+    def monitored(self):
+        current = sample()
+        current["pr"]["auto_merge"] = {"merge_method": "squash"}
+        receipt = {
+            "repository": design.REPOSITORY,
+            "repository_id": design.REPOSITORY_ID,
+            "ruleset_id": design.RULESET_ID,
+            "source_sha": design.SOURCE_SHA,
+            "number": current["pr"]["number"],
+            "head_sha": current["pr"]["head_sha"],
+            "base_sha": current["pr"]["base_sha"],
+            "merge_method": "squash",
+        }
+        return receipt, current
+
+    def assert_zero_authority(self, result):
+        self.assertEqual(result.provider_writes, 0)
+        self.assertFalse(result.merge_authorized)
+        self.assertFalse(result.revocation_authorized)
+
+    def test_unchanged_enrollment_is_monitor_only(self):
+        receipt, current = self.monitored()
+        got = design.plan_post_enrollment_monitor(receipt, current)
+        self.assertEqual(got.status, "REVIEW_ONLY_ENROLLMENT_MONITOR")
+        self.assert_zero_authority(got)
+
+    def test_head_change_requires_revocation_without_authorizing_it(self):
+        receipt, current = self.monitored()
+        current["pr"]["head_sha"] = OTHER
+        for check in current["check_runs"]:
+            check["head_sha"] = OTHER
+        got = design.plan_post_enrollment_monitor(receipt, current)
+        self.assertEqual(got.status, "REVIEW_ONLY_REVOCATION_REQUIRED")
+        self.assertIn("HEAD_CHANGED_AFTER_ENROLLMENT", got.reason)
+        self.assert_zero_authority(got)
+
+    def test_label_or_source_policy_drift_requires_revocation(self):
+        for mutate, code in [
+            (lambda s: s["pr"].update(labels=[]), "OPT_IN_LABEL_REMOVED"),
+            (lambda s: s.update(ruleset_id=1), "REPOSITORY_RULESET_OR_SOURCE_CHANGED"),
+            (lambda s: s.update(source_acceptance_sha=OTHER), "REPOSITORY_RULESET_OR_SOURCE_CHANGED"),
+        ]:
+            with self.subTest(code=code):
+                receipt, current = self.monitored()
+                mutate(current)
+                got = design.plan_post_enrollment_monitor(receipt, current)
+                self.assertEqual(got.status, "REVIEW_ONLY_REVOCATION_REQUIRED")
+                self.assertIn(code, got.reason)
+                self.assert_zero_authority(got)
+
+    def test_failed_cancelled_or_wrong_issuer_check_requires_revocation(self):
+        for status, conclusion, app_id in [
+            ("completed", "failure", 15368),
+            ("completed", "cancelled", 15368),
+            ("completed", "success", 1),
+        ]:
+            with self.subTest(status=status, conclusion=conclusion, app_id=app_id):
+                receipt, current = self.monitored()
+                current["check_runs"][1].update(
+                    status=status, conclusion=conclusion, app_id=app_id)
+                got = design.plan_post_enrollment_monitor(receipt, current)
+                self.assertEqual(got.status, "REVIEW_ONLY_REVOCATION_REQUIRED")
+                self.assert_zero_authority(got)
+
+    def test_enrollment_disappeared_is_uncertain_hold_not_retry(self):
+        receipt, current = self.monitored()
+        current["pr"]["auto_merge"] = None
+        got = design.plan_post_enrollment_monitor(receipt, current)
+        self.assertEqual(got.status, "HOLD")
+        self.assertIn("DO_NOT_RETRY", got.reason)
+        self.assert_zero_authority(got)
+
+    def test_two_successful_checks_still_do_not_authorize_merge(self):
+        receipt, current = self.monitored()
+        current["check_runs"][1].update(
+            status="completed", conclusion="success")
+        got = design.plan_post_enrollment_monitor(receipt, current)
+        self.assertEqual(got.status, "REVIEW_ONLY_ENROLLMENT_MONITOR")
+        self.assertIn("WAIT_FOR_GITHUB", got.reason)
+        self.assert_zero_authority(got)
+
+    def test_bad_receipt_fails_closed(self):
+        receipt, current = self.monitored()
+        receipt["head_sha"] = True
+        got = design.plan_post_enrollment_monitor(receipt, current)
+        self.assertEqual(got.status, "HOLD")
+        self.assertIn("RECEIPT", got.reason)
+        self.assert_zero_authority(got)
+
+
 if __name__=="__main__":
     unittest.main()
