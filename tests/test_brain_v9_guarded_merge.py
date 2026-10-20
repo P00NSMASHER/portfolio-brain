@@ -40,6 +40,14 @@ class FakeProvider:
         self.repo_setting_hidden = False
         self.graphql_setting_override = None
         self.graphql_wrong_identity = False
+        self.ruleset_bypass_hidden = False
+        self.graphql_ruleset_bypass_count = 0
+        self.graphql_ruleset_wrong_identity = False
+        self.graphql_ruleset_wrong_name = False
+        self.graphql_ruleset_incomplete = False
+        self.graphql_ruleset_paginated_bypass = False
+        self.graphql_ruleset_flip_on_final = False
+        self._ruleset_reads = 0
         self.repo = {"id": gm.REPO_ID, "full_name": gm.REPO, "default_branch": "main",
                      "archived": False, "allow_auto_merge": True}
         self.main = {"protected": True, "commit": {"sha": BASE}}
@@ -91,7 +99,10 @@ class FakeProvider:
                 r.pop("allow_auto_merge", None)
             return r
         if path == ROOT + "rulesets/" + str(gm.RULESET_ID):
-            return copy.deepcopy(self.rules)
+            value = copy.deepcopy(self.rules)
+            if self.ruleset_bypass_hidden:
+                value.pop("bypass_actors", None)
+            return value
         if path == ROOT + "branches/main":
             return copy.deepcopy(self.main)
         if path == ROOT + "git/matching-refs/heads/brain-acceptance-" + BASE[:8] + "-":
@@ -143,7 +154,29 @@ class FakeProvider:
 
     def graphql(self, query, variables):
         self.calls.append(("GRAPHQL", "read" if query in
-                           (gm.THREADS_QUERY, gm.SETTINGS_QUERY) else "write"))
+                           (gm.THREADS_QUERY, gm.SETTINGS_QUERY,
+                            gm.RULESET_QUERY) else "write"))
+        if query == gm.RULESET_QUERY:
+            self._ruleset_reads += 1
+            count = (1 if self.graphql_ruleset_flip_on_final
+                     and self._ruleset_reads >= 2
+                     else self.graphql_ruleset_bypass_count)
+            return {"data": {"repository": {
+                "databaseId": 0 if self.graphql_ruleset_wrong_identity else gm.REPO_ID,
+                "nameWithOwner": gm.REPO, "isArchived": False,
+                "rulesets": {
+                    "pageInfo": {"hasNextPage": self.graphql_ruleset_incomplete},
+                    "nodes": [{
+                        "databaseId": gm.RULESET_ID,
+                        "name": "wrong-protection" if self.graphql_ruleset_wrong_name
+                                else "portfolio-main-protection",
+                        "enforcement": "ACTIVE",
+                        "bypassActors": {"totalCount": count,
+                                         "pageInfo": {"hasNextPage":
+                                         self.graphql_ruleset_paginated_bypass}},
+                    }],
+                },
+            }}}
         if query == gm.SETTINGS_QUERY:
             setting = (not self.disabled if self.graphql_setting_override is None
                        else self.graphql_setting_override)
@@ -247,6 +280,60 @@ class GuardedAdmissionTests(unittest.TestCase):
         self.assertEqual(f.mutations, 0)
         with self.assertRaisesRegex(gm.Denied, "GITHUB_GRAPHQL_NOT_APPROVED"):
             gm.GitHub("a" * 32).graphql("mutation { createRepository(input:{name:\"x\"}) { clientMutationId } }", {})
+
+    def test_actual_restricted_actions_token_omits_rest_ruleset_bypass(self):
+        f = FakeProvider()
+        f.ruleset_bypass_hidden = True
+        result = gm.run(f, number=PR, expected_main=BASE, apply=False)
+        self.assertEqual(result["status"], "ADMISSIBLE")
+        self.assertEqual(f.mutations, 0)
+        self.assertEqual(f._ruleset_reads, 2)
+        self.assertTrue(any(c == ("GRAPHQL", "read") for c in f.calls))
+        # The actual trusted-main event runner also has to admit the candidate.
+        f = EventRunnerProvider()
+        f.ruleset_bypass_hidden = True
+        from brain.v9.guarded_merge_runner import dispatch_once
+        result = dispatch_once(lambda: f, BASE, apply=True)
+        self.assertEqual(result["provider_writes"], 1)
+        self.assertEqual(f.mutations, 1)
+
+    def test_no_bypass_must_be_authenticated_and_complete(self):
+        for field, value in (
+            ("graphql_ruleset_bypass_count", 1),
+            ("graphql_ruleset_bypass_count", True),
+            ("graphql_ruleset_bypass_count", None),
+            ("graphql_ruleset_wrong_identity", True),
+            ("graphql_ruleset_wrong_name", True),
+            ("graphql_ruleset_incomplete", True),
+            ("graphql_ruleset_paginated_bypass", True),
+        ):
+            with self.subTest(field=field):
+                f = FakeProvider()
+                f.ruleset_bypass_hidden = True
+                setattr(f, field, value)
+                self.assert_blocked(f, "PROTECTED_RULESET_GRAPHQL_UNVERIFIED")
+
+    def test_conflicting_visible_rest_ruleset_bypass_never_becomes_authorized(self):
+        for bypass in ([{"actor_id": 12}], None, {}, "not-reviewed"):
+            with self.subTest(bypass=bypass):
+                f = FakeProvider()
+                f.rules["bypass_actors"] = bypass
+                self.assert_blocked(f, "PROTECTED_RULESET_MISMATCH")
+
+    def test_ruleset_changed_between_reads_blocks_final_native_mutation(self):
+        f = FakeProvider()
+        f.ruleset_bypass_hidden = True
+        f.graphql_ruleset_flip_on_final = True
+        self.assert_blocked(f, "PROTECTED_RULESET_GRAPHQL_UNVERIFIED")
+        self.assertEqual(f._ruleset_reads, 2)
+
+    def test_unreviewed_graphql_ruleset_mutation_is_rejected(self):
+        with self.assertRaisesRegex(gm.Denied, "GITHUB_GRAPHQL_NOT_APPROVED"):
+            gm.GitHub("a" * 32).graphql(
+                'mutation { createRepositoryRuleset(input: { name: "bad" }) { clientMutationId } }',
+                {})
+        self.assertIn("bypassActors(first: 100)", gm.RULESET_QUERY)
+        self.assertIn("rulesets(first: 100)", gm.RULESET_QUERY)
 
     def test_unaccepted_source_blocks_every_mutation(self):
         f = FakeProvider()
