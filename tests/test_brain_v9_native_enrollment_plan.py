@@ -255,7 +255,7 @@ class NativeAdmissionReviewTests(unittest.TestCase):
     def test_pending_check_finishes_before_final_check_refuses_enrollment(self):
         last = sample()
         last["check_runs"][1].update(status="completed", conclusion="success")
-        self.assert_hold(last, "FINAL_MUST_HAVE_ONE_SUCCESS_AND_ONE_GENUINELY_PENDING_CHECK",
+        self.assert_hold(last, "FINAL_MUST_HAVE_ONE_SUCCESS_AND_ONE_REQUIRED_CHECK_OUTSTANDING",
                          change_final=True)
 
     def test_production_controller_and_workflow_are_not_modified(self):
