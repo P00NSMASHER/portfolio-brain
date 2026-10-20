@@ -28,6 +28,7 @@ PROOF_KEYS = (
     "docs_only_scope_verified",
     "no_unresolved_review_threads",
     "trusted_head_ancestry_verified",
+    "complete_check_census_verified",
 )
 
 
@@ -99,6 +100,8 @@ def _validated_snapshot(snapshot):
 
     runs = snapshot.get("check_runs")
     if (type(runs) is not list or not (1 <= len(runs) < 100)
+            or type(snapshot.get("check_total_count")) is not int
+            or snapshot["check_total_count"] != len(runs)
             or any(type(run) is not dict for run in runs)):
         return "ORIGINAL_REQUIRED_CHECK_CENSUS_INCOMPLETE", None
     status_by_name = {}
