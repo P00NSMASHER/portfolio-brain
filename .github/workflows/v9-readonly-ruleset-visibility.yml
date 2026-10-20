@@ -98,7 +98,7 @@ jobs:
           # Sample exact ruleset node with namespaced identity + bypass census;
           # if the return type rejects this shape, do not invent a result.
           try:
-              doc=graphql({'query':'query { repository(owner:"P00NSMASHER",name:"portfolio-brain") { databaseId nameWithOwner rulesets(first:100) { nodes { databaseId name enforcement bypassActors { totalCount pageInfo { hasNextPage } } } } } }'})
+              doc=graphql({'query':'query { repository(owner:"P00NSMASHER",name:"portfolio-brain") { databaseId nameWithOwner rulesets(first:100) { nodes { databaseId name enforcement bypassActors(first:100) { totalCount pageInfo { hasNextPage } } } } } }'})
               repo=doc.get('data',{}).get('repository')
               rows=(repo or {}).get('rulesets',{}).get('nodes',[]) if type(repo) is dict else []
               print('GRAPHQL_BYPASS_SAMPLE:',json.dumps({
