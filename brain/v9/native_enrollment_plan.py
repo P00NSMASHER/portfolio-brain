@@ -81,7 +81,8 @@ def _validated_snapshot(snapshot):
             and pr.get("base_sha") == SOURCE_SHA
             and _sha(pr.get("head_sha"))
             and pr["head_sha"] != SOURCE_SHA
-            and pr.get("author") in TRUSTED_AUTHORS
+            and type(pr.get("author")) is str
+            and pr["author"] in TRUSTED_AUTHORS
             and pr.get("auto_merge") is None
             and type(pr.get("labels")) is list
             and all(type(x) is str for x in pr["labels"])
