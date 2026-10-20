@@ -222,6 +222,48 @@ def checked_checks(checks, head):
                 "INDEPENDENT_HEAD_CHECK_FAILED")
 
 
+SETTINGS_QUERY = """query {
+  repository(owner: "P00NSMASHER", name: "portfolio-brain") {
+    databaseId
+    nameWithOwner
+    autoMergeAllowed
+    isArchived
+  }
+}"""
+
+
+def native_auto_merge_enabled(api, info):
+    """Cross-check restricted REST repository identity with original GraphQL setting.
+
+    GitHub Actions GITHUB_TOKEN omits allow_auto_merge from its REST repository
+    metadata despite having native PR and check read privileges. Missing means
+    unknown, NEVER disabled or enabled. A separate authenticated, read-only
+    repository GraphQL lookup returns the actual autoMergeAllowed boolean.
+    """
+    require(type(info) is dict and info.get("id") == REPO_ID
+            and info.get("full_name") == REPO
+            and info.get("default_branch") == "main"
+            and info.get("archived") is False,
+            "REPOSITORY_IDENTITY_CHANGED")
+    rest_setting = info.get("allow_auto_merge")
+    require(rest_setting is None or type(rest_setting) is bool,
+            "REPOSITORY_REST_SETTING_INVALID")
+    response = api.graphql(SETTINGS_QUERY, {})
+    require(type(response) is dict and not response.get("errors"),
+            "REPOSITORY_GRAPHQL_SETTING_UNVERIFIED")
+    data = response.get("data")
+    setting = data.get("repository") if type(data) is dict else None
+    require(type(setting) is dict and setting.get("databaseId") == REPO_ID
+            and setting.get("nameWithOwner") == REPO
+            and setting.get("isArchived") is False
+            and type(setting.get("autoMergeAllowed")) is bool,
+            "REPOSITORY_GRAPHQL_SETTING_UNVERIFIED")
+    allowed = setting["autoMergeAllowed"]
+    require(rest_setting is None or rest_setting == allowed,
+            "REPOSITORY_SETTING_CONFLICT")
+    return allowed
+
+
 THREADS_QUERY = """query($id: ID!) {
   node(id: $id) { ... on PullRequest {
     id
@@ -318,7 +360,7 @@ def observe(api, number, expected_main):
             and info.get("full_name") == REPO
             and info.get("default_branch") == "main"
             and info.get("archived") is False, "REPOSITORY_IDENTITY_CHANGED")
-    if info.get("allow_auto_merge") is not True:
+    if not native_auto_merge_enabled(api, info):
         return {"status": "REPOSITORY_AUTO_MERGE_SETTING_DISABLED",
                 "provider_writes": 0, "enrolled": False}
     ruleset_passes(api.get(root + "rulesets/" + str(RULESET_ID)))
@@ -342,6 +384,8 @@ def observe(api, number, expected_main):
     # enforces up-to-date checks even if another actor races this observer.
     # Repeat the trusted platform ruleset on the last read boundary.
     ruleset_passes(api.get(root + "rulesets/" + str(RULESET_ID)))
+    require(native_auto_merge_enabled(api, api.get("repos/" + REPO)),
+            "REPOSITORY_SETTING_CHANGED_DURING_ADMISSION")
     live = api.get(root + "branches/main")
     again = api.get(root + "pulls/" + str(number))
     require(live.get("commit", {}).get("sha") == expected_main
@@ -453,8 +497,9 @@ class GitHub:
         return self._request("GET", path)
 
     def graphql(self, query, variables):
-        require(query in (THREADS_QUERY, ENABLE_MUTATION)
-                and type(variables) is dict and set(variables) == {"id"},
+        require((query == SETTINGS_QUERY and variables == {})
+                or (query in (THREADS_QUERY, ENABLE_MUTATION)
+                    and type(variables) is dict and set(variables) == {"id"}),
                 "GITHUB_GRAPHQL_NOT_APPROVED")
         return self._request("POST", "graphql", {"query": query, "variables": variables})
 
