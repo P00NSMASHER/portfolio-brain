@@ -97,7 +97,8 @@ def _validated_snapshot(snapshot):
         return "GITHUB_NATIVE_EARLY_ELIGIBILITY_NOT_PROVEN", None
 
     runs = snapshot.get("check_runs")
-    if type(runs) is not list or not (2 <= len(runs) < 100):
+    if (type(runs) is not list or not (2 <= len(runs) < 100)
+            or any(type(run) is not dict for run in runs)):
         return "ORIGINAL_REQUIRED_CHECK_CENSUS_INCOMPLETE", None
     status_by_name = {}
     for name, app_id in CHECK_ISSUERS.items():
@@ -140,9 +141,6 @@ def plan_early_enrollment(initial, final):
         return _hold("FINAL_" + last_problem)
     if initial_identity != final_identity:
         return _hold("PR_HEAD_BASE_OR_NUMBER_CHANGED_BETWEEN_READS")
-    if (initial["check_runs"] == final["check_runs"]
-            and initial.get("pr", {}).get("graphql_merge_state") != "BLOCKED"):
-        return _hold("MERGE_STATE_CHANGED")
     return Decision(
         status="REVIEW_ONLY_EARLY_ADMISSION_CANDIDATE",
         reason="EXACT_DOCS_SOURCE_VERIFIED_ONE_GOOD_ONE_PENDING_REQUIRES_SEPARATE_WRITE_AUTHORITY",
