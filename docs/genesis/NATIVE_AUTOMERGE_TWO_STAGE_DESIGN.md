@@ -45,6 +45,14 @@ A future separately authorized, reviewed trusted-main controller could attempt o
 
 The final GitHub merge (if any) requires independent original event, protected-main SHA, exact PR head and check-issuer verification, plus a separate governed release-acceptance decision. Network uncertainty is UNKNOWN_AFTER_POST, never success or a license to retry. Do not use REST direct merge as a substitute.
 
+
+## Post-enrollment monitor and revocation boundary
+
+After original provider readback shows a SQUASH enrollment, a future trusted-main controller must continue source-bound monitoring until GitHub reports a merge or enrollment disappears. The pure `plan_post_enrollment_monitor` model records this fail-closed boundary. It compares an immutable enrollment receipt with a fresh, complete provider snapshot and reports `REVIEW_ONLY_REVOCATION_REQUIRED` for head/base/PR identity drift, policy/source/proof drift, label or trusted-author loss, foreign enrollment, or failed, cancelled, duplicate, wrong-head, wrong-issuer or incomplete required checks.
+
+That result is advisory only. It always returns `provider_writes=0`, `merge_authorized=false` and `revocation_authorized=false`. It neither disables auto-merge nor proves that the current token can do so. A separately reviewed production integration would need a single conditional disable mutation bound to the exact PR/head/enrollment receipt, then original provider readback. Network uncertainty remains a hold and cannot be retried blindly. If enrollment is no longer visible, the model reports `NOT_ENROLLED_DO_NOT_RETRY_UNCERTAIN_POST`; if GitHub reports merged, independent native-merge provenance and protected-main/check verification remain mandatory.
+
+
 ## Threat model and holds
 
 - Same-author PR modifications after enrollment could invalidate the initially vetted document without GitHub automatically disabling auto-merge. A real rollout must address reliable revocation and source reapproval, not merely rely on earlier snapshot evidence.
