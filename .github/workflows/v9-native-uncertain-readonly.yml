@@ -1,4 +1,5 @@
 name: V9 native eligibility read-only blocked-PR token probe
+# Second original-provider read: validate app check now SUCCESS, phase1 issuer still outstanding.
 
 # Review branch only: no production controller event, no native merge mutation.
 on:
