@@ -19,6 +19,7 @@ def sample():
         "source_acceptance_sha": design.SOURCE_SHA,
         "protected_main": True,
         "required_check_issuers": dict(design.CHECK_ISSUERS),
+        "check_total_count": 2,
         **{key: True for key in design.PROOF_KEYS},
         "pr": {
             "number": 999991,
@@ -94,6 +95,7 @@ class NativeAdmissionReviewTests(unittest.TestCase):
         # GitHub's ruleset still prevents protected merge until it arrives.
         snap = sample()
         snap["check_runs"] = [snap["check_runs"][0]]
+        snap["check_total_count"] = 1
         got = decision(snap)
         self.assertEqual(got.status, "REVIEW_ONLY_EARLY_ADMISSION_CANDIDATE")
         self.assertEqual(got.provider_writes, 0)
@@ -102,6 +104,7 @@ class NativeAdmissionReviewTests(unittest.TestCase):
     def test_unissued_required_check_may_become_queued_between_rereads(self):
         initial = sample()
         initial["check_runs"] = [initial["check_runs"][0]]
+        initial["check_total_count"] = 1
         final = sample()
         final["check_runs"][1]["status"] = "queued"
         got = decision(initial, final)
@@ -111,7 +114,17 @@ class NativeAdmissionReviewTests(unittest.TestCase):
     def test_unissued_required_check_without_independent_success_cannot_admit(self):
         snap = sample()
         snap["check_runs"] = [snap["check_runs"][1]]
+        snap["check_total_count"] = 1
         self.assert_hold(snap, "MUST_HAVE_ONE_SUCCESS_AND_ONE_REQUIRED_CHECK_OUTSTANDING")
+
+    def test_incomplete_original_check_census_cannot_treat_missing_check_as_safe(self):
+        snap = sample()
+        snap["check_runs"] = [snap["check_runs"][0]]
+        # Spoofed incomplete page with total_count reporting two original runs.
+        snap["check_total_count"] = 2
+        self.assert_hold(snap, "ORIGINAL_REQUIRED_CHECK_CENSUS_INCOMPLETE")
+        snap["check_total_count"] = True
+        self.assert_hold(snap, "ORIGINAL_REQUIRED_CHECK_CENSUS_INCOMPLETE")
 
     def test_unhashable_forged_author_fails_closed(self):
         snap = sample()
