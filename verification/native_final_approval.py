@@ -193,9 +193,10 @@ def verify_final_approval(read, ticket, *, expected_source_sha, expected_policy_
         return value
 
     try:
-        _ticket(ticket, expected_source_sha, expected_policy_sha, now)
-        # Validated fields are scalar. Detach before any external reader callback.
+        _need(type(ticket) is dict, 'TICKET_SCHEMA')
+        # Detach FIRST; validation must inspect the same snapshot used by reads.
         ticket = dict(ticket)
+        _ticket(ticket, expected_source_sha, expected_policy_sha, now)
         _main(get('/branches/main'), ticket)
         _pr(get(f'/pulls/{ticket["pr_number"]}'), ticket)
         approval_path = f'/check-runs/{ticket["approval_check_id"]}'
