@@ -35,14 +35,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/retained"
-          gh api repos/P00NSMASHER/portfolio-brain/actions/artifacts/12250972015/zip > "$RUNNER_TEMP/retained/original.zip"
+          gh api repos/P00NSMASHER/portfolio-brain/actions/artifacts/12250634492/zip > "$RUNNER_TEMP/retained/original.zip"
           python - <<'PY'
           import hashlib,os,pathlib,zipfile
           root=pathlib.Path(os.environ["RUNNER_TEMP"])/"retained"
           p=root/"original.zip"
           blob=p.read_bytes()
           if not (0<len(blob)<=5000000 and
-                  hashlib.sha256(blob).hexdigest()=="8710d3af6898beda098bb38998e2869a2b3e469849e4794cc74a4cc33cc6937c"):
+                  hashlib.sha256(blob).hexdigest()=="10beb8fe274589e3ec7404545ac652e710ec1333b43e33c1613c5ad79cf89df9"):
               raise SystemExit("ORIGINAL_PROVIDER_ZIP_SHA_MISMATCH")
           with zipfile.ZipFile(p) as z:
               names=z.namelist()
@@ -69,9 +69,9 @@ jobs:
           import json,os,pathlib
           r=json.loads((pathlib.Path(os.environ["RUNNER_TEMP"])/"retained"/"report.json").read_text())
           if (r.get("technical_window")!="WINDOW_RUNNING_NOT_ACCEPTED"
-                  or r.get("original_automatic_core_count")!=2
-                  or r.get("completed_span_seconds")!=1804
-                  or r.get("last_sequence")!=3511
+                  or r.get("original_automatic_core_count")!=3
+                  or r.get("completed_span_seconds")!=3596
+                  or r.get("last_sequence")!=3518
                   or r.get("source_sha")!="35ad71868f74e6d4f749a35630a1b86802b91ed0"
                   or r.get("merge_authorized") is not False
                   or r.get("production_accepted") is not False
