@@ -1,0 +1,131 @@
+name: V9 original healthy-core rollback guard drill (read only)
+
+on:
+  push:
+    branches: [review/v9-rollback-lab-runner-20261020]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify-no-false-positive-revert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout pinned unmerged rollback-guard proposal
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 3fd8c82fa39a6c3be88b6c06e2e5352398f2d6f9
+          persist-credentials: false
+      - name: Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Verify immutable review source and adversarial rollback tests
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "3fd8c82fa39a6c3be88b6c06e2e5352398f2d6f9"
+          python -m unittest discover -s tests -p test_v9_rollback_plan.py -v
+      - name: Correlate authentic original successful monitor and hold rollback
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,os,pathlib,subprocess
+          from verification import v9_rollback_plan as guard
+
+          def provider(path):
+              raw=subprocess.check_output(["gh","api",path],timeout=20)
+              if not raw or len(raw)>500000:
+                  raise SystemExit("GITHUB_PROVIDER_RESPONSE_NOT_BOUNDED")
+              return json.loads(raw)
+
+          def query_graphql(q):
+              raw=subprocess.check_output(["gh","api","graphql","-f","query="+q],timeout=20)
+              return json.loads(raw)
+
+          root="repos/P00NSMASHER/portfolio-brain/"
+          main=provider(root+"branches/main")
+          sha=main.get("commit",{}).get("sha")
+          if not main.get("protected") or sha!="4393488059c8f7f02ce665a514a10198feae270c":
+              raise SystemExit("LIVE_PROTECTED_MAIN_CHANGED")
+          commit=provider(root+"commits/"+sha)
+          state=provider(root+"git/ref/heads/brain-state-v2")
+          rules=provider(root+"rulesets/24182301")
+          if rules.get("id")!=24182301 or rules.get("enforcement")!="active":
+              raise SystemExit("ORIGINAL_PROTECTED_RULESET_MOVED")
+          gql=query_graphql('query { repository(owner:"P00NSMASHER",name:"portfolio-brain") { databaseId nameWithOwner isArchived rulesets(first:100) { pageInfo { hasNextPage } nodes { databaseId enforcement bypassActors(first:100) { totalCount pageInfo { hasNextPage } } } } } }')
+          repo=gql.get("data",{}).get("repository")
+          if not isinstance(repo,dict) or repo.get("databaseId")!=1387747549 or repo.get("nameWithOwner")!="P00NSMASHER/portfolio-brain" or repo.get("isArchived") is not False:
+              raise SystemExit("ORIGINAL_GRAPHQL_REPO_IDENTITY_FAIL")
+          conn=repo.get("rulesets",{})
+          if conn.get("pageInfo",{}).get("hasNextPage") is not False:
+              raise SystemExit("ORIGINAL_RULESET_CENSUS_INCOMPLETE")
+          found=[v for v in conn.get("nodes",[]) if v.get("databaseId")==24182301]
+          if (len(found)!=1 or found[0].get("enforcement")!="ACTIVE"
+                  or found[0].get("bypassActors",{}).get("totalCount")!=0
+                  or found[0].get("bypassActors",{}).get("pageInfo",{}).get("hasNextPage") is not False):
+              raise SystemExit("ZERO_BYPASS_NOT_AUTHENTICATED")
+          checks=next(r for r in rules["rules"] if r["type"]=="required_status_checks")
+          originals=checks.get("parameters",{}).get("required_status_checks")
+          snapshot={
+              "repository":guard.REPO,
+              "ruleset_id":24182301,
+              "protected_main":True,
+              "ruleset_enforcement":"active",
+              "bypass_actors":[],
+              "main_sha":sha,
+              "main_first_parent_sha":commit["parents"][0]["sha"],
+              "state_branch_sha":state["object"]["sha"],
+              "required_checks":[{"name":v["context"],"app_id":v["integration_id"]} for v in originals],
+              "release_changed_files":[v["filename"] for v in commit["files"]],
+          }
+          original=provider(root+"actions/runs/39347813668")
+          jobs=provider(root+"actions/runs/39347813668/jobs?per_page=100")["jobs"]
+          if len(jobs)!=1 or original.get("status")!="completed" or original.get("head_sha")!=sha or jobs[0].get("name")!="monitor" or jobs[0].get("conclusion")!="success":
+              raise SystemExit("ORIGINAL_GOOD_CORE_NOT_AUTHENTICATED")
+          incident={
+              "source_sha":original["head_sha"],
+              "workflow":original["name"],
+              "event":original["event"],
+              "run_id":original["id"],
+              "attempt":original["run_attempt"],
+              "conclusion":original["conclusion"],
+              "monitor_conclusion":jobs[0]["conclusion"],
+              "origin":"GITHUB_NATIVE_SCHEDULE",
+              "provider_write_uncertain":False,
+          }
+          proof=guard.inspect(snapshot,incident)
+          if (proof["decision"]!="HOLD_NO_CONFIRMED_ADVERSE_AUTOMATIC_CORE"
+                  or proof["prepare_separate_draft_revert_pr"] is not False
+                  or proof["provider_write_attempted"] is not False
+                  or proof["production_release_authorized"] is not False):
+              raise SystemExit("FALSE_POSITIVE_LIVE_ROLLBACK")
+          # Confirm the historic old-source cancelled original cannot be used
+          # to authorize reverting the *new* protected source.
+          cancelled=provider(root+"actions/runs/39278587557")
+          changed=dict(incident,source_sha=cancelled["head_sha"],run_id=cancelled["id"],
+                       conclusion="cancelled",monitor_conclusion="cancelled")
+          try:
+              guard.inspect(snapshot,changed)
+              raise SystemExit("HISTORICAL_CANCELLED_CORE_REUSED_WRONGLY")
+          except guard.RevertReviewHold as exc:
+              if str(exc)!="ORIGINAL_SOURCE_OR_RUN_NOT_VERIFIED":
+                  raise
+          out=pathlib.Path(os.environ["RUNNER_TEMP"])/"rollback-healthy-hold.json"
+          out.write_text(json.dumps(proof,sort_keys=True,indent=2)+"\n")
+          print("ORIGINAL_GOOD_CORE_REVERT_PREVENTION_VERIFIED")
+          print("OLD_SOURCE_CANCELLED_RUN_CANNOT_REVERT_NEW_MAIN")
+          print("PRODUCTION_RELEASE_AUTHORIZED=false")
+          PY
+      - name: Preserve read-only original-provider negative decision
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: v9-original-healthy-run-rollback-hold
+          path: ${{ runner.temp }}/rollback-healthy-hold.json
+          if-no-files-found: warn
+          retention-days: 30
