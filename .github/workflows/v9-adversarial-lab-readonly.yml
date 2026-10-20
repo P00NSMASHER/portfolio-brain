@@ -1,0 +1,36 @@
+name: V9 read-only guarded auto-merge hostile laboratory
+
+on:
+  push:
+    branches: [review/v9-adversarial-lab-runner-20261020]
+
+permissions:
+  contents: read
+
+jobs:
+  hostile-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout pinned unmerged test candidate without credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fb6ff324c9286b464d5069dcace1f464b4641b91
+          persist-credentials: false
+      - name: Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Exact candidate ancestry and SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "fb6ff324c9286b464d5069dcace1f464b4641b91"
+          git cat-file -p HEAD | grep -Fx "parent 779059bd493361eac5ff91eb70c0436ef9e51a72"
+      - name: Run only guarded native merge positive and hostile regressions
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p test_brain_v9_guarded_merge.py -v
+          python -m unittest discover -s tests -p test_v9_guarded_merge_hostile_matrix.py -v
+          python -c 'from brain.validate import validate_policy; r=validate_policy(); assert r.get("status")=="PASS", "POLICY_HOLD"; print("EXACT_SOURCE_POLICY_PASS")'
+          echo "REVIEW_ONLY_HOSTILE_GUARDIAN_TESTS_PASSED_NO_LIVE_MERGE"
