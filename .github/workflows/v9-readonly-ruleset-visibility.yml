@@ -116,3 +116,38 @@ jobs:
           except Exception as exc:
               print('GRAPHQL_BYPASS_SAMPLE_UNAVAILABLE:',type(exc).__name__)
           PY
+
+  isolated-candidate-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact staged source without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 24ae3d2ffae4175b200e364035dc85facea170da
+          path: staged-candidate
+          persist-credentials: false
+      - name: Confirm immutable candidate and exact reviewed diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C staged-candidate rev-parse HEAD)" = "24ae3d2ffae4175b200e364035dc85facea170da"
+          test "$(git -C staged-candidate rev-list --parents -n 1 HEAD)" = "24ae3d2ffae4175b200e364035dc85facea170da 4393488059c8f7f02ce665a514a10198feae270c"
+          echo "EXACT_UNMERGED_CANDIDATE_CHECKOUT_VERIFIED; REVIEW_ONLY"
+      - name: Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Exact-candidate guarded native merger negative and positive tests
+        working-directory: staged-candidate
+        run: python -m unittest discover -s tests -p test_brain_v9_guarded_merge.py -v
+      - name: Exact-candidate mandatory policy and source preflight
+        working-directory: staged-candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m brain validate
+          python -m brain preflight --output "$RUNNER_TEMP/staged-native-ruleset-preflight" --expected-sha "24ae3d2ffae4175b200e364035dc85facea170da"
+          echo "STAGED_CANDIDATE_PASSES_REVIEW_ONLY; NO_MERGE_NO_RELEASE"
