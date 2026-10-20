@@ -97,15 +97,20 @@ def _validated_snapshot(snapshot):
         return "GITHUB_NATIVE_EARLY_ELIGIBILITY_NOT_PROVEN", None
 
     runs = snapshot.get("check_runs")
-    if (type(runs) is not list or not (2 <= len(runs) < 100)
+    if (type(runs) is not list or not (1 <= len(runs) < 100)
             or any(type(run) is not dict for run in runs)):
         return "ORIGINAL_REQUIRED_CHECK_CENSUS_INCOMPLETE", None
     status_by_name = {}
     for name, app_id in CHECK_ISSUERS.items():
         matches = [check for check in runs
                    if type(check) is dict and check.get("name") == name]
-        if len(matches) != 1:
+        if len(matches) > 1:
             return "REQUIRED_CHECK_MISSING_OR_AMBIGUOUS", None
+        if not matches:
+            # The strict issuer-pinned protected rule still blocks the merge.
+            # Some installed Apps only issue their check after other CI ends.
+            status_by_name[name] = "not_issued"
+            continue
         check = matches[0]
         if not (check.get("head_sha") == pr["head_sha"]
                 and type(check.get("app_id")) is int
@@ -120,8 +125,9 @@ def _validated_snapshot(snapshot):
         else:
             return "REQUIRED_CHECK_FAILED_AMBIGUOUS_OR_CANCELLED", None
 
-    if sorted(status_by_name.values()) != ["pending", "success"]:
-        return "MUST_HAVE_ONE_SUCCESS_AND_ONE_GENUINELY_PENDING_CHECK", None
+    values = sorted(status_by_name.values())
+    if values not in (["pending", "success"], ["not_issued", "success"]):
+        return "MUST_HAVE_ONE_SUCCESS_AND_ONE_REQUIRED_CHECK_OUTSTANDING", None
     return None, (pr["number"], pr["head_sha"], pr["base_sha"])
 
 
@@ -143,7 +149,7 @@ def plan_early_enrollment(initial, final):
         return _hold("PR_HEAD_BASE_OR_NUMBER_CHANGED_BETWEEN_READS")
     return Decision(
         status="REVIEW_ONLY_EARLY_ADMISSION_CANDIDATE",
-        reason="EXACT_DOCS_SOURCE_VERIFIED_ONE_GOOD_ONE_PENDING_REQUIRES_SEPARATE_WRITE_AUTHORITY",
+        reason="EXACT_DOCS_SOURCE_VERIFIED_ONE_SUCCESS_ONE_REQUIRED_CHECK_OUTSTANDING_NO_WRITE_AUTHORITY",
     )
 
 
