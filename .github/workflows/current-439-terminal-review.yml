@@ -49,7 +49,38 @@ jobs:
           test "$(git -C production-source rev-parse HEAD)" = "4393488059c8f7f02ce665a514a10198feae270c"
           python -m verification.v8_terminal_readiness --output "$RUNNER_TEMP/proof-census.json"
           cat "$RUNNER_TEMP/proof-census.json"
+      - name: Classify incomplete original-window hold without a false replay failure
+        id: window
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          proof=json.loads((Path(os.environ["RUNNER_TEMP"])/"proof-census.json").read_text())
+          status=proof.get("status")
+          if status not in ("WINDOW_RUNNING_NOT_ACCEPTED",
+                            "SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED"):
+              raise SystemExit("SOURCE_SPECIFIC_CENSUS_UNKNOWN_FAIL_CLOSED")
+          if (proof.get("acceptance_pass") is not False or
+                  proof.get("release_or_merge_authorized") is not False or
+                  proof.get("external_cloudflare_provider_accepted") is not False):
+              raise SystemExit("TECHNICAL_REVIEW_AUTHORITY_ESCALATION")
+          ready=status=="SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED"
+          with open(os.environ["GITHUB_OUTPUT"],"a") as out:
+              out.write("replay_ready="+("true" if ready else "false")+"\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as out:
+              out.write("## Source-bound reviewer only; production release NOT authorized\n")
+              out.write("Original census: "+status+"\n")
+              out.write("Full terminal replay: "+("eligible for technical verification" if ready
+                                             else "not yet eligible; intentionally skipped")+"\n")
+              out.write("Independent Cloudflare provider verification and separate governed approval still mandatory.\n")
+          print("ORIGINAL_WINDOW_STATUS="+status)
+          print("TERMINAL_REPLAY_ELIGIBLE="+str(ready))
+          print("RELEASE_OR_MERGE_AUTHORIZED=false")
+          PY
       - name: Pin independently observed terminal Git state commit
+        if: ${{ steps.window.outputs.replay_ready == 'true' }}
         run: |
           set -euo pipefail
           SHA=$(python -c 'import json,os;print(json.load(open(os.environ["RUNNER_TEMP"]+"/proof-census.json"))["last_state_commit"])')
@@ -58,6 +89,7 @@ jobs:
           git -C terminal-state checkout --detach "$SHA"
           test "$(git -C terminal-state rev-parse HEAD)" = "$SHA"
       - name: Re-audit and replay original terminal SQLite and ledger
+        if: ${{ steps.window.outputs.replay_ready == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
