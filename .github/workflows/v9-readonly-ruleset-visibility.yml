@@ -148,6 +148,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m brain validate
+          python -c 'from brain.validate import validate_policy; r=validate_policy(); assert r.get("status")=="PASS", "POLICY_VALIDATION_FAILED"; print("EXACT_POLICY_VALIDATION_PASS")'
           python -m brain preflight --output "$RUNNER_TEMP/staged-native-ruleset-preflight" --expected-sha "24ae3d2ffae4175b200e364035dc85facea170da"
           echo "STAGED_CANDIDATE_PASSES_REVIEW_ONLY; NO_MERGE_NO_RELEASE"
