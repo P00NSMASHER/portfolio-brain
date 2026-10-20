@@ -99,3 +99,45 @@ jobs:
           print("READ_ONLY_NATIVE_PROVIDER_RECONCILIATION")
           print(json.dumps(result,sort_keys=True))
           PY
+
+      - name: Query fixed GraphQL viewer native-merge eligibility (read-only)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import http.client,json,os
+          query="""query ViewerCanEnableAutoMerge {
+            repository(owner:"P00NSMASHER",name:"portfolio-brain") {
+              databaseId
+              pullRequest(number:723) {
+                id state mergeable mergeStateStatus viewerCanEnableAutoMerge
+              }
+            }
+          }"""
+          conn=http.client.HTTPSConnection("api.github.com",timeout=15)
+          try:
+              conn.request("POST","/graphql",
+                 body=json.dumps({"query":query}).encode(),
+                 headers={"Authorization":"Bearer "+os.environ["GH_TOKEN"],
+                          "Accept":"application/vnd.github+json",
+                          "Content-Type":"application/json",
+                          "User-Agent":"portfolio-brain-readonly-native-eligibility"})
+              resp=conn.getresponse()
+              data=json.loads(resp.read(200000))
+          finally:
+              conn.close()
+          if resp.status!=200 or data.get("errors"):
+              print("READONLY_VIEWER_NATIVE_ELIGIBILITY_FIELD_NOT_AVAILABLE")
+          else:
+              repository=data.get("data",{}).get("repository")
+              if repository.get("databaseId")!=1387747549:
+                  raise SystemExit("UNTRUSTED_REPO_GRAPHQL_IDENTITY")
+              pr=repository.get("pullRequest")
+              if not isinstance(pr,dict) or type(pr.get("viewerCanEnableAutoMerge")) is not bool:
+                  raise SystemExit("UNVERIFIED_NATIVE_ELIGIBILITY_TYPE")
+              print("READONLY_VIEWER_NATIVE_ELIGIBILITY",
+                    json.dumps({"viewer_can_enable":pr["viewerCanEnableAutoMerge"],
+                                "mergeable":pr.get("mergeable"),
+                                "merge_state":pr.get("mergeStateStatus"),
+                                "writes":0},sort_keys=True))
+          PY
