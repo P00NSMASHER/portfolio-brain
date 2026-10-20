@@ -28,6 +28,7 @@ jobs:
               723: "19aff3921b85690eae44ce9be239d5c917b57030",
               729: "7ad50146267e4ed573230537b1450ded5c245d96",
               472: "c6c1138ea31ae64a9bbf41050be47fcc23d014cf",
+              731: "2c995bc6ca94dadd67f245b2ca200647dd161bb7",
           }
           assert os.environ.get("GITHUB_REPOSITORY") == REPO
           assert os.environ.get("GITHUB_REF_NAME") == "review/v9-native-eligibility-blocked-20261020"
@@ -58,6 +59,11 @@ jobs:
                 autoMergeRequest { enabledAt }
               }
               p472: pullRequest(number: 472) {
+                number state isDraft headRefOid baseRefOid
+                mergeable mergeStateStatus viewerCanEnableAutoMerge
+                autoMergeRequest { enabledAt }
+              }
+              p731: pullRequest(number: 731) {
                 number state isDraft headRefOid baseRefOid
                 mergeable mergeStateStatus viewerCanEnableAutoMerge
                 autoMergeRequest { enabledAt }
@@ -124,7 +130,7 @@ jobs:
                 "graphql_merge_state":row["mergeStateStatus"],
                 "viewer_can_enable":row["viewerCanEnableAutoMerge"],
                 "native_enrolled":False}
-              if number in (688,641,723):
+              if number in (688,641,723,731):
                   original_checks=api("GET",BASE+"/commits/"+expected_sha+"/check-runs?per_page=100")
                   assert type(original_checks) is dict and type(original_checks.get("check_runs")) is list
                   detail["checks"]=[{
