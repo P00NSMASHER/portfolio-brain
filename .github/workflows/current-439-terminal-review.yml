@@ -80,7 +80,6 @@ jobs:
           print("RELEASE_OR_MERGE_AUTHORIZED=false")
           PY
       - name: Pin independently observed terminal Git state commit
-        if: ${{ steps.window.outputs.replay_ready == 'true' }}
         run: |
           set -euo pipefail
           SHA=$(python -c 'import json,os;print(json.load(open(os.environ["RUNNER_TEMP"]+"/proof-census.json"))["last_state_commit"])')
@@ -88,6 +87,72 @@ jobs:
           git -C terminal-state fetch --depth=1 origin "$SHA"
           git -C terminal-state checkout --detach "$SHA"
           test "$(git -C terminal-state rev-parse HEAD)" = "$SHA"
+      - name: Preliminary source-pinned original SQLite and report replay (not acceptance)
+        if: ${{ steps.window.outputs.replay_ready != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,os,subprocess,sys
+          from pathlib import Path
+
+          proof=json.loads((Path(os.environ["RUNNER_TEMP"])/"proof-census.json").read_text())
+          if proof.get("status")!="WINDOW_RUNNING_NOT_ACCEPTED" or proof.get("acceptance_pass") is not False:
+              raise SystemExit("PRELIMINARY_REPLAY_REQUIRES_VERIFIED_RUNNING_WINDOW")
+          if proof.get("release_or_merge_authorized") is not False:
+              raise SystemExit("PRELIMINARY_REVIEW_CANNOT_RELEASE")
+          source=Path("production-source").resolve()
+          state=Path("terminal-state").resolve()
+          read=lambda p:subprocess.check_output(["git","-C",str(p),"rev-parse","HEAD"],
+                                                  text=True,timeout=12).strip()
+          if (read(source)!="4393488059c8f7f02ce665a514a10198feae270c"
+                  or read(state)!=proof.get("last_state_commit")
+                  or (state/"state.sqlite").exists()):
+              raise SystemExit("PRELIMINARY_SOURCE_OR_STATE_CHECKOUT_CHANGED")
+          sys.path.insert(0,str(source))
+          from brain.state_archive import restore
+          from soak_v3.audit import verify_sqlite
+          from brain.core import Store,digest
+          manifest=restore(state)
+          if manifest.get("raw_sha256")!=proof.get("last_raw_sha256"):
+              raise SystemExit("PRELIMINARY_STATE_ARCHIVE_SHA_MISMATCH")
+          raw=state/"state.sqlite"
+          strict=verify_sqlite(raw,expected_sequence=proof["last_sequence"],
+                               expected_chain=proof["last_canonical_hash"],
+                               expected_source="4393488059c8f7f02ce665a514a10198feae270c",
+                               max_bytes=120_512_512,strict_event_ids=True)
+          if strict.get("status")!="PASS":
+              raise SystemExit("PRELIMINARY_SQLITE_INTEGRITY_FAILED")
+          db=Store(raw,visibility="PUBLIC")
+          try:
+              row=db.db.execute("SELECT created_at,hash FROM reports ORDER BY id DESC LIMIT 1").fetchone()
+              if row is None:
+                  raise SystemExit("PRELIMINARY_NO_ORIGINAL_REPORT")
+              report=db.read_report("4393488059c8f7f02ce665a514a10198feae270c",
+                                    now=row["created_at"])
+              if (report.get("status")!="PASS"
+                      or report.get("state_sequence")!=proof["last_sequence"]
+                      or report.get("canonical_hash")!=proof["last_canonical_hash"]
+                      or report.get("pending_events")!=0
+                      or digest(report)!=row["hash"]):
+                  raise SystemExit("PRELIMINARY_ORIGINAL_REPORT_REPLAY_FAILED")
+          finally:
+              db.close()
+          verdict={"status":"PRELIMINARY_RAW_SQLITE_REPLAY_PASSED_NOT_ACCEPTANCE",
+                   "reviewed_source":proof["production_source"],
+                   "original_automatic_cores":proof["verified_original_cores"],
+                   "completed_span_seconds":proof["completion_span_seconds"],
+                   "state_commit":proof["last_state_commit"],
+                   "sequence":proof["last_sequence"],
+                   "pending_events":0,
+                   "raw_sqlite_sha256":strict["sha256"],
+                   "external_provider_complete":False,
+                   "source_released":False,
+                   "merge_authorized":False}
+          path=Path(os.environ["RUNNER_TEMP"])/"proof-provisional.json"
+          path.write_text(json.dumps(verdict,sort_keys=True,indent=2)+"\n")
+          print(json.dumps(verdict,sort_keys=True))
+          PY
       - name: Re-audit and replay original terminal SQLite and ledger
         if: ${{ steps.window.outputs.replay_ready == 'true' }}
         env:
@@ -114,5 +179,6 @@ jobs:
           path: |
             ${{ runner.temp }}/proof-census.json
             ${{ runner.temp }}/proof-terminal.json
+            ${{ runner.temp }}/proof-provisional.json
           if-no-files-found: warn
           retention-days: 30
