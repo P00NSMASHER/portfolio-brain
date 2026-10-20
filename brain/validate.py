@@ -55,7 +55,7 @@ def validate_policy():
         "github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain'",
         "ref: ${{ github.sha }}", "persist-credentials: false",
         "GH_TOKEN: ${{ github.token }}",
-        "9fffdb01e8176c1e661cfb4d1b520f6748b3965b",
+        "4369d2a9c784157ea83572eb9ebdf5cf6f1558e6",
         "18d91e7d20d2ab0c64c65f6fe199052409d6ba71",
         "contents: read", "pull-requests: write",
         "python -m brain.v9.guarded_merge_runner",

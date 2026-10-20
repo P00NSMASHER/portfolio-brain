@@ -345,8 +345,8 @@ THREADS_QUERY = """query($id: ID!) {
     }
   } }
 }"""
-ENABLE_MUTATION = """mutation($id: ID!) {
-  enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: SQUASH }) {
+ENABLE_MUTATION = """mutation($id: ID!, $expected_head: GitObjectID!) {
+  enablePullRequestAutoMerge(input: { pullRequestId: $id, expectedHeadOid: $expected_head, mergeMethod: SQUASH }) {
     pullRequest { id autoMergeRequest { enabledAt } }
   }
 }"""
@@ -492,7 +492,20 @@ def run(api, *, number, expected_main, apply=False):
         return {k: v for k, v in proof.items() if k != "node_id"}
     node_id = proof["node_id"]
     try:
-        result = api.graphql(ENABLE_MUTATION, {"id": node_id})
+        # Bind at GitHub's mutation boundary, not just the preceding reads.
+        # This does not freeze later PR pushes or substitute for final gates.
+        result = api.graphql(ENABLE_MUTATION, {
+            "id": node_id, "expected_head": proof["head_sha"]})
+        if type(result) is dict and result.get("errors"):
+            errors, data = result.get("errors"), result.get("data")
+            # Retain a bounded provider error TYPE, never its free-form message.
+            # The AUTO_MERGE_ prefix still forces UNKNOWN_AFTER_POST/no retry.
+            no_success = (data is None or (type(data) is dict
+                          and data.get("enablePullRequestAutoMerge") is None))
+            if (no_success and type(errors) is list and len(errors) == 1
+                    and type(errors[0]) is dict
+                    and errors[0].get("type") in ("FORBIDDEN", "UNPROCESSABLE", "NOT_FOUND")):
+                raise Denied("AUTO_MERGE_PROVIDER_REJECTION_" + errors[0]["type"])
         field = result.get("data") if type(result) is dict and not result.get("errors") else None
         result_pr = (field.get("enablePullRequestAutoMerge")
                      if type(field) is dict else None)
@@ -501,10 +514,21 @@ def run(api, *, number, expected_main, apply=False):
         require(observed_id == node_id, "AUTO_MERGE_PROVIDER_RESPONSE_INVALID")
         current = api.get("repos/" + REPO + "/pulls/" + str(number))
         require(type(current) is dict
-                and current.get("head", {}).get("sha") == proof["head_sha"],
+                and current.get("number") == number
+                and current.get("node_id") == node_id
+                and current.get("head", {}).get("sha") == proof["head_sha"]
+                and current.get("head", {}).get("repo", {}).get("full_name") == REPO
+                and current.get("base", {}).get("ref") == "main"
+                and current.get("base", {}).get("repo", {}).get("full_name") == REPO,
                 "AUTO_MERGE_PROVIDER_READBACK_UNVERIFIED")
-    except Exception:
-        # The write may have succeeded: never claim zero mutations or retry.
+    except Exception as exc:
+        # Even an explicit rejection is POST-attempt evidence, not a retry grant.
+        if isinstance(exc, Denied) and str(exc) in (
+            "AUTO_MERGE_PROVIDER_REJECTION_FORBIDDEN",
+            "AUTO_MERGE_PROVIDER_REJECTION_UNPROCESSABLE",
+            "AUTO_MERGE_PROVIDER_REJECTION_NOT_FOUND",
+        ):
+            raise
         raise Denied("AUTO_MERGE_WRITE_UNCERTAIN_READBACK_REQUIRED") from None
     # GitHub may merge immediately when the required checks are already green.
     # Treat that outcome as a merge only after the original provider says so.
@@ -517,9 +541,14 @@ def run(api, *, number, expected_main, apply=False):
                 "base_sha": expected_main, "provider_writes": 1,
                 "enrolled": True, "merged": True,
                 "merge_commit_sha": current["merge_commit_sha"]}
-    require(current.get("auto_merge") is not None
+    require(type(current.get("auto_merge")) is dict
             and current["auto_merge"].get("merge_method") == "squash"
-            and current.get("state") == "open",
+            and current.get("state") == "open"
+            and current.get("draft") is False and current.get("merged") is False
+            and current.get("base", {}).get("sha") == expected_main
+            and type(current.get("labels")) is list
+            and all(type(x) is dict and type(x.get("name")) is str for x in current["labels"])
+            and LABEL in {x["name"] for x in current["labels"]},
             "AUTO_MERGE_PROVIDER_READBACK_UNVERIFIED")
     return {"status": "NATIVE_AUTO_MERGE_ENROLLED",
             "number": number, "head_sha": proof["head_sha"],
@@ -584,8 +613,13 @@ class GitHub:
     def graphql(self, query, variables):
         require((query in (SETTINGS_QUERY, RULESET_QUERY)
                  and type(variables) is dict and variables == {})
-                or (query in (THREADS_QUERY, ENABLE_MUTATION)
-                    and type(variables) is dict and set(variables) == {"id"}),
+                or (query == THREADS_QUERY
+                    and type(variables) is dict and set(variables) == {"id"})
+                or (query == ENABLE_MUTATION
+                    and type(variables) is dict and set(variables) == {"id", "expected_head"}
+                    and type(variables["id"]) is str and 10 < len(variables["id"]) < 200
+                    and type(variables["expected_head"]) is str
+                    and SHA.fullmatch(variables["expected_head"]) is not None),
                 "GITHUB_GRAPHQL_NOT_APPROVED")
         return self._request("POST", "graphql", {"query": query, "variables": variables})
 
