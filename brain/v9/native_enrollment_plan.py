@@ -111,6 +111,11 @@ def _validated_snapshot(snapshot):
             or snapshot["check_total_count"] != len(runs)
             or any(type(run) is not dict for run in runs)):
         return "ORIGINAL_REQUIRED_CHECK_CENSUS_INCOMPLETE", None
+    # A malicious/malformed unrelated check must also fail closed, rather than
+    # raising during a later required-name lookup.
+    if any(type(check.get("name")) is not str
+           or not 1 <= len(check["name"]) <= 256 for check in runs):
+        return "ORIGINAL_CHECK_RUN_NAME_UNVERIFIED", None
     # The same original check identity must survive both observations. A
     # provider row with no stable ID is not adequate evidence for admission.
     if any(type(check.get("id")) is not int

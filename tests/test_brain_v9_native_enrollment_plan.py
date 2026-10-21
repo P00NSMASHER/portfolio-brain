@@ -165,6 +165,14 @@ class NativeAdmissionReviewTests(unittest.TestCase):
         self.assertFalse(final.merge_authorized)
         self.assertEqual(final.provider_writes, 0)
 
+    def test_unrelated_malformed_check_name_holds_without_exception(self):
+        for malformed in (None, [], {}, True, 7, "", "X" * 257):
+            with self.subTest(name=repr(malformed)[:64]):
+                candidate = sample()
+                candidate["check_runs"].append({"id": 103, "name": malformed})
+                candidate["check_total_count"] = 3
+                self.assert_hold(candidate, "ORIGINAL_CHECK_RUN_NAME_UNVERIFIED")
+
     def test_missing_boolean_duplicate_and_malformed_original_check_ids_hold(self):
         for bad in (None, True, False, "101", 0, -1, 10**16):
             with self.subTest(bad=bad):
