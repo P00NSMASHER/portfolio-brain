@@ -15,6 +15,45 @@ from brain.v9.guarded_merge import (
 
 MAX_CANDIDATES = 3
 
+# Diagnostics expose only fixed, source-reviewed codes. Never print provider
+# error bodies, credentials, or arbitrary exception text.
+SAFE_RUNNER_DENIALS = frozenset({
+    "SHA_INVALID",
+    "GITHUB_TOKEN_MISSING",
+    "REPOSITORY_IDENTITY_CHANGED",
+    "REPOSITORY_REST_SETTING_INVALID",
+    "REPOSITORY_GRAPHQL_SETTING_UNVERIFIED",
+    "REPOSITORY_SETTING_CONFLICT",
+    "RUNNER_PROTECTED_MAIN_MOVED",
+    "RUNNER_OPEN_PR_CENSUS_INCOMPLETE",
+    "RUNNER_PR_NUMBER_INVALID",
+    "RUNNER_DUPLICATE_CANDIDATES",
+    "GITHUB_ROUTE_NOT_ALLOWLISTED",
+    "GITHUB_METHOD_INVALID",
+    "GITHUB_GRAPHQL_NOT_APPROVED",
+    "GITHUB_PROVIDER_UNAVAILABLE",
+    "GITHUB_RESPONSE_TOO_LARGE",
+    "GITHUB_RESPONSE_NOT_JSON",
+    "HTTP_401",
+    "HTTP_403",
+    "HTTP_404",
+    "HTTP_429",
+    "HTTP_500",
+    "HTTP_502",
+    "HTTP_503",
+    "HTTP_504",
+})
+
+
+def blocked_report(error):
+    """Keep write uncertainty unchanged while revealing bounded failure class."""
+    code = str(error) if isinstance(error, Denied) else ""
+    return {
+        "status": "RUNNER_BLOCKED",
+        "reason_code": code if code in SAFE_RUNNER_DENIALS else "UNCLASSIFIED",
+        "provider_writes": "UNVERIFIED_NO_RETRY",
+    }
+
 
 def dispatch_once(make_client, expected_main, *, apply=True):
     sha(expected_main)
@@ -83,9 +122,8 @@ def main():
         result = dispatch_once(lambda: GitHub(token), source, apply=True)
         print(json.dumps(result, sort_keys=True))
         return 2 if result["status"] == "POST_WRITE_UNCERTAIN_MANUAL_RECONCILIATION" else 0
-    except (Denied, ValueError):
-        print(json.dumps({"status": "RUNNER_BLOCKED",
-                          "provider_writes": "UNVERIFIED_NO_RETRY"}, sort_keys=True))
+    except (Denied, ValueError) as error:
+        print(json.dumps(blocked_report(error), sort_keys=True))
         return 2
 
 
