@@ -1,6 +1,182 @@
 {
+  "fingerprint": "5ee62f0fecfcd69b50c1693b0e18ed6919ba21df7d6e15955cfbc68361ecb6b6",
   "schema_version": 2,
   "scope": "STRUCTURAL_REUSE_KNOWLEDGE_NOT_EXECUTED_OR_REVENUE_VERIFIED",
-  "sources": [],
-  "fingerprint": null
+  "sources": [
+    {
+      "blob_sha": "d9e80f748e519f54d3f3c58a87e50cfeebb06405",
+      "code_sha256": "a7ec2f7df7cc2da94554ecea9e31773cbd7d5811e805ac6d78659029af829144",
+      "head_sha": "df521c2719011c2d10d15ef39df5eaab64986e58",
+      "key": "MangroveTechnologies/mangrove-agent:server/scripts/inspect_x402_payment.py",
+      "license": "MIT",
+      "matched_terms": [
+        "payment",
+        "x402"
+      ],
+      "path": "server/scripts/inspect_x402_payment.py",
+      "repository": "MangroveTechnologies/mangrove-agent",
+      "source_ref": "https://github.com/MangroveTechnologies/mangrove-agent/blob/df521c2719011c2d10d15ef39df5eaab64986e58/server/scripts/inspect_x402_payment.py",
+      "target": "agent-products",
+      "test_paths": [
+        "server/scripts/test_x402_mainnet.py",
+        "server/tests/integration/test_x402_spend_routes.py",
+        "server/tests/integration/test_x402_sync_transport.py",
+        "server/tests/test_x402.py",
+        "server/tests/test_x402_startup_resilience.py",
+        "server/tests/unit/test_payment_budget.py",
+        "server/tests/unit/test_payment_hardening.py",
+        "server/tests/unit/test_payment_operations.py",
+        "server/tests/unit/test_payment_rejection.py",
+        "server/tests/unit/test_payment_result_recovery.py"
+      ]
+    },
+    {
+      "blob_sha": "47041ab0d1c056d0c8e2b662808c7976d450a686",
+      "code_sha256": "d3f4137ed24fd6c815b40bdd0509b8130797f45adc799f4cc22cbc6e37a792ae",
+      "head_sha": "c0d14410f0c466c8f80ea03fc9d2cce0e8519c89",
+      "key": "Austin-Brock/FreightLens:backend/app/api/audits.py",
+      "license": "UNKNOWN",
+      "matched_terms": [
+        "invoice",
+        "freight",
+        "audit"
+      ],
+      "path": "backend/app/api/audits.py",
+      "repository": "Austin-Brock/FreightLens",
+      "source_ref": "https://github.com/Austin-Brock/FreightLens/blob/c0d14410f0c466c8f80ea03fc9d2cce0e8519c89/backend/app/api/audits.py",
+      "target": "freight-recovery",
+      "test_paths": [
+        "backend/tests/test_audit_engine.py"
+      ]
+    },
+    {
+      "blob_sha": "73b5f2688f24dfe8dd8a6be84583202b3b448bf2",
+      "code_sha256": "b04745eebdae14273b129585cc26ec88649b786fea7f96de51dd2c68986d4705",
+      "head_sha": "ccc6f6c2771197bbb9010e403e83578ccfb180b5",
+      "key": "yyyqqqhh/attention-kernel-lab:src/attention_kernel_lab/benchmark.py",
+      "license": "UNKNOWN",
+      "matched_terms": [
+        "experiment",
+        "benchmark"
+      ],
+      "path": "src/attention_kernel_lab/benchmark.py",
+      "repository": "yyyqqqhh/attention-kernel-lab",
+      "source_ref": "https://github.com/yyyqqqhh/attention-kernel-lab/blob/ccc6f6c2771197bbb9010e403e83578ccfb180b5/src/attention_kernel_lab/benchmark.py",
+      "target": "research-methods",
+      "test_paths": [
+        "tests/test_benchmark_helpers.py"
+      ]
+    },
+    {
+      "blob_sha": "a6c0d6929b46fe023bd71d39a8bd9f022bba819a",
+      "code_sha256": "7cbfe6a5999a7a6d722945ce605e05c19a4da9981c938b8c910df0548ee1e71b",
+      "head_sha": "925288d2623e0cd1e7800e77fa1bbdd7ab2bc5b4",
+      "key": "Kalmi91/kimacha:lib/schedulePreview.ts",
+      "license": "NOASSERTION",
+      "matched_terms": [
+        "review",
+        "schedule"
+      ],
+      "path": "lib/schedulePreview.ts",
+      "repository": "Kalmi91/kimacha",
+      "source_ref": "https://github.com/Kalmi91/kimacha/blob/925288d2623e0cd1e7800e77fa1bbdd7ab2bc5b4/lib/schedulePreview.ts",
+      "target": "school-tools",
+      "test_paths": [
+        "lib/__tests__/schedulePreview.test.ts"
+      ]
+    },
+    {
+      "blob_sha": "6106669f7cba6aca6515887a748e8425676b13ee",
+      "code_sha256": "cccfed500c26752b89bd52aec8e0735234db4bdd64177de4a0b240348373a6c0",
+      "head_sha": "79ac558d72b91b137e079d7d236d6f2e68051cff",
+      "key": "livastic-vm2-primary-20260911/livastic-vm2-primary-20260911.github.io:tools/build_vm5_agent_bazaar_manifest.py",
+      "license": "NOASSERTION",
+      "matched_terms": [
+        "payment",
+        "x402",
+        "settle"
+      ],
+      "path": "tools/build_vm5_agent_bazaar_manifest.py",
+      "repository": "livastic-vm2-primary-20260911/livastic-vm2-primary-20260911.github.io",
+      "source_ref": "https://github.com/livastic-vm2-primary-20260911/livastic-vm2-primary-20260911.github.io/blob/79ac558d72b91b137e079d7d236d6f2e68051cff/tools/build_vm5_agent_bazaar_manifest.py",
+      "target": "agent-products",
+      "test_paths": [
+        "tests/vm5-bazaar-manifest.test.mjs",
+        "tests/vm5-dns-offer.test.mjs",
+        "tests/vm5-tls-offer.test.mjs",
+        "tests/x402-manifest-merchant-cta.test.mjs"
+      ]
+    },
+    {
+      "blob_sha": "df2872cedad6ad1de63f4a6c621cca8e003a2140",
+      "code_sha256": "2fb6c06b5dc0c46d0bc7a97095e2e7fef7d160b850953c4ef53273219cc672b7",
+      "head_sha": "b8b1e6e8b8b76e530ba101e95e01311217462527",
+      "key": "kirill-markin/flashcards-open-source-app:apps/backend/src/progress/reports/loaders/reviewSchedule.ts",
+      "license": "MIT",
+      "matched_terms": [
+        "review",
+        "schedule"
+      ],
+      "path": "apps/backend/src/progress/reports/loaders/reviewSchedule.ts",
+      "repository": "kirill-markin/flashcards-open-source-app",
+      "source_ref": "https://github.com/kirill-markin/flashcards-open-source-app/blob/b8b1e6e8b8b76e530ba101e95e01311217462527/apps/backend/src/progress/reports/loaders/reviewSchedule.ts",
+      "target": "school-tools",
+      "test_paths": [
+        "apps/backend/src/community/reviewActivityFacts.test.ts",
+        "apps/backend/src/progress/activeReviewDays/activeReviewDaysBackfill.test.ts",
+        "apps/backend/src/progress/reports/progressReviewSchedule.test.ts",
+        "apps/backend/src/routes/system/mobileReviewStatus.test.ts"
+      ]
+    },
+    {
+      "blob_sha": "16581ff0f14a6a29e4c3d84a30b69999e3aed84c",
+      "code_sha256": "eeb5fb601ef3aedc5380c31e7d57e31e0a7854c8237827e4bb3f17b094c9f276",
+      "head_sha": "3357cd2a4e146069b469ed60d6bc12ae4cc4c471",
+      "key": "sethbang/venice-py:examples/x402/solana_settlement.py",
+      "license": "MIT",
+      "matched_terms": [
+        "payment",
+        "x402",
+        "settle"
+      ],
+      "path": "examples/x402/solana_settlement.py",
+      "repository": "sethbang/venice-py",
+      "source_ref": "https://github.com/sethbang/venice-py/blob/3357cd2a4e146069b469ed60d6bc12ae4cc4c471/examples/x402/solana_settlement.py",
+      "target": "agent-products",
+      "test_paths": [
+        "tests/e2e/test_x402_solana_e2e.py",
+        "tests/unit/auth/test_solana_build_header.py",
+        "tests/unit/auth/test_x402_solana.py",
+        "tests/unit/auth/test_x402_solana_network.py",
+        "tests/unit/test_client_siwe_auth_solana.py"
+      ]
+    },
+    {
+      "blob_sha": "51e36a83eb430fd34a2301fbd85bf1f400135b8f",
+      "code_sha256": "2d5a0ae9f1f80ccd7c11bdcab9478d4764db17170e4b652b7417928656543cf8",
+      "head_sha": "d89cae9bcae89b75fc087e4eed4eecb1062a883d",
+      "key": "shipking-ai/BonaMind:auramind-gemini/src/pages/study/studyPreview.ts",
+      "license": "NOASSERTION",
+      "matched_terms": [
+        "review",
+        "study"
+      ],
+      "path": "auramind-gemini/src/pages/study/studyPreview.ts",
+      "repository": "shipking-ai/BonaMind",
+      "source_ref": "https://github.com/shipking-ai/BonaMind/blob/d89cae9bcae89b75fc087e4eed4eecb1062a883d/auramind-gemini/src/pages/study/studyPreview.ts",
+      "target": "school-tools",
+      "test_paths": [
+        "auramind-gemini/src/__tests__/iosPreviewTour.test.ts",
+        "auramind-gemini/src/__tests__/iosStudyAndChat.test.tsx",
+        "auramind-gemini/src/__tests__/studyFloat.test.tsx",
+        "auramind-gemini/src/__tests__/studyStatsDerivations.test.ts",
+        "auramind-gemini/src/__tests__/useStudyStats.test.ts",
+        "auramind-gemini/src/__tests__/useVoiceStudyErrors.test.tsx",
+        "auramind-gemini/src/__tests__/useVoiceStudyTranscript.test.tsx",
+        "auramind-gemini/src/__tests__/windowsStudyKeys.test.tsx",
+        "auramind-gemini/src/__tests__/windowsStudySession.test.tsx",
+        "mobile/src/study/__tests__/studyScreen.test.tsx"
+      ]
+    }
+  ]
 }
