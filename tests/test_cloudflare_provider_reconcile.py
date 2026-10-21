@@ -38,7 +38,7 @@ def provider(proof=None):
     return {"data": {"viewer": {"accounts": [{
         "workersInvocationsAdaptive": [
             {"dimensions": {"scriptName": cf.WORKER_SCRIPT, "status": "success",
-                            "datetime": row["scheduled_at"]},
+                            "datetime": row["scheduled_at"].replace(".000Z", "Z")},
              "sum": {"requests": 1, "errors": 0}}
             for row in proof["signed_cloudflare_origins"]
         ],
