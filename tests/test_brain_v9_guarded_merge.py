@@ -488,9 +488,14 @@ class EventRunnerProvider(FakeProvider):
         self.open_rows = [copy.deepcopy(self.pr)]
 
     def get(self, path):
-        if path == ROOT + "pulls?state=open&per_page=100":
+        prefix = ROOT + "pulls?state=open&per_page=20&page="
+        if path.startswith(prefix):
+            page = path[len(prefix):]
+            if page not in ("1", "2", "3", "4", "5"):
+                raise AssertionError("unreviewed mock census page")
             self.calls.append(("GET", path))
-            return copy.deepcopy(self.open_rows)
+            offset = (int(page) - 1) * 20
+            return copy.deepcopy(self.open_rows[offset:offset + 20])
         return super().get(path)
 
 
