@@ -47,17 +47,22 @@ def validate_policy():
             "scoped repair has an unreviewed trigger, permission or release action")
     native = (workflow_dir/"v9-guarded-native-automerge.yml").read_text(encoding="utf-8")
     for fragment in (
-        "workflow_run:", 'workflows: ["portfolio-independent-verifier"]',
+        "workflow_run:", 'workflows: ["foundation-ci"]',
         "types: [completed]", "cancel-in-progress: false",
         "github.event.workflow_run.conclusion == 'success'",
-        "github.event.workflow_run.head_branch == 'main'",
-        "github.event.workflow_run.head_sha == github.sha",
+        "github.event.workflow_run.name == 'foundation-ci'",
+        "github.event.workflow_run.event == 'pull_request'",
+        "github.event.workflow_run.head_repository.full_name == 'P00NSMASHER/portfolio-brain'",
+        "github.event.workflow_run.head_branch != 'main'",
+        "github.event.workflow_run.head_sha != github.sha",
         "github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain'",
         "ref: ${{ github.sha }}", "persist-credentials: false",
         "GH_TOKEN: ${{ github.token }}",
-        "1b5aeda0486d406e18841c708d6c81b2287021db",
-        "a153d5fe771ce9354d2ecb82f8d6e74f4df9e56d",
-        "contents: read", "pull-requests: write",
+        "ef638fa56b8e06a8b5a234c5f6b463f574ff29c4",
+        "e6191bd56c23b8a920a8bfebfcf50d3f96acb981",
+        "permissions:\n  contents: read",
+        "    permissions:\n      contents: write\n      pull-requests: write",
+        "FOUNDATION_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}",
         "python -m brain.v9.guarded_merge_runner",
     ):
         require(fragment in native, "guarded native merge original controls changed: "+fragment)
@@ -69,7 +74,9 @@ def validate_policy():
             and "gh pr merge" not in native
             and "permission-workflows:" not in native
             and "id-token: write" not in native
-            and "contents: write" not in native
+            and native.count("      contents: write") == 1
+            and native.count("      pull-requests: write") == 1
+            and native.count("FOUNDATION_HEAD_SHA:") == 1
             and "PORTFOLIO_RUNTIME_PRIVATE_KEY" not in native
             and "PORTFOLIO_VERIFIER_PRIVATE_KEY" not in native,
             "guarded native merger adds forbidden trigger, privilege or direct merge")

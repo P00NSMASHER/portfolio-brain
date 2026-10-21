@@ -14,7 +14,9 @@ class GuardedRunnerDiagnosticTests(unittest.TestCase):
         capture = io.StringIO()
         is_error = isinstance(outcome, Exception)
         with patch.dict(runner.os.environ,
-                        {"GH_TOKEN": "synthetic-not-a-real-token", "GITHUB_SHA": "a" * 40},
+                        {"GH_TOKEN": "synthetic-not-a-real-token",
+                         "GITHUB_SHA": "a" * 40,
+                         "FOUNDATION_HEAD_SHA": "b" * 40},
                         clear=True):
             with patch.object(runner, "dispatch_once",
                               side_effect=outcome if is_error else None,
@@ -68,9 +70,10 @@ class GuardedRunnerDiagnosticTests(unittest.TestCase):
     def test_diagnostic_changes_never_grant_merge_permission(self):
         from pathlib import Path
         workflow = Path(".github/workflows/v9-guarded-native-automerge.yml").read_text()
-        self.assertIn("contents: read", workflow)
-        self.assertIn("pull-requests: write", workflow)
-        self.assertNotIn("contents: write", workflow)
+        self.assertIn("permissions:\n  contents: read", workflow)
+        self.assertEqual(workflow.count("      contents: write"), 1)
+        self.assertEqual(workflow.count("      pull-requests: write"), 1)
+        self.assertIn('workflows: ["foundation-ci"]', workflow)
         self.assertNotIn("workflow_dispatch:", workflow)
         self.assertNotIn("pull_request_target:", workflow)
         self.assertNotIn("gh pr merge", workflow)

@@ -33,6 +33,10 @@ class FakeProvider:
         self.no_acceptance = False
         self.change_head = False
         self.bad_threads = False
+        self.viewer_can_enable = True
+        self.viewer_flip_on_final = False
+        self.viewer_merge_state = "BLOCKED"
+        self._viewer_reads = 0
         self.provider_fail = False
         self.extra_acceptance_file = False
         self.immediate_merge = False
@@ -185,9 +189,16 @@ class FakeProvider:
                 "nameWithOwner": gm.REPO,
                 "autoMergeAllowed": setting, "isArchived": False}}}
         if query == gm.THREADS_QUERY:
-            return {"data": {"node": {"id": NODE, "reviewThreads": {
-                "pageInfo": {"hasNextPage": False},
-                "nodes": [{"isResolved": not self.bad_threads}]}}}}
+            self._viewer_reads += 1
+            allowed = (False if self.viewer_flip_on_final and self._viewer_reads >= 2
+                       else self.viewer_can_enable)
+            return {"data": {"node": {
+                "id": NODE,
+                "viewerCanEnableAutoMerge": allowed,
+                "mergeStateStatus": self.viewer_merge_state,
+                "reviewThreads": {
+                    "pageInfo": {"hasNextPage": False},
+                    "nodes": [{"isResolved": not self.bad_threads}]}}}}
         if query == gm.ENABLE_MUTATION:
             self.mutations += 1
             if self.provider_fail:
@@ -326,6 +337,33 @@ class GuardedAdmissionTests(unittest.TestCase):
         f.graphql_ruleset_flip_on_final = True
         self.assert_blocked(f, "PROTECTED_RULESET_GRAPHQL_UNVERIFIED")
         self.assertEqual(f._ruleset_reads, 2)
+
+    def test_real_clean_pr_with_viewer_disallowed_never_attempts_native_post(self):
+        f = FakeProvider()
+        f.viewer_merge_state = "CLEAN"
+        f.viewer_can_enable = False
+        self.assert_blocked(f, "NATIVE_AUTOMERGE_UNAVAILABLE_ON_CURRENT_PR")
+        self.assertEqual(f._viewer_reads, 1)
+        self.assertIn("viewerCanEnableAutoMerge", gm.THREADS_QUERY)
+        self.assertIn("mergeStateStatus", gm.THREADS_QUERY)
+
+    def test_native_eligibility_missing_or_invalid_type_fails_closed(self):
+        for wrong in (None, 0, 1, "false", [], {}, 0.0):
+            with self.subTest(wrong=repr(wrong)):
+                f = FakeProvider()
+                f.viewer_can_enable = wrong
+                self.assert_blocked(f, "NATIVE_AUTOMERGE_ELIGIBILITY_UNVERIFIED")
+        for wrong in (None, False, 1, {}, "", "A" * 40):
+            with self.subTest(merge_state=repr(wrong)):
+                f = FakeProvider()
+                f.viewer_merge_state = wrong
+                self.assert_blocked(f, "NATIVE_AUTOMERGE_ELIGIBILITY_UNVERIFIED")
+
+    def test_native_eligibility_revoked_after_initial_positive_read_blocks_post(self):
+        f = FakeProvider()
+        f.viewer_flip_on_final = True
+        self.assert_blocked(f, "NATIVE_AUTOMERGE_UNAVAILABLE_ON_CURRENT_PR")
+        self.assertEqual(f._viewer_reads, 2)
 
     def test_unreviewed_graphql_ruleset_mutation_is_rejected(self):
         with self.assertRaisesRegex(gm.Denied, "GITHUB_GRAPHQL_NOT_APPROVED"):
@@ -510,6 +548,18 @@ class EventRunnerTests(unittest.TestCase):
         self.assertEqual(result["provider_writes"], 1)
         self.assertEqual(f.mutations, 1)
 
+    def test_real_clean_native_eligibility_denial_stops_event_runner_without_post(self):
+        from brain.v9 import guarded_merge_runner as runner
+        f = EventRunnerProvider()
+        f.viewer_can_enable = False
+        f.viewer_merge_state = "CLEAN"
+        result = runner.dispatch_once(lambda: f, BASE, apply=True)
+        self.assertEqual(result["candidate_count"], 1)
+        self.assertEqual(result["provider_writes"], 0)
+        self.assertEqual(result["decisions"][0]["status"],
+                         "BLOCKED:NATIVE_AUTOMERGE_UNAVAILABLE_ON_CURRENT_PR")
+        self.assertEqual(f.mutations, 0)
+
     def test_no_label_stops_before_native_github_mutation(self):
         from brain.v9 import guarded_merge_runner as runner
         f = EventRunnerProvider()
@@ -567,11 +617,16 @@ class EventRunnerTests(unittest.TestCase):
         for path in ("brain/v9/guarded_merge.py", "brain/v9/guarded_merge_runner.py"):
             expected = gm.git_blob_sha(Path(path).read_bytes())
             self.assertIn(expected, workflow)
-        self.assertIn('workflows: ["portfolio-independent-verifier"]', workflow)
-        self.assertIn("github.event.workflow_run.head_sha == github.sha", workflow)
+        self.assertIn('workflows: ["foundation-ci"]', workflow)
+        self.assertIn("github.event.workflow_run.event == 'pull_request'", workflow)
+        self.assertIn("github.event.workflow_run.head_sha != github.sha", workflow)
+        self.assertIn("github.event.workflow_run.head_repository.full_name", workflow)
+        self.assertIn("FOUNDATION_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}", workflow)
         self.assertIn("persist-credentials: false", workflow)
-        self.assertIn("pull-requests: write", workflow)
-        self.assertNotIn("contents: write", workflow)
+        self.assertIn("permissions:\n  contents: read", workflow)
+        self.assertEqual(workflow.count("      contents: write"), 1)
+        self.assertEqual(workflow.count("      pull-requests: write"), 1)
+        self.assertIn("persist-credentials: false", workflow)
         for forbidden in ("schedule:", "pull_request_target:", "workflow_dispatch:"):
             self.assertNotIn(forbidden, workflow)
 

@@ -27,6 +27,8 @@ SAFE_RUNNER_DENIALS = frozenset({
     "REPOSITORY_GRAPHQL_SETTING_UNVERIFIED",
     "REPOSITORY_SETTING_CONFLICT",
     "RUNNER_PROTECTED_MAIN_MOVED",
+    "RUNNER_EVENT_HEAD_REQUIRED",
+    "RUNNER_AMBIGUOUS_EVENT_HEAD",
     "RUNNER_OPEN_PR_CENSUS_INCOMPLETE",
     "RUNNER_OPEN_PR_CENSUS_CHANGED",
     "RUNNER_PR_NUMBER_INVALID",
@@ -97,8 +99,17 @@ def complete_open_pull_census(api, root):
     return second
 
 
-def dispatch_once(make_client, expected_main, *, apply=True):
+def dispatch_once(make_client, expected_main, *, apply=True,
+                  early=False, event_head=None):
     sha(expected_main)
+    if early:
+        # Bind this one enrollment exclusively to its genuine successful
+        # Foundation workflow_run HEAD; do not act on unrelated labeled PRs.
+        if type(event_head) is not str:
+            raise Denied("RUNNER_EVENT_HEAD_REQUIRED")
+        sha(event_head)
+        if event_head == expected_main:
+            raise Denied("RUNNER_EVENT_HEAD_REQUIRED")
     enumeration = make_client()
     root = "repos/" + REPO + "/"
     info = enumeration.get("repos/" + REPO)
@@ -120,6 +131,9 @@ def dispatch_once(make_client, expected_main, *, apply=True):
         if LABEL not in {item.get("name") for item in row.get("labels", [])
                          if type(item) is dict}:
             continue
+        if early and (type(row.get("head")) is not dict
+                      or row["head"].get("sha") != event_head):
+            continue
         number = row.get("number")
         if type(number) is not int or number <= 0:
             raise Denied("RUNNER_PR_NUMBER_INVALID")
@@ -128,12 +142,15 @@ def dispatch_once(make_client, expected_main, *, apply=True):
     if not require_unique:
         raise Denied("RUNNER_DUPLICATE_CANDIDATES")
     chosen.sort()
+    if early and len(chosen) > 1:
+        raise Denied("RUNNER_AMBIGUOUS_EVENT_HEAD")
     decisions = []
     writes = 0
     for number in chosen[:MAX_CANDIDATES]:
         try:
             result = run(make_client(), number=number,
-                         expected_main=expected_main, apply=apply)
+                         expected_main=expected_main, apply=apply,
+                         early=early)
             state = result["status"]
             effect = result["provider_writes"]
         except Denied as exc:
@@ -158,8 +175,10 @@ def dispatch_once(make_client, expected_main, *, apply=True):
 def main():
     token = os.environ.get("GH_TOKEN", "")
     source = os.environ.get("GITHUB_SHA", "")
+    event_head = os.environ.get("FOUNDATION_HEAD_SHA")
     try:
-        result = dispatch_once(lambda: GitHub(token), source, apply=True)
+        result = dispatch_once(lambda: GitHub(token), source, apply=True,
+                               early=True, event_head=event_head)
         print(json.dumps(result, sort_keys=True))
         return 2 if result["status"] == "POST_WRITE_UNCERTAIN_MANUAL_RECONCILIATION" else 0
     except (Denied, ValueError) as error:
