@@ -6,6 +6,7 @@ not create scheduled tasks, checks, credentials, or direct merge operations.
 """
 import json
 import os
+import re
 import sys
 
 from brain.v9.guarded_merge import (
@@ -14,6 +15,15 @@ from brain.v9.guarded_merge import (
 )
 
 MAX_CANDIDATES = 3
+
+
+def safe_denial_code(error):
+    """Expose only policy-defined codes; never echo provider or token text."""
+    if type(error) is Denied:
+        code = str(error)
+        if re.fullmatch(r"[A-Z][A-Z0-9_]{0,79}", code):
+            return code
+    return "UNCLASSIFIED_FAILURE"
 
 
 def dispatch_once(make_client, expected_main, *, apply=True):
@@ -83,8 +93,11 @@ def main():
         result = dispatch_once(lambda: GitHub(token), source, apply=True)
         print(json.dumps(result, sort_keys=True))
         return 2 if result["status"] == "POST_WRITE_UNCERTAIN_MANUAL_RECONCILIATION" else 0
-    except (Denied, ValueError):
+    except (Denied, ValueError) as error:
+        # A top-level failure is never evidence of zero provider writes.
+        # Retain the conservative no-retry state and a bounded diagnostic.
         print(json.dumps({"status": "RUNNER_BLOCKED",
+                          "reason_code": safe_denial_code(error),
                           "provider_writes": "UNVERIFIED_NO_RETRY"}, sort_keys=True))
         return 2
 
