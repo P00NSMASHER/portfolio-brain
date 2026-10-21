@@ -71,3 +71,31 @@ That result is advisory only. It always returns `provider_writes=0`, `merge_auth
 6. Genuine native enrollment and GitHub protected merge proof for a docs canary before any engineering/deployment expansion.
 
 Outcome: DESIGN_ONLY / ZERO_GITHUB_MUTATIONS / NO_AUTO_MERGE / NO_RELEASE_APPROVAL.
+
+## October 21, 2026 — subsequent genuine canary and readiness checkpoint
+
+Original owner-authorized guarded run `39527279455` issued one
+`expectedHeadOid`-bound native squash enrollment for docs-only PR #734 while
+the separately issued `portfolio-phase1-gate` remained outstanding. The
+original REST readback and GitHub `auto_squash_enabled` event proved enrollment;
+GitHub subsequently merged the exact inert canary after both required check
+issuers succeeded. **That job alone** was given
+`contents:write,pull-requests:write`. It does not establish native write
+authority for the ordinary production `contents:read,pull-requests:write`
+controller or remove the need for enrollment-lineage revocation design.
+
+Owner-approved protected PR #736 released a bounded, double-read public PR
+census without changing permissions or platform protections. On the new
+protected source `37a0b9300a28e2f1fc19481a5351410709664302`,
+authenticated guarded run `39562207026` completed `OBSERVED`,
+`candidate_count=0`, `provider_writes=0`. No actual eligible-PR enrollment
+was attempted. A private Windows synthetic ACL-and-durable-intent store test
+on PAAM-L044 also passed; see `NATIVE_INTENT_STORAGE.md`.
+
+The model's fixed `SOURCE_SHA=35ad7186...` remains **historical and inert**.
+The new protected-main SHA is **not independently accepted** until genuine
+source-specific six-hour original-run evidence and terminal SQLite/report
+replay are available. The current reviewer branch was updated non-forcibly
+for compatibility; this does not authorize final-gate publication, new
+permissions, bypasses, controller activation, protected merge, or unattended
+engineering releases. PR #729 remains a separate draft fail-closed guard.

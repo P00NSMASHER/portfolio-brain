@@ -67,3 +67,42 @@ proven by owner-authorized PR #734; this storage work does not repeat that write
 
 SQLite transaction semantics:
 https://www.sqlite.org/lang_transaction.html
+
+## Original Windows device acceptance — October 21, 2026
+
+On connected PAAM-L044 (Windows), the read-only Win32 ACL verifier was loaded
+from the exact reviewed Git blob `87f57c31e6c0fd2317a0b5417310b356d80b923d`.
+A nonexistent file and a normal temp file with inherited permissions both
+failed closed. A newly created synthetic file with an explicitly protected,
+current-user-only ACL passed. No pre-existing ACL was changed; disposable
+fixtures were removed after the tests.
+
+A separate end-to-end synthetic SQLite intent test loaded, with Git blob
+identity independently checked, these *unchanged* candidate modules:
+
+- `verification/native_final_approval.py`: `a296fa926f22ae2df7fc1e0da67f8d2a25190321`
+- `verification/native_windows_acl.py`: `87f57c31e6c0fd2317a0b5417310b356d80b923d`
+- `verification/native_intent_store.py`: `7bcd9693efc58a5fed6ef61114cfc177e871df4c`
+
+The test created a disposable private Windows directory and SQLite database,
+committed PREPARED and ATTEMPTED, recorded UNKNOWN, closed and reopened the
+database, proved a repeated claim was denied, reconciled to ENROLLED, then
+revoked and reopened to confirm sticky REVOKED. Exactly five events persisted.
+The revoked record denied final-gate evaluation without invoking even one
+provider read. All test state and temporary scripts were cleaned up.
+
+**Disposition:** `WINDOWS_PRIVATE_INTENT_SQLITE_PASS` using isolated synthetic
+inputs, zero GitHub writes, zero private credentials, zero changes to production
+ACLs. This proves Windows API and database integration on this device, **not**
+deployment of a trusted persistent service, original approval-check issuance,
+independent production final-gate integration, or permission to enroll a PR.
+
+## Current-main source separation — October 21, 2026
+
+The draft has been reconciled onto protected `main` at
+`37a0b9300a28e2f1fc19481a5351410709664302` while retaining all
+existing inert source-bound model fixtures. That source was released through
+owner-approved PR #736 with independently issued protected checks, but has
+not yet completed the separate six-hour source-specific acceptance.
+Earlier accepted `35ad7186...` evidence does not transfer.
+No production control-plane source, workflow, issuer or permission is modified.

@@ -2,11 +2,15 @@
 """Cross-file Step 2 registry validator. Standard library only."""
 from __future__ import annotations
 import json
+import re
 from pathlib import Path
 from registry.validate_project import validate_project_record
 from registry.validate_contracts import validate_autonomy_profile, validate_objective, validate_metric
 
 ROOT=Path(__file__).resolve().parents[1]
+PINNED_COVERAGE_SOURCE=re.compile(
+    r"https://github\.com/P00NSMASHER/[A-Za-z0-9_.-]+/blob/[0-9a-f]{40}/[A-Za-z0-9_./-]+\Z"
+)
 
 class RegistryValidationError(ValueError):
     pass
@@ -25,6 +29,44 @@ def unique_map(items, key, label):
         require(value not in out, f"duplicate {label}: {value}")
         out[value]=item
     return out
+
+def validate_coverage_items(items, projects) -> None:
+    """Validate descriptive coverage without registering projects or authority.
+
+    Bound rows retain their existing contract. A source-documented commercial
+    concept may remain explicitly unbound; sharing a repository never supplies
+    a canonical project ID, autonomy profile, or runtime capability.
+    """
+    require(isinstance(items,list) and items, "coverage items missing")
+    names=set()
+    for item in items:
+        require(isinstance(item,dict), "coverage item must be an object")
+        fields={"name","canonical_project_id","item_kind","coverage_status"}
+        unresolved=item.get("coverage_status")=="PROJECT_IDENTITY_UNRESOLVED"
+        if unresolved:
+            fields.add("source_refs")
+        require(set(item)==fields, "invalid coverage item fields")
+        require(isinstance(item["name"],str) and item["name"], "coverage name missing")
+        require(item["name"] not in names, f"duplicate coverage name: {item['name']}")
+        names.add(item["name"])
+        if unresolved:
+            require(item["canonical_project_id"] is None,
+                    "unresolved coverage must not claim a canonical project")
+            require(item["item_kind"]=="COMMERCIAL_CONCEPT",
+                    "unresolved coverage is limited to commercial concepts")
+            refs=item["source_refs"]
+            require(isinstance(refs,list) and refs, "unresolved coverage needs source references")
+            for ref in refs:
+                require(isinstance(ref,str) and PINNED_COVERAGE_SOURCE.fullmatch(ref) is not None
+                        and all(part not in {"", ".", ".."} for part in ref.split("/")[3:]),
+                        "coverage source must be an immutable public owner GitHub file reference")
+            require(len(refs)==len(set(refs)), "duplicate coverage source reference")
+        else:
+            require(item["coverage_status"]=="REGISTERED_COVERAGE_ONLY",
+                    "coverage must not claim independent validation")
+            require(isinstance(item["canonical_project_id"],str)
+                    and item["canonical_project_id"] in projects,
+                    f"coverage item maps to missing project: {item['name']}")
 
 def validate_registry_bundle() -> dict[str,int]:
     project_doc=load("registry/projects.json")
@@ -107,18 +149,10 @@ def validate_registry_bundle() -> dict[str,int]:
     require(state_binding is not None, "PRJ-003 missing REPO-006 declaration")
     require(state_binding["integration_status"]=="BLOCKED" and state_binding.get("blocker_id")=="BLK-001", "REPO-006 must remain blocked by BLK-001")
 
-    # Coverage maps owner-named portfolio items to canonical stable projects;
-    # it does not invent execution authority or validation status.
+    # Descriptive coverage is separate from registered projects and authority.
+    # Unresolved concepts retain source evidence without an invented binding.
     items=coverage_doc.get("items")
-    require(isinstance(items,list) and items, "coverage items missing")
-    names=set()
-    for item in items:
-        require(set(item)=={"name","canonical_project_id","item_kind","coverage_status"}, "invalid coverage item fields")
-        require(isinstance(item["name"],str) and item["name"], "coverage name missing")
-        require(item["name"] not in names, f"duplicate coverage name: {item['name']}")
-        names.add(item["name"])
-        require(item["canonical_project_id"] in projects, f"coverage item maps to missing project: {item['name']}")
-        require(item["coverage_status"]=="REGISTERED_COVERAGE_ONLY", "coverage must not claim independent validation")
+    validate_coverage_items(items,projects)
 
     return {
         "projects":len(projects),
