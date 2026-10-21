@@ -344,6 +344,18 @@ def evaluate(api):
         "last_sequence": last_seq,
         "last_canonical_hash": complete[-1]["doctor"]["canonical_hash"],
         "last_raw_sha256": complete[-1]["publication"]["raw_sha256"],
+        # Signed-origin fields have already passed the original ZIP/HMAC
+        # checks. Export minimal exact-second source-bound identities for a
+        # LATER independent Cloudflare provider read. No keys or HMACs.
+        "signed_cloudflare_origins": [
+            {
+                "run_id": row["run_id"],
+                "scheduled_at": row["signed_cloudflare_origin"]["scheduled_at"],
+                "slot": row["signed_cloudflare_origin"]["slot"],
+                "artifact_sha256": row["zip_digest"],
+            }
+            for row in complete if row["origin"] == "CLOUDFLARE_SIGNED"
+        ],
         "historical_adverse_automatic_cores": historical_adverse,
         "superseded_earlier_successful_cores": superseded_good_cores,
         "source_run_census_count": len(listing),

@@ -58,8 +58,10 @@ def source_receipt(api, rid):
         "signed_cloudflare_origin": {
             "status": "CLOUDFLARE_SIGNED_ORIGIN_VERIFIED",
             "signed_origin": True, "soak_pass": False, "source_sha": SOURCE,
-            "slot": i, "scheduled_at": "2026-10-17T09:00:00Z",
-        }
+            "slot": i, "scheduled_at":
+                (FIRST + timedelta(minutes=30*i) - timedelta(seconds=90)).isoformat().replace("+00:00", "Z"),
+        },
+        "zip_digest": "sha256:" + "c"*64,
     }
 
 
@@ -82,6 +84,12 @@ class SourceBoundWindow(unittest.TestCase):
                          "SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED")
         self.assertFalse(result["acceptance_pass"])
         self.assertEqual(result["verified_original_cores"], 13)
+        origins = result["signed_cloudflare_origins"]
+        self.assertEqual(len(origins), 13)
+        self.assertEqual(len({x["scheduled_at"] for x in origins}), 13)
+        self.assertTrue(all(x["artifact_sha256"] == "sha256:" + "c"*64
+                            for x in origins))
+        self.assertFalse(result["acceptance_pass"])
 
     def test_until_terminal_completed_no_acceptance_even_at_future_wall_clock(self):
         result = self.evaluate([model_row(i) for i in range(12)])
