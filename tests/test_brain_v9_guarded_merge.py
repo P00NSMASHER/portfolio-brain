@@ -617,11 +617,16 @@ class EventRunnerTests(unittest.TestCase):
         for path in ("brain/v9/guarded_merge.py", "brain/v9/guarded_merge_runner.py"):
             expected = gm.git_blob_sha(Path(path).read_bytes())
             self.assertIn(expected, workflow)
-        self.assertIn('workflows: ["portfolio-independent-verifier"]', workflow)
-        self.assertIn("github.event.workflow_run.head_sha == github.sha", workflow)
+        self.assertIn('workflows: ["foundation-ci"]', workflow)
+        self.assertIn("github.event.workflow_run.event == 'pull_request'", workflow)
+        self.assertIn("github.event.workflow_run.head_sha != github.sha", workflow)
+        self.assertIn("github.event.workflow_run.head_repository.full_name", workflow)
+        self.assertIn("FOUNDATION_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}", workflow)
         self.assertIn("persist-credentials: false", workflow)
-        self.assertIn("pull-requests: write", workflow)
-        self.assertNotIn("contents: write", workflow)
+        self.assertIn("permissions:\n  contents: read", workflow)
+        self.assertEqual(workflow.count("      contents: write"), 1)
+        self.assertEqual(workflow.count("      pull-requests: write"), 1)
+        self.assertIn("persist-credentials: false", workflow)
         for forbidden in ("schedule:", "pull_request_target:", "workflow_dispatch:"):
             self.assertNotIn(forbidden, workflow)
 

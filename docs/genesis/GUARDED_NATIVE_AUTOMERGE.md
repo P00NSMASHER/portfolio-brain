@@ -86,3 +86,58 @@ pagination runner, and its event-runner tests use that runner's two-pass
 bounded census. This is an **unmerged review candidate**, not permission to
 activate generic native auto-merge, change issuer requirements or bypass the
 new main source's genuine six-hour production acceptance.
+
+## Current production-candidate repair: early Foundation-bound admission
+
+The owner-approved source-specific reliability receipt for protected
+`37a0b9300a28e2f1fc19481a5351410709664302` is independently
+recognized by the deployed `accepted_source` reader. The first live
+guarded controller attempt on inert docs canary PR #723
+([run 39633652338](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/39633652338))
+reported `POST_WRITE_UNCERTAIN_MANUAL_RECONCILIATION`, and original GitHub
+readback/timeline confirmed **no enrolled or merged PR**. The exact GraphQL
+error was not present in the original logs; no repeat was attempted and the
+canary's opt-in label was removed.
+
+Two independently identified blockers required a source change:
+- The original job had only `contents:read,pull-requests:write`; GitHub's
+  native GraphQL auto-merge operation requires both `contents:write` and
+  `pull-requests:write`. The prior one-shot successful #734 had these grants.
+- The original job waited for the *second* issuer-pinned verifier to finish;
+  at that point GitHub could report `viewerCanEnableAutoMerge=false` because
+  the PR was already CLEAN and immediately mergeable. Auto-enrollment is
+  meaningful **before** the final required check completes.
+
+The revised **review candidate**, not yet an accepted production source:
+- Triggers ONLY on an original successful `foundation-ci` `workflow_run`
+  for a same-repository `pull_request`, while its source is unchanged,
+  using the exact protected main controller and hard-pinned source hashes.
+  No `pull_request_target`, recurring schedule, dispatch or PR-source execution.
+- Carries **only the same-source Foundation head SHA** into an exact, at-most-one
+  candidate census. No other labeled PR can be admitted by that event.
+- Requires current accepted main, zero-bypass strict ruleset, trusted PR owner,
+  a bounded Markdown-only diff, correct identity, active opt-in label,
+  complete original exact-head check-run census, SUCCESS `validate` from
+  App 15368 and the independent `portfolio-phase1-gate` from App 5121826
+  to be still unissued/queued/running, never completed, failed or ambiguous.
+  Two read passes reject head drift, check reissuance or final-gate completion.
+- Rechecks live GraphQL `viewerCanEnableAutoMerge=true` and
+  `mergeStateStatus=BLOCKED` immediately before one expected-head-bound
+  GraphQL `enablePullRequestAutoMerge` attempt. A duplicate, missing
+  or uncertain mutation remains no-retry HOLD with original provider readback.
+- Grants `contents:write,pull-requests:write` **only to that isolated
+  enrollment job**. Workflow defaults stay read-only. No direct merge API
+  or protected ruleset, status-check issuer, token secret or review bypass
+  changes. GitHub itself enforces **both** strict up-to-date issuer-pinned
+  checks at eventual protected completion.
+- An actual automatic merge changes the protected-main source SHA; its prior
+  reliability acceptance MUST NOT transfer. The new source must complete its
+  own six-hour original-run / Cloudflare / archived SQLite acceptance.
+
+This repairs the earliest safe *documentation-only* native-enrollment path.
+It is **not** authority for unsupervised executable-code merging. PR #730's
+separate two-stage issuer/lineage-revocation system remains a draft and
+must be installed, tested and source-accepted before broadening scope.
+Never re-enable old PR #723's opt-in merely to retry its uncertain prior POST;
+use a fresh independently reviewed inert canary only after the new source
+passes its own full production acceptance and the platform readback is ready.

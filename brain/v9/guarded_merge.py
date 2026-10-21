@@ -181,11 +181,11 @@ def accepted_source(api, main):
     return {"acceptance_ref": name, "acceptance_commit": tip}
 
 
-def check_pr(pr, number, source):
+def check_pr(pr, number, source, *, early=False):
     require(type(pr) is dict and pr.get("number") == number
             and pr.get("state") == "open" and pr.get("draft") is False
             and pr.get("merged") is False and pr.get("mergeable") is True
-            and pr.get("mergeable_state") == "clean"
+            and pr.get("mergeable_state") == ("blocked" if early else "clean")
             and pr.get("base", {}).get("ref") == "main"
             and pr.get("base", {}).get("sha") == source
             and pr.get("base", {}).get("repo", {}).get("full_name") == REPO
@@ -207,21 +207,46 @@ def check_pr(pr, number, source):
     return head
 
 
-def checked_checks(checks, head):
+def checked_checks(checks, head, *, early=False):
+    """Read complete issuer-pinned checks; early enrollment leaves final gate open.
+
+    A successful Foundation check does NOT substitute for the independent App.
+    GitHub's strict protected-main rules enforce BOTH issuers at merge time.
+    """
     require(type(checks) is dict and type(checks.get("total_count")) is int
             and 0 <= checks["total_count"] < 100
             and type(checks.get("check_runs")) is list
-            and len(checks["check_runs"]) == checks["total_count"],
+            and len(checks["check_runs"]) == checks["total_count"]
+            and all(type(x) is dict for x in checks["check_runs"]),
             "CHECK_CENSUS_INCOMPLETE")
+    observed = {}
     for check_name, app_id in REQUIRED_CHECKS.items():
-        matches = [x for x in checks["check_runs"]
-                   if type(x) is dict and x.get("name") == check_name]
+        matches = [x for x in checks["check_runs"] if x.get("name") == check_name]
+        if early and check_name == "portfolio-phase1-gate" and not matches:
+            # App 5121826 issues only after the Foundation workflow completes.
+            # Absence is safe for early *enrollment*, never for final merge.
+            observed[check_name] = None
+            continue
         require(len(matches) == 1
-                and matches[0].get("status") == "completed"
-                and matches[0].get("conclusion") == "success"
-                and matches[0].get("app", {}).get("id") == app_id
+                and type(matches[0].get("app")) is dict
+                and matches[0]["app"].get("id") == app_id
                 and matches[0].get("head_sha") == head,
                 "INDEPENDENT_HEAD_CHECK_FAILED")
+        row = matches[0]
+        if early:
+            require(type(row.get("id")) is int
+                    and 0 < row["id"] < 10**16,
+                    "INDEPENDENT_CHECK_ID_UNVERIFIED")
+        if early and check_name == "portfolio-phase1-gate":
+            require(row.get("status") in ("queued", "in_progress")
+                    and row.get("conclusion") is None,
+                    "EARLY_SECOND_GATE_ALREADY_FINISHED_OR_FAILED")
+        else:
+            require(row.get("status") == "completed"
+                    and row.get("conclusion") == "success",
+                    "INDEPENDENT_HEAD_CHECK_FAILED")
+        observed[check_name] = (row.get("id"), row.get("status"))
+    return observed
 
 
 SETTINGS_QUERY = """query {
@@ -352,7 +377,7 @@ ENABLE_MUTATION = """mutation($id: ID!, $expected_head: GitObjectID!) {
 }"""
 
 
-def checked_threads(response, node_id):
+def checked_threads(response, node_id, *, early=False):
     require(type(response) is dict and not response.get("errors"), "REVIEW_THREADS_QUERY_FAILED")
     node = response.get("data", {}).get("node")
     rows = node.get("reviewThreads") if type(node) is dict and node.get("id") == node_id else None
@@ -371,6 +396,9 @@ def checked_threads(response, node_id):
             "NATIVE_AUTOMERGE_ELIGIBILITY_UNVERIFIED")
     require(node["viewerCanEnableAutoMerge"] is True,
             "NATIVE_AUTOMERGE_UNAVAILABLE_ON_CURRENT_PR")
+    if early:
+        require(node["mergeStateStatus"] == "BLOCKED",
+                "EARLY_NATIVE_MERGE_STATE_NOT_BLOCKED")
 
 
 def checked_git_tree_files(api, head, files):
@@ -432,7 +460,7 @@ def check_files(api, number, head, expected):
                 and len(raw) <= 50000, "PR_CHANGED_FILE_MISMATCH")
 
 
-def observe(api, number, expected_main):
+def observe(api, number, expected_main, *, early=False):
     """All evidence originates with the provider; no caller-supplied green flags."""
     require(type(number) is int and 0 < number < 10**9, "PR_NUMBER_INVALID")
     sha(expected_main)
@@ -452,16 +480,19 @@ def observe(api, number, expected_main):
             "PROTECTED_MAIN_SOURCE_MOVED")
     acceptance = accepted_source(api, expected_main)
     pr = api.get(root + "pulls/" + str(number))
-    head = check_pr(pr, number, expected_main)
+    head = check_pr(pr, number, expected_main, early=early)
     if pr.get("auto_merge") is not None:
         require(pr["auto_merge"].get("merge_method") == "squash",
                 "EXISTING_NATIVE_AUTO_MERGE_NOT_OURS")
         return {"status": "ALREADY_ENROLLED", "number": number,
                 "head_sha": head, "base_sha": expected_main,
                 "provider_writes": 0, "enrolled": True}
-    checked_checks(api.get(root + "commits/" + head + "/check-runs?per_page=100"), head)
+    original_checks = checked_checks(
+        api.get(root + "commits/" + head + "/check-runs?per_page=100"),
+        head, early=early)
     check_files(api, number, head, pr["changed_files"])
-    checked_threads(api.graphql(THREADS_QUERY, {"id": pr["node_id"]}), pr["node_id"])
+    checked_threads(api.graphql(THREADS_QUERY, {"id": pr["node_id"]}),
+                    pr["node_id"], early=early)
     # Single final source/PR reread; native GitHub protection independently
     # enforces up-to-date checks even if another actor races this observer.
     # Repeat the trusted platform ruleset on the last read boundary.
@@ -475,19 +506,35 @@ def observe(api, number, expected_main):
             and again.get("base", {}).get("sha") == expected_main
             and again.get("draft") is False and again.get("state") == "open"
             and again.get("auto_merge") is None
+            and (not early or again.get("mergeable_state") == "blocked")
             and {x.get("name") for x in again.get("labels", []) if type(x) is dict} >= {LABEL},
             "PR_CHANGED_DURING_ADMISSION")
-    # Eligibility can change between the earlier first read and the
-    # enrollment boundary. No native GraphQL mutation on a stale/false flag.
-    checked_threads(api.graphql(THREADS_QUERY, {"id": pr["node_id"]}), pr["node_id"])
+    # A required check finishing, disappearing or being reissued between
+    # reads invalidates early eligibility BEFORE any native mutation.
+    if early:
+        final_checks = checked_checks(
+            api.get(root + "commits/" + head + "/check-runs?per_page=100"),
+            head, early=True)
+        require(final_checks["validate"] == original_checks["validate"],
+                "EARLY_FOUNDATION_CHECK_CHANGED")
+        initial_second = original_checks["portfolio-phase1-gate"]
+        final_second = final_checks["portfolio-phase1-gate"]
+        require(initial_second is None or (final_second is not None
+                and initial_second[0] == final_second[0]
+                and (initial_second[1] != "in_progress"
+                     or final_second[1] == "in_progress")),
+                "EARLY_FINAL_CHECK_REPLACED_OR_REGRESSED")
+    # Eligibility can change between earlier reads and the enrollment boundary.
+    checked_threads(api.graphql(THREADS_QUERY, {"id": pr["node_id"]}),
+                    pr["node_id"], early=early)
     return {"status": "ADMISSIBLE", "number": number,
             "node_id": pr["node_id"], "head_sha": head,
             "base_sha": expected_main, "acceptance": acceptance,
             "provider_writes": 0, "enrolled": False}
 
 
-def run(api, *, number, expected_main, apply=False):
-    proof = observe(api, number, expected_main)
+def run(api, *, number, expected_main, apply=False, early=False):
+    proof = observe(api, number, expected_main, early=early)
     if proof["status"] != "ADMISSIBLE" or not apply:
         return {k: v for k, v in proof.items() if k != "node_id"}
     node_id = proof["node_id"]
