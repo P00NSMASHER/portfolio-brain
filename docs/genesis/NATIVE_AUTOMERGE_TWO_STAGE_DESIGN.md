@@ -99,3 +99,7 @@ replay are available. The current reviewer branch was updated non-forcibly
 for compatibility; this does not authorize final-gate publication, new
 permissions, bypasses, controller activation, protected merge, or unattended
 engineering releases. PR #729 remains a separate draft fail-closed guard.
+
+## Review-only original check-lineage safety hardening — October 21
+
+The isolated early-admission classifier now requires positive, unique provider-issued check-run IDs for the complete snapshot census. Two individually admissible reads are **not sufficient** if a previously observed required check disappears, is reissued under a different check-run ID, or regresses from success/in-progress to a pending/queued state. Each of those cases returns `HOLD`, with zero provider writes and no merge authority. An authentically missing issuer-pinned check becoming newly queued, then progressing to in-progress without ID replacement, remains an advisory candidate while the other independent check stays successful. All of this is synthetic and **does not install** a check producer, deployment trigger, writer capability, final authorization or source acceptance.

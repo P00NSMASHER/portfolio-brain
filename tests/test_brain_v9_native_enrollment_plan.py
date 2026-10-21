@@ -38,9 +38,9 @@ def sample():
             "viewer_can_enable_auto_merge": True,
         },
         "check_runs": [
-            {"name": "portfolio-phase1-gate", "app_id": 5121826,
+            {"id": 101, "name": "portfolio-phase1-gate", "app_id": 5121826,
              "head_sha": HEAD, "status": "completed", "conclusion": "success"},
-            {"name": "validate", "app_id": 15368, "head_sha": HEAD,
+            {"id": 102, "name": "validate", "app_id": 15368, "head_sha": HEAD,
              "status": "in_progress", "conclusion": None},
         ]
     }
@@ -110,6 +110,73 @@ class NativeAdmissionReviewTests(unittest.TestCase):
         got = decision(initial, final)
         self.assertEqual(got.status, "REVIEW_ONLY_EARLY_ADMISSION_CANDIDATE")
         self.assertFalse(got.merge_authorized)
+
+    def test_pending_required_check_disappearing_between_reads_is_held(self):
+        before = sample()
+        after = sample()
+        after["check_runs"] = [after["check_runs"][0]]
+        after["check_total_count"] = 1
+        outcome = decision(before, after)
+        self.assertEqual(outcome.status, "HOLD")
+        self.assertEqual(outcome.reason, "REQUIRED_CHECK_DISAPPEARED_BETWEEN_READS")
+        self.assertEqual(outcome.provider_writes, 0)
+
+    def test_required_check_same_head_reissued_with_new_id_is_held(self):
+        for index in (0, 1):
+            with self.subTest(check=index):
+                before = sample()
+                after = sample()
+                after["check_runs"][index]["id"] += 500
+                outcome = decision(before, after)
+                self.assertEqual(outcome.status, "HOLD")
+                self.assertEqual(outcome.reason, "REQUIRED_CHECK_RUN_REPLACED_BETWEEN_READS")
+                self.assertFalse(outcome.merge_authorized)
+
+    def test_issuer_success_swaps_to_other_check_between_reads_is_held(self):
+        before = sample()
+        after = sample()
+        after["check_runs"][0].update(status="queued", conclusion=None)
+        after["check_runs"][1].update(status="completed", conclusion="success")
+        outcome = decision(before, after)
+        self.assertEqual(outcome.status, "HOLD")
+        self.assertEqual(outcome.reason, "REQUIRED_SUCCESS_REGRESSED_BETWEEN_READS")
+        self.assertEqual(outcome.provider_writes, 0)
+
+    def test_in_progress_check_regressing_to_queued_is_held(self):
+        before = sample()
+        after = sample()
+        after["check_runs"][1].update(status="queued", conclusion=None)
+        outcome = decision(before, after)
+        self.assertEqual(outcome.status, "HOLD")
+        self.assertEqual(outcome.reason, "REQUIRED_CHECK_STATUS_REGRESSED_BETWEEN_READS")
+
+    def test_newly_issued_queued_check_progressing_forward_is_allowed_as_advisory(self):
+        before = sample()
+        before["check_runs"] = [before["check_runs"][0]]
+        before["check_total_count"] = 1
+        after = sample()
+        after["check_runs"][1].update(status="queued", conclusion=None)
+        mid = decision(before, after)
+        self.assertEqual(mid.status, "REVIEW_ONLY_EARLY_ADMISSION_CANDIDATE")
+        before = after
+        after = sample()
+        final = decision(before, after)
+        self.assertEqual(final.status, "REVIEW_ONLY_EARLY_ADMISSION_CANDIDATE")
+        self.assertFalse(final.merge_authorized)
+        self.assertEqual(final.provider_writes, 0)
+
+    def test_missing_boolean_duplicate_and_malformed_original_check_ids_hold(self):
+        for bad in (None, True, False, "101", 0, -1, 10**16):
+            with self.subTest(bad=bad):
+                candidate = sample()
+                candidate["check_runs"][0]["id"] = bad
+                self.assert_hold(candidate, "ORIGINAL_CHECK_RUN_ID_UNVERIFIED")
+        candidate = sample()
+        del candidate["check_runs"][0]["id"]
+        self.assert_hold(candidate, "ORIGINAL_CHECK_RUN_ID_UNVERIFIED")
+        candidate = sample()
+        candidate["check_runs"][1]["id"] = candidate["check_runs"][0]["id"]
+        self.assert_hold(candidate, "ORIGINAL_CHECK_RUN_ID_DUPLICATED")
 
     def test_unissued_required_check_without_independent_success_cannot_admit(self):
         snap = sample()

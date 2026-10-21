@@ -111,6 +111,13 @@ def _validated_snapshot(snapshot):
             or snapshot["check_total_count"] != len(runs)
             or any(type(run) is not dict for run in runs)):
         return "ORIGINAL_REQUIRED_CHECK_CENSUS_INCOMPLETE", None
+    # The same original check identity must survive both observations. A
+    # provider row with no stable ID is not adequate evidence for admission.
+    if any(type(check.get("id")) is not int
+           or not 0 < check["id"] < 10**16 for check in runs):
+        return "ORIGINAL_CHECK_RUN_ID_UNVERIFIED", None
+    if len({check["id"] for check in runs}) != len(runs):
+        return "ORIGINAL_CHECK_RUN_ID_DUPLICATED", None
     status_by_name = {}
     for name, app_id in CHECK_ISSUERS.items():
         matches = [check for check in runs
@@ -158,6 +165,27 @@ def plan_early_enrollment(initial, final):
         return _hold("FINAL_" + last_problem)
     if initial_identity != final_identity:
         return _hold("PR_HEAD_BASE_OR_NUMBER_CHANGED_BETWEEN_READS")
+    # Both snapshots can independently be valid even when a required check
+    # disappears, gets a new provider ID, or regresses between observations.
+    # Do not call that a stable admission window.
+    initial_checks = {row["name"]: row for row in initial["check_runs"]
+                      if row.get("name") in CHECK_ISSUERS}
+    final_checks = {row["name"]: row for row in final["check_runs"]
+                    if row.get("name") in CHECK_ISSUERS}
+    for name in CHECK_ISSUERS:
+        first = initial_checks.get(name)
+        if first is None:
+            # An originally unissued check may legitimately be newly queued.
+            continue
+        last = final_checks.get(name)
+        if last is None:
+            return _hold("REQUIRED_CHECK_DISAPPEARED_BETWEEN_READS")
+        if first["id"] != last["id"]:
+            return _hold("REQUIRED_CHECK_RUN_REPLACED_BETWEEN_READS")
+        if first["status"] == "completed" and last["status"] != "completed":
+            return _hold("REQUIRED_SUCCESS_REGRESSED_BETWEEN_READS")
+        if first["status"] == "in_progress" and last["status"] == "queued":
+            return _hold("REQUIRED_CHECK_STATUS_REGRESSED_BETWEEN_READS")
     return Decision(
         status="REVIEW_ONLY_EARLY_ADMISSION_CANDIDATE",
         reason="EXACT_DOCS_SOURCE_VERIFIED_ONE_SUCCESS_ONE_REQUIRED_CHECK_OUTSTANDING_NO_WRITE_AUTHORITY",
