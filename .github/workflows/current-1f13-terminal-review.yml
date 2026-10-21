@@ -1,0 +1,190 @@
+name: Independent 1f13 terminal state replay (review only)
+
+# Isolated review-branch proof. Never merge this workflow into protected main.
+on:
+  push:
+    branches:
+      - review/portfolio-1f13-terminal-20261021
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: review-1f13-terminal-replay
+  cancel-in-progress: false
+
+jobs:
+  terminal-replay-read-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout review-only verifier source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Verify terminal toolkit and independent provider-shape adversarial tests
+        run: |
+          python -m unittest discover -s tests -p test_v8_terminal_readiness.py -v
+          python -m unittest discover -s tests -p test_cloudflare_provider_reconcile.py -v
+      - name: Checkout immutable protected production source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 1f13afe21a0ecb5d870cb651e9fd9bd7883e6636
+          path: production-source
+          persist-credentials: false
+      - name: Checkout current state branch read-only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: brain-state-v2
+          path: terminal-state
+          persist-credentials: false
+      - name: Verify source pin and original GitHub jobs and artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git -C production-source rev-parse HEAD)" = "1f13afe21a0ecb5d870cb651e9fd9bd7883e6636"
+          python -m verification.v8_terminal_readiness --output "$RUNNER_TEMP/proof-census.json"
+          cat "$RUNNER_TEMP/proof-census.json"
+      - name: Classify incomplete original-window hold without a false replay failure
+        id: window
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          proof=json.loads((Path(os.environ["RUNNER_TEMP"])/"proof-census.json").read_text())
+          status=proof.get("status")
+          if status not in ("WAITING_FIRST_ORIGINAL_AUTOMATIC_COMPLETION",
+                            "WINDOW_RUNNING_NOT_ACCEPTED",
+                            "SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED"):
+              raise SystemExit("SOURCE_SPECIFIC_CENSUS_UNKNOWN_FAIL_CLOSED")
+          if (proof.get("acceptance_pass") is not False or
+                  proof.get("release_or_merge_authorized") is not False or
+                  proof.get("external_cloudflare_provider_accepted") is not False):
+              raise SystemExit("TECHNICAL_REVIEW_AUTHORITY_ESCALATION")
+          ready=status=="SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED"
+          observed=status!="WAITING_FIRST_ORIGINAL_AUTOMATIC_COMPLETION"
+          with open(os.environ["GITHUB_OUTPUT"],"a") as out:
+              out.write("replay_ready="+("true" if ready else "false")+"\n")
+              out.write("first_seen="+("true" if observed else "false")+"\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as out:
+              out.write("## Source-bound reviewer only; production release NOT authorized\n")
+              out.write("Original census: "+status+"\n")
+              out.write("Full terminal replay: "+("eligible for technical verification" if ready
+                                             else "not yet eligible; intentionally skipped")+"\n")
+              out.write("Independent Cloudflare provider verification and separate governed approval still mandatory.\n")
+          print("ORIGINAL_WINDOW_STATUS="+status)
+          print("TERMINAL_REPLAY_ELIGIBLE="+str(ready))
+          print("RELEASE_OR_MERGE_AUTHORIZED=false")
+          PY
+      - name: Pin independently observed terminal Git state commit
+        if: ${{ steps.window.outputs.first_seen == 'true' }}
+        run: |
+          set -euo pipefail
+          SHA=$(python -c 'import json,os;print(json.load(open(os.environ["RUNNER_TEMP"]+"/proof-census.json"))["last_state_commit"])')
+          echo "$SHA" | grep -Eq '^[0-9a-f]{40}$'
+          git -C terminal-state fetch --depth=1 origin "$SHA"
+          git -C terminal-state checkout --detach "$SHA"
+          test "$(git -C terminal-state rev-parse HEAD)" = "$SHA"
+      - name: Preliminary source-pinned original SQLite and report replay (not acceptance)
+        if: ${{ steps.window.outputs.replay_ready != 'true' && steps.window.outputs.first_seen == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,os,subprocess,sys
+          from pathlib import Path
+
+          proof=json.loads((Path(os.environ["RUNNER_TEMP"])/"proof-census.json").read_text())
+          if proof.get("status")!="WINDOW_RUNNING_NOT_ACCEPTED" or proof.get("acceptance_pass") is not False:
+              raise SystemExit("PRELIMINARY_REPLAY_REQUIRES_VERIFIED_RUNNING_WINDOW")
+          if proof.get("release_or_merge_authorized") is not False:
+              raise SystemExit("PRELIMINARY_REVIEW_CANNOT_RELEASE")
+          source=Path("production-source").resolve()
+          state=Path("terminal-state").resolve()
+          read=lambda p:subprocess.check_output(["git","-C",str(p),"rev-parse","HEAD"],
+                                                  text=True,timeout=12).strip()
+          if (read(source)!="1f13afe21a0ecb5d870cb651e9fd9bd7883e6636"
+                  or read(state)!=proof.get("last_state_commit")
+                  or (state/"state.sqlite").exists()):
+              raise SystemExit("PRELIMINARY_SOURCE_OR_STATE_CHECKOUT_CHANGED")
+          sys.path.insert(0,str(source))
+          from brain.state_archive import restore
+          from soak_v3.audit import verify_sqlite
+          from brain.core import Store,digest
+          manifest=restore(state)
+          if manifest.get("raw_sha256")!=proof.get("last_raw_sha256"):
+              raise SystemExit("PRELIMINARY_STATE_ARCHIVE_SHA_MISMATCH")
+          raw=state/"state.sqlite"
+          strict=verify_sqlite(raw,expected_sequence=proof["last_sequence"],
+                               expected_chain=proof["last_canonical_hash"],
+                               expected_source="1f13afe21a0ecb5d870cb651e9fd9bd7883e6636",
+                               max_bytes=120_512_512,strict_event_ids=True)
+          if strict.get("status")!="PASS":
+              raise SystemExit("PRELIMINARY_SQLITE_INTEGRITY_FAILED")
+          db=Store(raw,visibility="PUBLIC")
+          try:
+              row=db.db.execute("SELECT created_at,hash FROM reports ORDER BY id DESC LIMIT 1").fetchone()
+              if row is None:
+                  raise SystemExit("PRELIMINARY_NO_ORIGINAL_REPORT")
+              report=db.read_report("1f13afe21a0ecb5d870cb651e9fd9bd7883e6636",
+                                    now=row["created_at"])
+              if (report.get("status")!="PASS"
+                      or report.get("state_sequence")!=proof["last_sequence"]
+                      or report.get("canonical_hash")!=proof["last_canonical_hash"]
+                      or report.get("pending_events")!=0
+                      or digest(report)!=row["hash"]):
+                  raise SystemExit("PRELIMINARY_ORIGINAL_REPORT_REPLAY_FAILED")
+          finally:
+              db.close()
+          verdict={"status":"PRELIMINARY_RAW_SQLITE_REPLAY_PASSED_NOT_ACCEPTANCE",
+                   "reviewed_source":proof["production_source"],
+                   "original_automatic_cores":proof["verified_original_cores"],
+                   "completed_span_seconds":proof["completion_span_seconds"],
+                   "state_commit":proof["last_state_commit"],
+                   "sequence":proof["last_sequence"],
+                   "pending_events":0,
+                   "raw_sqlite_sha256":strict["sha256"],
+                   "external_provider_complete":False,
+                   "source_released":False,
+                   "merge_authorized":False}
+          path=Path(os.environ["RUNNER_TEMP"])/"proof-provisional.json"
+          path.write_text(json.dumps(verdict,sort_keys=True,indent=2)+"\n")
+          print(json.dumps(verdict,sort_keys=True))
+          PY
+      - name: Re-audit and replay original terminal SQLite and ledger
+        if: ${{ steps.window.outputs.replay_ready == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -m verification.v8_terminal_readiness --source-dir production-source --terminal-dir terminal-state --output "$RUNNER_TEMP/proof-terminal.json"
+          cat "$RUNNER_TEMP/proof-terminal.json"
+          python - <<'PY'
+          import json,os
+          root=os.environ["RUNNER_TEMP"]
+          first=json.load(open(root+"/proof-census.json"))
+          final=json.load(open(root+"/proof-terminal.json"))
+          if first.get("last_state_commit")!=final.get("last_state_commit"):raise SystemExit("PROVIDER_TERMINAL_RACE_FAIL_CLOSED")
+          if final.get("status")!="SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED" or final.get("terminal_replay",{}).get("status")!="ORIGINAL_TERMINAL_RAW_SQLITE_REPLAY_VERIFIED":raise SystemExit("TERMINAL_REPLAY_INCOMPLETE")
+          if final.get("acceptance_pass") is not False or final.get("release_or_merge_authorized") is not False:raise SystemExit("RELEASE_AUTHORITY_ESCALATION")
+          print("TERMINAL_SOURCE_PINNED_REPLAY_PASS")
+          PY
+      - name: Retain sanitized source-specific audit proofs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-1f13-terminal-readonly-receipts
+          path: |
+            ${{ runner.temp }}/proof-census.json
+            ${{ runner.temp }}/proof-terminal.json
+            ${{ runner.temp }}/proof-provisional.json
+          if-no-files-found: warn
+          retention-days: 30

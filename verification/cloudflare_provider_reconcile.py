@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import re
 
-SOURCE = "37a0b9300a28e2f1fc19481a5351410709664302"
+SOURCE = "1f13afe21a0ecb5d870cb651e9fd9bd7883e6636"
 WORKER_SCRIPT = "portfolio-brain-recovery"
 MAX_ROWS = 1000
 MAX_EXPECTED = 80

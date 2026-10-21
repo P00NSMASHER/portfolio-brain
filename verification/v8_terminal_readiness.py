@@ -21,7 +21,7 @@ import sys
 import zipfile
 
 REPOSITORY = "P00NSMASHER/portfolio-brain"
-FINAL_SOURCE = "37a0b9300a28e2f1fc19481a5351410709664302"
+FINAL_SOURCE = "1f13afe21a0ecb5d870cb651e9fd9bd7883e6636"
 MINIMUM_SPAN = 21_600
 MAXIMUM_GAP = 5_400
 MAX_PAGES = 10
@@ -149,7 +149,7 @@ def original_census(api):
             if (item.get("name") == "brain-cycle-v2" and
                     item.get("head_branch") == "main" and
                     item.get("head_sha") != FINAL_SOURCE and
-                    item.get("created_at", "") < "2026-10-21T06:50:14Z"):
+                    item.get("created_at", "") < "2026-10-21T17:19:54Z"):
                 reached_older_source = True
         if reached_older_source:
             break
