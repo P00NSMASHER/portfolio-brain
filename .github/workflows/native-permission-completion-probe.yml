@@ -1,0 +1,47 @@
+name: Native permission completion canary
+
+on:
+  push:
+    branches: [review/native-permission-completion-20261020]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: native-permission-completion-single-attempt
+  cancel-in-progress: false
+
+jobs:
+  one-shot:
+    if: ${{ github.repository == 'P00NSMASHER/portfolio-brain' && github.run_attempt == 1 }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Validate canary and prepare exact intent without native writes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/native_permission_completion_probe.py prepare
+      - name: Persist intent before the single native request
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-permission-intent-${{ github.run_id }}
+          path: proof/intent.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: One exact-head native enrollment request with unchanged restricted token
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/native_permission_completion_probe.py attempt
+      - name: Preserve sanitized result regardless of provider rejection
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-permission-result-${{ github.run_id }}
+          path: proof/
+          if-no-files-found: warn
+          retention-days: 30
