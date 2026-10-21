@@ -60,3 +60,29 @@ Independent authenticated original provider REST, PR events and read-only GraphQ
 To prevent unsafe repeats from subsequent independent-verifier events, the existing `brain:guarded-automerge` label was **temporarily removed** from canary #723, leaving its original docs-only source and both passing checks intact. The owner can restore it only after safe approved design/release.
 
 This **unmerged draft** correction adds authenticated, bounded `viewerCanEnableAutoMerge` and `mergeStateStatus` fields to the *existing allowlisted read-only* review-thread GraphQL query. It requires a strictly typed original-provider positive enable permission **twice** before the single native mutation, and rejects a missing/false/changed permission with `NATIVE_AUTOMERGE_UNAVAILABLE_ON_CURRENT_PR`, zero provider writes. It preserves exact-head independent checks, ruleset identity, zero bypass, existing source acceptance, original provider rereads, pinned source blob hashes and zero new token permissions. Passing this guard does **not** prove that GitHub can natively enroll an already CLEAN PR or authorize a direct merge. A separate threat model, real-policy admission sequencing, owner governance, independent code checks and a fresh six-hour postmerge production window are required before any attempt to expand this beyond fail-closed safety. No bypasses, new schedules, settings, contents-write token grants, customer contacts or broader automatic code/deployment merging are proposed here.
+
+### October 21, 2026 — current-main integration review
+
+PR #734 subsequently established real, owner-authorized **one-shot** native
+auto-merge: original guarded job 39527279455 enrolled while the second issuer
+check was outstanding; original GitHub timeline shows `auto_squash_enabled`
+and then GitHub-bot squash merge of the inert Markdown canary. That one-shot
+job used narrowly scoped `contents:write,pull-requests:write`. It did **not**
+prove that the ordinary `contents:read,pull-requests:write` workflow can
+enroll an already CLEAN and fully green PR.
+
+PR #736 subsequently merged on protected main as
+`37a0b9300a28e2f1fc19481a5351410709664302`, adding bounded,
+double-read PR pagination and sanitized runner-denial codes with 2,207
+postmerge Foundation tests passing (one skipped). An independent read-only
+PAAM-L044 run of the hash-pinned original pagination functions returned
+58 unique live open PRs in two identical `20+20+18` passes, max response
+415,815 bytes, and zero provider writes.
+
+This draft PR #729 has now been reconciled against that main source:
+its eligibility/expected-head changes are preserved, its trusted workflow
+continues to pin the released `a153d5fe771ce9354d2ecb82f8d6e74f4df9e56d`
+pagination runner, and its event-runner tests use that runner's two-pass
+bounded census. This is an **unmerged review candidate**, not permission to
+activate generic native auto-merge, change issuer requirements or bypass the
+new main source's genuine six-hour production acceptance.

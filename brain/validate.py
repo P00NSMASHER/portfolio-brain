@@ -56,7 +56,7 @@ def validate_policy():
         "ref: ${{ github.sha }}", "persist-credentials: false",
         "GH_TOKEN: ${{ github.token }}",
         "4369d2a9c784157ea83572eb9ebdf5cf6f1558e6",
-        "18d91e7d20d2ab0c64c65f6fe199052409d6ba71",
+        "a153d5fe771ce9354d2ecb82f8d6e74f4df9e56d",
         "contents: read", "pull-requests: write",
         "python -m brain.v9.guarded_merge_runner",
     ):
