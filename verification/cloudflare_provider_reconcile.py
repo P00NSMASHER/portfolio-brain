@@ -16,7 +16,7 @@ WORKER_SCRIPT = "portfolio-brain-recovery"
 MAX_ROWS = 1000
 MAX_EXPECTED = 80
 MAX_WINDOW_SECONDS = 8 * 3600
-_TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z")
+_TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.0{1,6})?Z\Z")
 _SHA256 = re.compile(r"sha256:[0-9a-f]{64}\Z")
 
 # Official Cloudflare Analytics GraphQL workersInvocationsAdaptive dataset.
@@ -69,8 +69,8 @@ def _utc(value):
     _need(type(value) is str and _TIME.fullmatch(value) is not None,
           "UTC_TIMESTAMP_MALFORMED")
     try:
-        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(
-            tzinfo=timezone.utc)
+        fmt = "%Y-%m-%dT%H:%M:%S.%fZ" if "." in value else "%Y-%m-%dT%H:%M:%SZ"
+        return datetime.strptime(value, fmt).replace(tzinfo=timezone.utc)
     except ValueError:
         raise _Hold("UTC_TIMESTAMP_MALFORMED") from None
 

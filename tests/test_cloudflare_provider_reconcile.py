@@ -26,7 +26,7 @@ def original():
         },
         "signed_cloudflare_origins": [
             {"run_id": 9000+i, "slot": 400000+i,
-             "scheduled_at": STAMP(BASE+timedelta(minutes=30*i)),
+             "scheduled_at": STAMP(BASE+timedelta(minutes=30*i)).replace("Z", ".000Z"),
              "artifact_sha256": "sha256:"+"a"*64}
             for i in slots
         ],
@@ -73,6 +73,38 @@ class OriginalCloudflareCompareTests(unittest.TestCase):
         self.assertFalse(result.source_acceptance_issued)
         self.assertFalse(result.merge_authorized)
         self.assertEqual(result.github_writes, 0)
+
+    def test_original_zero_millisecond_dispatch_matches_whole_second_cloudflare(self):
+        proof = original()
+        self.assertTrue(all(row["scheduled_at"].endswith(".000Z")
+                            for row in proof["signed_cloudflare_origins"]))
+        result = cf.compare_cloudflare_rows(proof, provider(proof))
+        self.assertEqual(result.status,
+                         "CONTENT_MATCHED_PROVIDER_AUTHENTICATION_STILL_REQUIRED")
+        self.assertFalse(result.authenticated_cloudflare_provider)
+
+    def test_provider_zero_millisecond_datetime_is_accepted(self):
+        proof = original()
+        response = provider(proof)
+        rows = response["data"]["viewer"]["accounts"][0]["workersInvocationsAdaptive"]
+        rows[0]["dimensions"]["datetime"] = rows[0]["dimensions"]["datetime"].replace(
+            "Z", ".000Z")
+        result = cf.compare_cloudflare_rows(proof, response)
+        self.assertEqual(result.matched_original_invocations, 12)
+        self.assertFalse(result.source_acceptance_issued)
+
+    def test_nonzero_subsecond_dispatch_or_provider_timestamp_holds(self):
+        proof = original()
+        proof["signed_cloudflare_origins"][0]["scheduled_at"] = "2026-10-21T07:20:50.001Z"
+        self.hold(proof=proof, reason="UTC_TIMESTAMP_MALFORMED")
+        for wrong in ("2026-10-21T07:20:50.000001Z",
+                      "2026-10-21T07:20:50.123Z",
+                      "2026-10-21T07:20:50.0000000Z"):
+            with self.subTest(wrong=wrong):
+                response = provider()
+                response["data"]["viewer"]["accounts"][0][
+                    "workersInvocationsAdaptive"][0]["dimensions"]["datetime"] = wrong
+                self.hold(response=response, reason="UTC_TIMESTAMP_MALFORMED")
 
     def test_schedules_are_not_misclassified_as_cloudflare_calls(self):
         result = cf.compare_cloudflare_rows(original(), provider())
