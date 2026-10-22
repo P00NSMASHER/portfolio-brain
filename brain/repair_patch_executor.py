@@ -223,9 +223,56 @@ def apply_to_isolated_worktree(root: Path, patch):
         ["git", "rev-parse", "HEAD"], cwd=root, text=True,
         timeout=5).strip() == patch["source_head_sha"],
         "AUTOFIX_LOCAL_GIT_SOURCE_DRIFT")
-    require(not subprocess.check_output(
-        ["git", "status", "--porcelain"], cwd=root, text=True,
-        timeout=5).strip(), "AUTOFIX_WORKTREE_NOT_CLEAN")
+    # Crash recovery: the source replacement may have completed before the
+    # previous process recorded its receipt. Only an exact two-file diff of
+    # this same reviewed recipe can be treated as idempotently completed.
+    porcelain = subprocess.check_output(
+        ["git", "status", "--porcelain=v1", "--untracked-files=all", "-z"],
+        cwd=root, text=True, timeout=5)
+    if porcelain:
+        target, test = root / patch["source_path"], root / patch["test_path"]
+        for selected in (target, test):
+            require(root in selected.parents, "AUTOFIX_PATH_OUTSIDE_WORKTREE")
+            for parent in selected.parents:
+                if parent == root:
+                    break
+                require(not parent.is_symlink(), "AUTOFIX_PARENT_PATH_UNSAFE")
+        entries = [entry for entry in porcelain.split(chr(0)) if entry]
+        only_test = entries == ["?? " + patch["test_path"]]
+        only_both = (len(entries) == 2 and set(entries) == {
+            " M " + patch["source_path"], "?? " + patch["test_path"]})
+        if ((only_test or only_both)
+                and target.is_file() and not target.is_symlink()
+                and test.is_file() and not test.is_symlink()
+                and type(patch.get("test_content")) is str
+                and sha(test.read_bytes()) == patch.get("test_sha256")):
+            original = subprocess.check_output(
+                ["git", "show", "HEAD:" + patch["source_path"]],
+                cwd=root, timeout=5)
+            if sha(original) == patch.get("original_sha256"):
+                reconstructed = generate({
+                    "schema_version": 1,
+                    "repository": patch["repository"],
+                    "source_head_sha": patch["source_head_sha"],
+                    "path": patch["source_path"],
+                    "original_sha256": patch["original_sha256"],
+                    "repair_kind": "READONLY_CI_CHECKOUT_HARDENING",
+                    "independent_gate_required": True,
+                }, original)
+                require(reconstructed["test_path"] == patch["test_path"]
+                        and reconstructed["test_content"] == patch["test_content"]
+                        and reconstructed["changed_content"] == patch.get("changed_content"),
+                        "AUTOFIX_PATCH_RECIPE_REPLAY_FAILURE")
+                if only_both and sha(target.read_bytes()) == patch.get("changed_sha256"):
+                    return {
+                        "status": "ISOLATED_EDIT_ALREADY_PRESENT_AWAITING_CI",
+                        "source_head_sha": patch["source_head_sha"],
+                        "paths": [patch["source_path"], patch["test_path"]],
+                        "merged": False, "deployed": False,
+                    }
+                if only_test and sha(target.read_bytes()) == patch["original_sha256"]:
+                    raise BrainError("AUTOFIX_PARTIAL_WORKTREE_RECONCILIATION_REQUIRED")
+    require(not porcelain, "AUTOFIX_WORKTREE_NOT_CLEAN")
     target, test = root / patch["source_path"], root / patch["test_path"]
     # Checking only target.is_symlink() is insufficient: a committed .github
     # directory symlink could otherwise redirect the original source write
