@@ -121,5 +121,40 @@ class AtomicIsolatedRepairTests(unittest.TestCase):
             self.assertFalse(list(target.parent.glob(".brain-autofix-*")))
 
 
+    def test_rerun_after_completed_isolated_edit_is_read_only_and_idempotent(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root, target, patch = _workspace(folder)
+            first = apply_to_isolated_worktree(root, patch)
+            before = target.read_bytes()
+            test_before = (root / patch["test_path"]).read_bytes()
+            second = apply_to_isolated_worktree(root, patch)
+            self.assertEqual(first["status"], "ISOLATED_CODE_AND_TEST_EDITED_AWAITING_CI")
+            self.assertEqual(second["status"], "ISOLATED_EDIT_ALREADY_PRESENT_AWAITING_CI")
+            self.assertEqual(target.read_bytes(), before)
+            self.assertEqual((root / patch["test_path"]).read_bytes(), test_before)
+            self.assertFalse(second["merged"])
+            self.assertFalse(second["deployed"])
+
+    def test_crash_between_test_creation_and_source_replace_needs_reconciliation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root, target, patch = _workspace(folder)
+            regression = root / patch["test_path"]
+            regression.write_text(patch["test_content"], encoding="utf-8")
+            with self.assertRaisesRegex(
+                    BrainError, "AUTOFIX_PARTIAL_WORKTREE_RECONCILIATION_REQUIRED"):
+                apply_to_isolated_worktree(root, patch)
+            self.assertEqual(target.read_text(), ORIGINAL)
+            self.assertEqual(regression.read_text(), patch["test_content"])
+
+    def test_corrupted_already_applied_edit_cannot_claim_idempotent_completion(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root, target, patch = _workspace(folder)
+            apply_to_isolated_worktree(root, patch)
+            target.write_text("tampered\n", encoding="utf-8")
+            with self.assertRaises(BrainError):
+                apply_to_isolated_worktree(root, patch)
+            self.assertNotEqual(target.read_text(), patch["changed_content"])
+
+
 if __name__ == "__main__":
     unittest.main()
