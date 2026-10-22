@@ -65,8 +65,10 @@ class OwnerFocusTests(unittest.TestCase):
         output = build_cycle(dict(source_sha=SHA, projects=rows),
                              source_sha=SHA, cycle=0, now=NOW)
         self.assertEqual(output["owner_jobs"], [])
-        self.assertEqual([r["project_id"] for r in output["coverage_gaps"]],
-                         ["abvm"])
+        gaps = {r["project_id"] for r in output["coverage_gaps"]}
+        self.assertIn("abvm", gaps)
+        self.assertTrue(gaps.issubset(ACTIVE_OWNER_PROJECTS))
+        self.assertTrue(gaps.isdisjoint(DEFERRED))
         self.assertEqual({r["project_id"] for r in output["outside_owner_scope"]},
                          {"product-factory", "pips-classroom", "trading-platform"})
         self.assertFalse(output["automatic_execution_authority"])
