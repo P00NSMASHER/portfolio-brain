@@ -45,11 +45,21 @@ class FactoryTests(unittest.TestCase):
     def test_verification_rejects_unbound_or_stale_candidate_receipt(self):
         self.enqueue();self.sf.claim("SFW-TEST-0001","AGT-ENGINEER",now=101);self.sf.record_candidate_commit("SFW-TEST-0001","AGT-ENGINEER",commit_sha="b"*40,changed_paths=["src/x.py"],test_commands=["pytest"],test_receipt_hashes=[H("t")],diff_hash=H("d"),now=102)
         with self.assertRaisesRegex(SoftwareFactoryError,"candidate binding mismatch"):
+            self.sf.verify("SFW-TEST-0001","AGT-TESTER","PASS",report_hash=H("r"),evidence_refs=["test:r"],now=103)
+        with self.assertRaisesRegex(SoftwareFactoryError,"candidate binding mismatch"):
             self.sf.verify("SFW-TEST-0001","AGT-TESTER","PASS",report_hash=H("r"),candidate_binding_hash=H("s"),evidence_refs=["test:r"],now=103)
         binding=self.sf.candidate_binding_hash("SFW-TEST-0001")
         vid=self.sf.verify("SFW-TEST-0001","AGT-TESTER","PASS",report_hash=H("r"),candidate_binding_hash=binding,evidence_refs=["test:r"],now=104)
         stored=self.sf.conn.execute("SELECT candidate_binding_hash FROM verification WHERE verification_id=?",(vid,)).fetchone()
         self.assertEqual(stored["candidate_binding_hash"],binding);self.assertIn(f"Candidate binding: {binding}",self.sf.pr_action("SFW-TEST-0001")["pr_body"])
+
+    def test_legacy_nullable_verification_receipt_stays_fail_closed(self):
+        self.enqueue();self.sf.claim("SFW-TEST-0001","AGT-ENGINEER",now=101);self.sf.record_candidate_commit("SFW-TEST-0001","AGT-ENGINEER",commit_sha="b"*40,changed_paths=["src/x.py"],test_commands=["pytest"],test_receipt_hashes=[H("t")],diff_hash=H("d"),now=102)
+        self.sf.conn.execute("INSERT INTO verification(verification_id,work_id,builder_agent_id,verifier_agent_id,verdict,report_hash,candidate_binding_hash,evidence_refs_json,created_at) VALUES(?,?,?,?,?,?,?,?,?)",("SFV-LEGACY","SFW-TEST-0001","AGT-ENGINEER","AGT-TESTER","PASS",H("r"),None,'["legacy:test"]',103.0))
+        self.sf.conn.execute("UPDATE work SET state='READY_FOR_PR',verification_id='SFV-LEGACY' WHERE work_id='SFW-TEST-0001'");self.sf.conn.commit()
+        row=self.sf.conn.execute("SELECT candidate_binding_hash FROM verification WHERE verification_id='SFV-LEGACY'").fetchone();self.assertIsNone(row["candidate_binding_hash"])
+        with self.assertRaisesRegex(SoftwareFactoryError,"verification is not bound to current candidate"):
+            self.sf.pr_action("SFW-TEST-0001")
 
     def test_failed_audit_requeues_to_fresh_attempt(self):
         self.enqueue();p1=self.sf.claim("SFW-TEST-0001","AGT-ENGINEER",now=101);self.sf.record_candidate_commit("SFW-TEST-0001","AGT-ENGINEER",commit_sha="b"*40,changed_paths=["src/x.py"],test_commands=["pytest"],test_receipt_hashes=[H("t")],diff_hash=H("d"),now=102);self.sf.verify("SFW-TEST-0001","AGT-TESTER","FAIL",report_hash=H("r"),candidate_binding_hash=self.sf.candidate_binding_hash("SFW-TEST-0001"),evidence_refs=["test:r"],now=103);p2=self.sf.claim("SFW-TEST-0001","AGT-ENGINEER",now=104);self.assertNotEqual(p1["branch_name"],p2["branch_name"])
