@@ -186,9 +186,15 @@ def verified_outcome_calls(memory: dict[str,Any], outcome: dict[str,Any])->dict[
 
 def validate_credit_conservation(outcomes: list[dict[str,Any]])->None:
     totals={}
+    outcome_ids=set()
     memory_events=set()
     for outcome in outcomes:
         validate_outcome(outcome)
+        _require(
+            outcome["outcome_id"] not in outcome_ids,
+            f"duplicate outcome_id: {outcome['outcome_id']}",
+        )
+        outcome_ids.add(outcome["outcome_id"])
         memory_event=(outcome["memory_id"],outcome["event_id"])
         _require(memory_event not in memory_events,
                  f"duplicate event for memory: {outcome['memory_id']}::{outcome['event_id']}")
