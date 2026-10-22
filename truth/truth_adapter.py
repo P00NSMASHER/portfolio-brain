@@ -97,14 +97,25 @@ def _validate_finding(finding: dict[str,Any]) -> None:
     _require(isinstance(finding["required"],bool),"finding.required must be boolean")
     _require(finding["status"] in FINDING_STATUSES,"unknown upstream finding status")
     _require(isinstance(finding["reason"],str) and finding["reason"],"finding reason required")
-    for key in [
+    lineage_buckets=[
         "supporting_evidence_ids","contradicting_evidence_ids",
         "stale_evidence_ids","inadmissible_evidence_ids",
-    ]:
+    ]
+    for key in lineage_buckets:
         values=finding[key]
         _require(isinstance(values,list),"finding evidence IDs must be lists")
         _require(all(isinstance(x,str) and x for x in values),"finding evidence IDs must be non-empty strings")
         _require(len(values)==len(set(values)),"finding evidence IDs must be unique")
+
+    lineage_ids=[
+        evidence_id
+        for key in lineage_buckets
+        for evidence_id in finding[key]
+    ]
+    _require(
+        len(lineage_ids)==len(set(lineage_ids)),
+        "finding evidence ID cannot span lineage buckets",
+    )
 
 def validate_upstream_receipt(receipt: dict[str,Any]) -> None:
     _require(isinstance(receipt,dict),"truth receipt must be an object")
