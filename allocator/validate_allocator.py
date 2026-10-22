@@ -35,6 +35,15 @@ def validate_allocator():
         req(plan["allocated_share_basis_points"]+plan["unallocated_share_basis_points"]==10000,"resource share accounting does not conserve basis points")
         req(all(r["share_basis_points"]<=p["max_project_share_basis_points"] for r in plan["recommendations"]),"project concentration cap exceeded")
         req(all(r["uncertainty_components"] and r["evidence_refs"] for r in plan["recommendations"]),"allocation component evidence missing")
+        for r in plan["recommendations"]:
+            basis=r["evidence_basis_summary"];groups=[basis["policy_estimate_component_ids"],basis["derived_component_ids"],basis["measured_outcome_component_ids"]]
+            flattened=[component_id for group in groups for component_id in group]
+            req(len(flattened)==len(set(flattened)) and set(flattened)==set(r["uncertainty_components"]),"allocation basis summary must partition every component exactly once")
+            req(all(r["uncertainty_components"][component_id]["basis_type"]=="POLICY_ESTIMATE" for component_id in basis["policy_estimate_component_ids"]),"policy estimate basis summary mismatch")
+            req(all(r["uncertainty_components"][component_id]["basis_type"]=="DERIVED" for component_id in basis["derived_component_ids"]),"derived basis summary mismatch")
+            req(all(r["uncertainty_components"][component_id]["basis_type"]=="MEASURED_OUTCOME" for component_id in basis["measured_outcome_component_ids"]),"measured outcome basis summary mismatch")
+            expected_state="MEASURED_OUTCOME_INPUT_PRESENT" if basis["measured_outcome_component_ids"] else "NO_MEASURED_OUTCOME_INPUT"
+            req(basis["measurement_state"]==expected_state,"allocation measurement state mismatch")
     by={x["resource_type"]:x for x in snap["plans"]}
     req(by["CASH"]["allocated_share_basis_points"]==0 and by["CASH"]["status"]=="HOLD_HUMAN_GATED_NO_APPROVED_POOL","cash allocation authority widened")
     req(by["MODEL_CALLS"]["allocated_share_basis_points"]>0 and by["MODEL_CALLS"]["status"]=="ACTIVE_RECOMMENDATION","enabled model capacity was not allocated")

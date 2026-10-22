@@ -77,6 +77,7 @@
           "actionability",
           "resource_fit_reason",
           "uncertainty_components",
+          "evidence_basis_summary",
           "evidence_refs"
         ],
         "properties": {
@@ -137,6 +138,72 @@
             },
             "uniqueItems": true,
             "minItems": 1
+          },
+          "evidence_basis_summary": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "measurement_state",
+              "policy_estimate_component_ids",
+              "derived_component_ids",
+              "measured_outcome_component_ids"
+            ],
+            "properties": {
+              "measurement_state": {
+                "enum": [
+                  "NO_MEASURED_OUTCOME_INPUT",
+                  "MEASURED_OUTCOME_INPUT_PRESENT"
+                ]
+              },
+              "policy_estimate_component_ids": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "importance",
+                    "uncertainty",
+                    "test_cost",
+                    "time_to_evidence",
+                    "reversibility",
+                    "downstream_impact",
+                    "strategic_reuse",
+                    "external_validation_value"
+                  ]
+                },
+                "uniqueItems": true
+              },
+              "derived_component_ids": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "importance",
+                    "uncertainty",
+                    "test_cost",
+                    "time_to_evidence",
+                    "reversibility",
+                    "downstream_impact",
+                    "strategic_reuse",
+                    "external_validation_value"
+                  ]
+                },
+                "uniqueItems": true
+              },
+              "measured_outcome_component_ids": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "importance",
+                    "uncertainty",
+                    "test_cost",
+                    "time_to_evidence",
+                    "reversibility",
+                    "downstream_impact",
+                    "strategic_reuse",
+                    "external_validation_value"
+                  ]
+                },
+                "uniqueItems": true
+              }
+            }
           }
         }
       }

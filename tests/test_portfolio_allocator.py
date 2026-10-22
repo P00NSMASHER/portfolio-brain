@@ -46,6 +46,19 @@ class PortfolioAllocatorTests(unittest.TestCase):
                 self.assertEqual(set(r["uncertainty_components"]),expected)
                 self.assertTrue(r["evidence_refs"])
 
+    def test_receipts_separate_estimates_from_measured_outcomes(self):
+        expected={"importance","uncertainty","test_cost","time_to_evidence","reversibility","downstream_impact","strategic_reuse","external_validation_value"}
+        for plan in self.by.values():
+            for recommendation in plan["recommendations"]:
+                basis=recommendation["evidence_basis_summary"]
+                groups=[basis["policy_estimate_component_ids"],basis["derived_component_ids"],basis["measured_outcome_component_ids"]]
+                flattened=[component_id for group in groups for component_id in group]
+                self.assertEqual(set(flattened),expected)
+                self.assertEqual(len(flattened),len(set(flattened)))
+                self.assertEqual(set(basis["policy_estimate_component_ids"]),{"test_cost","time_to_evidence"})
+                self.assertEqual(basis["measured_outcome_component_ids"],[])
+                self.assertEqual(basis["measurement_state"],"NO_MEASURED_OUTCOME_INPUT")
+
     def test_normalized_shares_are_not_claimed_real_units(self):
         self.assertEqual(self.snap["mode"],"ADVISORY_NORMALIZED_SHARES_ONLY")
         self.assertEqual(self.snap["normalized_share_basis_points"],10000)

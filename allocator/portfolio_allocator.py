@@ -37,6 +37,24 @@ def _pareto_rank(candidates):
     ranked=sorted(candidates,key=lambda c:(layers[c["uncertainty_id"]],*_tie_key(c)))
     return [(c,layers[c["uncertainty_id"]],i+1) for i,c in enumerate(ranked)]
 
+def _basis_summary(candidate):
+    """Expose estimate/derived/measured inputs without converting them to outcomes."""
+    component_ids=set(candidate["components"])
+    by_basis={"POLICY_ESTIMATE":[],"DERIVED":[],"MEASURED_OUTCOME":[]}
+    for component_id,component in candidate["components"].items():
+        basis_type=component.get("basis_type")
+        req(basis_type in by_basis,f"unsupported allocation basis type: {basis_type}")
+        by_basis[basis_type].append(component_id)
+    for values in by_basis.values():values.sort()
+    req(set().union(*(set(values) for values in by_basis.values()))==component_ids,"allocation basis summary does not cover every component")
+    measured=by_basis["MEASURED_OUTCOME"]
+    return {
+      "measurement_state":"MEASURED_OUTCOME_INPUT_PRESENT" if measured else "NO_MEASURED_OUTCOME_INPUT",
+      "policy_estimate_component_ids":by_basis["POLICY_ESTIMATE"],
+      "derived_component_ids":by_basis["DERIVED"],
+      "measured_outcome_component_ids":measured
+    }
+
 def _project_best(candidates):
     out={}
     for c,layer,rank in _pareto_rank(candidates):
@@ -120,6 +138,7 @@ def resource_plan(resource,uncertainty,experiments):
           "pareto_layer":layer,"rank_order":rank,"share_basis_points":share,
           "authority_requirement":c["authority_requirement"],"actionability":c["actionability"],
           "resource_fit_reason":fit,"uncertainty_components":c["components"],
+          "evidence_basis_summary":_basis_summary(c),
           "evidence_refs":list(dict.fromkeys([*c["evidence_refs"],f"experiment:{exp['experiment_id']}"]))
         })
     body={"schema_version":"1.0.0","resource_type":resource,"status":"ACTIVE_RECOMMENDATION","normalized_share_basis_points":10000,
