@@ -291,6 +291,10 @@ class BatchQueue:
         before=self.checkpoint()
         with tempfile.TemporaryDirectory(prefix="brain-v9-restore-") as temp:
             target=Path(temp)/"replay.sqlite"
+            # sqlite3.connect normally creates a 0644 file under permissive
+            # umasks. Keep the restored replay as owner-only from creation.
+            fd=os.open(target,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+            os.close(fd)
             with sqlite3.connect(target) as backup:
                 self.db.backup(backup)
                 must(backup.execute("PRAGMA integrity_check").fetchone()[0]=="ok","RESTORE_INTEGRITY_FAILED")
