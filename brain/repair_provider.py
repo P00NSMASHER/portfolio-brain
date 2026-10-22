@@ -150,7 +150,7 @@ def _head_ci_receipt(raw, repository, pr_number, head_sha):
     bad = {"failure", "cancelled", "timed_out", "action_required",
            "startup_failure", "stale"}
     conclusions = bad | {"success", "neutral", "skipped", None}
-    statuses = {"completed", "queued", "in_progress", "pending", "waiting"}
+    statuses = {"completed", "queued", "in_progress", "pending", "waiting", "requested"}
     for row in raw["check_runs"]:
         require(type(row) is dict
                 and type(row.get("id")) is int and row["id"] > 0
@@ -161,8 +161,11 @@ def _head_ci_receipt(raw, repository, pr_number, head_sha):
                 and type(row.get("app")) is dict
                 and type(row["app"].get("id")) is int
                 and row["app"]["id"] > 0
-                and row.get("status") in statuses
-                and row.get("conclusion") in conclusions,
+                and type(row.get("status")) is str
+                and row["status"] in statuses
+                and (row.get("conclusion") is None or type(row["conclusion"]) is str)
+                and row.get("conclusion") in conclusions
+                and (row["status"] == "completed" or row.get("conclusion") is None),
                 "REPAIR_EXACT_HEAD_CI_ROW_INVALID")
         seen.add(row["id"])
         if row["status"] != "completed" or row["conclusion"] is None:

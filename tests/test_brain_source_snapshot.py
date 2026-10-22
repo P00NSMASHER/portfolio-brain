@@ -8,9 +8,10 @@ import unittest
 from pathlib import Path
 
 from brain.__main__ import monitor
-from brain.adapters import GitHub
+from brain.adapters import GitHub, event
 from brain.core import BrainError, Store
 from brain.intelligence import validate_payload
+from brain.projects import _check_evidence
 
 
 REPO = "example/repository"
@@ -61,6 +62,69 @@ class Provider:
 
 
 class GitHubSnapshotIntegrityTests(unittest.TestCase):
+    def test_monitor_accepts_actions_nonterminal_states_without_claiming_recovery(self):
+        for status in ("queued", "in_progress", "waiting", "requested", "pending"):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as folder:
+                prior = check(1)
+                prior["conclusion"] = "failure"
+                payload, _ = GitHub(transport=Provider([prior])).observe(REPO)
+                current = check(2)
+                current.update(status=status, conclusion=None)
+                api = GitHub(transport=Provider([current]))
+                store = Store(Path(folder) / "state.sqlite", visibility="PUBLIC")
+                try:
+                    store.submit([event(
+                        "repository", REPO, payload, SHA,
+                        now="2026-10-09T15:00:00Z",
+                    )])
+                    store.drain()
+                    report = monitor(
+                        store, SHA, Path(folder) / "report", api=api,
+                        repositories=[REPO],
+                    )
+                    self.assertEqual(report["operation"]["errors"], [])
+                    self.assertEqual(store.pending(), 0)
+                    self.assertEqual(report["state_sequence"], 2)
+                    observed = report["repositories"][0]
+                    self.assertEqual(observed["checks"][0]["status"], status)
+                    self.assertIsNone(observed["checks"][0]["conclusion"])
+                    self.assertEqual(
+                        _check_evidence(observed),
+                        "INCOMPLETE_OR_INCONCLUSIVE_CHECKS_OBSERVED",
+                    )
+                    change = report["repository_changes"][0]
+                    self.assertEqual(change["check_recoveries"], [])
+                    self.assertEqual(change["check_deteriorations"], [])
+                    self.assertEqual(change["change_types"], [])
+                    attempt = store.db.execute(
+                        "SELECT status FROM attempts WHERE operation='monitor' "
+                        "ORDER BY id DESC LIMIT 1"
+                    ).fetchone()
+                    self.assertEqual(attempt["status"], "PASS")
+                    self.assertEqual(api.requests, 4)
+                finally:
+                    store.close()
+
+    def test_unknown_or_malformed_check_status_remains_rejected(self):
+        for status in (None, True, 0, "success", "expected", "waiting ", [], {}):
+            with self.subTest(status=status):
+                row = check(1)
+                row.update(status=status, conclusion=None)
+                payload, _ = GitHub(transport=Provider([row])).observe(REPO)
+                with self.assertRaisesRegex(BrainError, "check status invalid"):
+                    validate_payload("repository", payload, "2026-10-09T16:00:00Z")
+
+    def test_nonterminal_status_with_a_conclusion_remains_rejected(self):
+        for status in ("queued", "in_progress", "waiting", "requested", "pending"):
+            for conclusion in ("success", "failure", "neutral", "cancelled", "skipped",
+                               "timed_out", "action_required", "stale", "startup_failure"):
+                with self.subTest(status=status, conclusion=conclusion):
+                    row = check(1)
+                    row.update(status=status, conclusion=conclusion)
+                    payload, _ = GitHub(transport=Provider([row])).observe(REPO)
+                    with self.assertRaisesRegex(BrainError, "nonterminal check has a conclusion"):
+                        validate_payload("repository", payload, "2026-10-09T16:00:00Z")
+
     def test_stable_two_check_snapshot_is_accepted_and_branch_is_rechecked(self):
         provider = Provider([check(1), check(2)])
         api = GitHub(transport=provider)

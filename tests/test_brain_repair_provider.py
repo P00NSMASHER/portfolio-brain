@@ -296,6 +296,58 @@ class OriginalProviderEvidenceTests(unittest.TestCase):
                 self.assertNotEqual(evidence["status"],
                                     "EXACT_HEAD_TECHNICAL_CHECKS_GREEN_NOT_RELEASE")
 
+    def test_all_nonterminal_head_checks_keep_collection_incomplete_and_available(self):
+        for repo in (RET, FAC):
+            for status in ("queued", "in_progress", "pending", "waiting", "requested"):
+                with self.subTest(repository=repo, status=status):
+                    current, api = rig()
+                    page = original_checks(repo, A)
+                    page["check_runs"][0].update(status=status, conclusion=None)
+                    api.put(repo, f"/commits/{A}/check-runs?per_page=100", page)
+                    result = collect_original_proofs(current, transport=api)
+                    self.assertEqual(result["observed_pr_count"], len(current["actions"]))
+                    self.assertEqual(len(result["source_checks"]), len(current["actions"]))
+                    self.assertEqual(result["gaps"], [])
+                    for evidence in result["source_checks"]:
+                        if evidence["repository"] == repo:
+                            self.assertEqual(evidence["status"], "INCOMPLETE_EXACT_HEAD_CHECKS")
+                            self.assertEqual(evidence["incomplete_count"], 1)
+                            self.assertEqual(evidence["adverse_count"], 0)
+                            self.assertIn(page["check_runs"][0]["name"],
+                                          evidence["required_not_successful"])
+                        else:
+                            self.assertEqual(evidence["status"],
+                                             "EXACT_HEAD_TECHNICAL_CHECKS_GREEN_NOT_RELEASE")
+                    self.assertFalse(result["automatic_merge_or_deployment_authority"])
+
+    def test_nonterminal_head_checks_cannot_supply_a_terminal_conclusion(self):
+        for status in ("queued", "in_progress", "pending", "waiting", "requested"):
+            for conclusion in ("success", "failure"):
+                with self.subTest(status=status, conclusion=conclusion):
+                    current, api = rig()
+                    repo = current["actions"][0]["repository"]
+                    page = original_checks(repo, A)
+                    page["check_runs"][0].update(status=status, conclusion=conclusion)
+                    api.put(repo, f"/commits/{A}/check-runs?per_page=100", page)
+                    with self.assertRaisesRegex(BrainError, "REPAIR_EXACT_HEAD_CI_ROW_INVALID"):
+                        collect_original_proofs(current, transport=api)
+
+    def test_unknown_or_malformed_head_status_and_conclusion_fail_closed(self):
+        for field, value in (
+            ("status", "accepted"), ("status", None), ("status", True),
+            ("status", 1), ("status", []), ("status", {}),
+            ("conclusion", "approved"), ("conclusion", True),
+            ("conclusion", []), ("conclusion", {}),
+        ):
+            with self.subTest(field=field, value=value):
+                current, api = rig()
+                repo = current["actions"][0]["repository"]
+                page = original_checks(repo, A)
+                page["check_runs"][0][field] = value
+                api.put(repo, f"/commits/{A}/check-runs?per_page=100", page)
+                with self.assertRaisesRegex(BrainError, "REPAIR_EXACT_HEAD_CI_ROW_INVALID"):
+                    collect_original_proofs(current, transport=api)
+
     def test_duplicate_or_cross_commit_head_ci_fails_closed(self):
         for issue in ("duplicate","cross_source","truncated"):
             current, api=rig()
