@@ -24,7 +24,7 @@ PROJECTS={"portfolio-brain":"P00NSMASHER/portfolio-brain",
           "permitplate":"P00NSMASHER/permitplate-nyc",
           "capturebrief":"P00NSMASHER/capturebrief"}
 NEXT={"OBSERVED":"DIAGNOSED","DIAGNOSED":"PATCHED","PATCHED":"TESTED"}
-STAGES=set(NEXT)|{"TESTED"}
+STAGES=set(NEXT)|{"TESTED","LIVE_VERIFIED"}
 FIELDS={"project_id","repository","source_sha","fingerprint","owner","path","priority"}
 IMMUTABLE=FIELDS|{"work_id","created_at"}
 WORK=IMMUTABLE|{"stage","updated_at","epoch","claim","pending","evidence","effects"}
@@ -48,6 +48,18 @@ def validate(row):
     must(instant(row["updated_at"])>=instant(row["created_at"]),"TIME_REVERSED")
     must(type(row["evidence"]) is list and len(row["evidence"])<=64 and all(hashval(e) for e in row["evidence"]),"EVIDENCE_INVALID")
     must(type(row["effects"]) is dict,"EFFECT_INVALID")
+    if row["stage"]=="LIVE_VERIFIED":
+        proof=row["effects"].get("publication")
+        must(type(proof) is dict
+             and proof.get("status")=="ORIGINAL_PUBLISHED_REPAIR_LIVE_VERIFIED"
+             and proof.get("repository")==row["repository"]
+             and proof.get("path")==row["path"]
+             and hashval(proof.get("candidate_sha"),40)
+             and hashval(proof.get("deployed_sha"),40)
+             and hashval(proof.get("asset_sha256"))
+             and proof.get("execution_mode")=="SUPERVISED_REPAIR_NOT_UNATTENDED_AUTOMERGE"
+             and proof.get("production_accepted") is False,
+             "PUBLICATION_PROOF_INVALID")
     c=row["claim"]
     if c is not None:
         must(type(c) is dict and set(c)=={"token_hash","epoch","owner","issued_at","expires_at"}
@@ -127,6 +139,9 @@ class BatchQueue:
     def _append(self,row,at):
         records,seq,previous=self.scan()
         must(seq<MAX_EVENTS,"JOURNAL_BOUND")
+        # A different work item's older timestamp must not poison global replay.
+        previous_frame=self.db.execute("SELECT body FROM batch_event ORDER BY sequence DESC LIMIT 1").fetchone()
+        must(previous_frame is None or instant(at)>=instant(json.loads(previous_frame[0])["time"]),"TIME_REVERSED")
         frame={"time":at,"previous":digest(records.get(row["work_id"])),"work":validate(row)}
         raw=encode(frame)
         size=self.db.execute("SELECT COALESCE(SUM(length(CAST(body AS BLOB))),0) FROM batch_event").fetchone()[0]
@@ -278,13 +293,38 @@ class BatchQueue:
                 "operation_id":operation_id,"provider_writes":0,
                 "independent_gate_passed":False,"production_accepted":False}
 
+    def record_publication(self,spec,reader,*,now):
+        """Record an actual downstream publication; do not assert Brain acceptance."""
+        from brain.v9.publication_reader import PublicationReader,validate_spec
+        validate_spec(spec)
+        must(type(reader) is PublicationReader,"PROVIDER_READBACK_REQUIRED")
+        ident=self.observe(dict(project_id="capturebrief",repository=spec["repository"],
+            source_sha=spec["original_source_sha"],fingerprint=spec["fingerprint"],
+            owner="retally-website",path=spec["path"],priority=1),now=now)
+        original=self.snapshot()["work"][ident]
+        must(original["pending"] is None and original["claim"] is None,"RECONCILIATION_REQUIRED")
+        proof=reader.verify(spec)
+        with self.tx():
+            work,_,_=self.scan()
+            row=deepcopy(work[ident])
+            must(digest(row)==digest(original),"RECONCILIATION_SOURCE_CHANGED")
+            if row["effects"].get("publication")==proof:
+                return dict(proof,work_id=ident,durable_evidence_reused=True)
+            row["effects"]["publication"]=proof
+            row["stage"]="LIVE_VERIFIED"
+            row["updated_at"]=now
+            self._append(row,now)
+        return dict(proof,work_id=ident,durable_evidence_reused=False)
+
     def metrics(self,*,now):
         at=instant(now)
         work=self.snapshot()["work"]
         ages=[(at-instant(row["created_at"])).total_seconds() for row in work.values()]
         must(all(t>=0 for t in ages),"TIME_REVERSED")
         return {"work_items":len(work),"uncertain_effects":sum(row["pending"] is not None for row in work.values()),
-                "actual_live_verified":0,"production_accepted":False,
+                "actual_live_verified":sum(row["stage"]=="LIVE_VERIFIED" and
+                    row["effects"].get("publication",{}).get("status")=="ORIGINAL_PUBLISHED_REPAIR_LIVE_VERIFIED"
+                    for row in work.values()),"production_accepted":False,
                 "oldest_unresolved_seconds":max(ages,default=0),
                 "stages":{s:sum(row["stage"]==s for row in work.values()) for s in sorted(STAGES)}}
     def restore_drill(self):
