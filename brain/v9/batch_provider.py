@@ -76,6 +76,37 @@ class GitHubOriginalReader:
             raise BatchFault('READBACK_JSON_INVALID') from exc
         if type(doc) is not dict: raise BatchFault('READBACK_JSON_INVALID')
         return doc
+    def read_draft_only(self, repo, number, *, base_sha, head_sha, operation_id):
+        """Reconcile original draft creation independent of CI success."""
+        if (type(repo) is not str or repo not in set(PROJECTS.values())
+                or type(number) is not int or not 0<number<10**9
+                or not hashval(base_sha,40) or not hashval(head_sha,40)
+                or not hashval(operation_id)):
+            raise BatchFault('READBACK_IDENTITY_INVALID')
+        first=self._get(repo,'/branches/main')
+        if type(first.get('commit')) is not dict or first['commit'].get('sha')!=base_sha:
+            raise BatchFault('READBACK_SOURCE_CHANGED')
+        pr=self._get(repo,'/pulls/'+str(number))
+        head=pr.get('head');base=pr.get('base')
+        marker='BRAIN_BATCH_OPERATION_ID: '+operation_id
+        if (type(head) is not dict or type(base) is not dict
+                or type(head.get('repo')) is not dict or type(base.get('repo')) is not dict
+                or pr.get('number')!=number or pr.get('state')!='open'
+                or pr.get('draft') is not True or pr.get('merged') is not False
+                or head.get('sha')!=head_sha or head['repo'].get('full_name')!=repo
+                or base.get('ref')!='main' or base.get('sha')!=base_sha
+                or base['repo'].get('full_name')!=repo or type(pr.get('body')) is not str
+                or marker not in pr['body'].splitlines()):
+            raise BatchFault('READBACK_DRAFT_OR_OPERATION_UNVERIFIED')
+        second=self._get(repo,'/branches/main')
+        if type(second.get('commit')) is not dict or second['commit'].get('sha')!=base_sha:
+            raise BatchFault('READBACK_SOURCE_CHANGED')
+        return dict(status='ORIGINAL_DRAFT_WRITE_OBSERVED_CHECKS_UNKNOWN',
+                    repository=repo,base_sha=base_sha,candidate_sha=head_sha,
+                    pr_number=number,operation_id=operation_id,original_get_count=3,
+                    independent_check_verified=False,provider_writes=0,
+                    production_accepted=False)
+
     def verify_draft_and_checks(self,repo,number,*,base_sha,head_sha,operation_id):
         if (type(repo) is not str or repo not in set(PROJECTS.values())
                 or type(number) is not int or not 0<number<10**9
