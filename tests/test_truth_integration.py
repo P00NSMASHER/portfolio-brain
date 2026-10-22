@@ -90,6 +90,13 @@ class TruthIntegrationTests(unittest.TestCase):
         self.assertEqual(project_truth_state(receipt("CONTESTED","CONFLICTED")),"CONTRADICTED")
         self.assertEqual(project_truth_state(receipt("CONTESTED","CONTRADICTED")),"CONTRADICTED")
 
+    def test_evidence_id_cannot_support_and_contradict_same_finding(self):
+        r=receipt("PROVEN","SATISFIED")
+        r["findings"][0]["contradicting_evidence_ids"]=["support"]
+        resign_receipt(r)
+        with self.assertRaisesRegex(TruthIntegrationError,"cannot span lineage buckets"):
+            project_truth_state(r)
+
     def test_repeated_support_does_not_change_verdict_without_upstream_proof(self):
         r=receipt("NOT_PROVEN","INSUFFICIENT_INDEPENDENCE")
         r["findings"][0]["supporting_evidence_ids"]=["a","b","c","d","e"]
