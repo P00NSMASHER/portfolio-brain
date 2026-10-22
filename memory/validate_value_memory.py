@@ -50,6 +50,7 @@ def validate_shared_value_memory()->dict[str,object]:
       "objective_conditioning":"REQUIRED",
       "untested_memory_prior":"NEUTRAL",
       "recency_decay":"HALF_LIFE",
+      "duplicate_outcome_identity":"REJECT",
       "duplicate_event_per_memory":"REJECT",
     },"canonical Value Memory semantics changed")
 
