@@ -85,11 +85,17 @@ def _provider(proof):
                 and check["app_id"] > 0
                 and type(check["head_sha"]) is str
                 and SHA.fullmatch(check["head_sha"])
-                and check["status"] in {"completed", "queued", "in_progress"}
+                and type(check["status"]) is str
+                and check["status"] in {
+                    "completed", "queued", "in_progress", "pending", "waiting", "requested",
+                }
+                and (check["conclusion"] is None or type(check["conclusion"]) is str)
                 and check["conclusion"] in {
                     "success", "neutral", "skipped", "failure",
-                    "timed_out", "cancelled", None,
-                }, "FOLLOWTHROUGH_PROVIDER_CHECK_IDENTITY_INVALID")
+                    "timed_out", "cancelled", "action_required", "stale", "startup_failure", None,
+                }
+                and (check["status"] == "completed" or check["conclusion"] is None),
+                "FOLLOWTHROUGH_PROVIDER_CHECK_IDENTITY_INVALID")
         unique.add(check["id"])
     require(not proof["merged"] or
             (proof["pr_state"] == "closed" and proof["merge_commit_sha"] is not None),

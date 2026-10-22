@@ -133,7 +133,11 @@ def validate_payload(kind, p, observed_at):
             fields(check, {"name","status","conclusion","head_sha","url"})
             text(check["name"], 200)
             require(check["head_sha"] == p["head_sha"], "check is not bound to current source revision")
-            require(check["status"] in {"queued","in_progress","completed"}, "check status invalid")
+            # GitHub Actions can also report waiting/requested/pending. These
+            # are valid observations, never terminal conclusions or successes.
+            require(type(check["status"]) is str and check["status"] in {
+                "queued", "in_progress", "completed", "waiting", "requested", "pending"
+            }, "check status invalid")
             require(check["conclusion"] in {None,"success","failure","neutral","cancelled","skipped","timed_out","action_required","stale","startup_failure"}, "check conclusion invalid")
             require(check["status"] == "completed" or check["conclusion"] is None, "nonterminal check has a conclusion")
             require(type(check["url"]) is str and check["url"].startswith(ref), "check reference invalid")
