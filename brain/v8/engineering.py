@@ -10,6 +10,14 @@ from brain.v8.contracts import SHA,matches,parse_utc
 from brain.v8.inventory import project_maps
 from brain.v8.planning import select_work
 
+# Keep complete historical project observations. Only issue owner jobs for
+# projects with an active specialist in the owner's 15-slot portfolio roster.
+# Deferring a project here never disables its original repository or service.
+ACTIVE_OWNER_PROJECTS = frozenset({
+    'portfolio-brain', 'abvm', 'retally', 'research-labs',
+    'permitplate', 'capturebrief',
+})
+
 
 def prepare_repair(request,original_bytes):
     patch=generate(request,original_bytes)
@@ -51,7 +59,14 @@ def build_cycle(report, *, source_sha,cycle,now):
     maps=project_maps(report['projects'])
     work=[]
     gaps=[]
+    outside_owner_scope=[]
     for row in maps:
+        if row['project_id'] not in ACTIVE_OWNER_PROJECTS:
+            outside_owner_scope.append(dict(
+                project_id=row['project_id'], repository=row['repository'],
+                source_sha=row['source_sha'],
+                reason='NO_ACTIVE_SPECIALIST_ROLE_IN_CURRENT_PORTFOLIO'))
+            continue
         if row['source_sha'] is None:
             gaps.append(dict(project_id=row['project_id'],owner=row['owner'],reason='PROJECT_SOURCE_UNOBSERVED',
                              next_action='OBSERVE_CURRENT_SOURCE_BEFORE_EDIT'))
@@ -82,6 +97,7 @@ def build_cycle(report, *, source_sha,cycle,now):
         status='OWNER_BRIDGE_READY_WITH_GAPS' if gaps else 'OWNER_BRIDGE_READY',
         runtime_authority=runtime_authority(),
         project_maps=maps,work_items=work,owner_jobs=jobs,coverage_gaps=gaps,
+        outside_owner_scope=outside_owner_scope,
         coverage=dict(registered=len(maps),observed=len(work),missing=len(gaps)),
         source_freshness='REOBSERVE_BEFORE_OWNER_ACTION',provider_calls=0,runtime_actions_executed=0,
         production_accepted=False,automatic_execution_authority=False,
