@@ -88,15 +88,23 @@ def research(store, sha, output, *, api=None, repository=None):
     # Up to two alternative reviewed targets, not a blanket 404 bypass.
     # Preserve original 24-GET operation limit with >=7 GETs left for
     # each independent search, branch, tree and original blob inspection.
-    # Explicit/private scope, malformed provider payloads, nonempty branch
-    # 404, 403, identity and all other authority errors NEVER fall back.
+    # Only inaccessible public search hits or an explicitly incomplete
+    # public search may try an alternate reviewed query. Incomplete hits
+    # NEVER become source evidence. Explicit/private scope, malformed
+    # payloads, nonempty branch 404, 403 and identity errors stay fatal.
     for offset in range(min(3,len(targets))):
         target=reviewed_target((first_index+offset)%len(targets))
         before=api.requests
         try:
             inspected=api.discover(target,repository=repository)
         except BrainError as exc:
-            recoverable=(str(exc).startswith("DISCOVERY_ALL_SEARCH_RESULTS_UNAVAILABLE:")
+            # A GitHub repository-search response marked incomplete is
+            # untrusted, even if its items appear plausible. It is a bounded
+            # PUBLIC search availability failure, not a verified source.
+            # Keep the adapter's direct incomplete-results rejection intact.
+            incomplete=str(exc)=="DISCOVERY_INCOMPLETE"
+            recoverable=((incomplete or
+                          str(exc).startswith("DISCOVERY_ALL_SEARCH_RESULTS_UNAVAILABLE:"))
                          and repository is None and store.visibility=="PUBLIC"
                          and not getattr(api,"private",False))
             if not recoverable:
@@ -105,9 +113,13 @@ def research(store, sha, output, *, api=None, repository=None):
                 first_unavailable=exc
             skipped.append({
                 "target":target["project"],
-                "classification":"PUBLIC_SEARCH_RESULTS_UNINSPECTABLE",
+                "classification":("PUBLIC_SEARCH_INCOMPLETE" if incomplete else
+                                   "PUBLIC_SEARCH_RESULTS_UNINSPECTABLE"),
                 "get_requests":api.requests-before,
-                "source_gaps":list(getattr(api,"discovery_unavailable",[])),
+                "source_gaps":([{"stage":"search",
+                                  "reason":"GITHUB_SEARCH_INCOMPLETE_RESULTS"}]
+                                if incomplete else
+                                list(getattr(api,"discovery_unavailable",[]))),
                 "verified_candidates":0,
             })
             if offset==min(3,len(targets))-1 or api.requests>17:
