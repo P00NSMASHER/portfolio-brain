@@ -68,7 +68,7 @@ def build_cycle(report, *, source_sha,cycle,now):
             dependencies=[],created_at=now,updated_at=now,attempts=0,blocker=None)
         item['work_id']='work:'+digest({k:item[k] for k in ('project_id','repository','source_sha','fingerprint')})
         work.append(item)
-    plan=select_work(work,cycle=cycle,limit=5)
+    plan=select_work(work,cycle=cycle,limit=5,collision_safe=True)
     by_id={r['project_id']:r for r in maps}
     jobs=[]
     for item in plan['selected']:
