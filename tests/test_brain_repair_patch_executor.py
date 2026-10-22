@@ -115,8 +115,14 @@ class DeterministicRepairTests(unittest.TestCase):
             execution = subprocess.run([sys.executable, str(generated)],
                                        text=True, capture_output=True, timeout=8)
             self.assertEqual(execution.returncode, 0, execution.stderr)
-            with self.assertRaisesRegex(BrainError, "AUTOFIX_WORKTREE_NOT_CLEAN"):
-                apply_to_isolated_worktree(root, artifact)
+            # An identical generated change can be confirmed after a crash
+            # without a second write; the exact source SHA and generated
+            # regression are still revalidated by the executor.
+            replay = apply_to_isolated_worktree(root, artifact)
+            self.assertEqual(
+                replay["status"], "ISOLATED_EDIT_ALREADY_PRESENT_AWAITING_CI")
+            self.assertFalse(replay["merged"])
+            self.assertFalse(replay["deployed"])
 
     def test_source_and_caller_authority_are_immutable(self):
         for key, value in (
