@@ -47,7 +47,7 @@ class OwnerLaneCollisionTests(unittest.TestCase):
         a, b, c = candidates()
         b = work("other", repository="P00NSMASHER/other",
                  resource=a["resource"], fingerprint="4" * 64, priority_tier=0)
-        result = select_work([a, b, c], cycle=0, limit=2,
+        result = select_work([a, b, c], cycle=1, limit=2,
                              collision_safe=True)
         self.assertEqual({r["project_id"] for r in result["selected"]},
                          {"research-labs", "abvm"})
@@ -83,7 +83,7 @@ class OwnerLaneCollisionTests(unittest.TestCase):
             project("research-labs", SHARED),
             project("abvm", ABVM),
         ]}
-        for cycle in (0, 1):
+        for cycle in (0, 2):
             with self.subTest(cycle=cycle):
                 output = build_cycle(report, source_sha=SHA,
                                      cycle=cycle, now=NOW)
