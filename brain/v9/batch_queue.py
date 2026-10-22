@@ -228,6 +228,51 @@ class BatchQueue:
         must(hashval(wid) and hashval(operation_id),"EFFECT_INVALID")
         instant(now)
         raise BatchFault("PROVIDER_READBACK_REQUIRED")
+    def reconcile_original_draft(self,wid,operation_id,reader,*,pr_number,candidate_sha,now):
+        """Resolve an uncertain external draft only after original GitHub GETs.
+
+        Keep network calls outside the SQLite transaction. Revalidate the
+        identical immutable work snapshot after readback; a concurrent claim
+        or state change cannot be silently overwritten.
+        """
+        from brain.v9.batch_provider import GitHubOriginalReader
+        must(hashval(wid) and hashval(operation_id) and hashval(candidate_sha,40)
+             and type(pr_number) is int and 0<pr_number<10**9
+             and type(reader) is GitHubOriginalReader,"PROVIDER_READBACK_REQUIRED")
+        instant(now)
+        original=self.snapshot()["work"].get(wid)
+        must(original is not None,"WORK_UNKNOWN")
+        pending=original["pending"]
+        must(pending is not None and pending["operation_id"]==operation_id
+             and pending["action"]=="CREATE_DRAFT_PR"
+             and pending["status"] in ("INTENT","UNKNOWN"),
+             "RECONCILIATION_REQUIRED")
+        observed=reader.read_draft_only(
+            original["repository"],pr_number,base_sha=original["source_sha"],
+            head_sha=candidate_sha,operation_id=operation_id)
+        must(observed["status"]=="ORIGINAL_DRAFT_WRITE_OBSERVED_CHECKS_UNKNOWN"
+             and observed["production_accepted"] is False
+             and observed["independent_check_verified"] is False,
+             "PROVIDER_READBACK_REQUIRED")
+        with self.tx():
+            state,_,_=self.scan()
+            current=state.get(wid)
+            must(current is not None and digest(current)==digest(original),
+                 "RECONCILIATION_SOURCE_CHANGED")
+            must(instant(now)>=instant(current["updated_at"]),"TIME_REVERSED")
+            item=deepcopy(current)
+            item["effects"][operation_id]={
+                "kind":"ORIGINAL_DRAFT_OBSERVED_NOT_APPROVED",
+                "pr_number":pr_number,"candidate_sha":candidate_sha,
+                "source_sha":current["source_sha"],"evidence_sha256":digest(observed),
+                "observed_at":now,"production_accepted":False}
+            item["pending"]=None
+            item["updated_at"]=now
+            self._append(item,now)
+        return {"status":"EXTERNAL_DRAFT_RECONCILED_NOT_VERIFIED",
+                "operation_id":operation_id,"provider_writes":0,
+                "independent_gate_passed":False,"production_accepted":False}
+
     def metrics(self,*,now):
         at=instant(now)
         work=self.snapshot()["work"]

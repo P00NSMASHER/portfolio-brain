@@ -148,6 +148,56 @@ class QueueTests(unittest.TestCase):
                            now="2026-10-21T03:00:00Z")
 
 
+    def test_original_draft_reconciliation_resolves_uncertain_write_not_release(self):
+        from unittest.mock import patch
+        from brain.v9.batch_provider import GitHubOriginalReader
+        ident=self.q.observe(issue(),now=T0)
+        token=self.q.claim(ident,"retally-product",now=T0)
+        for stage in ("DIAGNOSED","PATCHED","TESTED"):
+            self.q.advance(ident,token,stage,evidence_sha=EVIDENCE,now=T1)
+        op=self.q.begin_effect(ident,token,action="CREATE_DRAFT_PR",now=T1)
+        self.q.mark_unknown(ident,op,now=T2)
+        reader=GitHubOriginalReader()
+        row=dict(number=123,draft=True,state='open',merged=False,
+                 head=dict(sha=NEXT,repo=dict(full_name=REPO)),
+                 base=dict(sha=SHA,ref='main',repo=dict(full_name=REPO)),
+                 body='BRAIN_BATCH_OPERATION_ID: '+op)
+        with patch.object(reader,'_get',side_effect=[
+            {'commit':{'sha':SHA}},row,{'commit':{'sha':SHA}}]):
+            receipt=self.q.reconcile_original_draft(
+                ident,op,reader,pr_number=123,candidate_sha=NEXT,now=T2)
+        self.assertEqual(receipt['status'],'EXTERNAL_DRAFT_RECONCILED_NOT_VERIFIED')
+        saved=self.q.snapshot()['work'][ident]
+        self.assertIsNone(saved['pending'])
+        self.assertIn(op,saved['effects'])
+        self.assertEqual(self.q.metrics(now=T2)['uncertain_effects'],0)
+        self.assertEqual(self.q.metrics(now=T2)['actual_live_verified'],0)
+        with self.assertRaisesRegex(BatchFault,'EFFECT_ALREADY_CONFIRMED'):
+            self.q.begin_effect(ident,token,action="CREATE_DRAFT_PR",now=T2)
+
+    def test_reconciliation_rejects_spoof_and_preserves_unknown(self):
+        from unittest.mock import patch
+        from brain.v9.batch_provider import GitHubOriginalReader
+        ident=self.q.observe(issue(),now=T0)
+        token=self.q.claim(ident,'retally-product',now=T0)
+        for stage in ('DIAGNOSED','PATCHED','TESTED'):
+            self.q.advance(ident,token,stage,evidence_sha=EVIDENCE,now=T1)
+        op=self.q.begin_effect(ident,token,action='CREATE_DRAFT_PR',now=T1)
+        self.q.mark_unknown(ident,op,now=T2)
+        bad=dict(number=123,draft=True,state='open',merged=False,
+                 head=dict(sha=NEXT,repo=dict(full_name=REPO)),
+                 base=dict(sha=SHA,ref='main',repo=dict(full_name=REPO)),
+                 body='UNRELATED_PR')
+        reader=GitHubOriginalReader()
+        with patch.object(reader,'_get',side_effect=[
+            {'commit':{'sha':SHA}},bad,{'commit':{'sha':SHA}}]):
+            with self.assertRaises(BatchFault):
+                self.q.reconcile_original_draft(
+                    ident,op,reader,pr_number=123,candidate_sha=NEXT,now=T2)
+        self.assertEqual(self.q.metrics(now=T2)['uncertain_effects'],1)
+        self.assertEqual(self.q.snapshot()['work'][ident]['pending']['status'],'UNKNOWN')
+
+
 class ReleaseTests(unittest.TestCase):
     def test_all_green_is_readiness_not_execution(self):
         out = review_release(release())
