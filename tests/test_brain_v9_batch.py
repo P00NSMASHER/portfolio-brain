@@ -88,7 +88,7 @@ class QueueTests(unittest.TestCase):
 
     def test_unknown_effect_survives_restart_and_blocks_all_claims(self):
         ident = self.q.observe(issue(), now=T0)
-        token = self.q.claim(ident, "retally-product", now=T0, ttl_seconds=60)
+        token = self.q.claim(ident, "retally-product", now=T0, ttl_seconds=1200)
         for stage in ("DIAGNOSED", "PATCHED", "TESTED"):
             self.q.advance(ident, token, stage, evidence_sha=EVIDENCE, now=T1)
         operation_id = self.q.begin_effect(ident, token, action="CREATE_DRAFT_PR", now=T1)

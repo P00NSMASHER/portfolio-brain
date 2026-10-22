@@ -183,6 +183,9 @@ class BatchQueue:
         return token
     @staticmethod
     def _owned(row,token,at):
+        # An action timestamp predating the last committed claim/update
+        # is a chronology violation, regardless of token validity.
+        must(instant(at)>=instant(row["updated_at"]),"TIME_REVERSED")
         claim=row["claim"]
         must(claim is not None and type(token) is str and secrets.compare_digest(claim["token_hash"],digest(token))
              and instant(claim["issued_at"])<=instant(at)<instant(claim["expires_at"]),"CLAIM_STALE")
