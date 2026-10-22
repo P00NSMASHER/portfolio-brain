@@ -16,6 +16,10 @@ class InvalidStateArtifact(ValueError):
     pass
 
 
+def reject_nonfinite_json_constant(_value: str) -> None:
+    raise InvalidStateArtifact("state member contains non-finite JSON")
+
+
 def _validated_payload(
     raw: bytes,
     *,
@@ -41,7 +45,10 @@ def _validated_payload(
     if len(body) != info.file_size or len(body) > max_state_bytes:
         raise InvalidStateArtifact("state member size mismatch")
     try:
-        state = json.loads(body.decode("utf-8"))
+        state = json.loads(
+            body.decode("utf-8"),
+            parse_constant=reject_nonfinite_json_constant,
+        )
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise InvalidStateArtifact("state member is not valid UTF-8 JSON") from exc
     if not isinstance(state, dict):
@@ -55,7 +62,16 @@ def _validated_payload(
             validator(state)
         except Exception as exc:
             raise InvalidStateArtifact("state payload failed subsystem validation") from exc
-    canonical = json.dumps(state, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    try:
+        canonical = json.dumps(
+            state,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError, RecursionError) as exc:
+        raise InvalidStateArtifact("state member is not finite canonical JSON") from exc
     state_hash = "sha256:" + hashlib.sha256(canonical).hexdigest()
     return body, state["sequence"], state_hash
 
@@ -190,3 +206,4 @@ def restore_latest_valid_state(
             "candidates_inspected":min(len(candidates), max_candidates),
         },sort_keys=True)+"\n").encode("utf-8"))
     return status
+

@@ -8,7 +8,7 @@ import shutil
 from pathlib import Path
 from runtime.artifact_http import open_url
 from runtime.artifact_restore import restore_latest_valid_state
-from runtime.artifact_restore import InvalidStateArtifact
+from runtime.artifact_restore import InvalidStateArtifact, reject_nonfinite_json_constant
 from runtime.provider_health import validate_provider_health
 from runtime.state import validate_cycle_receipt, validate_state
 
@@ -27,7 +27,10 @@ def _single_json_member(archive:zipfile.ZipFile,name:str,*,max_bytes:int)->dict:
         raw=archive.read(info)
         if len(raw)!=info.file_size:
             raise InvalidStateArtifact(f"runtime artifact {name} size mismatch")
-        value=json.loads(raw.decode("utf-8"))
+        value=json.loads(
+            raw.decode("utf-8"),
+            parse_constant=reject_nonfinite_json_constant,
+        )
     except (UnicodeDecodeError,json.JSONDecodeError,RuntimeError,OSError) as exc:
         raise InvalidStateArtifact(f"runtime artifact {name} is invalid JSON") from exc
     if not isinstance(value,dict):
@@ -324,3 +327,4 @@ def main():
       provider_health_metadata_output=None if args.provider_health_metadata_output is None else Path(args.provider_health_metadata_output),
     ))
 if __name__=="__main__": main()
+

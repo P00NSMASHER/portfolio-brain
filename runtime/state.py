@@ -27,7 +27,16 @@ def _utc_timestamp(value: Any, field: str)->datetime:
     return parsed
 
 def canonical_hash(value: Any)->str:
-    raw=json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+    try:
+        raw=json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",",":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError,ValueError,RecursionError) as exc:
+        raise RuntimeStateError("runtime value is not finite canonical JSON") from exc
     return "sha256:"+hashlib.sha256(raw).hexdigest()
 
 def validate_cycle_receipt(receipt: Any, *, allow_disabled: bool=False)->None:
@@ -175,6 +184,7 @@ def validate_state(state: dict[str,Any])->None:
             raise RuntimeStateError("runtime freshness does not match retained history")
     elif state["last_cycle_id"] is not None:
         raise RuntimeStateError("last cycle id requires retained history")
+    canonical_hash(state)
 
 def advance_cycle(state: dict[str,Any], receipt: dict[str,Any])->dict[str,Any]:
     validate_state(state)
@@ -226,3 +236,4 @@ def advance_cycle(state: dict[str,Any], receipt: dict[str,Any])->dict[str,Any]:
             durable["observed_at"]=receipt["finished_at"]
     validate_state(updated)
     return updated
+
