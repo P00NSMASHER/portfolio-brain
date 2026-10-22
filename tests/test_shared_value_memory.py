@@ -101,6 +101,12 @@ class SharedValueMemoryTests(unittest.TestCase):
         b=copy.deepcopy(a); b["outcome_id"]="MOUT-PORTFOLIO-0002"; b["memory_id"]="MEM-PORTFOLIO-0002"; b["attribution_fraction"]=0.5; resign(b)
         with self.assertRaises(SharedMemoryError): validate_credit_conservation([a,b])
 
+    def test_outcome_identity_cannot_be_replayed_under_a_new_event(self):
+        a=outcome(event="EVT-OUTCOME-0005",fraction=0.5)
+        b=copy.deepcopy(a); b["event_id"]="EVT-OUTCOME-0006"; resign(b)
+        with self.assertRaisesRegex(SharedMemoryError,"duplicate outcome_id"):
+            validate_credit_conservation([a,b])
+
     def test_duplicate_event_cannot_be_replayed_into_same_memory(self):
         a=outcome(event="EVT-OUTCOME-0003",fraction=0.5)
         b=copy.deepcopy(a); b["outcome_id"]="MOUT-PORTFOLIO-0002"; b["attribution_fraction"]=0.5; resign(b)
