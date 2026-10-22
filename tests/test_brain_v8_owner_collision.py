@@ -16,11 +16,14 @@ ABVM = "P00NSMASHER/abvmschoolstarworld"
 
 def candidates():
     return [
-        work("research-labs", repository=SHARED, resource="1" * 64,
+        work("research-labs", repository=SHARED, owner="research-methods-owner",
+             resource="1" * 64,
              fingerprint="1" * 64, priority_tier=0),
-        work("retally", repository=SHARED, resource="2" * 64,
+        work("retally", repository=SHARED, owner="retally-product-owner",
+             resource="2" * 64,
              fingerprint="2" * 64, priority_tier=0),
-        work("abvm", repository=ABVM, resource="3" * 64,
+        work("abvm", repository=ABVM, owner="school-data-owner",
+             resource="3" * 64,
              fingerprint="3" * 64, priority_tier=1),
     ]
 
@@ -45,7 +48,7 @@ class OwnerLaneCollisionTests(unittest.TestCase):
 
     def test_shared_resource_across_repositories_is_deferred_and_backfilled(self):
         a, b, c = candidates()
-        b = work("other", repository="P00NSMASHER/other",
+        b = work("other", repository="P00NSMASHER/other", owner="other-owner",
                  resource=a["resource"], fingerprint="4" * 64, priority_tier=0)
         result = select_work([a, b, c], cycle=1, limit=2,
                              collision_safe=True)

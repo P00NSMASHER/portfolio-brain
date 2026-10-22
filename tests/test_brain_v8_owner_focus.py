@@ -50,11 +50,12 @@ class OwnerFocusTests(unittest.TestCase):
         output = build_cycle(dict(source_sha=SHA, projects=rows),
                              source_sha=SHA, cycle=0, now=NOW)
         self.assertEqual(len(output["work_items"]), len(ACTIVE_OWNER_PROJECTS))
-        self.assertEqual(len(output["owner_jobs"]), 5)
+        self.assertEqual(len(output["owner_jobs"]), 4)
         self.assertEqual(len({r["repository"].casefold()
-                              for r in output["owner_jobs"]}), 5)
+                              for r in output["owner_jobs"]}), 4)
         self.assertEqual({r["project_id"] for r in output["outside_owner_scope"]},
                          DEFERRED)
+        self.assertEqual(len({r["owner"].casefold() for r in output["owner_jobs"]}), 4)
         self.assertEqual(output["coverage"]["registered"], 9)
         self.assertTrue(all(not r["merge_or_deployment_authority"]
                             for r in output["owner_jobs"]))

@@ -66,16 +66,18 @@ def select_work(items, *, cycle, limit, collision_safe=False):
         # project IDs (e.g. RETALLY and research-labs) share its source.
         # Backfill freed slots with the next eligible independent project.
         selected,deferred=[],[]
-        repositories,resources=set(),set()
+        repositories,resources,owners=set(),set(),set()
         for row in ranked:
             repo=row['repository'].casefold()
             if (len(selected)>=limit or repo in repositories
-                    or row['resource'] in resources):
+                    or row['resource'] in resources
+                    or row['owner'].casefold() in owners):
                 deferred.append(row)
                 continue
             selected.append(row)
             repositories.add(repo)
             resources.add(row['resource'])
+            owners.add(row['owner'].casefold())
     return dict(selected=selected,deferred=deferred,
                 blocked_dependencies=sorted(blocked,key=lambda r:r['work_id']),
                 automatic_execution_authority=False)

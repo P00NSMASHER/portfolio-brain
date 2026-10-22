@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import tempfile
 
 from brain.core import BrainError, require
 
@@ -222,10 +223,66 @@ def apply_to_isolated_worktree(root: Path, patch):
         ["git", "rev-parse", "HEAD"], cwd=root, text=True,
         timeout=5).strip() == patch["source_head_sha"],
         "AUTOFIX_LOCAL_GIT_SOURCE_DRIFT")
-    require(not subprocess.check_output(
-        ["git", "status", "--porcelain"], cwd=root, text=True,
-        timeout=5).strip(), "AUTOFIX_WORKTREE_NOT_CLEAN")
+    # Crash recovery: the source replacement may have completed before the
+    # previous process recorded its receipt. Only an exact two-file diff of
+    # this same reviewed recipe can be treated as idempotently completed.
+    porcelain = subprocess.check_output(
+        ["git", "status", "--porcelain=v1", "--untracked-files=all", "-z"],
+        cwd=root, text=True, timeout=5)
+    if porcelain:
+        target, test = root / patch["source_path"], root / patch["test_path"]
+        for selected in (target, test):
+            require(root in selected.parents, "AUTOFIX_PATH_OUTSIDE_WORKTREE")
+            for parent in selected.parents:
+                if parent == root:
+                    break
+                require(not parent.is_symlink(), "AUTOFIX_PARENT_PATH_UNSAFE")
+        entries = [entry for entry in porcelain.split(chr(0)) if entry]
+        only_test = entries == ["?? " + patch["test_path"]]
+        only_both = (len(entries) == 2 and set(entries) == {
+            " M " + patch["source_path"], "?? " + patch["test_path"]})
+        if ((only_test or only_both)
+                and target.is_file() and not target.is_symlink()
+                and test.is_file() and not test.is_symlink()
+                and type(patch.get("test_content")) is str
+                and sha(test.read_bytes()) == patch.get("test_sha256")):
+            original = subprocess.check_output(
+                ["git", "show", "HEAD:" + patch["source_path"]],
+                cwd=root, timeout=5)
+            if sha(original) == patch.get("original_sha256"):
+                reconstructed = generate({
+                    "schema_version": 1,
+                    "repository": patch["repository"],
+                    "source_head_sha": patch["source_head_sha"],
+                    "path": patch["source_path"],
+                    "original_sha256": patch["original_sha256"],
+                    "repair_kind": "READONLY_CI_CHECKOUT_HARDENING",
+                    "independent_gate_required": True,
+                }, original)
+                require(reconstructed["test_path"] == patch["test_path"]
+                        and reconstructed["test_content"] == patch["test_content"]
+                        and reconstructed["changed_content"] == patch.get("changed_content"),
+                        "AUTOFIX_PATCH_RECIPE_REPLAY_FAILURE")
+                if only_both and sha(target.read_bytes()) == patch.get("changed_sha256"):
+                    return {
+                        "status": "ISOLATED_EDIT_ALREADY_PRESENT_AWAITING_CI",
+                        "source_head_sha": patch["source_head_sha"],
+                        "paths": [patch["source_path"], patch["test_path"]],
+                        "merged": False, "deployed": False,
+                    }
+                if only_test and sha(target.read_bytes()) == patch["original_sha256"]:
+                    raise BrainError("AUTOFIX_PARTIAL_WORKTREE_RECONCILIATION_REQUIRED")
+    require(not porcelain, "AUTOFIX_WORKTREE_NOT_CLEAN")
     target, test = root / patch["source_path"], root / patch["test_path"]
+    # Checking only target.is_symlink() is insufficient: a committed .github
+    # directory symlink could otherwise redirect the original source write
+    # outside the isolated repository even when Git reports a clean tree.
+    for path in (target, test):
+        require(root in path.parents, "AUTOFIX_PATH_OUTSIDE_WORKTREE")
+        for parent in path.parents:
+            if parent == root:
+                break
+            require(not parent.is_symlink(), "AUTOFIX_PARENT_PATH_UNSAFE")
     require(target.is_file() and not target.is_symlink()
             and test.parent.is_dir() and not test.parent.is_symlink()
             and not test.exists() and not test.is_symlink()
@@ -247,15 +304,39 @@ def apply_to_isolated_worktree(root: Path, patch):
             and rebuilt["test_content"] == patch["test_content"]
             and rebuilt["test_path"] == patch["test_path"],
             "AUTOFIX_PATCH_RECIPE_REPLAY_FAILURE")
+    stage_path = None
+    test_created = False
     try:
+        # Stage the corrected source on the SAME filesystem before creating
+        # the regression. A failing replacement must leave original bytes
+        # untouched, instead of a truncated or partially written workflow.
+        fd, name = tempfile.mkstemp(prefix=".brain-autofix-", dir=target.parent)
+        stage_path = Path(name)
+        with os.fdopen(fd, "w", encoding="utf-8") as staged:
+            staged.write(patch["changed_content"])
+            staged.flush()
+            os.fsync(staged.fileno())
+        os.chmod(stage_path, target.stat().st_mode & 0o777)
+
+        # Recheck the pinned source after preparing the candidate, so a
+        # concurrent change cannot silently become the patch's input.
+        require(not target.is_symlink()
+                and sha(target.read_bytes()) == patch["original_sha256"],
+                "AUTOFIX_SOURCE_DRIFT_BEFORE_REPLACE")
         fd = os.open(test, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
                      0o600)
+        test_created = True
         with os.fdopen(fd, "w", encoding="utf-8") as output:
             output.write(patch["test_content"])
-        target.write_text(patch["changed_content"], encoding="utf-8")
-    except OSError as exc:
-        if test.exists():
+        os.replace(stage_path, target)
+        stage_path = None
+    except (OSError, BrainError) as exc:
+        if test_created and test.exists():
             test.unlink()
+        if stage_path is not None and stage_path.exists():
+            stage_path.unlink()
+        if isinstance(exc, BrainError):
+            raise
         raise BrainError("AUTOFIX_ISOLATED_FILE_WRITE_FAILED") from exc
     return {
         "status": "ISOLATED_CODE_AND_TEST_EDITED_AWAITING_CI",
