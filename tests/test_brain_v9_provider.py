@@ -46,6 +46,16 @@ class ReadbackTests(unittest.TestCase):
                 {'commit':{'sha':BASE}},row,checks(),{'commit':{'sha':tip}}]):
                 with self.subTest(defect=defect),self.assertRaises(BatchFault):
                     reader.verify_draft_and_checks(R,741,base_sha=BASE,head_sha=SHA,operation_id=OP)
+    def test_uncertain_pr_creation_is_reconciled_without_green_checks(self):
+        r=GitHubOriginalReader()
+        with patch.object(r,'_get',side_effect=[
+            {'commit':{'sha':BASE}},pr(),{'commit':{'sha':BASE}}]) as get:
+            evidence=r.read_draft_only(R,741,base_sha=BASE,head_sha=SHA,operation_id=OP)
+        self.assertEqual(get.call_count,3)
+        self.assertEqual(evidence['status'],'ORIGINAL_DRAFT_WRITE_OBSERVED_CHECKS_UNKNOWN')
+        self.assertFalse(evidence['independent_check_verified'])
+        self.assertFalse(evidence['production_accepted'])
+
     def test_max_gets_and_scoped_repositories(self):
         with self.assertRaises(ValueError):GitHubOriginalReader(max_gets=25)
         reader=GitHubOriginalReader(max_gets=1)
