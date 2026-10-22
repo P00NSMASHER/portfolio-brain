@@ -198,6 +198,25 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(self.q.snapshot()['work'][ident]['pending']['status'],'UNKNOWN')
 
 
+    def test_untrusted_sqlite_event_trigger_is_refused_on_restart(self):
+        self.q.close()
+        with sqlite3.connect(self.path) as conn:
+            conn.execute("CREATE TRIGGER hostile AFTER INSERT ON batch_event "
+                         "BEGIN DELETE FROM batch_event; END")
+        with self.assertRaisesRegex(BatchFault,"JOURNAL_SCHEMA_INVALID"):
+            BatchQueue(self.path)
+
+    def test_world_readable_journal_is_not_opened_as_private_state(self):
+        self.q.close()
+        import os
+        os.chmod(self.path,0o644)
+        try:
+            with self.assertRaisesRegex(BatchFault,"STATE_PATH_UNSAFE"):
+                BatchQueue(self.path)
+        finally:
+            os.chmod(self.path,0o600)
+
+
 class ReleaseTests(unittest.TestCase):
     def test_all_green_is_readiness_not_execution(self):
         out = review_release(release())

@@ -68,7 +68,8 @@ class BatchQueue:
             fd=os.open(self.path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
             os.close(fd)
         st=self.path.stat()
-        must(stat.S_ISREG(st.st_mode) and st.st_nlink==1,"STATE_PATH_UNSAFE")
+        must(stat.S_ISREG(st.st_mode) and st.st_nlink==1 and st.st_uid==os.getuid()
+             and st.st_mode & 0o077==0,"STATE_PATH_UNSAFE")
         self.identity=(st.st_dev,st.st_ino)
         self.db=sqlite3.connect(self.path,timeout=5,isolation_level=None)
         self.db.execute("PRAGMA journal_mode=DELETE")
@@ -96,6 +97,10 @@ class BatchQueue:
             if self.db.in_transaction: self.db.execute("ROLLBACK")
             raise
     def scan(self):
+        must(not self.db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='trigger' "
+            "AND tbl_name IN ('batch_event','batch_head') LIMIT 1").fetchone(),
+            "JOURNAL_SCHEMA_INVALID")
         must(self.db.execute("PRAGMA quick_check").fetchone()[0]=="ok","JOURNAL_TAMPERED")
         rows=self.db.execute("SELECT sequence,body,prev_hash,chain_hash FROM batch_event ORDER BY sequence LIMIT ?",(MAX_EVENTS+1,)).fetchall()
         must(len(rows)<=MAX_EVENTS and sum(len(r[1].encode()) for r in rows)<=MAX_BYTES,"JOURNAL_BOUND")

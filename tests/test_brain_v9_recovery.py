@@ -42,4 +42,11 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(output['actions'][0]['next_action'],
                          'VERIFY_ORIGINAL_INDEPENDENT_CHECKS')
         self.assertFalse(output['production_accepted'])
+    def test_noncanonical_utc_clock_is_refused(self):
+        for invalid in ('20261022T032500Z','2026-10-22T03:25:00.1234567Z',
+                        '2026-10-22T03:25:00+00:00',True):
+            with self.subTest(invalid=invalid),self.assertRaisesRegex(
+                    BatchFault,'RECOVERY_CLOCK_INVALID'):
+                recovery_plan(FakeQueue({}),now=invalid)
+
 if __name__=='__main__':unittest.main()

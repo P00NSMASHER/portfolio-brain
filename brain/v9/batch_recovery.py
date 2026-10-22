@@ -5,10 +5,12 @@ original lease expires. No task scheduling, code execution or remote writes.
 """
 from __future__ import annotations
 from datetime import datetime
+import re
 from brain.v9.batch_queue import BatchFault
 
 def at(value):
-    if type(value) is not str or not value.endswith('Z'):
+    if (type(value) is not str or not re.fullmatch(
+            r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?Z', value)):
         raise BatchFault('RECOVERY_CLOCK_INVALID')
     try: return datetime.fromisoformat(value[:-1]+'+00:00')
     except ValueError as exc: raise BatchFault('RECOVERY_CLOCK_INVALID') from exc
