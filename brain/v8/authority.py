@@ -13,7 +13,7 @@ REPOSITORY = "P00NSMASHER/portfolio-brain"
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github/workflows/brain-cycle.yml"
 # A scope-name scan cannot establish which credentials the workflow uses.
 # Any workflow edit requires renewed source review before issuing this receipt.
-REVIEWED_WORKFLOW_SHA256 = "b0ece62287614890ccf8a71c595592b64a181b521e783ce2f925bd6fc9e92ea2"
+REVIEWED_WORKFLOW_SHA256 = "0fb86ed1af641db2b2568038ad57233429c1bceec469c077f6b680f87ff6adb5"
 
 
 def runtime_authority(workflow_text=None):
