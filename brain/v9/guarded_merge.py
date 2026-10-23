@@ -659,6 +659,13 @@ class GitHub:
         require((method == "POST") == (path == "graphql")
                 and (method == "POST") == (body is not None),
                 "GITHUB_METHOD_INVALID")
+        # Even direct _request callers cannot send native enrollment or
+        # arbitrary GraphQL mutations around the governed reservation gate.
+        if method == "POST":
+            require(type(body) is dict and set(body) == {"query", "variables"}
+                    and body["query"] in (SETTINGS_QUERY, RULESET_QUERY, THREADS_QUERY)
+                    and type(body["variables"]) is dict,
+                    "GITHUB_GRAPHQL_NOT_APPROVED")
         connection = http.client.HTTPSConnection("api.github.com", timeout=15)
         headers = {"Authorization": "Bearer " + self.token,
                    "Accept": "application/vnd.github+json",
