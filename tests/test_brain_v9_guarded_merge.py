@@ -28,6 +28,7 @@ class FakeProvider:
     def __init__(self):
         self.calls = []
         self.mutations = 0
+        self.native_intents = set()
         self.enabled = False
         self.disabled = False
         self.no_acceptance = False
@@ -95,6 +96,13 @@ class FakeProvider:
 
     def get(self, path):
         self.calls.append(("GET", path))
+        if path == ROOT + "commits/" + REVIEW_TIP + "/check-runs?per_page=100":
+            import hashlib
+            raw = json.dumps(self.record).encode()
+            return {"total_count": 1, "check_runs": [{
+                "name": "portfolio-source-acceptance", "head_sha": REVIEW_TIP,
+                "app": {"id": 5121826}, "status": "completed", "conclusion": "success",
+                "external_id": "source-acceptance:" + BASE + ":" + hashlib.sha256(raw).hexdigest()}]}
         if path == "repos/" + gm.REPO:
             r = copy.deepcopy(self.repo)
             if self.disabled:
@@ -155,6 +163,12 @@ class FakeProvider:
         if path == ROOT + "contents/" + FILE + "?ref=" + HEAD:
             return content(RAW)
         raise AssertionError("UNREVIEWED_PROVIDER_ROUTE: " + path)
+
+    def reserve_native_intent(self, number, head):
+        key = (number, head)
+        if key in self.native_intents:
+            raise gm.Denied("AUTO_MERGE_INTENT_UNVERIFIED_NO_RETRY")
+        self.native_intents.add(key)
 
     def graphql(self, query, variables):
         self.calls.append(("GRAPHQL", "read" if query in
@@ -232,7 +246,7 @@ class GuardedAdmissionTests(unittest.TestCase):
         f = FakeProvider()
         result = gm.run(f, number=PR, expected_main=BASE, apply=True)
         self.assertEqual(result["status"], "NATIVE_AUTO_MERGE_ENROLLED")
-        self.assertEqual(result["provider_writes"], 1)
+        self.assertEqual(result["provider_writes"], 2)
         self.assertTrue(result["enrolled"])
         self.assertFalse(result["merged"])
         self.assertEqual(f.mutations, 1)
@@ -267,7 +281,7 @@ class GuardedAdmissionTests(unittest.TestCase):
         f.repo_setting_hidden = True
         result = __import__("brain.v9.guarded_merge_runner", fromlist=["dispatch_once"]).dispatch_once(
             lambda: f, BASE, apply=True)
-        self.assertEqual(result["provider_writes"], 1)
+        self.assertEqual(result["provider_writes"], 2)
         self.assertEqual(f.mutations, 1)
 
     def test_graphql_setting_denial_conflict_and_forged_identity_block(self):
@@ -305,7 +319,7 @@ class GuardedAdmissionTests(unittest.TestCase):
         f.ruleset_bypass_hidden = True
         from brain.v9.guarded_merge_runner import dispatch_once
         result = dispatch_once(lambda: f, BASE, apply=True)
-        self.assertEqual(result["provider_writes"], 1)
+        self.assertEqual(result["provider_writes"], 2)
         self.assertEqual(f.mutations, 1)
 
     def test_no_bypass_must_be_authenticated_and_complete(self):
@@ -545,7 +559,7 @@ class EventRunnerTests(unittest.TestCase):
         self.assertEqual(result["status"], "OBSERVED")
         self.assertEqual(result["candidate_count"], 1)
         self.assertEqual(result["processed"], 1)
-        self.assertEqual(result["provider_writes"], 1)
+        self.assertEqual(result["provider_writes"], 2)
         self.assertEqual(f.mutations, 1)
 
     def test_real_clean_native_eligibility_denial_stops_event_runner_without_post(self):

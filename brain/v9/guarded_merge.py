@@ -178,6 +178,26 @@ def accepted_source(api, main):
             and terminal.get("deterministic_report_reproduction") == "PASS"
             and proof.get("technical_workflow_conclusion") == "success",
             "ACCEPTANCE_ORIGINAL_EVIDENCE_MISSING")
+    # A branch writer can manufacture every field above. Only the separate
+    # verifier App may attest this exact immutable receipt and source. Its
+    # existing CI check is deliberately NOT an acceptance attestation.
+    checks = api.get("repos/" + REPO + "/commits/" + tip + "/check-runs?per_page=100")
+    require(type(checks) is dict and type(checks.get("total_count")) is int
+            and type(checks.get("check_runs")) is list
+            and 0 <= checks["total_count"] < 100
+            and len(checks["check_runs"]) == checks["total_count"],
+            "ACCEPTANCE_ATTESTATION_CENSUS_INCOMPLETE")
+    attested = [row for row in checks["check_runs"] if type(row) is dict
+                and row.get("name") == "portfolio-source-acceptance"]
+    binding = "source-acceptance:" + main + ":" + hashlib.sha256(raw).hexdigest()
+    require(len(attested) == 1 and attested[0].get("head_sha") == tip
+            and type(attested[0].get("app")) is dict
+            and type(attested[0]["app"].get("id")) is int
+            and attested[0]["app"]["id"] == 5121826
+            and attested[0].get("external_id") == binding
+            and attested[0].get("status") == "completed"
+            and attested[0].get("conclusion") == "success",
+            "ACCEPTANCE_ATTESTATION_UNVERIFIED")
     return {"acceptance_ref": name, "acceptance_commit": tip}
 
 
@@ -539,6 +559,10 @@ def run(api, *, number, expected_main, apply=False, early=False):
         return {k: v for k, v in proof.items() if k != "node_id"}
     node_id = proof["node_id"]
     try:
+        # GitHub creates this exact ref once, atomically. It survives runner
+        # restarts and is never automatically removed, including on timeout.
+        # A second invocation cannot turn uncertainty into another request.
+        api.reserve_native_intent(number, proof["head_sha"])
         # Bind at GitHub's mutation boundary, not just the preceding reads.
         # This does not freeze later PR pushes or substitute for final gates.
         result = api.graphql(ENABLE_MUTATION, {
@@ -569,6 +593,10 @@ def run(api, *, number, expected_main, apply=False, early=False):
                 and current.get("base", {}).get("repo", {}).get("full_name") == REPO,
                 "AUTO_MERGE_PROVIDER_READBACK_UNVERIFIED")
     except Exception as exc:
+        # Local authority denials are known zero-write outcomes, never an
+        # unknown POST result that could trigger manual replay ambiguity.
+        if isinstance(exc, Denied) and str(exc) == "NATIVE_INTENT_REF_WRITE_NOT_AUTHORIZED":
+            raise
         # Even an explicit rejection is POST-attempt evidence, not a retry grant.
         if isinstance(exc, Denied) and str(exc) in (
             "AUTO_MERGE_PROVIDER_REJECTION_FORBIDDEN",
@@ -585,7 +613,7 @@ def run(api, *, number, expected_main, apply=False, early=False):
                 "AUTO_MERGE_COMPLETION_UNVERIFIED")
         return {"status": "NATIVE_AUTO_MERGE_COMPLETED",
                 "number": number, "head_sha": proof["head_sha"],
-                "base_sha": expected_main, "provider_writes": 1,
+                "base_sha": expected_main, "provider_writes": 2,
                 "enrolled": True, "merged": True,
                 "merge_commit_sha": current["merge_commit_sha"]}
     require(type(current.get("auto_merge")) is dict
@@ -599,7 +627,7 @@ def run(api, *, number, expected_main, apply=False, early=False):
             "AUTO_MERGE_PROVIDER_READBACK_UNVERIFIED")
     return {"status": "NATIVE_AUTO_MERGE_ENROLLED",
             "number": number, "head_sha": proof["head_sha"],
-            "base_sha": expected_main, "provider_writes": 1,
+            "base_sha": expected_main, "provider_writes": 2,
             "enrolled": True, "merged": False}
 
 
@@ -626,9 +654,18 @@ class GitHub:
                 and (path == "graphql" or path.startswith(root)
                      or path == "repos/" + REPO),
                 "GITHUB_ROUTE_NOT_ALLOWLISTED")
+        # A candidate PR grant is not authority to create an intent-marker
+        # ref. Only the already-reviewed GraphQL route may use POST.
         require((method == "POST") == (path == "graphql")
                 and (method == "POST") == (body is not None),
                 "GITHUB_METHOD_INVALID")
+        # Even direct _request callers cannot send native enrollment or
+        # arbitrary GraphQL mutations around the governed reservation gate.
+        if method == "POST":
+            require(type(body) is dict and set(body) == {"query", "variables"}
+                    and body["query"] in (SETTINGS_QUERY, RULESET_QUERY, THREADS_QUERY)
+                    and type(body["variables"]) is dict,
+                    "GITHUB_GRAPHQL_NOT_APPROVED")
         connection = http.client.HTTPSConnection("api.github.com", timeout=15)
         headers = {"Authorization": "Bearer " + self.token,
                    "Accept": "application/vnd.github+json",
@@ -656,6 +693,14 @@ class GitHub:
 
     def get(self, path):
         return self._request("GET", path)
+
+    def reserve_native_intent(self, number, head):
+        require(type(number) is int and 0 < number < 10**9, "PR_NUMBER_INVALID")
+        sha(head)
+        # Current deny-by-default governance only grants candidate PR branches,
+        # not an additional brain-native-intent ref mutation. Do not attempt
+        # the REST write or silently expand authority to make a PR mergeable.
+        raise Denied("NATIVE_INTENT_REF_WRITE_NOT_AUTHORIZED")
 
     def graphql(self, query, variables):
         require((query in (SETTINGS_QUERY, RULESET_QUERY)
