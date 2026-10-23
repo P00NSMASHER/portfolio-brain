@@ -22,6 +22,17 @@ STALL_AFTER_MINUTES = 90
 NON_PRODUCTIVE_ACTIVITY_KINDS = {"HEALTH_CHECK"}
 
 
+def _is_external_runtime_qa_gate(work: dict[str, Any]) -> bool:
+    """Classify product runtime QA that cannot execute inside GitHub Actions."""
+    return (
+        work.get("work_type") == "TEST"
+        and work.get("required_authority") == "EXPERIMENT"
+        and isinstance(work.get("source_ref"), str)
+        and work["source_ref"].startswith("SKU-")
+        and work.get("external_milestone") == "PUBLISH_PRODUCT"
+    )
+
+
 def load_json(path: str | Path) -> Any:
     p=Path(path)
     if not p.is_absolute():p=ROOT/p
@@ -92,7 +103,7 @@ def _queue(scheduler: dict[str,Any], *, at: datetime) -> dict[str,Any]:
     items=[];open_ages=[]
     for row in sorted(scheduler["work_items"],key=lambda x:(x.get("created_at") or "",x["scheduler_work_id"]),reverse=True)[:32]:
         age=_age_minutes(row.get("created_at"),at)
-        if row["state"] in {"QUEUED","ACTIVE"} and age is not None:open_ages.append(age)
+        if row["state"] in {"QUEUED","ACTIVE"} and age is not None and not _is_external_runtime_qa_gate(row):open_ages.append(age)
         items.append({
             "work_id":row["scheduler_work_id"],
             "work_type":row["work_type"],
@@ -106,6 +117,7 @@ def _queue(scheduler: dict[str,Any], *, at: datetime) -> dict[str,Any]:
             "lease_generation":row.get("lease_generation"),
             "lease_expires_at":row.get("lease_expires_at"),
             "source_ref":row.get("source_ref"),
+            "external_runtime_qa_gate":_is_external_runtime_qa_gate(row),
         })
     return {
         "sequence":scheduler["sequence"],
@@ -115,11 +127,13 @@ def _queue(scheduler: dict[str,Any], *, at: datetime) -> dict[str,Any]:
         "terminal_total":counts["COMPLETE"]+counts["CANCELLED"],
         "completed_fingerprint_count":len(scheduler["completed_fingerprints"]),
         "oldest_open_age_minutes":max(open_ages) if open_ages else None,
+        "externally_gated_open_count":sum(1 for row in scheduler["work_items"] if row["state"] in {"QUEUED","ACTIVE"} and _is_external_runtime_qa_gate(row)),
         "stalled_open_count":sum(
             1 for row in items
             if row["state"] in {"QUEUED","ACTIVE"}
             and row["age_minutes"] is not None
             and row["age_minutes"]>STALL_AFTER_MINUTES
+            and not row["external_runtime_qa_gate"]
         ),
         "items":items,
     }
@@ -132,7 +146,7 @@ def _agents(agent_state: dict[str,Any], scheduler: dict[str,Any], *, at: datetim
 
     open_by_agent={}
     for work in scheduler["work_items"]:
-        if work["state"] not in {"QUEUED","ACTIVE"}:continue
+        if work["state"] not in {"QUEUED","ACTIVE"} or _is_external_runtime_qa_gate(work):continue
         open_by_agent.setdefault(work["assigned_agent_id"],[]).append(work)
 
     rows=[]
@@ -410,7 +424,7 @@ def build_operational_telemetry(*, at: str | None=None) -> dict[str,Any]:
     for row in scheduler["work_items"]:
         if row["state"]=="CANCELLED":
             failures.append({"kind":"SCHEDULER_CANCELLED","at":row.get("created_at"),"ref":row["scheduler_work_id"],"project_ids":row["project_ids"]})
-        elif row["state"] in {"QUEUED","ACTIVE"}:
+        elif row["state"] in {"QUEUED","ACTIVE"} and not _is_external_runtime_qa_gate(row):
             age=_age_minutes(row.get("created_at"),now)
             if age is not None and age>STALL_AFTER_MINUTES:
                 failures.append({"kind":"SCHEDULER_STALLED","at":row.get("created_at"),"ref":row["scheduler_work_id"],"project_ids":row["project_ids"]})
