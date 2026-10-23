@@ -107,6 +107,55 @@ class PublicationReservationTests(unittest.TestCase):
                     self.assertEqual(result["repository_count"], 8)
                     self.assertEqual(result["status"], "PASS")
 
+    def test_simulated_full_proof_reconciles_within_same_twenty_four_gets(self):
+        # Isolated deterministic proof fixture, never evidence of live delivery.
+        import json
+        from brain.v9.publication_reader import PublicationReader
+        fixture = json.loads((Path(__file__).parents[1] /
+                              "brain/v9/repair-proof.json").read_text())
+        payload = {
+            "schema_version": 1, "source_sha": SHA,
+            "canonical_pending_events": 0,
+            "operation": {
+                "name": "projects", "requests": 14,
+                "publication_reserved_gets": 10,
+                "project_request_ceiling": 14,
+            },
+            "projects": [{
+                "id": "abvm", "repository": "P00NSMASHER/abvmschoolstarworld",
+                "repository_revision": "b" * 40,
+                "source_check_state": "NO_ADVERSE_CHECKS_OBSERVED_NOT_RELEASE_APPROVAL",
+            }],
+        }
+        def synthetic_verify(self, spec):
+            self.used_gets += 10
+            return {
+                "status": "ORIGINAL_PUBLISHED_REPAIR_LIVE_VERIFIED",
+                "repository": spec["repository"],
+                "path": spec["path"], "candidate_sha": spec["candidate_sha"],
+                "deployed_sha": "e" * 40,
+                "asset_sha256": spec["expected_asset_sha256"],
+                "execution_mode": "SUPERVISED_REPAIR_NOT_UNATTENDED_AUTOMERGE",
+                "production_accepted": False,
+            }
+        with tempfile.TemporaryDirectory() as tmp:
+            queue = BatchQueue(Path(tmp) / "state.sqlite")
+            try:
+                reader = PublicationReader(token="", max_gets=10)
+                with patch.object(PublicationReader, "verify", synthetic_verify):
+                    result = run_cycle(payload, queue, source_sha=SHA, cycle=1,
+                                       now="2026-10-23T16:00:00Z",
+                                       proof_spec=fixture, reader=reader)
+                self.assertEqual(result["provider_gets"], 10)
+                self.assertEqual(result["total_project_gets"], 24)
+                self.assertEqual(result["metrics"]["actual_live_verified"], 1)
+                self.assertFalse(result["production_accepted"])
+                self.assertFalse(result["automatic_execution_authority"])
+                self.assertEqual(queue.restore_drill()["status"],
+                                 "ISOLATED_RESTORE_REPLAY_PASSED")
+            finally:
+                queue.close()
+
     def test_v9_refuses_false_proof_reservation_before_durable_mutation(self):
         payload = {
             "schema_version": 1, "source_sha": SHA,

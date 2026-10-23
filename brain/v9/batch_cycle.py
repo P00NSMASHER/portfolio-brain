@@ -36,6 +36,13 @@ def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=
          and type(operation.get('requests')) is int and 0 <= operation['requests'] <= 24,
          'CYCLE_GET_BUDGET_INVALID')
     used = operation['requests']
+    reserved = operation.get('publication_reserved_gets', 0)
+    ceiling = operation.get('project_request_ceiling', 24 - reserved)
+    # Reject a false reservation before touching the durable queue. The 24
+    # GET cap still includes real project GETs and original publication GETs.
+    need(type(reserved) is int and reserved in (0, REQUIRED_BUDGET)
+         and type(ceiling) is int and ceiling == 24 - reserved
+         and used <= ceiling, 'CYCLE_GET_BUDGET_INVALID')
     rows = report.get('projects')
     need(type(rows) is list and len(rows) <= 16, 'CYCLE_PROJECTS_INVALID')
     inputs, missing, skipped, seen = [], [], [], set()

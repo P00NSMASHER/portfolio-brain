@@ -64,7 +64,12 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         raise BrainError("REDIRECT_REFUSED: source identity must remain api.github.com")
 
 class GitHub:
-    def __init__(self, *, private=False, transport=None):
+    def __init__(self, *, private=False, transport=None, max_requests=24):
+        # An operation may deliberately reserve provider GETs for a later
+        # proof stage, but no caller may exceed the original hard 24 limit.
+        require(type(max_requests) is int and 1<=max_requests<=24,
+                "REQUEST_CAP_INVALID")
+        self.max_requests=max_requests
         self.private=private
         self.token=os.environ.get("GITHUB_TOKEN", "")
         require(not private or self.token, "PRIVATE_ACCESS_UNAVAILABLE: explicit existing GITHUB_TOKEN required")
@@ -81,7 +86,8 @@ class GitHub:
         for attempt in range(2):
             # An exhausted budget cannot increment the reported request
             # counter beyond the policy limit. No provider request is sent.
-            require(self.requests < 24, "REQUEST_BUDGET_EXHAUSTED")
+            require(self.requests < 24 and self.requests < self.max_requests,
+                    "REQUEST_BUDGET_EXHAUSTED")
             self.requests+=1
             try:
                 if self.transport:
