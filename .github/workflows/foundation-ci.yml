@@ -92,6 +92,62 @@ jobs:
         run: python -m operations.validate_operating_mode
       - name: Run regression tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
+      # This additional lane checks out the immutable PR head separately.
+      # The existing required "validate" suite above checks GitHub's
+      # synthetic merge tree; its artifacts must not be relabeled as HEAD.
+      - name: Checkout immutable candidate head separately
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: exact-candidate
+          persist-credentials: false
+      - name: Exact-candidate v9 adversarial proof (not production acceptance)
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+          SYNTHETIC_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          test -f exact-candidate/tests/test_brain_v9_red_team.py
+          test "$(git -C exact-candidate rev-parse HEAD)" = "$CANDIDATE_SHA"
+          (cd exact-candidate && python -m unittest discover -s tests -p test_brain_v9_red_team.py -v)
+          mkdir -p brain/out/exact-candidate
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          def git(*args):
+              return subprocess.check_output(
+                  ["git", "-C", "exact-candidate", *args], text=True).strip()
+          sha = git("rev-parse", "HEAD")
+          assert sha == os.environ["CANDIDATE_SHA"]
+          evidence = {
+              "phase": "EXACT_CANDIDATE_HEAD_FOCUSED_V9_REGRESSION",
+              "source_sha": sha,
+              "source_tree_sha": git("rev-parse", "HEAD^{tree}"),
+              "synthetic_merge_sha": os.environ["SYNTHETIC_SHA"],
+              "workflow_run_id": os.environ["RUN_ID"],
+              "test_file": "tests/test_brain_v9_red_team.py",
+              "test_suite": "unittest discover focused v9 red team",
+              "production_accepted": False,
+              "independent_acceptance_attested": False,
+          }
+          Path("brain/out/exact-candidate/evidence.json").write_text(
+              json.dumps(evidence, sort_keys=True, indent=2) + "\\n",
+              encoding="utf-8",
+          )
+          PY
+      - name: Upload immutable candidate v9 report (not acceptance)
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: v9-exact-head-${{ github.event.pull_request.head.sha }}-${{ github.run_id }}
+          path: brain/out/exact-candidate/evidence.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Exact-source Brain v2 preflight
         run: python -m brain preflight --output brain/out/preflight --expected-sha "$(git rev-parse HEAD)"
       - name: Upload Brain v2 deterministic preflight
