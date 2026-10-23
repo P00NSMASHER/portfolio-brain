@@ -104,6 +104,15 @@ class TruthIntegrationTests(unittest.TestCase):
         validate_upstream_receipt(r)
         self.assertEqual(project_truth_state(r),"UNKNOWN")
 
+    def test_non_finite_or_boolean_evaluated_at_is_invalid(self):
+        for invalid in (True,False,float("nan"),float("inf"),float("-inf")):
+            with self.subTest(evaluated_at=invalid):
+                r=receipt("PROVEN","SATISFIED")
+                r["evaluated_at"]=invalid
+                resign_receipt(r)
+                with self.assertRaisesRegex(TruthIntegrationError,"finite numeric"):
+                    project_truth_state(r)
+
     def test_tampered_receipt_body_fails_closed_even_when_shape_is_valid(self):
         r=receipt("PROVEN","SATISFIED")
         original_hash=r["receipt_hash"]
