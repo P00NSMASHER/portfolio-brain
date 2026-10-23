@@ -136,6 +136,29 @@ class RuntimeTests(unittest.TestCase):
             advance_cycle(state,self.cycle_receipt(state,observation))
         self.assertEqual(state["repositories"][rid]["cursor_sha"],durable_sha)
 
+    def test_cycle_receipt_rejects_unknown_or_duplicate_observation_identity(self):
+        state=bootstrap_state(now="2026-09-25T17:00:00Z")
+        rid="REPO-001";sha=state["repositories"][rid]["cursor_sha"]
+        observation={
+            "repository_id":rid,"status":"UNCHANGED","source_ref":"main",
+            "prior_sha":sha,"current_sha":sha,"observed_at":"2026-09-25T18:00:00Z",
+        }
+        unknown=dict(observation,status="OBSERVED")
+        with self.assertRaisesRegex(RuntimeStateError,"status invalid"):
+            advance_cycle(state,self.cycle_receipt(state,unknown))
+        receipt=self.cycle_receipt(state,observation)
+        receipt["observations"]=[observation,copy.deepcopy(observation)]
+        receipt["cycle_id"]=cycle_id_for(
+            state,mode="observe",target_repository_id=rid,
+            observations=receipt["observations"],
+        )
+        receipt["receipt_hash"]=canonical_hash({
+            key:value for key,value in receipt.items() if key!="receipt_hash"
+        })
+        with self.assertRaisesRegex(RuntimeStateError,"duplicate repository"):
+            advance_cycle(state,receipt)
+        self.assertEqual(state["sequence"],0)
+
     def test_cycle_timestamp_cannot_roll_freshness_backward(self):
         state=bootstrap_state(now="2026-09-25T19:00:00Z")
         rid="REPO-001"; sha=state["repositories"][rid]["cursor_sha"]
