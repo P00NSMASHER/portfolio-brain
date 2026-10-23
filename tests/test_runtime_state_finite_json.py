@@ -7,7 +7,15 @@ import zipfile
 from pathlib import Path
 
 from runtime.artifact_restore import InvalidStateArtifact, _validated_payload, restore_latest_valid_state
-from runtime.state import RuntimeStateError, bootstrap_state, canonical_hash, validate_state
+from runtime.continuous_runtime import load_runtime_state
+from runtime.state import (
+    RuntimeStateError,
+    advance_cycle,
+    bootstrap_state,
+    canonical_hash,
+    cycle_id_for,
+    validate_state,
+)
 
 
 def artifact(body: bytes) -> bytes:
@@ -34,7 +42,64 @@ def validate_artifact(body: bytes):
     )
 
 
+def state_after_one_cycle():
+    state = bootstrap_state(now="2026-10-22T23:00:00Z")
+    cursor = state["repositories"]["REPO-001"]["cursor_sha"]
+    observations = [{
+        "repository_id": "REPO-001",
+        "status": "UNCHANGED",
+        "source_ref": "main",
+        "prior_sha": cursor,
+        "current_sha": cursor,
+        "observed_at": "2026-10-22T23:01:00Z",
+    }]
+    receipt = {
+        "schema_version": "1.0.0",
+        "cycle_id": cycle_id_for(
+            state,
+            mode="observe",
+            target_repository_id="REPO-001",
+            observations=observations,
+        ),
+        "mode": "observe",
+        "started_at": "2026-10-22T23:01:00Z",
+        "finished_at": "2026-10-22T23:01:00Z",
+        "status": "PASS",
+        "reason": None,
+        "observations": observations,
+        "api_requests": 1,
+    }
+    receipt["receipt_hash"] = canonical_hash(receipt)
+    return advance_cycle(state, receipt)
+
+
 class RuntimeStateFiniteJSONTests(unittest.TestCase):
+    def test_direct_loader_and_artifact_restore_reject_boolean_sequences(self):
+        valid_states = [
+            bootstrap_state(now="2026-10-22T23:00:00Z"),
+            state_after_one_cycle(),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "runtime_state.json"
+            for sequence, valid in enumerate(valid_states):
+                with self.subTest(control=sequence):
+                    path.write_text(json.dumps(valid), encoding="utf-8")
+                    self.assertEqual(
+                        load_runtime_state(path, now="2026-10-22T23:02:00Z")["sequence"],
+                        sequence,
+                    )
+
+                malformed = dict(valid)
+                malformed["sequence"] = bool(sequence)
+                malformed_body = json.dumps(malformed).encode("utf-8")
+                with self.subTest(boolean=bool(sequence), path="direct"):
+                    path.write_bytes(malformed_body)
+                    with self.assertRaises(RuntimeStateError):
+                        load_runtime_state(path, now="2026-10-22T23:02:00Z")
+                with self.subTest(boolean=bool(sequence), path="artifact"):
+                    with self.assertRaises(InvalidStateArtifact):
+                        validate_artifact(malformed_body)
+
     def test_four_reproduced_nonfinite_payloads_are_rejected(self):
         probes = [
             ("daily_learning_state", float("nan")),

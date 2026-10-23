@@ -159,7 +159,7 @@ def validate_state(state: dict[str,Any])->None:
         raise RuntimeStateError("runtime state fields changed")
     if state["schema_version"]!="1.0.0" or state["state_id"]!="portfolio-runtime-state":
         raise RuntimeStateError("runtime state identity mismatch")
-    if not isinstance(state["sequence"],int) or state["sequence"]<0:
+    if type(state["sequence"]) is not int or state["sequence"]<0:
         raise RuntimeStateError("runtime state sequence invalid")
     _utc_timestamp(state["updated_at"],"runtime state updated_at")
     repos=state["repositories"]
