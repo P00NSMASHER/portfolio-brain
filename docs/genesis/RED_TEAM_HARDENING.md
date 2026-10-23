@@ -1,21 +1,26 @@
 # Engine red-team hardening
 
-## Native enrollment survives process restarts
+## Native enrollment held under current governance
 
-After all admission reads succeed, the guarded controller atomically creates
-`refs/heads/brain-native-intent/pr-<number>-<exact-head>` pointing to that head.
-Only a confirmed HTTP 201 with the exact returned identity permits the native
-enrollment request. GitHub refuses a second creation. A lost response, existing
-marker or failed enrollment stays held across fresh workflow runs. The controller
-never deletes or updates intent refs and never retries an uncertain request.
-Successful enrollment reports two provider writes: the intent and enrollment.
+The create-once marker design integrated by PR #750 is NOT an authorized
+production mutation. The deny-by-default `governance/boundaries.json` grants
+Portfolio Brain candidate PR writes under `factory/` and `auto-repair/`,
+but contains no authorization for `refs/heads/brain-native-intent/`.
 
-An existing marker is not proof of enrollment or a merge. Reconcile the original
-PR, timeline and creating run read-only. No automated cleanup or retry grant is
-implemented. Intent refs must remain retained; deleting one removes the replay
-barrier and requires a separately governed decision. The controller's narrow
-POST allowlist permits only this namespace, never an arbitrary branch change.
-Repository settings, permissions and final GitHub merge protections are unchanged.
+Until an independently reviewed authorization or an independently verified
+already-authorized durable replay barrier is established, the production
+GitHub adapter refuses marker creation **before network I/O** and its HTTP
+allowlist rejects all git-ref POSTs. Native auto-merge enrollment consequently
+fails closed, reporting a blocked candidate rather than an uncertain write.
+No permission, protected-branch rule, credential, or deployment authority is
+broadened. No old marker is deleted or retried.
+
+Network-free `FakeProvider` unit tests of proposed create-once semantics
+remain algorithm-only simulations; they do not establish approval for use or
+prove a production native enrollment. This hold must not be lifted without
+fresh exact-head Foundation, App 5121826 and independent adverse-case review.
+GitHub's required checks and source-specific six-hour production acceptance
+remain separate requirements.
 
 ## Acceptance receipt provenance
 

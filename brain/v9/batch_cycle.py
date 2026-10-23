@@ -36,6 +36,13 @@ def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=
          and type(operation.get('requests')) is int and 0 <= operation['requests'] <= 24,
          'CYCLE_GET_BUDGET_INVALID')
     used = operation['requests']
+    reserved = operation.get('publication_reserved_gets', 0)
+    ceiling = operation.get('project_request_ceiling', 24 - reserved)
+    # Reject a false reservation before touching the durable queue. The 24
+    # GET cap still includes real project GETs and original publication GETs.
+    need(type(reserved) is int and reserved in (0, REQUIRED_BUDGET)
+         and type(ceiling) is int and ceiling == 24 - reserved
+         and used <= ceiling, 'CYCLE_GET_BUDGET_INVALID')
     rows = report.get('projects')
     need(type(rows) is list and len(rows) <= 16, 'CYCLE_PROJECTS_INVALID')
     inputs, missing, skipped, seen = [], [], [], set()
@@ -58,13 +65,17 @@ def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=
         need(hashval(sha, 40), 'CYCLE_PROJECT_SOURCE_INVALID')
         adverse = state == 'ADVERSE_CHECKS_OBSERVED'
         clean = state == 'NO_ADVERSE_CHECKS_OBSERVED_NOT_RELEASE_APPROVAL'
-        kind = 'PRODUCTION_INCIDENT' if adverse else 'RESEARCH'
+        # Check-run history for a commit also includes checks from unrelated
+        # feature-branch runs on that SHA.  This source-only envelope cannot
+        # prove that an adverse check was from a protected-main runtime cycle.
+        kind = 'CHECK_EVIDENCE_TRIAGE' if adverse else 'RESEARCH'
         # This is a repository diagnosis scope, not a claimed source file or
         # authority to mutate arbitrary files. The owner must identify a real
         # defect/path and claim its current source before any actual edit.
         path = 'repository-observation'
         route = route_defect(project_id=project, repository=row['repository'],
                              source_sha=sha, path=path, kind=kind)
+        route['source_check_state'] = state
         priority = 1 if adverse else (3 if clean else 2)
         item = dict(project_id=project, repository=row['repository'], source_sha=sha,
                     fingerprint=digest(dict(project=project, check_state=state,
@@ -122,6 +133,11 @@ def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=
             repository=work['repository'], source_sha=work['source_sha'],
             path=work['path'], priority=work['priority'], owner=work['owner'],
             verifier=route['verifier'], stage=work['stage'],
+            source_check_state=route['source_check_state'],
+            incident_classification=(
+                'ADVERSE_CHECK_HISTORY_PRODUCTION_UNVERIFIED'
+                if route['defect_kind'] == 'CHECK_EVIDENCE_TRIAGE'
+                else 'NO_PRODUCTION_INCIDENT_CLAIM'),
             source_reobservation_required=True, durable_claim_required_before_mutation=True,
             automatic_execution_authority=False))
     selected = select_distinct_owners(candidates, limit=5, cycle=cycle)

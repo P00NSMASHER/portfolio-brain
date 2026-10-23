@@ -593,6 +593,10 @@ def run(api, *, number, expected_main, apply=False, early=False):
                 and current.get("base", {}).get("repo", {}).get("full_name") == REPO,
                 "AUTO_MERGE_PROVIDER_READBACK_UNVERIFIED")
     except Exception as exc:
+        # Local authority denials are known zero-write outcomes, never an
+        # unknown POST result that could trigger manual replay ambiguity.
+        if isinstance(exc, Denied) and str(exc) == "NATIVE_INTENT_REF_WRITE_NOT_AUTHORIZED":
+            raise
         # Even an explicit rejection is POST-attempt evidence, not a retry grant.
         if isinstance(exc, Denied) and str(exc) in (
             "AUTO_MERGE_PROVIDER_REJECTION_FORBIDDEN",
@@ -650,15 +654,18 @@ class GitHub:
                 and (path == "graphql" or path.startswith(root)
                      or path == "repos/" + REPO),
                 "GITHUB_ROUTE_NOT_ALLOWLISTED")
-        intent = (method == "POST" and path == root + "git/refs"
-                  and type(body) is dict and set(body) == {"ref", "sha"}
-                  and type(body["ref"]) is str and type(body["sha"]) is str
-                  and re.fullmatch(r"refs/heads/brain-native-intent/pr-[1-9][0-9]{0,8}-[a-f0-9]{40}", body["ref"])
-                  and body["ref"].endswith("-" + body["sha"])
-                  and SHA.fullmatch(body["sha"]) is not None)
-        require((method == "POST") == (path == "graphql" or intent)
+        # A candidate PR grant is not authority to create an intent-marker
+        # ref. Only the already-reviewed GraphQL route may use POST.
+        require((method == "POST") == (path == "graphql")
                 and (method == "POST") == (body is not None),
                 "GITHUB_METHOD_INVALID")
+        # Even direct _request callers cannot send native enrollment or
+        # arbitrary GraphQL mutations around the governed reservation gate.
+        if method == "POST":
+            require(type(body) is dict and set(body) == {"query", "variables"}
+                    and body["query"] in (SETTINGS_QUERY, RULESET_QUERY, THREADS_QUERY)
+                    and type(body["variables"]) is dict,
+                    "GITHUB_GRAPHQL_NOT_APPROVED")
         connection = http.client.HTTPSConnection("api.github.com", timeout=15)
         headers = {"Authorization": "Bearer " + self.token,
                    "Accept": "application/vnd.github+json",
@@ -672,7 +679,7 @@ class GitHub:
         try:
             connection.request(method, "/" + path, body=raw, headers=headers)
             response = connection.getresponse()
-            require(response.status == (201 if intent else 200), "HTTP_" + str(response.status))
+            require(response.status == 200, "HTTP_" + str(response.status))
             data = response.read(MAX_BYTES + 1)
             require(len(data) <= MAX_BYTES, "GITHUB_RESPONSE_TOO_LARGE")
         except (OSError, http.client.HTTPException):
@@ -690,18 +697,10 @@ class GitHub:
     def reserve_native_intent(self, number, head):
         require(type(number) is int and 0 < number < 10**9, "PR_NUMBER_INVALID")
         sha(head)
-        ref = "refs/heads/brain-native-intent/pr-" + str(number) + "-" + head
-        try:
-            result = self._request("POST", "repos/" + REPO + "/git/refs",
-                                   {"ref": ref, "sha": head})
-            require(type(result) is dict and result.get("ref") == ref
-                    and result.get("object", {}).get("sha") == head
-                    and result["object"].get("type") == "commit",
-                    "AUTO_MERGE_INTENT_READBACK_UNVERIFIED")
-        except Exception:
-            # Existing marker, lost response or denial all require read-only
-            # reconciliation. Never delete the marker or retry automatically.
-            raise Denied("AUTO_MERGE_INTENT_UNVERIFIED_NO_RETRY") from None
+        # Current deny-by-default governance only grants candidate PR branches,
+        # not an additional brain-native-intent ref mutation. Do not attempt
+        # the REST write or silently expand authority to make a PR mergeable.
+        raise Denied("NATIVE_INTENT_REF_WRITE_NOT_AUTHORIZED")
 
     def graphql(self, query, variables):
         require((query in (SETTINGS_QUERY, RULESET_QUERY)
