@@ -118,27 +118,28 @@ class RedTeamTests(unittest.TestCase):
             gm.run(second, number=PR, expected_main=BASE, apply=True, early=True)
         self.assertEqual(first.mutations + second.mutations, 1)
 
-    def test_http_intent_reservation_is_exact_and_create_once(self):
+    def test_production_marker_write_is_denied_without_network_or_retry(self):
         requests = []
         marker = 'refs/heads/brain-native-intent/pr-812-' + HEAD
-        class Response:
-            def __init__(self):
-                self.status = 201 if len(requests) == 1 else 422
-            def read(self, maximum):
-                return json.dumps({'ref': marker, 'object': {'type': 'commit', 'sha': HEAD}}).encode()
         class Connection:
             def __init__(self, *args, **kwargs): pass
-            def request(self, method, path, body=None, headers=None):
-                requests.append((method, path, json.loads(body)))
-            def getresponse(self): return Response()
+            def request(self, *args, **kwargs): requests.append(args)
             def close(self): pass
         with patch.object(gm.http.client, 'HTTPSConnection', Connection):
-            gm.GitHub('a'*32).reserve_native_intent(PR, HEAD)
-            with self.assertRaisesRegex(gm.Denied, 'AUTO_MERGE_INTENT_UNVERIFIED_NO_RETRY'):
+            with self.assertRaisesRegex(gm.Denied, 'NATIVE_INTENT_REF_WRITE_NOT_AUTHORIZED'):
                 gm.GitHub('a'*32).reserve_native_intent(PR, HEAD)
             with self.assertRaisesRegex(gm.Denied, 'GITHUB_METHOD_INVALID'):
-                gm.GitHub('a'*32)._request('POST', ROOT + 'git/refs', {'ref': 'refs/heads/main', 'sha': HEAD})
-        self.assertEqual(requests, [('POST', '/' + ROOT + 'git/refs', {'ref': marker, 'sha': HEAD})]*2)
+                gm.GitHub('a'*32)._request('POST', ROOT + 'git/refs', {'ref': marker, 'sha': HEAD})
+        self.assertEqual(requests, [])
+
+    def test_authority_denial_is_not_mislabeled_as_an_uncertain_write(self):
+        provider = early_fixture()
+        def deny(*args):
+            raise gm.Denied('NATIVE_INTENT_REF_WRITE_NOT_AUTHORIZED')
+        provider.reserve_native_intent = deny
+        with self.assertRaisesRegex(gm.Denied, 'NATIVE_INTENT_REF_WRITE_NOT_AUTHORIZED'):
+            gm.run(provider, number=PR, expected_main=BASE, apply=True, early=True)
+        self.assertEqual(provider.mutations, 0)
 
     def test_blocked_candidate_is_not_reported_as_success(self):
         provider = early_fixture(EventRunnerProvider)
