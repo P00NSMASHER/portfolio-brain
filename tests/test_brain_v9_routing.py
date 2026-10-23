@@ -27,6 +27,31 @@ class RoutingTests(unittest.TestCase):
                 self.assertNotEqual(outcome['owner'],outcome['verifier'])
                 self.assertFalse(outcome['automatic_execution_authority'])
                 self.assertEqual(outcome['provider_writes'],0)
+    def test_unscoped_adverse_check_routes_to_reliability_without_prod_assertion(self):
+        triage = self.route('portfolio-brain', 'repository-observation',
+                            'CHECK_EVIDENCE_TRIAGE')
+        self.assertEqual(triage['owner'], 'brain-reliability')
+        self.assertEqual(triage['verifier'], 'brain-qa')
+        self.assertEqual(triage['defect_kind'], 'CHECK_EVIDENCE_TRIAGE')
+        self.assertFalse(triage['automatic_execution_authority'])
+
+    def test_unscoped_project_check_triage_preserves_existing_owner_lanes(self):
+        # A source-SHA check summary has no main-run event/ref for any project.
+        # Do not invent proof for ABVM, PermitPlate, or the research controller.
+        for project, owner, verifier in [
+            ('abvm', 'abvm-reliability', 'portfolio-security'),
+            ('permitplate', 'retally-product', 'retally-qa'),
+            ('research-labs', 'research-provenance', 'portfolio-security'),
+        ]:
+            with self.subTest(project=project):
+                result = self.route(project, 'repository-observation',
+                                    'CHECK_EVIDENCE_TRIAGE')
+                self.assertEqual(result['defect_kind'], 'CHECK_EVIDENCE_TRIAGE')
+                self.assertEqual(result['owner'], owner)
+                self.assertEqual(result['verifier'], verifier)
+                self.assertEqual(result['provider_writes'], 0)
+                self.assertFalse(result['automatic_execution_authority'])
+
     def test_malformed_project_path_kind_and_source_denied(self):
         for row in [
             dict(project_id='unknown',repository='evil/repo',source_sha=SHA,path='src/main.py',kind='FEATURE'),
