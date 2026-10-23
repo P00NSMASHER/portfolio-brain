@@ -74,6 +74,15 @@ def build_intake(queue,*,source_revision,source_path=SOURCE_PATH,prior_state=Non
         if source_key in state["source_keys"] or candidate_key in state["candidate_keys"]: continue
         eligible.append((score,repo_name,revision,candidate_key,source_key,row))
     eligible.sort(key=lambda x:(-x[0],x[1].casefold(),x[2]))
+    # A source queue can repeat one repository/revision identity. Durable state
+    # only suppresses prior cycles, so deduplicate this fresh cycle after
+    # ranking to keep the highest-scored row and preserve scarce intake slots.
+    unique=[];seen=set()
+    for item in eligible:
+        candidate_key=item[3]
+        if candidate_key in seen: continue
+        seen.add(candidate_key);unique.append(item)
+    eligible=unique
     selected=eligible[:MAX_INTAKE]
     hints=[]
     for score,repo_name,revision,candidate_key,source_key,row in selected:
