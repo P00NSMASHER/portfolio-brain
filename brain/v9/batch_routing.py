@@ -7,7 +7,7 @@ proposed assignment in a cycle.
 from brain.v9.batch_queue import BatchFault, PROJECTS, hashval, valid_path
 
 KINDS=frozenset({'PRODUCTION_INCIDENT','SECURITY','DATA_ACCURACY',
-                  'USER_EXPERIENCE','FEATURE','RESEARCH'})
+                  'USER_EXPERIENCE','FEATURE','RESEARCH','CHECK_EVIDENCE_TRIAGE'})
 VERIFIERS={
  'brain-reliability':'brain-qa','brain-engineering':'brain-qa',
  'portfolio-security':'brain-qa','abvm-sources':'portfolio-security',
@@ -27,7 +27,7 @@ def route_defect(*,project_id,repository,source_sha,path,kind):
     if kind=='SECURITY' or p.startswith('verification/'):
         owner='portfolio-security'
     elif project_id=='portfolio-brain':
-        owner=('brain-reliability' if kind=='PRODUCTION_INCIDENT' or
+        owner=('brain-reliability' if kind in ('PRODUCTION_INCIDENT','CHECK_EVIDENCE_TRIAGE') or
                p.startswith(('brain/core.py','brain/state_','brain/watchdog','brain/intelligence.py'))
                else 'brain-engineering')
     elif project_id=='abvm':
