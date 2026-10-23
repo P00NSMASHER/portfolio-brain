@@ -53,6 +53,18 @@ def validate_cycle_receipt(receipt: Any, *, allow_disabled: bool=False)->None:
         raise RuntimeStateError("cycle receipt chronology invalid")
     if not isinstance(receipt["observations"],list):
         raise RuntimeStateError("cycle receipt observations invalid")
+    seen_repositories=set()
+    for index,observation in enumerate(receipt["observations"]):
+        if not isinstance(observation,dict):
+            raise RuntimeStateError(f"cycle observation {index} must be an object")
+        repository_id=observation.get("repository_id")
+        if repository_id not in {f"REPO-{i:03d}" for i in range(1,9)}:
+            raise RuntimeStateError(f"cycle observation {index} repository invalid")
+        if repository_id in seen_repositories:
+            raise RuntimeStateError("cycle receipt contains duplicate repository observations")
+        seen_repositories.add(repository_id)
+        if observation.get("status") not in {"CHANGED","UNCHANGED","INITIALIZED","BLOCKED"}:
+            raise RuntimeStateError(f"cycle observation {index} status invalid")
     if type(receipt["api_requests"]) is not int or receipt["api_requests"]<0:
         raise RuntimeStateError("cycle receipt API request count invalid")
     body={key:value for key,value in receipt.items() if key!="receipt_hash"}
