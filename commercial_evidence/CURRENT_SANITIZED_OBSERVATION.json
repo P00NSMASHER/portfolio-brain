@@ -1,17 +1,17 @@
 {
   "schema_version": "1.0.0",
-  "observation_id": "CEOBS-E9FF3C879FD2D2BEC013",
-  "captured_at": "2026-09-27T21:31:00Z",
+  "observation_id": "CEOBS-A761ADA3FC984AC16F12",
+  "captured_at": "2026-09-30T06:06:00Z",
   "window_start": "2026-09-18T00:00:00Z",
-  "window_end": "2026-09-27T21:31:00Z",
+  "window_end": "2026-09-30T06:06:00Z",
   "source_kind": "CHATGPT_GMAIL_CONNECTOR_SANITIZED_OBSERVATION",
   "query_contract_id": "freightrecovery-sent-campaign-threads-v2",
   "coverage_scope": "GMAIL_SENT_18_FREIGHTRECOVERY_CAMPAIGN_THREADS_THREE_EXACT_SUBJECT_FAMILIES",
   "threads_observed": 18,
   "threads_truncated": 0,
   "outbound_messages_observed": 21,
-  "inbound_messages_observed": 0,
-  "threads_with_auto_response": 0,
+  "inbound_messages_observed": 1,
+  "threads_with_auto_response": 1,
   "threads_with_human_reply": 0,
   "authority_class": "OBSERVE",
   "evidence_state": "OBSERVED",
@@ -19,5 +19,5 @@
   "raw_message_ids_persisted": false,
   "raw_thread_ids_persisted": false,
   "recipient_identifiers_persisted": false,
-  "observation_hash": "sha256:e9ff3c879fd2d2bec013582865e73b9208da8e18f583a4990fcadefcb6c4456a"
+  "observation_hash": "sha256:a761ada3fc984ac16f1216814ee869a43c4dfe19e325e1a163a05921beefbfe2"
 }
