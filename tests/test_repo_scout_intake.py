@@ -9,6 +9,7 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def queue():
     return {"schema_version":2,"authority":"PRE_VERIFICATION_DISCOVERY_ONLY","worker_id":"HUNTER-01","candidates":[
+      {"repository":"metadata/only","exact_revision":"e"*40,"status":"PRE_VERIFICATION_CANDIDATE","archived":False,"triage_score":100,"published_license_spdx":"UNKNOWN","root_code_signals":[".github"]},
       {"repository":"bigfootpp/sync","exact_revision":"a"*40,"status":"PRE_VERIFICATION_CANDIDATE","archived":False,"triage_score":42,"published_license_spdx":"MIT","root_code_signals":["src","tests"]},
       {"repository":"MingauRM/fobos-framework","exact_revision":"b"*40,"status":"PRE_VERIFICATION_CANDIDATE","archived":False,"triage_score":41,"published_license_spdx":"Zlib","root_code_signals":["src"]},
       {"repository":"bad/unknown","exact_revision":"c"*40,"status":"PRE_VERIFICATION_CANDIDATE","archived":False,"triage_score":99,"published_license_spdx":"UNKNOWN","root_code_signals":["src"]},
@@ -24,7 +25,9 @@ class RepoScoutIntakeTests(unittest.TestCase):
 
     def test_intake_is_bounded_eligible_and_preverification_only(self):
         state,receipt=build_intake(queue(),source_revision="1"*40,prior_state=seed_state(),at="2026-09-30T14:00:00Z")
+        self.assertEqual(receipt["filtered_metadata_only_candidates"],1)
         self.assertEqual(receipt["selected_candidates"],2)
+        self.assertNotIn("metadata/only",{x["repository_full_name"] for x in receipt["hints"]})
         self.assertLessEqual(receipt["selected_candidates"],receipt["max_intake"])
         self.assertTrue(all(x["project_ids"]==["PRJ-005"] for x in receipt["hints"]))
         self.assertTrue(all(x["status"]=="ELIGIBLE_FOR_EXISTING_HUNTER_INSPECTION" for x in receipt["hints"]))
