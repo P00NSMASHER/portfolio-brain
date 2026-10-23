@@ -31,7 +31,9 @@ jobs:
           node-version: '20'
 
       - name: Syntax check
-        run: node --check server.js
+        run: |
+          node --check server.js
+          node --check scripts/bazaar-audit.mjs
 
       - name: Verify Netlify function adapter
         run: |
