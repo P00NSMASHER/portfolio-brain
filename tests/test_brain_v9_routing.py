@@ -27,6 +27,14 @@ class RoutingTests(unittest.TestCase):
                 self.assertNotEqual(outcome['owner'],outcome['verifier'])
                 self.assertFalse(outcome['automatic_execution_authority'])
                 self.assertEqual(outcome['provider_writes'],0)
+    def test_unscoped_adverse_check_routes_to_reliability_without_prod_assertion(self):
+        triage = self.route('portfolio-brain', 'repository-observation',
+                            'CHECK_EVIDENCE_TRIAGE')
+        self.assertEqual(triage['owner'], 'brain-reliability')
+        self.assertEqual(triage['verifier'], 'brain-qa')
+        self.assertEqual(triage['defect_kind'], 'CHECK_EVIDENCE_TRIAGE')
+        self.assertFalse(triage['automatic_execution_authority'])
+
     def test_malformed_project_path_kind_and_source_denied(self):
         for row in [
             dict(project_id='unknown',repository='evil/repo',source_sha=SHA,path='src/main.py',kind='FEATURE'),
