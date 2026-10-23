@@ -113,6 +113,24 @@ class TruthIntegrationTests(unittest.TestCase):
                 with self.assertRaisesRegex(TruthIntegrationError,"finite numeric"):
                     project_truth_state(r)
 
+    def test_oversized_signed_integer_timestamps_reject_with_stable_error(self):
+        # Signed JSON remains hash-valid; arbitrary-size timestamps must not
+        # leak a raw OverflowError or lose numeric identity by float coercion.
+        for invalid in (10**309,-(10**309),2**53,-(2**53)):
+            with self.subTest(value=invalid):
+                row=receipt("PROVEN","SATISFIED")
+                row["evaluated_at"]=invalid
+                resign_receipt(row)
+                with self.assertRaisesRegex(TruthIntegrationError,"finite numeric"):
+                    project_truth_state(row)
+        for valid in (0,1,-1,1700000000,(2**53)-1,-((2**53)-1)):
+            with self.subTest(valid=valid):
+                row=receipt("PROVEN","SATISFIED")
+                row["evaluated_at"]=valid
+                resign_receipt(row)
+                self.assertEqual(project_truth_state(row),"VERIFIED")
+                self.assertEqual(row["evaluated_at"],valid)
+
     def test_tampered_receipt_body_fails_closed_even_when_shape_is_valid(self):
         r=receipt("PROVEN","SATISFIED")
         original_hash=r["receipt_hash"]

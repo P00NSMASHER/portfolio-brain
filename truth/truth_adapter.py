@@ -125,9 +125,14 @@ def validate_upstream_receipt(receipt: dict[str,Any]) -> None:
     _require(isinstance(receipt["claim_id"],str) and receipt["claim_id"],"claim_id required")
     _require(SHA64.fullmatch(receipt["claim_hash"]) is not None,"claim_hash must be 64 hex")
     _require(receipt["verdict"] in VERDICTS,"unknown upstream verdict")
+    evaluated_at=receipt["evaluated_at"]
+    # An unbounded Python int can overflow math.isfinite's implicit float
+    # conversion. Admit only safely representable signed JSON integers;
+    # preserve the historical finite-float contract without coercing types.
     _require(
-        type(receipt["evaluated_at"]) in {int,float}
-        and math.isfinite(receipt["evaluated_at"]),
+        (type(evaluated_at) is int
+         and -(2**53-1)<=evaluated_at<=(2**53-1))
+        or (type(evaluated_at) is float and math.isfinite(evaluated_at)),
         "evaluated_at must be finite numeric",
     )
     _require(SHA64.fullmatch(receipt["evidence_set_hash"]) is not None,"evidence_set_hash must be 64 hex")
