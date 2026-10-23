@@ -58,6 +58,28 @@ class CycleWiringTests(unittest.TestCase):
             with self.subTest(invalid=invalid), self.assertRaises(BatchFault):
                 run_cycle(invalid, self.queue, source_sha=SOURCE, cycle=0, now=NOW)
             self.assertEqual(initial, self.queue.checkpoint())
+    def test_feature_branch_cancelled_check_stays_triage_not_proven_production(self):
+        # Provider run 39904547112 was a cancelled push on
+        # stepqa-pb01-main-repro-20261023, although its check SHA equals main.
+        # The bounded snapshot retains the adverse check, but not its run event/ref.
+        payload = report()
+        payload['projects'] = [dict(
+            id='portfolio-brain', repository='P00NSMASHER/portfolio-brain',
+            repository_revision='58e96a4e7a036b9f877f4bc6903656082ce84ca3',
+            source_check_state='ADVERSE_CHECKS_OBSERVED')]
+        outcome = run_cycle(payload, self.queue, source_sha=SOURCE, cycle=0, now=NOW)
+        self.assertEqual(len(outcome['owner_jobs']), 1)
+        handoff = outcome['owner_jobs'][0]
+        self.assertEqual(handoff['owner'], 'brain-reliability')
+        self.assertEqual(handoff['verifier'], 'brain-qa')
+        self.assertEqual(handoff['priority'], 1)
+        self.assertEqual(handoff['source_check_state'], 'ADVERSE_CHECKS_OBSERVED')
+        self.assertEqual(handoff['incident_classification'],
+                         'ADVERSE_CHECK_HISTORY_PRODUCTION_UNVERIFIED')
+        self.assertFalse(outcome['automatic_execution_authority'])
+        self.assertEqual(outcome['total_project_gets'], 24)
+        self.assertEqual(outcome['metrics']['work_items'], 1)
+
     def test_missing_source_remains_unknown(self):
         payload = report()
         payload['projects'][0]['repository_revision'] = None
