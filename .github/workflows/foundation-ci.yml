@@ -136,7 +136,7 @@ jobs:
               "independent_acceptance_attested": False,
           }
           Path("brain/out/exact-candidate/evidence.json").write_text(
-              json.dumps(evidence, sort_keys=True, indent=2) + "\\n",
+              json.dumps(evidence, sort_keys=True, indent=2),
               encoding="utf-8",
           )
           PY
