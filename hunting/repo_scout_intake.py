@@ -19,6 +19,7 @@ SOURCE_REF="main"
 STATE_ID="portfolio-repo-scout-intake-state"
 MAX_INTAKE=2
 MIN_TRIAGE_SCORE=35
+METADATA_ONLY_ROOT_SIGNALS={".github"}
 WORKER_PROJECTS={"HUNTER-01":["PRJ-005"]}
 SHA40=re.compile(r"^[0-9a-f]{40}$")
 
@@ -58,6 +59,7 @@ def build_intake(queue,*,source_revision,source_path=SOURCE_PATH,prior_state=Non
     worker=queue.get("worker_id");req(worker in WORKER_PROJECTS,"scout worker is not allowlisted")
     candidates=queue.get("candidates");req(isinstance(candidates,list),"scout candidate list invalid")
     eligible=[]
+    metadata_only_candidates=0
     for row in candidates:
         if not isinstance(row,dict): continue
         if row.get("status")!="PRE_VERIFICATION_CANDIDATE" or row.get("archived") is not False: continue
@@ -67,7 +69,10 @@ def build_intake(queue,*,source_revision,source_path=SOURCE_PATH,prior_state=Non
         if not (isinstance(repo_name,str) and "/" in repo_name and isinstance(revision,str) and SHA40.fullmatch(revision)): continue
         if type(score) is not int or score<MIN_TRIAGE_SCORE: continue
         if license_spdx is not None and not isinstance(license_spdx,str): continue
-        if not isinstance(roots,list) or not roots: continue
+        if not isinstance(roots,list) or not roots or not all(isinstance(signal,str) for signal in roots): continue
+        if all(signal.casefold() in METADATA_ONLY_ROOT_SIGNALS for signal in roots):
+            metadata_only_candidates+=1
+            continue
         candidate_key=_candidate_identity(row)
         source_key=hashv({"source_repository":SOURCE_REPOSITORY,"source_revision":source_revision,"source_path":source_path,
                           "finding_identity":candidate_key})
@@ -94,7 +99,7 @@ def build_intake(queue,*,source_revision,source_path=SOURCE_PATH,prior_state=Non
     validate_state(state)
     receipt={"schema_version":"1.0.0","status":"PASS","source_repository":SOURCE_REPOSITORY,"source_revision":source_revision,
              "source_path":source_path,"worker_id":worker,"input_candidates":len(candidates),"eligible_candidates":len(eligible),
-             "selected_candidates":len(hints),"max_intake":MAX_INTAKE,"hints":hints,
+             "filtered_metadata_only_candidates":metadata_only_candidates,"selected_candidates":len(hints),"max_intake":MAX_INTAKE,"hints":hints,
              "license_policy_ref":"hunting/LICENSE_ADMISSION_POLICY.json","license_based_blocking":False,
              "authority_granted":False,"rights_granted":False,"value_verified":False}
     receipt["receipt_hash"]=hashv(receipt)
