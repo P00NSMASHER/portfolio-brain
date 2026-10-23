@@ -15,6 +15,9 @@ HASH=re.compile(r"^sha256:[0-9a-f]{64}$")
 CYCLE_ID=re.compile(r"^cycle-[0-9a-f]{24}$")
 CYCLE_MODES={"observe","sync","daily","weekly"}
 
+def _reject_json_constant(value: str)->None:
+    raise RuntimeStateError(f"non-finite JSON constant {value}")
+
 def _utc_timestamp(value: Any, field: str)->datetime:
     if not isinstance(value,str) or not value.endswith("Z"):
         raise RuntimeStateError(f"{field} must be a UTC timestamp")
@@ -27,7 +30,12 @@ def _utc_timestamp(value: Any, field: str)->datetime:
     return parsed
 
 def canonical_hash(value: Any)->str:
-    raw=json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+    try:
+        raw=json.dumps(
+            value,sort_keys=True,separators=(",",":"),ensure_ascii=False,allow_nan=False
+        ).encode("utf-8")
+    except (TypeError,ValueError) as exc:
+        raise RuntimeStateError("value is not canonical JSON") from exc
     return "sha256:"+hashlib.sha256(raw).hexdigest()
 
 def validate_cycle_receipt(receipt: Any, *, allow_disabled: bool=False)->None:
@@ -104,7 +112,24 @@ def _expected_cycle_id(state: dict[str,Any], receipt: dict[str,Any])->str:
     )
 
 def load_json(path: Path)->dict[str,Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        value=json.loads(path.read_text(encoding="utf-8"),parse_constant=_reject_json_constant)
+    except (UnicodeDecodeError,json.JSONDecodeError,ValueError) as exc:
+        raise RuntimeStateError(f"{path} is not strict JSON") from exc
+    if not isinstance(value,dict):
+        raise RuntimeStateError(f"{path} must contain a JSON object")
+    return value
+
+def _validate_learning_subtree(value: Any, field: str, required: set[str])->None:
+    if value is None:
+        return
+    if not isinstance(value,dict) or set(value)!=required:
+        raise RuntimeStateError(f"{field} schema invalid")
+    _utc_timestamp(value["generated_at"],f"{field} generated_at")
+    for hash_field in required-{"generated_at"}:
+        digest=value[hash_field]
+        if not isinstance(digest,str) or HASH.fullmatch(digest) is None:
+            raise RuntimeStateError(f"{field} {hash_field} invalid")
 
 def bootstrap_state(*, now: str)->dict[str,Any]:
     cursors=load_json(ROOT/"adapters"/"cursors"/"repositories.json")["repositories"]
@@ -134,7 +159,7 @@ def validate_state(state: dict[str,Any])->None:
         raise RuntimeStateError("runtime state fields changed")
     if state["schema_version"]!="1.0.0" or state["state_id"]!="portfolio-runtime-state":
         raise RuntimeStateError("runtime state identity mismatch")
-    if not isinstance(state["sequence"],int) or state["sequence"]<0:
+    if type(state["sequence"]) is not int or state["sequence"]<0:
         raise RuntimeStateError("runtime state sequence invalid")
     _utc_timestamp(state["updated_at"],"runtime state updated_at")
     repos=state["repositories"]
@@ -175,6 +200,16 @@ def validate_state(state: dict[str,Any])->None:
             raise RuntimeStateError("runtime freshness does not match retained history")
     elif state["last_cycle_id"] is not None:
         raise RuntimeStateError("last cycle id requires retained history")
+    _validate_learning_subtree(
+        state["daily_learning_state"],
+        "daily_learning_state",
+        {"generated_at","snapshot_hash","portfolio_learning_state_hash"},
+    )
+    _validate_learning_subtree(
+        state["weekly_synthesis"],
+        "weekly_synthesis",
+        {"generated_at","snapshot_hash"},
+    )
 
 def advance_cycle(state: dict[str,Any], receipt: dict[str,Any])->dict[str,Any]:
     validate_state(state)
