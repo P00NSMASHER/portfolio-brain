@@ -168,7 +168,7 @@ class NativeEarlyAdmissionTests(unittest.TestCase):
         result = runner.dispatch_once(lambda: f, BASE, apply=True,
                                       early=True, event_head=HEAD)
         self.assertEqual(result["candidate_count"], 1)
-        self.assertEqual(result["provider_writes"], 1)
+        self.assertEqual(result["provider_writes"], 2)
         self.assertEqual(f.mutations, 1)
 
     def test_unrelated_labelled_pr_head_is_never_admitted(self):

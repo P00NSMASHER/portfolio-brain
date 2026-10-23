@@ -164,7 +164,8 @@ def dispatch_once(make_client, expected_main, *, apply=True,
                     "candidate_count": len(chosen), "provider_writes": "UNKNOWN",
                     "decisions": decisions}
         writes += effect
-    return {"status": "OBSERVED",
+    blocked = any(item["status"].startswith("BLOCKED:") for item in decisions)
+    return {"status": "CANDIDATES_BLOCKED" if blocked else "OBSERVED",
             "candidate_count": len(chosen),
             "processed": len(decisions),
             "more_candidates_waiting": len(chosen) > MAX_CANDIDATES,
@@ -180,7 +181,8 @@ def main():
         result = dispatch_once(lambda: GitHub(token), source, apply=True,
                                early=True, event_head=event_head)
         print(json.dumps(result, sort_keys=True))
-        return 2 if result["status"] == "POST_WRITE_UNCERTAIN_MANUAL_RECONCILIATION" else 0
+        return 2 if result["status"] in ("POST_WRITE_UNCERTAIN_MANUAL_RECONCILIATION",
+                                         "CANDIDATES_BLOCKED") else 0
     except (Denied, ValueError) as error:
         print(json.dumps(blocked_report(error), sort_keys=True))
         return 2
