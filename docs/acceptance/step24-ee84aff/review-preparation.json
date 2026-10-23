@@ -1,0 +1,192 @@
+{
+  "schema_version": "1.0.0",
+  "review_id": "portfolio-step24-least-privilege-v1",
+  "status": "READY_FOR_INDEPENDENT_SIGNOFF",
+  "step24_complete": false,
+  "live_evidence_present": true,
+  "covered_domains": [
+    "ADAPTER_WRITE_AUTHORITY",
+    "ARTIFACT_TAMPER_RESISTANCE",
+    "AUTOMERGE_SCOPE",
+    "BRANCH_PROTECTION",
+    "CANDIDATE_NETWORK_ISOLATION",
+    "PR_HEAD_AND_FORK_RESTRICTIONS",
+    "REPO_006_ACCESS",
+    "SANITIZED_PUBLIC_PERSISTENCE",
+    "SECRET_HANDLING",
+    "VERIFIER_APP_SCOPES",
+    "VERIFIER_TRUST_ANCHORS",
+    "WORKFLOW_PERMISSIONS"
+  ],
+  "finding_counts": {
+    "CRITICAL": 0,
+    "HIGH": 0,
+    "MEDIUM": 0,
+    "LOW": 0,
+    "UNKNOWN": 0
+  },
+  "observed": {
+    "static": {
+      "verifier_trust_anchors": true,
+      "same_repo_head_restriction": true,
+      "candidate_network_isolation": true,
+      "candidate_checkout_credentials_disabled": true,
+      "verifier_secret_minted_after_candidate": true,
+      "workflow_permissions": {
+        ".github/workflows/portfolio-independent-verifier.yml": {
+          "expected": {
+            "actions": "read",
+            "contents": "write",
+            "pull-requests": "write"
+          },
+          "observed": {
+            "actions": "read",
+            "contents": "write",
+            "pull-requests": "write"
+          },
+          "job_level_overrides": [],
+          "job_level_overrides_bounded": true,
+          "exact": true
+        },
+        ".github/workflows/portfolio-autonomous-repair.yml": {
+          "expected": {
+            "actions": "write",
+            "contents": "write",
+            "pull-requests": "write",
+            "copilot-requests": "write"
+          },
+          "observed": {
+            "actions": "write",
+            "contents": "write",
+            "pull-requests": "write",
+            "copilot-requests": "write"
+          },
+          "job_level_overrides": [
+            {
+              "actions": "write",
+              "contents": "read",
+              "pull-requests": "write"
+            }
+          ],
+          "job_level_overrides_bounded": true,
+          "exact": true
+        },
+        ".github/workflows/software-factory-candidate.yml": {
+          "expected": {
+            "actions": "read",
+            "contents": "write",
+            "pull-requests": "write"
+          },
+          "observed": {
+            "contents": "write",
+            "pull-requests": "write",
+            "actions": "read"
+          },
+          "job_level_overrides": [],
+          "job_level_overrides_bounded": true,
+          "exact": true
+        },
+        ".github/workflows/portfolio-autonomous-scheduler.yml": {
+          "expected": {
+            "actions": "write",
+            "contents": "read",
+            "pull-requests": "read"
+          },
+          "observed": {
+            "contents": "read",
+            "actions": "write",
+            "pull-requests": "read"
+          },
+          "job_level_overrides": [],
+          "job_level_overrides_bounded": true,
+          "exact": true
+        },
+        ".github/workflows/portfolio-state-reducer.yml": {
+          "expected": {
+            "actions": "read",
+            "contents": "read"
+          },
+          "observed": {
+            "contents": "read",
+            "actions": "read"
+          },
+          "job_level_overrides": [],
+          "job_level_overrides_bounded": true,
+          "exact": true
+        }
+      },
+      "workflow_permissions_exact": true,
+      "repair_generation_authority_bounded": true,
+      "trusted_merge_scope_bounded_to_autonomous_repairs": true,
+      "software_factory_merge_command_present": false,
+      "governance_boundaries_present": true,
+      "governance_canonical_action_schema": true,
+      "governance_authority_matrix_fail_closed": true,
+      "governance_email_policy_bounded": true,
+      "governance_no_inherited_authority": true,
+      "governance_project_caps_bounded": true,
+      "chatgpt_gmail_customer_email_gateway_present": true,
+      "chatgpt_gmail_customer_email_policy_bounded": true,
+      "registry_persistence_sanitized_or_reference_only": true,
+      "repo006_access_fail_closed": true,
+      "repo006_binding": {
+        "repository_id": "REPO-006",
+        "full_name": "P00NSMASHER/permitplate-state",
+        "integration_status": "BLOCKED",
+        "blocker_id": "BLK-001"
+      }
+    },
+    "live": {
+      "expected_main_sha": "ee84aff53911cd00162dcea94178688672f13a89",
+      "observed_main_sha": "ee84aff53911cd00162dcea94178688672f13a89",
+      "exact_main_identity": true,
+      "ruleset_covers_main": true,
+      "branch_protection_exact_checks_no_bypass": true,
+      "ruleset_id": 24182301,
+      "verifier_app_scope_exact": true,
+      "verifier_app_source_binding": true,
+      "verifier_app_slug": "portfolio-brain-522",
+      "verifier_app_events": [],
+      "verifier_app_source_head_sha": "2e3ca0d9c693bad68e6421da7ec1ab8124127d0a",
+      "verifier_app_source_merge_sha": "ee84aff53911cd00162dcea94178688672f13a89",
+      "verifier_app_source_check_run_id": 111555744195,
+      "verifier_app_source_pr_number": 539,
+      "artifact_exact_run_head_digest_traceable": true
+    },
+    "required_domain_coverage": {
+      "required": [
+        "VERIFIER_TRUST_ANCHORS",
+        "VERIFIER_APP_SCOPES",
+        "WORKFLOW_PERMISSIONS",
+        "PR_HEAD_AND_FORK_RESTRICTIONS",
+        "CANDIDATE_NETWORK_ISOLATION",
+        "SECRET_HANDLING",
+        "ARTIFACT_TAMPER_RESISTANCE",
+        "BRANCH_PROTECTION",
+        "AUTOMERGE_SCOPE",
+        "ADAPTER_WRITE_AUTHORITY",
+        "SANITIZED_PUBLIC_PERSISTENCE",
+        "REPO_006_ACCESS"
+      ],
+      "covered": [
+        "ADAPTER_WRITE_AUTHORITY",
+        "ARTIFACT_TAMPER_RESISTANCE",
+        "AUTOMERGE_SCOPE",
+        "BRANCH_PROTECTION",
+        "CANDIDATE_NETWORK_ISOLATION",
+        "PR_HEAD_AND_FORK_RESTRICTIONS",
+        "REPO_006_ACCESS",
+        "SANITIZED_PUBLIC_PERSISTENCE",
+        "SECRET_HANDLING",
+        "VERIFIER_APP_SCOPES",
+        "VERIFIER_TRUST_ANCHORS",
+        "WORKFLOW_PERMISSIONS"
+      ],
+      "missing": []
+    }
+  },
+  "findings": [],
+  "authority_granted": false,
+  "evidence_upgraded": false,
+  "review_hash": "sha256:806ad20177f138c0491329769fdc94d99e5abc4ccaa2a61847bb516ad5fca60e"
+}
