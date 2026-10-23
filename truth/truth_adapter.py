@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -124,7 +125,11 @@ def validate_upstream_receipt(receipt: dict[str,Any]) -> None:
     _require(isinstance(receipt["claim_id"],str) and receipt["claim_id"],"claim_id required")
     _require(SHA64.fullmatch(receipt["claim_hash"]) is not None,"claim_hash must be 64 hex")
     _require(receipt["verdict"] in VERDICTS,"unknown upstream verdict")
-    _require(isinstance(receipt["evaluated_at"],(int,float)),"evaluated_at must be numeric")
+    _require(
+        type(receipt["evaluated_at"]) in {int,float}
+        and math.isfinite(receipt["evaluated_at"]),
+        "evaluated_at must be finite numeric",
+    )
     _require(SHA64.fullmatch(receipt["evidence_set_hash"]) is not None,"evidence_set_hash must be 64 hex")
     _require(SHA64.fullmatch(receipt["receipt_hash"]) is not None,"receipt_hash must be 64 hex")
     findings=receipt["findings"]
