@@ -130,6 +130,13 @@ class RedTeamTests(unittest.TestCase):
                 gm.GitHub('a'*32).reserve_native_intent(PR, HEAD)
             with self.assertRaisesRegex(gm.Denied, 'GITHUB_METHOD_INVALID'):
                 gm.GitHub('a'*32)._request('POST', ROOT + 'git/refs', {'ref': marker, 'sha': HEAD})
+            with self.assertRaisesRegex(gm.Denied, 'GITHUB_GRAPHQL_NOT_APPROVED'):
+                gm.GitHub('a'*32).graphql(
+                    gm.ENABLE_MUTATION,
+                    {'id': 'PR_kwDO123456789', 'expected_head': HEAD})
+            with self.assertRaisesRegex(gm.Denied, 'GITHUB_GRAPHQL_NOT_APPROVED'):
+                gm.GitHub('a'*32)._request('POST', 'graphql',
+                    {'query': 'mutation { unauthorized }', 'variables': {}})
         self.assertEqual(requests, [])
 
     def test_authority_denial_is_not_mislabeled_as_an_uncertain_write(self):
