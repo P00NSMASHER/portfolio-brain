@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime,timedelta
-import hashlib,json,os,re,secrets,sqlite3,stat,tempfile
+import hashlib,json,os,re,secrets,sqlite3,stat,tempfile,zlib
 from pathlib import Path
 
 class BatchFault(ValueError): pass
@@ -30,9 +30,12 @@ IMMUTABLE=FIELDS|{"work_id","created_at"}
 WORK=IMMUTABLE|{"stage","updated_at","epoch","claim","pending","evidence","effects"}
 TABLE="CREATE TABLE batch_event (sequence INTEGER PRIMARY KEY, body TEXT NOT NULL, prev_hash TEXT NOT NULL, chain_hash TEXT NOT NULL)"
 HEAD="CREATE TABLE batch_head (slot INTEGER PRIMARY KEY CHECK(slot=1), sequence INTEGER NOT NULL, chain_hash TEXT NOT NULL)"
+ARCHIVE="CREATE TABLE batch_archive (slot INTEGER PRIMARY KEY, body BLOB NOT NULL, sha256 TEXT NOT NULL)"
 MAX_EVENTS=4096
 MAX_BYTES=4*1024*1024
 MAX_WORK=256
+MAX_ARCHIVE_SEGMENTS=64
+MAX_ARCHIVE_RAW_BYTES=16*1024*1024
 
 def valid_path(p):
     return type(p) is str and 0<len(p)<=240 and not p.startswith("/") and "\\" not in p and all(x not in ("",".","..",".git") for x in p.split("/"))
@@ -88,7 +91,7 @@ class BatchQueue:
         self.db.execute("PRAGMA synchronous=FULL")
         try:
             with self.tx():
-                for name,sql in (("batch_event",TABLE),("batch_head",HEAD)):
+                for name,sql in (("batch_event",TABLE),("batch_head",HEAD),("batch_archive",ARCHIVE)):
                     prior=self.db.execute("SELECT sql FROM sqlite_master WHERE name=?",(name,)).fetchone()
                     if prior is None: self.db.execute(sql)
                     else: must(prior[0]==sql,"JOURNAL_SCHEMA_INVALID")
@@ -111,41 +114,97 @@ class BatchQueue:
     def scan(self):
         must(not self.db.execute(
             "SELECT 1 FROM sqlite_master WHERE type='trigger' "
-            "AND tbl_name IN ('batch_event','batch_head') LIMIT 1").fetchone(),
+            "AND tbl_name IN ('batch_event','batch_head','batch_archive') LIMIT 1").fetchone(),
             "JOURNAL_SCHEMA_INVALID")
         must(self.db.execute("PRAGMA quick_check").fetchone()[0]=="ok","JOURNAL_TAMPERED")
         rows=self.db.execute("SELECT sequence,body,prev_hash,chain_hash FROM batch_event ORDER BY sequence LIMIT ?",(MAX_EVENTS+1,)).fetchall()
         must(len(rows)<=MAX_EVENTS and sum(len(r[1].encode()) for r in rows)<=MAX_BYTES,"JOURNAL_BOUND")
-        records={}; prior="0"*64; old_time=None
-        for position,(seq,raw,parent,ch) in enumerate(rows,1):
+        archives=self.db.execute("SELECT slot,body,sha256 FROM batch_archive ORDER BY slot LIMIT ?",(MAX_ARCHIVE_SEGMENTS+1,)).fetchall()
+        must(len(archives)<=MAX_ARCHIVE_SEGMENTS,"ARCHIVE_BOUND")
+        records={}; prior="0"*64; old_time=None; position=0; archive_bytes=0
+        def consume(events):
+            nonlocal prior,old_time,position
+            must(type(events) is list and len(events)<=MAX_EVENTS,"JOURNAL_BOUND")
+            for event in events:
+                must(type(event) in (list,tuple) and len(event)==4,"JOURNAL_TAMPERED")
+                seq,raw,parent,ch=event
+                position+=1
+                must(type(raw) is str,"JOURNAL_TAMPERED")
+                try:
+                    frame=json.loads(raw)
+                    must(type(frame) is dict and set(frame)=={"time","previous","work"},"JOURNAL_TAMPERED")
+                    must(raw==encode(frame) and seq==position and parent==prior
+                         and ch==digest({"sequence":seq,"body":frame,"parent":parent}),"JOURNAL_TAMPERED")
+                    at=instant(frame["time"])
+                    must(old_time is None or at>=old_time,"JOURNAL_TAMPERED")
+                    old_time=at
+                    item=validate(frame["work"]); old=records.get(item["work_id"])
+                    must(frame["previous"]==digest(old),"JOURNAL_TAMPERED")
+                    if old is not None:
+                        must(all(old[k]==item[k] for k in IMMUTABLE) and instant(item["updated_at"])>=instant(old["updated_at"]),"JOURNAL_TAMPERED")
+                    records[item["work_id"]]=item; prior=ch
+                except (KeyError,TypeError,ValueError,json.JSONDecodeError) as e:
+                    raise BatchFault("JOURNAL_TAMPERED") from e
+        for slot,(index,compressed,expected) in enumerate(archives,1):
             try:
-                frame=json.loads(raw)
-                must(type(frame) is dict and set(frame)=={"time","previous","work"},"JOURNAL_TAMPERED")
-                must(raw==encode(frame) and seq==position and parent==prior
-                     and ch==digest({"sequence":seq,"body":frame,"parent":parent}),"JOURNAL_TAMPERED")
-                at=instant(frame["time"])
-                must(old_time is None or at>=old_time,"JOURNAL_TAMPERED")
-                old_time=at
-                item=validate(frame["work"]); old=records.get(item["work_id"])
-                must(frame["previous"]==digest(old),"JOURNAL_TAMPERED")
-                if old is not None:
-                    must(all(old[k]==item[k] for k in IMMUTABLE) and instant(item["updated_at"])>=instant(old["updated_at"]),"JOURNAL_TAMPERED")
-                records[item["work_id"]]=item; prior=ch
-            except (KeyError,TypeError,ValueError,json.JSONDecodeError) as e:
-                raise BatchFault("JOURNAL_TAMPERED") from e
-        must(self.db.execute("SELECT slot,sequence,chain_hash FROM batch_head").fetchall()==[(1,len(rows),prior)],"JOURNAL_TAMPERED")
+                must(index==slot and type(compressed) is bytes and len(compressed)<=MAX_BYTES,"ARCHIVE_TAMPERED")
+                decoder=zlib.decompressobj()
+                raw=decoder.decompress(compressed,MAX_ARCHIVE_RAW_BYTES-archive_bytes+1)
+                archive_bytes+=len(raw)
+                must(archive_bytes<=MAX_ARCHIVE_RAW_BYTES and decoder.eof
+                     and not decoder.unused_data and not decoder.unconsumed_tail,"ARCHIVE_BOUND")
+                body=json.loads(raw)
+                must(type(body) is dict and set(body)=={"events","retired"}
+                     and raw.decode()==encode(body) and digest(body)==expected,"ARCHIVE_TAMPERED")
+                consume(body["events"])
+                retired=body["retired"]
+                must(type(retired) is list and len(set(retired))==len(retired),"ARCHIVE_TAMPERED")
+                for ident in retired:
+                    row=records.get(ident)
+                    must(row is not None and self._retirable(row),"ARCHIVE_UNSAFE_RETIREMENT")
+                    del records[ident]
+            except (KeyError,TypeError,ValueError,zlib.error) as error:
+                raise BatchFault("ARCHIVE_TAMPERED") from error
+        consume(rows)
+        must(self.db.execute("SELECT slot,sequence,chain_hash FROM batch_head").fetchall()==[(1,position,prior)],"JOURNAL_TAMPERED")
         must(len(records)<=MAX_WORK,"WORK_BOUND")
-        return records,len(rows),prior
+        self._last_event_time=old_time
+        self._archive_raw_bytes=archive_bytes
+        return records,position,prior
+
+    @staticmethod
+    def _retirable(row):
+        return (row["stage"]=="OBSERVED" and row["claim"] is None
+                and row["pending"] is None and not row["effects"] and not row["evidence"])
+
+    def _rotate(self,retired=()):
+        # Called only in the same IMMEDIATE transaction as the new append.
+        # Preserve the full event chain in compressed segments in this SAME
+        # state image. Never retire progressed work, leases or unknown writes.
+        self.scan()
+        count=self.db.execute("SELECT COUNT(*) FROM batch_archive").fetchone()[0]
+        must(count<MAX_ARCHIVE_SEGMENTS,"ARCHIVE_CAPACITY_RECONCILIATION_REQUIRED")
+        events=self.db.execute("SELECT sequence,body,prev_hash,chain_hash FROM batch_event ORDER BY sequence").fetchall()
+        must(bool(events),"ARCHIVE_EMPTY")
+        body={"events":events,"retired":sorted(retired)}
+        compressed=zlib.compress(encode(body).encode(),9)
+        self.db.execute("INSERT INTO batch_archive VALUES(?,?,?)",(count+1,compressed,digest(body)))
+        self.db.execute("DELETE FROM batch_event")
+        self.scan()
     def _append(self,row,at):
         records,seq,previous=self.scan()
-        must(seq<MAX_EVENTS,"JOURNAL_BOUND")
+        count=self.db.execute("SELECT COUNT(*) FROM batch_event").fetchone()[0]
+        if count>=MAX_EVENTS-1:
+            self._rotate()
+            count=0
+        must(count<MAX_EVENTS,"JOURNAL_BOUND")
         # A different work item's older timestamp must not poison global replay.
-        previous_frame=self.db.execute("SELECT body FROM batch_event ORDER BY sequence DESC LIMIT 1").fetchone()
-        must(previous_frame is None or instant(at)>=instant(json.loads(previous_frame[0])["time"]),"TIME_REVERSED")
+        must(self._last_event_time is None or instant(at)>=self._last_event_time,"TIME_REVERSED")
         frame={"time":at,"previous":digest(records.get(row["work_id"])),"work":validate(row)}
         raw=encode(frame)
         size=self.db.execute("SELECT COALESCE(SUM(length(CAST(body AS BLOB))),0) FROM batch_event").fetchone()[0]
-        must(size+len(raw.encode())<=MAX_BYTES,"JOURNAL_BOUND")
+        if size+len(raw.encode())>MAX_BYTES:
+            self._rotate()
         chain=digest({"sequence":seq+1,"body":frame,"parent":previous})
         self.db.execute("INSERT INTO batch_event VALUES(?,?,?,?)",(seq+1,raw,previous,chain))
         self.db.execute("UPDATE batch_head SET sequence=?,chain_hash=? WHERE slot=1",(seq+1,chain))
@@ -176,6 +235,13 @@ class BatchQueue:
             if old:
                 must(all(old[k]==row[k] for k in IMMUTABLE if k!="created_at"),"OBSERVATION_CONFLICT")
                 return wid
+            if len(state)>=MAX_WORK:
+                retired=[ident for ident,prior in state.items() if self._retirable(prior)
+                         and all(prior[k]==row[k] for k in ("project_id","repository","path","fingerprint"))
+                         and prior["source_sha"]!=row["source_sha"]]
+                must(bool(retired),"WORK_CAPACITY_RECONCILIATION_REQUIRED")
+                self._rotate(retired)
+                state,_,_=self.scan()
             must(len(state)<MAX_WORK,"WORK_BOUND")
             self._append(row,now)
         return wid
@@ -321,7 +387,13 @@ class BatchQueue:
         work=self.snapshot()["work"]
         ages=[(at-instant(row["created_at"])).total_seconds() for row in work.values()]
         must(all(t>=0 for t in ages),"TIME_REVERSED")
-        return {"work_items":len(work),"uncertain_effects":sum(row["pending"] is not None for row in work.values()),
+        segments=self.db.execute("SELECT COUNT(*) FROM batch_archive").fetchone()[0]
+        return {"work_items":len(work),"archive_segments":segments,
+                "archive_raw_bytes":self._archive_raw_bytes,
+                "capacity_warning":("QUEUE_CAPACITY_APPROACHING" if len(work)>=MAX_WORK*3//4
+                    or segments>=MAX_ARCHIVE_SEGMENTS*3//4
+                    or self._archive_raw_bytes>=MAX_ARCHIVE_RAW_BYTES*3//4 else None),
+                "uncertain_effects":sum(row["pending"] is not None for row in work.values()),
                 "actual_live_verified":sum(row["stage"]=="LIVE_VERIFIED" and
                     row["effects"].get("publication",{}).get("status")=="ORIGINAL_PUBLISHED_REPAIR_LIVE_VERIFIED"
                     for row in work.values()),"production_accepted":False,
