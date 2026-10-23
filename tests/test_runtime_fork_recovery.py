@@ -60,7 +60,7 @@ def candidate(artifact_id, created_at, url):
 class RuntimeForkRecoveryTests(unittest.TestCase):
     def fork(self, *, conflicting_observe=False):
         base = bootstrap_state(now='2026-09-28T08:00:00Z')
-        parent_receipt = make_receipt(base, mode='sync', finished_at='2026-09-28T09:00:00Z', observations=[])
+        parent_receipt = make_receipt(\n            base, mode='sync', finished_at='2026-09-28T09:00:00Z',\n            observations=[observation(base, 'REPO-001', '2026-09-28T09:00:00Z')],\n        )
         parent = advance_cycle(base, parent_receipt)
 
         observe_sha = 'e' * 40 if conflicting_observe else parent['repositories']['REPO-008']['cursor_sha']
@@ -89,7 +89,7 @@ class RuntimeForkRecoveryTests(unittest.TestCase):
 
     def test_unique_later_equivalent_observe_state_is_selected(self):
         base = bootstrap_state(now='2026-09-28T08:00:00Z')
-        parent_receipt = make_receipt(base, mode='sync', finished_at='2026-09-28T09:00:00Z', observations=[])
+        parent_receipt = make_receipt(\n            base, mode='sync', finished_at='2026-09-28T09:00:00Z',\n            observations=[observation(base, 'REPO-001', '2026-09-28T09:00:00Z')],\n        )
         parent = advance_cycle(base, parent_receipt)
 
         first_rows = [observation(parent, 'REPO-008', '2026-09-28T10:00:00Z', 'f' * 40)]
