@@ -1,6 +1,254 @@
 {
+  "fingerprint": "688119898feb9fa39345b9ab8a56bf163a628e5107f931a8f64d1cf7020d0da2",
   "schema_version": 2,
   "scope": "STRUCTURAL_REUSE_KNOWLEDGE_NOT_EXECUTED_OR_REVENUE_VERIFIED",
-  "sources": [],
-  "fingerprint": null
+  "sources": [
+    {
+      "blob_sha": "d7b30c8f059cac62ae95741725146cc4a7fbab0a",
+      "code_sha256": "4aa8f9032a4159c3929012ff6eca05a13fa49a4977ae35340907b1e39b5ce155",
+      "head_sha": "5f436442fca0da2826a00df679bb05542d445b11",
+      "key": "AwokenLazarus/Lightning-Stream-py-channel:docs/x402/check_vectors.py",
+      "license": "Apache-2.0",
+      "matched_terms": [
+        "payment",
+        "x402",
+        "verify",
+        "settle"
+      ],
+      "path": "docs/x402/check_vectors.py",
+      "repository": "AwokenLazarus/Lightning-Stream-py-channel",
+      "source_ref": "https://github.com/AwokenLazarus/Lightning-Stream-py-channel/blob/5f436442fca0da2826a00df679bb05542d445b11/docs/x402/check_vectors.py",
+      "target": "agent-products",
+      "test_paths": [
+        "tests/test_sighash_vectors.py"
+      ]
+    },
+    {
+      "blob_sha": "755391c6427324700011b0964ab38c5df8155fe4",
+      "code_sha256": "b3ccf10ba8abeeaa184b141808673b68490f9e113847249026ea459dc6b25d21",
+      "head_sha": "ee21796a118e0c648bcedbe49de3bd71d5da8945",
+      "key": "HadiYoussef2005/LeetLeitner:src/engine.ts",
+      "license": "UNKNOWN",
+      "matched_terms": [
+        "review",
+        "schedule"
+      ],
+      "path": "src/engine.ts",
+      "repository": "HadiYoussef2005/LeetLeitner",
+      "source_ref": "https://github.com/HadiYoussef2005/LeetLeitner/blob/ee21796a118e0c648bcedbe49de3bd71d5da8945/src/engine.ts",
+      "target": "school-tools",
+      "test_paths": [
+        "src/engine.test.ts"
+      ]
+    },
+    {
+      "blob_sha": "d9e80f748e519f54d3f3c58a87e50cfeebb06405",
+      "code_sha256": "a7ec2f7df7cc2da94554ecea9e31773cbd7d5811e805ac6d78659029af829144",
+      "head_sha": "b7b03142296539307d0b075445664065b097943a",
+      "key": "MangroveTechnologies/mangrove-agent:server/scripts/inspect_x402_payment.py",
+      "license": "MIT",
+      "matched_terms": [
+        "payment",
+        "x402"
+      ],
+      "path": "server/scripts/inspect_x402_payment.py",
+      "repository": "MangroveTechnologies/mangrove-agent",
+      "source_ref": "https://github.com/MangroveTechnologies/mangrove-agent/blob/b7b03142296539307d0b075445664065b097943a/server/scripts/inspect_x402_payment.py",
+      "target": "agent-products",
+      "test_paths": [
+        "server/scripts/test_x402_mainnet.py",
+        "server/tests/integration/test_x402_spend_routes.py",
+        "server/tests/integration/test_x402_sync_transport.py",
+        "server/tests/test_x402.py",
+        "server/tests/test_x402_startup_resilience.py",
+        "server/tests/unit/test_payment_budget.py",
+        "server/tests/unit/test_payment_hardening.py",
+        "server/tests/unit/test_payment_operations.py",
+        "server/tests/unit/test_payment_rejection.py",
+        "server/tests/unit/test_payment_result_recovery.py"
+      ]
+    },
+    {
+      "blob_sha": "a6c0d6929b46fe023bd71d39a8bd9f022bba819a",
+      "code_sha256": "7cbfe6a5999a7a6d722945ce605e05c19a4da9981c938b8c910df0548ee1e71b",
+      "head_sha": "0f4abd649349838548108732980855ef9907d755",
+      "key": "Kalmi91/kimacha:lib/schedulePreview.ts",
+      "license": "NOASSERTION",
+      "matched_terms": [
+        "review",
+        "schedule"
+      ],
+      "path": "lib/schedulePreview.ts",
+      "repository": "Kalmi91/kimacha",
+      "source_ref": "https://github.com/Kalmi91/kimacha/blob/0f4abd649349838548108732980855ef9907d755/lib/schedulePreview.ts",
+      "target": "school-tools",
+      "test_paths": [
+        "lib/__tests__/schedulePreview.test.ts"
+      ]
+    },
+    {
+      "blob_sha": "5255a2f87dda4d9edd2cca358bdb39323717cfec",
+      "code_sha256": "09e088828373f4f6803334f3c13228bb20f4ea469218333d2312bb63b4bb7d7e",
+      "head_sha": "c8aa2edaca95040da267f0c380159d05ee0a0f17",
+      "key": "dhyabi2/nano-invoice:examples/x402_seller.py",
+      "license": "MIT",
+      "matched_terms": [
+        "payment",
+        "x402",
+        "settle"
+      ],
+      "path": "examples/x402_seller.py",
+      "repository": "dhyabi2/nano-invoice",
+      "source_ref": "https://github.com/dhyabi2/nano-invoice/blob/c8aa2edaca95040da267f0c380159d05ee0a0f17/examples/x402_seller.py",
+      "target": "agent-products",
+      "test_paths": [
+        "tests/test_x402_seller_example.py"
+      ]
+    },
+    {
+      "blob_sha": "18aeb2ccd916d814a1ef4ecb64cd9a208d4c2ec0",
+      "code_sha256": "de11f6a59e7afcd310014e86d5db764d736c1855eb2938a8345a3ec8fd0c4dee",
+      "head_sha": "5ad928b937981439a5b53d13ba03f99becb9ae91",
+      "key": "Rishichamp/lumen:backend/app/api/routes/review.py",
+      "license": "MIT",
+      "matched_terms": [
+        "review",
+        "schedule"
+      ],
+      "path": "backend/app/api/routes/review.py",
+      "repository": "Rishichamp/lumen",
+      "source_ref": "https://github.com/Rishichamp/lumen/blob/5ad928b937981439a5b53d13ba03f99becb9ae91/backend/app/api/routes/review.py",
+      "target": "school-tools",
+      "test_paths": [
+        "backend/tests/test_review_endpoints.py"
+      ]
+    },
+    {
+      "blob_sha": "f4bbabc0b59df0f43be4d1b7e8128d8e23eb3052",
+      "code_sha256": "8403e8ac01d361c636e72efde7d12fa35a2d64cdf4a06f89a2f1f7579a1957ee",
+      "head_sha": "62ee40a7103c9f462d1c8c03ae7d47871885f66b",
+      "key": "econdash/econdash-python:src/econdash/_payments.py",
+      "license": "MIT",
+      "matched_terms": [
+        "payment",
+        "x402"
+      ],
+      "path": "src/econdash/_payments.py",
+      "repository": "econdash/econdash-python",
+      "source_ref": "https://github.com/econdash/econdash-python/blob/62ee40a7103c9f462d1c8c03ae7d47871885f66b/src/econdash/_payments.py",
+      "target": "agent-products",
+      "test_paths": [
+        "tests/test_payments.py"
+      ]
+    },
+    {
+      "blob_sha": "be4ad5b062cc9b54a1f4e2f6f9d9aec9216f7df2",
+      "code_sha256": "67629e89f3cc6018ac0e8926853b93f317238a97498eab7356232eb0eb968817",
+      "head_sha": "9609eb6e4160115102292d7500fad9ca6e20f86f",
+      "key": "maydinidil/aydinlearns:core/scheduler.ts",
+      "license": "NOASSERTION",
+      "matched_terms": [
+        "review",
+        "schedule"
+      ],
+      "path": "core/scheduler.ts",
+      "repository": "maydinidil/aydinlearns",
+      "source_ref": "https://github.com/maydinidil/aydinlearns/blob/9609eb6e4160115102292d7500fad9ca6e20f86f/core/scheduler.ts",
+      "target": "school-tools",
+      "test_paths": [
+        "tests/core/scheduler.test.ts"
+      ]
+    },
+    {
+      "blob_sha": "d958142f465a443d5fc64d86681a1a3ce3fb5e62",
+      "code_sha256": "50fc87ae4765f5580827ed3c3735eecc7b53c96f8c88f08c46f62f342cf1e7f1",
+      "head_sha": "727f4f3b919177905a82d3326e012c45edc2164f",
+      "key": "financedistrict-platform/fd-prism-sdk:python/packages/core/prism_sdk_core/payment_replay_guard.py",
+      "license": "MIT",
+      "matched_terms": [
+        "payment",
+        "settle"
+      ],
+      "path": "python/packages/core/prism_sdk_core/payment_replay_guard.py",
+      "repository": "financedistrict-platform/fd-prism-sdk",
+      "source_ref": "https://github.com/financedistrict-platform/fd-prism-sdk/blob/727f4f3b919177905a82d3326e012c45edc2164f/python/packages/core/prism_sdk_core/payment_replay_guard.py",
+      "target": "agent-products",
+      "test_paths": [
+        "java/core/src/test/java/org/fdtech/prism/core/PaymentReplayGuardTest.java",
+        "java/core/src/test/java/org/fdtech/prism/core/PrismMiddlewareReplayTest.java",
+        "java/servlet/src/test/java/org/fdtech/prism/servlet/PrismFilterReplayTest.java",
+        "python/packages/core/tests/test_parallel_proof_replay.py",
+        "python/packages/core/tests/test_payment_validation.py",
+        "typescript/packages/core/src/__tests__/middleware/parallel-proof-replay.test.ts",
+        "typescript/packages/core/src/__tests__/middleware/payment-validation.test.ts"
+      ]
+    },
+    {
+      "blob_sha": "ae06d317c9467433b73f290b85a5b99baca209fa",
+      "code_sha256": "6bad7367d55b8f827498430354a3bb9e2f306eac66d00fcd67acf8ec2a908c8a",
+      "head_sha": "b39a941b0d99f3dbdf4b238a2b1181f6275272ef",
+      "key": "msb7-jpg/flashcard-app:src/composables/useStudySession.ts",
+      "license": "UNKNOWN",
+      "matched_terms": [
+        "review",
+        "study"
+      ],
+      "path": "src/composables/useStudySession.ts",
+      "repository": "msb7-jpg/flashcard-app",
+      "source_ref": "https://github.com/msb7-jpg/flashcard-app/blob/b39a941b0d99f3dbdf4b238a2b1181f6275272ef/src/composables/useStudySession.ts",
+      "target": "school-tools",
+      "test_paths": [
+        "src/__tests__/StudySession.spec.ts"
+      ]
+    },
+    {
+      "blob_sha": "58fa4621b782c817905e36b8158ef48fd23e2a05",
+      "code_sha256": "cfb0b5b1d1c56fd4dcf92a293080f9e9de2c05b7c4040eb924dd09b8d424fb5f",
+      "head_sha": "e3db45734448dc6dce2273310e1b829983e463a1",
+      "key": "inamprotocol/inam-protocol:examples/x402-verify-before-pay.ts",
+      "license": "Apache-2.0",
+      "matched_terms": [
+        "payment",
+        "x402",
+        "verify"
+      ],
+      "path": "examples/x402-verify-before-pay.ts",
+      "repository": "inamprotocol/inam-protocol",
+      "source_ref": "https://github.com/inamprotocol/inam-protocol/blob/e3db45734448dc6dce2273310e1b829983e463a1/examples/x402-verify-before-pay.ts",
+      "target": "agent-products",
+      "test_paths": [
+        "sdk-python/tests/test_x402_context.py",
+        "tests/x402ContextVectors.test.ts",
+        "tests/x402Gate.test.ts"
+      ]
+    },
+    {
+      "blob_sha": "46b938ebc2fb7092cb63e8265d7010e1ce7f5e58",
+      "code_sha256": "3132febb45f9d1304813242cb11acf9455dc5844217b9277d7dc30962aa1d729",
+      "head_sha": "e7fcf722f77afbd4e09b19018e1c5cbaf6de25a9",
+      "key": "pieralukasz/true-recall:packages/obsidian/src/features/study/services/ReviewSessionController.ts",
+      "license": "NOASSERTION",
+      "matched_terms": [
+        "review",
+        "schedule",
+        "study"
+      ],
+      "path": "packages/obsidian/src/features/study/services/ReviewSessionController.ts",
+      "repository": "pieralukasz/true-recall",
+      "source_ref": "https://github.com/pieralukasz/true-recall/blob/e7fcf722f77afbd4e09b19018e1c5cbaf6de25a9/packages/obsidian/src/features/study/services/ReviewSessionController.ts",
+      "target": "school-tools",
+      "test_paths": [
+        "packages/obsidian/tests/assistant/proposal-review-controller.test.ts",
+        "packages/obsidian/tests/commands/review-actions.sqlite-integration.test.ts",
+        "packages/obsidian/tests/commands/review-actions.test.ts",
+        "packages/obsidian/tests/commands/review-answer-sibling-disperse.test.ts",
+        "packages/obsidian/tests/commands/review-answer-standalone.test.ts",
+        "packages/obsidian/tests/features/study/services/review-session-key.test.ts",
+        "packages/obsidian/tests/features/study/ui/review/review-follow-up.test.ts",
+        "packages/obsidian/tests/features/study/ui/review/review-selection-bubble.test.ts",
+        "packages/obsidian/tests/features/study/ui/review/session-helpers.test.ts",
+        "packages/obsidian/tests/store/review-queue.engine.test.ts"
+      ]
+    }
+  ]
 }
