@@ -90,12 +90,46 @@ class TruthIntegrationTests(unittest.TestCase):
         self.assertEqual(project_truth_state(receipt("CONTESTED","CONFLICTED")),"CONTRADICTED")
         self.assertEqual(project_truth_state(receipt("CONTESTED","CONTRADICTED")),"CONTRADICTED")
 
+    def test_evidence_id_cannot_support_and_contradict_same_finding(self):
+        r=receipt("PROVEN","SATISFIED")
+        r["findings"][0]["contradicting_evidence_ids"]=["support"]
+        resign_receipt(r)
+        with self.assertRaisesRegex(TruthIntegrationError,"cannot span lineage buckets"):
+            project_truth_state(r)
+
     def test_repeated_support_does_not_change_verdict_without_upstream_proof(self):
         r=receipt("NOT_PROVEN","INSUFFICIENT_INDEPENDENCE")
         r["findings"][0]["supporting_evidence_ids"]=["a","b","c","d","e"]
         resign_receipt(r)
         validate_upstream_receipt(r)
         self.assertEqual(project_truth_state(r),"UNKNOWN")
+
+    def test_non_finite_or_boolean_evaluated_at_is_invalid(self):
+        for invalid in (True,False,float("nan"),float("inf"),float("-inf")):
+            with self.subTest(evaluated_at=invalid):
+                r=receipt("PROVEN","SATISFIED")
+                r["evaluated_at"]=invalid
+                resign_receipt(r)
+                with self.assertRaisesRegex(TruthIntegrationError,"finite numeric"):
+                    project_truth_state(r)
+
+    def test_oversized_signed_integer_timestamps_reject_with_stable_error(self):
+        # Signed JSON remains hash-valid; arbitrary-size timestamps must not
+        # leak a raw OverflowError or lose numeric identity by float coercion.
+        for invalid in (10**309,-(10**309),2**53,-(2**53)):
+            with self.subTest(value=invalid):
+                row=receipt("PROVEN","SATISFIED")
+                row["evaluated_at"]=invalid
+                resign_receipt(row)
+                with self.assertRaisesRegex(TruthIntegrationError,"finite numeric"):
+                    project_truth_state(row)
+        for valid in (0,1,-1,1700000000,(2**53)-1,-((2**53)-1)):
+            with self.subTest(valid=valid):
+                row=receipt("PROVEN","SATISFIED")
+                row["evaluated_at"]=valid
+                resign_receipt(row)
+                self.assertEqual(project_truth_state(row),"VERIFIED")
+                self.assertEqual(row["evaluated_at"],valid)
 
     def test_tampered_receipt_body_fails_closed_even_when_shape_is_valid(self):
         r=receipt("PROVEN","SATISFIED")
