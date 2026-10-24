@@ -1,0 +1,248 @@
+name: Independent 7007de72 terminal state replay (review only)
+
+on:
+  push:
+    branches:
+      - review/portfolio-7007de72-terminal-20261024
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: review-7007de72-terminal-replay
+  cancel-in-progress: false
+
+jobs:
+  terminal-replay-read-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout review-only verifier
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Checkout immutable protected production source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 7007de7294f83044f4e003eed78aa7ae0a6bdfe3
+          path: production-source
+          persist-credentials: false
+      - name: Checkout exact terminal state commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 130a650587bdeb436c453f427a454f67d7d1202d
+          path: terminal-state
+          persist-credentials: false
+      - name: Verify complete original census, artifacts, state, and report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          PYTHONPATH=production-source python - <<'PY'
+          import hashlib, io, json, os, shutil, sqlite3, subprocess, tempfile, zipfile
+          from datetime import datetime
+          from pathlib import Path
+          from brain.core import Store
+          from brain.state_archive import _extract
+          from soak_v3.audit import REQUIRED_STEPS, require, verify_artifact, verify_sqlite
+          from soak_v3.remote_probe import GitHubReadOnly
+
+          SOURCE="7007de7294f83044f4e003eed78aa7ae0a6bdfe3"
+          TERMINAL="130a650587bdeb436c453f427a454f67d7d1202d"
+          EXPECTED_PARENT="ff05ea99ac137f8ba558abacb01cf5ac647cefb1"
+          api=GitHubReadOnly(os.environ["GH_TOKEN"],max_calls=656)
+
+          require(api.json("/branches/main").get("commit",{}).get("sha")==SOURCE,
+                  "CURRENT_MAIN_SOURCE_MISMATCH")
+          all_runs=[]
+          total=None
+          for page in range(1,20):
+              page_doc=api.json(f"/actions/workflows/brain-cycle.yml/runs?branch=main&per_page=100&page={page}")
+              if total is None:
+                  total=page_doc.get("total_count")
+                  require(type(total) is int and total < 2000,"RUN_CENSUS_BOUND")
+              rows=page_doc.get("workflow_runs")
+              require(type(rows) is list,"RUN_CENSUS_PAGE_INVALID")
+              all_runs.extend(rows)
+              if len(all_runs)>=total:
+                  break
+          require(len(all_runs)==total,"RUN_CENSUS_INCOMPLETE")
+          source_runs=[r for r in all_runs if r.get("head_sha")==SOURCE]
+          require(len(source_runs)==15,"SOURCE_RUN_CENSUS_UNEXPECTED")
+          require(all(r.get("run_attempt")==1 and r.get("status")=="completed"
+                      and r.get("conclusion")=="success" and r.get("head_branch")=="main"
+                      for r in source_runs),"SOURCE_RUN_ADVERSE_OR_RETRIED")
+          automatic=sorted([r for r in source_runs if r.get("event")!="push"],
+                           key=lambda r:r["updated_at"])
+          require(len(automatic)==14
+                  and sum(r.get("event")=="workflow_dispatch" for r in automatic)==13
+                  and sum(r.get("event")=="schedule" for r in automatic)==1,
+                  "AUTOMATIC_RUN_CENSUS_UNEXPECTED")
+          completed=[datetime.fromisoformat(r["updated_at"].replace("Z","+00:00"))
+                     for r in automatic]
+          gaps=[int((completed[i]-completed[i-1]).total_seconds())
+                for i in range(1,len(completed))]
+          span=int((completed[-1]-completed[0]).total_seconds())
+          require(span>=21600 and max(gaps)<=5400,"SIX_HOUR_WINDOW_INVALID")
+
+          proofs=[]
+          prior_commit=None
+          prior_sequence=None
+          signed_times=[]
+          provider_reads=0
+          for run in automatic:
+              rid=run["id"]
+              jobs=api.json(f"/actions/runs/{rid}/jobs?per_page=100")
+              provider_reads+=1
+              require(jobs.get("total_count")==1 and len(jobs.get("jobs",[]))==1,
+                      "JOB_CENSUS_INCOMPLETE")
+              job=jobs["jobs"][0]
+              require(job.get("name")=="monitor" and job.get("conclusion")=="success",
+                      "MONITOR_JOB_FAILED")
+              steps={s.get("name"):s.get("conclusion") for s in job.get("steps",[])
+                     if isinstance(s,dict)}
+              require(all(steps.get(name)=="success" for name in REQUIRED_STEPS),
+                      "MANDATORY_STEP_FAILED")
+              if run.get("event")=="workflow_dispatch":
+                  require(steps.get("Verify independently signed Cloudflare Cron provenance")=="success",
+                          "SIGNED_ORIGIN_STEP_FAILED")
+              arts=api.json(f"/actions/runs/{rid}/artifacts?per_page=100")
+              provider_reads+=1
+              items=arts.get("artifacts",[])
+              require(type(items) is list and len(items)==1,"ARTIFACT_CENSUS_INCOMPLETE")
+              art=items[0]
+              require(art.get("expired") is False
+                      and art.get("name")==f"brain-v2-cycle-{SOURCE}-{rid}-1"
+                      and art.get("workflow_run",{}).get("head_sha")==SOURCE,
+                      "ARTIFACT_IDENTITY_INVALID")
+              raw=api.get(f"/actions/artifacts/{art['id']}/zip",limit=20_000_000)
+              provider_reads+=1
+              require("sha256:"+hashlib.sha256(raw).hexdigest()==art.get("digest"),
+                      "ARTIFACT_PROVIDER_DIGEST_MISMATCH")
+              with zipfile.ZipFile(io.BytesIO(raw)) as z:
+                  require(z.testzip() is None,"ARTIFACT_CRC_FAILED")
+                  delivery=json.loads(z.read("delivery.json"))
+                  doctor=json.loads(z.read("doctor/report.json"))
+                  if run.get("event")=="workflow_dispatch":
+                      origin=json.loads(z.read("cloudflare-origin.json"))
+                      require(origin.get("status")=="CLOUDFLARE_SIGNED_ORIGIN_VERIFIED",
+                              "SIGNED_ORIGIN_RECEIPT_INVALID")
+                      signed_times.append(origin["scheduled_at"])
+              with tempfile.NamedTemporaryFile(suffix=".zip") as tmp:
+                  tmp.write(raw); tmp.flush()
+                  verified=verify_artifact(
+                      tmp.name,art["digest"],run_id=rid,source_sha=SOURCE,
+                      state_parent=delivery["state_parent"],
+                      state_commit=delivery["state_commit"])
+              if prior_commit is not None:
+                  require(delivery["state_parent"]==prior_commit,
+                          "STATE_PARENT_CHILD_CHAIN_BROKEN")
+                  require(doctor["state_sequence"]>prior_sequence,
+                          "STATE_SEQUENCE_NOT_MONOTONIC")
+              prior_commit=delivery["state_commit"]
+              prior_sequence=doctor["state_sequence"]
+              proofs.append({
+                  "run_id":rid,"event":run["event"],"completed_at":run["updated_at"],
+                  "artifact_id":art["id"],"artifact_digest":art["digest"],
+                  "state_parent":delivery["state_parent"],
+                  "state_commit":delivery["state_commit"],
+                  "state_sequence":doctor["state_sequence"],
+                  "canonical_hash":doctor["canonical_hash"],
+              })
+
+          require(prior_commit==TERMINAL and proofs[-1]["run_id"]==40072425249,
+                  "TERMINAL_RUN_OR_STATE_MISMATCH")
+          require(subprocess.check_output(
+              ["git","-C","terminal-state","rev-parse","HEAD"],text=True).strip()==TERMINAL,
+              "TERMINAL_CHECKOUT_MISMATCH")
+          require(subprocess.check_output(
+              ["git","-C","terminal-state","rev-parse","HEAD^"],text=True).strip()==EXPECTED_PARENT,
+              "TERMINAL_GIT_PARENT_MISMATCH")
+          require(api.json("/git/ref/heads/brain-state-v2").get("object",{}).get("sha")==TERMINAL,
+                  "LIVE_STATE_REF_MISMATCH")
+
+          with tempfile.TemporaryDirectory(prefix="brain-terminal-review-") as folder:
+              raw_path=Path(folder)/"original.sqlite"
+              manifest=_extract(Path("terminal-state"),raw_path)
+              terminal=proofs[-1]
+              sqlite_proof=verify_sqlite(
+                  raw_path,expected_sequence=terminal["state_sequence"],
+                  expected_chain=terminal["canonical_hash"],expected_source=SOURCE,
+                  max_bytes=5*1024*1024*1024,strict_event_ids=True)
+              with sqlite3.connect(raw_path.as_uri()+"?mode=ro&immutable=1",uri=True) as db:
+                  row=db.execute("SELECT body,created_at FROM reports ORDER BY id DESC LIMIT 1").fetchone()
+                  counts={
+                      "attempts":db.execute("SELECT count(*) FROM attempts").fetchone()[0],
+                      "events":db.execute("SELECT count(*) FROM events").fetchone()[0],
+                      "ledger":db.execute("SELECT count(*) FROM ledger").fetchone()[0],
+                  }
+              require(row is not None,"LATEST_REPORT_MISSING")
+              stored=json.loads(row[0])
+              copy=Path(folder)/"report-replay.sqlite"
+              shutil.copyfile(raw_path,copy)
+              store=Store(copy,visibility="PUBLIC")
+              try:
+                  replay=store.read_report(SOURCE,now=row[1])
+              finally:
+                  store.close()
+              require(replay==stored and replay.get("status")=="PASS"
+                      and replay.get("pending_events")==0,
+                      "DETERMINISTIC_REPORT_REPLAY_MISMATCH")
+
+          require(api.json("/branches/main").get("commit",{}).get("sha")==SOURCE,
+                  "CURRENT_MAIN_DRIFT_DURING_REVIEW")
+          result={
+              "status":"SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED",
+              "source_sha":SOURCE,
+              "source_run_census_count":len(source_runs),
+              "qualifying_automatic_cores":len(automatic),
+              "signed_cloudflare_dispatched_cores":len(signed_times),
+              "github_native_schedule_cores":1,
+              "first_run_id":automatic[0]["id"],
+              "first_completed_utc":automatic[0]["updated_at"],
+              "terminal_run_id":automatic[-1]["id"],
+              "terminal_completed_utc":automatic[-1]["updated_at"],
+              "completed_span_seconds":span,
+              "maximum_gap_seconds":max(gaps),
+              "all_success_attempt_one":True,
+              "all_required_steps_success":True,
+              "all_artifact_sha256_crc_verified":True,
+              "all_state_parent_child_links_contiguous":True,
+              "terminal_state_commit":TERMINAL,
+              "terminal_state_parent":EXPECTED_PARENT,
+              "raw_sqlite_sha256":sqlite_proof["sha256"],
+              "raw_sqlite_bytes":manifest["raw_size"],
+              "compressed_sha256":manifest["compressed_sha256"],
+              "compressed_bytes":manifest["compressed_size"],
+              "state_chunks":len(manifest["chunks"]),
+              "canonical_sequence":terminal["state_sequence"],
+              "canonical_hash":terminal["canonical_hash"],
+              "pending_events":0,
+              "sqlite_integrity":"PASS",
+              "foreign_keys":"PASS",
+              "strict_event_ledger_replay":"PASS",
+              "deterministic_report_reproduction":"PASS",
+              "counts":counts,
+              "provider_reads":provider_reads,
+              "signed_dispatch_timestamps_utc":signed_times,
+              "acceptance_pass":False,
+              "release_or_merge_authorized":False,
+              "external_cloudflare_provider_accepted":False,
+          }
+          output=Path(os.environ["RUNNER_TEMP"])/"proof-terminal.json"
+          output.write_text(json.dumps(result,sort_keys=True,indent=2)+"\n")
+          print(json.dumps(result,sort_keys=True))
+          PY
+      - name: Retain sanitized source-specific terminal proof
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-7007de72-terminal-readonly-receipt
+          path: ${{ runner.temp }}/proof-terminal.json
+          if-no-files-found: error
+          retention-days: 30
