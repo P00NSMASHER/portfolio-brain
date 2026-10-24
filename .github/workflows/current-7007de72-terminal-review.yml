@@ -37,6 +37,7 @@ jobs:
         with:
           ref: aac8daf5bf8fe73bcf79dd56fee4230afbfc9360
           path: terminal-state
+          fetch-depth: 2
           persist-credentials: false
       - name: Verify complete original census, artifacts, state, and report
         env:
