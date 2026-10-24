@@ -1,8 +1,11 @@
-import copy, json, unittest
+import copy, hashlib, json, unittest
 from memory.value_memory_adapter import (
     SharedMemoryError, canonical_hash, load_pin, outcome_hash, project_upstream_summary,
     upstream_registration_args, validate_credit_conservation, validate_memory,
     validate_outcome, verified_outcome_calls
+)
+from truth.truth_adapter import (
+    TruthIntegrationError, load_pin as load_truth_pin, project_receipt
 )
 
 def mem():
@@ -31,6 +34,24 @@ def outcome(state="VERIFIED", event="EVT-OUTCOME-0001", fraction=1.0):
 
 def resign(value):
     value["outcome_hash"]=outcome_hash(value)
+    return value
+
+def truth_receipt():
+    value={
+      "claim_id":"claim-memory-checkpoint","claim_hash":"c"*64,"verdict":"PROVEN",
+      "evaluated_at":200.0,
+      "findings":[{
+        "key":"source-run","required":True,"status":"SATISFIED","reason":"exact receipt observed",
+        "supporting_evidence_ids":["source-receipt"],"contradicting_evidence_ids":[],
+        "stale_evidence_ids":[],"inadmissible_evidence_ids":[]
+      }],
+      "evidence_set_hash":"d"*64,"receipt_hash":""
+    }
+    payload={key:value[key] for key in (
+      "claim_id","claim_hash","verdict","evaluated_at","findings","evidence_set_hash"
+    )}
+    raw=json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+    value["receipt_hash"]=hashlib.sha256(raw).hexdigest()
     return value
 
 class SharedValueMemoryTests(unittest.TestCase):
@@ -124,6 +145,29 @@ class SharedValueMemoryTests(unittest.TestCase):
             validate_credit_conservation(recovered+[replay])
         self.assertEqual(json.dumps(recovered,sort_keys=True,separators=(",",":")),
                          serialized)
+
+
+    def test_truth_projection_checkpoint_preserves_source_receipt_identity(self):
+        pin=load_truth_pin()
+        receipt_ref="ai-business-os://truth/receipt/source-run-1"
+        projection=project_receipt(
+            truth_receipt(),project_id="PRJ-000",
+            source_revision=pin["source_revision"],source_blob_sha=pin["source_blob_sha"],
+            source_receipt_ref=receipt_ref,
+        )
+        serialized=json.dumps(projection,sort_keys=True,separators=(",",":"))
+        recovered=json.loads(serialized)
+        self.assertEqual(recovered["upstream_source"]["receipt_ref"],receipt_ref)
+        self.assertEqual(recovered["projection_hash"],projection["projection_hash"])
+        self.assertEqual(json.dumps(recovered,sort_keys=True,separators=(",",":")),serialized)
+        for invalid in (None,"","   ",42):
+            with self.subTest(source_receipt_ref=invalid):
+                with self.assertRaisesRegex(TruthIntegrationError,"non-empty string"):
+                    project_receipt(
+                        truth_receipt(),project_id="PRJ-000",
+                        source_revision=pin["source_revision"],source_blob_sha=pin["source_blob_sha"],
+                        source_receipt_ref=invalid,
+                    )
 
     def test_duplicate_event_cannot_be_replayed_into_same_memory(self):
         a=outcome(event="EVT-OUTCOME-0003",fraction=0.5)
