@@ -58,8 +58,7 @@ def build_intake(queue,*,source_revision,source_path=SOURCE_PATH,prior_state=Non
     req(queue.get("authority")=="PRE_VERIFICATION_DISCOVERY_ONLY","scout queue authority widened")
     worker=queue.get("worker_id");req(worker in WORKER_PROJECTS,"scout worker is not allowlisted")
     candidates=queue.get("candidates");req(isinstance(candidates,list),"scout candidate list invalid")
-    eligible=[]
-    seen_candidate_keys=set()
+    eligible_rows=[]
     metadata_only_candidates=0
     for row in candidates:
         if not isinstance(row,dict): continue
@@ -75,13 +74,15 @@ def build_intake(queue,*,source_revision,source_path=SOURCE_PATH,prior_state=Non
             metadata_only_candidates+=1
             continue
         candidate_key=_candidate_identity(row)
-        if candidate_key in seen_candidate_keys: continue
-        seen_candidate_keys.add(candidate_key)
         source_key=hashv({"source_repository":SOURCE_REPOSITORY,"source_revision":source_revision,"source_path":source_path,
                           "finding_identity":candidate_key})
         if source_key in state["source_keys"] or candidate_key in state["candidate_keys"]: continue
-        eligible.append((score,repo_name,revision,candidate_key,source_key,row))
-    eligible.sort(key=lambda x:(-x[0],x[1].casefold(),x[2]))
+        eligible_rows.append((score,repo_name,revision,candidate_key,source_key,row))
+    eligible_rows.sort(key=lambda x:(-x[0],x[1].casefold(),x[2],canon(x[5])))
+    eligible=[];seen_candidate_keys=set()
+    for candidate in eligible_rows:
+        if candidate[3] in seen_candidate_keys: continue
+        seen_candidate_keys.add(candidate[3]);eligible.append(candidate)
     selected=eligible[:MAX_INTAKE]
     hints=[]
     for score,repo_name,revision,candidate_key,source_key,row in selected:
