@@ -59,20 +59,22 @@ jobs:
 
           require(api.json("/branches/main").get("commit",{}).get("sha")==SOURCE,
                   "CURRENT_MAIN_SOURCE_MISMATCH")
+          # Actions caps deep search results at 1,000 even when total_count is
+          # larger. The current source is the newest contiguous source block;
+          # two full pages establish both its complete block and the prior-source
+          # transition without pretending inaccessible deep history was listed.
           all_runs=[]
-          total=None
-          for page in range(1,20):
+          for page in (1,2):
               page_doc=api.json(f"/actions/workflows/brain-cycle.yml/runs?branch=main&per_page=100&page={page}")
-              if total is None:
-                  total=page_doc.get("total_count")
-                  require(type(total) is int and total < 2000,"RUN_CENSUS_BOUND")
               rows=page_doc.get("workflow_runs")
-              require(type(rows) is list,"RUN_CENSUS_PAGE_INVALID")
+              require(type(rows) is list and len(rows)==100,"RUN_CENSUS_PAGE_INVALID")
               all_runs.extend(rows)
-              if len(all_runs)>=total:
-                  break
-          require(len(all_runs)==total,"RUN_CENSUS_INCOMPLETE")
-          source_runs=[r for r in all_runs if r.get("head_sha")==SOURCE]
+          positions=[i for i,r in enumerate(all_runs) if r.get("head_sha")==SOURCE]
+          require(positions==list(range(len(positions)))
+                  and len(positions)<len(all_runs)
+                  and all_runs[len(positions)].get("head_sha")!=SOURCE,
+                  "SOURCE_RUN_BOUNDARY_INCOMPLETE")
+          source_runs=all_runs[:len(positions)]
           require(len(source_runs)==15,"SOURCE_RUN_CENSUS_UNEXPECTED")
           require(all(r.get("run_attempt")==1 and r.get("status")=="completed"
                       and r.get("conclusion")=="success" and r.get("head_branch")=="main"
