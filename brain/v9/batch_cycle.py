@@ -14,6 +14,41 @@ from brain.v9.batch_queue import BatchQueue, BatchFault, PROJECTS, digest, hashv
 from brain.v9.batch_routing import route_defect, select_distinct_owners
 from brain.v9.publication_reader import PublicationReader, REQUIRED_BUDGET
 
+# Approved bounded reader codes only. Never preserve raw provider response text,
+# exceptions, URLs, token values, stack traces or unrecognized BatchFault payloads.
+PUBLICATION_FAILURE_CODES = frozenset({
+    'PROVIDER_READBACK_REQUIRED',
+    'PUBLICATION_ASSET_INVALID',
+    'PUBLICATION_BRANCH_INVALID',
+    'PUBLICATION_BROWSER_JOB_NOT_VERIFIED',
+    'PUBLICATION_CANDIDATE_QA_NOT_VERIFIED',
+    'PUBLICATION_CENSUS_INCOMPLETE',
+    'PUBLICATION_DUPLICATE_JSON_KEY',
+    'PUBLICATION_HTTP_NOT_OK',
+    'PUBLICATION_JSON_INVALID',
+    'PUBLICATION_LIVE_BYTES_MISMATCH',
+    'PUBLICATION_LIVE_STEP_NOT_VERIFIED',
+    'PUBLICATION_NONFINITE',
+    'PUBLICATION_ORIGINAL_RUN_MISSING',
+    'PUBLICATION_ORIGINAL_RUN_NOT_SUCCESS',
+    'PUBLICATION_PROVIDER_UNAVAILABLE',
+    'PUBLICATION_PR_NOT_EXACT_MERGE',
+    'PUBLICATION_REPAIR_NOT_IN_DEPLOYED_HISTORY',
+    'PUBLICATION_RESPONSE_TOO_LARGE',
+    'PUBLICATION_ROUTE_REFUSED',
+    'PUBLICATION_SOURCE_BYTES_MISMATCH',
+    'PUBLICATION_SOURCE_MOVED_DURING_READBACK',
+    'PUBLICATION_SPEC_FIELDS',
+    'PUBLICATION_SPEC_SCOPE',
+    'PUBLICATION_URL_REFUSED',
+    'READBACK_BUDGET_EXHAUSTED',
+    'RECONCILIATION_REQUIRED',
+    'RECONCILIATION_SOURCE_CHANGED',
+})
+def stable_publication_failure(exc):
+    code = str(exc) if isinstance(exc, BatchFault) else None
+    return code if code in PUBLICATION_FAILURE_CODES else 'PUBLICATION_FAILURE_UNCLASSIFIED'
+
 RETIRED = {'product-factory', 'pips-classroom', 'trading-platform'}
 CHECK_STATES = {'SOURCE_UNOBSERVED', 'CHECK_EVIDENCE_UNVERIFIED', 'NO_CHECK_RUNS_OBSERVED',
                 'ADVERSE_CHECKS_OBSERVED', 'INCOMPLETE_OR_INCONCLUSIVE_CHECKS_OBSERVED',
@@ -104,8 +139,12 @@ def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=
             before_gets = actual.used_gets
             try:
                 provider = queue.record_publication(proof_spec, actual, now=now)
-            except (BatchFault, OSError, ValueError, KeyError, TypeError, AttributeError):
+            except (BatchFault, OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+                # Keep the original fail-closed verdict, and expose only one
+                # fixed machine code so an absent downstream quality run can
+                # be distinguished from a changed source or bad live bytes.
                 provider = dict(status='ORIGINAL_PUBLICATION_NOT_VERIFIED',
+                                failure_code=stable_publication_failure(exc),
                                 production_accepted=False)
             provider['provider_gets'] = actual.used_gets - before_gets
     total = used + provider.get('provider_gets', 0)
