@@ -158,6 +158,22 @@ class TruthIntegrationTests(unittest.TestCase):
         self.assertEqual(p["upstream_source"]["blob_sha"],pin["source_blob_sha"])
         self.assertTrue(p["projection_hash"].startswith("sha256:"))
 
+    def test_projection_rejects_missing_source_receipt_reference(self):
+        pin=load_pin()
+        for invalid in (None,"","   ",42):
+            with self.subTest(source_receipt_ref=invalid):
+                with self.assertRaisesRegex(
+                    TruthIntegrationError,
+                    "source_receipt_ref must be a non-empty string",
+                ):
+                    project_receipt(
+                        receipt("PROVEN","SATISFIED"),
+                        project_id="PRJ-001",
+                        source_revision=pin["source_revision"],
+                        source_blob_sha=pin["source_blob_sha"],
+                        source_receipt_ref=invalid,
+                    )
+
     def test_projection_hash_changes_when_source_receipt_changes(self):
         pin=load_pin()
         a=project_receipt(receipt("PROVEN","SATISFIED"),project_id="PRJ-001",source_revision=pin["source_revision"],source_blob_sha=pin["source_blob_sha"],source_receipt_ref="receipt/1")
