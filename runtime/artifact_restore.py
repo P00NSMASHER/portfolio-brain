@@ -16,6 +16,10 @@ class InvalidStateArtifact(ValueError):
     pass
 
 
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"non-finite JSON constant {value}")
+
+
 def _validated_payload(
     raw: bytes,
     *,
@@ -41,8 +45,8 @@ def _validated_payload(
     if len(body) != info.file_size or len(body) > max_state_bytes:
         raise InvalidStateArtifact("state member size mismatch")
     try:
-        state = json.loads(body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        state = json.loads(body.decode("utf-8"), parse_constant=_reject_json_constant)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         raise InvalidStateArtifact("state member is not valid UTF-8 JSON") from exc
     if not isinstance(state, dict):
         raise InvalidStateArtifact("state payload must be an object")
@@ -55,7 +59,16 @@ def _validated_payload(
             validator(state)
         except Exception as exc:
             raise InvalidStateArtifact("state payload failed subsystem validation") from exc
-    canonical = json.dumps(state, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    try:
+        canonical = json.dumps(
+            state,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise InvalidStateArtifact("state payload is not canonical JSON") from exc
     state_hash = "sha256:" + hashlib.sha256(canonical).hexdigest()
     return body, state["sequence"], state_hash
 
