@@ -2,7 +2,7 @@
 from __future__ import annotations
 import json
 from pathlib import Path
-from allocator.portfolio_allocator import build_allocation_snapshot,policy,summary
+from allocator.portfolio_allocator import build_allocation_snapshot,policy,summary,validate_allocation_plan
 ROOT=Path(__file__).resolve().parents[1]
 class AllocatorValidationError(ValueError):pass
 def req(ok,msg):
@@ -21,6 +21,7 @@ def _contains_score(value):
 def validate_allocator():
     p=policy();pin=load("allocator/AI_BUSINESS_OS_CAPITAL_ALLOCATOR_PIN.json");schema=load("schemas/PORTFOLIO_ALLOCATION_PLAN_SCHEMA.json")
     baseline=load("allocator/INITIAL_ALLOCATION_SUMMARY.json");snap=build_allocation_snapshot()
+    for plan in snap["plans"]:validate_allocation_plan(plan)
     req(pin["source_revision"]=="c6276c80828d2632d5fee37cdaaf65f1d5b36427","allocator source revision mismatch")
     blobs={"capital_allocator":"cf08795e72de378656f9be963b36efa80b945c33","capital_allocator_contract":"d997ad49c90c9b8bcf298cffbb764d2122a66ad3","capital_allocator_tests":"3c15babd1cd899c32bcf62c0945c57e481a9d511","governance":"40d278e479830d6f76aca7da22b6893f5d0060a7","governance_tests":"3a1429ec8d81e92d1043e89c55a7868b226a6fd4"}
     for k,v in blobs.items():req(pin["components"][k]["blob_sha"]==v,f"{k} blob mismatch")
