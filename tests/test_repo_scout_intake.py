@@ -36,16 +36,20 @@ class RepoScoutIntakeTests(unittest.TestCase):
         self.assertTrue(any(x["published_license_spdx"]=="UNKNOWN" for x in receipt["hints"]))
         self.assertEqual(state["sequence"],1)
 
-    def test_same_repository_revision_is_deduplicated_within_one_queue(self):
+    def test_same_repository_revision_dedup_prefers_strongest_deterministically(self):
         q=queue()
         original=q["candidates"][1]
         duplicate=dict(original)
         duplicate["triage_score"]=original["triage_score"]+1
         q["candidates"]=[original,duplicate]
         state,receipt=build_intake(q,source_revision="1"*40,prior_state=seed_state(),at="2026-09-30T14:00:00Z")
+        q["candidates"].reverse()
+        reversed_state,reversed_receipt=build_intake(q,source_revision="1"*40,prior_state=seed_state(),at="2026-09-30T14:00:00Z")
         self.assertEqual(receipt["selected_candidates"],1)
         self.assertEqual(receipt["eligible_candidates"],1)
-        self.assertEqual(len({x["finding_identity"] for x in receipt["hints"]}),1)
+        self.assertEqual(receipt["hints"][0]["triage_score"],43)
+        self.assertEqual(receipt["receipt_hash"],reversed_receipt["receipt_hash"])
+        self.assertEqual(state,reversed_state)
         self.assertEqual(len(state["candidate_keys"]),1)
         self.assertEqual(len(state["source_keys"]),1)
 
