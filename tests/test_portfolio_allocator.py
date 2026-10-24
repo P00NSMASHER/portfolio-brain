@@ -1,5 +1,12 @@
-import unittest
-from allocator.portfolio_allocator import build_allocation_snapshot,policy
+import copy, unittest
+from allocator.portfolio_allocator import (
+    AllocationError, build_allocation_snapshot, hashv, policy, validate_allocation_plan
+)
+
+def rehash(plan):
+    body={key:value for key,value in plan.items() if key!="plan_hash"}
+    plan["plan_hash"]=hashv(body)
+    return plan
 
 class PortfolioAllocatorTests(unittest.TestCase):
     @classmethod
@@ -48,16 +55,81 @@ class PortfolioAllocatorTests(unittest.TestCase):
 
     def test_receipts_separate_estimates_from_measured_outcomes(self):
         expected={"importance","uncertainty","test_cost","time_to_evidence","reversibility","downstream_impact","strategic_reuse","external_validation_value"}
+        by_uncertainty={}
         for plan in self.by.values():
+            validate_allocation_plan(plan)
             for recommendation in plan["recommendations"]:
+                by_uncertainty[recommendation["source_uncertainty_id"]]=recommendation
                 basis=recommendation["evidence_basis_summary"]
                 groups=[basis["policy_estimate_component_ids"],basis["derived_component_ids"],basis["measured_outcome_component_ids"]]
                 flattened=[component_id for group in groups for component_id in group]
                 self.assertEqual(set(flattened),expected)
                 self.assertEqual(len(flattened),len(set(flattened)))
-                self.assertEqual(set(basis["policy_estimate_component_ids"]),{"test_cost","time_to_evidence"})
+                expected_estimates={
+                    component_id for component_id,component in recommendation["uncertainty_components"].items()
+                    if component["basis_type"]=="POLICY_ESTIMATE"
+                }
+                self.assertEqual(set(basis["policy_estimate_component_ids"]),expected_estimates)
+                self.assertTrue({"test_cost","time_to_evidence"}<=expected_estimates)
                 self.assertEqual(basis["measured_outcome_component_ids"],[])
                 self.assertEqual(basis["measurement_state"],"NO_MEASURED_OUTCOME_INPUT")
+        self.assertEqual(
+            by_uncertainty["UNC-EXTERNAL-PRJ-001"]["uncertainty_components"]["reversibility"]["basis_type"],
+            "POLICY_ESTIMATE",
+        )
+        self.assertEqual(
+            by_uncertainty["UNC-LEARNING-PRJ-000"]["uncertainty_components"]["reversibility"]["basis_type"],
+            "DERIVED",
+        )
+
+    def test_untrusted_basis_receipt_mutations_fail_closed_without_mutation(self):
+        source=next(plan for plan in self.snap["plans"] if plan["recommendations"])
+        recommendation=source["recommendations"][0]
+        component_id="importance"
+        basis=recommendation["evidence_basis_summary"]
+        source_bucket=next(
+            key for key in [
+                "policy_estimate_component_ids","derived_component_ids","measured_outcome_component_ids"
+            ] if component_id in basis[key]
+        )
+        other_bucket=next(
+            key for key in [
+                "policy_estimate_component_ids","derived_component_ids","measured_outcome_component_ids"
+            ] if key!=source_bucket
+        )
+
+        omitted=copy.deepcopy(source)
+        omitted["recommendations"][0]["evidence_basis_summary"][source_bucket].remove(component_id)
+
+        overlapping=copy.deepcopy(source)
+        overlapping["recommendations"][0]["evidence_basis_summary"][other_bucket].append(component_id)
+
+        mismatched=copy.deepcopy(source)
+        current=mismatched["recommendations"][0]["uncertainty_components"][component_id]["basis_type"]
+        mismatched["recommendations"][0]["uncertainty_components"][component_id]["basis_type"]=(
+            "DERIVED" if current!="DERIVED" else "POLICY_ESTIMATE"
+        )
+
+        future=copy.deepcopy(source)
+        future["recommendations"][0]["uncertainty_components"][component_id]["basis_type"]="FUTURE_BASIS"
+
+        wrong_state=copy.deepcopy(source)
+        state=wrong_state["recommendations"][0]["evidence_basis_summary"]["measurement_state"]
+        wrong_state["recommendations"][0]["evidence_basis_summary"]["measurement_state"]=(
+            "MEASURED_OUTCOME_INPUT_PRESENT"
+            if state=="NO_MEASURED_OUTCOME_INPUT" else "NO_MEASURED_OUTCOME_INPUT"
+        )
+
+        for name,mutated in [
+            ("omitted",omitted),("overlapping",overlapping),("mismatched",mismatched),
+            ("future",future),("wrong_state",wrong_state)
+        ]:
+            with self.subTest(name=name):
+                rehash(mutated)
+                before=copy.deepcopy(mutated)
+                with self.assertRaises(AllocationError):
+                    validate_allocation_plan(mutated)
+                self.assertEqual(mutated,before)
 
     def test_normalized_shares_are_not_claimed_real_units(self):
         self.assertEqual(self.snap["mode"],"ADVISORY_NORMALIZED_SHARES_ONLY")
