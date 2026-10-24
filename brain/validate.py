@@ -94,7 +94,7 @@ def validate_policy():
         "actions: read", "contents: read", "pull-requests: read",
         "PORTFOLIO_VERIFIER_PRIVATE_KEY", 'app-id: "5121826"',
         "2a3adc75b0c016c993045a8ee21aad0e9c5b6d5f",
-        "python verification/source_acceptance_verifier.py",
+        "python -m verification.source_acceptance_verifier",
     ):
         require(fragment in acceptance,
                 "source acceptance producer original control changed: "+fragment)
@@ -124,7 +124,7 @@ def validate_policy():
         "2a3adc75b0c016c993045a8ee21aad0e9c5b6d5f",
         "PORTFOLIO_RUNTIME_PRIVATE_KEY", "permission-contents: write",
         "permission-pull-requests: write", "skip-token-revoke: false",
-        "python verification/source_acceptance_producer.py",
+        "python -m verification.source_acceptance_producer",
     ):
         require(fragment in receipt,
                 "source acceptance receipt producer control changed: "+fragment)
