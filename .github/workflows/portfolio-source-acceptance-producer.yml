@@ -67,5 +67,5 @@ jobs:
           PORTFOLIO_RUNTIME_TOKEN: ${{ steps.runtime-token.outputs.token }}
           SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: >-
-          python verification/source_acceptance_producer.py
+          python -m verification.source_acceptance_producer
           --source-sha "$SOURCE_SHA"
