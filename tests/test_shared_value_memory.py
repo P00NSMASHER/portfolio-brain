@@ -1,4 +1,4 @@
-import copy, unittest
+import copy, json, unittest
 from memory.value_memory_adapter import (
     SharedMemoryError, canonical_hash, load_pin, outcome_hash, project_upstream_summary,
     upstream_registration_args, validate_credit_conservation, validate_memory,
@@ -106,6 +106,24 @@ class SharedValueMemoryTests(unittest.TestCase):
         b=copy.deepcopy(a); b["event_id"]="EVT-OUTCOME-0006"; resign(b)
         with self.assertRaisesRegex(SharedMemoryError,"duplicate outcome_id"):
             validate_credit_conservation([a,b])
+
+    def test_checkpoint_roundtrip_keeps_outcome_identity_and_original_hash(self):
+        # Exact JSON bytes survive a simulated durable checkpoint/restore.
+        # An already-accepted outcome must not gain a second credit merely
+        # because a restarted consumer observes a new event reference.
+        first=outcome(event="EVT-OUTCOME-0005",fraction=0.5)
+        serialized=json.dumps([first],sort_keys=True,separators=(",",":"))
+        recovered=json.loads(serialized)
+        self.assertEqual(recovered,[first])
+        self.assertEqual(recovered[0]["outcome_hash"],first["outcome_hash"])
+        validate_credit_conservation(recovered)
+        replay=copy.deepcopy(recovered[0])
+        replay["event_id"]="EVT-OUTCOME-0006"
+        resign(replay)
+        with self.assertRaisesRegex(SharedMemoryError,"duplicate outcome_id"):
+            validate_credit_conservation(recovered+[replay])
+        self.assertEqual(json.dumps(recovered,sort_keys=True,separators=(",",":")),
+                         serialized)
 
     def test_duplicate_event_cannot_be_replayed_into_same_memory(self):
         a=outcome(event="EVT-OUTCOME-0003",fraction=0.5)
