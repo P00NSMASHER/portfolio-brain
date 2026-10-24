@@ -35,7 +35,7 @@ jobs:
       - name: Checkout exact terminal state commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: 130a650587bdeb436c453f427a454f67d7d1202d
+          ref: aac8daf5bf8fe73bcf79dd56fee4230afbfc9360
           path: terminal-state
           persist-credentials: false
       - name: Verify complete original census, artifacts, state, and report
@@ -53,8 +53,8 @@ jobs:
           from soak_v3.remote_probe import GitHubReadOnly
 
           SOURCE="7007de7294f83044f4e003eed78aa7ae0a6bdfe3"
-          TERMINAL="130a650587bdeb436c453f427a454f67d7d1202d"
-          EXPECTED_PARENT="ff05ea99ac137f8ba558abacb01cf5ac647cefb1"
+          TERMINAL="aac8daf5bf8fe73bcf79dd56fee4230afbfc9360"
+          EXPECTED_PARENT="130a650587bdeb436c453f427a454f67d7d1202d"
           api=GitHubReadOnly(os.environ["GH_TOKEN"],max_calls=656)
 
           require(api.json("/branches/main").get("commit",{}).get("sha")==SOURCE,
@@ -75,15 +75,15 @@ jobs:
                   and all_runs[len(positions)].get("head_sha")!=SOURCE,
                   "SOURCE_RUN_BOUNDARY_INCOMPLETE")
           source_runs=all_runs[:len(positions)]
-          require(len(source_runs)==15,"SOURCE_RUN_CENSUS_UNEXPECTED")
+          require(len(source_runs)==16,"SOURCE_RUN_CENSUS_UNEXPECTED")
           require(all(r.get("run_attempt")==1 and r.get("status")=="completed"
                       and r.get("conclusion")=="success" and r.get("head_branch")=="main"
                       for r in source_runs),"SOURCE_RUN_ADVERSE_OR_RETRIED")
           automatic=sorted([r for r in source_runs if r.get("event")!="push"],
                            key=lambda r:r["updated_at"])
-          require(len(automatic)==14
+          require(len(automatic)==15
                   and sum(r.get("event")=="workflow_dispatch" for r in automatic)==13
-                  and sum(r.get("event")=="schedule" for r in automatic)==1,
+                  and sum(r.get("event")=="schedule" for r in automatic)==2,
                   "AUTOMATIC_RUN_CENSUS_UNEXPECTED")
           completed=[datetime.fromisoformat(r["updated_at"].replace("Z","+00:00"))
                      for r in automatic]
@@ -157,7 +157,7 @@ jobs:
                   "canonical_hash":doctor["canonical_hash"],
               })
 
-          require(prior_commit==TERMINAL and proofs[-1]["run_id"]==40072425249,
+          require(prior_commit==TERMINAL and proofs[-1]["run_id"]==40073032947,
                   "TERMINAL_RUN_OR_STATE_MISMATCH")
           require(subprocess.check_output(
               ["git","-C","terminal-state","rev-parse","HEAD"],text=True).strip()==TERMINAL,
@@ -204,7 +204,7 @@ jobs:
               "source_run_census_count":len(source_runs),
               "qualifying_automatic_cores":len(automatic),
               "signed_cloudflare_dispatched_cores":len(signed_times),
-              "github_native_schedule_cores":1,
+              "github_native_schedule_cores":2,
               "first_run_id":automatic[0]["id"],
               "first_completed_utc":automatic[0]["updated_at"],
               "terminal_run_id":automatic[-1]["id"],
