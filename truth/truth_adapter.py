@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -97,14 +98,25 @@ def _validate_finding(finding: dict[str,Any]) -> None:
     _require(isinstance(finding["required"],bool),"finding.required must be boolean")
     _require(finding["status"] in FINDING_STATUSES,"unknown upstream finding status")
     _require(isinstance(finding["reason"],str) and finding["reason"],"finding reason required")
-    for key in [
+    lineage_buckets=[
         "supporting_evidence_ids","contradicting_evidence_ids",
         "stale_evidence_ids","inadmissible_evidence_ids",
-    ]:
+    ]
+    for key in lineage_buckets:
         values=finding[key]
         _require(isinstance(values,list),"finding evidence IDs must be lists")
         _require(all(isinstance(x,str) and x for x in values),"finding evidence IDs must be non-empty strings")
         _require(len(values)==len(set(values)),"finding evidence IDs must be unique")
+
+    lineage_ids=[
+        evidence_id
+        for key in lineage_buckets
+        for evidence_id in finding[key]
+    ]
+    _require(
+        len(lineage_ids)==len(set(lineage_ids)),
+        "finding evidence ID cannot span lineage buckets",
+    )
 
 def validate_upstream_receipt(receipt: dict[str,Any]) -> None:
     _require(isinstance(receipt,dict),"truth receipt must be an object")
@@ -113,7 +125,16 @@ def validate_upstream_receipt(receipt: dict[str,Any]) -> None:
     _require(isinstance(receipt["claim_id"],str) and receipt["claim_id"],"claim_id required")
     _require(SHA64.fullmatch(receipt["claim_hash"]) is not None,"claim_hash must be 64 hex")
     _require(receipt["verdict"] in VERDICTS,"unknown upstream verdict")
-    _require(isinstance(receipt["evaluated_at"],(int,float)),"evaluated_at must be numeric")
+    evaluated_at=receipt["evaluated_at"]
+    # An unbounded Python int can overflow math.isfinite's implicit float
+    # conversion. Admit only safely representable signed JSON integers;
+    # preserve the historical finite-float contract without coercing types.
+    _require(
+        (type(evaluated_at) is int
+         and -(2**53-1)<=evaluated_at<=(2**53-1))
+        or (type(evaluated_at) is float and math.isfinite(evaluated_at)),
+        "evaluated_at must be finite numeric",
+    )
     _require(SHA64.fullmatch(receipt["evidence_set_hash"]) is not None,"evidence_set_hash must be 64 hex")
     _require(SHA64.fullmatch(receipt["receipt_hash"]) is not None,"receipt_hash must be 64 hex")
     findings=receipt["findings"]
