@@ -23,6 +23,16 @@ def canon(v):return json.dumps(v,sort_keys=True,separators=(",",":"),ensure_asci
 def hashv(v):return "sha256:"+hashlib.sha256(canon(v).encode()).hexdigest()
 def policy():return load("allocator/ALLOCATOR_POLICY.json")
 
+BASIS_TYPES=("POLICY_ESTIMATE","DERIVED","MEASURED_OUTCOME")
+BASIS_SUMMARY_KEYS={
+  "measurement_state","policy_estimate_component_ids",
+  "derived_component_ids","measured_outcome_component_ids"
+}
+EXPECTED_COMPONENT_IDS={
+  "importance","uncertainty","test_cost","time_to_evidence","reversibility",
+  "downstream_impact","strategic_reuse","external_validation_value"
+}
+
 def _tie_key(c):
     v={k:c["components"][k]["value"] for k in c["components"]}
     return (-v["external_validation_value"],-v["importance"],-v["uncertainty"],-v["downstream_impact"],-v["strategic_reuse"],v["test_cost"],v["time_to_evidence"],-v["reversibility"],c["primary_project_id"],c["uncertainty_id"])
@@ -36,6 +46,85 @@ def _pareto_rank(candidates):
         ids={c["uncertainty_id"] for c in front};remaining=[c for c in remaining if c["uncertainty_id"] not in ids];layer+=1
     ranked=sorted(candidates,key=lambda c:(layers[c["uncertainty_id"]],*_tie_key(c)))
     return [(c,layers[c["uncertainty_id"]],i+1) for i,c in enumerate(ranked)]
+
+def _basis_summary(candidate):
+    """Expose estimate/derived/measured inputs without converting them to outcomes."""
+    component_ids=set(candidate["components"])
+    by_basis={basis_type:[] for basis_type in BASIS_TYPES}
+    for component_id,component in candidate["components"].items():
+        basis_type=component.get("basis_type")
+        req(basis_type in by_basis,f"unsupported allocation basis type: {basis_type}")
+        by_basis[basis_type].append(component_id)
+    for values in by_basis.values():values.sort()
+    req(set().union(*(set(values) for values in by_basis.values()))==component_ids,"allocation basis summary does not cover every component")
+    measured=by_basis["MEASURED_OUTCOME"]
+    return {
+      "measurement_state":"MEASURED_OUTCOME_INPUT_PRESENT" if measured else "NO_MEASURED_OUTCOME_INPUT",
+      "policy_estimate_component_ids":by_basis["POLICY_ESTIMATE"],
+      "derived_component_ids":by_basis["DERIVED"],
+      "measured_outcome_component_ids":measured
+    }
+
+def validate_allocation_plan(plan):
+    """Validate a serialized allocation receipt without regenerating trusted state."""
+    plan_keys={
+      "schema_version","resource_type","status","normalized_share_basis_points",
+      "allocated_share_basis_points","unallocated_share_basis_points","hold_reason",
+      "recommendations","plan_hash"
+    }
+    req(isinstance(plan,dict) and set(plan)==plan_keys,"allocation plan fields must exactly match contract")
+    req(plan["schema_version"]=="1.0.0","allocation plan schema mismatch")
+    req(plan["resource_type"] in policy()["resource_types"],"unsupported allocation resource type")
+    req(plan["status"] in {
+      "ACTIVE_RECOMMENDATION","HOLD_NO_ELIGIBLE_EVIDENCE","HOLD_PROVIDER_DISABLED",
+      "HOLD_HUMAN_GATED_NO_APPROVED_POOL","HOLD_NO_APPROVED_INFRASTRUCTURE_NEED"
+    },"unsupported allocation status")
+    allocated=plan["allocated_share_basis_points"];unallocated=plan["unallocated_share_basis_points"]
+    req(type(allocated) is int and type(unallocated) is int,"allocation shares must be integers")
+    req(plan["normalized_share_basis_points"]==10000 and allocated>=0 and unallocated>=0 and allocated+unallocated==10000,
+        "allocation shares do not conserve 10000 basis points")
+    req(isinstance(plan["recommendations"],list),"allocation recommendations must be a list")
+    if plan["status"]=="ACTIVE_RECOMMENDATION":
+        req(plan["hold_reason"] is None and plan["recommendations"],"active allocation requires recommendations and no hold reason")
+    else:
+        req(isinstance(plan["hold_reason"],str) and plan["hold_reason"] and not plan["recommendations"],
+            "held allocation cannot contain recommendations")
+    recommendation_keys={
+      "project_id","source_uncertainty_id","source_experiment_id","pareto_layer",
+      "rank_order","share_basis_points","authority_requirement","actionability",
+      "resource_fit_reason","uncertainty_components","evidence_basis_summary","evidence_refs"
+    }
+    for recommendation in plan["recommendations"]:
+        req(isinstance(recommendation,dict) and set(recommendation)==recommendation_keys,
+            "allocation recommendation fields must exactly match contract")
+        components=recommendation["uncertainty_components"]
+        req(isinstance(components,dict) and set(components)==EXPECTED_COMPONENT_IDS,
+            "allocation receipt must preserve the exact eight-component vector")
+        basis=recommendation["evidence_basis_summary"]
+        req(isinstance(basis,dict) and set(basis)==BASIS_SUMMARY_KEYS,
+            "allocation basis summary fields must exactly match contract")
+        groups={
+          "POLICY_ESTIMATE":basis["policy_estimate_component_ids"],
+          "DERIVED":basis["derived_component_ids"],
+          "MEASURED_OUTCOME":basis["measured_outcome_component_ids"]
+        }
+        req(all(isinstance(ids,list) and all(isinstance(x,str) for x in ids) for ids in groups.values()),
+            "allocation basis buckets must be string lists")
+        flattened=[component_id for ids in groups.values() for component_id in ids]
+        req(len(flattened)==len(set(flattened)) and set(flattened)==EXPECTED_COMPONENT_IDS,
+            "allocation basis summary must partition every component exactly once")
+        for component_id,component in components.items():
+            req(isinstance(component,dict),"allocation component must be an object")
+            basis_type=component.get("basis_type")
+            req(basis_type in BASIS_TYPES,f"unsupported allocation basis type: {basis_type}")
+            req(component_id in groups[basis_type],f"allocation basis summary mismatch: {component_id}")
+        expected_state=(
+          "MEASURED_OUTCOME_INPUT_PRESENT"
+          if groups["MEASURED_OUTCOME"] else "NO_MEASURED_OUTCOME_INPUT"
+        )
+        req(basis["measurement_state"]==expected_state,"allocation measurement state mismatch")
+    body={key:value for key,value in plan.items() if key!="plan_hash"}
+    req(plan["plan_hash"]==hashv(body),"allocation plan hash mismatch")
 
 def _project_best(candidates):
     out={}
@@ -120,6 +209,7 @@ def resource_plan(resource,uncertainty,experiments):
           "pareto_layer":layer,"rank_order":rank,"share_basis_points":share,
           "authority_requirement":c["authority_requirement"],"actionability":c["actionability"],
           "resource_fit_reason":fit,"uncertainty_components":c["components"],
+          "evidence_basis_summary":_basis_summary(c),
           "evidence_refs":list(dict.fromkeys([*c["evidence_refs"],f"experiment:{exp['experiment_id']}"]))
         })
     body={"schema_version":"1.0.0","resource_type":resource,"status":"ACTIVE_RECOMMENDATION","normalized_share_basis_points":10000,
