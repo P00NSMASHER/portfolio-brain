@@ -17,6 +17,7 @@ def validate_policy():
         require(p[name] is False, "forbidden authority/filter: "+name)
     workflow_dir=ROOT/".github/workflows"
     expected={"foundation-ci.yml","portfolio-independent-verifier.yml",
+              "portfolio-source-acceptance.yml",
               "x402-gateway-ci.yml","x402-render-gateway-smoke.yml",
               "brain-cycle.yml","brain-clock.yml",
               "state-capacity-qualification.yml", "v8-runtime-preflight.yml",
@@ -80,6 +81,33 @@ def validate_policy():
             and "PORTFOLIO_RUNTIME_PRIVATE_KEY" not in native
             and "PORTFOLIO_VERIFIER_PRIVATE_KEY" not in native,
             "guarded native merger adds forbidden trigger, privilege or direct merge")
+    acceptance = (workflow_dir/"portfolio-source-acceptance.yml").read_text(encoding="utf-8")
+    for fragment in (
+        "workflow_run:", 'workflows: ["foundation-ci"]', "types: [completed]",
+        "cancel-in-progress: false",
+        "github.event.workflow_run.event == 'pull_request'",
+        "github.event.workflow_run.conclusion == 'success'",
+        "startsWith(github.event.workflow_run.head_branch, 'brain-acceptance-')",
+        "github.event.workflow_run.head_repository.full_name == 'P00NSMASHER/portfolio-brain'",
+        "github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain'",
+        "ref: ${{ github.sha }}", "persist-credentials: false",
+        "actions: read", "contents: read", "pull-requests: read",
+        "PORTFOLIO_VERIFIER_PRIVATE_KEY", 'app-id: "5121826"',
+        "167be9d2384693c3a6084db7da3a13ea40fa06f9",
+        "python verification/source_acceptance_verifier.py",
+    ):
+        require(fragment in acceptance,
+                "source acceptance producer original control changed: "+fragment)
+    require("schedule:" not in acceptance
+            and "workflow_dispatch:" not in acceptance
+            and "pull_request_target:" not in acceptance
+            and "contents: write" not in acceptance
+            and "pull-requests: write" not in acceptance
+            and "actions: write" not in acceptance
+            and "id-token: write" not in acceptance
+            and "gh pr merge" not in acceptance
+            and "merge_pull_request" not in acceptance,
+            "source acceptance producer adds forbidden trigger, privilege or merge")
     from operations.validate_operating_mode import scheduled_workflow_inventory
     require(scheduled_workflow_inventory(workflow_dir)=={"brain-cycle":[p["cron"]], "brain-clock":[p["watchdog_cron"]]}, "only reviewed native Brain execution and watchdog may recur")
     source=(workflow_dir/"brain-cycle.yml").read_text()
