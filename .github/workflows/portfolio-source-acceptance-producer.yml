@@ -1,0 +1,71 @@
+name: portfolio-source-acceptance-producer
+
+on:
+  workflow_run:
+    workflows: ["brain-cycle-v2"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: portfolio-source-acceptance-producer
+  cancel-in-progress: false
+
+jobs:
+  create-receipt-when-ready:
+    if: >-
+      ${{
+        github.repository == 'P00NSMASHER/portfolio-brain' &&
+        github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain' &&
+        github.event.workflow_run.name == 'brain-cycle-v2' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_sha == github.sha &&
+        (github.event.workflow_run.event == 'schedule' ||
+         github.event.workflow_run.event == 'workflow_dispatch')
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact trusted main without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Pin reviewed receipt producer and independent verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(git hash-object verification/source_acceptance_producer.py)" = "ae34a7c144c79014df97c5bca2ef4b0ea08e5f84"
+          test "$(git hash-object verification/source_acceptance_verifier.py)" = "2a3adc75b0c016c993045a8ee21aad0e9c5b6d5f"
+
+      - name: Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Mint short-lived one-repository runtime writer token
+        id: runtime-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: '5352505'
+          private-key: ${{ secrets.PORTFOLIO_RUNTIME_PRIVATE_KEY }}
+          owner: P00NSMASHER
+          repositories: portfolio-brain
+          permission-contents: write
+          permission-pull-requests: write
+          skip-token-revoke: false
+
+      - name: Create exact receipt PR only after terminal evidence passes
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PORTFOLIO_RUNTIME_TOKEN: ${{ steps.runtime-token.outputs.token }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: >-
+          python verification/source_acceptance_producer.py
+          --source-sha "$SOURCE_SHA"
