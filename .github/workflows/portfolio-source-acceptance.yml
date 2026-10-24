@@ -89,6 +89,6 @@ jobs:
           PR_NUMBER: ${{ steps.pr.outputs.number }}
           ACCEPTANCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: >-
-          python verification/source_acceptance_verifier.py
+          python -m verification.source_acceptance_verifier
           --pr-number "$PR_NUMBER"
           --head-sha "$ACCEPTANCE_HEAD_SHA"

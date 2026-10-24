@@ -65,9 +65,13 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
         self.assertIn("github.event.workflow_run.event == 'schedule'", workflow)
         self.assertIn("github.event.workflow_run.event == 'workflow_dispatch'", workflow)
         self.assertIn("PORTFOLIO_RUNTIME_PRIVATE_KEY", workflow)
+        self.assertIn("python -m verification.source_acceptance_producer", workflow)
         self.assertNotIn("PORTFOLIO_VERIFIER_PRIVATE_KEY", workflow)
         self.assertNotIn("\n  schedule:", workflow)
         self.assertNotIn("pull_request_target:", workflow)
+
+        verifier_workflow = Path(".github/workflows/portfolio-source-acceptance.yml").read_text()
+        self.assertIn("python -m verification.source_acceptance_verifier", verifier_workflow)
 
     def test_existing_exact_receipt_and_pr_are_reused_without_writes(self):
         receipt = {"status": "PASS"}
