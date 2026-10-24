@@ -1,9 +1,12 @@
 import hashlib
+import base64
+import json
 from pathlib import Path
 import unittest
 from unittest import mock
 
 from verification import source_acceptance_verifier as sav
+from verification import source_acceptance_producer as sap
 
 
 HEAD = "b" * 40
@@ -51,6 +54,50 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
              mock.patch.dict("os.environ", {"GITHUB_TOKEN": "read", "PORTFOLIO_VERIFIER_TOKEN": "app"}):
             self.assertEqual(sav.main(["--pr-number", "1", "--head-sha", HEAD]), 1)
         publish.assert_not_called()
+
+    def test_receipt_producer_is_automatic_only_and_uses_separate_runtime_app(self):
+        workflow = Path(".github/workflows/portfolio-source-acceptance-producer.yml").read_text()
+        for path in ("verification/source_acceptance_producer.py",
+                     "verification/source_acceptance_verifier.py"):
+            source = Path(path).read_bytes()
+            blob = hashlib.sha1(b"blob " + str(len(source)).encode() + b"\0" + source).hexdigest()
+            self.assertIn(blob, workflow)
+        self.assertIn("github.event.workflow_run.event == 'schedule'", workflow)
+        self.assertIn("github.event.workflow_run.event == 'workflow_dispatch'", workflow)
+        self.assertIn("PORTFOLIO_RUNTIME_PRIVATE_KEY", workflow)
+        self.assertNotIn("PORTFOLIO_VERIFIER_PRIVATE_KEY", workflow)
+        self.assertNotIn("\n  schedule:", workflow)
+        self.assertNotIn("pull_request_target:", workflow)
+
+    def test_existing_exact_receipt_and_pr_are_reused_without_writes(self):
+        receipt = {"status": "PASS"}
+        date = "20261024"
+        branch = "brain-acceptance-aaaaaaaa-20261024"
+        raw = (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode()
+
+        class API:
+            def get(self, route):
+                if route.startswith("/git/matching-refs/"):
+                    return json.dumps([{"ref": "refs/heads/" + branch,
+                                        "object": {"sha": HEAD}}]).encode()
+                if route.startswith("/pulls?"):
+                    return b'[{"number":901}]'
+                raise AssertionError(route)
+
+            def json(self, route):
+                return {"encoding": "base64", "content": base64.b64encode(raw).decode(),
+                        "size": len(raw)}
+
+        class Writer:
+            writes = 0
+            def post(self, path, payload):
+                raise AssertionError("unexpected write")
+
+        result = sap.publish_receipt(
+            API(), Writer(), source=SOURCE, receipt=receipt, date=date,
+        )
+        self.assertEqual(result["pr_number"], 901)
+        self.assertEqual(result["provider_writes"], 0)
 
 
 if __name__ == "__main__":

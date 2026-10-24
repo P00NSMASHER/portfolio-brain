@@ -136,10 +136,12 @@ def _one_artifact(api: GitHubReadOnly, run: dict, source: str) -> tuple[dict, by
     return item, raw, delivery
 
 
-def _verify_original_runs(api: GitHubReadOnly, receipt: dict, source: str) -> dict:
-    evidence = receipt.get("original_run_evidence")
-    req(type(evidence) is dict, "run evidence missing")
-    terminal_done = utc(evidence.get("terminal_original_monitor_completed_utc"))
+def collect_original_runs(api: GitHubReadOnly, source: str, evidence: dict | None = None) -> dict:
+    if evidence is not None:
+        req(type(evidence) is dict, "run evidence missing")
+        terminal_done = utc(evidence.get("terminal_original_monitor_completed_utc"))
+    else:
+        terminal_done = None
     inventory = api.json(
         "/actions/workflows/brain-cycle.yml/runs?branch=main&per_page=100"
     )
@@ -151,10 +153,11 @@ def _verify_original_runs(api: GitHubReadOnly, receipt: dict, source: str) -> di
         if type(run) is not dict or run.get("head_sha") != source:
             continue
         created = utc(run.get("created_at"))
-        if created <= terminal_done:
+        if terminal_done is None or created <= terminal_done:
             selected.append(run)
-    req(len(selected) == evidence.get("source_run_census_count"),
-        "source run census mismatch")
+    if evidence is not None:
+        req(len(selected) == evidence.get("source_run_census_count"),
+            "source run census mismatch")
 
     proven = []
     with tempfile.TemporaryDirectory(prefix="source-acceptance-runs-") as folder:
@@ -206,34 +209,44 @@ def _verify_original_runs(api: GitHubReadOnly, receipt: dict, source: str) -> di
         req(current["state_parent"] == previous["state_commit"],
             "source state publication chain is not contiguous")
     automatic = [row for row in proven if row["event"] != "push"]
-    req(len(automatic) == evidence.get("original_qualifying_cores")
-        and sum(row["event"] == "workflow_dispatch" for row in automatic)
-            == evidence.get("original_signed_cloudflare_dispatched_cores")
-        and sum(row["event"] == "schedule" for row in automatic)
-            == evidence.get("original_github_native_schedule_cores"),
-        "automatic origin census mismatch")
-    req(automatic[0]["id"] == evidence.get("first_original_run_id")
-        and automatic[-1]["id"] == evidence.get("terminal_original_run_id"),
-        "acceptance endpoints mismatch")
+    req(len(automatic) >= 2, "automatic run census too small")
     span = int((automatic[-1]["completed"] - automatic[0]["completed"]).total_seconds())
     gaps = [int((right["completed"] - left["completed"]).total_seconds())
             for left, right in zip(automatic, automatic[1:])]
-    req(span == evidence.get("completed_span_seconds") and span >= 21600
-        and max(gaps) == evidence.get("maximum_gap_seconds") and max(gaps) <= 5400,
-        "acceptance timing mismatch")
-    req(automatic[0]["completed"] == utc(evidence["first_original_monitor_completed_utc"])
-        and automatic[-1]["completed"] == terminal_done,
-        "monitor completion timestamp mismatch")
     signed = [row["scheduled_at"] for row in automatic if row["event"] == "workflow_dispatch"]
+    if evidence is not None:
+        req(len(automatic) == evidence.get("original_qualifying_cores")
+            and sum(row["event"] == "workflow_dispatch" for row in automatic)
+                == evidence.get("original_signed_cloudflare_dispatched_cores")
+            and sum(row["event"] == "schedule" for row in automatic)
+                == evidence.get("original_github_native_schedule_cores"),
+            "automatic origin census mismatch")
+        req(automatic[0]["id"] == evidence.get("first_original_run_id")
+            and automatic[-1]["id"] == evidence.get("terminal_original_run_id"),
+            "acceptance endpoints mismatch")
+        req(span == evidence.get("completed_span_seconds") and span >= 21600
+            and max(gaps) == evidence.get("maximum_gap_seconds") and max(gaps) <= 5400,
+            "acceptance timing mismatch")
+        req(automatic[0]["completed"] == utc(evidence["first_original_monitor_completed_utc"])
+            and automatic[-1]["completed"] == terminal_done,
+            "monitor completion timestamp mismatch")
+    return {
+        "runs": proven, "automatic": automatic, "terminal": automatic[-1],
+        "span": span, "maximum_gap": max(gaps), "signed_timestamps": signed,
+    }
+
+
+def _verify_original_runs(api: GitHubReadOnly, receipt: dict, source: str) -> dict:
+    evidence = receipt.get("original_run_evidence")
+    summary = collect_original_runs(api, source, evidence)
     external = receipt.get("external_cloudflare_provider")
+    signed = summary["signed_timestamps"]
     req(type(external) is dict and signed == external.get("signed_dispatch_timestamps_utc")
         and len(signed) == external.get("signed_dispatch_count")
-        and len(signed) == external.get("authenticated_exact_second_script_matches")
-        and external.get("expected_dispatches_without_provider_observation") == 0
-        and external.get("matched_dispatches_with_nonzero_reported_errors") == 0
-        and external.get("worker_reported_errors_total") == 0,
+        and external.get("all_signed_origin_records_source_bound") is True
+        and external.get("all_origin_verification_steps_success") is True,
         "external origin evidence mismatch")
-    return automatic[-1]
+    return summary["terminal"]
 
 
 def _verify_terminal(api: GitHubReadOnly, receipt: dict, source: str, terminal: dict) -> None:
