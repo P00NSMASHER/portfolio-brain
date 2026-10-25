@@ -17,7 +17,7 @@ from soak_v3.audit import require, sha40
 from soak_v3.current_state_probe import verify_source_state
 from soak_v3.remote_probe import GitHubReadOnly
 from verification.source_acceptance_verifier import (
-    REPOSITORY, SCOPE, _decode_content, collect_original_runs, req,
+    REPOSITORY, SCOPE, _decode_content, collect_original_runs, req, strict_json,
 )
 
 
@@ -54,6 +54,13 @@ def _iso(value) -> str:
     return value.isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
+def _source_receipt_date(automatic: list[dict]) -> str:
+    """Use the first qualifying core so one source maps to one receipt key."""
+    req(type(automatic) is list and automatic,
+        "automatic source evidence missing")
+    return automatic[0]["completed"].strftime("%Y%m%d")
+
+
 def _foundation_run(api: GitHubReadOnly, source: str) -> int:
     doc = api.json("/actions/workflows/foundation-ci.yml/runs?branch=main&per_page=100")
     matches = [row for row in doc.get("workflow_runs", [])
@@ -82,7 +89,7 @@ def build_receipt(api: GitHubReadOnly, source: str) -> tuple[dict, str]:
     )))
     foundation_run = _foundation_run(api, source)
     signed = summary["signed_timestamps"]
-    date = terminal["completed"].strftime("%Y%m%d")
+    date = _source_receipt_date(automatic)
     receipt = {
         "schema_version": 2,
         "decision_date_utc": terminal["completed"].strftime("%Y-%m-%d"),
@@ -196,7 +203,12 @@ def publish_receipt(api: GitHubReadOnly, writer: GitHubWrite, *, source: str,
         existing = _decode_content(api.json(
             f"/contents/{urllib.parse.quote(path, safe='/')}?ref={head}"
         ))
-        req(existing == raw, "existing acceptance receipt differs")
+        accepted = strict_json(existing)
+        req(accepted.get("source_sha") == source
+            and accepted.get("scope") == SCOPE
+            and accepted.get("status") == "PASS"
+            and accepted.get("decision") == "RELEASED",
+            "existing acceptance receipt identity invalid")
     else:
         base = api.json(f"/git/commits/{source}")
         tree_sha = sha40(base.get("tree", {}).get("sha"))
@@ -258,9 +270,13 @@ def main(argv=None) -> int:
         )
         print(json.dumps({"status": "RECEIPT_PR_READY", **result}, sort_keys=True))
         return 0
-    except Exception as exc:
-        print(json.dumps({"status": "NOT_READY", "reason": type(exc).__name__ + ":" + str(exc)[:500]},
-                         sort_keys=True))
+    except Exception:
+        # Public workflow output is a closed interface: provider/exception text
+        # must never cross into logs or durable evidence.
+        print(json.dumps({
+            "status": "NOT_READY",
+            "reason_code": "SOURCE_ACCEPTANCE_NOT_READY",
+        }, sort_keys=True))
         return 0
 
 
