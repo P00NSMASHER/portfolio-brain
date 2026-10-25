@@ -18,6 +18,7 @@ from soak_v3.current_state_probe import verify_source_state
 from soak_v3.remote_probe import GitHubReadOnly
 from verification.source_acceptance_verifier import (
     REPOSITORY, SCOPE, _decode_content, collect_original_runs, req, strict_json,
+    verify_acceptance,
 )
 
 
@@ -189,7 +190,7 @@ def build_receipt(api: GitHubReadOnly, source: str) -> tuple[dict, str]:
 
 def publish_receipt(api: GitHubReadOnly, writer: GitHubWrite, *, source: str,
                     receipt: dict, date: str) -> dict:
-    branch = f"brain-acceptance-{source[:8]}-{date}"
+    branch = f"auto-repair/pb-01-acceptance-receipt-{source[:8]}-{date}"
     path = f"acceptance/finish-soak-{source[:8]}-{date}.json"
     raw = (json.dumps(receipt, indent=2, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
     prefix = f"/git/matching-refs/heads/{branch}"
@@ -197,6 +198,7 @@ def publish_receipt(api: GitHubReadOnly, writer: GitHubWrite, *, source: str,
     # accepts objects only; use its bounded raw reader here.
     matches = json.loads(api.get(prefix))
     req(type(matches) is list and len(matches) <= 1, "acceptance branch ambiguous")
+    reused = bool(matches)
     if matches:
         head = matches[0].get("object", {}).get("sha")
         sha40(head)
@@ -241,6 +243,7 @@ def publish_receipt(api: GitHubReadOnly, writer: GitHubWrite, *, source: str,
     if rows:
         number = rows[0].get("number")
     else:
+        req(not reused, "existing acceptance branch missing open PR")
         pr = writer.post("/pulls", {
             "title": f"accept: source reliability {source[:8]} ({date})",
             "head": branch, "base": "main", "draft": False,
@@ -251,6 +254,11 @@ def publish_receipt(api: GitHubReadOnly, writer: GitHubWrite, *, source: str,
         })
         number = pr.get("number")
     req(type(number) is int and number > 0, "acceptance PR creation failed")
+    if reused:
+        verified_source, _ = verify_acceptance(
+            api, pr_number=number, head_sha=head,
+        )
+        req(verified_source == source, "existing acceptance source verification mismatch")
     return {"branch": branch, "head_sha": head, "path": path, "pr_number": number,
             "provider_writes": writer.writes}
 
