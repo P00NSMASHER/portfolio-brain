@@ -43,7 +43,7 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
         blob = hashlib.sha1(b"blob " + str(len(source)).encode() + b"\0" + source).hexdigest()
         self.assertIn(blob, workflow)
         self.assertIn("github.event.workflow_run.event == 'pull_request'", workflow)
-        self.assertIn("startsWith(github.event.workflow_run.head_branch, 'brain-acceptance-')", workflow)
+        self.assertIn("startsWith(github.event.workflow_run.head_branch, 'auto-repair/pb-01-acceptance-receipt-')", workflow)
         self.assertIn("ref: ${{ github.sha }}", workflow)
         self.assertIn("persist-credentials: false", workflow)
         self.assertNotIn("workflow_dispatch:", workflow)
@@ -94,7 +94,7 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
             "terminal_state_replay": {"canonical_sequence": 4921},
         }
         date = "20261024"
-        branch = "brain-acceptance-aaaaaaaa-20261024"
+        branch = "auto-repair/pb-01-acceptance-receipt-aaaaaaaa-20261024"
         raw = (json.dumps(existing_receipt, indent=2, sort_keys=True) + "\n").encode()
 
         class API:
@@ -115,11 +115,61 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
             def post(self, path, payload):
                 raise AssertionError("unexpected write")
 
-        result = sap.publish_receipt(
-            API(), Writer(), source=SOURCE, receipt=receipt, date=date,
-        )
+        api = API()
+        with mock.patch.object(
+            sap, "verify_acceptance", return_value=(SOURCE, "source-acceptance:verified"),
+        ) as verify:
+            result = sap.publish_receipt(
+                api, Writer(), source=SOURCE, receipt=receipt, date=date,
+            )
+        verify.assert_called_once_with(api, pr_number=901, head_sha=HEAD)
+        self.assertEqual(result["branch"], branch)
         self.assertEqual(result["pr_number"], 901)
         self.assertEqual(result["provider_writes"], 0)
+
+    def test_reused_truncated_receipt_fails_closed_without_writes(self):
+        receipt = {
+            "status": "PASS", "decision": "RELEASED",
+            "scope": sav.SCOPE, "source_sha": SOURCE,
+        }
+        date = "20261024"
+        branch = "auto-repair/pb-01-acceptance-receipt-aaaaaaaa-20261024"
+        raw = (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode()
+
+        class API:
+            def get(self, route):
+                if route.startswith("/git/matching-refs/"):
+                    return json.dumps([{
+                        "ref": "refs/heads/" + branch,
+                        "object": {"sha": HEAD},
+                    }]).encode()
+                if route.startswith("/pulls?"):
+                    return b'[{"number":901}]'
+                raise AssertionError(route)
+
+            def json(self, route):
+                return {
+                    "encoding": "base64",
+                    "content": base64.b64encode(raw).decode(),
+                    "size": len(raw),
+                }
+
+        class Writer:
+            writes = 0
+
+            def post(self, path, payload):
+                raise AssertionError("unexpected write")
+
+        writer = Writer()
+        with mock.patch.object(
+            sap, "verify_acceptance",
+            side_effect=sav.SourceAcceptanceError("nested evidence missing"),
+        ):
+            with self.assertRaises(sav.SourceAcceptanceError):
+                sap.publish_receipt(
+                    API(), writer, source=SOURCE, receipt=receipt, date=date,
+                )
+        self.assertEqual(writer.writes, 0)
 
     def test_not_ready_output_never_preserves_exception_text(self):
         marker = "UNTRUSTED_PROVIDER_MARKER_MUST_NOT_PERSIST"
