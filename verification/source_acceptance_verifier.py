@@ -338,6 +338,9 @@ def verify_acceptance(api: GitHubReadOnly, *, pr_number: int, head_sha: str) -> 
         and evidence.get("all_required_original_job_steps_success") is True
         and evidence.get("original_artifacts_sha256_size_crc_verified") is True,
         "acceptance receipt run assertions incomplete")
+    req(match.group(2) == utc(
+        evidence.get("first_original_monitor_completed_utc")
+    ).strftime("%Y%m%d"), "acceptance branch date mismatch")
     _verify_technical_proof(api, receipt, source)
     terminal = _verify_original_runs(api, receipt, source)
     _verify_terminal(api, receipt, source, terminal)
