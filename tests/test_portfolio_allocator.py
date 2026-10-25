@@ -120,9 +120,21 @@ class PortfolioAllocatorTests(unittest.TestCase):
             if state=="NO_MEASURED_OUTCOME_INPUT" else "NO_MEASURED_OUTCOME_INPUT"
         )
 
+        coordinated_relabel=copy.deepcopy(source)
+        relabeled=coordinated_relabel["recommendations"][0]
+        derived_id=next(
+            key for key,value in relabeled["uncertainty_components"].items()
+            if value["basis_type"]=="DERIVED"
+        )
+        relabeled["uncertainty_components"][derived_id]["basis_type"]="MEASURED_OUTCOME"
+        relabeled["evidence_basis_summary"]["derived_component_ids"].remove(derived_id)
+        relabeled["evidence_basis_summary"]["measured_outcome_component_ids"].append(derived_id)
+        relabeled["evidence_basis_summary"]["measurement_state"]="MEASURED_OUTCOME_INPUT_PRESENT"
+
         for name,mutated in [
             ("omitted",omitted),("overlapping",overlapping),("mismatched",mismatched),
-            ("future",future),("wrong_state",wrong_state)
+            ("future",future),("wrong_state",wrong_state),
+            ("coordinated_relabel",coordinated_relabel)
         ]:
             with self.subTest(name=name):
                 rehash(mutated)
