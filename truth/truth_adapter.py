@@ -181,6 +181,10 @@ def project_receipt(
     source_blob_sha: str,
     source_receipt_ref: str,
 ) -> dict[str,Any]:
+    _require(
+        isinstance(source_receipt_ref,str) and bool(source_receipt_ref.strip()),
+        "source_receipt_ref must be a non-empty string",
+    )
     pin=load_pin()
     verify_source_identity(pin,source_revision=source_revision,source_blob_sha=source_blob_sha)
     state=project_truth_state(receipt)
