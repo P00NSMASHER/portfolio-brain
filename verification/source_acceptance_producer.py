@@ -10,6 +10,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import urllib.parse
 import urllib.request
 
@@ -17,7 +18,7 @@ from soak_v3.audit import require, sha40
 from soak_v3.current_state_probe import verify_source_state
 from soak_v3.remote_probe import GitHubReadOnly
 from verification.source_acceptance_verifier import (
-    REPOSITORY, SCOPE, _decode_content, collect_original_runs, req,
+    REPOSITORY, SCOPE, _decode_content, collect_original_runs, req, strict_json,
 )
 
 
@@ -180,8 +181,79 @@ def build_receipt(api: GitHubReadOnly, source: str) -> tuple[dict, str]:
     return receipt, date
 
 
+
+_ACCEPTANCE_BRANCH = re.compile(r"^brain-acceptance-([0-9a-f]{8})-(\d{8})$")
+
+
+def _existing_source_receipt(api: GitHubReadOnly, *, source: str) -> dict | None:
+    """Return one structurally valid open receipt for source, regardless of date."""
+    rows = json.loads(api.get("/pulls?state=open&base=main&per_page=100"))
+    req(type(rows) is list and len(rows) <= 100, "acceptance PR census invalid")
+    matches = []
+    for row in rows:
+        head_ref = row.get("head", {}).get("ref")
+        match = _ACCEPTANCE_BRANCH.fullmatch(head_ref) if type(head_ref) is str else None
+        if match is None or match.group(1) != source[:8]:
+            continue
+        number = row.get("number")
+        req(type(number) is int and number > 0, "acceptance PR number invalid")
+        pr = api.json(f"/pulls/{number}")
+        head = pr.get("head", {})
+        base = pr.get("base", {})
+        date = match.group(2)
+        path = f"acceptance/finish-soak-{source[:8]}-{date}.json"
+        req(pr.get("state") == "open" and pr.get("draft") is False,
+            "matching acceptance PR state invalid")
+        req(pr.get("user", {}).get("login") == "portfolio-brain-v8-runtime[bot]",
+            "matching acceptance PR actor invalid")
+        req(base.get("ref") == "main" and base.get("sha") == source,
+            "matching acceptance PR base invalid")
+        req(head.get("ref") == head_ref
+            and head.get("repo", {}).get("full_name") == REPOSITORY,
+            "matching acceptance PR head repository invalid")
+        head_sha = sha40(head.get("sha"))
+        commit = api.json(f"/git/commits/{head_sha}")
+        parents = commit.get("parents")
+        req(type(parents) is list and len(parents) == 1
+            and parents[0].get("sha") == source,
+            "matching acceptance receipt is not a direct source child")
+        comparison = api.json(f"/compare/{source}...{head_sha}")
+        files = comparison.get("files")
+        req(comparison.get("status") == "ahead"
+            and comparison.get("ahead_by") == 1
+            and comparison.get("behind_by") == 0
+            and comparison.get("total_commits") == 1
+            and comparison.get("merge_base_commit", {}).get("sha") == source,
+            "matching acceptance receipt topology invalid")
+        req(type(files) is list and len(files) == 1
+            and files[0].get("filename") == path
+            and files[0].get("status") == "added",
+            "matching acceptance receipt file set invalid")
+        raw = _decode_content(api.json(
+            f"/contents/{urllib.parse.quote(path, safe='/')}?ref={head_sha}"
+        ))
+        receipt = strict_json(raw)
+        req(receipt.get("source_sha") == source
+            and receipt.get("decision") == "RELEASED"
+            and receipt.get("status") == "PASS"
+            and receipt.get("scope") == SCOPE
+            and receipt.get("decision_date_utc")
+                == f"{date[:4]}-{date[4:6]}-{date[6:]}",
+            "matching acceptance receipt body invalid")
+        matches.append({
+            "branch": head_ref, "head_sha": head_sha, "path": path,
+            "pr_number": number, "provider_writes": 0,
+        })
+    req(len(matches) <= 1, "multiple open acceptance receipts for exact source")
+    return matches[0] if matches else None
+
+
 def publish_receipt(api: GitHubReadOnly, writer: GitHubWrite, *, source: str,
                     receipt: dict, date: str) -> dict:
+    existing = _existing_source_receipt(api, source=source)
+    if existing is not None:
+        req(writer.writes == 0, "existing receipt discovery must precede writes")
+        return existing
     branch = f"brain-acceptance-{source[:8]}-{date}"
     path = f"acceptance/finish-soak-{source[:8]}-{date}.json"
     raw = (json.dumps(receipt, indent=2, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
