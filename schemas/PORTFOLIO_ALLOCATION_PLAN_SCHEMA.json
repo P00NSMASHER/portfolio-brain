@@ -150,10 +150,8 @@
             ],
             "properties": {
               "measurement_state": {
-                "enum": [
-                  "NO_MEASURED_OUTCOME_INPUT",
-                  "MEASURED_OUTCOME_INPUT_PRESENT"
-                ]
+                "const": "NO_MEASURED_OUTCOME_INPUT",
+                "$comment": "Allocator v1 rejects measured-outcome inputs until a versioned trusted source binding exists."
               },
               "policy_estimate_component_ids": {
                 "type": "array",
@@ -189,6 +187,7 @@
               },
               "measured_outcome_component_ids": {
                 "type": "array",
+                "maxItems": 0,
                 "items": {
                   "enum": [
                     "importance",
