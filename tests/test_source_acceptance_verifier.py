@@ -13,6 +13,63 @@ HEAD = "b" * 40
 SOURCE = "a" * 40
 
 
+def source_receipt_api(dates):
+    heads = {date: hex(11 + index)[2:] * 40 for index, date in enumerate(dates)}
+    branches = {date: f"brain-acceptance-aaaaaaaa-{date}" for date in dates}
+    numbers = {date: 901 + index for index, date in enumerate(dates)}
+    rows = [
+        {"number": numbers[date], "head": {"ref": branches[date]}}
+        for date in dates
+    ]
+
+    class API:
+        def get(self, route):
+            if route == "/pulls?state=open&base=main&per_page=100":
+                return json.dumps(rows).encode()
+            raise AssertionError(route)
+
+        def json(self, route):
+            for date in dates:
+                branch = branches[date]
+                head = heads[date]
+                number = numbers[date]
+                path = f"acceptance/finish-soak-aaaaaaaa-{date}.json"
+                receipt = {
+                    "source_sha": SOURCE, "decision": "RELEASED", "status": "PASS",
+                    "scope": sav.SCOPE,
+                    "decision_date_utc": f"{date[:4]}-{date[4:6]}-{date[6:]}",
+                }
+                raw = (json.dumps(receipt, sort_keys=True) + "\n").encode()
+                if route == f"/pulls/{number}":
+                    return {
+                        "state": "open", "draft": False,
+                        "user": {"login": "portfolio-brain-v8-runtime[bot]"},
+                        "base": {"ref": "main", "sha": SOURCE},
+                        "head": {
+                            "ref": branch, "sha": head,
+                            "repo": {"full_name": sap.REPOSITORY},
+                        },
+                    }
+                if route == f"/git/commits/{head}":
+                    return {"parents": [{"sha": SOURCE}]}
+                if route == f"/compare/{SOURCE}...{head}":
+                    return {
+                        "status": "ahead", "ahead_by": 1, "behind_by": 0,
+                        "total_commits": 1,
+                        "merge_base_commit": {"sha": SOURCE},
+                        "files": [{"filename": path, "status": "added"}],
+                    }
+                if route == f"/contents/{path}?ref={head}":
+                    return {
+                        "encoding": "base64",
+                        "content": base64.b64encode(raw).decode(),
+                        "size": len(raw),
+                    }
+            raise AssertionError(route)
+
+    return API()
+
+
 class SourceAcceptanceVerifierTests(unittest.TestCase):
     def test_strict_json_rejects_duplicate_and_nonfinite(self):
         for raw in (b'{"x":1,"x":2}', b'{"x":NaN}'):
@@ -73,35 +130,35 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
         verifier_workflow = Path(".github/workflows/portfolio-source-acceptance.yml").read_text()
         self.assertIn("python -m verification.source_acceptance_verifier", verifier_workflow)
 
-    def test_existing_exact_receipt_and_pr_are_reused_without_writes(self):
-        receipt = {"status": "PASS"}
-        date = "20261024"
-        branch = "brain-acceptance-aaaaaaaa-20261024"
-        raw = (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode()
-
-        class API:
-            def get(self, route):
-                if route.startswith("/git/matching-refs/"):
-                    return json.dumps([{"ref": "refs/heads/" + branch,
-                                        "object": {"sha": HEAD}}]).encode()
-                if route.startswith("/pulls?"):
-                    return b'[{"number":901}]'
-                raise AssertionError(route)
-
-            def json(self, route):
-                return {"encoding": "base64", "content": base64.b64encode(raw).decode(),
-                        "size": len(raw)}
-
+    def test_existing_exact_source_receipt_is_reused_across_utc_date_without_writes(self):
         class Writer:
             writes = 0
             def post(self, path, payload):
                 raise AssertionError("unexpected write")
 
         result = sap.publish_receipt(
-            API(), Writer(), source=SOURCE, receipt=receipt, date=date,
+            source_receipt_api(["20261024"]), Writer(), source=SOURCE,
+            receipt={"status": "PASS"}, date="20261025",
         )
+        self.assertEqual(result["branch"], "brain-acceptance-aaaaaaaa-20261024")
         self.assertEqual(result["pr_number"], 901)
         self.assertEqual(result["provider_writes"], 0)
+
+    def test_duplicate_open_receipts_for_exact_source_fail_closed_without_writes(self):
+        class Writer:
+            writes = 0
+            def post(self, path, payload):
+                raise AssertionError("unexpected write")
+
+        with self.assertRaisesRegex(
+            sav.SourceAcceptanceError,
+            "multiple open acceptance receipts for exact source",
+        ):
+            sap.publish_receipt(
+                source_receipt_api(["20261024", "20261025"]), Writer(),
+                source=SOURCE, receipt={"status": "PASS"}, date="20261025",
+            )
+
 
 
 if __name__ == "__main__":
