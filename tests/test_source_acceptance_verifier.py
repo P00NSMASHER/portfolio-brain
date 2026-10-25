@@ -1,5 +1,7 @@
 import hashlib
 import base64
+from datetime import datetime, timezone
+import io
 import json
 from pathlib import Path
 import unittest
@@ -73,11 +75,27 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
         verifier_workflow = Path(".github/workflows/portfolio-source-acceptance.yml").read_text()
         self.assertIn("python -m verification.source_acceptance_verifier", verifier_workflow)
 
-    def test_existing_exact_receipt_and_pr_are_reused_without_writes(self):
-        receipt = {"status": "PASS"}
+    def test_source_receipt_key_uses_first_qualifying_core(self):
+        first = datetime(2026, 10, 24, 10, 31, tzinfo=timezone.utc)
+        later = datetime(2026, 10, 25, 0, 2, tzinfo=timezone.utc)
+        self.assertEqual(
+            sap._source_receipt_date([{"completed": first}, {"completed": later}]),
+            "20261024",
+        )
+
+    def test_existing_source_receipt_and_pr_are_reused_without_writes(self):
+        receipt = {
+            "status": "PASS", "decision": "RELEASED",
+            "scope": sav.SCOPE, "source_sha": SOURCE,
+            "terminal_state_replay": {"canonical_sequence": 5001},
+        }
+        existing_receipt = {
+            **receipt,
+            "terminal_state_replay": {"canonical_sequence": 4921},
+        }
         date = "20261024"
         branch = "brain-acceptance-aaaaaaaa-20261024"
-        raw = (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode()
+        raw = (json.dumps(existing_receipt, indent=2, sort_keys=True) + "\n").encode()
 
         class API:
             def get(self, route):
@@ -103,6 +121,21 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
         self.assertEqual(result["pr_number"], 901)
         self.assertEqual(result["provider_writes"], 0)
 
+    def test_not_ready_output_never_preserves_exception_text(self):
+        marker = "UNTRUSTED_PROVIDER_MARKER_MUST_NOT_PERSIST"
+        output = io.StringIO()
+        with mock.patch.object(sap, "build_receipt", side_effect=RuntimeError(marker)), \
+             mock.patch("sys.stdout", output), \
+             mock.patch.dict("os.environ", {
+                 "GITHUB_TOKEN": "read", "PORTFOLIO_RUNTIME_TOKEN": "write",
+             }):
+            self.assertEqual(sap.main(["--source-sha", SOURCE]), 0)
+        value = json.loads(output.getvalue())
+        self.assertEqual(value, {
+            "reason_code": "SOURCE_ACCEPTANCE_NOT_READY",
+            "status": "NOT_READY",
+        })
+        self.assertNotIn(marker, output.getvalue())
 
 if __name__ == "__main__":
     unittest.main()
