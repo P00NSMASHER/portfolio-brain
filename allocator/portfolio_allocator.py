@@ -58,6 +58,7 @@ def _basis_summary(candidate):
     for values in by_basis.values():values.sort()
     req(set().union(*(set(values) for values in by_basis.values()))==component_ids,"allocation basis summary does not cover every component")
     measured=by_basis["MEASURED_OUTCOME"]
+    req(not measured,"measured outcome allocation basis requires a trusted source binding")
     return {
       "measurement_state":"MEASURED_OUTCOME_INPUT_PRESENT" if measured else "NO_MEASURED_OUTCOME_INPUT",
       "policy_estimate_component_ids":by_basis["POLICY_ESTIMATE"],
@@ -110,6 +111,8 @@ def validate_allocation_plan(plan):
         }
         req(all(isinstance(ids,list) and all(isinstance(x,str) for x in ids) for ids in groups.values()),
             "allocation basis buckets must be string lists")
+        req(not groups["MEASURED_OUTCOME"],
+            "measured outcome allocation basis requires a trusted source binding")
         flattened=[component_id for ids in groups.values() for component_id in ids]
         req(len(flattened)==len(set(flattened)) and set(flattened)==EXPECTED_COMPONENT_IDS,
             "allocation basis summary must partition every component exactly once")
