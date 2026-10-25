@@ -28,7 +28,7 @@ from soak_v3.remote_probe import GitHubReadOnly
 REPOSITORY = "P00NSMASHER/portfolio-brain"
 VERIFIER_APP_ID = 5121826
 CHECK_NAME = "portfolio-source-acceptance"
-BRANCH = re.compile(r"brain-acceptance-([0-9a-f]{8})-([0-9]{8})\Z")
+BRANCH = re.compile(r"auto-repair/pb-01-acceptance-receipt-([0-9a-f]{8})-([0-9]{8})\Z")
 SCOPE = "SOURCE_SPECIFIC_UNATTENDED_PRODUCTION_CORE_RELIABILITY_ONLY"
 MAX_RUNS = 100
 
