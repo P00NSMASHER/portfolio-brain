@@ -15,11 +15,95 @@ HEAD = "b" * 40
 SOURCE = "a" * 40
 
 
+class AcceptanceAPI:
+    def __init__(self, *, branch=None, pr_head=HEAD, files=None,
+                 first_completed="2026-10-24T10:31:00Z"):
+        self.branch = (
+            branch
+            or "auto-repair/pb-01-acceptance-receipt-aaaaaaaa-20261024"
+        )
+        self.pr_head = pr_head
+        date = self.branch.rsplit("-", 1)[-1]
+        self.path = f"acceptance/finish-soak-aaaaaaaa-{date}.json"
+        self.files = files or [self.path]
+        self.first_completed = first_completed
+
+    def json(self, route):
+        if route == "/pulls/901":
+            return {
+                "state": "open", "draft": False,
+                "head": {
+                    "ref": self.branch, "sha": self.pr_head,
+                    "repo": {"full_name": sav.REPOSITORY},
+                },
+                "base": {
+                    "ref": "main", "repo": {"full_name": sav.REPOSITORY},
+                },
+            }
+        if route == "/branches/main":
+            return {"commit": {"sha": SOURCE}}
+        if route == f"/git/commits/{HEAD}":
+            return {"sha": HEAD, "parents": [{"sha": SOURCE}]}
+        if route == f"/compare/{SOURCE}...{HEAD}":
+            return {
+                "ahead_by": 1, "behind_by": 0,
+                "merge_base_commit": {"sha": SOURCE},
+                "files": [
+                    {"filename": path, "status": "added"} for path in self.files
+                ],
+            }
+        if route.startswith("/contents/"):
+            receipt = {
+                "source_sha": SOURCE, "decision": "RELEASED",
+                "status": "PASS", "scope": sav.SCOPE,
+                "original_run_evidence": {
+                    "all_success_attempt_one": True,
+                    "all_original_core_state_parent_child_links_contiguous": True,
+                    "all_required_original_job_steps_success": True,
+                    "original_artifacts_sha256_size_crc_verified": True,
+                    "first_original_monitor_completed_utc": self.first_completed,
+                },
+            }
+            raw = json.dumps(receipt).encode()
+            return {
+                "encoding": "base64",
+                "content": base64.b64encode(raw).decode(),
+                "size": len(raw),
+            }
+        raise AssertionError(route)
+
+
 class SourceAcceptanceVerifierTests(unittest.TestCase):
     def test_strict_json_rejects_duplicate_and_nonfinite(self):
         for raw in (b'{"x":1,"x":2}', b'{"x":NaN}'):
             with self.assertRaises(sav.SourceAcceptanceError):
                 sav.strict_json(raw)
+
+    def test_verifier_rejects_unauthorized_or_moved_receipt_branch(self):
+        for api in (
+            AcceptanceAPI(branch="brain-acceptance-aaaaaaaa-20261024"),
+            AcceptanceAPI(pr_head="c" * 40),
+        ):
+            with self.subTest(branch=api.branch, head=api.pr_head):
+                with self.assertRaises(sav.SourceAcceptanceError):
+                    sav.verify_acceptance(api, pr_number=901, head_sha=HEAD)
+
+    def test_verifier_rejects_extra_scope_and_wrong_first_core_date(self):
+        for api in (
+            AcceptanceAPI(files=[
+                "acceptance/finish-soak-aaaaaaaa-20261024.json",
+                "extra.txt",
+            ]),
+            AcceptanceAPI(
+                branch=(
+                    "auto-repair/pb-01-acceptance-receipt-"
+                    "aaaaaaaa-20261025"
+                ),
+            ),
+        ):
+            with self.subTest(branch=api.branch, files=api.files):
+                with self.assertRaises(sav.SourceAcceptanceError):
+                    sav.verify_acceptance(api, pr_number=901, head_sha=HEAD)
 
     def test_publish_check_binds_name_app_source_and_receipt(self):
         external = "source-acceptance:" + SOURCE + ":" + "c" * 64
