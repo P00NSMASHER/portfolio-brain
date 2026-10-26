@@ -17,7 +17,9 @@ from soak_v3.audit import require, sha40
 from soak_v3.current_state_probe import verify_source_state
 from soak_v3.remote_probe import GitHubReadOnly
 from verification.source_acceptance_verifier import (
-    REPOSITORY, SCOPE, _decode_content, collect_original_runs, req,
+    APPROVAL_BASIS, REPOSITORY, REQUIRED_AUTHORITY_LIMITS, REQUIRED_CRITERIA,
+    SCOPE, _decode_content, _verify_receipt_contract, collect_original_runs,
+    req, strict_json, verify_acceptance,
 )
 
 
@@ -54,6 +56,13 @@ def _iso(value) -> str:
     return value.isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
+def _source_receipt_date(automatic: list[dict]) -> str:
+    """Use the first qualifying core so one source maps to one receipt key."""
+    req(type(automatic) is list and automatic,
+        "automatic source evidence missing")
+    return automatic[0]["completed"].strftime("%Y%m%d")
+
+
 def _foundation_run(api: GitHubReadOnly, source: str) -> int:
     doc = api.json("/actions/workflows/foundation-ci.yml/runs?branch=main&per_page=100")
     matches = [row for row in doc.get("workflow_runs", [])
@@ -82,7 +91,7 @@ def build_receipt(api: GitHubReadOnly, source: str) -> tuple[dict, str]:
     )))
     foundation_run = _foundation_run(api, source)
     signed = summary["signed_timestamps"]
-    date = terminal["completed"].strftime("%Y%m%d")
+    date = _source_receipt_date(automatic)
     receipt = {
         "schema_version": 2,
         "decision_date_utc": terminal["completed"].strftime("%Y-%m-%d"),
@@ -90,19 +99,8 @@ def build_receipt(api: GitHubReadOnly, source: str) -> tuple[dict, str]:
         "status": "PASS",
         "scope": SCOPE,
         "source_sha": source,
-        "approval_basis": (
-            "Trusted-main producer independently verified original GitHub runs, signed-origin "
-            "artifacts, state ancestry and terminal SQLite replay. Separate App attestation required."
-        ),
-        "criteria": {
-            "minimum_completed_span_seconds": 21600,
-            "maximum_intercore_gap_seconds": 5400,
-            "required_original_first_attempt_success": True,
-            "excludes_push_triggered_completions": True,
-            "requires_source_pinned_original_git_and_crc": True,
-            "requires_pristine_raw_sqlite_ledger_report_replay": True,
-            "requires_external_origin_corroboration": True,
-        },
+        "approval_basis": APPROVAL_BASIS,
+        "criteria": dict(REQUIRED_CRITERIA),
         "original_run_evidence": {
             "original_qualifying_cores": len(automatic),
             "original_signed_cloudflare_dispatched_cores": sum(
@@ -165,24 +163,17 @@ def build_receipt(api: GitHubReadOnly, source: str) -> tuple[dict, str]:
             ),
             "hosted_review_result_source_bound": True,
         },
-        "authority_limits": {
-            "source_specific_current_main_reliability_only": True,
-            "source_change_invalidates_this_acceptance": True,
-            "no_new_source_acceptance_preissued": True,
-            "no_current_or_future_merge_directly_authorized_by_this_receipt": True,
-            "no_relaxation_of_repository_branch_rules": True,
-            "no_new_secrets_credentials_schedules_or_paid_spending": True,
-            "no_customer_contact_or_cross_repo_mutations": True,
-            "no_claim_of_independent_third_party_human_review": True,
-            "no_claim_of_real_customer_outcome": True,
-        },
+        "authority_limits": dict(REQUIRED_AUTHORITY_LIMITS),
     }
+    _verify_receipt_contract(receipt)
     return receipt, date
 
 
 def publish_receipt(api: GitHubReadOnly, writer: GitHubWrite, *, source: str,
                     receipt: dict, date: str) -> dict:
-    branch = f"brain-acceptance-{source[:8]}-{date}"
+    # Reject any undeclared assertion before provider reads or writes.
+    _verify_receipt_contract(receipt)
+    branch = f"auto-repair/pb-01-acceptance-receipt-{source[:8]}-{date}"
     path = f"acceptance/finish-soak-{source[:8]}-{date}.json"
     raw = (json.dumps(receipt, indent=2, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
     prefix = f"/git/matching-refs/heads/{branch}"
@@ -190,13 +181,19 @@ def publish_receipt(api: GitHubReadOnly, writer: GitHubWrite, *, source: str,
     # accepts objects only; use its bounded raw reader here.
     matches = json.loads(api.get(prefix))
     req(type(matches) is list and len(matches) <= 1, "acceptance branch ambiguous")
+    reused = bool(matches)
     if matches:
         head = matches[0].get("object", {}).get("sha")
         sha40(head)
         existing = _decode_content(api.json(
             f"/contents/{urllib.parse.quote(path, safe='/')}?ref={head}"
         ))
-        req(existing == raw, "existing acceptance receipt differs")
+        accepted = strict_json(existing)
+        req(accepted.get("source_sha") == source
+            and accepted.get("scope") == SCOPE
+            and accepted.get("status") == "PASS"
+            and accepted.get("decision") == "RELEASED",
+            "existing acceptance receipt identity invalid")
     else:
         base = api.json(f"/git/commits/{source}")
         tree_sha = sha40(base.get("tree", {}).get("sha"))
@@ -229,6 +226,7 @@ def publish_receipt(api: GitHubReadOnly, writer: GitHubWrite, *, source: str,
     if rows:
         number = rows[0].get("number")
     else:
+        req(not reused, "existing acceptance branch missing open PR")
         pr = writer.post("/pulls", {
             "title": f"accept: source reliability {source[:8]} ({date})",
             "head": branch, "base": "main", "draft": False,
@@ -239,6 +237,11 @@ def publish_receipt(api: GitHubReadOnly, writer: GitHubWrite, *, source: str,
         })
         number = pr.get("number")
     req(type(number) is int and number > 0, "acceptance PR creation failed")
+    if reused:
+        verified_source, _ = verify_acceptance(
+            api, pr_number=number, head_sha=head,
+        )
+        req(verified_source == source, "existing acceptance source verification mismatch")
     return {"branch": branch, "head_sha": head, "path": path, "pr_number": number,
             "provider_writes": writer.writes}
 
@@ -258,9 +261,13 @@ def main(argv=None) -> int:
         )
         print(json.dumps({"status": "RECEIPT_PR_READY", **result}, sort_keys=True))
         return 0
-    except Exception as exc:
-        print(json.dumps({"status": "NOT_READY", "reason": type(exc).__name__ + ":" + str(exc)[:500]},
-                         sort_keys=True))
+    except Exception:
+        # Public workflow output is a closed interface: provider/exception text
+        # must never cross into logs or durable evidence.
+        print(json.dumps({
+            "status": "NOT_READY",
+            "reason_code": "SOURCE_ACCEPTANCE_NOT_READY",
+        }, sort_keys=True))
         return 0
 
 
