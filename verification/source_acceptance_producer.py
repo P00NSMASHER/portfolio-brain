@@ -17,8 +17,8 @@ from soak_v3.audit import require, sha40
 from soak_v3.current_state_probe import verify_source_state
 from soak_v3.remote_probe import GitHubReadOnly
 from verification.source_acceptance_verifier import (
-    REPOSITORY, SCOPE, _decode_content, collect_original_runs, req, strict_json,
-    verify_acceptance,
+    APPROVAL_BASIS, REPOSITORY, REQUIRED_AUTHORITY_LIMITS, REQUIRED_CRITERIA,
+    SCOPE, _decode_content, collect_original_runs, req, strict_json, verify_acceptance,
 )
 
 
@@ -98,19 +98,8 @@ def build_receipt(api: GitHubReadOnly, source: str) -> tuple[dict, str]:
         "status": "PASS",
         "scope": SCOPE,
         "source_sha": source,
-        "approval_basis": (
-            "Trusted-main producer independently verified original GitHub runs, signed-origin "
-            "artifacts, state ancestry and terminal SQLite replay. Separate App attestation required."
-        ),
-        "criteria": {
-            "minimum_completed_span_seconds": 21600,
-            "maximum_intercore_gap_seconds": 5400,
-            "required_original_first_attempt_success": True,
-            "excludes_push_triggered_completions": True,
-            "requires_source_pinned_original_git_and_crc": True,
-            "requires_pristine_raw_sqlite_ledger_report_replay": True,
-            "requires_external_origin_corroboration": True,
-        },
+        "approval_basis": APPROVAL_BASIS,
+        "criteria": dict(REQUIRED_CRITERIA),
         "original_run_evidence": {
             "original_qualifying_cores": len(automatic),
             "original_signed_cloudflare_dispatched_cores": sum(
@@ -173,17 +162,7 @@ def build_receipt(api: GitHubReadOnly, source: str) -> tuple[dict, str]:
             ),
             "hosted_review_result_source_bound": True,
         },
-        "authority_limits": {
-            "source_specific_current_main_reliability_only": True,
-            "source_change_invalidates_this_acceptance": True,
-            "no_new_source_acceptance_preissued": True,
-            "no_current_or_future_merge_directly_authorized_by_this_receipt": True,
-            "no_relaxation_of_repository_branch_rules": True,
-            "no_new_secrets_credentials_schedules_or_paid_spending": True,
-            "no_customer_contact_or_cross_repo_mutations": True,
-            "no_claim_of_independent_third_party_human_review": True,
-            "no_claim_of_real_customer_outcome": True,
-        },
+        "authority_limits": dict(REQUIRED_AUTHORITY_LIMITS),
     }
     return receipt, date
 
