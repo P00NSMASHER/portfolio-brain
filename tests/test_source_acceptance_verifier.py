@@ -74,6 +74,58 @@ class AcceptanceAPI:
 
 
 class SourceAcceptanceVerifierTests(unittest.TestCase):
+    def test_receipt_contract_rejects_authority_and_provenance_drift(self):
+        receipt = {
+            "schema_version": 2,
+            "decision_date_utc": "2026-10-24",
+            "decision": "RELEASED",
+            "status": "PASS",
+            "scope": sav.SCOPE,
+            "source_sha": SOURCE,
+            "approval_basis": sav.APPROVAL_BASIS,
+            "criteria": dict(sav.REQUIRED_CRITERIA),
+            "original_run_evidence": {
+                "historical_adverse_automatic_cores_for_this_source": [],
+                "prior_source_acceptance_is_not_transferable": True,
+                "original_proof_status":
+                    "SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED",
+            },
+            "terminal_state_replay": {},
+            "external_cloudflare_provider": {
+                "source": (
+                    "Original source-bound signed Cloudflare origin records "
+                    "retained in GitHub artifacts"
+                ),
+                "worker_script_name": "portfolio-brain-recovery",
+                "only_signed_origin_with_successful_original_github_monitor_counted":
+                    True,
+                "standalone_worker_invocation_never_counts_as_completed_cycle":
+                    True,
+            },
+            "proof": {},
+            "authority_limits": dict(sav.REQUIRED_AUTHORITY_LIMITS),
+        }
+        sav._verify_receipt_contract(receipt)
+        cases = []
+        for field in ("criteria", "authority_limits"):
+            changed = json.loads(json.dumps(receipt))
+            changed[field][next(iter(changed[field]))] = False
+            cases.append((field, changed))
+        changed = json.loads(json.dumps(receipt))
+        changed["external_cloudflare_provider"][
+            "standalone_worker_invocation_never_counts_as_completed_cycle"
+        ] = False
+        cases.append(("external", changed))
+        changed = json.loads(json.dumps(receipt))
+        changed["original_run_evidence"][
+            "prior_source_acceptance_is_not_transferable"
+        ] = False
+        cases.append(("original", changed))
+        for name, changed in cases:
+            with self.subTest(name=name):
+                with self.assertRaises(sav.SourceAcceptanceError):
+                    sav._verify_receipt_contract(changed)
+
     def test_strict_json_rejects_duplicate_and_nonfinite(self):
         for raw in (b'{"x":1,"x":2}', b'{"x":NaN}'):
             with self.assertRaises(sav.SourceAcceptanceError):
@@ -134,12 +186,23 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
         self.assertNotIn("pull_request_target:", workflow)
         self.assertNotIn("schedule:", workflow)
 
-    def test_failure_does_not_publish_unbound_check(self):
-        with mock.patch.object(sav, "verify_acceptance", side_effect=RuntimeError("blocked")), \
-             mock.patch.object(sav, "publish_check") as publish, \
-             mock.patch.dict("os.environ", {"GITHUB_TOKEN": "read", "PORTFOLIO_VERIFIER_TOKEN": "app"}):
+    def test_failure_does_not_publish_unbound_check_or_exception_text(self):
+        marker = "UNTRUSTED_VERIFIER_MARKER_MUST_NOT_PERSIST"
+        output = io.StringIO()
+        with mock.patch.object(
+            sav, "verify_acceptance", side_effect=RuntimeError(marker)
+        ), mock.patch.object(sav, "publish_check") as publish, \
+             mock.patch("sys.stdout", output), \
+             mock.patch.dict("os.environ", {
+                 "GITHUB_TOKEN": "read", "PORTFOLIO_VERIFIER_TOKEN": "app",
+             }):
             self.assertEqual(sav.main(["--pr-number", "1", "--head-sha", HEAD]), 1)
         publish.assert_not_called()
+        self.assertEqual(json.loads(output.getvalue()), {
+            "reason_code": "SOURCE_ACCEPTANCE_VERIFICATION_BLOCKED",
+            "status": "BLOCKED",
+        })
+        self.assertNotIn(marker, output.getvalue())
 
     def test_receipt_producer_is_automatic_only_and_uses_separate_runtime_app(self):
         workflow = Path(".github/workflows/portfolio-source-acceptance-producer.yml").read_text()
