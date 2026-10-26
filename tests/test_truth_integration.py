@@ -146,12 +146,15 @@ class TruthIntegrationTests(unittest.TestCase):
 
     def test_projection_binds_upstream_provenance(self):
         pin=load_pin()
+        source=receipt("PROVEN","SATISFIED")
         p=project_receipt(
-            receipt("PROVEN","SATISFIED"),
+            source,
             project_id="PRJ-001",
             source_revision=pin["source_revision"],
             source_blob_sha=pin["source_blob_sha"],
-            source_receipt_ref="ai-business-os://truth/receipt/1",
+            source_receipt_ref=(
+                "ai-business-os://truth/receipt/sha256/"+source["receipt_hash"]
+            ),
         )
         self.assertEqual(p["truth_state"],"VERIFIED")
         self.assertEqual(p["upstream_source"]["revision"],pin["source_revision"])
@@ -160,8 +163,20 @@ class TruthIntegrationTests(unittest.TestCase):
 
     def test_projection_hash_changes_when_source_receipt_changes(self):
         pin=load_pin()
-        a=project_receipt(receipt("PROVEN","SATISFIED"),project_id="PRJ-001",source_revision=pin["source_revision"],source_blob_sha=pin["source_blob_sha"],source_receipt_ref="receipt/1")
-        b=project_receipt(receipt("PROVEN","SATISFIED"),project_id="PRJ-001",source_revision=pin["source_revision"],source_blob_sha=pin["source_blob_sha"],source_receipt_ref="receipt/2")
+        first=receipt("PROVEN","SATISFIED")
+        second=receipt("PROVEN","SATISFIED")
+        second["claim_id"]="claim-2"
+        resign_receipt(second)
+        a=project_receipt(
+            first,project_id="PRJ-001",
+            source_revision=pin["source_revision"],source_blob_sha=pin["source_blob_sha"],
+            source_receipt_ref="ai-business-os://truth/receipt/sha256/"+first["receipt_hash"],
+        )
+        b=project_receipt(
+            second,project_id="PRJ-001",
+            source_revision=pin["source_revision"],source_blob_sha=pin["source_blob_sha"],
+            source_receipt_ref="ai-business-os://truth/receipt/sha256/"+second["receipt_hash"],
+        )
         self.assertNotEqual(a["projection_hash"],b["projection_hash"])
 
     def test_optional_stale_finding_does_not_override_required_satisfied(self):

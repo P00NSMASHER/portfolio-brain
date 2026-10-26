@@ -95,6 +95,9 @@ class SharedValueMemoryTests(unittest.TestCase):
         value=mem()
         original=value["memory_hash"]
         value["verification_binding"]["source_receipt_hash"]="sha256:"+"d"*64
+        value["verification_binding"]["source_receipt_ref"]=(
+            "ai-business-os://truth/receipt/sha256/"+"d"*64
+        )
         self.assertEqual(value["memory_hash"],original)
         with self.assertRaisesRegex(SharedMemoryError,"memory_hash"):
             validate_memory(value)
