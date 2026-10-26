@@ -30,6 +30,30 @@ VERIFIER_APP_ID = 5121826
 CHECK_NAME = "portfolio-source-acceptance"
 BRANCH = re.compile(r"auto-repair/pb-01-acceptance-receipt-([0-9a-f]{8})-([0-9]{8})\Z")
 SCOPE = "SOURCE_SPECIFIC_UNATTENDED_PRODUCTION_CORE_RELIABILITY_ONLY"
+APPROVAL_BASIS = (
+    "Trusted-main producer independently verified original GitHub runs, signed-origin "
+    "artifacts, state ancestry and terminal SQLite replay. Separate App attestation required."
+)
+REQUIRED_CRITERIA = {
+    "minimum_completed_span_seconds": 21600,
+    "maximum_intercore_gap_seconds": 5400,
+    "required_original_first_attempt_success": True,
+    "excludes_push_triggered_completions": True,
+    "requires_source_pinned_original_git_and_crc": True,
+    "requires_pristine_raw_sqlite_ledger_report_replay": True,
+    "requires_external_origin_corroboration": True,
+}
+REQUIRED_AUTHORITY_LIMITS = {
+    "source_specific_current_main_reliability_only": True,
+    "source_change_invalidates_this_acceptance": True,
+    "no_new_source_acceptance_preissued": True,
+    "no_current_or_future_merge_directly_authorized_by_this_receipt": True,
+    "no_relaxation_of_repository_branch_rules": True,
+    "no_new_secrets_credentials_schedules_or_paid_spending": True,
+    "no_customer_contact_or_cross_repo_mutations": True,
+    "no_claim_of_independent_third_party_human_review": True,
+    "no_claim_of_real_customer_outcome": True,
+}
 MAX_RUNS = 100
 
 
@@ -236,6 +260,37 @@ def collect_original_runs(api: GitHubReadOnly, source: str, evidence: dict | Non
     }
 
 
+def _verify_receipt_contract(receipt: dict) -> None:
+    req(set(receipt) == {
+        "schema_version", "decision_date_utc", "decision", "status", "scope",
+        "source_sha", "approval_basis", "criteria", "original_run_evidence",
+        "terminal_state_replay", "external_cloudflare_provider", "proof",
+        "authority_limits",
+    }, "acceptance receipt schema fields invalid")
+    req(receipt.get("schema_version") == 2
+        and receipt.get("approval_basis") == APPROVAL_BASIS
+        and receipt.get("criteria") == REQUIRED_CRITERIA
+        and receipt.get("authority_limits") == REQUIRED_AUTHORITY_LIMITS,
+        "acceptance receipt contract invalid")
+    evidence = receipt.get("original_run_evidence")
+    req(type(evidence) is dict
+        and evidence.get("historical_adverse_automatic_cores_for_this_source") == []
+        and evidence.get("prior_source_acceptance_is_not_transferable") is True
+        and evidence.get("original_proof_status")
+            == "SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED",
+        "acceptance original-run contract invalid")
+    external = receipt.get("external_cloudflare_provider")
+    req(type(external) is dict
+        and external.get("source")
+            == "Original source-bound signed Cloudflare origin records retained in GitHub artifacts"
+        and external.get("worker_script_name") == "portfolio-brain-recovery"
+        and external.get("only_signed_origin_with_successful_original_github_monitor_counted")
+            is True
+        and external.get("standalone_worker_invocation_never_counts_as_completed_cycle")
+            is True,
+        "acceptance external-origin contract invalid")
+
+
 def _verify_original_runs(api: GitHubReadOnly, receipt: dict, source: str) -> dict:
     evidence = receipt.get("original_run_evidence")
     summary = collect_original_runs(api, source, evidence)
@@ -244,7 +299,11 @@ def _verify_original_runs(api: GitHubReadOnly, receipt: dict, source: str) -> di
     req(type(external) is dict and signed == external.get("signed_dispatch_timestamps_utc")
         and len(signed) == external.get("signed_dispatch_count")
         and external.get("all_signed_origin_records_source_bound") is True
-        and external.get("all_origin_verification_steps_success") is True,
+        and external.get("all_origin_verification_steps_success") is True
+        and external.get("only_signed_origin_with_successful_original_github_monitor_counted")
+            is True
+        and external.get("standalone_worker_invocation_never_counts_as_completed_cycle")
+            is True,
         "external origin evidence mismatch")
     return summary["terminal"]
 
@@ -272,7 +331,10 @@ def _verify_terminal(api: GitHubReadOnly, receipt: dict, source: str, terminal: 
         and state.get("sqlite_integrity") == "PASS"
         and state.get("foreign_keys") == "PASS"
         and state.get("strict_event_ledger_replay") == "PASS"
-        and state.get("deterministic_report_reproduction") == "PASS",
+        and state.get("deterministic_report_reproduction") == "PASS"
+        and state.get("last_original_state_raw_sha256") == state.get("raw_sqlite_sha256")
+        and state.get("terminal_replay_status")
+            == "ORIGINAL_TERMINAL_RAW_SQLITE_REPLAY_VERIFIED",
         "terminal SQLite replay mismatch")
     manifest = _decode_content(api.json(
         f"/contents/state-manifest.json?ref={terminal['state_commit']}"
@@ -295,7 +357,11 @@ def _verify_technical_proof(api: GitHubReadOnly, receipt: dict, source: str) -> 
         and run.get("status") == "completed" and run.get("conclusion") == "success"
         and run.get("head_sha") == source
         and run.get("path") == ".github/workflows/foundation-ci.yml"
-        and proof.get("technical_workflow_conclusion") == "success",
+        and proof.get("technical_workflow_run_attempt") == 1
+        and proof.get("technical_workflow_conclusion") == "success"
+        and proof.get("technical_audit_url")
+            == f"https://github.com/{REPOSITORY}/actions/runs/{run_id}"
+        and proof.get("hosted_review_result_source_bound") is True,
         "technical review run invalid")
 
 
@@ -341,8 +407,11 @@ def verify_acceptance(api: GitHubReadOnly, *, pr_number: int, head_sha: str) -> 
     req(match.group(2) == utc(
         evidence.get("first_original_monitor_completed_utc")
     ).strftime("%Y%m%d"), "acceptance branch date mismatch")
+    _verify_receipt_contract(receipt)
     _verify_technical_proof(api, receipt, source)
     terminal = _verify_original_runs(api, receipt, source)
+    req(receipt.get("decision_date_utc") == terminal["completed"].strftime("%Y-%m-%d"),
+        "acceptance decision date mismatch")
     _verify_terminal(api, receipt, source, terminal)
     after = api.json("/branches/main").get("commit", {}).get("sha")
     req(after == source, "main changed during source acceptance verification")
@@ -405,11 +474,12 @@ def main(argv=None) -> int:
         print(json.dumps({"check_run_id": check.get("id"), "source_sha": source,
                           "head_sha": args.head_sha, "external_id": external_id}, sort_keys=True))
         return 0
-    except Exception as exc:
-        # Do not emit an unbound red check: the guarded consumer requires an exact
-        # immutable source/receipt digest and absence is safely fail-closed.
-        print(json.dumps({"status": "BLOCKED", "reason": type(exc).__name__ + ":" + str(exc)[:500]},
-                         sort_keys=True))
+    except Exception:
+        # Do not emit untrusted exception/provider text or an unbound red check.
+        print(json.dumps({
+            "status": "BLOCKED",
+            "reason_code": "SOURCE_ACCEPTANCE_VERIFICATION_BLOCKED",
+        }, sort_keys=True))
         return 1
 
 
