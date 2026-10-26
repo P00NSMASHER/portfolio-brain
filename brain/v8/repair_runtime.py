@@ -232,7 +232,10 @@ def checked_original_superseded_draft(api, *, prefix):
             and original.get("head", {}).get("repo", {}).get("full_name") == TARGET
             and original.get("base", {}).get("ref") == "main"
             and original.get("user", {}).get("login") == APP_SLUG + "[bot]"
-            and type(body) is str and fingerprint in body.splitlines()
+            # The original writer embedded this marker at the end of a prose
+            # paragraph. Accept that historical format, but not partial tokens.
+            and type(body) is str
+            and re.search(r"(?:^|\s)" + re.escape(fingerprint) + r"(?=\s|$)", body) is not None
             and ("superseded" in body.casefold())
             and ("PR #70" in body)
             and SUCCESSOR_MERGE in body,

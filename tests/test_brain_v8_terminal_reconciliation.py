@@ -58,12 +58,9 @@ class TerminalProvider:
         return text
 
     def original_pr(self):
-        fingerprint = (
-            "AUTO_REPAIR_FINGERPRINT: " + r.EXPECTED_TARGET_HEAD
-            + "/" + r.EXPECTED_RELEASE_BLOB
-        )
+        body = DOCUMENTS["original_pr_body"]
         if self.wrong_fingerprint:
-            fingerprint = fingerprint.replace(
+            body = body.replace(
                 r.EXPECTED_RELEASE_BLOB, "0" * 40)
         return {
             "number": r.ORIGINAL_DRAFT_PR,
@@ -80,10 +77,7 @@ class TerminalProvider:
                 "login": "spoofed[bot]" if self.wrong_actor
                 else r.APP_SLUG + "[bot]"
             },
-            "body": (
-                fingerprint + "\nSuperseded by PR #70 at "
-                + r.SUCCESSOR_MERGE
-            ),
+            "body": body,
         }
 
     def successor_pr(self):
@@ -209,6 +203,22 @@ class TerminalReconciliationTests(unittest.TestCase):
         self.assertEqual(r.digest_blob(CURRENT_RELEASE.encode()), RELEASE_BLOB)
         self.assertIn("does\nnot prove the intended content is live", CURRENT_RELEASE)
         r.require_current_correction(CURRENT_CANONICAL, CURRENT_RELEASE)
+
+    def test_historical_inline_fingerprint_is_exact_and_token_bounded(self):
+        fingerprint = ("AUTO_REPAIR_FINGERPRINT: " + r.EXPECTED_TARGET_HEAD
+                       + "/" + r.EXPECTED_RELEASE_BLOB)
+        self.assertIn("REQUIRED. " + fingerprint, DOCUMENTS["original_pr_body"])
+        self.assertNotIn(fingerprint, DOCUMENTS["original_pr_body"].splitlines())
+        for bad in ("prefix" + fingerprint, fingerprint + "0"):
+            with self.subTest(bad=bad):
+                provider = TerminalProvider()
+                original = provider.original_pr()
+                original["body"] = original["body"].replace(fingerprint, bad)
+                with patch.object(provider, "original_pr", return_value=original), \
+                        patch.object(r, "checked_document", side_effect=provider.checked):
+                    with self.assertRaisesRegex(ValueError, "ORIGINAL_SUPERSEDED_DRAFT_NOT_VERIFIED"):
+                        r.execute(provider, installation=r.INSTALLATION, slug=r.APP_SLUG)
+                self.assertTrue(all(method == "GET" for method, _ in provider.calls))
 
     def test_contradictory_append_with_valid_blob_hash_cannot_claim_correction(self):
         for document in ("canonical", "release"):
