@@ -5,6 +5,7 @@ import base64,hashlib,json,re,sqlite3,time,uuid
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
+SHA256P=re.compile(r"^sha256:[0-9a-f]{64}$")
 class SoftwareFactoryError(ValueError):pass
 def req(ok,msg):
     if not ok:raise SoftwareFactoryError(msg)
@@ -110,8 +111,8 @@ class SoftwareFactory:
         req(changed_paths and len(changed_paths)<=policy()["max_changed_files"] and len(changed_paths)==len(set(changed_paths)),"changed_paths invalid")
         req(all(_path_allowed(p) for p in changed_paths),"candidate touches forbidden path")
         req(test_commands and len(test_commands)==len(set(test_commands)),"regression test commands required")
-        req(test_receipt_hashes and len(test_receipt_hashes)==len(set(test_receipt_hashes)) and all(h.startswith("sha256:") and len(h)==71 for h in test_receipt_hashes),"test receipts required")
-        req(isinstance(diff_hash,str) and diff_hash.startswith("sha256:") and len(diff_hash)==71,"diff_hash required")
+        req(test_receipt_hashes and len(test_receipt_hashes)==len(set(test_receipt_hashes)) and all(isinstance(h,str) and SHA256P.fullmatch(h) for h in test_receipt_hashes),"canonical test receipt hashes required")
+        req(isinstance(diff_hash,str) and SHA256P.fullmatch(diff_hash),"canonical diff_hash required")
         self.conn.execute("UPDATE work SET state='VERIFYING',commit_sha=?,changed_paths_json=?,test_commands_json=?,test_receipt_hashes_json=?,diff_hash=?,updated_at=? WHERE work_id=?",
                           (commit_sha,canon(changed_paths),canon(test_commands),canon(test_receipt_hashes),diff_hash,ts,work_id))
         binding=self.candidate_binding_hash(work_id,required_state="VERIFYING")
@@ -133,7 +134,7 @@ class SoftwareFactory:
         req(verifier_agent_id in policy()["allowed_verifier_agent_ids"],"verifier not allowed");req(verdict in {"PASS","FAIL","UNKNOWN"},"invalid verdict")
         expected_binding=self.candidate_binding_hash(work_id,required_state="VERIFYING")
         req(candidate_binding_hash==expected_binding,"verification candidate binding mismatch")
-        req(report_hash.startswith("sha256:") and len(report_hash)==71,"report hash required");req(evidence_refs and len(evidence_refs)==len(set(evidence_refs)),"verification evidence required")
+        req(isinstance(report_hash,str) and SHA256P.fullmatch(report_hash),"canonical report hash required");req(evidence_refs and len(evidence_refs)==len(set(evidence_refs)),"verification evidence required")
         vid="SFV-"+uuid.uuid4().hex[:20].upper()
         self.conn.execute("INSERT INTO verification(verification_id,work_id,builder_agent_id,verifier_agent_id,verdict,report_hash,candidate_binding_hash,evidence_refs_json,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
                           (vid,work_id,r["builder_agent_id"],verifier_agent_id,verdict,report_hash,candidate_binding_hash,canon(evidence_refs),ts))
@@ -196,3 +197,4 @@ def make_commit_action(work,files,commit_message):
         normalized.append({"path":path,"content_b64":f["content_b64"],"content_sha256":h})
     row={**work}
     return action_packet("COMMIT_CANDIDATE",row,expected_head_sha=work["base_sha"],files=normalized,commit_message=commit_message,pr_title=None,pr_body=None)
+
