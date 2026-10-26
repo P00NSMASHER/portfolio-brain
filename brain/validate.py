@@ -33,7 +33,7 @@ def validate_policy():
         "github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain'",
         "persist-credentials: false", "actions: read",
         "d216e938c3e301042a13c97ed6fa0111be905230",
-        "79f4deab37a259e828ccf9ecaf34ff493d0859c7",
+        "6619993314d32af11a0fbab9b914837bc7f556b4",
         "repositories: capturebrief", "permission-contents: write",
         "permission-pull-requests: write", "skip-token-revoke: false",
         "PORTFOLIO_RUNTIME_PRIVATE_KEY", "python -I",
@@ -188,3 +188,4 @@ def validate_policy():
         require(item['target'] in {t['project'] for t in p['research_targets']} and set(item['matched_terms'])<=set(next(t['terms'] for t in p['research_targets'] if t['project']==item['target'])),'knowledge target/terms outside approved research')
         require(item['test_paths'] and len(item['matched_terms'])>=2,'knowledge minimum structural evidence missing')
     return {"status":"PASS","scope":"POLICY_VALIDATION_ONLY_NOT_LIVE_READINESS","components":4,"recurring_workflows":2,"paid_calls":0,"read_only_discovery":True,"production_accepted":False,"soak_started":False}
+

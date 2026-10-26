@@ -145,8 +145,13 @@ class CaptureBriefScopeTests(unittest.TestCase):
                         "default_branch":"main"}
             if path.endswith("branches/main"):
                 return {"commit":{"sha":"f"*40}}
+            if "/contents/" in path and path.endswith("?ref="+"f"*40):
+                return {"fixture":"drifted_source"}
             raise AssertionError(path)
-        actual=r.execute(api,installation=r.INSTALLATION,slug=r.APP_SLUG)
+        # Drift now reads both current document blobs before assessing the
+        # original draft. Changed blobs must preserve the no-write outcome.
+        with patch.object(r,"checked_document",return_value=(CANON,"0"*40)):
+            actual=r.execute(api,installation=r.INSTALLATION,slug=r.APP_SLUG)
         self.assertEqual(actual["status"],"TARGET_SOURCE_CHANGED_NO_MUTATION")
         self.assertEqual(actual["provider_writes"],0)
         self.assertTrue(all(method=="GET" for method,path in calls))
