@@ -18,7 +18,8 @@ from soak_v3.current_state_probe import verify_source_state
 from soak_v3.remote_probe import GitHubReadOnly
 from verification.source_acceptance_verifier import (
     APPROVAL_BASIS, REPOSITORY, REQUIRED_AUTHORITY_LIMITS, REQUIRED_CRITERIA,
-    SCOPE, _decode_content, collect_original_runs, req, strict_json, verify_acceptance,
+    SCOPE, _decode_content, _verify_receipt_contract, collect_original_runs,
+    req, strict_json, verify_acceptance,
 )
 
 
@@ -164,11 +165,14 @@ def build_receipt(api: GitHubReadOnly, source: str) -> tuple[dict, str]:
         },
         "authority_limits": dict(REQUIRED_AUTHORITY_LIMITS),
     }
+    _verify_receipt_contract(receipt)
     return receipt, date
 
 
 def publish_receipt(api: GitHubReadOnly, writer: GitHubWrite, *, source: str,
                     receipt: dict, date: str) -> dict:
+    # Reject any undeclared assertion before provider reads or writes.
+    _verify_receipt_contract(receipt)
     branch = f"auto-repair/pb-01-acceptance-receipt-{source[:8]}-{date}"
     path = f"acceptance/finish-soak-{source[:8]}-{date}.json"
     raw = (json.dumps(receipt, indent=2, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")

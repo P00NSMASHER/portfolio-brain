@@ -15,9 +15,53 @@ HEAD = "b" * 40
 SOURCE = "a" * 40
 
 
+
+def valid_receipt():
+    """Contract-valid fixture; evidence replay validates values independently."""
+    evidence = dict.fromkeys(sav.RECEIPT_NESTED_FIELDS["original_run_evidence"])
+    evidence.update({
+        "first_original_monitor_completed_utc": "2026-10-24T10:31:00Z",
+        "historical_adverse_automatic_cores_for_this_source": [],
+        "prior_source_acceptance_is_not_transferable": True,
+        "original_proof_status": "SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED",
+        "all_success_attempt_one": True,
+        "all_original_core_state_parent_child_links_contiguous": True,
+        "all_required_original_job_steps_success": True,
+        "original_artifacts_sha256_size_crc_verified": True,
+    })
+    external = dict.fromkeys(sav.RECEIPT_NESTED_FIELDS["external_cloudflare_provider"])
+    external.update({
+        "source": (
+            "Original source-bound signed Cloudflare origin records "
+            "retained in GitHub artifacts"
+        ),
+        "worker_script_name": "portfolio-brain-recovery",
+        "only_signed_origin_with_successful_original_github_monitor_counted": True,
+        "standalone_worker_invocation_never_counts_as_completed_cycle": True,
+    })
+    return {
+        "schema_version": 2,
+        "decision_date_utc": "2026-10-24",
+        "decision": "RELEASED",
+        "status": "PASS",
+        "scope": sav.SCOPE,
+        "source_sha": SOURCE,
+        "approval_basis": sav.APPROVAL_BASIS,
+        "criteria": dict(sav.REQUIRED_CRITERIA),
+        "original_run_evidence": evidence,
+        "terminal_state_replay": dict.fromkeys(
+            sav.RECEIPT_NESTED_FIELDS["terminal_state_replay"]
+        ),
+        "external_cloudflare_provider": external,
+        "proof": dict.fromkeys(sav.RECEIPT_NESTED_FIELDS["proof"]),
+        "authority_limits": dict(sav.REQUIRED_AUTHORITY_LIMITS),
+    }
+
+
 class AcceptanceAPI:
     def __init__(self, *, branch=None, pr_head=HEAD, files=None,
-                 first_completed="2026-10-24T10:31:00Z"):
+                 first_completed="2026-10-24T10:31:00Z", receipt=None):
+        self.receipt = receipt
         self.branch = (
             branch
             or "auto-repair/pb-01-acceptance-receipt-aaaaaaaa-20261024"
@@ -64,7 +108,7 @@ class AcceptanceAPI:
                     "first_original_monitor_completed_utc": self.first_completed,
                 },
             }
-            raw = json.dumps(receipt).encode()
+            raw = json.dumps(self.receipt if self.receipt is not None else receipt).encode()
             return {
                 "encoding": "base64",
                 "content": base64.b64encode(raw).decode(),
@@ -75,36 +119,7 @@ class AcceptanceAPI:
 
 class SourceAcceptanceVerifierTests(unittest.TestCase):
     def test_receipt_contract_rejects_authority_and_provenance_drift(self):
-        receipt = {
-            "schema_version": 2,
-            "decision_date_utc": "2026-10-24",
-            "decision": "RELEASED",
-            "status": "PASS",
-            "scope": sav.SCOPE,
-            "source_sha": SOURCE,
-            "approval_basis": sav.APPROVAL_BASIS,
-            "criteria": dict(sav.REQUIRED_CRITERIA),
-            "original_run_evidence": {
-                "historical_adverse_automatic_cores_for_this_source": [],
-                "prior_source_acceptance_is_not_transferable": True,
-                "original_proof_status":
-                    "SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED",
-            },
-            "terminal_state_replay": {},
-            "external_cloudflare_provider": {
-                "source": (
-                    "Original source-bound signed Cloudflare origin records "
-                    "retained in GitHub artifacts"
-                ),
-                "worker_script_name": "portfolio-brain-recovery",
-                "only_signed_origin_with_successful_original_github_monitor_counted":
-                    True,
-                "standalone_worker_invocation_never_counts_as_completed_cycle":
-                    True,
-            },
-            "proof": {},
-            "authority_limits": dict(sav.REQUIRED_AUTHORITY_LIMITS),
-        }
+        receipt = valid_receipt()
         sav._verify_receipt_contract(receipt)
         cases = []
         for field in ("criteria", "authority_limits"):
@@ -125,6 +140,73 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
             with self.subTest(name=name):
                 with self.assertRaises(sav.SourceAcceptanceError):
                     sav._verify_receipt_contract(changed)
+
+
+    def test_nested_provenance_claims_denied_by_verifier_and_producer(self):
+        denied_claims = (
+            "deployed", "live_verified", "market_verified",
+            "revenue_verified", "independent_human_review",
+        )
+
+        class ZeroWriter:
+            writes = 0
+
+            def post(self, path, payload):
+                raise AssertionError("schema denial must not write")
+
+        for field in sav.RECEIPT_NESTED_FIELDS:
+            for claim in denied_claims:
+                with self.subTest(field=field, claim=claim):
+                    receipt = valid_receipt()
+                    receipt[field][claim] = True
+                    with self.assertRaises(sav.SourceAcceptanceError):
+                        sav._verify_receipt_contract(receipt)
+
+                    # The independent verifier must deny before remote replay.
+                    with mock.patch.object(sav, "_verify_technical_proof") as technical:
+                        with self.assertRaises(sav.SourceAcceptanceError):
+                            sav.verify_acceptance(
+                                AcceptanceAPI(receipt=receipt),
+                                pr_number=901, head_sha=HEAD,
+                            )
+                        technical.assert_not_called()
+
+                    writer = ZeroWriter()
+                    with self.assertRaises(sav.SourceAcceptanceError):
+                        sap.publish_receipt(
+                            AcceptanceAPI(), writer, source=SOURCE,
+                            receipt=receipt, date="20261024",
+                        )
+                    self.assertEqual(writer.writes, 0)
+
+                    # Public producer emits only a fixed failure code.
+                    output = io.StringIO()
+                    with mock.patch.object(sap, "GitHubReadOnly"), \
+                         mock.patch.object(sap, "GitHubWrite", return_value=writer), \
+                         mock.patch.object(
+                             sap, "build_receipt", return_value=(receipt, "20261024")
+                         ), mock.patch("sys.stdout", output), \
+                         mock.patch.dict("os.environ", {
+                             "GITHUB_TOKEN": "read", "PORTFOLIO_RUNTIME_TOKEN": "write"
+                         }):
+                        self.assertEqual(sap.main(["--source-sha", SOURCE]), 0)
+                    self.assertEqual(json.loads(output.getvalue()), {
+                        "reason_code": "SOURCE_ACCEPTANCE_NOT_READY",
+                        "status": "NOT_READY",
+                    })
+                    self.assertEqual(writer.writes, 0)
+
+    def test_missing_nested_evidence_fields_fail_closed(self):
+        for field, required_keys in sav.RECEIPT_NESTED_FIELDS.items():
+            with self.subTest(field=field):
+                receipt = valid_receipt()
+                del receipt[field][next(iter(required_keys))]
+                with self.assertRaises(sav.SourceAcceptanceError):
+                    sav._verify_receipt_contract(receipt)
+                with self.assertRaises(sav.SourceAcceptanceError):
+                    sav.verify_acceptance(
+                        AcceptanceAPI(receipt=receipt), pr_number=901, head_sha=HEAD
+                    )
 
     def test_strict_json_rejects_duplicate_and_nonfinite(self):
         for raw in (b'{"x":1,"x":2}', b'{"x":NaN}'):
@@ -231,15 +313,9 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
         )
 
     def test_existing_source_receipt_and_pr_are_reused_without_writes(self):
-        receipt = {
-            "status": "PASS", "decision": "RELEASED",
-            "scope": sav.SCOPE, "source_sha": SOURCE,
-            "terminal_state_replay": {"canonical_sequence": 5001},
-        }
-        existing_receipt = {
-            **receipt,
-            "terminal_state_replay": {"canonical_sequence": 4921},
-        }
+        receipt = valid_receipt()
+        existing_receipt = valid_receipt()
+        existing_receipt["terminal_state_replay"]["canonical_sequence"] = 4921
         date = "20261024"
         branch = "auto-repair/pb-01-acceptance-receipt-aaaaaaaa-20261024"
         raw = (json.dumps(existing_receipt, indent=2, sort_keys=True) + "\n").encode()
@@ -275,13 +351,12 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
         self.assertEqual(result["provider_writes"], 0)
 
     def test_reused_truncated_receipt_fails_closed_without_writes(self):
-        receipt = {
-            "status": "PASS", "decision": "RELEASED",
-            "scope": sav.SCOPE, "source_sha": SOURCE,
-        }
+        receipt = valid_receipt()
         date = "20261024"
         branch = "auto-repair/pb-01-acceptance-receipt-aaaaaaaa-20261024"
-        raw = (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode()
+        existing_truncated = {"source_sha": SOURCE, "status": "PASS",
+                              "decision": "RELEASED", "scope": sav.SCOPE}
+        raw = (json.dumps(existing_truncated, indent=2, sort_keys=True) + "\n").encode()
 
         class API:
             def get(self, route):

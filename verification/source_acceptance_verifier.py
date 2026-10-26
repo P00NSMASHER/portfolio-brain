@@ -15,6 +15,7 @@ import io
 import json
 import os
 from pathlib import Path
+from types import MappingProxyType
 import re
 import tempfile
 import urllib.parse
@@ -54,6 +55,83 @@ REQUIRED_AUTHORITY_LIMITS = {
     "no_claim_of_independent_third_party_human_review": True,
     "no_claim_of_real_customer_outcome": True,
 }
+# Immutable, shared contract: a receipt hash must not certify extra claims.
+RECEIPT_FIELDS = frozenset({
+    "schema_version",
+    "decision_date_utc",
+    "decision",
+    "status",
+    "scope",
+    "source_sha",
+    "approval_basis",
+    "criteria",
+    "original_run_evidence",
+    "terminal_state_replay",
+    "external_cloudflare_provider",
+    "proof",
+    "authority_limits",
+})
+RECEIPT_NESTED_FIELDS = MappingProxyType({
+    "original_run_evidence": frozenset({
+        "original_qualifying_cores",
+        "original_signed_cloudflare_dispatched_cores",
+        "original_github_native_schedule_cores",
+        "first_original_run_id",
+        "first_original_monitor_completed_utc",
+        "terminal_original_run_id",
+        "terminal_original_monitor_completed_utc",
+        "completed_span_seconds",
+        "maximum_gap_seconds",
+        "all_success_attempt_one",
+        "all_original_core_state_parent_child_links_contiguous",
+        "all_required_original_job_steps_success",
+        "source_run_census_count",
+        "original_artifacts_sha256_size_crc_verified",
+        "historical_adverse_automatic_cores_for_this_source",
+        "prior_source_acceptance_is_not_transferable",
+        "original_proof_status",
+    }),
+    "terminal_state_replay": frozenset({
+        "source_sha",
+        "last_state_commit",
+        "direct_parent",
+        "raw_sqlite_sha256",
+        "last_original_state_raw_sha256",
+        "raw_sqlite_bytes",
+        "compressed_sha256",
+        "compressed_bytes",
+        "state_chunks",
+        "canonical_sequence",
+        "canonical_hash",
+        "attempts",
+        "events",
+        "ledger_rows",
+        "pending_events",
+        "sqlite_integrity",
+        "foreign_keys",
+        "strict_event_ledger_replay",
+        "deterministic_report_reproduction",
+        "terminal_replay_status",
+    }),
+    "external_cloudflare_provider": frozenset({
+        "source",
+        "worker_script_name",
+        "signed_dispatch_timestamps_utc",
+        "signed_dispatch_count",
+        "all_signed_origin_records_source_bound",
+        "all_origin_verification_steps_success",
+        "only_signed_origin_with_successful_original_github_monitor_counted",
+        "standalone_worker_invocation_never_counts_as_completed_cycle",
+    }),
+    "proof": frozenset({
+        "technical_workflow_run_id",
+        "technical_workflow_run_attempt",
+        "technical_workflow_conclusion",
+        "technical_audit_url",
+        "hosted_review_result_source_bound",
+    }),
+})
+
 MAX_RUNS = 100
 
 
@@ -261,12 +339,12 @@ def collect_original_runs(api: GitHubReadOnly, source: str, evidence: dict | Non
 
 
 def _verify_receipt_contract(receipt: dict) -> None:
-    req(set(receipt) == {
-        "schema_version", "decision_date_utc", "decision", "status", "scope",
-        "source_sha", "approval_basis", "criteria", "original_run_evidence",
-        "terminal_state_replay", "external_cloudflare_provider", "proof",
-        "authority_limits",
-    }, "acceptance receipt schema fields invalid")
+    req(type(receipt) is dict and set(receipt) == RECEIPT_FIELDS,
+        "acceptance receipt schema fields invalid")
+    for field, required_fields in RECEIPT_NESTED_FIELDS.items():
+        value = receipt.get(field)
+        req(type(value) is dict and set(value) == required_fields,
+            "acceptance receipt nested schema fields invalid")
     req(receipt.get("schema_version") == 2
         and receipt.get("approval_basis") == APPROVAL_BASIS
         and receipt.get("criteria") == REQUIRED_CRITERIA
