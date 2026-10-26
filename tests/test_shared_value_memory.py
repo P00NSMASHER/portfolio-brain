@@ -122,30 +122,36 @@ class SharedValueMemoryTests(unittest.TestCase):
                     validate_memory(value)
 
     def test_unsafe_checkpoint_is_rejected_and_safely_quarantined(self):
-        value=mem()
-        value["verification_binding"]["source_receipt_ref"]=(
+        unsafe_refs=(
+            "javascript://truth/receipt/sha256/"+"b"*64,
+            "file://localhost/etc/sha256/"+"b"*64,
+            "https://127.0.0.1/receipt/sha256/"+"b"*64,
             "https://provider.invalid/receipt?token=SYNTHETIC-SECRET-MARKER\n"
-            "RECOVERY-INJECTION"
+            "RECOVERY-INJECTION",
         )
-        value["memory_hash"]=memory_hash(value)
-        serialized=json.dumps(value,sort_keys=True,separators=(",",":"))
-        recovered=json.loads(serialized)
-        with self.assertRaisesRegex(SharedMemoryError,"source receipt reference"):
-            validate_memory(recovered)
-        quarantined=quarantine_invalid_memory(
-            recovered,reason_code="INVALID_SOURCE_RECEIPT_REFERENCE",
-        )
-        validate_memory(quarantined)
-        exported=upstream_registration_args(quarantined)["content"]
-        self.assertEqual(exported["truth_state"],"INVALID")
-        self.assertIsNone(exported["verification_binding"])
-        self.assertEqual(
-            exported["content"]["quarantine"]["original_record_hash"],
-            canonical_hash(recovered),
-        )
-        self.assertFalse(exported["content"]["quarantine"]["raw_record_publicly_persisted"])
-        self.assertNotIn("SYNTHETIC-SECRET-MARKER",json.dumps(quarantined))
-        self.assertEqual(json.dumps(recovered,sort_keys=True,separators=(",",":")),serialized)
+        for unsafe_ref in unsafe_refs:
+            with self.subTest(unsafe_ref=unsafe_ref[:80]):
+                value=mem()
+                value["verification_binding"]["source_receipt_ref"]=unsafe_ref
+                value["memory_hash"]=memory_hash(value)
+                serialized=json.dumps(value,sort_keys=True,separators=(",",":"))
+                recovered=json.loads(serialized)
+                with self.assertRaisesRegex(SharedMemoryError,"source receipt reference"):
+                    validate_memory(recovered)
+                quarantined=quarantine_invalid_memory(
+                    recovered,reason_code="INVALID_SOURCE_RECEIPT_REFERENCE",
+                )
+                validate_memory(quarantined)
+                exported=upstream_registration_args(quarantined)["content"]
+                self.assertEqual(exported["truth_state"],"INVALID")
+                self.assertIsNone(exported["verification_binding"])
+                self.assertEqual(
+                    exported["content"]["quarantine"]["original_record_hash"],
+                    canonical_hash(recovered),
+                )
+                self.assertFalse(exported["content"]["quarantine"]["raw_record_publicly_persisted"])
+                self.assertNotIn(unsafe_ref,json.dumps(quarantined))
+                self.assertEqual(json.dumps(recovered,sort_keys=True,separators=(",",":")),serialized)
 
     def test_observed_terminal_payload_roundtrips_without_promotion(self):
         value=mem("OBSERVED")
@@ -312,3 +318,4 @@ class SharedValueMemoryTests(unittest.TestCase):
         self.assertLess(summary["value_factor"],0.5)
 
 if __name__=="__main__": unittest.main()
+

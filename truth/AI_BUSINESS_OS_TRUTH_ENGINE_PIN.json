@@ -9,6 +9,13 @@
   "source_test_blob_sha": "5705d2876741a39250c1e1662d62e995820a4ebc",
   "integration_mode": "PINNED_INTERFACE_ADAPTER",
   "copied_source_code": false,
+  "receipt_namespace": {
+    "scheme": "ai-business-os",
+    "authority": "truth",
+    "path_prefix": "/receipt",
+    "digest_algorithm": "sha256",
+    "max_length": 512
+  },
   "upstream_contract": {
     "verdicts": [
       "PROVEN",
@@ -57,3 +64,4 @@
     "on_blob_mismatch": "FAIL_CLOSED"
   }
 }
+
