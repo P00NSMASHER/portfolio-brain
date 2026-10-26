@@ -19,6 +19,19 @@ INSTALLATION = "172257326"
 EXPECTED_TARGET_HEAD = "4a7c5d6c223b8488995ab221dc169ba32ae828f8"
 EXPECTED_CANONICAL_BLOB = "f4182f742af5e793cb98efcf4b3dac5bfc0d9dd9"
 EXPECTED_RELEASE_BLOB = "11eb0d1674bc7b2cf9ccb1a5aa907060f1e833c1"
+ORIGINAL_DRAFT_PR = 47
+ORIGINAL_DRAFT_HEAD = "33a0b2cd26921935bfca11a0b35e566ad0c735f1"
+ORIGINAL_REPAIR_BLOB = "cba246861b93ffce495fbebcd5e2f0438d00ad4e"
+SUCCESSOR_PR = 70
+SUCCESSOR_BASE = "fb660e44eaf22c941e8aa25d42772c4768b76e20"
+SUCCESSOR_HEAD = "f0a6bef1b6f9133501c2758747f1e2864e06365a"
+SUCCESSOR_MERGE = "8b591cf42eaf1e4856adfdc766bacc5d3df9fa3e"
+SUCCESSOR_BRANCH = "capturebrief-release-maintenance-20261021"
+# Reviewed current correction bytes, independently fetched from CaptureBrief
+# main b10347cd9e9cd0cef6cfc9cdcc1e9130fd9858c2. Later document edits require
+# a fresh review; merely retaining selected phrases is not semantic proof.
+TERMINAL_CANONICAL_BLOB = "07f8970e8ff2a295aaeff34dc2b2b596a85d4dd2"
+TERMINAL_RELEASE_BLOB = "6e58aef6e26a4a92f30ca31c7232c53441abfec8"
 DOC = "PUBLIC-RELEASE.md"
 CANONICAL = "DEPLOYMENT-TARGET.md"
 BRANCH_PREFIX = "v8-capturebrief-hosting-doc-"
@@ -171,10 +184,12 @@ def checked_candidate(api, *, prefix, main_sha, branch_sha, fixed):
     return expected_blob
 
 
-def checked_draft(api, *, prefix, number, branch, branch_sha, main_sha):
+def checked_draft(api, *, prefix, number, branch, branch_sha, main_sha, base_sha=None):
     """A bot-owned original draft is not a delivery, merge or production change."""
     require(type(number) is int and 0 < number < 10**9,
             "ORIGINAL_DRAFT_NUMBER_INVALID")
+    require(base_sha is None or (type(base_sha) is str and GIT_SHA.fullmatch(base_sha)),
+            "DRAFT_BASE_SOURCE_INVALID")
     verified = None
     for retry in range(3):
         try:
@@ -193,11 +208,225 @@ def checked_draft(api, *, prefix, number, branch, branch_sha, main_sha):
             and verified.get("head", {}).get("sha") == branch_sha
             and verified.get("head", {}).get("ref") == branch
             and verified.get("head", {}).get("repo", {}).get("full_name") == TARGET
-            and verified.get("base", {}).get("sha") == main_sha
+            and verified.get("base", {}).get("sha") == (main_sha if base_sha is None else base_sha)
             and verified.get("base", {}).get("ref") == "main"
             and verified.get("user", {}).get("login") == APP_SLUG + "[bot]",
             "ORIGINAL_BOT_DRAFT_NOT_VERIFIED")
     return True
+
+
+def checked_original_superseded_draft(api, *, prefix):
+    """Verify immutable original proposal identity without treating closure as delivery."""
+    branch = BRANCH_PREFIX + EXPECTED_TARGET_HEAD[:12]
+    original = api("GET", prefix + "pulls/" + str(ORIGINAL_DRAFT_PR))
+    body = original.get("body") if type(original) is dict else None
+    fingerprint = ("AUTO_REPAIR_FINGERPRINT: " + EXPECTED_TARGET_HEAD
+                   + "/" + EXPECTED_RELEASE_BLOB)
+    require(type(original) is dict
+            and original.get("number") == ORIGINAL_DRAFT_PR
+            and original.get("state") == "closed"
+            and original.get("draft") is True
+            and original.get("merged") is False
+            and original.get("head", {}).get("sha") == ORIGINAL_DRAFT_HEAD
+            and original.get("head", {}).get("ref") == branch
+            and original.get("head", {}).get("repo", {}).get("full_name") == TARGET
+            and original.get("base", {}).get("ref") == "main"
+            and original.get("user", {}).get("login") == APP_SLUG + "[bot]"
+            and type(body) is str and fingerprint in body.splitlines()
+            and ("superseded" in body.casefold())
+            and ("PR #70" in body)
+            and SUCCESSOR_MERGE in body,
+            "ORIGINAL_SUPERSEDED_DRAFT_NOT_VERIFIED")
+    commit = immutable_git_get(api, prefix + "git/commits/" + ORIGINAL_DRAFT_HEAD)
+    require(type(commit) is dict and commit.get("sha") == ORIGINAL_DRAFT_HEAD
+            and type(commit.get("parents")) is list
+            and len(commit["parents"]) == 1
+            and commit["parents"][0].get("sha") == EXPECTED_TARGET_HEAD,
+            "ORIGINAL_SUPERSEDED_COMMIT_NOT_EXACT_CHILD")
+    observed = immutable_git_get(
+        api, prefix + "contents/" + DOC + "?ref=" + ORIGINAL_DRAFT_HEAD)
+    _, blob = checked_document(observed, "ORIGINAL_SUPERSEDED_REPAIR")
+    require(blob == ORIGINAL_REPAIR_BLOB,
+            "ORIGINAL_SUPERSEDED_REPAIR_BLOB_MISMATCH")
+    comparison = api(
+        "GET", prefix + "compare/" + EXPECTED_TARGET_HEAD + "..." + ORIGINAL_DRAFT_HEAD)
+    files = comparison.get("files") if type(comparison) is dict else None
+    require(type(files) is list and len(files) == 1
+            and type(files[0]) is dict
+            and files[0].get("filename") == DOC
+            and files[0].get("status") == "modified"
+            and comparison.get("merge_base_commit", {}).get("sha")
+                == EXPECTED_TARGET_HEAD
+            and comparison.get("ahead_by") == 1
+            and comparison.get("behind_by") == 0,
+            "ORIGINAL_SUPERSEDED_DRAFT_SCOPE_CHANGED")
+    return branch
+
+
+def require_current_correction(source, release):
+    """Require current documents to retain the reviewed hosting correction."""
+    require(type(source) is str and type(release) is str
+            and len(source) <= 12000 and len(release) <= 60000,
+            "CURRENT_CORRECTION_SOURCE_BOUNDS_INVALID")
+    require("Use GitHub Pages, not Netlify." in source
+            and "- Website branch: `gh-pages`" in source
+            and "https://p00nsmasher.github.io/capturebrief/" in source
+            and "- Product engine and its regression tests: `main`" in source,
+            "CURRENT_CANONICAL_HOSTING_SEMANTICS_REGRESSED")
+    require(release.startswith("# Verified public release artifact\n\n")
+            and "authoritative website uses GitHub Pages" in release
+            and "`gh-pages` branch" in release
+            and "https://p00nsmasher.github.io/capturebrief/" in release
+            and "legacy packaging tools" in release
+            and "do not\nselect the current hosting provider or authorize a website deployment" in release
+            and "## Current GitHub Pages release handoff" in release
+            and "does not prove the intended content is live" in " ".join(release.split())
+            and MISLEADING not in release
+            and HANDOFF_START not in release,
+            "CURRENT_RELEASE_CORRECTION_SEMANTICS_REGRESSED")
+
+
+def resembles_successor_correction(source, release):
+    """Select only the reviewed correction family; unrelated drift stays generic."""
+    return (type(source) is str and type(release) is str
+            and "Use GitHub Pages, not Netlify." in source
+            and "authoritative website uses GitHub Pages" in release
+            and "## Current GitHub Pages release handoff" in release)
+
+
+def readback_superseded_draft_successor(api, *, prefix, current_main,
+                                        source, release,
+                                        canonical_blob, release_blob):
+    """Read-only terminal proof for the original draft and merged successor."""
+    require(canonical_blob == TERMINAL_CANONICAL_BLOB
+            and release_blob == TERMINAL_RELEASE_BLOB,
+            "TERMINAL_CORRECTION_BLOBS_UNREVIEWED")
+    require_current_correction(source, release)
+    original_branch = checked_original_superseded_draft(api, prefix=prefix)
+    successor = api("GET", prefix + "pulls/" + str(SUCCESSOR_PR))
+    require(type(successor) is dict
+            and successor.get("number") == SUCCESSOR_PR
+            and successor.get("state") == "closed"
+            and successor.get("draft") is False
+            and successor.get("merged") is True
+            and successor.get("head", {}).get("sha") == SUCCESSOR_HEAD
+            and successor.get("head", {}).get("ref") == SUCCESSOR_BRANCH
+            and successor.get("head", {}).get("repo", {}).get("full_name") == TARGET
+            and successor.get("base", {}).get("sha") == SUCCESSOR_BASE
+            and successor.get("base", {}).get("ref") == "main"
+            and successor.get("merge_commit_sha") == SUCCESSOR_MERGE,
+            "SUCCESSOR_MERGED_PR_NOT_VERIFIED")
+    successor_diff = api(
+        "GET", prefix + "compare/" + SUCCESSOR_BASE + "..." + SUCCESSOR_HEAD)
+    files = successor_diff.get("files") if type(successor_diff) is dict else None
+    require(type(files) is list
+            and all(type(row) is dict for row in files)
+            and {(row.get("filename"), row.get("status")) for row in files} == {
+                (".github/workflows/product-core.yml", "modified"),
+                (".github/workflows/public-release.yml", "modified"),
+                (DOC, "modified"),
+            }
+            and successor_diff.get("merge_base_commit", {}).get("sha") == SUCCESSOR_BASE
+            and successor_diff.get("ahead_by") == 1
+            and successor_diff.get("behind_by") == 0,
+            "SUCCESSOR_REVIEWED_SCOPE_CHANGED")
+    merge = immutable_git_get(api, prefix + "git/commits/" + SUCCESSOR_MERGE)
+    parents = merge.get("parents") if type(merge) is dict else None
+    require(type(merge) is dict
+            and merge.get("sha") == SUCCESSOR_MERGE
+            and type(parents) is list
+            and all(type(row) is dict for row in parents)
+            and any(row.get("sha") == SUCCESSOR_HEAD for row in parents),
+            "SUCCESSOR_MERGE_COMMIT_NOT_VERIFIED")
+    ancestry = api(
+        "GET", prefix + "compare/" + SUCCESSOR_MERGE + "..." + current_main)
+    require(type(ancestry) is dict
+            and ancestry.get("merge_base_commit", {}).get("sha") == SUCCESSOR_MERGE
+            and ancestry.get("behind_by") == 0,
+            "SUCCESSOR_MERGE_NOT_IN_CURRENT_MAIN")
+    latest = api("GET", prefix + "branches/main")
+    require(type(latest) is dict
+            and latest.get("commit", {}).get("sha") == current_main,
+            "TERMINAL_TARGET_MAIN_MOVED_DURING_READBACK")
+    return {
+        "status": "ORIGINAL_BOT_DRAFT_SUPERSEDED_BY_MERGED_SUCCESSOR",
+        "repository": TARGET,
+        "target_source": current_main,
+        "original_source": EXPECTED_TARGET_HEAD,
+        "original_draft_pr": ORIGINAL_DRAFT_PR,
+        "original_draft_branch": original_branch,
+        "original_draft_head": ORIGINAL_DRAFT_HEAD,
+        "original_draft_merged": False,
+        "successor_pr": SUCCESSOR_PR,
+        "successor_head": SUCCESSOR_HEAD,
+        "successor_merge_commit": SUCCESSOR_MERGE,
+        "successor_merged": True,
+        "current_canonical_blob": canonical_blob,
+        "current_release_blob": release_blob,
+        "correction_semantics_verified": True,
+        "provider_writes": 0,
+        "deployed": False,
+        "live_verified": False,
+    }
+
+
+
+def readback_original_draft_after_source_drift(api, *, prefix, current_main):
+    """Read-only proof that the original bot draft survived unrelated main drift.
+
+    This never retargets a writer, rebases, retries or declares delivery. A
+    changed source document or absent original draft preserves the ordinary
+    no-mutation drift outcome. Malformed evidence fails closed.
+    """
+    require(type(current_main) is str and GIT_SHA.fullmatch(current_main)
+            and current_main != EXPECTED_TARGET_HEAD,
+            "DRIFT_SOURCE_INVALID")
+    branch = BRANCH_PREFIX + EXPECTED_TARGET_HEAD[:12]
+    source, canonical_blob = checked_document(
+        api("GET", prefix + "contents/" + CANONICAL + "?ref=" + current_main),
+        "DRIFT_CANONICAL")
+    original, original_blob = checked_document(
+        api("GET", prefix + "contents/" + DOC + "?ref=" + current_main),
+        "DRIFT_RELEASE_DOC")
+    if (canonical_blob != EXPECTED_CANONICAL_BLOB
+            or original_blob != EXPECTED_RELEASE_BLOB):
+        if resembles_successor_correction(source, original):
+            return readback_superseded_draft_successor(
+                api, prefix=prefix, current_main=current_main,
+                source=source, release=original,
+                canonical_blob=canonical_blob, release_blob=original_blob)
+        return None
+    corrected = plan(source, original)
+    if corrected is None:
+        return None
+    census = api("GET", prefix + "pulls?state=open&per_page=100")
+    require(type(census) is list and len(census) < 100
+            and all(type(p) is dict for p in census),
+            "DRIFT_OPEN_PR_CENSUS_INCOMPLETE")
+    matches = [p for p in census
+               if type(p.get("head")) is dict
+               and p["head"].get("ref") == branch]
+    if not matches:
+        return None
+    require(len(matches) == 1, "DRIFT_ORIGINAL_DRAFT_AMBIGUOUS")
+    branch_row = api("GET", prefix + "branches/" + branch)
+    require(type(branch_row) is dict and type(branch_row.get("commit")) is dict,
+            "DRIFT_ORIGINAL_BRANCH_UNVERIFIED")
+    candidate_sha = branch_row["commit"].get("sha")
+    checked_candidate(api, prefix=prefix, main_sha=EXPECTED_TARGET_HEAD,
+                      branch_sha=candidate_sha, fixed=corrected)
+    number = matches[0].get("number")
+    checked_draft(api, prefix=prefix, number=number, branch=branch,
+                  branch_sha=candidate_sha, main_sha=EXPECTED_TARGET_HEAD,
+                  base_sha=current_main)
+    latest = api("GET", prefix + "branches/main")
+    require(type(latest) is dict and latest.get("commit", {}).get("sha") == current_main,
+            "DRIFT_TARGET_MAIN_MOVED_DURING_READBACK")
+    return {"status": "ORIGINAL_BOT_DRAFT_STILL_PENDING_AFTER_TARGET_DRIFT",
+            "repository": TARGET, "target_source": current_main,
+            "original_source": EXPECTED_TARGET_HEAD, "draft_pr": number,
+            "repair_commit": candidate_sha, "source_documents_unchanged": True,
+            "provider_writes": 0, "merged": False, "deployed": False}
 
 
 def execute(api, *, installation, slug):
@@ -214,6 +443,10 @@ def execute(api, *, installation, slug):
     require(type(main_sha) is str and GIT_SHA.fullmatch(main_sha) is not None,
             "TARGET_MAIN_NOT_VERIFIED")
     if main_sha != EXPECTED_TARGET_HEAD:
+        pending = readback_original_draft_after_source_drift(
+            api, prefix=prefix, current_main=main_sha)
+        if pending is not None:
+            return pending
         return {"status": "TARGET_SOURCE_CHANGED_NO_MUTATION",
                 "repository": TARGET, "target_source": main_sha,
                 "provider_writes": 0, "merged": False, "deployed": False}
@@ -425,3 +658,4 @@ if __name__ == "__main__":
     except Exception:
         # No token, provider response, untrusted data or traceback in CI logs.
         raise SystemExit("V8_SCOPED_REPAIR_BLOCKED; NO_RELEASE_AUTHORITY") from None
+
