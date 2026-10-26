@@ -15,7 +15,7 @@ from hunting.lifecycle import (
 from hunting.proposal_review_state import digest
 from software_factory.software_factory import SoftwareFactory
 
-H=lambda c:"sha256:"+c*64
+H=lambda c:digest(c)
 
 def controlled_review():
     core={
@@ -187,3 +187,4 @@ class HunterLifecycleTests(unittest.TestCase):
 
 if __name__=="__main__":
     unittest.main()
+
