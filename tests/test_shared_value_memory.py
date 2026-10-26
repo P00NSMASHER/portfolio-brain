@@ -1,6 +1,6 @@
 import copy, hashlib, json, unittest
 from memory.value_memory_adapter import (
-    SharedMemoryError, canonical_hash, load_pin, outcome_hash, project_upstream_summary,
+    SharedMemoryError, canonical_hash, load_pin, memory_hash, outcome_hash, project_upstream_summary,
     upstream_registration_args, validate_credit_conservation, validate_memory,
     validate_outcome, verified_outcome_calls
 )
@@ -8,16 +8,31 @@ from truth.truth_adapter import (
     TruthIntegrationError, load_pin as load_truth_pin, project_receipt
 )
 
-def mem():
-    content={"lesson":"cheap decisive experiments beat speculative build activity"}
+def verification_binding():
     return {
-      "schema_version":"1.0.0","memory_id":"MEM-PORTFOLIO-0001","memory_key":"experiment-first",
-      "version":"v1","memory_kind":"STRATEGY","project_ids":["PRJ-000","PRJ-008"],
-      "objective_id":"OBJ-000","scope":"GLOBAL","content":content,"content_hash":canonical_hash(content),
-      "provenance_evidence_ids":["EVD-PORTFOLIO-0001"],"truth_state":"VERIFIED",
-      "status":"ACTIVE","upstream_memory_id":"portfolio-memory-0001"
+      "observer_actor_id":"AGT-RESEARCHER",
+      "verifier_actor_id":"AGT-AUDITOR",
+      "verification_report_hash":"sha256:"+"a"*64,
+      "source_receipt_ref":"ai-business-os://truth/receipt/source-run-1",
+      "source_receipt_hash":"sha256:"+"b"*64,
+      "source_projection_hash":"sha256:"+"c"*64,
+      "observed_at":"2026-09-25T16:00:00Z",
+      "verified_at":"2026-09-25T16:01:00Z",
     }
 
+def mem(state="VERIFIED"):
+    content={"lesson":"cheap decisive experiments beat speculative build activity"}
+    value={
+      "schema_version":"1.1.0","memory_id":"MEM-PORTFOLIO-0001","memory_key":"experiment-first",
+      "version":"v1","memory_kind":"STRATEGY","project_ids":["PRJ-000","PRJ-008"],
+      "objective_id":"OBJ-000","scope":"GLOBAL","content":content,"content_hash":canonical_hash(content),
+      "provenance_evidence_ids":["EVD-PORTFOLIO-0001"],"truth_state":state,
+      "status":"ACTIVE","upstream_memory_id":"portfolio-memory-0001",
+      "verification_binding":verification_binding() if state=="VERIFIED" else None,
+      "memory_hash":"",
+    }
+    value["memory_hash"]=memory_hash(value)
+    return value
 def outcome(state="VERIFIED", event="EVT-OUTCOME-0001", fraction=1.0):
     verified=state=="VERIFIED"
     receipt={
@@ -68,6 +83,47 @@ class SharedValueMemoryTests(unittest.TestCase):
         self.assertEqual(args["objective"],"OBJ-000")
         self.assertEqual(args["memory_id"],m["upstream_memory_id"])
         self.assertEqual(args["content"]["project_ids"],["PRJ-000","PRJ-008"])
+
+    def test_verified_memory_requires_exact_binding(self):
+        value=mem()
+        value["verification_binding"]=None
+        value["memory_hash"]=memory_hash(value)
+        with self.assertRaisesRegex(SharedMemoryError,"verification binding"):
+            validate_memory(value)
+
+    def test_verification_binding_is_memory_hash_bound(self):
+        value=mem()
+        original=value["memory_hash"]
+        value["verification_binding"]["source_receipt_hash"]="sha256:"+"d"*64
+        self.assertEqual(value["memory_hash"],original)
+        with self.assertRaisesRegex(SharedMemoryError,"memory_hash"):
+            validate_memory(value)
+
+    def test_observed_terminal_payload_roundtrips_without_promotion(self):
+        value=mem("OBSERVED")
+        value["content"]={
+          "terminal_state_replay":{"deployed":True,"live_verified":False},
+          "original_run_evidence":{"market_verified":True},
+          "external_cloudflare_provider":{"revenue_verified":True},
+          "proof":{"independent_human_review":True},
+        }
+        value["content_hash"]=canonical_hash(value["content"])
+        value["memory_hash"]=memory_hash(value)
+        serialized=json.dumps(value,sort_keys=True,separators=(",",":"))
+        recovered=json.loads(serialized)
+        validate_memory(recovered)
+        exported=upstream_registration_args(recovered)["content"]
+        self.assertEqual(exported["truth_state"],"OBSERVED")
+        self.assertEqual(exported["content"],value["content"])
+        self.assertIsNone(exported["verification_binding"])
+        self.assertEqual(json.dumps(recovered,sort_keys=True,separators=(",",":")),serialized)
+
+    def test_non_verified_memory_cannot_claim_verifier(self):
+        value=mem("OBSERVED")
+        value["verification_binding"]=verification_binding()
+        value["memory_hash"]=memory_hash(value)
+        with self.assertRaisesRegex(SharedMemoryError,"cannot claim"):
+            validate_memory(value)
 
     def test_only_verified_outcome_can_change_learned_value(self):
         m=mem()
