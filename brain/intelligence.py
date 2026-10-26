@@ -8,6 +8,7 @@ import math
 import re
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation
+from brain.limits import MAX_REPOSITORY_CHECKS
 from brain.core import BrainError, require, timestamp, digest, same_semantic_observation, semantic_observation_identity
 
 REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -128,7 +129,7 @@ def validate_payload(kind, p, observed_at):
         )
         text(p["default_branch"], 100)
         require(type(p["open_issues"]) is int and p["open_issues"] >= 0, "issue count invalid")
-        require(type(p["checks"]) is list and len(p["checks"]) <= 500, "checks invalid")
+        require(type(p["checks"]) is list and len(p["checks"]) <= MAX_REPOSITORY_CHECKS, "checks invalid")
         for check in p["checks"]:
             fields(check, {"name","status","conclusion","head_sha","url"})
             text(check["name"], 200)
