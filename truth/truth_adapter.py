@@ -19,6 +19,13 @@ PIN_PATH=ROOT/"truth"/"AI_BUSINESS_OS_TRUTH_ENGINE_PIN.json"
 
 SHA40=re.compile(r"^[0-9a-f]{40}$")
 SHA64=re.compile(r"^[0-9a-f]{64}$")
+SOURCE_RECEIPT_REF=re.compile(
+    r"^(?P<scheme>[a-z][a-z0-9+.-]{1,31})://"
+    r"(?P<authority>[a-z0-9](?:[a-z0-9.-]{0,126}[a-z0-9])?)"
+    r"(?P<path>(?:/[A-Za-z0-9._~-]+)*)"
+    r"/sha256/(?P<digest>[0-9a-f]{64})$"
+)
+SOURCE_RECEIPT_REF_MAX_LENGTH=512
 VERDICTS={"PROVEN","CONTESTED","NOT_PROVEN","UNKNOWN"}
 FINDING_STATUSES={
     "SATISFIED","MISSING","STALE","INADMISSIBLE",
@@ -37,6 +44,32 @@ def _require(ok: bool, message: str) -> None:
 def _canonical_hash(value: Any) -> str:
     raw=json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode("utf-8")
     return "sha256:"+hashlib.sha256(raw).hexdigest()
+
+def validate_source_receipt_ref(
+    value: str,
+    *,
+    expected_receipt_hash: str | None = None,
+) -> str:
+    """Validate a sanitized canonical URI bound to an immutable receipt digest."""
+    _require(isinstance(value,str) and len(value)<=SOURCE_RECEIPT_REF_MAX_LENGTH,
+             "source_receipt_ref must be a bounded string")
+    match=SOURCE_RECEIPT_REF.fullmatch(value)
+    _require(match is not None,
+             "source_receipt_ref must be canonical and query/fragment free")
+    segments=[segment for segment in match.group("path").split("/") if segment]
+    _require(all(segment not in {".",".."} for segment in segments),
+             "source_receipt_ref path must be canonical")
+    if expected_receipt_hash is not None:
+        _require(
+            isinstance(expected_receipt_hash,str)
+            and re.fullmatch(r"sha256:[0-9a-f]{64}",expected_receipt_hash) is not None,
+            "expected source receipt hash invalid",
+        )
+        _require(
+            expected_receipt_hash=="sha256:"+match.group("digest"),
+            "source_receipt_ref digest mismatch",
+        )
+    return value
 
 def _upstream_receipt_hash(receipt: dict[str,Any]) -> str:
     """Reproduce the exact receipt hash contract at the pinned upstream revision."""
@@ -181,9 +214,13 @@ def project_receipt(
     source_blob_sha: str,
     source_receipt_ref: str,
 ) -> dict[str,Any]:
+    state=project_truth_state(receipt)
+    validate_source_receipt_ref(
+        source_receipt_ref,
+        expected_receipt_hash="sha256:"+receipt["receipt_hash"],
+    )
     pin=load_pin()
     verify_source_identity(pin,source_revision=source_revision,source_blob_sha=source_blob_sha)
-    state=project_truth_state(receipt)
     required=[f for f in receipt["findings"] if f["required"]]
     projection={
         "schema_version":"1.0.0",

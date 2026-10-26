@@ -10,6 +10,7 @@ import hashlib, json, math, re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from truth.truth_adapter import TruthIntegrationError, validate_source_receipt_ref
 
 ROOT=Path(__file__).resolve().parents[1]
 PIN_PATH=ROOT/"memory"/"AI_BUSINESS_OS_VALUE_MEMORY_PIN.json"
@@ -25,6 +26,11 @@ SHA40=re.compile(r"^[0-9a-f]{40}$")
 SHA256P=re.compile(r"^sha256:[0-9a-f]{64}$")
 MEMORY_KINDS={"FACT","STRATEGY","ENGINEERING","RESEARCH","COMMERCIAL","PORTFOLIO","SELF_IMPROVEMENT"}
 TRUTH_STATES={"OBSERVED","VERIFIED","INFERRED","UNKNOWN","CONTRADICTED","STALE","INVALID"}
+VERIFICATION_FIELDS={
+    "observer_actor_id","verifier_actor_id","verification_report_hash",
+    "source_receipt_ref","source_receipt_hash","source_projection_hash",
+    "observed_at","verified_at",
+}
 
 class SharedMemoryError(ValueError): pass
 
@@ -38,6 +44,53 @@ def canonical_hash(value: Any)->str:
 def outcome_hash(outcome: dict[str,Any])->str:
     """Bind a value-memory outcome receipt to every learning-relevant field."""
     return canonical_hash({key:value for key,value in outcome.items() if key!="outcome_hash"})
+
+def memory_hash(record: dict[str,Any])->str:
+    """Bind content, truth state, provenance, and verification to one memory identity."""
+    return canonical_hash({key:value for key,value in record.items() if key!="memory_hash"})
+
+def quarantine_invalid_memory(record: dict[str,Any], *, reason_code: str)->dict[str,Any]:
+    """Create a sanitized, non-exportable identity for invalid historical evidence.
+
+    The caller remains responsible for retaining the original record in its
+    authoritative private quarantine. This function never mutates or echoes the
+    unsafe payload; it binds the preserved record to a public-safe digest.
+    """
+    required={"schema_version","memory_id","memory_key","version","memory_kind","project_ids",
+              "objective_id","scope","content","content_hash","provenance_evidence_ids",
+              "truth_state","status","upstream_memory_id","verification_binding","memory_hash"}
+    _require(isinstance(record,dict) and set(record)==required,
+             "quarantine source fields must exactly match memory contract")
+    _require(reason_code=="INVALID_SOURCE_RECEIPT_REFERENCE",
+             "unsupported memory quarantine reason")
+    content={
+        "quarantine":{
+            "reason_code":reason_code,
+            "original_record_hash":canonical_hash(record),
+            "raw_record_publicly_persisted":False,
+        }
+    }
+    quarantined={
+        "schema_version":"1.1.1",
+        "memory_id":record["memory_id"],
+        "memory_key":record["memory_key"],
+        "version":record["version"],
+        "memory_kind":record["memory_kind"],
+        "project_ids":record["project_ids"],
+        "objective_id":record["objective_id"],
+        "scope":record["scope"],
+        "content":content,
+        "content_hash":canonical_hash(content),
+        "provenance_evidence_ids":record["provenance_evidence_ids"],
+        "truth_state":"INVALID",
+        "status":"RETIRED",
+        "upstream_memory_id":record["upstream_memory_id"],
+        "verification_binding":None,
+        "memory_hash":"",
+    }
+    quarantined["memory_hash"]=memory_hash(quarantined)
+    validate_memory(quarantined)
+    return quarantined
 
 def _time(value: str, field: str)->datetime:
     _require(isinstance(value,str) and value,f"{field} required")
@@ -81,9 +134,9 @@ def validate_pin(pin: dict[str,Any])->None:
 def validate_memory(record: dict[str,Any])->None:
     required={"schema_version","memory_id","memory_key","version","memory_kind","project_ids",
               "objective_id","scope","content","content_hash","provenance_evidence_ids",
-              "truth_state","status","upstream_memory_id"}
+              "truth_state","status","upstream_memory_id","verification_binding","memory_hash"}
     _require(isinstance(record,dict) and set(record)==required,"memory fields must exactly match contract")
-    _require(record["schema_version"]=="1.0.0","memory schema mismatch")
+    _require(record["schema_version"]=="1.1.1","memory schema mismatch")
     _require(MEM_ID.fullmatch(record["memory_id"]) is not None,"invalid memory_id")
     _require(isinstance(record["memory_key"],str) and record["memory_key"],"memory_key required")
     _require(isinstance(record["version"],str) and record["version"],"version required")
@@ -97,8 +150,44 @@ def validate_memory(record: dict[str,Any])->None:
     evid=record["provenance_evidence_ids"]; _require(isinstance(evid,list) and evid and len(evid)==len(set(evid)),"provenance evidence invalid")
     _require(all(EVD_ID.fullmatch(x) for x in evid),"invalid provenance evidence id")
     _require(record["truth_state"] in TRUTH_STATES,"invalid truth_state")
+    binding=record["verification_binding"]
+    if record["truth_state"]=="VERIFIED":
+        _require(isinstance(binding,dict) and set(binding)==VERIFICATION_FIELDS,
+                 "VERIFIED memory requires exact verification binding")
+        agents=registered_agents()
+        observer=agents.get(binding["observer_actor_id"])
+        verifier=agents.get(binding["verifier_actor_id"])
+        _require(observer is not None and observer.get("status")=="ACTIVE",
+                 "memory observer must be an active registered agent")
+        _require(verifier is not None and verifier.get("status")=="ACTIVE",
+                 "memory verifier must be an active registered agent")
+        _require(binding["verifier_actor_id"]!=binding["observer_actor_id"],
+                 "memory observer cannot verify own record")
+        _require(verifier.get("verifier_eligible") is True,
+                 "VERIFIED memory requires a verifier-eligible agent")
+        _require(verifier.get("independence_group")!=observer.get("independence_group"),
+                 "memory observer and verifier independence groups must differ")
+        try:
+            validate_source_receipt_ref(
+                binding["source_receipt_ref"],
+                expected_receipt_hash=binding["source_receipt_hash"],
+            )
+        except TruthIntegrationError as exc:
+            raise SharedMemoryError(
+                "VERIFIED memory source receipt reference invalid"
+            ) from exc
+        for field in ("verification_report_hash","source_receipt_hash","source_projection_hash"):
+            _require(isinstance(binding[field],str) and SHA256P.fullmatch(binding[field]),
+                     f"VERIFIED memory requires {field}")
+        _require(_time(binding["verified_at"],"verified_at")>=
+                 _time(binding["observed_at"],"observed_at"),
+                 "verified_at precedes observed_at")
+    else:
+        _require(binding is None,"non-VERIFIED memory cannot claim verification binding")
     _require(record["status"] in {"ACTIVE","RETIRED"},"invalid memory status")
     _require(isinstance(record["upstream_memory_id"],str) and record["upstream_memory_id"],"upstream_memory_id required")
+    _require(record["memory_hash"]==memory_hash(record),
+             "memory_hash does not bind memory record")
 
 def validate_outcome(outcome: dict[str,Any])->None:
     required={"schema_version","outcome_id","memory_id","event_id","project_id","objective_id",
@@ -149,6 +238,8 @@ def upstream_registration_args(record: dict[str,Any])->dict[str,Any]:
             "provenance_evidence_ids":record["provenance_evidence_ids"],
             "content":record["content"],
             "content_hash":record["content_hash"],
+            "verification_binding":record["verification_binding"],
+            "memory_hash":record["memory_hash"],
         },
         "objective":record["objective_id"],
         "scope":"GLOBAL",
@@ -186,9 +277,15 @@ def verified_outcome_calls(memory: dict[str,Any], outcome: dict[str,Any])->dict[
 
 def validate_credit_conservation(outcomes: list[dict[str,Any]])->None:
     totals={}
+    outcome_ids=set()
     memory_events=set()
     for outcome in outcomes:
         validate_outcome(outcome)
+        _require(
+            outcome["outcome_id"] not in outcome_ids,
+            f"duplicate outcome_id: {outcome['outcome_id']}",
+        )
+        outcome_ids.add(outcome["outcome_id"])
         memory_event=(outcome["memory_id"],outcome["event_id"])
         _require(memory_event not in memory_events,
                  f"duplicate event for memory: {outcome['memory_id']}::{outcome['event_id']}")
