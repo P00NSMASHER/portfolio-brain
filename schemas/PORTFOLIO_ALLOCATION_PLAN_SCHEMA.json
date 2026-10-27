@@ -77,6 +77,7 @@
           "actionability",
           "resource_fit_reason",
           "uncertainty_components",
+          "evidence_basis_summary",
           "evidence_refs"
         ],
         "properties": {
@@ -109,7 +110,8 @@
             "enum": [
               "OBSERVE_ONLY",
               "BOUNDED_EXPERIMENT",
-              "HUMAN_GATED_ACT"
+              "HUMAN_GATED_ACT",
+              "BOUNDED_ACT"
             ]
           },
           "actionability": {
@@ -117,7 +119,8 @@
               "READY_FOR_INFORMATION_GATHERING",
               "READY_FOR_EXPERIMENT_DESIGN",
               "HUMAN_APPROVAL_REQUIRED",
-              "BLOCKED"
+              "BLOCKED",
+              "READY_FOR_BOUNDED_EXTERNAL_EXECUTION"
             ]
           },
           "resource_fit_reason": {
@@ -126,7 +129,44 @@
             "maxLength": 1000
           },
           "uncertainty_components": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "importance",
+              "uncertainty",
+              "test_cost",
+              "time_to_evidence",
+              "reversibility",
+              "downstream_impact",
+              "strategic_reuse",
+              "external_validation_value"
+            ],
+            "properties": {
+              "importance": {
+                "$ref": "#/$defs/allocation_component"
+              },
+              "uncertainty": {
+                "$ref": "#/$defs/allocation_component"
+              },
+              "test_cost": {
+                "$ref": "#/$defs/allocation_component"
+              },
+              "time_to_evidence": {
+                "$ref": "#/$defs/allocation_component"
+              },
+              "reversibility": {
+                "$ref": "#/$defs/allocation_component"
+              },
+              "downstream_impact": {
+                "$ref": "#/$defs/allocation_component"
+              },
+              "strategic_reuse": {
+                "$ref": "#/$defs/allocation_component"
+              },
+              "external_validation_value": {
+                "$ref": "#/$defs/allocation_component"
+              }
+            }
           },
           "evidence_refs": {
             "type": "array",
@@ -137,6 +177,72 @@
             },
             "uniqueItems": true,
             "minItems": 1
+          },
+          "evidence_basis_summary": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "measurement_state",
+              "policy_estimate_component_ids",
+              "derived_component_ids",
+              "measured_outcome_component_ids"
+            ],
+            "properties": {
+              "measurement_state": {
+                "enum": [
+                  "NO_MEASURED_OUTCOME_INPUT",
+                  "MEASURED_OUTCOME_INPUT_PRESENT"
+                ]
+              },
+              "policy_estimate_component_ids": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "importance",
+                    "uncertainty",
+                    "test_cost",
+                    "time_to_evidence",
+                    "reversibility",
+                    "downstream_impact",
+                    "strategic_reuse",
+                    "external_validation_value"
+                  ]
+                },
+                "uniqueItems": true
+              },
+              "derived_component_ids": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "importance",
+                    "uncertainty",
+                    "test_cost",
+                    "time_to_evidence",
+                    "reversibility",
+                    "downstream_impact",
+                    "strategic_reuse",
+                    "external_validation_value"
+                  ]
+                },
+                "uniqueItems": true
+              },
+              "measured_outcome_component_ids": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "importance",
+                    "uncertainty",
+                    "test_cost",
+                    "time_to_evidence",
+                    "reversibility",
+                    "downstream_impact",
+                    "strategic_reuse",
+                    "external_validation_value"
+                  ]
+                },
+                "uniqueItems": true
+              }
+            }
           }
         }
       }
@@ -144,6 +250,46 @@
     "plan_hash": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "$defs": {
+    "allocation_component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "basis_type",
+        "rationale",
+        "evidence_refs"
+      ],
+      "properties": {
+        "value": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "basis_type": {
+          "enum": [
+            "DERIVED",
+            "POLICY_ESTIMATE"
+          ]
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        }
+      }
     }
   }
 }
