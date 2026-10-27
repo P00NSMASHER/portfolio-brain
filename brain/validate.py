@@ -21,7 +21,7 @@ def validate_policy():
               "x402-gateway-ci.yml","x402-render-gateway-smoke.yml",
               "brain-cycle.yml","brain-clock.yml",
               "state-capacity-qualification.yml", "v8-runtime-preflight.yml",
-              "v8-scoped-repair.yml", "v9-guarded-native-automerge.yml"}
+              "v8-scoped-repair.yml", "v9-guarded-native-automerge.yml", "reliability-day.yml"}
     require({x.name for x in workflow_dir.iterdir() if x.suffix in {".yml",".yaml"}}==expected, "active workflow inventory changed")
     scoped=(workflow_dir/"v8-scoped-repair.yml").read_text(encoding="utf-8")
     for phrase in (
@@ -32,7 +32,7 @@ def validate_policy():
         "github.event.workflow_run.head_sha == github.sha",
         "github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain'",
         "persist-credentials: false", "actions: read",
-        "d216e938c3e301042a13c97ed6fa0111be905230",
+        "d57ff91a7783455f5efb429717b2871edd8fa543",
         "6619993314d32af11a0fbab9b914837bc7f556b4",
         "repositories: capturebrief", "permission-contents: write",
         "permission-pull-requests: write", "skip-token-revoke: false",
