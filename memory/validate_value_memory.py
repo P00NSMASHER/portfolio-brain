@@ -29,6 +29,16 @@ def validate_shared_value_memory()->dict[str,object]:
             "Value Memory source cursor drifted; reconformance required")
     require(mem_schema["additionalProperties"] is False,"memory schema must be closed")
     require(out_schema["additionalProperties"] is False,"outcome schema must be closed")
+    binding_variants=mem_schema["properties"]["verification_binding"]["oneOf"]
+    binding_schema=next(
+        variant for variant in binding_variants
+        if variant.get("type")=="object"
+    )
+    require(
+        binding_schema["properties"]["source_receipt_ref"]["pattern"]
+        ==r"^ai-business-os://truth/receipt/sha256/[0-9a-f]{64}$",
+        "memory schema source receipt namespace drifted",
+    )
     require(conf["schema_version"]=="1.1.1","conformance schema mismatch")
     source=conf["source"]
     require(source["repository"]==pin["source_repository"],"source repository mismatch")
@@ -86,3 +96,4 @@ def validate_shared_value_memory()->dict[str,object]:
 
 if __name__=="__main__":
     print("portfolio-brain Step 6 shared memory: PASS",json.dumps(validate_shared_value_memory(),sort_keys=True))
+

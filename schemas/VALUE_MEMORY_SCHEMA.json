@@ -139,7 +139,7 @@
             "source_receipt_ref": {
               "type": "string",
               "maxLength": 512,
-              "pattern": "^[a-z][a-z0-9+.-]{1,31}://[a-z0-9](?:[a-z0-9.-]{0,126}[a-z0-9])?(?:/[A-Za-z0-9._~-]+)*/sha256/[0-9a-f]{64}$"
+              "pattern": "^ai-business-os://truth/receipt/sha256/[0-9a-f]{64}$"
             },
             "source_receipt_hash": {
               "type": "string",
@@ -195,3 +195,4 @@
     }
   ]
 }
+

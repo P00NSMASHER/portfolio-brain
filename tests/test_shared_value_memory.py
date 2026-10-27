@@ -1,4 +1,5 @@
 import copy, hashlib, json, unittest
+from pathlib import Path
 from memory.value_memory_adapter import (
     SharedMemoryError, canonical_hash, load_pin, memory_hash, outcome_hash, project_upstream_summary,
     quarantine_invalid_memory, upstream_registration_args, validate_credit_conservation, validate_memory,
@@ -70,6 +71,35 @@ def truth_receipt():
     return value
 
 class SharedValueMemoryTests(unittest.TestCase):
+    def test_published_schema_pins_truth_receipt_namespace(self):
+        schema=json.loads(
+            (Path(__file__).resolve().parents[1]/"schemas"/"VALUE_MEMORY_SCHEMA.json")
+            .read_text(encoding="utf-8")
+        )
+        binding=next(
+            variant for variant in schema["properties"]["verification_binding"]["oneOf"]
+            if variant.get("type")=="object"
+        )
+        pattern=binding["properties"]["source_receipt_ref"]["pattern"]
+        self.assertEqual(
+            pattern,
+            r"^ai-business-os://truth/receipt/sha256/[0-9a-f]{64}$",
+        )
+        digest="b"*64
+        self.assertIsNotNone(
+            __import__("re").fullmatch(
+                pattern,
+                "ai-business-os://truth/receipt/sha256/"+digest,
+            )
+        )
+        for unsafe in (
+            "javascript://truth/receipt/sha256/"+digest,
+            "file://localhost/etc/sha256/"+digest,
+            "https://127.0.0.1/receipt/sha256/"+digest,
+        ):
+            with self.subTest(unsafe=unsafe):
+                self.assertIsNone(__import__("re").fullmatch(pattern,unsafe))
+
     def test_pin_reuses_upstream_engine(self):
         pin=load_pin()
         self.assertEqual(pin["source_revision"],"c6276c80828d2632d5fee37cdaaf65f1d5b36427")
@@ -318,4 +348,5 @@ class SharedValueMemoryTests(unittest.TestCase):
         self.assertLess(summary["value_factor"],0.5)
 
 if __name__=="__main__": unittest.main()
+
 
