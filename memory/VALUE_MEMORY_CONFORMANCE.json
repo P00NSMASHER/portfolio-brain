@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.1",
   "source": {
     "repository": "P00NSMASHER/github-value-hunt-ledger",
     "revision": "c6276c80828d2632d5fee37cdaaf65f1d5b36427",
@@ -20,7 +20,13 @@
     "objective_conditioning": "REQUIRED",
     "untested_memory_prior": "NEUTRAL",
     "recency_decay": "HALF_LIFE",
-    "duplicate_event_per_memory": "REJECT"
+    "duplicate_outcome_identity": "REJECT",
+    "duplicate_event_per_memory": "REJECT",
+    "verified_memory_binding": "REQUIRED",
+    "canonical_source_receipt_reference": "REQUIRED",
+    "receipt_reference_hash_binding": "REQUIRED",
+    "unverified_memory_binding": "PROHIBITED",
+    "memory_record_integrity": "CANONICAL_SHA256_REQUIRED"
   },
   "authority_change": "NONE"
 }
