@@ -19,6 +19,7 @@ SOURCE_REF="main"
 STATE_ID="portfolio-repo-scout-intake-state"
 MAX_INTAKE=2
 MIN_TRIAGE_SCORE=35
+METADATA_ONLY_ROOT_SIGNALS={".github"}
 WORKER_PROJECTS={"HUNTER-01":["PRJ-005"]}
 SHA40=re.compile(r"^[0-9a-f]{40}$")
 
@@ -57,7 +58,8 @@ def build_intake(queue,*,source_revision,source_path=SOURCE_PATH,prior_state=Non
     req(queue.get("authority")=="PRE_VERIFICATION_DISCOVERY_ONLY","scout queue authority widened")
     worker=queue.get("worker_id");req(worker in WORKER_PROJECTS,"scout worker is not allowlisted")
     candidates=queue.get("candidates");req(isinstance(candidates,list),"scout candidate list invalid")
-    eligible=[]
+    eligible_rows=[]
+    metadata_only_candidates=0
     for row in candidates:
         if not isinstance(row,dict): continue
         if row.get("status")!="PRE_VERIFICATION_CANDIDATE" or row.get("archived") is not False: continue
@@ -67,13 +69,20 @@ def build_intake(queue,*,source_revision,source_path=SOURCE_PATH,prior_state=Non
         if not (isinstance(repo_name,str) and "/" in repo_name and isinstance(revision,str) and SHA40.fullmatch(revision)): continue
         if type(score) is not int or score<MIN_TRIAGE_SCORE: continue
         if license_spdx is not None and not isinstance(license_spdx,str): continue
-        if not isinstance(roots,list) or not roots: continue
+        if not isinstance(roots,list) or not roots or not all(isinstance(signal,str) for signal in roots): continue
+        if all(signal.casefold() in METADATA_ONLY_ROOT_SIGNALS for signal in roots):
+            metadata_only_candidates+=1
+            continue
         candidate_key=_candidate_identity(row)
         source_key=hashv({"source_repository":SOURCE_REPOSITORY,"source_revision":source_revision,"source_path":source_path,
                           "finding_identity":candidate_key})
         if source_key in state["source_keys"] or candidate_key in state["candidate_keys"]: continue
-        eligible.append((score,repo_name,revision,candidate_key,source_key,row))
-    eligible.sort(key=lambda x:(-x[0],x[1].casefold(),x[2]))
+        eligible_rows.append((score,repo_name,revision,candidate_key,source_key,row))
+    eligible_rows.sort(key=lambda x:(-x[0],x[1].casefold(),x[2],canon(x[5])))
+    eligible=[];seen_candidate_keys=set()
+    for candidate in eligible_rows:
+        if candidate[3] in seen_candidate_keys: continue
+        seen_candidate_keys.add(candidate[3]);eligible.append(candidate)
     selected=eligible[:MAX_INTAKE]
     hints=[]
     for score,repo_name,revision,candidate_key,source_key,row in selected:
@@ -94,7 +103,7 @@ def build_intake(queue,*,source_revision,source_path=SOURCE_PATH,prior_state=Non
     validate_state(state)
     receipt={"schema_version":"1.0.0","status":"PASS","source_repository":SOURCE_REPOSITORY,"source_revision":source_revision,
              "source_path":source_path,"worker_id":worker,"input_candidates":len(candidates),"eligible_candidates":len(eligible),
-             "selected_candidates":len(hints),"max_intake":MAX_INTAKE,"hints":hints,
+             "filtered_metadata_only_candidates":metadata_only_candidates,"selected_candidates":len(hints),"max_intake":MAX_INTAKE,"hints":hints,
              "license_policy_ref":"hunting/LICENSE_ADMISSION_POLICY.json","license_based_blocking":False,
              "authority_granted":False,"rights_granted":False,"value_verified":False}
     receipt["receipt_hash"]=hashv(receipt)

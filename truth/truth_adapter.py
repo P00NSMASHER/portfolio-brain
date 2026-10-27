@@ -19,6 +19,7 @@ PIN_PATH=ROOT/"truth"/"AI_BUSINESS_OS_TRUTH_ENGINE_PIN.json"
 
 SHA40=re.compile(r"^[0-9a-f]{40}$")
 SHA64=re.compile(r"^[0-9a-f]{64}$")
+RECEIPT_NAMESPACE_FIELDS={"scheme","authority","path_prefix","digest_algorithm","max_length"}
 VERDICTS={"PROVEN","CONTESTED","NOT_PROVEN","UNKNOWN"}
 FINDING_STATUSES={
     "SATISFIED","MISSING","STALE","INADMISSIBLE",
@@ -37,6 +38,51 @@ def _require(ok: bool, message: str) -> None:
 def _canonical_hash(value: Any) -> str:
     raw=json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode("utf-8")
     return "sha256:"+hashlib.sha256(raw).hexdigest()
+
+def validate_source_receipt_ref(
+    value: str,
+    *,
+    expected_receipt_hash: str | None = None,
+    namespace: dict[str,Any] | None = None,
+) -> str:
+    """Validate one pinned, non-dereferenced Truth receipt identifier."""
+    if namespace is None:
+        namespace=load_pin()["receipt_namespace"]
+    _require(
+        isinstance(namespace,dict) and set(namespace)==RECEIPT_NAMESPACE_FIELDS,
+        "source receipt namespace contract changed",
+    )
+    _require(
+        namespace=={
+            "scheme":"ai-business-os",
+            "authority":"truth",
+            "path_prefix":"/receipt",
+            "digest_algorithm":"sha256",
+            "max_length":512,
+        },
+        "source receipt namespace is not approved",
+    )
+    _require(
+        isinstance(value,str) and len(value)<=namespace["max_length"],
+        "source_receipt_ref must be a bounded string",
+    )
+    prefix=(
+        f'{namespace["scheme"]}://{namespace["authority"]}'
+        f'{namespace["path_prefix"]}/{namespace["digest_algorithm"]}/'
+    )
+    _require(value.startswith(prefix),"source_receipt_ref namespace is not approved")
+    digest=value[len(prefix):]
+    _require(SHA64.fullmatch(digest) is not None,
+             "source_receipt_ref must end in one canonical receipt digest")
+    if expected_receipt_hash is not None:
+        _require(
+            isinstance(expected_receipt_hash,str)
+            and re.fullmatch(r"sha256:[0-9a-f]{64}",expected_receipt_hash) is not None,
+            "expected source receipt hash invalid",
+        )
+        _require(expected_receipt_hash=="sha256:"+digest,
+                 "source_receipt_ref digest mismatch")
+    return value
 
 def _upstream_receipt_hash(receipt: dict[str,Any]) -> str:
     """Reproduce the exact receipt hash contract at the pinned upstream revision."""
@@ -61,7 +107,7 @@ def validate_pin(pin: dict[str,Any]) -> None:
         "schema_version","integration_id","source_repository","source_revision",
         "source_path","source_blob_sha","source_test_path","source_test_blob_sha",
         "integration_mode","copied_source_code","upstream_contract",
-        "observed_semantics","drift_policy"
+        "observed_semantics","drift_policy","receipt_namespace"
     }
     _require(set(pin)==required,"truth-engine pin fields changed")
     _require(pin["schema_version"]=="1.0.0","pin schema_version mismatch")
@@ -71,6 +117,13 @@ def validate_pin(pin: dict[str,Any]) -> None:
     _require(SHA40.fullmatch(pin["source_test_blob_sha"]) is not None,"invalid source test blob SHA")
     _require(pin["integration_mode"]=="PINNED_INTERFACE_ADAPTER","integration must remain pinned-interface")
     _require(pin["copied_source_code"] is False,"canonical Truth Engine source must not be copied")
+    _require(pin["receipt_namespace"]=={
+        "scheme":"ai-business-os",
+        "authority":"truth",
+        "path_prefix":"/receipt",
+        "digest_algorithm":"sha256",
+        "max_length":512,
+    },"truth receipt namespace changed")
     contract=pin["upstream_contract"]
     _require(set(contract["verdicts"])==VERDICTS,"upstream verdict contract changed")
     _require(set(contract["finding_statuses"])==FINDING_STATUSES,"upstream finding-status contract changed")
@@ -184,6 +237,11 @@ def project_receipt(
     pin=load_pin()
     verify_source_identity(pin,source_revision=source_revision,source_blob_sha=source_blob_sha)
     state=project_truth_state(receipt)
+    validate_source_receipt_ref(
+        source_receipt_ref,
+        expected_receipt_hash="sha256:"+receipt["receipt_hash"],
+        namespace=pin["receipt_namespace"],
+    )
     required=[f for f in receipt["findings"] if f["required"]]
     projection={
         "schema_version":"1.0.0",
@@ -213,4 +271,3 @@ def project_receipt(
         } for f in required],
     }
     return projection | {"projection_hash":_canonical_hash(projection)}
-

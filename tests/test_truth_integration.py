@@ -9,7 +9,8 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from truth.truth_adapter import (
     TruthIntegrationError, load_pin, project_receipt, project_truth_state,
-    validate_pin, validate_upstream_receipt, verify_source_identity,
+    validate_pin, validate_source_receipt_ref, validate_upstream_receipt,
+    verify_source_identity,
 )
 
 H="a"*64
@@ -50,12 +51,22 @@ def receipt(verdict,status):
         "receipt_hash":"",
     })
 
+def receipt_ref(value):
+    return "ai-business-os://truth/receipt/sha256/"+value["receipt_hash"]
+
 class TruthIntegrationTests(unittest.TestCase):
     def test_pin_is_exact_and_source_is_not_copied(self):
         pin=load_pin()
         self.assertEqual(pin["source_revision"],"c6276c80828d2632d5fee37cdaaf65f1d5b36427")
         self.assertEqual(pin["source_blob_sha"],"9b3eaa9412ece784c05e9c93dfcea04e1ec96105")
         self.assertFalse(pin["copied_source_code"])
+        self.assertEqual(pin["receipt_namespace"],{
+            "scheme":"ai-business-os",
+            "authority":"truth",
+            "path_prefix":"/receipt",
+            "digest_algorithm":"sha256",
+            "max_length":512,
+        })
         validate_pin(pin)
 
     def test_source_revision_drift_fails_closed(self):
@@ -146,12 +157,13 @@ class TruthIntegrationTests(unittest.TestCase):
 
     def test_projection_binds_upstream_provenance(self):
         pin=load_pin()
+        source=receipt("PROVEN","SATISFIED")
         p=project_receipt(
-            receipt("PROVEN","SATISFIED"),
+            source,
             project_id="PRJ-001",
             source_revision=pin["source_revision"],
             source_blob_sha=pin["source_blob_sha"],
-            source_receipt_ref="ai-business-os://truth/receipt/1",
+            source_receipt_ref=receipt_ref(source),
         )
         self.assertEqual(p["truth_state"],"VERIFIED")
         self.assertEqual(p["upstream_source"]["revision"],pin["source_revision"])
@@ -160,9 +172,35 @@ class TruthIntegrationTests(unittest.TestCase):
 
     def test_projection_hash_changes_when_source_receipt_changes(self):
         pin=load_pin()
-        a=project_receipt(receipt("PROVEN","SATISFIED"),project_id="PRJ-001",source_revision=pin["source_revision"],source_blob_sha=pin["source_blob_sha"],source_receipt_ref="receipt/1")
-        b=project_receipt(receipt("PROVEN","SATISFIED"),project_id="PRJ-001",source_revision=pin["source_revision"],source_blob_sha=pin["source_blob_sha"],source_receipt_ref="receipt/2")
+        first=receipt("PROVEN","SATISFIED")
+        second=receipt("PROVEN","SATISFIED")
+        second["claim_id"]="claim-2"
+        resign_receipt(second)
+        a=project_receipt(first,project_id="PRJ-001",source_revision=pin["source_revision"],source_blob_sha=pin["source_blob_sha"],source_receipt_ref=receipt_ref(first))
+        b=project_receipt(second,project_id="PRJ-001",source_revision=pin["source_revision"],source_blob_sha=pin["source_blob_sha"],source_receipt_ref=receipt_ref(second))
         self.assertNotEqual(a["projection_hash"],b["projection_hash"])
+
+    def test_receipt_reference_namespace_and_digest_fail_closed(self):
+        source=receipt("PROVEN","SATISFIED")
+        expected="sha256:"+source["receipt_hash"]
+        valid=receipt_ref(source)
+        self.assertEqual(validate_source_receipt_ref(valid,expected_receipt_hash=expected),valid)
+        invalid=(
+            None,"","   ",42,
+            "javascript://truth/receipt/sha256/"+source["receipt_hash"],
+            "file://localhost/etc/sha256/"+source["receipt_hash"],
+            "https://127.0.0.1/receipt/sha256/"+source["receipt_hash"],
+            valid+"?token=SYNTHETIC",
+            valid+"#fragment",
+            valid+"\nRECOVERY-INJECTION",
+            "AI-business-os://truth/receipt/sha256/"+source["receipt_hash"],
+            "ai-business-os://truth/other/sha256/"+source["receipt_hash"],
+            "ai-business-os://truth/receipt/sha256/"+"0"*64,
+        )
+        for value in invalid:
+            with self.subTest(value=str(value)[:80]):
+                with self.assertRaises(TruthIntegrationError):
+                    validate_source_receipt_ref(value,expected_receipt_hash=expected)
 
     def test_optional_stale_finding_does_not_override_required_satisfied(self):
         r=receipt("PROVEN","SATISFIED")
@@ -172,4 +210,3 @@ class TruthIntegrationTests(unittest.TestCase):
 
 if __name__=="__main__":
     unittest.main()
-
