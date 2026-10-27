@@ -287,7 +287,15 @@ class GitHub:
             repos=[self.get("/repos/"+repository)]
         else:
             query=target["query"]+('' if self.private else ' is:public')
-            response=self.get("/search/repositories?q="+urllib.parse.quote(query,safe="")+"&per_page=8&sort=updated")
+            path="/search/repositories?q="+urllib.parse.quote(query,safe="")+"&per_page=8&sort=updated"
+            response=self.get(path)
+            # Retry only GitHub's explicit incomplete marker, once, inside
+            # the existing shared request budget. Never consume partial hits.
+            if (type(response) is dict and response.get("incomplete_results") is True
+                    and self.requests < min(MAX_REQUESTS, self.max_requests)):
+                time.sleep(1)
+                response=self.get(path)
+            require(type(response) is dict, "DISCOVERY_RESPONSE_INVALID")
             require(response.get("incomplete_results") is False, "DISCOVERY_INCOMPLETE")
             require(type(response.get("items")) is list, "DISCOVERY_RESPONSE_INVALID")
             repos=response["items"]
