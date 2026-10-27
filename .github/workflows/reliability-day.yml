@@ -1,0 +1,38 @@
+name: brain-24-hour-reliability
+on:
+  workflow_run:
+    workflows: [v8-scoped-repair-proposal]
+    types: [completed]
+permissions:
+  actions: read
+  contents: read
+concurrency:
+  group: brain-24-hour-reliability
+  cancel-in-progress: false
+jobs:
+  observe:
+    if: >-
+      github.repository == 'P00NSMASHER/portfolio-brain' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_sha == github.sha &&
+      github.event.workflow_run.event == 'workflow_run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Replay original cycle artifacts and contiguous state publications
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: python -m verification.reliability_day
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: reliability-day-${{ github.sha }}-${{ github.run_id }}
+          path: reliability-day.json
+          if-no-files-found: error
