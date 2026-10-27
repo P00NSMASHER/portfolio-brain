@@ -1,8 +1,8 @@
-import base64,tempfile,unittest
+import base64,hashlib,tempfile,unittest
 from pathlib import Path
 from software_factory.software_factory import SoftwareFactory,SoftwareFactoryError,hashv,make_commit_action
 from software_factory.github_executor import GitHubExecutor
-H=lambda c:"sha256:"+c*64
+H=lambda c:"sha256:"+hashlib.sha256(c.encode()).hexdigest()
 class FakeTransport:
     def __init__(self,base_sha="a"*40):self.calls=[];self.head=base_sha;self.tree="t"*40;self.n=0
     def __call__(self,method,url,payload=None):
@@ -34,6 +34,16 @@ class FactoryTests(unittest.TestCase):
     def test_candidate_requires_regression_test_evidence(self):
         self.enqueue();self.sf.claim("SFW-TEST-0001","AGT-ENGINEER",now=101)
         with self.assertRaises(SoftwareFactoryError):self.sf.record_candidate_commit("SFW-TEST-0001","AGT-ENGINEER",commit_sha="b"*40,changed_paths=["src/x.py"],test_commands=[],test_receipt_hashes=[],diff_hash=H("d"),now=102)
+    def test_noncanonical_evidence_hashes_are_rejected(self):
+        invalid="sha256:"+"Z"*64
+        self.enqueue();self.sf.claim("SFW-TEST-0001","AGT-ENGINEER",now=101)
+        with self.assertRaisesRegex(SoftwareFactoryError,"canonical test receipt hashes"):
+            self.sf.record_candidate_commit("SFW-TEST-0001","AGT-ENGINEER",commit_sha="b"*40,changed_paths=["src/x.py"],test_commands=["pytest"],test_receipt_hashes=[invalid],diff_hash=H("d"),now=102)
+        with self.assertRaisesRegex(SoftwareFactoryError,"canonical diff_hash"):
+            self.sf.record_candidate_commit("SFW-TEST-0001","AGT-ENGINEER",commit_sha="b"*40,changed_paths=["src/x.py"],test_commands=["pytest"],test_receipt_hashes=[H("t")],diff_hash=invalid,now=102)
+        self.sf.record_candidate_commit("SFW-TEST-0001","AGT-ENGINEER",commit_sha="b"*40,changed_paths=["src/x.py"],test_commands=["pytest"],test_receipt_hashes=[H("t")],diff_hash=H("d"),now=102)
+        with self.assertRaisesRegex(SoftwareFactoryError,"canonical report hash"):
+            self.sf.verify("SFW-TEST-0001","AGT-TESTER","PASS",report_hash=invalid,candidate_binding_hash=self.sf.candidate_binding_hash("SFW-TEST-0001"),evidence_refs=["test:r"],now=103)
     def test_builder_cannot_verify_and_independent_tester_can(self):
         self.enqueue();self.sf.claim("SFW-TEST-0001","AGT-ENGINEER",now=101);self.sf.record_candidate_commit("SFW-TEST-0001","AGT-ENGINEER",commit_sha="b"*40,changed_paths=["src/x.py","tests/test_x.py"],test_commands=["python -m unittest tests.test_x"],test_receipt_hashes=[H("t")],diff_hash=H("d"),now=102)
         with self.assertRaises(SoftwareFactoryError):self.sf.verify("SFW-TEST-0001","AGT-ENGINEER","PASS",report_hash=H("r"),candidate_binding_hash=self.sf.candidate_binding_hash("SFW-TEST-0001"),evidence_refs=["test:r"],now=103)
@@ -74,3 +84,4 @@ class FactoryTests(unittest.TestCase):
     def test_event_chain_is_tamper_evident(self):
         self.enqueue();self.assertTrue(self.sf.event_chain_valid());self.sf.conn.execute("UPDATE events SET payload_json='{}' WHERE seq=1");self.sf.conn.commit();self.assertFalse(self.sf.event_chain_valid())
 if __name__=="__main__":unittest.main()
+
