@@ -23,9 +23,7 @@ on:
         type: string
   push:
     branches: ["main"]
-    paths:
-      - "brain/**"
-      - ".github/workflows/brain-cycle.yml"
+    # Every source revision needs its own original deployment evidence.
 
 permissions:
   contents: read
