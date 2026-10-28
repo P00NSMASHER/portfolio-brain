@@ -4,7 +4,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from governance.validate_boundaries import BoundaryValidationError, validate_boundaries
+from governance.validate_boundaries import (BoundaryValidationError, candidate_pr_authority,
+                                             validate_boundaries)
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -20,6 +21,30 @@ class GovernanceBoundaryTests(unittest.TestCase):
         self.assertTrue(all(row["CANDIDATE_PR"]["allowed"] is False for row in downstream))
         self.assertTrue(all(row["DEPLOY"]["allowed"] is False for row in downstream))
         self.assertTrue(all(row["EXTERNAL_ACTION"]["allowed"] is False for row in downstream))
+
+
+    def test_candidate_write_authority_gates_downstream_token_mint(self):
+        denied=candidate_pr_authority(
+            "PRJ-004","REPO-007","v8-capturebrief-hosting-doc-4a7c5d6c223b")
+        self.assertFalse(denied["allowed"])
+        self.assertFalse(denied["token_mint_allowed"])
+        self.assertEqual(denied["reason"],"PROJECT_SCOPED_CANDIDATE_WRITE_DENIED")
+        self.assertFalse(denied["merge_authority"])
+        self.assertFalse(denied["deploy_authority"])
+
+        allowed=candidate_pr_authority(
+            "PRJ-000","REPO-008","factory/pb-07-authority-test")
+        self.assertTrue(allowed["allowed"])
+        self.assertFalse(candidate_pr_authority(
+            "PRJ-000","REPO-008","unreviewed/pb-07-authority-test")["allowed"])
+
+        workflow=(ROOT/".github/workflows/v8-scoped-repair.yml").read_text()
+        gate="Evaluate project-scoped candidate authority before token mint"
+        mint="Mint one-CaptureBrief-repository short-lived draft-only contents token"
+        self.assertLess(workflow.index(gate),workflow.index(mint))
+        self.assertIn("id: authority",workflow)
+        self.assertIn("steps.authority.outputs.allowed == 'true'",workflow)
+        self.assertIn("v8-authority.json",workflow)
 
     def test_abvm_is_observation_only_and_child_facing_changes_stay_human_gated(self):
         policy=json.loads((ROOT/"governance/boundaries.json").read_text())
