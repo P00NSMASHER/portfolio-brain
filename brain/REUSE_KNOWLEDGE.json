@@ -1,6 +1,67 @@
 {
+  "fingerprint": "b08dde105734189c97e99de3604d196b2b4072ad98ceea84f3f23b23053dae32",
   "schema_version": 2,
   "scope": "STRUCTURAL_REUSE_KNOWLEDGE_NOT_EXECUTED_OR_REVENUE_VERIFIED",
-  "sources": [],
-  "fingerprint": null
+  "sources": [
+    {
+      "blob_sha": "c31235fc30297ebaebc36716e49f0a8122ba3ba2",
+      "code_sha256": "3eb32e1ae03e0deb9865618332df3be1a083e7339f72bcb55fa78810f6372516",
+      "head_sha": "419b82c7854e3cf0cd39faf5480459dcd18f2501",
+      "key": "Misterio070/scanpay:examples/x402_facilitator_payer.py",
+      "license": "UNKNOWN",
+      "matched_terms": [
+        "payment",
+        "x402",
+        "verify",
+        "settle"
+      ],
+      "path": "examples/x402_facilitator_payer.py",
+      "repository": "Misterio070/scanpay",
+      "source_ref": "https://github.com/Misterio070/scanpay/blob/419b82c7854e3cf0cd39faf5480459dcd18f2501/examples/x402_facilitator_payer.py",
+      "target": "agent-products",
+      "test_paths": [
+        "tests/test_facilitator_payer.py",
+        "tests/test_x402_payer.py"
+      ]
+    },
+    {
+      "blob_sha": "a6c0d6929b46fe023bd71d39a8bd9f022bba819a",
+      "code_sha256": "7cbfe6a5999a7a6d722945ce605e05c19a4da9981c938b8c910df0548ee1e71b",
+      "head_sha": "df0a41eb1a362a79ed823ba135e66b4d25ea7b66",
+      "key": "Kalmi91/kimacha:lib/schedulePreview.ts",
+      "license": "NOASSERTION",
+      "matched_terms": [
+        "review",
+        "schedule"
+      ],
+      "path": "lib/schedulePreview.ts",
+      "repository": "Kalmi91/kimacha",
+      "source_ref": "https://github.com/Kalmi91/kimacha/blob/df0a41eb1a362a79ed823ba135e66b4d25ea7b66/lib/schedulePreview.ts",
+      "target": "school-tools",
+      "test_paths": [
+        "lib/__tests__/schedulePreview.test.ts"
+      ]
+    },
+    {
+      "blob_sha": "df2872cedad6ad1de63f4a6c621cca8e003a2140",
+      "code_sha256": "2fb6c06b5dc0c46d0bc7a97095e2e7fef7d160b850953c4ef53273219cc672b7",
+      "head_sha": "eb92e1d90aa6bf9a42f9475144cad891af8a915a",
+      "key": "kirill-markin/flashcards-open-source-app:apps/backend/src/progress/reports/loaders/reviewSchedule.ts",
+      "license": "MIT",
+      "matched_terms": [
+        "review",
+        "schedule"
+      ],
+      "path": "apps/backend/src/progress/reports/loaders/reviewSchedule.ts",
+      "repository": "kirill-markin/flashcards-open-source-app",
+      "source_ref": "https://github.com/kirill-markin/flashcards-open-source-app/blob/eb92e1d90aa6bf9a42f9475144cad891af8a915a/apps/backend/src/progress/reports/loaders/reviewSchedule.ts",
+      "target": "school-tools",
+      "test_paths": [
+        "apps/backend/src/community/reviewActivityFacts.test.ts",
+        "apps/backend/src/progress/activeReviewDays/activeReviewDaysBackfill.test.ts",
+        "apps/backend/src/progress/reports/progressReviewSchedule.test.ts",
+        "apps/backend/src/routes/system/mobileReviewStatus.test.ts"
+      ]
+    }
+  ]
 }
