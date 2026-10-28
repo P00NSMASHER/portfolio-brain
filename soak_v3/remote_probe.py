@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import time
 from urllib import error, request
 import zipfile
 
@@ -25,30 +26,57 @@ class DropCredentialRedirect(request.HTTPRedirectHandler):
         return request.Request(newurl, headers={'User-Agent':'Mozilla/5.0', 'Accept':'application/zip'})
 
 class GitHubReadOnly:
-    def __init__(self, token, *, transport=None, max_calls=12):
+    def __init__(self, token, *, transport=None, max_calls=12, max_attempts=3, sleep=time.sleep):
         require(isinstance(token, str) and len(token)>0 or transport is not None, 'GITHUB_TOKEN_REQUIRED')
         require(type(max_calls) is int and 1 <= max_calls <= 656, 'API_CALL_BOUND_INVALID')
+        require(type(max_attempts) is int and 1 <= max_attempts <= 3, 'API_ATTEMPT_BOUND_INVALID')
+        require(callable(sleep), 'API_RETRY_SLEEP_INVALID')
         self.max_calls=max_calls
+        self.max_attempts=max_attempts
         self.token=token
         self.transport=transport
+        self.sleep=sleep
         self.calls=0
         self.opener=request.build_opener(DropCredentialRedirect())
     def get(self, suffix, *, limit=2_000_000):
         require(type(suffix) is str and suffix.startswith('/') and '://' not in suffix and '..' not in suffix.split('/'), 'API_PATH_INVALID')
-        self.calls+=1
-        require(self.calls<=self.max_calls, 'API_CALL_BUDGET')
         if self.transport:
+            require(self.calls < self.max_calls, 'API_CALL_BUDGET')
+            self.calls+=1
             return self.transport(suffix)
-        req=request.Request(API+suffix,headers={'Authorization':'Bearer '+self.token,
-            'Accept':'application/vnd.github+json', 'X-GitHub-Api-Version':'2022-11-28',
-            'User-Agent':'PortfolioBrain-soak-v3-readonly'},method='GET')
-        try:
-            with self.opener.open(req,timeout=15) as resp:
-                raw=resp.read(limit+1)
-        except (error.URLError, TimeoutError, OSError):
-            raise EvidenceError('GITHUB_API_UNAVAILABLE') from None
-        require(0<len(raw)<=limit,'API_RESPONSE_SIZE_INVALID')
-        return raw
+        for attempt in range(self.max_attempts):
+            # Every provider attempt consumes the shared request budget. A retry
+            # can therefore never hide quota use or exceed the configured cap.
+            require(self.calls < self.max_calls, 'API_CALL_BUDGET')
+            self.calls+=1
+            req=request.Request(API+suffix,headers={'Authorization':'Bearer '+self.token,
+                'Accept':'application/vnd.github+json', 'X-GitHub-Api-Version':'2022-11-28',
+                'User-Agent':'PortfolioBrain-soak-v3-readonly'},method='GET')
+            try:
+                with self.opener.open(req,timeout=15) as resp:
+                    raw=resp.read(limit+1)
+                require(0<len(raw)<=limit,'API_RESPONSE_SIZE_INVALID')
+                return raw
+            except error.HTTPError as exc:
+                status=exc.code
+                retryable=status in {403,429,500,502,503,504}
+                exc.close()
+                if not retryable:
+                    raise EvidenceError('GITHUB_API_HTTP_REJECTED') from None
+                if attempt+1 == self.max_attempts:
+                    if status == 403:
+                        reason='GITHUB_API_QUOTA_OR_FORBIDDEN'
+                    elif status == 429:
+                        reason='GITHUB_API_RATE_LIMITED'
+                    else:
+                        reason='GITHUB_API_UNAVAILABLE'
+                    raise EvidenceError(reason) from None
+            except (error.URLError, TimeoutError, OSError):
+                if attempt+1 == self.max_attempts:
+                    raise EvidenceError('GITHUB_API_UNAVAILABLE') from None
+            # Deterministic bounded backoff: at most 1+2 seconds.
+            self.sleep(attempt+1)
+        raise EvidenceError('GITHUB_API_UNAVAILABLE')
     def json(self, suffix):
         try:
             obj=json.loads(self.get(suffix))
