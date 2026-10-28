@@ -170,6 +170,20 @@ class TruthIntegrationTests(unittest.TestCase):
         self.assertEqual(p["upstream_source"]["blob_sha"],pin["source_blob_sha"])
         self.assertTrue(p["projection_hash"].startswith("sha256:"))
 
+    def test_projection_rejects_malformed_or_unregistered_project_identity(self):
+        pin=load_pin()
+        source=receipt("PROVEN","SATISFIED")
+        for project_id in (None,""," ","PRJ-999","not-a-project","prj-001"):
+            with self.subTest(project_id=project_id):
+                with self.assertRaisesRegex(TruthIntegrationError,"project_id"):
+                    project_receipt(
+                        source,
+                        project_id=project_id,
+                        source_revision=pin["source_revision"],
+                        source_blob_sha=pin["source_blob_sha"],
+                        source_receipt_ref=receipt_ref(source),
+                    )
+
     def test_projection_hash_changes_when_source_receipt_changes(self):
         pin=load_pin()
         first=receipt("PROVEN","SATISFIED")
@@ -210,3 +224,4 @@ class TruthIntegrationTests(unittest.TestCase):
 
 if __name__=="__main__":
     unittest.main()
+
