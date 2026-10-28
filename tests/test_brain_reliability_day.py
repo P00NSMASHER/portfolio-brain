@@ -27,6 +27,29 @@ class CensusTests(unittest.TestCase):
         with self.assertRaises(SourceAcceptanceError):
             window([dict(row, conclusion='failure')], 'a')
 
+    def test_post_window_failure_does_not_retroactively_erase_pass(self):
+        from verification.reliability_day import window
+        source = 'a' * 40
+        def core(run_id, created_at, conclusion='success'):
+            return dict(id=run_id, head_sha=source, created_at=created_at,
+                        status='completed', conclusion=conclusion,
+                        run_attempt=1, event='workflow_dispatch')
+        first = core(40562141043, '2026-10-27T18:40:22Z')
+        terminal = core(40750335787, '2026-10-28T19:00:22Z')
+        outside = core(40754892091, '2026-10-28T19:30:22Z', 'failure')
+        self.assertEqual(window([outside, terminal, first], source), [first, terminal])
+
+    def test_failure_inside_fixed_window_remains_rejected(self):
+        from verification.reliability_day import window
+        source = 'a' * 40
+        row = dict(id=1, head_sha=source, created_at='2026-10-27T18:40:22Z',
+                   status='completed', conclusion='success',
+                   run_attempt=1, event='workflow_dispatch')
+        inside = dict(row, id=2, created_at='2026-10-28T19:00:23Z',
+                      conclusion='failure')
+        with self.assertRaisesRegex(SourceAcceptanceError, 'original core failed or retried'):
+            window([row, inside], source)
+
     def test_retried_repair_cannot_erase_original_failure(self):
         from verification.reliability_day import verify_repairs
         with self.assertRaises(SourceAcceptanceError):
