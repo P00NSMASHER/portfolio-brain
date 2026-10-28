@@ -50,6 +50,17 @@ class CensusTests(unittest.TestCase):
         with self.assertRaisesRegex(SourceAcceptanceError, 'original core failed or retried'):
             window([row, inside], source)
 
+    def test_exact_boundary_run_is_included_and_must_succeed(self):
+        from verification.reliability_day import window
+        source = 'a' * 40
+        row = dict(id=1, head_sha=source, created_at='2026-10-27T18:40:22Z',
+                   status='completed', conclusion='success',
+                   run_attempt=1, event='workflow_dispatch')
+        boundary = dict(row, id=2, created_at='2026-10-28T19:10:22Z')
+        self.assertEqual(window([row, boundary], source), [row, boundary])
+        with self.assertRaisesRegex(SourceAcceptanceError, 'original core failed or retried'):
+            window([row, dict(boundary, conclusion='failure')], source)
+
     def test_retried_repair_cannot_erase_original_failure(self):
         from verification.reliability_day import verify_repairs
         with self.assertRaises(SourceAcceptanceError):
