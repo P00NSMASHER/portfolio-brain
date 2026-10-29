@@ -141,7 +141,10 @@ class CycleWiringTests(unittest.TestCase):
         self.assertIn('--db state/state.sqlite', workflow[anchor:anchor+700])
         self.assertIn('--input /tmp/brain/projects/report.json', workflow[anchor:anchor+700])
         self.assertLess(anchor, workflow.index('python -m brain.state_archive pack'))
-        self.assertIn('7,27,47 * * * *', workflow)
+        native_clock = (ROOT / '.github/workflows/brain-clock.yml').read_text()
+        self.assertIn('7,27,47 * * * *', native_clock)
+        self.assertIn('python -m brain.watchdog decide', native_clock)
+        self.assertNotIn('\n  schedule:', workflow)
     def test_restore_of_integrated_queue_is_exact(self):
         run_cycle(report(), self.queue, source_sha=SOURCE, cycle=1, now=NOW)
         result = self.queue.restore_drill()
