@@ -1,13 +1,11 @@
 services:
   - type: web
     name: agent-data-tools-x402
-    repo: https://github.com/P00NSMASHER/portfolio-brain
-    branch: agent-data-tools-standalone
     runtime: node
     plan: free
     region: ohio
-    rootDir: services/agent-data-tools-standalone
+    rootDir: x402-render-gateway
     buildCommand: npm install
     startCommand: npm start
-    healthCheckPath: /api/health
-    autoDeployTrigger: off
+    healthCheckPath: /health
+    autoDeployTrigger: commit
