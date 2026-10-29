@@ -6,6 +6,7 @@ Untrusted JSON cannot assert release. All output keeps release_authorized false.
 """
 from __future__ import annotations
 
+from datetime import datetime
 import argparse
 import hashlib
 import json
@@ -110,6 +111,19 @@ def compile_report(census, replay=None, *, source_sha):
             and type(census.get("latest_completion_utc")) is str,
             "ORIGINAL_COMPLETION_TIMES_MISSING")
 
+    try:
+        start=datetime.fromisoformat(census['anchor_completion_utc'].replace('Z','+00:00'))
+        end=datetime.fromisoformat(census['latest_completion_utc'].replace('Z','+00:00'))
+        require(start.utcoffset() is not None and end.utcoffset() is not None,
+                'COMPLETION_TIMEZONE_REQUIRED')
+        require((end-start).total_seconds()==span and gap<=span<=gap*(count-1),
+                'COMPLETION_TIMING_INCONSISTENT')
+    except (ValueError,TypeError) as exc:
+        raise EvidenceError('COMPLETION_TIMING_INVALID') from exc
+    require(not census['historical_adverse_automatic_cores'], 'ADVERSE_CORES_REQUIRE_REVIEW')
+    require((census["anchor_run"] == census["latest_run"]) == (count == 1), "RUN_ENDPOINTS_INCONSISTENT")
+    require(census['superseded_earlier_successful_cores']>=0,'SUPERSEDED_COUNT_INVALID')
+
     state_replay_pass = False
     replay_kind = "NOT_SUPPLIED"
     if replay is not None:
@@ -120,9 +134,10 @@ def compile_report(census, replay=None, *, source_sha):
                 "REPLAY_CANNOT_CLAIM_EXTERNAL_APPROVAL")
         require(replay.get("reviewed_source") == source_sha
                 and replay.get("state_commit") == census["last_state_commit"]
+                and type(replay.get("sequence")) is int
                 and replay.get("sequence") == census["last_sequence"]
-                and _hex(replay.get("raw_sqlite_sha256"))
-                and replay.get("pending_events") == 0,
+                and replay.get("raw_sqlite_sha256") == census["last_raw_sha256"]
+                and type(replay.get("pending_events")) is int and replay.get("pending_events") == 0,
                 "REPLAY_STATE_DISAGREES_WITH_CENSUS")
         replay_kind = replay.get("status")
         require(replay_kind == "PRELIMINARY_RAW_SQLITE_REPLAY_PASSED_NOT_ACCEPTANCE",
@@ -135,9 +150,10 @@ def compile_report(census, replay=None, *, source_sha):
                 and terminal.get("status") == "ORIGINAL_TERMINAL_RAW_SQLITE_REPLAY_VERIFIED"
                 and terminal.get("terminal_source_sha") == source_sha
                 and terminal.get("terminal_state_commit") == census["last_state_commit"]
+                and type(terminal.get("sequence")) is int
                 and terminal.get("sequence") == census["last_sequence"]
-                and terminal.get("pending_events") == 0
-                and _hex(terminal.get("restored_sqlite_sha256"))
+                and type(terminal.get("pending_events")) is int and terminal.get("pending_events") == 0
+                and terminal.get("restored_sqlite_sha256") == census["last_raw_sha256"]
                 and terminal.get("authorizes_production_release") is False,
                 "AUTHENTIC_TERMINAL_REPLAY_STILL_REQUIRED")
         state_replay_pass = True

@@ -1,3 +1,5 @@
+> October 29 integration note: original review notes below are historical. Prepared on main 25e697c in PR #787; fresh checks and independent review are required. No release authority or live acceptance is granted.
+
 # V9 source-specific evidence report — independent-review candidate
 
 **Status: DRAFT ONLY.** This branch is derived from protected source `4393488059c8f7f02ce665a514a10198feae270c`. It adds an offline, read-only deterministic summary tool and adversarial tests. It does **not** modify the running Brain or its workflows, create a schedule, call GitHub/Cloudflare, manufacture provider originals, or authorize a merge.

@@ -1,3 +1,5 @@
+> October 29 integration note: original review notes below are historical. Prepared on main 25e697c in PR #787; fresh checks and independent review are required. No release authority or live acceptance is granted.
+
 # Guarded native merge — hostile input test laboratory
 
 **Dependent DRAFT review only.** This branch starts at the immutable, unmerged PR #725 head `24ae3d2ffae4175b200e364035dc85facea170da`. It adds only a new offline hostile-input test module; no production code, workflow, schedule, policy, GitHub permission or user-owned release setting changes.

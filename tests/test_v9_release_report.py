@@ -41,7 +41,7 @@ def provisional():
         "reviewed_source": SRC,
         "state_commit": "a" * 40,
         "sequence": 3425,
-        "raw_sqlite_sha256": "d" * 64,
+        "raw_sqlite_sha256": "b" * 64,
         "pending_events": 0,
         "source_released": False,
         "merge_authorized": False,
@@ -64,7 +64,8 @@ class ReleaseDigestTests(unittest.TestCase):
     def test_technical_window_later_still_requires_separate_cloudflare_and_owner(self):
         proof = census()
         proof.update(status="SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED",
-                     completion_span_seconds=22000, maximum_gap_seconds=2000)
+                     completion_span_seconds=22000, maximum_gap_seconds=2000,
+                     verified_original_cores=12,latest_completion_utc="2026-10-20T06:36:07+00:00")
         proof.pop("seconds_remaining_minimum")
         proof["terminal_replay"] = {
             "status": "ORIGINAL_TERMINAL_RAW_SQLITE_REPLAY_VERIFIED",
@@ -72,7 +73,7 @@ class ReleaseDigestTests(unittest.TestCase):
             "terminal_state_commit": "a" * 40,
             "sequence": 3425,
             "pending_events": 0,
-            "restored_sqlite_sha256": "f" * 64,
+            "restored_sqlite_sha256": "b" * 64,
             "authorizes_production_release": False,
         }
         result = report.compile_report(proof, source_sha=SRC)
@@ -128,6 +129,8 @@ class ReleaseDigestTests(unittest.TestCase):
             ("state_commit", "f" * 40),
             ("sequence", 999),
             ("pending_events", 1),
+            ("pending_events", False),
+            ("raw_sqlite_sha256", "e" * 64),
         ):
             with self.subTest(key=key):
                 v = provisional()
@@ -151,6 +154,12 @@ class ReleaseDigestTests(unittest.TestCase):
                 path.write_text(payload)
                 with self.assertRaises(report.EvidenceError):
                     report.read_json(path)
+
+    def test_contradictory_timing_and_adverse_evidence_fail(self):
+        for key,value in [('anchor_completion_utc','bad'),('latest_completion_utc','2026-10-19T00:00:00Z'),('verified_original_cores',2),('historical_adverse_automatic_cores',[123]),('superseded_earlier_successful_cores',-1)]:
+            x=census();x[key]=value
+            with self.subTest(key=key),self.assertRaises(report.EvidenceError):
+                report.compile_report(x,source_sha=SRC)
 
     def test_output_is_deterministic_and_non_authorizing(self):
         first = report.compile_report(census(), provisional(), source_sha=SRC)

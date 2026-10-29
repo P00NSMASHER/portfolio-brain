@@ -1,3 +1,5 @@
+> October 29 integration note: original review notes below are historical. Prepared on main 25e697c in PR #787; fresh checks and independent review are required. No release authority or live acceptance is granted.
+
 # V9 rollback protection — read-only review candidate
 
 **DRAFT; no production installation.** This proposal is deliberately narrower than automatic deployment or automatic rollback. It is a safety guard that can *prepare the prerequisites* for a separately reviewed revert, not a controller that actually performs a revert.
