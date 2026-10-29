@@ -1,5 +1,5 @@
 """Read-only 12-hour observation; no independent release authority."""
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
@@ -75,6 +75,14 @@ class Snapshot:
         return self.api.get(*args, **kwargs)
 
 
+def terminal_follow_through_ready(terminal, now=None):
+    """An observer PASS must not precede the full 30-minute terminal interval."""
+    instant = datetime.now(timezone.utc) if now is None else now
+    req(isinstance(instant, datetime) and instant.tzinfo is not None,
+        'invalid terminal follow-through clock')
+    return instant >= terminal['completed'] + timedelta(minutes=30)
+
+
 def verify_repairs(api, rows, source, core_ids, cutoff=None):
     seen = set()
     for row in rows:
@@ -84,12 +92,18 @@ def verify_repairs(api, rows, source, core_ids, cutoff=None):
             continue
         if row.get('status') != 'completed':
             continue
+        # A repair that only finishes after the fixed terminal deadline is
+        # not retrospective proof of 30-minute terminal follow-through.
+        if cutoff is not None and utc(row.get('updated_at')) > cutoff:
+            continue
         req(row.get('conclusion') == 'success' and row.get('run_attempt') == 1,
             'original scheduled repair failed or retried')
         doc = api.json(f"/actions/runs/{row['id']}/artifacts?per_page=100")
         artifacts = doc.get('artifacts', [])
         req(doc.get('total_count') == 1 and len(artifacts) == 1, 'repair artifact census invalid')
         item = artifacts[0]
+        if cutoff is not None and utc(item.get('created_at')) > cutoff:
+            continue
         req(item.get('expired') is False and item.get('workflow_run', {}).get('id') == row['id']
             and item.get('workflow_run', {}).get('head_sha') == source, 'repair artifact identity invalid')
         raw = api.get(f"/actions/artifacts/{item['id']}/zip", limit=20_000_000)
@@ -121,6 +135,9 @@ def main():
                                   cutoff=summary['terminal']['completed'] + timedelta(minutes=30))
         if not complete:
             result.update(status='COLLECTING', reason='REPAIR_FOLLOW_THROUGH_PENDING')
+        elif result['status'] == 'PASS' and not terminal_follow_through_ready(summary['terminal']):
+            result.update(status='COLLECTING',
+                          reason='TERMINAL_30_MINUTE_FOLLOW_THROUGH_PENDING')
     req(api.json('/branches/main')['commit']['sha'] == source, 'source moved')
     Path('reliability-day.json').write_text(json.dumps(result, sort_keys=True)+'\n')
     print(json.dumps(result, sort_keys=True))
