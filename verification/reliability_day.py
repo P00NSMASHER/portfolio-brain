@@ -41,6 +41,11 @@ def window(rows, source):
     completed = []
     first = None
     for row in selected:
+        created = utc(row['created_at']) if first is not None else None
+        # The receipt is a fixed first-24.5-hour snapshot. A later run cannot
+        # retroactively change that already bounded evidence window.
+        if first is not None and (created - first).total_seconds() > 88200:
+            break
         if row.get('status') != 'completed':
             break
         req(row.get('conclusion') == 'success' and row.get('run_attempt') == 1,
@@ -49,8 +54,10 @@ def window(rows, source):
         if row.get('event') in {'schedule', 'workflow_dispatch'}:
             if first is None:
                 first = utc(row['created_at'])
-            # Include one extra cycle beyond 24h; the collector uses job completion times.
-            if (utc(row['created_at']) - first).total_seconds() >= 88200:
+                created = first
+            # Include a boundary cycle at exactly 24.5h; the collector uses
+            # job completion times to establish the required 24-hour span.
+            if (created - first).total_seconds() >= 88200:
                 break
     return completed
 

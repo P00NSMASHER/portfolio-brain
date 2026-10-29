@@ -19,6 +19,7 @@ PIN_PATH=ROOT/"truth"/"AI_BUSINESS_OS_TRUTH_ENGINE_PIN.json"
 
 SHA40=re.compile(r"^[0-9a-f]{40}$")
 SHA64=re.compile(r"^[0-9a-f]{64}$")
+PROJECT_ID=re.compile(r"^PRJ-[0-9]{3}$")
 RECEIPT_NAMESPACE_FIELDS={"scheme","authority","path_prefix","digest_algorithm","max_length"}
 VERDICTS={"PROVEN","CONTESTED","NOT_PROVEN","UNKNOWN"}
 FINDING_STATUSES={
@@ -234,6 +235,26 @@ def project_receipt(
     source_blob_sha: str,
     source_receipt_ref: str,
 ) -> dict[str,Any]:
+    _require(
+        isinstance(project_id,str) and PROJECT_ID.fullmatch(project_id) is not None,
+        "project_id must be canonical",
+    )
+    project_registry=json.loads((ROOT/"registry"/"projects.json").read_text(encoding="utf-8"))
+    projects=project_registry.get("projects") if isinstance(project_registry,dict) else None
+    _require(isinstance(projects,list),"project registry is invalid")
+    registered_ids=[
+        row.get("project_id")
+        for row in projects
+        if isinstance(row,dict)
+    ]
+    _require(
+        len(registered_ids)==len(projects)
+        and all(isinstance(value,str) and PROJECT_ID.fullmatch(value) is not None
+                for value in registered_ids)
+        and len(registered_ids)==len(set(registered_ids)),
+        "project registry identities are invalid",
+    )
+    _require(project_id in registered_ids,"project_id is not registered")
     pin=load_pin()
     verify_source_identity(pin,source_revision=source_revision,source_blob_sha=source_blob_sha)
     state=project_truth_state(receipt)

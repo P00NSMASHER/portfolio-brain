@@ -135,6 +135,33 @@ class GitHub:
 
     def observe(self, repository):
         meta,branch,sha=self.repository(repository)
+        for attempt in range(2):
+            try:
+                items=self._complete_checks(repository, sha)
+                break
+            except BrainError as exc:
+                if attempt or not str(exc).startswith('CHECK_COVERAGE_CHANGED:'):
+                    raise
+                # Discard every page of the changing snapshot. The same client
+                # retains all consumed requests and reserves final branch proof.
+                require(min(MAX_REQUESTS,self.max_requests)-self.requests >= 2,
+                        'CHECK_COVERAGE_BUDGET_EXCEEDED: no complete retry reserve')
+                time.sleep(1)
+        # Branches can advance during a multi-page check fetch. A sampled
+        # branch must still point to this SHA at the end, or the entire
+        # observation fails closed. No retry or second provider is spawned.
+        confirmed=self.get("/repos/"+repository+"/branches/"+urllib.parse.quote(branch,safe=""))
+        require(
+            type(confirmed) is dict
+            and type(confirmed.get("commit")) is dict
+            and confirmed["commit"].get("sha") == sha,
+            "SOURCE_REVISION_CHANGED: branch advanced during check collection",
+        )
+        rows=[{"name":x["name"],"status":x["status"],"conclusion":x.get("conclusion"),"head_sha":x["head_sha"],"url":x["html_url"]} for x in items]
+        return {"repository":repository,"head_sha":sha,"default_branch":branch,"checks":rows,"open_issues":meta["open_issues_count"],"source_ref":f'https://github.com/{repository}/commit/{sha}'}, meta["private"]
+
+    def _complete_checks(self, repository, sha):
+        """Return a complete immutable-source census, or discard all partial pages."""
         checks=self.get(f'/repos/{repository}/commits/{sha}/check-runs?per_page={CHECKS_PER_PAGE}')
         require(type(checks) is dict, 'CHECK_COVERAGE_UNAVAILABLE: malformed history')
         total=checks.get('total_count')
@@ -154,7 +181,10 @@ class GitHub:
                     'CHECK_COVERAGE_BUDGET_EXCEEDED: retry consumed complete-history reserve')
             batch=self.get(f'/repos/{repository}/commits/{sha}/check-runs?per_page={CHECKS_PER_PAGE}&page={page}')
             require(type(batch) is dict and type(batch.get('total_count')) is int
-                    and batch['total_count']==total and type(batch.get('check_runs')) is list,
+                    and batch['total_count'] >= 0
+                    and type(batch.get('check_runs')) is list,
+                    'CHECK_COVERAGE_UNAVAILABLE: malformed history page')
+            require(batch['total_count']==total,
                     'CHECK_COVERAGE_CHANGED: do not claim complete changing history')
             require(len(batch['check_runs'])==min(CHECKS_PER_PAGE,total-(page-1)*CHECKS_PER_PAGE),
                     'CHECK_COVERAGE_TRUNCATED: incomplete page')
@@ -169,18 +199,7 @@ class GitHub:
             and len({x["id"] for x in items}) == total,
             "CHECK_COVERAGE_AMBIGUOUS: invalid, duplicate or cross-revision check identity",
         )
-        # Branches can advance during a multi-page check fetch. A sampled
-        # branch must still point to this SHA at the end, or the entire
-        # observation fails closed. No retry or second provider is spawned.
-        confirmed=self.get("/repos/"+repository+"/branches/"+urllib.parse.quote(branch,safe=""))
-        require(
-            type(confirmed) is dict
-            and type(confirmed.get("commit")) is dict
-            and confirmed["commit"].get("sha") == sha,
-            "SOURCE_REVISION_CHANGED: branch advanced during check collection",
-        )
-        rows=[{"name":x["name"],"status":x["status"],"conclusion":x.get("conclusion"),"head_sha":x["head_sha"],"url":x["html_url"]} for x in items]
-        return {"repository":repository,"head_sha":sha,"default_branch":branch,"checks":rows,"open_issues":meta["open_issues_count"],"source_ref":f'https://github.com/{repository}/commit/{sha}'}, meta["private"]
+        return items
 
     def _bounded_public_tree(self, repository, head_sha, terms):
         """Source-visible but INCOMPLETE tree evidence after recursive overflow.

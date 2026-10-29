@@ -84,5 +84,40 @@ def validate_boundaries()->dict[str,object]:
 
     return {"projects":len(registered),"enabled_adapters":sum(1 for a in adapters if a["enabled"]),"authority_model":policy["authority_model"],"abvm_scope":abvm["allowed_evidence"]}
 
+
+def candidate_pr_authority(project_id: str, repository_id: str, branch_name: str) -> dict[str, object]:
+    """Evaluate one candidate-write request against the checked-in authority matrix."""
+    validate_boundaries()
+    req(type(project_id) is str and type(repository_id) is str and type(branch_name) is str,
+        "candidate authority inputs invalid")
+    req(0 < len(project_id) <= 64 and 0 < len(repository_id) <= 64
+        and 0 < len(branch_name) <= 255,
+        "candidate authority inputs out of bounds")
+    policy=load("governance/boundaries.json")
+    rows=[row for row in policy["project_capabilities"] if row["project_id"]==project_id]
+    req(len(rows)==1,"candidate authority project unknown")
+    candidate=rows[0]["CANDIDATE_PR"]
+    allowed=(
+        candidate["allowed"] is True
+        and repository_id in candidate["repository_ids"]
+        and any(branch_name.startswith(prefix) for prefix in candidate["branch_prefixes"])
+    )
+    return {
+        "schema_version":1,
+        "action":"REPOSITORY_CANDIDATE_WRITE",
+        "project_id":project_id,
+        "repository_id":repository_id,
+        "branch_name":branch_name,
+        "allowed":allowed,
+        "token_mint_allowed":allowed,
+        "reason":(
+            "PROJECT_SCOPED_CANDIDATE_WRITE_AUTHORIZED"
+            if allowed else "PROJECT_SCOPED_CANDIDATE_WRITE_DENIED"
+        ),
+        "merge_authority":False,
+        "deploy_authority":False,
+        "external_action_authority":False,
+    }
+
 if __name__=="__main__":
     print("portfolio-brain governance boundaries: PASS",json.dumps(validate_boundaries(),sort_keys=True))
