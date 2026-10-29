@@ -35,3 +35,7 @@ not arbitrary assistant-generated code.
 
 This is a source-pinned independent gate improvement, not proof that PR #688
 merged or that autonomous remediation can handle every human-only task.
+
+## October 29 source-bound restriction
+
+The historical V6 issue #684 is not valid source acceptance for the protected 12-hour reliability contract. The obsolete `issues/684` merge gate and immediate App-token merge action have been **removed** from this draft. This workflow may validate and publish an independent exact-head check, but is strictly **review-only**, does not merge a PR, and has no authority to treat a six-hour receipt as final. A later independent protected integration must separately inspect authenticated 12-hour source acceptance and terminal repairs. Preserve all original PR #688 evidence; no new cron, buyer payment, or external contact.
