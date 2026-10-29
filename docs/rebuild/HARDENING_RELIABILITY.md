@@ -19,6 +19,33 @@ Two definition-only private dashboard helpers were removed. Archived workflow fi
 
 A final source change starts fresh evidence. The 12-hour result cannot be marked complete until actual unattended elapsed-time and follow-through evidence pass.
 
+## Native scheduler collision coordination — October 29, 2026
+
+A historical source completed separate native GitHub and signed Cloudflare cores
+whose creation intervals overlapped, despite serialized state publication.
+PR #785 made such cross-origin overlaps a hard denial of source acceptance.
+
+The existing native core cron `7,27,47 * * * *` is retained, but moved
+from direct `brain-cycle` execution into the already-scheduled `brain-clock`
+watchdog. The existing watchdog cron `16,36,56 * * * *` and independent
+Cloudflare Worker `*/10 * * * *` remain configured. No schedule or permission
+is disabled, created, or widened. The same watchdog first examines source-bound
+actual core runs: a recent successful core or an active writer suppresses
+redundant dispatch; stale active writers fail closed. Only an overdue source
+issues a GitHub-native watchdog dispatch, and its original scheduled-parent
+provenance is independently replayed through GitHub.
+
+Original accepted Cloudflare cores retain their signed P-256 origin receipts.
+Fallback native cores use the source-bound `watchdog-origin.json` and actual
+scheduled watchdog provider run. The verifier rejects manual origins, stale,
+failed or retried clock parents, mixed origin artifacts, and overlapping
+Cloudflare/native invocation windows even when both appear as
+`workflow_dispatch`. The former source's PASS and overlap failure remain
+historical evidence; the new protected release must collect a fresh
+12-hour observation and independent source acceptance. Source-specific
+monitor/core gaps, contiguous state history, and repair follow-through remain
+required. Clock dispatch alone is never a completed core.
+
 ## Observation duration change — October 28, 2026
 
 At the owner's explicit request, new releases use a 12-hour minimum instead of 24 hours. This is a prospective change: existing 24-hour receipts and failed runs retain their original source, criteria and outcome. No old failure is reclassified or evidence clock reset on the same source. The release containing this change starts its own source-bound evidence window. The 30-minute terminal allowance, 90-minute maximum intercore gap, first-attempt requirement, complete artifact replay and repair coverage checks remain unchanged. A 12-hour PASS is bounded operational evidence, not a guarantee of flawless future execution.
