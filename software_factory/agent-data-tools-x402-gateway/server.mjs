@@ -95,10 +95,15 @@ async function latestTreasuryRates(security){
   u.searchParams.set('page[size]','100');
   const r=await fetchWithTimeout(u,{headers:{accept:'application/json','user-agent':'agent-data-tools-x402/1.0'}},10000);
   if(!r.ok)throw new Error('treasury_http_'+r.status);
-  const payload=await r.json(), rows=Array.isArray(payload.data)?payload.data:[];
+  const payload=await r.json(), rows=Array.isArray(payload?.data)?payload.data:[];
   if(!rows.length)throw new Error('treasury_no_data');
-  const recordDate=String(rows[0].record_date||''), needle=String(security||'').trim().toLowerCase();
-  const latest=rows.filter(row=>String(row.record_date||'')===recordDate);
+  const recordDate=rows[0]?.record_date, needle=String(security||'').trim().toLowerCase();
+  if(typeof recordDate!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(recordDate))throw new Error('treasury_record_date_invalid');
+  const latest=rows.filter(row=>row&&row.record_date===recordDate);
+  if(!latest.length||latest.some(row=>typeof row.security_desc!=='string'||!row.security_desc.trim()
+    ||typeof row.security_type_desc!=='string'||!row.security_type_desc.trim()
+    ||(row.avg_interest_rate_amt!==null&&row.avg_interest_rate_amt!==''
+       &&!Number.isFinite(Number(row.avg_interest_rate_amt)))))throw new Error('treasury_rows_invalid');
   const filtered=needle?latest.filter(row=>String(row.security_desc||'').toLowerCase().includes(needle)):latest;
   return {recordDate,count:filtered.length,rates:filtered.map(row=>({securityDescription:row.security_desc??null,securityType:row.security_type_desc??null,averageInterestRatePercent:row.avg_interest_rate_amt===''||row.avg_interest_rate_amt==null?null:Number(row.avg_interest_rate_amt)})),source:'U.S. Treasury Fiscal Data — Average Interest Rates on U.S. Treasury Securities',frequency:'monthly'};
 }
@@ -113,7 +118,7 @@ async function serveTreasury(req,res,u){
   const requirements=paymentRequirements(routes[path][1]);
   try{
     const verified=await facilitatorPost('verify',payload,requirements);
-    if(verified.isValid!==true&&verified.success!==true)return sendPaymentRequired(req,res,path,String(verified.invalidReason||verified.errorReason||'payment_verification_failed'));
+    if(verified.isValid!==true)return sendPaymentRequired(req,res,path,String(verified.invalidReason||verified.errorReason||'payment_verification_failed'));
     let result;
     try{result=await latestTreasuryRates(security);}catch{return send(res,502,{error:'Treasury Fiscal Data unavailable; payment was not settled.'});}
     const settled=await facilitatorPost('settle',payload,requirements);
@@ -164,7 +169,7 @@ async function serveCensus(req,res,u){
   const requirements=paymentRequirements(routes[path][1]);
   try{
     const verified=await facilitatorPost('verify',payload,requirements);
-    if(verified.isValid!==true&&verified.success!==true)return sendPaymentRequired(req,res,path,String(verified.invalidReason||verified.errorReason||'payment_verification_failed'));
+    if(verified.isValid!==true)return sendPaymentRequired(req,res,path,String(verified.invalidReason||verified.errorReason||'payment_verification_failed'));
     let result;
     try{result=await geocodeAddress(address);}catch{return send(res,502,{error:'Census geocoder unavailable; payment was not settled.'});}
     const settled=await facilitatorPost('settle',payload,requirements);
@@ -240,7 +245,7 @@ async function serveRdap(req,res,u){
   const requirements=paymentRequirements(routes[path][1]);
   try{
     const verified=await facilitatorPost('verify',payload,requirements);
-    if(verified.isValid!==true&&verified.success!==true)return sendPaymentRequired(req,res,path,String(verified.invalidReason||verified.errorReason||'payment_verification_failed'));
+    if(verified.isValid!==true)return sendPaymentRequired(req,res,path,String(verified.invalidReason||verified.errorReason||'payment_verification_failed'));
     let result;
     try{result=await lookupRdap(domain);}catch{return send(res,502,{error:'IANA or authoritative RDAP service unavailable; payment was not settled.'});}
     const settled=await facilitatorPost('settle',payload,requirements);
@@ -304,7 +309,7 @@ async function serveSec(req,res,u){
   const requirements=paymentRequirements(routes[path][1]);
   try{
     const verified=await facilitatorPost('verify',payload,requirements);
-    if(verified.isValid!==true&&verified.success!==true)return sendPaymentRequired(req,res,path,String(verified.invalidReason||verified.errorReason||'payment_verification_failed'));
+    if(verified.isValid!==true)return sendPaymentRequired(req,res,path,String(verified.invalidReason||verified.errorReason||'payment_verification_failed'));
     let result;
     try{result=await lookupSecFilings({ticker,cik,form,limit});}catch(e){
       if(String(e?.message||e)==='company_not_found')return send(res,404,{error:'company_not_found',paid:false});
@@ -403,7 +408,7 @@ async function serveOfac(req,res,u){
   const requirements=paymentRequirements(routes[path][1]);
   try{
     const verified=await facilitatorPost('verify',payload,requirements);
-    if(verified.isValid!==true&&verified.success!==true)return sendPaymentRequired(req,res,path,String(verified.invalidReason||verified.errorReason||'payment_verification_failed'));
+    if(verified.isValid!==true)return sendPaymentRequired(req,res,path,String(verified.invalidReason||verified.errorReason||'payment_verification_failed'));
     let result;
     try{result=await screenOfacName(name,limit,minScore);}catch{return send(res,502,{error:'OFAC SDN source unavailable; payment was not settled.'});}
     const settled=await facilitatorPost('settle',payload,requirements);
