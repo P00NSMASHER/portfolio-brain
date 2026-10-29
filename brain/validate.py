@@ -120,7 +120,7 @@ def validate_policy():
         "github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain'",
         "ref: ${{ github.sha }}", "persist-credentials: false",
         "actions: read", "contents: read", "pull-requests: read",
-        "bd26ebd33c967da4d1aa29f9ae6bf73339460e4e",
+        "c6728ed7b2133e8ac5a7da381520c5165a32f185",
         "d5a92561c814134b3ce38e55c66008b08245fa9d",
         "PORTFOLIO_RUNTIME_PRIVATE_KEY", "permission-contents: write",
         "permission-pull-requests: write", "skip-token-revoke: false",
