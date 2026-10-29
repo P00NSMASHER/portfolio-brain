@@ -16,8 +16,10 @@ test('SEC malformed200 is rejected rather than billed empty filings',async()=>{
  await assert.rejects(vm.runInContext("lookupSecFilings({cik:'123',limit:1})",context({})),/sec_identity/);
 });
 test('empty OFAC sources rejected',async()=>{
- await assert.rejects(vm.runInContext('loadOfacEntries()',context({})),/ofac_empty/);
+ await assert.rejects(vm.runInContext('loadOfacEntries()',context({})),/ofac_(empty|aliases_empty)/);
 });
 test('numbered Census geography matches digits',()=>{
  const c=context({});assert.equal(vm.runInContext("firstGeoByPattern({'2020 Census Blocks':[{BLOCK:'12'}]},/^\\d{4} Census Blocks$/i).BLOCK",c),'12');
 });
+
+test('null Census match rejected',async()=>{await assert.rejects(vm.runInContext("geocodeAddress('123 Main St')",context({result:{addressMatches:[null]}})),/census_match_invalid/);});

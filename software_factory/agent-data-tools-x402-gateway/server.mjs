@@ -142,6 +142,7 @@ async function geocodeAddress(address){
   if(!r.ok)throw new Error('census_http_'+r.status);
   const data=await r.json();
   if(!Array.isArray(data?.result?.addressMatches))throw new Error('census_shape_invalid');
+  if(data.result.addressMatches.some(m=>!m||typeof m!=='object'||typeof m.matchedAddress!=='string'||!Number.isFinite(m.coordinates?.x)||!Number.isFinite(m.coordinates?.y)))throw new Error('census_match_invalid');
   const match=data.result.addressMatches[0];
   if(match && (typeof match.matchedAddress!=='string'||!Number.isFinite(match.coordinates?.x)||!Number.isFinite(match.coordinates?.y)))throw new Error('census_match_invalid');
   if(!match)return {input:address,matched:false,matchedAddress:null,coordinates:null,addressComponents:null,geographies:null,source:'U.S. Census Bureau Geocoding Services'};
@@ -347,7 +348,9 @@ async function loadOfacEntries(){
     if(cols.length!==12||!/^\d+$/.test(uid)||!name||map.has(uid))throw new Error('ofac_row_invalid');
     map.set(uid,{uid,name,type:cleanOfac(cols[2]),program:cleanOfac(cols[3]),title:cleanOfac(cols[4]),remarks:cleanOfac(cols[11]),aliases:[]});
   }
-  for(const cols of parseCsv(altText)){
+  const aliases=parseCsv(altText);
+  if(!aliases.length)throw new Error('ofac_aliases_empty');
+  for(const cols of aliases){
     const uid=String(cols[0]||'').trim(), altName=String(cols[3]||'').trim(), entry=map.get(uid);
     if(cols.length!==5||!entry||!altName)throw new Error('ofac_alias_invalid');
     entry.aliases.push({type:cleanOfac(cols[2]),name:altName,remarks:cleanOfac(cols[4])});
@@ -423,6 +426,8 @@ async function proxy(req,res,r){
       const value=upstream.headers.get(key);if(value!==null)res.setHeader(key,value);
     }
     res.setHeader('cache-control','no-store');
+    res.setHeader('access-control-allow-origin','*');
+    res.setHeader('access-control-expose-headers','PAYMENT-REQUIRED, PAYMENT-RESPONSE, x402-settled');
     res.setHeader('x-x402-gateway','bounded-proxy');
     res.end(body);
   }catch{if(!res.destroyed)send(res,502,{error:'gateway_upstream_unavailable'});}
@@ -433,6 +438,7 @@ http.createServer(async(req,res)=>{
   const u=new URL(req.url,'http://gateway.local');
   if(req.method==='OPTIONS'){res.writeHead(204,{'access-control-allow-origin':'*','access-control-allow-methods':'GET,HEAD,OPTIONS','access-control-allow-headers':'PAYMENT-SIGNATURE,X-PAYMENT,Content-Type,Accept','access-control-expose-headers':'PAYMENT-REQUIRED,PAYMENT-RESPONSE,x402-settled,x402-price,x402-network,x402-asset,x402-pay-to'});return res.end();}
   if(!['GET','HEAD'].includes(req.method||''))return send(res,405,{error:'method_not_allowed'});
+  if(req.method==='HEAD'&&u.pathname.startsWith('/api/'))return send(res,405,{error:'paid_head_not_supported'});
   if(u.pathname==='/healthz')return send(res,200,{ok:true,routes:Object.keys(routes).length});
   if(u.pathname==='/openapi.json')return send(res,200,openapi(req));
   if(u.pathname==='/.well-known/x402')return send(res,200,discovery(req));
