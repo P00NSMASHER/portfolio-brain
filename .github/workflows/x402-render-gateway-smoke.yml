@@ -35,6 +35,9 @@ jobs:
           node --check server.js
           node --check scripts/bazaar-audit.mjs
 
+      - name: Mock read-only Bazaar diagnostic
+        run: node --test scripts/bazaar-audit.test.mjs
+
       - name: Verify Netlify function adapter
         run: |
           node --input-type=module <<'NODE'
