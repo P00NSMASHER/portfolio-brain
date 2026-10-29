@@ -49,4 +49,33 @@ class RecoveryTests(unittest.TestCase):
                     BatchFault,'RECOVERY_CLOCK_INVALID'):
                 recovery_plan(FakeQueue({}),now=invalid)
 
+class DurableCrashRecovery(unittest.TestCase):
+    def test_intent_survives_reopen_without_duplicate_write(self):
+        import tempfile
+        from pathlib import Path
+        from brain.v9.batch_queue import BatchQueue
+        from test_brain_v9_batch import issue, EVIDENCE, T0, T1, T2
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'queue.sqlite'
+            queue = BatchQueue(path)
+            work = queue.observe(issue(), now=T0)
+            token = queue.claim(work, 'retally-product', now=T0, ttl_seconds=1200)
+            for stage in ('DIAGNOSED','PATCHED','TESTED'):
+                queue.advance(work, token, stage, evidence_sha=EVIDENCE, now=T1)
+            operation = queue.begin_effect(work, token, action='CREATE_DRAFT_PR', now=T1)
+            queue.close()
+            queue = BatchQueue(path)
+            try:
+                before = queue.checkpoint()
+                result = recovery_plan(queue, now=T2)
+                self.assertEqual(result['actions'][0]['operation_id'], operation)
+                self.assertEqual(result['actions'][0]['next_action'],
+                                 'ORIGINAL_PROVIDER_RECONCILIATION_REQUIRED_NO_RETRY')
+                self.assertEqual(result['provider_writes'], 0)
+                self.assertEqual(queue.checkpoint(), before)
+                with self.assertRaises(BatchFault):
+                    queue.claim(work, 'retally-product', now=T2)
+            finally:
+                queue.close()
+
 if __name__=='__main__':unittest.main()

@@ -929,17 +929,6 @@ def _chatgpt_action_link(prompt: str) -> str:
     # receive execution authority from this read-only dashboard.
     return "https://chatgpt.com/?prompt=" + quote(prompt, safe="")
 
-def _github_workflow_link(workflow: str) -> str:
-    allowed = {
-        "command-center-pages.yml",
-        "portfolio-autonomous-scheduler.yml",
-        "hunter-autonomous-cycle.yml",
-    }
-    if workflow not in allowed:
-        raise ValueError("workflow link is not allowlisted")
-    return "https://github.com/P00NSMASHER/portfolio-brain/actions/workflows/" + workflow
-
-
 def _status_tone(value: str) -> str:
     upper = value.upper()
     if upper in {"OPERATIONAL", "ACTIVE", "VERIFIED_FIXED", "RUNNING", "LIVE", "READY", "IDLE_HEALTHY", "HEALTHY"}:

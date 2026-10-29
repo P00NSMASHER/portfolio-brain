@@ -224,5 +224,179 @@ class GitHubSnapshotIntegrityTests(unittest.TestCase):
                 store.close()
 
 
+class CheckHistoryCapacityTests(unittest.TestCase):
+    def test_532_checks_survive_monitor_persistence_and_restart(self):
+        rows = [check(i) for i in range(1, 533)]
+        # Do not discard an adverse result on the last page.
+        rows[-1]["conclusion"] = "failure"
+        api = GitHub(transport=Provider(rows))
+        with tempfile.TemporaryDirectory() as folder:
+            db = Path(folder) / "state.sqlite"
+            store = Store(db, visibility="PUBLIC")
+            try:
+                report = monitor(store, SHA, Path(folder) / "report",
+                                 api=api, repositories=[REPO])
+                self.assertEqual(report["operation"]["errors"], [])
+                self.assertEqual(len(report["repositories"][0]["checks"]), 532)
+                self.assertEqual(api.requests, 9)
+                self.assertEqual(store.pending(), 0)
+            finally:
+                store.close()
+            restored = Store(db, visibility="PUBLIC")
+            try:
+                result = restored.report(SHA)
+                checks = result["repositories"][0]["checks"]
+                self.assertEqual(len(checks), 532)
+                self.assertEqual(checks[-1]["conclusion"], "failure")
+                self.assertEqual(restored.read_report(SHA)["canonical_hash"],
+                                 result["canonical_hash"])
+            finally:
+                restored.close()
+
+    def test_current_four_repository_load_fits_shared_budget(self):
+        counts = [532, 119, 9, 17]
+        providers = {}
+        for index, count in enumerate(counts):
+            providers[f"example/repo{index}"] = Provider(
+                [check(i) for i in range(1, count + 1)])
+
+        def transport(path):
+            repo = "/".join(path.split("/")[2:4])
+            result = providers[repo](path.replace(repo, REPO))
+            if path == "/repos/" + repo:
+                result["full_name"] = repo
+            for row in result.get("check_runs", []):
+                row["html_url"] = row["html_url"].replace(REPO, repo)
+            return result
+
+        api = GitHub(transport=transport)
+        for repo, count in zip(providers, counts):
+            payload, _ = api.observe(repo)
+            validate_payload("repository", payload, "2026-10-26T16:00:00Z")
+            self.assertEqual(len(payload["checks"]), count)
+        self.assertEqual(api.requests, 22)
+
+    def test_maximum_complete_snapshot_uses_exactly_24_requests(self):
+        api = GitHub(transport=Provider([check(i) for i in range(1, 2101)]))
+        payload, _ = api.observe(REPO)
+        validate_payload("repository", payload, "2026-10-26T16:00:00Z")
+        self.assertEqual(len(payload["checks"]), 2100)
+        self.assertEqual(api.requests, 24)
+
+    def test_over_capacity_fails_before_fetching_more_pages(self):
+        for count, budget in ((2101, 24), (532, 8)):
+            with self.subTest(count=count, budget=budget):
+                provider = Provider([check(i) for i in range(1, count + 1)])
+                api = GitHub(transport=provider, max_requests=budget)
+                with self.assertRaisesRegex(BrainError, "CHECK_COVERAGE_BUDGET_EXCEEDED"):
+                    api.observe(REPO)
+                self.assertEqual(api.requests, 3)
+                self.assertEqual(provider.calls.count(BRANCH), 1)
+
+    def test_prior_reads_reduce_capacity_without_resetting_budget(self):
+        api = GitHub(transport=Provider([check(i) for i in range(1, 533)]))
+        api.requests = 16
+        with self.assertRaisesRegex(BrainError, "CHECK_COVERAGE_BUDGET_EXCEEDED"):
+            api.observe(REPO)
+        self.assertEqual(api.requests, 19)
+
+    def test_short_middle_page_cannot_be_compensated_by_long_final_page(self):
+        provider = Provider([check(i) for i in range(1, 202)])
+        def transport(path):
+            result = provider(path)
+            if path.endswith("&page=2"):
+                result["check_runs"] = result["check_runs"][:-1]
+            elif path.endswith("&page=3"):
+                result["check_runs"].insert(0, check(200))
+            return result
+        with self.assertRaisesRegex(BrainError, "CHECK_COVERAGE_TRUNCATED"):
+            GitHub(transport=transport).observe(REPO)
+        self.assertFalse(any(path.endswith("&page=3") for path in provider.calls))
+
+    def test_duplicate_cross_revision_and_count_drift_on_sixth_page_fail(self):
+        for mutation in ("duplicate", "revision", "total", "shape"):
+            with self.subTest(mutation=mutation):
+                provider = Provider([check(i) for i in range(1, 533)])
+                def transport(path):
+                    result = provider(path)
+                    if path.endswith("&page=6"):
+                        if mutation == "duplicate": result["check_runs"][-1] = check(1)
+                        elif mutation == "revision": result["check_runs"][-1] = check(532, revision=OTHER)
+                        elif mutation == "total": result["total_count"] = 533
+                        else: return []
+                    return result
+                with self.assertRaisesRegex(BrainError, "CHECK_COVERAGE_(AMBIGUOUS|CHANGED|UNAVAILABLE)"):
+                    GitHub(transport=transport).observe(REPO)
+                self.assertEqual(provider.calls.count(BRANCH), 1)
+
+    def test_malformed_first_page_remains_rejected(self):
+        for value in (None, [], {"total_count": True, "check_runs": []},
+                      {"total_count": -1, "check_runs": []}):
+            with self.subTest(value=value):
+                provider = Provider()
+                def transport(path):
+                    return value if "/check-runs?" in path else provider(path)
+                with self.assertRaisesRegex(BrainError, "CHECK_COVERAGE_UNAVAILABLE"):
+                    GitHub(transport=transport).observe(REPO)
+
+    def test_state_validator_rejects_history_beyond_collectable_bound(self):
+        payload, _ = GitHub(transport=Provider([check(1)])).observe(REPO)
+        payload["checks"] *= 2101
+        with self.assertRaisesRegex(BrainError, "checks invalid"):
+            validate_payload("repository", payload, "2026-10-26T16:00:00Z")
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class ChangingHistoryRetryTests(unittest.TestCase):
+    def test_retry_discards_partial_pages_and_accepts_complete_fresh_history(self):
+        provider=Provider([check(i) for i in range(1,102)])
+        def transport(path):
+            result=provider(path)
+            if path.endswith('&page=2') and provider.calls.count(CHECKS)==1:
+                result['total_count']=102
+                provider.rows=[check(i) for i in range(1001,1103)]
+            return result
+        api=GitHub(transport=transport)
+        from unittest.mock import patch
+        with patch('brain.adapters.time.sleep') as sleep:
+            payload,_=api.observe(REPO)
+        self.assertEqual(len(payload['checks']),102)
+        self.assertTrue(all(int(r['url'].rsplit('/',1)[1])>=1001 for r in payload['checks']))
+        self.assertEqual(api.requests,7)
+        self.assertEqual(provider.calls.count(CHECKS),2)
+        self.assertEqual(provider.calls.count(BRANCH),2)
+        sleep.assert_called_once_with(1)
+
+    def test_retry_exhaustion_preserves_failure_and_shared_budget(self):
+        from unittest.mock import patch
+        for budget,reason,expected in [(24,'CHECK_COVERAGE_CHANGED',6),(5,'CHECK_COVERAGE_BUDGET_EXCEEDED',4)]:
+            provider=Provider([check(i) for i in range(1,102)],page_totals={1:101,2:102})
+            api=GitHub(transport=provider,max_requests=budget)
+            with patch('brain.adapters.time.sleep'),self.assertRaisesRegex(BrainError,reason):
+                api.observe(REPO)
+            self.assertEqual(api.requests,expected)
+            self.assertEqual(provider.calls.count(BRANCH),1)
+
+    def test_malformed_later_page_is_not_retried(self):
+        provider=Provider([check(i) for i in range(1,102)])
+        def transport(path):
+            value=provider(path)
+            return [] if path.endswith('&page=2') else value
+        from unittest.mock import patch
+        with patch('brain.adapters.time.sleep') as sleep,self.assertRaisesRegex(BrainError,'CHECK_COVERAGE_UNAVAILABLE'):
+            GitHub(transport=transport).observe(REPO)
+        sleep.assert_not_called()
+        self.assertEqual(provider.calls.count(CHECKS),1)
+
+    def test_invalid_page_total_is_never_retried(self):
+        from unittest.mock import patch
+        for total in (-1,True,None):
+            provider=Provider([check(i) for i in range(1,102)],page_totals={2:total})
+            with self.subTest(total=total),patch('brain.adapters.time.sleep') as sleep:
+                with self.assertRaisesRegex(BrainError,'CHECK_COVERAGE_UNAVAILABLE'):
+                    GitHub(transport=provider).observe(REPO)
+                sleep.assert_not_called()
+                self.assertEqual(provider.calls.count(CHECKS),1)

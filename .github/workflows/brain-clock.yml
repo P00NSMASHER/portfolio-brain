@@ -1,6 +1,9 @@
 name: brain-clock-v2
 on:
   schedule:
+    # Former direct core cadence remains scheduled but uses the same
+    # bounded watchdog admission as the original fallback cadence.
+    - cron: "7,27,47 * * * *"
     - cron: "16,36,56 * * * *"
   push:
     branches: [brain-clock-v2]

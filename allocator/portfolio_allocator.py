@@ -5,7 +5,7 @@ The allocator recommends normalized shares only. It never claims real hours,
 dollars, model calls or cash are available, and it never executes allocations.
 """
 from __future__ import annotations
-import hashlib,json
+import hashlib,json,re
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +23,16 @@ def canon(v):return json.dumps(v,sort_keys=True,separators=(",",":"),ensure_asci
 def hashv(v):return "sha256:"+hashlib.sha256(canon(v).encode()).hexdigest()
 def policy():return load("allocator/ALLOCATOR_POLICY.json")
 
+BASIS_TYPES=("POLICY_ESTIMATE","DERIVED","MEASURED_OUTCOME")
+BASIS_SUMMARY_KEYS={
+  "measurement_state","policy_estimate_component_ids",
+  "derived_component_ids","measured_outcome_component_ids"
+}
+EXPECTED_COMPONENT_IDS={
+  "importance","uncertainty","test_cost","time_to_evidence","reversibility",
+  "downstream_impact","strategic_reuse","external_validation_value"
+}
+
 def _tie_key(c):
     v={k:c["components"][k]["value"] for k in c["components"]}
     return (-v["external_validation_value"],-v["importance"],-v["uncertainty"],-v["downstream_impact"],-v["strategic_reuse"],v["test_cost"],v["time_to_evidence"],-v["reversibility"],c["primary_project_id"],c["uncertainty_id"])
@@ -36,6 +46,129 @@ def _pareto_rank(candidates):
         ids={c["uncertainty_id"] for c in front};remaining=[c for c in remaining if c["uncertainty_id"] not in ids];layer+=1
     ranked=sorted(candidates,key=lambda c:(layers[c["uncertainty_id"]],*_tie_key(c)))
     return [(c,layers[c["uncertainty_id"]],i+1) for i,c in enumerate(ranked)]
+
+def _basis_summary(candidate):
+    """Expose estimate/derived/measured inputs without converting them to outcomes."""
+    component_ids=set(candidate["components"])
+    by_basis={basis_type:[] for basis_type in BASIS_TYPES}
+    for component_id,component in candidate["components"].items():
+        basis_type=component.get("basis_type")
+        req(basis_type in by_basis,f"unsupported allocation basis type: {basis_type}")
+        by_basis[basis_type].append(component_id)
+    for values in by_basis.values():values.sort()
+    req(set().union(*(set(values) for values in by_basis.values()))==component_ids,"allocation basis summary does not cover every component")
+    measured=by_basis["MEASURED_OUTCOME"]
+    req(not measured,"measured allocation inputs require independent source binding; admission unavailable")
+    return {
+      "measurement_state":"MEASURED_OUTCOME_INPUT_PRESENT" if measured else "NO_MEASURED_OUTCOME_INPUT",
+      "policy_estimate_component_ids":by_basis["POLICY_ESTIMATE"],
+      "derived_component_ids":by_basis["DERIVED"],
+      "measured_outcome_component_ids":measured
+    }
+
+def validate_allocation_plan(plan):
+    """Check receipt structure/disclosure and current gates, not source authenticity.
+
+    A self-recomputed hash is an integrity checksum, not evidence authentication.
+    """
+    def text_field(value,maximum):
+        return isinstance(value,str) and 0<len(value)<=maximum
+    def evidence_refs(value):
+        return (isinstance(value,list) and bool(value)
+                and all(text_field(ref,500) for ref in value)
+                and len(value)==len(set(value)))
+    plan_keys={
+      "schema_version","resource_type","status","normalized_share_basis_points",
+      "allocated_share_basis_points","unallocated_share_basis_points","hold_reason",
+      "recommendations","plan_hash"
+    }
+    req(isinstance(plan,dict) and set(plan)==plan_keys,"allocation plan fields must exactly match contract")
+    req(plan["schema_version"]=="1.0.0","allocation plan schema mismatch")
+    req(plan["resource_type"] in policy()["resource_types"],"unsupported allocation resource type")
+    req(plan["status"] in {
+      "ACTIVE_RECOMMENDATION","HOLD_NO_ELIGIBLE_EVIDENCE","HOLD_PROVIDER_DISABLED",
+      "HOLD_HUMAN_GATED_NO_APPROVED_POOL","HOLD_NO_APPROVED_INFRASTRUCTURE_NEED"
+    },"unsupported allocation status")
+    allocated=plan["allocated_share_basis_points"];unallocated=plan["unallocated_share_basis_points"]
+    req(type(allocated) is int and type(unallocated) is int,"allocation shares must be integers")
+    req(plan["normalized_share_basis_points"]==10000 and allocated>=0 and unallocated>=0 and allocated+unallocated==10000,
+        "allocation shares do not conserve 10000 basis points")
+    req(isinstance(plan["recommendations"],list),"allocation recommendations must be a list")
+    if plan["status"]=="ACTIVE_RECOMMENDATION":
+        req(plan["hold_reason"] is None and plan["recommendations"],"active allocation requires recommendations and no hold reason")
+    else:
+        req(isinstance(plan["hold_reason"],str) and plan["hold_reason"] and not plan["recommendations"],
+            "held allocation cannot contain recommendations")
+    req(allocated==0 if plan["status"]!="ACTIVE_RECOMMENDATION" else allocated>0,
+        "allocation status disagrees with allocated shares")
+    required_holds={"CASH":"HOLD_HUMAN_GATED_NO_APPROVED_POOL",
+                    "API_INFRASTRUCTURE":"HOLD_NO_APPROVED_INFRASTRUCTURE_NEED"}
+    if plan["resource_type"] in required_holds:
+        req(plan["status"]==required_holds[plan["resource_type"]],"resource requires current policy hold")
+    if plan["resource_type"]=="MODEL_CALLS" and not _enabled_nonzero_models():
+        req(plan["status"]=="HOLD_PROVIDER_DISABLED","disabled providers cannot receive allocation")
+    req(plan["hold_reason"] is None or text_field(plan["hold_reason"],1000),"invalid hold reason")
+    shares_by_project={}
+    recommendation_keys={
+      "project_id","source_uncertainty_id","source_experiment_id","pareto_layer",
+      "rank_order","share_basis_points","authority_requirement","actionability",
+      "resource_fit_reason","uncertainty_components","evidence_basis_summary","evidence_refs"
+    }
+    for recommendation in plan["recommendations"]:
+        req(isinstance(recommendation,dict) and set(recommendation)==recommendation_keys,
+            "allocation recommendation fields must exactly match contract")
+        for field,pattern in (("project_id",r"PRJ-[0-9]{3,}"),
+                              ("source_uncertainty_id",r"UNC-[A-Z0-9-]+"),
+                              ("source_experiment_id",r"PEXP-[A-Z0-9]{16}")):
+            req(isinstance(recommendation[field],str) and re.fullmatch(pattern,recommendation[field]),
+                f"invalid allocation {field}")
+        for field,minimum in (("pareto_layer",0),("rank_order",1),("share_basis_points",1)):
+            req(type(recommendation[field]) is int and recommendation[field]>=minimum,
+                f"invalid allocation {field}")
+        pid=recommendation["project_id"]
+        shares_by_project[pid]=shares_by_project.get(pid,0)+recommendation["share_basis_points"]
+        req(shares_by_project[pid]<=policy()["max_project_share_basis_points"],"project concentration cap exceeded")
+        req(recommendation["authority_requirement"] in ("OBSERVE_ONLY","BOUNDED_EXPERIMENT","BOUNDED_ACT","HUMAN_GATED_ACT"),
+            "invalid allocation authority")
+        req(recommendation["actionability"] in ("READY_FOR_INFORMATION_GATHERING","READY_FOR_EXPERIMENT_DESIGN",
+            "READY_FOR_BOUNDED_EXTERNAL_EXECUTION","HUMAN_APPROVAL_REQUIRED","BLOCKED"),"invalid allocation actionability")
+        req(text_field(recommendation["resource_fit_reason"],1000),"invalid allocation resource fit reason")
+        req(evidence_refs(recommendation["evidence_refs"]),"allocation evidence references missing or invalid")
+        components=recommendation["uncertainty_components"]
+        req(isinstance(components,dict) and set(components)==EXPECTED_COMPONENT_IDS,
+            "allocation receipt must preserve the exact eight-component vector")
+        basis=recommendation["evidence_basis_summary"]
+        req(isinstance(basis,dict) and set(basis)==BASIS_SUMMARY_KEYS,
+            "allocation basis summary fields must exactly match contract")
+        groups={
+          "POLICY_ESTIMATE":basis["policy_estimate_component_ids"],
+          "DERIVED":basis["derived_component_ids"],
+          "MEASURED_OUTCOME":basis["measured_outcome_component_ids"]
+        }
+        req(all(isinstance(ids,list) and all(isinstance(x,str) for x in ids) for ids in groups.values()),
+            "allocation basis buckets must be string lists")
+        flattened=[component_id for ids in groups.values() for component_id in ids]
+        req(len(flattened)==len(set(flattened)) and set(flattened)==EXPECTED_COMPONENT_IDS,
+            "allocation basis summary must partition every component exactly once")
+        for component_id,component in components.items():
+            req(isinstance(component,dict) and set(component)=={"value","basis_type","rationale","evidence_refs"},
+                "allocation component fields must exactly match contract")
+            req(type(component["value"]) is int and 0<=component["value"]<=5,"invalid allocation component value")
+            req(text_field(component["rationale"],500),"invalid allocation component rationale")
+            req(evidence_refs(component["evidence_refs"]),"allocation component evidence missing or invalid")
+            basis_type=component.get("basis_type")
+            req(basis_type in BASIS_TYPES,f"unsupported allocation basis type: {basis_type}")
+            req(component_id in groups[basis_type],f"allocation basis summary mismatch: {component_id}")
+        req(not groups["MEASURED_OUTCOME"],
+            "measured allocation inputs require independent source binding; admission unavailable")
+        expected_state=(
+          "MEASURED_OUTCOME_INPUT_PRESENT"
+          if groups["MEASURED_OUTCOME"] else "NO_MEASURED_OUTCOME_INPUT"
+        )
+        req(basis["measurement_state"]==expected_state,"allocation measurement state mismatch")
+    req(sum(shares_by_project.values())==allocated,"recommendation shares do not match allocated shares")
+    body={key:value for key,value in plan.items() if key!="plan_hash"}
+    req(plan["plan_hash"]==hashv(body),"allocation plan hash mismatch")
 
 def _project_best(candidates):
     out={}
@@ -120,6 +253,7 @@ def resource_plan(resource,uncertainty,experiments):
           "pareto_layer":layer,"rank_order":rank,"share_basis_points":share,
           "authority_requirement":c["authority_requirement"],"actionability":c["actionability"],
           "resource_fit_reason":fit,"uncertainty_components":c["components"],
+          "evidence_basis_summary":_basis_summary(c),
           "evidence_refs":list(dict.fromkeys([*c["evidence_refs"],f"experiment:{exp['experiment_id']}"]))
         })
     body={"schema_version":"1.0.0","resource_type":resource,"status":"ACTIVE_RECOMMENDATION","normalized_share_basis_points":10000,

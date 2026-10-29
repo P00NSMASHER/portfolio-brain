@@ -48,8 +48,8 @@ class IncompleteSearchFallbackTests(unittest.TestCase):
         self.assertEqual(op["target"], "agent-products")
         self.assertEqual(op["result"], "VERIFIED_ALTERNATE_SOURCE_AFTER_SEARCH_FAILURE")
         self.assertEqual(op["candidates_observed"], 1)
-        self.assertEqual(op["requests"], 5)
-        self.assertEqual(len(transport.paths), 5)
+        self.assertEqual(op["requests"], 6)
+        self.assertEqual(len(transport.paths), 6)
         self.assertEqual(op["prior_unavailable_targets"][0]["classification"],
                          "PUBLIC_SEARCH_INCOMPLETE")
         self.assertEqual(op["prior_unavailable_targets"][0]["source_gaps"],
@@ -66,8 +66,8 @@ class IncompleteSearchFallbackTests(unittest.TestCase):
         api = GitHub(transport=transport)
         with self.assertRaisesRegex(BrainError, "^DISCOVERY_INCOMPLETE$"):
             research(self.store, SHA, self.output, api=api)
-        self.assertEqual(api.requests, 3)
-        self.assertEqual(len(transport.paths), 3)
+        self.assertEqual(api.requests, 6)
+        self.assertEqual(len(transport.paths), 6)
         self.assertEqual(self.store.pending(), 0)
         self.assertEqual(self.store.db.execute(
             "SELECT COUNT(*) FROM attempts").fetchone()[0], 0)
@@ -79,7 +79,7 @@ class IncompleteSearchFallbackTests(unittest.TestCase):
         api = GitHub(transport=transport)
         with self.assertRaisesRegex(BrainError, "^DISCOVERY_INCOMPLETE$"):
             research(self.store, SHA, self.output, api=api)
-        self.assertEqual(api.requests, 3)
+        self.assertEqual(api.requests, 4)
         self.assertEqual(self.store.db.execute(
             "SELECT COUNT(*) FROM events").fetchone()[0], 0)
 
@@ -89,8 +89,8 @@ class IncompleteSearchFallbackTests(unittest.TestCase):
         api.requests = 18
         with self.assertRaisesRegex(BrainError, "^DISCOVERY_INCOMPLETE$"):
             research(self.store, SHA, self.output, api=api)
-        self.assertEqual(api.requests, 19)
-        self.assertEqual(len(transport.paths), 1)
+        self.assertEqual(api.requests, 20)
+        self.assertEqual(len(transport.paths), 2)
         self.assertEqual(self.store.pending(), 0)
 
     def test_adapter_direct_discovery_still_rejects_incomplete_results(self):
@@ -100,8 +100,8 @@ class IncompleteSearchFallbackTests(unittest.TestCase):
                   "terms": ["freight", "invoice", "audit"]}
         with self.assertRaisesRegex(BrainError, "^DISCOVERY_INCOMPLETE$"):
             api.discover(target)
-        self.assertEqual(api.requests, 1)
-        self.assertEqual(len(transport.paths), 1)
+        self.assertEqual(api.requests, 2)
+        self.assertEqual(len(transport.paths), 2)
         self.assertEqual(api.discovery_unavailable, [])
 
 

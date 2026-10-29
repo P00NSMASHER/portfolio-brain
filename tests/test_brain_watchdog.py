@@ -28,6 +28,20 @@ def parent(minutes=1):
             "created_at":stamp(NOW-timedelta(minutes=minutes))}
 
 class WatchdogTests(unittest.TestCase):
+    def test_native_cron_is_preserved_but_requires_watchdog_admission(self):
+        from pathlib import Path
+        from operations.validate_operating_mode import scheduled_workflow_inventory
+        workflow_dir = Path(".github/workflows")
+        self.assertEqual(scheduled_workflow_inventory(workflow_dir), {
+            "brain-clock": ["7,27,47 * * * *", "16,36,56 * * * *"]
+        })
+        direct = (workflow_dir / "brain-cycle.yml").read_text()
+        clock = (workflow_dir / "brain-clock.yml").read_text()
+        self.assertNotIn("  schedule:", direct)
+        self.assertIn("python -m brain.watchdog decide", clock)
+        self.assertIn('inputs[watchdog_run_id]', clock)
+        self.assertIn("python -m brain.watchdog verify", direct)
+
     def test_recent_success_prevents_duplicate_dispatch(self):
         self.assertEqual(decide(inventory(run(10)),SHA,now=NOW)["status"],"FRESH")
     def test_overdue_success_requests_real_core(self):

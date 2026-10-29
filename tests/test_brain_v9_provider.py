@@ -29,12 +29,12 @@ class ReadbackTests(unittest.TestCase):
     def test_readback_is_exact_head_and_operation_bound(self):
         r=GitHubOriginalReader()
         with patch.object(r,'_get',side_effect=[
-            {'commit':{'sha':BASE}},pr(),checks(),{'commit':{'sha':BASE}}]) as get:
+            {'commit':{'sha':BASE}},pr(),checks(),checks(),pr(),{'commit':{'sha':BASE}}]) as get:
             item=r.verify_draft_and_checks(R,741,base_sha=BASE,head_sha=SHA,operation_id=OP)
         self.assertEqual(item['status'],'OBSERVED_BY_GITHUB_READBACK_NOT_RELEASED')
         self.assertFalse(item['production_accepted'])
         self.assertFalse(item['six_hour_acceptance_passed'])
-        self.assertEqual(get.call_count,4)
+        self.assertEqual(get.call_count,6)
     def test_head_marker_and_main_drift_are_refused(self):
         for defect in ('head','marker','main'):
             row=pr()
@@ -43,15 +43,15 @@ class ReadbackTests(unittest.TestCase):
             tip='d'*40 if defect=='main' else BASE
             reader=GitHubOriginalReader()
             with patch.object(reader,'_get',side_effect=[
-                {'commit':{'sha':BASE}},row,checks(),{'commit':{'sha':tip}}]):
+                {'commit':{'sha':BASE}},row,checks(),checks(),row,{'commit':{'sha':tip}}]):
                 with self.subTest(defect=defect),self.assertRaises(BatchFault):
                     reader.verify_draft_and_checks(R,741,base_sha=BASE,head_sha=SHA,operation_id=OP)
     def test_uncertain_pr_creation_is_reconciled_without_green_checks(self):
         r=GitHubOriginalReader()
         with patch.object(r,'_get',side_effect=[
-            {'commit':{'sha':BASE}},pr(),{'commit':{'sha':BASE}}]) as get:
+            {'commit':{'sha':BASE}},pr(),pr(),{'commit':{'sha':BASE}}]) as get:
             evidence=r.read_draft_only(R,741,base_sha=BASE,head_sha=SHA,operation_id=OP)
-        self.assertEqual(get.call_count,3)
+        self.assertEqual(get.call_count,4)
         self.assertEqual(evidence['status'],'ORIGINAL_DRAFT_WRITE_OBSERVED_CHECKS_UNKNOWN')
         self.assertFalse(evidence['independent_check_verified'])
         self.assertFalse(evidence['production_accepted'])
