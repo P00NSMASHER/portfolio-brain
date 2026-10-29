@@ -3,6 +3,7 @@ import base64
 from datetime import datetime, timezone
 import io
 import json
+import zipfile
 from pathlib import Path
 import unittest
 from unittest import mock
@@ -262,6 +263,99 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
             created=sav.utc("2026-10-29T06:32:27Z"),
         )
         sav._require_nonoverlapping_scheduler_origins([dispatch, later_schedule])
+
+    def test_native_watchdog_fallback_requires_original_provider_proof(self):
+        now = "2026-10-29T06:31:00Z"
+        parent = {
+            "id": 501, "name": "brain-clock-v2",
+            "event": "schedule",
+            "path": ".github/workflows/brain-clock.yml",
+            "head_branch": "main", "head_sha": SOURCE,
+            "run_attempt": 1, "status": "completed",
+            "conclusion": "success",
+            "created_at": "2026-10-29T06:30:00Z",
+        }
+        receipt = {
+            "schema_version": 1, "kind": "github_schedule",
+            "clock_run_id": 501, "source_sha": SOURCE,
+            "provider_event": "schedule",
+            "core_actor": "github-actions[bot]",
+            "independent_verification": "REQUIRED",
+            "soak_pass": False,
+        }
+        run = {
+            "event": "workflow_dispatch", "created_at": now,
+            "actor": {"login": "github-actions[bot]"},
+        }
+
+        class Provider:
+            def __init__(self, document):
+                self.document = document
+            def json(self, path):
+                if path != "/actions/runs/501":
+                    raise AssertionError("unexpected provider read")
+                return self.document
+
+        def archive(**documents):
+            stream = io.BytesIO()
+            with zipfile.ZipFile(stream, "w") as z:
+                for name, value in documents.items():
+                    z.writestr(name, json.dumps(value))
+            return stream.getvalue()
+
+        data = archive(**{"watchdog-origin.json": receipt})
+        self.assertEqual(
+            sav._validated_automatic_origin(Provider(parent), run, data, SOURCE),
+            (None, "github_schedule"),
+        )
+        for name, invalid_parent in (
+            ("wrong parent event", dict(parent, event="workflow_dispatch")),
+            ("wrong source", dict(parent, head_sha=HEAD)),
+            ("retried parent", dict(parent, run_attempt=2)),
+            ("failed parent", dict(parent, conclusion="failure")),
+            ("stale parent", dict(parent, created_at="2026-10-29T06:00:00Z")),
+        ):
+            with self.subTest(name=name), self.assertRaises(sav.SourceAcceptanceError):
+                sav._validated_automatic_origin(Provider(invalid_parent), run, data, SOURCE)
+
+        wrong_actor = dict(run, actor={"login": "P00NSMASHER"})
+        with self.assertRaises(sav.SourceAcceptanceError):
+            sav._validated_automatic_origin(Provider(parent), wrong_actor, data, SOURCE)
+        changed_receipt = dict(receipt, independent_verification="ACCEPTED")
+        with self.assertRaises(sav.SourceAcceptanceError):
+            sav._validated_automatic_origin(
+                Provider(parent), run,
+                archive(**{"watchdog-origin.json": changed_receipt}), SOURCE,
+            )
+        with self.assertRaises(sav.SourceAcceptanceError):
+            sav._validated_automatic_origin(
+                Provider(parent), run,
+                archive(**{
+                    "watchdog-origin.json": receipt,
+                    "cloudflare-origin.json": {"kind": "cloudflare_cron_v1"},
+                }), SOURCE,
+            )
+        direct = dict(run, event="schedule")
+        with self.assertRaisesRegex(sav.SourceAcceptanceError, "uncoordinated"):
+            sav._validated_automatic_origin(Provider(parent), direct, data, SOURCE)
+
+    def test_same_event_different_scheduler_origins_cannot_overlap(self):
+        dispatch = {
+            "event": "workflow_dispatch", "origin_kind": "cloudflare_cron_v1",
+            "created": sav.utc("2026-10-29T06:30:21Z"),
+            "completed": sav.utc("2026-10-29T06:32:27Z"),
+        }
+        native = {
+            "event": "workflow_dispatch", "origin_kind": "github_schedule",
+            "created": sav.utc("2026-10-29T06:30:59Z"),
+            "completed": sav.utc("2026-10-29T06:34:46Z"),
+        }
+        with self.assertRaisesRegex(
+            sav.SourceAcceptanceError, "competing scheduler origins overlapped"
+        ):
+            sav._require_nonoverlapping_scheduler_origins([dispatch, native])
+        native["created"] = dispatch["completed"]
+        sav._require_nonoverlapping_scheduler_origins([dispatch, native])
 
     def test_publish_check_binds_name_app_source_and_receipt(self):
         external = "source-acceptance:" + SOURCE + ":" + "c" * 64
