@@ -92,12 +92,12 @@ def verify_repairs(api, rows, source, core_ids, cutoff=None):
             continue
         if row.get('status') != 'completed':
             continue
-        # A repair that only finishes after the fixed terminal deadline is
-        # not retrospective proof of 30-minute terminal follow-through.
-        if cutoff is not None and utc(row.get('updated_at')) > cutoff:
-            continue
         req(row.get('conclusion') == 'success' and row.get('run_attempt') == 1,
             'original scheduled repair failed or retried')
+        # Preserve failed/retried original repairs even when they finish late.
+        # Late successful work cannot retroactively certify the 30m window.
+        if cutoff is not None and utc(row.get('updated_at')) > cutoff:
+            continue
         doc = api.json(f"/actions/runs/{row['id']}/artifacts?per_page=100")
         artifacts = doc.get('artifacts', [])
         req(doc.get('total_count') == 1 and len(artifacts) == 1, 'repair artifact census invalid')
