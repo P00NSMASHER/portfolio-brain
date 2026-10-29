@@ -238,6 +238,14 @@ def _one_artifact(api: GitHubReadOnly, run: dict, source: str) -> tuple[dict, by
     return item, raw, delivery
 
 
+def _require_nonoverlapping_scheduler_origins(rows: list[dict]) -> None:
+    """Deny overlapping invocations from distinct automatic schedulers."""
+    for previous, current in zip(rows, rows[1:]):
+        if previous["event"] != current["event"]:
+            req(current["created"] >= previous["completed"],
+                "competing scheduler origins overlapped")
+
+
 def collect_original_runs(api: GitHubReadOnly, source: str, evidence: dict | None = None) -> dict:
     if evidence is not None:
         req(type(evidence) is dict, "run evidence missing")
@@ -298,7 +306,9 @@ def collect_original_runs(api: GitHubReadOnly, source: str, evidence: dict | Non
                 scheduled = origin.get("scheduled_at")
                 utc(scheduled)
             proven.append({
-                "id": run_id, "event": run["event"], "completed": utc(job.get("completed_at")),
+                "id": run_id, "event": run["event"],
+                "created": utc(run.get("created_at")),
+                "completed": utc(job.get("completed_at")),
                 "state_parent": state_parent, "state_commit": state_commit,
                 "sequence": proof["state_sequence"], "canonical_hash": proof["canonical_hash"],
                 "scheduled_at": scheduled,
@@ -312,6 +322,7 @@ def collect_original_runs(api: GitHubReadOnly, source: str, evidence: dict | Non
             "source state publication chain is not contiguous")
     automatic = [row for row in proven if row["event"] != "push"]
     req(len(automatic) >= 2, "automatic run census too small")
+    _require_nonoverlapping_scheduler_origins(automatic)
     span = int((automatic[-1]["completed"] - automatic[0]["completed"]).total_seconds())
     gaps = [int((right["completed"] - left["completed"]).total_seconds())
             for left, right in zip(automatic, automatic[1:])]
