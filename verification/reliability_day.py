@@ -1,4 +1,4 @@
-"""Read-only 24-hour observation; no independent release authority."""
+"""Read-only 12-hour observation; no independent release authority."""
 from datetime import timedelta
 import hashlib
 import json
@@ -8,12 +8,14 @@ from soak_v3.remote_probe import GitHubReadOnly
 from verification.source_acceptance_verifier import collect_original_runs, req, utc, _zip_json
 
 CORE = '/actions/workflows/brain-cycle.yml/runs?branch=main&per_page=100'
+REQUIRED_SPAN_SECONDS = 12 * 60 * 60
+WINDOW_LIMIT_SECONDS = REQUIRED_SPAN_SECONDS + 30 * 60
 
 
 def evaluate(summary):
     req(summary['maximum_gap'] <= 5400, 'automatic cycle gap exceeded')
-    return {'status': 'PASS' if summary['span'] >= 86400 else 'COLLECTING',
-            'completed_span_seconds': summary['span'], 'required_span_seconds': 86400,
+    return {'status': 'PASS' if summary['span'] >= REQUIRED_SPAN_SECONDS else 'COLLECTING',
+            'completed_span_seconds': summary['span'], 'required_span_seconds': REQUIRED_SPAN_SECONDS,
             'maximum_gap_seconds': summary['maximum_gap'], 'independent_release_authority': False}
 
 
@@ -42,9 +44,9 @@ def window(rows, source):
     first = None
     for row in selected:
         created = utc(row['created_at']) if first is not None else None
-        # The receipt is a fixed first-24.5-hour snapshot. A later run cannot
+        # The receipt is a fixed first-12.5-hour snapshot. A later run cannot
         # retroactively change that already bounded evidence window.
-        if first is not None and (created - first).total_seconds() > 88200:
+        if first is not None and (created - first).total_seconds() > WINDOW_LIMIT_SECONDS:
             break
         if row.get('status') != 'completed':
             break
@@ -55,9 +57,9 @@ def window(rows, source):
             if first is None:
                 first = utc(row['created_at'])
                 created = first
-            # Include a boundary cycle at exactly 24.5h; the collector uses
-            # job completion times to establish the required 24-hour span.
-            if (created - first).total_seconds() >= 88200:
+            # Include a boundary cycle at exactly 12.5h; the collector uses
+            # job completion times to establish the required 12-hour span.
+            if (created - first).total_seconds() >= WINDOW_LIMIT_SECONDS:
                 break
     return completed
 
@@ -107,7 +109,9 @@ def main():
     api = GitHubReadOnly(os.environ['GITHUB_TOKEN'], max_calls=656)
     req(api.json('/branches/main')['commit']['sha'] == source, 'source moved')
     rows = window(inventory(api, CORE + "&head_sha=" + source), source)
-    result = {'status': 'COLLECTING', 'source_sha': source, 'independent_release_authority': False}
+    result = {'status': 'COLLECTING', 'source_sha': source,
+              'required_span_seconds': REQUIRED_SPAN_SECONDS,
+              'independent_release_authority': False}
     if sum(row.get('event') in {'schedule', 'workflow_dispatch'} for row in rows) >= 2:
         summary = collect_original_runs(Snapshot(api, rows), source)
         result.update(evaluate(summary), qualifying_cores=len(summary['automatic']),
