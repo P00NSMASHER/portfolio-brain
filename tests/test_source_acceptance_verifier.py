@@ -296,16 +296,18 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
                 if path == "/actions/runs/501":
                     return self.document
                 if path == "/actions/runs/501/jobs?filter=all&per_page=100":
-                    return {"total_count": 1, "jobs": [{
-                        "name": "scheduled-watchdog",
-                        "status": "completed", "conclusion": "success",
-                        "steps": [
-                            {"name": "Check independent GitHub scheduling liveness",
-                             "conclusion": "success"},
-                            {"name": "Dispatch one overdue core without inventing a PASS",
-                             "conclusion": "success" if self.dispatched else "skipped"},
-                        ],
-                    }]}
+                    return {"total_count": 2, "jobs": [
+                        {"name": "dispatch", "status": "completed",
+                         "conclusion": "skipped", "steps": []},
+                        {"name": "scheduled-watchdog",
+                         "status": "completed", "conclusion": "success",
+                         "steps": [
+                             {"name": "Check independent GitHub scheduling liveness",
+                              "conclusion": "success"},
+                             {"name": "Dispatch one overdue core without inventing a PASS",
+                              "conclusion": "success" if self.dispatched else "skipped"},
+                         ]},
+                    ]}
                 raise AssertionError("unexpected provider read")
 
         def archive(**documents):
