@@ -57,10 +57,14 @@ CI runs all of the following on the isolated branch:
 1. contract tests for public discovery and all eight unpaid HTTP 402 challenges;
 2. exact Base USDC / `USD Coin` payment metadata checks;
 3. mocked verify → data → settle ordering plus no-settle-on-upstream-failure;
-4. live smoke tests against all six authoritative public-data families;
-5. `@agentcash/discovery` origin discovery;
+4. deterministic mock-payment contracts, never settling real payments;
+5. `@agentcash/discovery` origin discovery in the isolated CI job;
 6. `@agentcash/discovery` checks against every paid route;
 7. warning-free discovery enforcement.
+
+## Live upstream qualification (not a CI release pass)
+
+The original [standalone CI run 40972971832](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/40972971832) failed its live upstream smoke on an actual U.S. Census 502 response. That failure remains preserved and **does not establish readiness**. The live upstream check is now separate from deterministic mock-payment CI so external outages cannot masquerade as a code regression. A future deployment requires a new successful `npm run test:upstreams` on an explicitly authorized network plus independent upstream/settlement security review. No real payment tests are authorized.
 
 ## Render deployment
 
