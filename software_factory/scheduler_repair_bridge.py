@@ -242,11 +242,15 @@ def verify_factory_candidate(
         req(work["verification_id"] is None and work["pr_number"] is None,
             "factory candidate was already verified or submitted")
 
+        candidate_binding_hash = sf.candidate_binding_hash(
+            work_id, required_state="VERIFYING"
+        )
         independent_test_receipt_hash = "sha256:" + hashlib.sha256(independent_test_log).hexdigest()
         report_hash = hashv({
             "factory_work_id": work_id,
             "request_fingerprint": request["fingerprint"],
             "candidate_commit_sha": expected_commit_sha,
+            "candidate_binding_hash": candidate_binding_hash,
             "diff_hash": work["diff_hash"],
             "independent_test_receipt_hash": independent_test_receipt_hash,
         })
@@ -255,6 +259,7 @@ def verify_factory_candidate(
             VERIFIER_AGENT_ID,
             "PASS",
             report_hash=report_hash,
+            candidate_binding_hash=candidate_binding_hash,
             evidence_refs=[
                 f"repair-request:{request['request_id']}",
                 f"candidate-commit:{expected_commit_sha}",
@@ -289,6 +294,7 @@ def verify_factory_candidate(
             "candidate_commit_sha": expected_commit_sha,
             "changed_paths": work["changed_paths"],
             "diff_hash": work["diff_hash"],
+            "candidate_binding_hash": candidate_binding_hash,
             "independent_test_receipt_hash": independent_test_receipt_hash,
             "factory_verification_id": verification_id,
             "pr_number": pr_number,

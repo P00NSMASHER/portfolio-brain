@@ -5,6 +5,7 @@ import base64,hashlib,json,re,sqlite3,time,uuid
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
+SHA256P=re.compile(r"^sha256:[0-9a-f]{64}$")
 class SoftwareFactoryError(ValueError):pass
 def req(ok,msg):
     if not ok:raise SoftwareFactoryError(msg)
@@ -61,13 +62,17 @@ class SoftwareFactory:
         );
         CREATE TABLE IF NOT EXISTS verification(
           verification_id TEXT PRIMARY KEY,work_id TEXT NOT NULL,builder_agent_id TEXT NOT NULL,verifier_agent_id TEXT NOT NULL,
-          verdict TEXT NOT NULL,report_hash TEXT NOT NULL,evidence_refs_json TEXT NOT NULL,created_at REAL NOT NULL
+          verdict TEXT NOT NULL,report_hash TEXT NOT NULL,candidate_binding_hash TEXT,evidence_refs_json TEXT NOT NULL,created_at REAL NOT NULL
         );
         CREATE TABLE IF NOT EXISTS events(
           seq INTEGER PRIMARY KEY AUTOINCREMENT,event_id TEXT UNIQUE NOT NULL,work_id TEXT NOT NULL,event_type TEXT NOT NULL,
           payload_json TEXT NOT NULL,created_at REAL NOT NULL,prev_hash TEXT NOT NULL,event_hash TEXT UNIQUE NOT NULL
         );
-        """);self.conn.commit()
+        """)
+        columns={row["name"] for row in self.conn.execute("PRAGMA table_info(verification)")}
+        if "candidate_binding_hash" not in columns:
+            self.conn.execute("ALTER TABLE verification ADD COLUMN candidate_binding_hash TEXT")
+        self.conn.commit()
     def _work(self,wid):
         r=self.conn.execute("SELECT * FROM work WHERE work_id=?",(wid,)).fetchone();req(r is not None,f"unknown work: {wid}");return r
     def _event(self,wid,event_type,payload,now):
@@ -106,32 +111,50 @@ class SoftwareFactory:
         req(changed_paths and len(changed_paths)<=policy()["max_changed_files"] and len(changed_paths)==len(set(changed_paths)),"changed_paths invalid")
         req(all(_path_allowed(p) for p in changed_paths),"candidate touches forbidden path")
         req(test_commands and len(test_commands)==len(set(test_commands)),"regression test commands required")
-        req(test_receipt_hashes and len(test_receipt_hashes)==len(set(test_receipt_hashes)) and all(h.startswith("sha256:") and len(h)==71 for h in test_receipt_hashes),"test receipts required")
-        req(isinstance(diff_hash,str) and diff_hash.startswith("sha256:") and len(diff_hash)==71,"diff_hash required")
+        req(test_receipt_hashes and len(test_receipt_hashes)==len(set(test_receipt_hashes)) and all(isinstance(h,str) and SHA256P.fullmatch(h) for h in test_receipt_hashes),"canonical test receipt hashes required")
+        req(isinstance(diff_hash,str) and SHA256P.fullmatch(diff_hash),"canonical diff_hash required")
         self.conn.execute("UPDATE work SET state='VERIFYING',commit_sha=?,changed_paths_json=?,test_commands_json=?,test_receipt_hashes_json=?,diff_hash=?,updated_at=? WHERE work_id=?",
                           (commit_sha,canon(changed_paths),canon(test_commands),canon(test_receipt_hashes),diff_hash,ts,work_id))
-        self._event(work_id,"SUBMITTED_FOR_VERIFICATION",{"commit_sha":commit_sha,"diff_hash":diff_hash,"test_receipt_hashes":test_receipt_hashes},ts);self.conn.commit()
-    def verify(self,work_id,verifier_agent_id,verdict,*,report_hash,evidence_refs,now=None):
+        binding=self.candidate_binding_hash(work_id,required_state="VERIFYING")
+        self._event(work_id,"SUBMITTED_FOR_VERIFICATION",{"commit_sha":commit_sha,"diff_hash":diff_hash,"test_receipt_hashes":test_receipt_hashes,"candidate_binding_hash":binding},ts);self.conn.commit()
+    def candidate_binding_hash(self,work_id,required_state=None):
+        r=self._work(work_id)
+        if required_state is not None:req(r["state"]==required_state,f"work not {required_state.lower()}")
+        req(r["state"] in {"VERIFYING","READY_FOR_PR","PR_OPEN"},"candidate not submitted")
+        return hashv({
+          "factory_work_id":r["work_id"],"repository_full_name":r["repository_full_name"],
+          "base_sha":r["base_sha"],"branch_name":r["branch_name"],"attempt":int(r["attempt"]),
+          "commit_sha":r["commit_sha"],"changed_paths":json.loads(r["changed_paths_json"]),
+          "test_commands":json.loads(r["test_commands_json"]),
+          "test_receipt_hashes":json.loads(r["test_receipt_hashes_json"]),"diff_hash":r["diff_hash"]
+        })
+    def verify(self,work_id,verifier_agent_id,verdict,*,report_hash,evidence_refs,candidate_binding_hash=None,now=None):
         ts=time.time() if now is None else float(now);r=self._work(work_id)
         req(r["state"]=="VERIFYING","work not verifying");req(verifier_agent_id==r["verifier_agent_id"],"wrong verifier");req(verifier_agent_id!=r["builder_agent_id"],"builder cannot verify self")
         req(verifier_agent_id in policy()["allowed_verifier_agent_ids"],"verifier not allowed");req(verdict in {"PASS","FAIL","UNKNOWN"},"invalid verdict")
-        req(report_hash.startswith("sha256:") and len(report_hash)==71,"report hash required");req(evidence_refs and len(evidence_refs)==len(set(evidence_refs)),"verification evidence required")
+        expected_binding=self.candidate_binding_hash(work_id,required_state="VERIFYING")
+        req(candidate_binding_hash==expected_binding,"verification candidate binding mismatch")
+        req(isinstance(report_hash,str) and SHA256P.fullmatch(report_hash),"canonical report hash required");req(evidence_refs and len(evidence_refs)==len(set(evidence_refs)),"verification evidence required")
         vid="SFV-"+uuid.uuid4().hex[:20].upper()
-        self.conn.execute("INSERT INTO verification(verification_id,work_id,builder_agent_id,verifier_agent_id,verdict,report_hash,evidence_refs_json,created_at) VALUES(?,?,?,?,?,?,?,?)",
-                          (vid,work_id,r["builder_agent_id"],verifier_agent_id,verdict,report_hash,canon(evidence_refs),ts))
+        self.conn.execute("INSERT INTO verification(verification_id,work_id,builder_agent_id,verifier_agent_id,verdict,report_hash,candidate_binding_hash,evidence_refs_json,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                          (vid,work_id,r["builder_agent_id"],verifier_agent_id,verdict,report_hash,candidate_binding_hash,canon(evidence_refs),ts))
         if verdict=="PASS":state="READY_FOR_PR"
         elif int(r["attempt"])<int(r["max_attempts"]):state="QUEUED"
         else:state="BLOCKED"
         self.conn.execute("UPDATE work SET state=?,verification_id=?,branch_name=CASE WHEN ?='QUEUED' THEN NULL ELSE branch_name END,commit_sha=CASE WHEN ?='QUEUED' THEN NULL ELSE commit_sha END,updated_at=? WHERE work_id=?",
                           (state,vid,state,state,ts,work_id))
-        self._event(work_id,"VERIFIED",{"verification_id":vid,"verdict":verdict,"next_state":state},ts);self.conn.commit();return vid
+        self._event(work_id,"VERIFIED",{"verification_id":vid,"verdict":verdict,"candidate_binding_hash":candidate_binding_hash,"next_state":state},ts);self.conn.commit();return vid
     def pr_action(self,work_id):
         r=self._work(work_id);req(r["state"]=="READY_FOR_PR","work not PR-ready");rp=_repo_policy(r["repository_id"]);req(rp["pr_create_enabled"],"PR creation disabled")
+        verification=self.conn.execute("SELECT candidate_binding_hash FROM verification WHERE verification_id=?",(r["verification_id"],)).fetchone()
+        binding=self.candidate_binding_hash(work_id)
+        req(verification is not None and verification["candidate_binding_hash"]==binding,"verification is not bound to current candidate")
         title=f"[factory] {r['title']}"
         body=(f"Factory work: {r['work_id']}\n"
               f"Source: {r['issue_ref']}\n"
               f"Base: {r['base_sha']}\n"
               f"Candidate: {r['commit_sha']}\n"
+              f"Candidate binding: {binding}\n"
               f"Factory regression verification: {r['verification_id']}\n"
               "Factory merge authority: NONE\n"
               "Factory deployment authority: NONE\n"

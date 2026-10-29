@@ -19,6 +19,7 @@ import urllib.request
 from pathlib import Path
 from brain.core import require, BrainError, digest, utcnow
 from brain.intelligence import REPO, is_test_source_path, related_test_paths
+from brain.limits import MAX_REQUESTS, CHECKS_PER_PAGE, MAX_REPOSITORY_CHECKS
 
 def _api_request_family(path):
     """Return only a fixed, non-sensitive endpoint family; never a URL/path.
@@ -64,7 +65,12 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         raise BrainError("REDIRECT_REFUSED: source identity must remain api.github.com")
 
 class GitHub:
-    def __init__(self, *, private=False, transport=None):
+    def __init__(self, *, private=False, transport=None, max_requests=MAX_REQUESTS):
+        # An operation may deliberately reserve provider GETs for a later
+        # proof stage, but no caller may exceed the original hard 24 limit.
+        require(type(max_requests) is int and 1<=max_requests<=MAX_REQUESTS,
+                "REQUEST_CAP_INVALID")
+        self.max_requests=max_requests
         self.private=private
         self.token=os.environ.get("GITHUB_TOKEN", "")
         require(not private or self.token, "PRIVATE_ACCESS_UNAVAILABLE: explicit existing GITHUB_TOKEN required")
@@ -81,7 +87,8 @@ class GitHub:
         for attempt in range(2):
             # An exhausted budget cannot increment the reported request
             # counter beyond the policy limit. No provider request is sent.
-            require(self.requests < 24, "REQUEST_BUDGET_EXHAUSTED")
+            require(self.requests < MAX_REQUESTS and self.requests < self.max_requests,
+                    "REQUEST_BUDGET_EXHAUSTED")
             self.requests+=1
             try:
                 if self.transport:
@@ -128,25 +135,18 @@ class GitHub:
 
     def observe(self, repository):
         meta,branch,sha=self.repository(repository)
-        checks=self.get(f'/repos/{repository}/commits/{sha}/check-runs?per_page=100')
-        total=checks.get('total_count')
-        require(type(total) is int and 0<=total<=500 and type(checks.get('check_runs')) is list, 'CHECK_COVERAGE_UNAVAILABLE: malformed or over bounded500 history')
-        items=list(checks['check_runs'])
-        require(len(items)==min(total,100), 'CHECK_COVERAGE_TRUNCATED: incomplete first page')
-        for page in range(2,(total+99)//100+1):
-            batch=self.get(f'/repos/{repository}/commits/{sha}/check-runs?per_page=100&page={page}')
-            require(batch.get('total_count')==total and type(batch.get('check_runs')) is list, 'CHECK_COVERAGE_CHANGED: do not claim complete changing history')
-            items.extend(batch['check_runs'])
-        require(len(items)==total,'CHECK_COVERAGE_TRUNCATED: incomplete delivery')
-        # GitHub check-run IDs are unique, positive provider identities on
-        # EVERY page, including a one-page response. Never accept a duplicate
-        # as a second independent run, or a result for another source SHA.
-        require(
-            all(type(x) is dict and type(x.get("id")) is int
-                and x["id"] > 0 and x.get("head_sha") == sha for x in items)
-            and len({x["id"] for x in items}) == total,
-            "CHECK_COVERAGE_AMBIGUOUS: invalid, duplicate or cross-revision check identity",
-        )
+        for attempt in range(2):
+            try:
+                items=self._complete_checks(repository, sha)
+                break
+            except BrainError as exc:
+                if attempt or not str(exc).startswith('CHECK_COVERAGE_CHANGED:'):
+                    raise
+                # Discard every page of the changing snapshot. The same client
+                # retains all consumed requests and reserves final branch proof.
+                require(min(MAX_REQUESTS,self.max_requests)-self.requests >= 2,
+                        'CHECK_COVERAGE_BUDGET_EXCEEDED: no complete retry reserve')
+                time.sleep(1)
         # Branches can advance during a multi-page check fetch. A sampled
         # branch must still point to this SHA at the end, or the entire
         # observation fails closed. No retry or second provider is spawned.
@@ -159,6 +159,47 @@ class GitHub:
         )
         rows=[{"name":x["name"],"status":x["status"],"conclusion":x.get("conclusion"),"head_sha":x["head_sha"],"url":x["html_url"]} for x in items]
         return {"repository":repository,"head_sha":sha,"default_branch":branch,"checks":rows,"open_issues":meta["open_issues_count"],"source_ref":f'https://github.com/{repository}/commit/{sha}'}, meta["private"]
+
+    def _complete_checks(self, repository, sha):
+        """Return a complete immutable-source census, or discard all partial pages."""
+        checks=self.get(f'/repos/{repository}/commits/{sha}/check-runs?per_page={CHECKS_PER_PAGE}')
+        require(type(checks) is dict, 'CHECK_COVERAGE_UNAVAILABLE: malformed history')
+        total=checks.get('total_count')
+        require(type(total) is int and total>=0 and type(checks.get('check_runs')) is list,
+                'CHECK_COVERAGE_UNAVAILABLE: malformed history')
+        pages=max(1,(total+CHECKS_PER_PAGE-1)//CHECKS_PER_PAGE)
+        # The first page is already read. Reserve the final branch read;
+        # never truncate history, reset the counter, or create a fresh client.
+        require(total<=MAX_REPOSITORY_CHECKS
+                and pages<=min(MAX_REQUESTS,self.max_requests)-self.requests,
+                'CHECK_COVERAGE_BUDGET_EXCEEDED: complete history and branch readback do not fit remaining request budget')
+        items=list(checks['check_runs'])
+        require(len(items)==min(total,CHECKS_PER_PAGE), 'CHECK_COVERAGE_TRUNCATED: incomplete first page')
+        for page in range(2,pages+1):
+            # A transient retry can consume the previously reserved capacity.
+            require(pages-page+2<=min(MAX_REQUESTS,self.max_requests)-self.requests,
+                    'CHECK_COVERAGE_BUDGET_EXCEEDED: retry consumed complete-history reserve')
+            batch=self.get(f'/repos/{repository}/commits/{sha}/check-runs?per_page={CHECKS_PER_PAGE}&page={page}')
+            require(type(batch) is dict and type(batch.get('total_count')) is int
+                    and batch['total_count'] >= 0
+                    and type(batch.get('check_runs')) is list,
+                    'CHECK_COVERAGE_UNAVAILABLE: malformed history page')
+            require(batch['total_count']==total,
+                    'CHECK_COVERAGE_CHANGED: do not claim complete changing history')
+            require(len(batch['check_runs'])==min(CHECKS_PER_PAGE,total-(page-1)*CHECKS_PER_PAGE),
+                    'CHECK_COVERAGE_TRUNCATED: incomplete page')
+            items.extend(batch['check_runs'])
+        require(len(items)==total,'CHECK_COVERAGE_TRUNCATED: incomplete delivery')
+        # GitHub check-run IDs are unique, positive provider identities on
+        # EVERY page, including a one-page response. Never accept a duplicate
+        # as a second independent run, or a result for another source SHA.
+        require(
+            all(type(x) is dict and type(x.get("id")) is int
+                and x["id"] > 0 and x.get("head_sha") == sha for x in items)
+            and len({x["id"] for x in items}) == total,
+            "CHECK_COVERAGE_AMBIGUOUS: invalid, duplicate or cross-revision check identity",
+        )
+        return items
 
     def _bounded_public_tree(self, repository, head_sha, terms):
         """Source-visible but INCOMPLETE tree evidence after recursive overflow.
@@ -265,7 +306,15 @@ class GitHub:
             repos=[self.get("/repos/"+repository)]
         else:
             query=target["query"]+('' if self.private else ' is:public')
-            response=self.get("/search/repositories?q="+urllib.parse.quote(query,safe="")+"&per_page=8&sort=updated")
+            path="/search/repositories?q="+urllib.parse.quote(query,safe="")+"&per_page=8&sort=updated"
+            response=self.get(path)
+            # Retry only GitHub's explicit incomplete marker, once, inside
+            # the existing shared request budget. Never consume partial hits.
+            if (type(response) is dict and response.get("incomplete_results") is True
+                    and self.requests < min(MAX_REQUESTS, self.max_requests)):
+                time.sleep(1)
+                response=self.get(path)
+            require(type(response) is dict, "DISCOVERY_RESPONSE_INVALID")
             require(response.get("incomplete_results") is False, "DISCOVERY_INCOMPLETE")
             require(type(response.get("items")) is list, "DISCOVERY_RESPONSE_INVALID")
             repos=response["items"]

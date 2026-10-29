@@ -11,7 +11,7 @@ from software_factory.scheduler_repair_bridge import (
     submit_factory_candidate,
     verify_factory_candidate,
 )
-from software_factory.software_factory import hashv
+from software_factory.software_factory import SoftwareFactoryError, hashv
 
 
 class FakeTransport:
@@ -159,6 +159,7 @@ class SchedulerRepairFactoryBridgeTests(unittest.TestCase):
         self.assertTrue(final["independent_factory_verified"])
         self.assertEqual(final["pr_number"], 77)
         self.assertTrue(final["technical_candidate_tested"])
+        self.assertTrue(final["candidate_binding_hash"].startswith("sha256:"))
         self.assertFalse(final["foundation_success"])
         self.assertFalse(final["hosted_independent_success"])
         self.assertFalse(final["market_verified"])
@@ -171,9 +172,59 @@ class SchedulerRepairFactoryBridgeTests(unittest.TestCase):
         body = pull_calls[0][2]["body"]
         self.assertIn("REPAIR_SOURCE_REF:" + request["source_ref"], body)
         self.assertIn("AUTO_REPAIR_FINGERPRINT:" + request["fingerprint"], body)
+        self.assertIn("Candidate binding: " + final["candidate_binding_hash"], body)
         self.assertIn("Factory merge authority: NONE", body)
         self.assertIn("portfolio-phase1-gate", body)
         self.assertFalse(any("/merge" in url for _, url, _ in transport.calls))
+
+    def test_scheduler_verifier_rejects_candidate_identity_drift_before_pr(self):
+        request = scheduler_request()
+        transport = FakeTransport(request["base_sha"])
+        executor = GitHubExecutor("token", transport=transport)
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            db = root / "factory.sqlite3"
+            candidate = root / "candidate"
+            (candidate / "learning").mkdir(parents=True)
+            (candidate / "learning" / "continuous_learning.py").write_text(
+                "def normalize_marker(value):\n    return value.strip().upper()\n",
+                encoding="utf-8",
+            )
+            start_factory_repair(
+                request, db_path=db, attempt_id="36700000124",
+                executor=executor, now=100,
+            )
+            validation = {
+                "schema_version": "1.0.0",
+                "request_id": request["request_id"],
+                "fingerprint": request["fingerprint"],
+                "base_sha": request["base_sha"],
+                "changed_paths": ["learning/continuous_learning.py"],
+                "test_paths": [],
+                "implementation_paths": ["learning/continuous_learning.py"],
+                "changed_lines": 2,
+                "diff_hash": hashv({"fixture": "candidate-drift"}),
+                "merge_authority_granted": False,
+                "deployment_authority_granted": False,
+            }
+            submitted = submit_factory_candidate(
+                request, validation, test_log=b"builder PASS\n",
+                candidate_root=candidate, db_path=db,
+                attempt_id="36700000124", executor=executor, now=101,
+            )
+            with self.assertRaisesRegex(SoftwareFactoryError,
+                                        "candidate commit identity drifted"):
+                verify_factory_candidate(
+                    request, independent_test_log=b"independent PASS\n",
+                    expected_commit_sha="f" * 40, db_path=db,
+                    attempt_id="36700000124", executor=executor, now=102,
+                )
+
+        self.assertFalse(any(
+            method == "POST" and url.endswith("/pulls")
+            for method, url, _payload in transport.calls
+        ))
 
     def test_workflow_prevents_python_bytecode_from_contaminating_candidate_diff(self):
         root = Path(__file__).resolve().parents[1]

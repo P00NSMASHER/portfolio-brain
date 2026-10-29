@@ -1,8 +1,8 @@
 name: brain-cycle-v2
 
 on:
-  schedule:
-    - cron: "7,27,47 * * * *"
+  # Existing native cron remains active in brain-clock.yml, where its
+  # watchdog checks recent or active original cores before dispatch.
   workflow_dispatch:
     inputs:
       clock_commit:
@@ -23,9 +23,7 @@ on:
         type: string
   push:
     branches: ["main"]
-    paths:
-      - "brain/**"
-      - ".github/workflows/brain-cycle.yml"
+    # Every source revision needs its own original deployment evidence.
 
 permissions:
   contents: read
@@ -140,6 +138,14 @@ jobs:
         continue-on-error: true
         run: |
           python -m brain.v8 cycle --input /tmp/brain/projects/report.json --source-sha "$BRAIN_SOURCE_SHA" --cycle "$GITHUB_RUN_NUMBER" --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /tmp/brain/v8-engineering.json
+      - name: Persist v9 owner work and bounded original publication evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python -m brain.v9.batch_cycle cycle --db state/state.sqlite \
+            --input /tmp/brain/projects/report.json --expected-sha "$BRAIN_SOURCE_SHA" \
+            --cycle "$GITHUB_RUN_NUMBER" --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --proof-manifest brain/v9/repair-proof.json --output /tmp/brain/v9-engineering.json
       - name: Propose a measured protected knowledge upgrade when eligible
         env:
           GITHUB_TOKEN: ${{ github.token }}

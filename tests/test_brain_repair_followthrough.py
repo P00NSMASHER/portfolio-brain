@@ -164,6 +164,72 @@ class OwnerFollowThroughTests(unittest.TestCase):
         self.assertFalse(task["financial_or_external_action_authorized"])
         self.assertEqual(plan["technical_main_verified_count"], 1)
 
+    def test_all_nonterminal_main_checks_reopen_previous_technical_verification(self):
+        for project in ("retally", "product-factory"):
+            for status in ("queued", "in_progress", "pending", "waiting", "requested"):
+                with self.subTest(project=project, status=status):
+                    queue = active()
+                    work = getwork(queue, project)
+                    proof = receipt(work)
+                    proof["main_checks"][0].update(status=status, conclusion=None)
+                    plan = follow_through(
+                        queue, cycle=11,
+                        history=[prior(work, "MAIN_TECHNICALLY_VERIFIED")],
+                        provider_receipts=[proof],
+                    )
+                    task = next(x for x in plan["actions"]
+                                if x["dedupe_key"] == work["dedupe_key"])
+                    self.assertEqual(task["provider_status"], "MAIN_CHECKS_UNVERIFIED_OR_ADVERSE")
+                    self.assertEqual(task["next_operation"], "REVERIFY_PREVIOUSLY_VERIFIED_MAIN")
+                    self.assertFalse(task["technical_main_source_verified"])
+                    record = next(x for x in plan["next_history"]
+                                  if x["dedupe_key"] == work["dedupe_key"])
+                    self.assertEqual(record["state"], "OBSERVED")
+                    self.assertEqual(plan["technical_main_verified_count"], 0)
+                    self.assertFalse(plan["merge_or_deployment_authority"])
+
+    def test_valid_adverse_main_conclusions_remain_unverified(self):
+        for conclusion in ("failure", "timed_out", "cancelled", "action_required",
+                           "stale", "startup_failure"):
+            with self.subTest(conclusion=conclusion):
+                queue = active()
+                work = getwork(queue, "retally")
+                proof = receipt(work)
+                proof["main_checks"][0]["conclusion"] = conclusion
+                plan = follow_through(queue, cycle=11, provider_receipts=[proof])
+                task = next(x for x in plan["actions"]
+                            if x["dedupe_key"] == work["dedupe_key"])
+                self.assertEqual(task["provider_status"], "MAIN_CHECKS_UNVERIFIED_OR_ADVERSE")
+                self.assertFalse(task["technical_main_source_verified"])
+                self.assertEqual(plan["technical_main_verified_count"], 0)
+                self.assertFalse(plan["merge_or_deployment_authority"])
+
+    def test_nonterminal_main_checks_cannot_supply_a_terminal_conclusion(self):
+        for status in ("queued", "in_progress", "pending", "waiting", "requested"):
+            for conclusion in ("success", "failure"):
+                with self.subTest(status=status, conclusion=conclusion):
+                    queue = active()
+                    proof = receipt(getwork(queue, "retally"))
+                    proof["main_checks"][0].update(status=status, conclusion=conclusion)
+                    with self.assertRaisesRegex(BrainError,
+                                                "FOLLOWTHROUGH_PROVIDER_CHECK_IDENTITY_INVALID"):
+                        follow_through(queue, cycle=11, provider_receipts=[proof])
+
+    def test_unknown_or_malformed_main_status_and_conclusion_fail_closed(self):
+        for field, value in (
+            ("status", "accepted"), ("status", None), ("status", True),
+            ("status", 1), ("status", []), ("status", {}),
+            ("conclusion", "approved"), ("conclusion", True),
+            ("conclusion", []), ("conclusion", {}),
+        ):
+            with self.subTest(field=field, value=value):
+                queue = active()
+                proof = receipt(getwork(queue, "retally"))
+                proof["main_checks"][0][field] = value
+                with self.assertRaisesRegex(BrainError,
+                                            "FOLLOWTHROUGH_PROVIDER_CHECK_IDENTITY_INVALID"):
+                    follow_through(queue, cycle=11, provider_receipts=[proof])
+
     def test_provider_merge_can_close_disappeared_pr_only_with_proof(self):
         work = getwork(active(), "product-factory")
         queue = copy.deepcopy(active())

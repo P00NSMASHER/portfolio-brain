@@ -1,0 +1,94 @@
+name: portfolio-source-acceptance
+
+on:
+  workflow_run:
+    workflows: ["foundation-ci"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: portfolio-source-acceptance-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  attest-receipt:
+    if: >-
+      ${{
+        github.repository == 'P00NSMASHER/portfolio-brain' &&
+        github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain' &&
+        github.event.workflow_run.name == 'foundation-ci' &&
+        github.event.workflow_run.event == 'pull_request' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        startsWith(github.event.workflow_run.head_branch, 'auto-repair/pb-01-acceptance-receipt-') &&
+        github.event.workflow_run.head_repository.full_name == 'P00NSMASHER/portfolio-brain' &&
+        github.event.workflow_run.head_branch != 'main' &&
+        github.event.workflow_run.head_sha != github.sha
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Resolve exact acceptance pull request
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACCEPTANCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          ACCEPTANCE_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os, subprocess
+          raw=subprocess.check_output([
+              "gh","api",f"repos/{os.environ['GITHUB_REPOSITORY']}/pulls",
+              "-f","state=open","-f",f"head=P00NSMASHER:{os.environ['ACCEPTANCE_BRANCH']}",
+              "--method","GET"
+          ],text=True)
+          matches=[pr for pr in json.loads(raw)
+                   if pr.get("head",{}).get("sha")==os.environ["ACCEPTANCE_HEAD_SHA"]
+                   and pr.get("base",{}).get("ref")=="main"
+                   and pr.get("head",{}).get("repo",{}).get("full_name")==os.environ["GITHUB_REPOSITORY"]]
+          if len(matches)!=1:
+              raise SystemExit("exact acceptance PR missing or ambiguous")
+          print("number="+str(matches[0]["number"]))
+          PY
+
+      - name: Checkout trusted verifier from protected main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Pin reviewed source-acceptance producer
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(git hash-object verification/source_acceptance_verifier.py)" = "d8f1883ad34a8ca2d0a1dd4a3d8e68cb1cf5003d"
+
+      - name: Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Mint short-lived independent verifier App token
+        id: verifier-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: "5121826"
+          private-key: ${{ secrets.PORTFOLIO_VERIFIER_PRIVATE_KEY }}
+          owner: P00NSMASHER
+          repositories: portfolio-brain
+
+      - name: Verify original evidence and publish source-bound attestation
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PORTFOLIO_VERIFIER_TOKEN: ${{ steps.verifier-token.outputs.token }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          ACCEPTANCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: >-
+          python -m verification.source_acceptance_verifier
+          --pr-number "$PR_NUMBER"
+          --head-sha "$ACCEPTANCE_HEAD_SHA"

@@ -32,8 +32,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.sha }}"
-          test "$(git hash-object brain/v8/repair_core_origin.py)" = "d216e938c3e301042a13c97ed6fa0111be905230"
-          test "$(git hash-object brain/v8/repair_runtime.py)" = "79f4deab37a259e828ccf9ecaf34ff493d0859c7"
+          test "$(git hash-object brain/v8/repair_core_origin.py)" = "d57ff91a7783455f5efb429717b2871edd8fa543"
+          test "$(git hash-object brain/v8/repair_runtime.py)" = "6619993314d32af11a0fbab9b914837bc7f556b4"
           install -m 0500 brain/v8/repair_core_origin.py "$RUNNER_TEMP/v8-origin.py"
           install -m 0500 brain/v8/repair_runtime.py "$RUNNER_TEMP/v8-repair.py"
       - name: Authenticate original current-source automatic core before token mint
@@ -42,7 +42,30 @@ jobs:
           BRAIN_RUN_ID: ${{ github.event.workflow_run.id }}
           BRAIN_SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: python -I "$RUNNER_TEMP/v8-origin.py"
+
+      - name: Evaluate project-scoped candidate authority before token mint
+        id: authority
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from governance.validate_boundaries import candidate_pr_authority
+
+          receipt=candidate_pr_authority(
+              "PRJ-004",
+              "REPO-007",
+              "v8-capturebrief-hosting-doc-4a7c5d6c223b",
+          )
+          output=Path(os.environ["RUNNER_TEMP"])/"v8-authority.json"
+          output.write_text(json.dumps(receipt,sort_keys=True,indent=2)+"\n",encoding="utf-8")
+          with open(os.environ["GITHUB_OUTPUT"],"a",encoding="utf-8") as handle:
+              handle.write("allowed="+str(receipt["token_mint_allowed"]).lower()+"\n")
+          print("V8_AUTHORITY:",receipt["reason"],"token_mint_allowed:",receipt["token_mint_allowed"])
+          PY
       - name: Mint one-CaptureBrief-repository short-lived draft-only contents token
+        if: ${{ steps.authority.outputs.allowed == 'true' }}
         id: runtime
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
         with:
@@ -54,6 +77,7 @@ jobs:
           permission-pull-requests: write
           skip-token-revoke: false
       - name: Reobserve canonical docs and create ONLY source-bound draft PR
+        if: ${{ steps.authority.outputs.allowed == 'true' }}
         env:
           GH_TOKEN: ${{ steps.runtime.outputs.token }}
           INSTALLATION_ID: ${{ steps.runtime.outputs.installation-id }}
@@ -66,6 +90,8 @@ jobs:
           name: v8-source-bound-repair-${{ github.event.workflow_run.id }}-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/v8-origin.json
+            ${{ runner.temp }}/v8-authority.json
             ${{ runner.temp }}/v8-capturebrief-repair.json
           if-no-files-found: warn
           retention-days: 30
+

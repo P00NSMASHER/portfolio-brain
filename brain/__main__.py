@@ -88,15 +88,23 @@ def research(store, sha, output, *, api=None, repository=None):
     # Up to two alternative reviewed targets, not a blanket 404 bypass.
     # Preserve original 24-GET operation limit with >=7 GETs left for
     # each independent search, branch, tree and original blob inspection.
-    # Explicit/private scope, malformed provider payloads, nonempty branch
-    # 404, 403, identity and all other authority errors NEVER fall back.
+    # Only inaccessible public search hits or an explicitly incomplete
+    # public search may try an alternate reviewed query. Incomplete hits
+    # NEVER become source evidence. Explicit/private scope, malformed
+    # payloads, nonempty branch 404, 403 and identity errors stay fatal.
     for offset in range(min(3,len(targets))):
         target=reviewed_target((first_index+offset)%len(targets))
         before=api.requests
         try:
             inspected=api.discover(target,repository=repository)
         except BrainError as exc:
-            recoverable=(str(exc).startswith("DISCOVERY_ALL_SEARCH_RESULTS_UNAVAILABLE:")
+            # A GitHub repository-search response marked incomplete is
+            # untrusted, even if its items appear plausible. It is a bounded
+            # PUBLIC search availability failure, not a verified source.
+            # Keep the adapter's direct incomplete-results rejection intact.
+            incomplete=str(exc)=="DISCOVERY_INCOMPLETE"
+            recoverable=((incomplete or
+                          str(exc).startswith("DISCOVERY_ALL_SEARCH_RESULTS_UNAVAILABLE:"))
                          and repository is None and store.visibility=="PUBLIC"
                          and not getattr(api,"private",False))
             if not recoverable:
@@ -105,9 +113,13 @@ def research(store, sha, output, *, api=None, repository=None):
                 first_unavailable=exc
             skipped.append({
                 "target":target["project"],
-                "classification":"PUBLIC_SEARCH_RESULTS_UNINSPECTABLE",
+                "classification":("PUBLIC_SEARCH_INCOMPLETE" if incomplete else
+                                   "PUBLIC_SEARCH_RESULTS_UNINSPECTABLE"),
                 "get_requests":api.requests-before,
-                "source_gaps":list(getattr(api,"discovery_unavailable",[])),
+                "source_gaps":([{"stage":"search",
+                                  "reason":"GITHUB_SEARCH_INCOMPLETE_RESULTS"}]
+                                if incomplete else
+                                list(getattr(api,"discovery_unavailable",[]))),
                 "verified_candidates":0,
             })
             if offset==min(3,len(targets))-1 or api.requests>17:
@@ -202,7 +214,27 @@ def projects(store, sha, output, *, api=None,
         verify_original_repairs = real_adapter
     require(type(verify_original_repairs) is bool,
             "ORIGINAL_REPAIR_VERIFICATION_FLAG_INVALID")
-    api = api or GitHub(private=store.visibility == "PRIVATE")
+    cycle_index = canonical.get("state_sequence")
+    require(type(cycle_index) is int and 0 <= cycle_index <= 2**63 - 1,
+            "PROJECT_SOURCE_SEQUENCE_UNVERIFIED")
+    rotation = rotation_counter(
+        cycle_index,
+        environment=dict(os.environ) if real_adapter else {},
+        real_adapter=real_adapter,
+    )
+    # One in four authenticated brain-cycle runs reserves ten of the EXISTING
+    # twenty-four provider GETs for the v9 original publication readback.
+    # The monotonic workflow run number avoids modulo-state-sequence starvation.
+    # All other runs preserve the full project-observation contract.
+    publication_reserved_gets = (
+        10 if real_adapter
+        and rotation["basis"] == "GITHUB_WORKFLOW_RUN_SEQUENCE"
+        and rotation["index"] % 4 == 0 else 0
+    )
+    project_ceiling = policy()["max_requests_per_operation"] - publication_reserved_gets
+    require(project_ceiling in (14, 24), "PROJECT_PROOF_RESERVATION_INVALID")
+    api = api or GitHub(private=store.visibility == "PRIVATE",
+                        max_requests=project_ceiling)
     snapshots, errors = [], []
     observed_at = utcnow()
     extended = extended_repositories()
@@ -236,14 +268,6 @@ def projects(store, sha, output, *, api=None,
         row["repository"]: row
         for row in (*canonical.get("repositories", []), *snapshots)
     }
-    cycle_index = canonical.get("state_sequence")
-    require(type(cycle_index) is int and 0 <= cycle_index <= 2**63 - 1,
-            "PROJECT_SOURCE_SEQUENCE_UNVERIFIED")
-    rotation = rotation_counter(
-        cycle_index,
-        environment=dict(os.environ) if real_adapter else {},
-        real_adapter=real_adapter,
-    )
     focused = observe_priority_prs(
         api, observed, review_contracts=FOCUS,
         cycle_index=rotation["index"],
@@ -255,7 +279,7 @@ def projects(store, sha, output, *, api=None,
     # four calls; skip knowingly impossible attempts with an explicit gap.
     for repository in extended[1:]:
         if (type(api.requests) is int and
-                api.requests > policy()["max_requests_per_operation"] - 4):
+                api.requests > project_ceiling - 4):
             errors.append({
                 "repository": repository,
                 "error_class": "OptionalSourceBudget",
@@ -273,7 +297,8 @@ def projects(store, sha, output, *, api=None,
     # collector selects one fair-rotated exact PR and cannot write a branch.
     original = {
         "scope": "ORIGINAL_GITHUB_READ_ONLY_REPAIR_PROOFS",
-        "status": "NOT_CHECKED_OR_REQUEST_BUDGET_UNAVAILABLE",
+        "status": ("DEFERRED_TO_V9_PUBLICATION_READBACK" if publication_reserved_gets
+                   else "NOT_CHECKED_OR_REQUEST_BUDGET_UNAVAILABLE"),
         "proofs": [], "source_checks": [], "gaps": [],
         "requests_used": 0,
         "automatic_merge_or_deployment_authority": False,
@@ -281,7 +306,8 @@ def projects(store, sha, output, *, api=None,
         "original_api_response_not_signed": True,
     }
     original_requests_before = api.requests
-    if (verify_original_repairs and callable(getattr(api, "get", None))
+    if (publication_reserved_gets == 0 and verify_original_repairs
+            and callable(getattr(api, "get", None))
             and result["autonomous_repair_queue"]["actions"]
             and type(api.requests) is int
             and policy()["max_requests_per_operation"] - api.requests >= 3):
@@ -313,10 +339,14 @@ def projects(store, sha, output, *, api=None,
             # A provider or schema failure must not terminate canonical core
             # state publication. Project repair proof stays explicitly unknown.
             original["status"] = "ORIGINAL_PR_EVIDENCE_UNVERIFIED"
+    require(type(api.requests) is int and api.requests <= project_ceiling,
+            "PROJECT_PUBLICATION_BUDGET_VIOLATION")
     result["original_repair_proof"] = original
     result["operation"] = {
         "name": "projects",
         "requests": api.requests,
+        "publication_reserved_gets": publication_reserved_gets,
+        "project_request_ceiling": project_ceiling,
         "extended_repositories": list(extended),
         "priority_sources_checked_first": [factory],
         "requests_after_priority_source": requests_after_priority_source,

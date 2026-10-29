@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import time
 from pathlib import Path
 import urllib.error
 import urllib.request
@@ -24,9 +25,13 @@ AUTOMATIC = {
 }
 
 
+class OriginError(ValueError):
+    """Only static, nonsecret diagnostic codes may cross this boundary."""
+
+
 def require(condition, code):
     if not condition:
-        raise ValueError(code)
+        raise OriginError(code)
 
 
 def admit(get, source, run_id):
@@ -73,7 +78,35 @@ def admit(get, source, run_id):
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        raise ValueError("ORIGIN_REDIRECT_REJECTED")
+        raise OriginError("ORIGIN_REDIRECT_REJECTED")
+
+
+def read_json(opener, token, path, sleep=time.sleep):
+    """Retry only bounded transient read failures; never retry admission denials."""
+    req = urllib.request.Request("https://api.github.com" + path,
+        headers={"Authorization": "Bearer " + token,
+                 "Accept": "application/vnd.github+json",
+                 "X-GitHub-Api-Version": "2022-11-28"}, method="GET")
+    for attempt in range(3):
+        try:
+            with opener.open(req, timeout=20) as response:
+                raw = response.read(1048577)
+            break
+        except urllib.error.HTTPError as exc:
+            code = "ORIGIN_HTTP_" + str(exc.code) if exc.code in {401, 403, 404, 429, 500, 502, 503, 504} else "ORIGIN_HTTP_REJECTED"
+            retry = exc.code in {429, 500, 502, 503, 504}
+            exc.close()
+            if not retry or attempt == 2:
+                raise OriginError(code) from None
+        except (urllib.error.URLError, TimeoutError, ConnectionError):
+            if attempt == 2:
+                raise OriginError("ORIGIN_TRANSPORT_UNAVAILABLE") from None
+        sleep(attempt + 1)
+    require(len(raw) <= 1048576, "ORIGIN_PROVIDER_RESPONSE_TOO_LARGE")
+    try:
+        return json.loads(raw)
+    except (ValueError, UnicodeError):
+        raise OriginError("ORIGIN_JSON_INVALID") from None
 
 
 def main():
@@ -91,14 +124,7 @@ def main():
             or re.fullmatch(re.escape(ROOT) + r"actions/runs/[1-9][0-9]{0,15}", path)
             or re.fullmatch(re.escape(ROOT) + r"actions/runs/[1-9][0-9]{0,15}/jobs\?per_page=100", path)
         ), "UNREVIEWED_API_PATH")
-        req = urllib.request.Request("https://api.github.com" + path,
-            headers={"Authorization": "Bearer " + token,
-                     "Accept": "application/vnd.github+json",
-                     "X-GitHub-Api-Version": "2022-11-28"},method="GET")
-        with opener.open(req,timeout=20) as response:
-            raw = response.read(1048577)
-        require(len(raw) <= 1048576, "ORIGIN_PROVIDER_RESPONSE_TOO_LARGE")
-        return json.loads(raw)
+        return read_json(opener, token, path)
 
     receipt = admit(get, claimed, run_id)
     dest = Path(os.environ.get("RUNNER_TEMP", "/tmp")) / "v8-origin.json"
@@ -109,5 +135,7 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+    except OriginError as exc:
+        raise SystemExit("V8_CORE_ORIGIN_UNVERIFIED; " + str(exc) + "; NO_WRITER_TOKEN") from None
     except Exception:
-        raise SystemExit("V8_CORE_ORIGIN_UNVERIFIED; NO_WRITER_TOKEN") from None
+        raise SystemExit("V8_CORE_ORIGIN_UNVERIFIED; ORIGIN_INTERNAL_ERROR; NO_WRITER_TOKEN") from None

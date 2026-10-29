@@ -178,14 +178,34 @@ def accepted_source(api, main):
             and terminal.get("deterministic_report_reproduction") == "PASS"
             and proof.get("technical_workflow_conclusion") == "success",
             "ACCEPTANCE_ORIGINAL_EVIDENCE_MISSING")
+    # A branch writer can manufacture every field above. Only the separate
+    # verifier App may attest this exact immutable receipt and source. Its
+    # existing CI check is deliberately NOT an acceptance attestation.
+    checks = api.get("repos/" + REPO + "/commits/" + tip + "/check-runs?per_page=100")
+    require(type(checks) is dict and type(checks.get("total_count")) is int
+            and type(checks.get("check_runs")) is list
+            and 0 <= checks["total_count"] < 100
+            and len(checks["check_runs"]) == checks["total_count"],
+            "ACCEPTANCE_ATTESTATION_CENSUS_INCOMPLETE")
+    attested = [row for row in checks["check_runs"] if type(row) is dict
+                and row.get("name") == "portfolio-source-acceptance"]
+    binding = "source-acceptance:" + main + ":" + hashlib.sha256(raw).hexdigest()
+    require(len(attested) == 1 and attested[0].get("head_sha") == tip
+            and type(attested[0].get("app")) is dict
+            and type(attested[0]["app"].get("id")) is int
+            and attested[0]["app"]["id"] == 5121826
+            and attested[0].get("external_id") == binding
+            and attested[0].get("status") == "completed"
+            and attested[0].get("conclusion") == "success",
+            "ACCEPTANCE_ATTESTATION_UNVERIFIED")
     return {"acceptance_ref": name, "acceptance_commit": tip}
 
 
-def check_pr(pr, number, source):
+def check_pr(pr, number, source, *, early=False):
     require(type(pr) is dict and pr.get("number") == number
             and pr.get("state") == "open" and pr.get("draft") is False
             and pr.get("merged") is False and pr.get("mergeable") is True
-            and pr.get("mergeable_state") == "clean"
+            and pr.get("mergeable_state") == ("blocked" if early else "clean")
             and pr.get("base", {}).get("ref") == "main"
             and pr.get("base", {}).get("sha") == source
             and pr.get("base", {}).get("repo", {}).get("full_name") == REPO
@@ -207,21 +227,46 @@ def check_pr(pr, number, source):
     return head
 
 
-def checked_checks(checks, head):
+def checked_checks(checks, head, *, early=False):
+    """Read complete issuer-pinned checks; early enrollment leaves final gate open.
+
+    A successful Foundation check does NOT substitute for the independent App.
+    GitHub's strict protected-main rules enforce BOTH issuers at merge time.
+    """
     require(type(checks) is dict and type(checks.get("total_count")) is int
             and 0 <= checks["total_count"] < 100
             and type(checks.get("check_runs")) is list
-            and len(checks["check_runs"]) == checks["total_count"],
+            and len(checks["check_runs"]) == checks["total_count"]
+            and all(type(x) is dict for x in checks["check_runs"]),
             "CHECK_CENSUS_INCOMPLETE")
+    observed = {}
     for check_name, app_id in REQUIRED_CHECKS.items():
-        matches = [x for x in checks["check_runs"]
-                   if type(x) is dict and x.get("name") == check_name]
+        matches = [x for x in checks["check_runs"] if x.get("name") == check_name]
+        if early and check_name == "portfolio-phase1-gate" and not matches:
+            # App 5121826 issues only after the Foundation workflow completes.
+            # Absence is safe for early *enrollment*, never for final merge.
+            observed[check_name] = None
+            continue
         require(len(matches) == 1
-                and matches[0].get("status") == "completed"
-                and matches[0].get("conclusion") == "success"
-                and matches[0].get("app", {}).get("id") == app_id
+                and type(matches[0].get("app")) is dict
+                and matches[0]["app"].get("id") == app_id
                 and matches[0].get("head_sha") == head,
                 "INDEPENDENT_HEAD_CHECK_FAILED")
+        row = matches[0]
+        if early:
+            require(type(row.get("id")) is int
+                    and 0 < row["id"] < 10**16,
+                    "INDEPENDENT_CHECK_ID_UNVERIFIED")
+        if early and check_name == "portfolio-phase1-gate":
+            require(row.get("status") in ("queued", "in_progress")
+                    and row.get("conclusion") is None,
+                    "EARLY_SECOND_GATE_ALREADY_FINISHED_OR_FAILED")
+        else:
+            require(row.get("status") == "completed"
+                    and row.get("conclusion") == "success",
+                    "INDEPENDENT_HEAD_CHECK_FAILED")
+        observed[check_name] = (row.get("id"), row.get("status"))
+    return observed
 
 
 SETTINGS_QUERY = """query {
@@ -337,20 +382,22 @@ def native_auto_merge_enabled(api, info):
 THREADS_QUERY = """query($id: ID!) {
   node(id: $id) { ... on PullRequest {
     id
+    viewerCanEnableAutoMerge
+    mergeStateStatus
     reviewThreads(first: 100) {
       pageInfo { hasNextPage }
       nodes { isResolved }
     }
   } }
 }"""
-ENABLE_MUTATION = """mutation($id: ID!) {
-  enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: SQUASH }) {
+ENABLE_MUTATION = """mutation($id: ID!, $expected_head: GitObjectID!) {
+  enablePullRequestAutoMerge(input: { pullRequestId: $id, expectedHeadOid: $expected_head, mergeMethod: SQUASH }) {
     pullRequest { id autoMergeRequest { enabledAt } }
   }
 }"""
 
 
-def checked_threads(response, node_id):
+def checked_threads(response, node_id, *, early=False):
     require(type(response) is dict and not response.get("errors"), "REVIEW_THREADS_QUERY_FAILED")
     node = response.get("data", {}).get("node")
     rows = node.get("reviewThreads") if type(node) is dict and node.get("id") == node_id else None
@@ -359,6 +406,19 @@ def checked_threads(response, node_id):
             and len(rows["nodes"]) <= 100
             and all(type(x) is dict and x.get("isResolved") is True for x in rows["nodes"]),
             "UNRESOLVED_OR_INCOMPLETE_REVIEW_THREADS")
+    # Native GitHub exposes enrollment only when the executing principal
+    # can currently enable it. A fully mergeable CLEAN PR can legitimately
+    # report False despite all exact independent checks already being green.
+    # Detect that condition from the original provider *before* any mutation.
+    require(type(node.get("viewerCanEnableAutoMerge")) is bool
+            and type(node.get("mergeStateStatus")) is str
+            and 1 <= len(node["mergeStateStatus"]) <= 32,
+            "NATIVE_AUTOMERGE_ELIGIBILITY_UNVERIFIED")
+    require(node["viewerCanEnableAutoMerge"] is True,
+            "NATIVE_AUTOMERGE_UNAVAILABLE_ON_CURRENT_PR")
+    if early:
+        require(node["mergeStateStatus"] == "BLOCKED",
+                "EARLY_NATIVE_MERGE_STATE_NOT_BLOCKED")
 
 
 def checked_git_tree_files(api, head, files):
@@ -420,7 +480,7 @@ def check_files(api, number, head, expected):
                 and len(raw) <= 50000, "PR_CHANGED_FILE_MISMATCH")
 
 
-def observe(api, number, expected_main):
+def observe(api, number, expected_main, *, early=False):
     """All evidence originates with the provider; no caller-supplied green flags."""
     require(type(number) is int and 0 < number < 10**9, "PR_NUMBER_INVALID")
     sha(expected_main)
@@ -440,16 +500,19 @@ def observe(api, number, expected_main):
             "PROTECTED_MAIN_SOURCE_MOVED")
     acceptance = accepted_source(api, expected_main)
     pr = api.get(root + "pulls/" + str(number))
-    head = check_pr(pr, number, expected_main)
+    head = check_pr(pr, number, expected_main, early=early)
     if pr.get("auto_merge") is not None:
         require(pr["auto_merge"].get("merge_method") == "squash",
                 "EXISTING_NATIVE_AUTO_MERGE_NOT_OURS")
         return {"status": "ALREADY_ENROLLED", "number": number,
                 "head_sha": head, "base_sha": expected_main,
                 "provider_writes": 0, "enrolled": True}
-    checked_checks(api.get(root + "commits/" + head + "/check-runs?per_page=100"), head)
+    original_checks = checked_checks(
+        api.get(root + "commits/" + head + "/check-runs?per_page=100"),
+        head, early=early)
     check_files(api, number, head, pr["changed_files"])
-    checked_threads(api.graphql(THREADS_QUERY, {"id": pr["node_id"]}), pr["node_id"])
+    checked_threads(api.graphql(THREADS_QUERY, {"id": pr["node_id"]}),
+                    pr["node_id"], early=early)
     # Single final source/PR reread; native GitHub protection independently
     # enforces up-to-date checks even if another actor races this observer.
     # Repeat the trusted platform ruleset on the last read boundary.
@@ -463,21 +526,57 @@ def observe(api, number, expected_main):
             and again.get("base", {}).get("sha") == expected_main
             and again.get("draft") is False and again.get("state") == "open"
             and again.get("auto_merge") is None
+            and (not early or again.get("mergeable_state") == "blocked")
             and {x.get("name") for x in again.get("labels", []) if type(x) is dict} >= {LABEL},
             "PR_CHANGED_DURING_ADMISSION")
+    # A required check finishing, disappearing or being reissued between
+    # reads invalidates early eligibility BEFORE any native mutation.
+    if early:
+        final_checks = checked_checks(
+            api.get(root + "commits/" + head + "/check-runs?per_page=100"),
+            head, early=True)
+        require(final_checks["validate"] == original_checks["validate"],
+                "EARLY_FOUNDATION_CHECK_CHANGED")
+        initial_second = original_checks["portfolio-phase1-gate"]
+        final_second = final_checks["portfolio-phase1-gate"]
+        require(initial_second is None or (final_second is not None
+                and initial_second[0] == final_second[0]
+                and (initial_second[1] != "in_progress"
+                     or final_second[1] == "in_progress")),
+                "EARLY_FINAL_CHECK_REPLACED_OR_REGRESSED")
+    # Eligibility can change between earlier reads and the enrollment boundary.
+    checked_threads(api.graphql(THREADS_QUERY, {"id": pr["node_id"]}),
+                    pr["node_id"], early=early)
     return {"status": "ADMISSIBLE", "number": number,
             "node_id": pr["node_id"], "head_sha": head,
             "base_sha": expected_main, "acceptance": acceptance,
             "provider_writes": 0, "enrolled": False}
 
 
-def run(api, *, number, expected_main, apply=False):
-    proof = observe(api, number, expected_main)
+def run(api, *, number, expected_main, apply=False, early=False):
+    proof = observe(api, number, expected_main, early=early)
     if proof["status"] != "ADMISSIBLE" or not apply:
         return {k: v for k, v in proof.items() if k != "node_id"}
     node_id = proof["node_id"]
     try:
-        result = api.graphql(ENABLE_MUTATION, {"id": node_id})
+        # GitHub creates this exact ref once, atomically. It survives runner
+        # restarts and is never automatically removed, including on timeout.
+        # A second invocation cannot turn uncertainty into another request.
+        api.reserve_native_intent(number, proof["head_sha"])
+        # Bind at GitHub's mutation boundary, not just the preceding reads.
+        # This does not freeze later PR pushes or substitute for final gates.
+        result = api.graphql(ENABLE_MUTATION, {
+            "id": node_id, "expected_head": proof["head_sha"]})
+        if type(result) is dict and result.get("errors"):
+            errors, data = result.get("errors"), result.get("data")
+            # Retain a bounded provider error TYPE, never its free-form message.
+            # The AUTO_MERGE_ prefix still forces UNKNOWN_AFTER_POST/no retry.
+            no_success = (data is None or (type(data) is dict
+                          and data.get("enablePullRequestAutoMerge") is None))
+            if (no_success and type(errors) is list and len(errors) == 1
+                    and type(errors[0]) is dict
+                    and errors[0].get("type") in ("FORBIDDEN", "UNPROCESSABLE", "NOT_FOUND")):
+                raise Denied("AUTO_MERGE_PROVIDER_REJECTION_" + errors[0]["type"])
         field = result.get("data") if type(result) is dict and not result.get("errors") else None
         result_pr = (field.get("enablePullRequestAutoMerge")
                      if type(field) is dict else None)
@@ -486,10 +585,25 @@ def run(api, *, number, expected_main, apply=False):
         require(observed_id == node_id, "AUTO_MERGE_PROVIDER_RESPONSE_INVALID")
         current = api.get("repos/" + REPO + "/pulls/" + str(number))
         require(type(current) is dict
-                and current.get("head", {}).get("sha") == proof["head_sha"],
+                and current.get("number") == number
+                and current.get("node_id") == node_id
+                and current.get("head", {}).get("sha") == proof["head_sha"]
+                and current.get("head", {}).get("repo", {}).get("full_name") == REPO
+                and current.get("base", {}).get("ref") == "main"
+                and current.get("base", {}).get("repo", {}).get("full_name") == REPO,
                 "AUTO_MERGE_PROVIDER_READBACK_UNVERIFIED")
-    except Exception:
-        # The write may have succeeded: never claim zero mutations or retry.
+    except Exception as exc:
+        # Local authority denials are known zero-write outcomes, never an
+        # unknown POST result that could trigger manual replay ambiguity.
+        if isinstance(exc, Denied) and str(exc) == "NATIVE_INTENT_REF_WRITE_NOT_AUTHORIZED":
+            raise
+        # Even an explicit rejection is POST-attempt evidence, not a retry grant.
+        if isinstance(exc, Denied) and str(exc) in (
+            "AUTO_MERGE_PROVIDER_REJECTION_FORBIDDEN",
+            "AUTO_MERGE_PROVIDER_REJECTION_UNPROCESSABLE",
+            "AUTO_MERGE_PROVIDER_REJECTION_NOT_FOUND",
+        ):
+            raise
         raise Denied("AUTO_MERGE_WRITE_UNCERTAIN_READBACK_REQUIRED") from None
     # GitHub may merge immediately when the required checks are already green.
     # Treat that outcome as a merge only after the original provider says so.
@@ -499,16 +613,21 @@ def run(api, *, number, expected_main, apply=False):
                 "AUTO_MERGE_COMPLETION_UNVERIFIED")
         return {"status": "NATIVE_AUTO_MERGE_COMPLETED",
                 "number": number, "head_sha": proof["head_sha"],
-                "base_sha": expected_main, "provider_writes": 1,
+                "base_sha": expected_main, "provider_writes": 2,
                 "enrolled": True, "merged": True,
                 "merge_commit_sha": current["merge_commit_sha"]}
-    require(current.get("auto_merge") is not None
+    require(type(current.get("auto_merge")) is dict
             and current["auto_merge"].get("merge_method") == "squash"
-            and current.get("state") == "open",
+            and current.get("state") == "open"
+            and current.get("draft") is False and current.get("merged") is False
+            and current.get("base", {}).get("sha") == expected_main
+            and type(current.get("labels")) is list
+            and all(type(x) is dict and type(x.get("name")) is str for x in current["labels"])
+            and LABEL in {x["name"] for x in current["labels"]},
             "AUTO_MERGE_PROVIDER_READBACK_UNVERIFIED")
     return {"status": "NATIVE_AUTO_MERGE_ENROLLED",
             "number": number, "head_sha": proof["head_sha"],
-            "base_sha": expected_main, "provider_writes": 1,
+            "base_sha": expected_main, "provider_writes": 2,
             "enrolled": True, "merged": False}
 
 
@@ -535,9 +654,18 @@ class GitHub:
                 and (path == "graphql" or path.startswith(root)
                      or path == "repos/" + REPO),
                 "GITHUB_ROUTE_NOT_ALLOWLISTED")
+        # A candidate PR grant is not authority to create an intent-marker
+        # ref. Only the already-reviewed GraphQL route may use POST.
         require((method == "POST") == (path == "graphql")
                 and (method == "POST") == (body is not None),
                 "GITHUB_METHOD_INVALID")
+        # Even direct _request callers cannot send native enrollment or
+        # arbitrary GraphQL mutations around the governed reservation gate.
+        if method == "POST":
+            require(type(body) is dict and set(body) == {"query", "variables"}
+                    and body["query"] in (SETTINGS_QUERY, RULESET_QUERY, THREADS_QUERY)
+                    and type(body["variables"]) is dict,
+                    "GITHUB_GRAPHQL_NOT_APPROVED")
         connection = http.client.HTTPSConnection("api.github.com", timeout=15)
         headers = {"Authorization": "Bearer " + self.token,
                    "Accept": "application/vnd.github+json",
@@ -566,11 +694,24 @@ class GitHub:
     def get(self, path):
         return self._request("GET", path)
 
+    def reserve_native_intent(self, number, head):
+        require(type(number) is int and 0 < number < 10**9, "PR_NUMBER_INVALID")
+        sha(head)
+        # Current deny-by-default governance only grants candidate PR branches,
+        # not an additional brain-native-intent ref mutation. Do not attempt
+        # the REST write or silently expand authority to make a PR mergeable.
+        raise Denied("NATIVE_INTENT_REF_WRITE_NOT_AUTHORIZED")
+
     def graphql(self, query, variables):
         require((query in (SETTINGS_QUERY, RULESET_QUERY)
                  and type(variables) is dict and variables == {})
-                or (query in (THREADS_QUERY, ENABLE_MUTATION)
-                    and type(variables) is dict and set(variables) == {"id"}),
+                or (query == THREADS_QUERY
+                    and type(variables) is dict and set(variables) == {"id"})
+                or (query == ENABLE_MUTATION
+                    and type(variables) is dict and set(variables) == {"id", "expected_head"}
+                    and type(variables["id"]) is str and 10 < len(variables["id"]) < 200
+                    and type(variables["expected_head"]) is str
+                    and SHA.fullmatch(variables["expected_head"]) is not None),
                 "GITHUB_GRAPHQL_NOT_APPROVED")
         return self._request("POST", "graphql", {"query": query, "variables": variables})
 

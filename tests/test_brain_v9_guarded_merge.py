@@ -28,11 +28,16 @@ class FakeProvider:
     def __init__(self):
         self.calls = []
         self.mutations = 0
+        self.native_intents = set()
         self.enabled = False
         self.disabled = False
         self.no_acceptance = False
         self.change_head = False
         self.bad_threads = False
+        self.viewer_can_enable = True
+        self.viewer_flip_on_final = False
+        self.viewer_merge_state = "BLOCKED"
+        self._viewer_reads = 0
         self.provider_fail = False
         self.extra_acceptance_file = False
         self.immediate_merge = False
@@ -91,6 +96,13 @@ class FakeProvider:
 
     def get(self, path):
         self.calls.append(("GET", path))
+        if path == ROOT + "commits/" + REVIEW_TIP + "/check-runs?per_page=100":
+            import hashlib
+            raw = json.dumps(self.record).encode()
+            return {"total_count": 1, "check_runs": [{
+                "name": "portfolio-source-acceptance", "head_sha": REVIEW_TIP,
+                "app": {"id": 5121826}, "status": "completed", "conclusion": "success",
+                "external_id": "source-acceptance:" + BASE + ":" + hashlib.sha256(raw).hexdigest()}]}
         if path == "repos/" + gm.REPO:
             r = copy.deepcopy(self.repo)
             if self.disabled:
@@ -152,6 +164,12 @@ class FakeProvider:
             return content(RAW)
         raise AssertionError("UNREVIEWED_PROVIDER_ROUTE: " + path)
 
+    def reserve_native_intent(self, number, head):
+        key = (number, head)
+        if key in self.native_intents:
+            raise gm.Denied("AUTO_MERGE_INTENT_UNVERIFIED_NO_RETRY")
+        self.native_intents.add(key)
+
     def graphql(self, query, variables):
         self.calls.append(("GRAPHQL", "read" if query in
                            (gm.THREADS_QUERY, gm.SETTINGS_QUERY,
@@ -185,9 +203,16 @@ class FakeProvider:
                 "nameWithOwner": gm.REPO,
                 "autoMergeAllowed": setting, "isArchived": False}}}
         if query == gm.THREADS_QUERY:
-            return {"data": {"node": {"id": NODE, "reviewThreads": {
-                "pageInfo": {"hasNextPage": False},
-                "nodes": [{"isResolved": not self.bad_threads}]}}}}
+            self._viewer_reads += 1
+            allowed = (False if self.viewer_flip_on_final and self._viewer_reads >= 2
+                       else self.viewer_can_enable)
+            return {"data": {"node": {
+                "id": NODE,
+                "viewerCanEnableAutoMerge": allowed,
+                "mergeStateStatus": self.viewer_merge_state,
+                "reviewThreads": {
+                    "pageInfo": {"hasNextPage": False},
+                    "nodes": [{"isResolved": not self.bad_threads}]}}}}
         if query == gm.ENABLE_MUTATION:
             self.mutations += 1
             if self.provider_fail:
@@ -221,7 +246,7 @@ class GuardedAdmissionTests(unittest.TestCase):
         f = FakeProvider()
         result = gm.run(f, number=PR, expected_main=BASE, apply=True)
         self.assertEqual(result["status"], "NATIVE_AUTO_MERGE_ENROLLED")
-        self.assertEqual(result["provider_writes"], 1)
+        self.assertEqual(result["provider_writes"], 2)
         self.assertTrue(result["enrolled"])
         self.assertFalse(result["merged"])
         self.assertEqual(f.mutations, 1)
@@ -256,7 +281,7 @@ class GuardedAdmissionTests(unittest.TestCase):
         f.repo_setting_hidden = True
         result = __import__("brain.v9.guarded_merge_runner", fromlist=["dispatch_once"]).dispatch_once(
             lambda: f, BASE, apply=True)
-        self.assertEqual(result["provider_writes"], 1)
+        self.assertEqual(result["provider_writes"], 2)
         self.assertEqual(f.mutations, 1)
 
     def test_graphql_setting_denial_conflict_and_forged_identity_block(self):
@@ -294,7 +319,7 @@ class GuardedAdmissionTests(unittest.TestCase):
         f.ruleset_bypass_hidden = True
         from brain.v9.guarded_merge_runner import dispatch_once
         result = dispatch_once(lambda: f, BASE, apply=True)
-        self.assertEqual(result["provider_writes"], 1)
+        self.assertEqual(result["provider_writes"], 2)
         self.assertEqual(f.mutations, 1)
 
     def test_no_bypass_must_be_authenticated_and_complete(self):
@@ -326,6 +351,33 @@ class GuardedAdmissionTests(unittest.TestCase):
         f.graphql_ruleset_flip_on_final = True
         self.assert_blocked(f, "PROTECTED_RULESET_GRAPHQL_UNVERIFIED")
         self.assertEqual(f._ruleset_reads, 2)
+
+    def test_real_clean_pr_with_viewer_disallowed_never_attempts_native_post(self):
+        f = FakeProvider()
+        f.viewer_merge_state = "CLEAN"
+        f.viewer_can_enable = False
+        self.assert_blocked(f, "NATIVE_AUTOMERGE_UNAVAILABLE_ON_CURRENT_PR")
+        self.assertEqual(f._viewer_reads, 1)
+        self.assertIn("viewerCanEnableAutoMerge", gm.THREADS_QUERY)
+        self.assertIn("mergeStateStatus", gm.THREADS_QUERY)
+
+    def test_native_eligibility_missing_or_invalid_type_fails_closed(self):
+        for wrong in (None, 0, 1, "false", [], {}, 0.0):
+            with self.subTest(wrong=repr(wrong)):
+                f = FakeProvider()
+                f.viewer_can_enable = wrong
+                self.assert_blocked(f, "NATIVE_AUTOMERGE_ELIGIBILITY_UNVERIFIED")
+        for wrong in (None, False, 1, {}, "", "A" * 40):
+            with self.subTest(merge_state=repr(wrong)):
+                f = FakeProvider()
+                f.viewer_merge_state = wrong
+                self.assert_blocked(f, "NATIVE_AUTOMERGE_ELIGIBILITY_UNVERIFIED")
+
+    def test_native_eligibility_revoked_after_initial_positive_read_blocks_post(self):
+        f = FakeProvider()
+        f.viewer_flip_on_final = True
+        self.assert_blocked(f, "NATIVE_AUTOMERGE_UNAVAILABLE_ON_CURRENT_PR")
+        self.assertEqual(f._viewer_reads, 2)
 
     def test_unreviewed_graphql_ruleset_mutation_is_rejected(self):
         with self.assertRaisesRegex(gm.Denied, "GITHUB_GRAPHQL_NOT_APPROVED"):
@@ -507,8 +559,20 @@ class EventRunnerTests(unittest.TestCase):
         self.assertEqual(result["status"], "OBSERVED")
         self.assertEqual(result["candidate_count"], 1)
         self.assertEqual(result["processed"], 1)
-        self.assertEqual(result["provider_writes"], 1)
+        self.assertEqual(result["provider_writes"], 2)
         self.assertEqual(f.mutations, 1)
+
+    def test_real_clean_native_eligibility_denial_stops_event_runner_without_post(self):
+        from brain.v9 import guarded_merge_runner as runner
+        f = EventRunnerProvider()
+        f.viewer_can_enable = False
+        f.viewer_merge_state = "CLEAN"
+        result = runner.dispatch_once(lambda: f, BASE, apply=True)
+        self.assertEqual(result["candidate_count"], 1)
+        self.assertEqual(result["provider_writes"], 0)
+        self.assertEqual(result["decisions"][0]["status"],
+                         "BLOCKED:NATIVE_AUTOMERGE_UNAVAILABLE_ON_CURRENT_PR")
+        self.assertEqual(f.mutations, 0)
 
     def test_no_label_stops_before_native_github_mutation(self):
         from brain.v9 import guarded_merge_runner as runner
@@ -567,11 +631,16 @@ class EventRunnerTests(unittest.TestCase):
         for path in ("brain/v9/guarded_merge.py", "brain/v9/guarded_merge_runner.py"):
             expected = gm.git_blob_sha(Path(path).read_bytes())
             self.assertIn(expected, workflow)
-        self.assertIn('workflows: ["portfolio-independent-verifier"]', workflow)
-        self.assertIn("github.event.workflow_run.head_sha == github.sha", workflow)
+        self.assertIn('workflows: ["foundation-ci"]', workflow)
+        self.assertIn("github.event.workflow_run.event == 'pull_request'", workflow)
+        self.assertIn("github.event.workflow_run.head_sha != github.sha", workflow)
+        self.assertIn("github.event.workflow_run.head_repository.full_name", workflow)
+        self.assertIn("FOUNDATION_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}", workflow)
         self.assertIn("persist-credentials: false", workflow)
-        self.assertIn("pull-requests: write", workflow)
-        self.assertNotIn("contents: write", workflow)
+        self.assertIn("permissions:\n  contents: read", workflow)
+        self.assertEqual(workflow.count("      contents: write"), 1)
+        self.assertEqual(workflow.count("      pull-requests: write"), 1)
+        self.assertIn("persist-credentials: false", workflow)
         for forbidden in ("schedule:", "pull_request_target:", "workflow_dispatch:"):
             self.assertNotIn(forbidden, workflow)
 

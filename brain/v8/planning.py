@@ -4,10 +4,13 @@ from brain.core import require
 from brain.v8.contracts import LOCAL_STATES, parse_utc, validate_work
 
 
-def select_work(items, *, cycle, limit):
+def select_work(items, *, cycle, limit, collision_safe=False):
     require(type(items) is list and len(items)<=256, 'V8_PLAN_BOUND')
     require(type(cycle) is int and 0<=cycle<2**63 and type(limit) is int
             and 1<=limit<=5, 'V8_PLAN_COUNTER_INVALID')
+    # The generic diagnostic planner retains its original selection semantics.
+    # Owner-executable handoffs opt into one writer per repository/resource.
+    require(type(collision_safe) is bool, 'V8_PLAN_COLLISION_POLICY_INVALID')
     rows=[validate_work(row) for row in items]
     by_id={r['work_id']:r for r in rows}
     require(len(by_id)==len(rows), 'V8_PLAN_DUPLICATE_WORK')
@@ -56,6 +59,25 @@ def select_work(items, *, cycle, limit):
             for project in projects:
                 if groups[project]:
                     ranked.append(groups[project].pop(0))
-    return dict(selected=ranked[:limit],deferred=ranked[limit:],
+    if not collision_safe:
+        selected,deferred=ranked[:limit],ranked[limit:]
+    else:
+        # Do not send two writers to one repository even when distinct
+        # project IDs (e.g. RETALLY and research-labs) share its source.
+        # Backfill freed slots with the next eligible independent project.
+        selected,deferred=[],[]
+        repositories,resources,owners=set(),set(),set()
+        for row in ranked:
+            repo=row['repository'].casefold()
+            if (len(selected)>=limit or repo in repositories
+                    or row['resource'] in resources
+                    or row['owner'].casefold() in owners):
+                deferred.append(row)
+                continue
+            selected.append(row)
+            repositories.add(repo)
+            resources.add(row['resource'])
+            owners.add(row['owner'].casefold())
+    return dict(selected=selected,deferred=deferred,
                 blocked_dependencies=sorted(blocked,key=lambda r:r['work_id']),
                 automatic_execution_authority=False)
