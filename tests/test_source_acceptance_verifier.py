@@ -239,6 +239,30 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
                 with self.assertRaises(sav.SourceAcceptanceError):
                     sav.verify_acceptance(api, pr_number=901, head_sha=HEAD)
 
+    def test_overlapping_scheduler_origins_fail_closed(self):
+        dispatch = {
+            "event": "workflow_dispatch",
+            "created": sav.utc("2026-10-29T06:30:21Z"),
+            "completed": sav.utc("2026-10-29T06:32:27Z"),
+        }
+        overlapping_schedule = {
+            "event": "schedule",
+            "created": sav.utc("2026-10-29T06:30:59Z"),
+            "completed": sav.utc("2026-10-29T06:34:46Z"),
+        }
+        with self.assertRaisesRegex(
+            sav.SourceAcceptanceError, "competing scheduler origins overlapped"
+        ):
+            sav._require_nonoverlapping_scheduler_origins(
+                [dispatch, overlapping_schedule]
+            )
+
+        later_schedule = dict(
+            overlapping_schedule,
+            created=sav.utc("2026-10-29T06:32:27Z"),
+        )
+        sav._require_nonoverlapping_scheduler_origins([dispatch, later_schedule])
+
     def test_publish_check_binds_name_app_source_and_receipt(self):
         external = "source-acceptance:" + SOURCE + ":" + "c" * 64
         expected = {
