@@ -1,4 +1,4 @@
-name: brain-24-hour-reliability
+name: brain-12-hour-reliability
 on:
   workflow_run:
     workflows: [v8-scoped-repair-proposal]
@@ -7,7 +7,7 @@ permissions:
   actions: read
   contents: read
 concurrency:
-  group: brain-24-hour-reliability
+  group: brain-12-hour-reliability
   cancel-in-progress: false
 jobs:
   observe:

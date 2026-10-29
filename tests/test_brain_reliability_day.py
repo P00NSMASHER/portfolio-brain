@@ -2,13 +2,16 @@ import unittest
 from verification.reliability_day import evaluate
 from verification.source_acceptance_verifier import SourceAcceptanceError
 
-class DayTests(unittest.TestCase):
+class ObservationTests(unittest.TestCase):
     def test_short_window_cannot_pass(self):
-        self.assertEqual(evaluate({'span':86399,'maximum_gap':1800})['status'],'COLLECTING')
-    def test_full_day_requires_bounded_gaps(self):
-        self.assertEqual(evaluate({'span':86400,'maximum_gap':1800})['status'],'PASS')
+        self.assertEqual(evaluate({'span':43199,'maximum_gap':1800})['status'],'COLLECTING')
+    def test_twelve_hours_requires_bounded_gaps(self):
+        result=evaluate({'span':43200,'maximum_gap':1800})
+        self.assertEqual(result['status'],'PASS')
+        self.assertEqual(result['required_span_seconds'],43200)
+        self.assertFalse(result['independent_release_authority'])
         with self.assertRaises(SourceAcceptanceError):
-            evaluate({'span':86400,'maximum_gap':5401})
+            evaluate({'span':43200,'maximum_gap':5401})
 
 class CensusTests(unittest.TestCase):
     def test_pagination_requires_complete_unique_inventory(self):
@@ -34,9 +37,9 @@ class CensusTests(unittest.TestCase):
             return dict(id=run_id, head_sha=source, created_at=created_at,
                         status='completed', conclusion=conclusion,
                         run_attempt=1, event='workflow_dispatch')
-        first = core(40562141043, '2026-10-27T18:40:22Z')
-        terminal = core(40750335787, '2026-10-28T19:00:22Z')
-        outside = core(40754892091, '2026-10-28T19:30:22Z', 'failure')
+        first = core(1, '2026-10-27T18:40:22Z')
+        terminal = core(2, '2026-10-28T07:00:22Z')
+        outside = core(3, '2026-10-28T07:30:22Z', 'failure')
         self.assertEqual(window([outside, terminal, first], source), [first, terminal])
 
     def test_failure_inside_fixed_window_remains_rejected(self):
@@ -45,7 +48,7 @@ class CensusTests(unittest.TestCase):
         row = dict(id=1, head_sha=source, created_at='2026-10-27T18:40:22Z',
                    status='completed', conclusion='success',
                    run_attempt=1, event='workflow_dispatch')
-        inside = dict(row, id=2, created_at='2026-10-28T19:00:23Z',
+        inside = dict(row, id=2, created_at='2026-10-28T07:00:23Z',
                       conclusion='failure')
         with self.assertRaisesRegex(SourceAcceptanceError, 'original core failed or retried'):
             window([row, inside], source)
@@ -56,7 +59,7 @@ class CensusTests(unittest.TestCase):
         row = dict(id=1, head_sha=source, created_at='2026-10-27T18:40:22Z',
                    status='completed', conclusion='success',
                    run_attempt=1, event='workflow_dispatch')
-        boundary = dict(row, id=2, created_at='2026-10-28T19:10:22Z')
+        boundary = dict(row, id=2, created_at='2026-10-28T07:10:22Z')
         self.assertEqual(window([row, boundary], source), [row, boundary])
         with self.assertRaisesRegex(SourceAcceptanceError, 'original core failed or retried'):
             window([row, dict(boundary, conclusion='failure')], source)
