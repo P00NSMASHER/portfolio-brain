@@ -163,7 +163,7 @@ class QueueTests(unittest.TestCase):
                  base=dict(sha=SHA,ref='main',repo=dict(full_name=REPO)),
                  body='BRAIN_BATCH_OPERATION_ID: '+op)
         with patch.object(reader,'_get',side_effect=[
-            {'commit':{'sha':SHA}},row,{'commit':{'sha':SHA}}]):
+            {'commit':{'sha':SHA}},row,row,{'commit':{'sha':SHA}}]):
             receipt=self.q.reconcile_original_draft(
                 ident,op,reader,pr_number=123,candidate_sha=NEXT,now=T2)
         self.assertEqual(receipt['status'],'EXTERNAL_DRAFT_RECONCILED_NOT_VERIFIED')
