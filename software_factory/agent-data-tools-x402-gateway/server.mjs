@@ -1,6 +1,5 @@
 import { fetchWithTimeout } from './bounded-fetch.mjs';
 import http from 'node:http';
-import https from 'node:https';
 
 const PORT = Number(process.env.PORT || 3000);
 const PAY_TO = '0x708f7b52b56eafd7fc1de65fc7752ed732914021';
@@ -141,12 +140,15 @@ async function geocodeAddress(address){
   u.searchParams.set('format','json');
   const r=await fetchWithTimeout(u,{headers:{accept:'application/json','user-agent':'agent-data-tools-x402/1.0'}},10000);
   if(!r.ok)throw new Error('census_http_'+r.status);
-  const data=await r.json(), match=data?.result?.addressMatches?.[0];
+  const data=await r.json();
+  if(!Array.isArray(data?.result?.addressMatches))throw new Error('census_shape_invalid');
+  const match=data.result.addressMatches[0];
+  if(match && (typeof match.matchedAddress!=='string'||!Number.isFinite(match.coordinates?.x)||!Number.isFinite(match.coordinates?.y)))throw new Error('census_match_invalid');
   if(!match)return {input:address,matched:false,matchedAddress:null,coordinates:null,addressComponents:null,geographies:null,source:'U.S. Census Bureau Geocoding Services'};
   const geos=match.geographies||{};
   const state=firstGeoByKey(geos,'States'), county=firstGeoByKey(geos,'Counties'), tract=firstGeoByKey(geos,'Census Tracts');
-  const block=firstGeoByKey(geos,'Census Blocks')||firstGeoByPattern(geos,/^\\d{4} Census Blocks$/i);
-  const district=firstGeoByPattern(geos,/^(?:\\d+(?:st|nd|rd|th) )?Congressional Districts$/i);
+  const block=firstGeoByKey(geos,'Census Blocks')||firstGeoByPattern(geos,/^\d{4} Census Blocks$/i);
+  const district=firstGeoByPattern(geos,/^(?:\d+(?:st|nd|rd|th) )?Congressional Districts$/i);
   return {input:address,matched:true,matchedAddress:match.matchedAddress??null,coordinates:{longitude:match.coordinates?.x??null,latitude:match.coordinates?.y??null},addressComponents:match.addressComponents??null,geographies:{stateFips:state?.STATE??null,countyFips:county?.COUNTY??null,countyGeoid:county?.GEOID??null,tract:tract?.TRACT??null,tractGeoid:tract?.GEOID??null,block:block?.BLOCK??null,blockGeoid:block?.GEOID??null,congressionalDistrict:district?.CD??district?.BASENAME??null},source:'U.S. Census Bureau Geocoding Services'};
 }
 async function serveCensus(req,res,u){
@@ -155,7 +157,7 @@ async function serveCensus(req,res,u){
   if(!signature)return sendPaymentRequired(req,res,path);
   let payload;
   try{payload=decodePaymentHeader(String(signature));}catch{return sendPaymentRequired(req,res,path,'invalid_payment_header');}
-  const address=(u.searchParams.get('address')||'').trim().replace(/\\s+/g,' ');
+  const address=(u.searchParams.get('address')||'').trim().replace(/\s+/g,' ');
   if(address.length<6)return send(res,400,{error:'address must contain at least 6 characters.'});
   if(address.length>240)return send(res,400,{error:'address must be 240 characters or fewer.'});
   const requirements=paymentRequirements(routes[path][1]);
@@ -186,6 +188,7 @@ async function rdapBootstrap(){
   const r=await fetchWithTimeout(IANA_RDAP_BOOTSTRAP,{headers:{accept:'application/json','user-agent':'agent-data-tools-x402/1.0'}},10000);
   if(!r.ok)throw new Error('iana_bootstrap_http_'+r.status);
   const data=await r.json();
+  if(!Array.isArray(data?.services)||!data.services.length)throw new Error('rdap_bootstrap_invalid');
   rdapBootstrapCache={loadedAt:Date.now(),data};
   return data;
 }
@@ -214,12 +217,13 @@ function eventMap(events){
 }
 async function lookupRdap(domain){
   const tld=domain.split('.').pop()||'', registry=await rdapBootstrap(), base=findRdapBase(registry,tld);
-  if(!base)return {domain,registered:null,error:'no_rdap_bootstrap_service',source:'IANA RDAP Bootstrap Service Registry'};
+  if(!base)throw new Error('rdap_service_unavailable');
   const u=base.replace(/\/+$/,'')+'/domain/'+encodeURIComponent(domain);
   const r=await fetchWithTimeout(u,{headers:{accept:'application/rdap+json, application/json','user-agent':'agent-data-tools-x402/1.0'},redirect:'follow'},10000);
   if(r.status===404)return {domain,registered:false,authoritativeRdap:base,source:'Authoritative RDAP server discovered via IANA bootstrap'};
   if(!r.ok)throw new Error('rdap_http_'+r.status);
   const data=await r.json();
+  if(data?.objectClassName!=='domain'||typeof data.ldhName!=='string'||data.ldhName.toLowerCase()!==domain.toLowerCase())throw new Error('rdap_identity_invalid');
   const registrar=Array.isArray(data.entities)?data.entities.find(entity=>Array.isArray(entity.roles)&&entity.roles.map(role=>String(role).toLowerCase()).includes('registrar')):undefined;
   const nameservers=Array.isArray(data.nameservers)?data.nameservers.map(ns=>String(ns.ldhName||ns.unicodeName||'')).filter(Boolean):[];
   return {domain,registered:true,handle:data.handle??null,unicodeName:data.unicodeName??null,status:Array.isArray(data.status)?data.status:[],registrar:registrar?{name:vcardName(registrar),handle:registrar.handle??null}:null,events:eventMap(data.events),nameservers,secureDns:data.secureDNS?{delegationSigned:data.secureDNS.delegationSigned??null}:null,authoritativeRdap:base,source:'Authoritative RDAP server discovered via IANA bootstrap'};
@@ -269,7 +273,10 @@ async function lookupSecFilings(input){
   if(!cik&&input.ticker)cik=await resolveTicker(input.ticker);
   if(!cik)throw new Error('company_not_found');
   const data=await secJson('https://data.sec.gov/submissions/CIK'+cik+'.json');
-  const recent=data?.filings?.recent||{}, forms=Array.isArray(recent.form)?recent.form:[];
+  const recent=data?.filings?.recent;
+  if(normalizeCik(String(data?.cik||''))!==cik||!recent||!Array.isArray(recent.form))throw new Error('sec_identity_invalid');
+  const forms=recent.form;
+  for(const key of ['accessionNumber','primaryDocument','filingDate'])if(!Array.isArray(recent[key])||recent[key].length!==forms.length||recent[key].some(v=>typeof v!=='string'||!v))throw new Error('sec_rows_incomplete');
   const formFilter=String(input.form||'').trim().toUpperCase(), cikNoZero=String(Number.parseInt(cik,10));
   const filings=[];
   for(let i=0;i<forms.length&&filings.length<input.limit;i+=1){
@@ -318,6 +325,7 @@ function parseCsv(text){
       if(ch==='"'&&text[i+1]==='"'){field+='"';i+=1;}else if(ch==='"'){quoted=false;}else{field+=ch;}
     }else if(ch==='"'){quoted=true;}else if(ch===','){row.push(field);field='';}else if(ch==='\n'){row.push(field.replace(/\r$/,''));if(row.some(v=>v.length))rows.push(row);row=[];field='';}else{field+=ch;}
   }
+  if(quoted)throw new Error('csv_unclosed_quote');
   if(field.length||row.length){row.push(field.replace(/\r$/,''));if(row.some(v=>v.length))rows.push(row);}
   return rows;
 }
@@ -336,13 +344,15 @@ async function loadOfacEntries(){
   const map=new Map();
   for(const cols of parseCsv(sdnText)){
     const uid=String(cols[0]||'').trim(), name=String(cols[1]||'').trim();
-    if(!uid||!name)continue;
+    if(cols.length!==12||!/^\d+$/.test(uid)||!name||map.has(uid))throw new Error('ofac_row_invalid');
     map.set(uid,{uid,name,type:cleanOfac(cols[2]),program:cleanOfac(cols[3]),title:cleanOfac(cols[4]),remarks:cleanOfac(cols[11]),aliases:[]});
   }
   for(const cols of parseCsv(altText)){
     const uid=String(cols[0]||'').trim(), altName=String(cols[3]||'').trim(), entry=map.get(uid);
-    if(entry&&altName)entry.aliases.push({type:cleanOfac(cols[2]),name:altName,remarks:cleanOfac(cols[4])});
+    if(cols.length!==5||!entry||!altName)throw new Error('ofac_alias_invalid');
+    entry.aliases.push({type:cleanOfac(cols[2]),name:altName,remarks:cleanOfac(cols[4])});
   }
+  if(!map.size)throw new Error('ofac_empty_source');
   const entries=[...map.values()]; ofacCache={loadedAt:Date.now(),entries}; return entries;
 }
 function normalizeName(value){
@@ -401,18 +411,21 @@ async function serveOfac(req,res,u){
   }catch{return send(res,503,{error:'Payment facilitator is temporarily unavailable; no result was served.'});}
 }
 
-function proxy(req,res,r){
+async function proxy(req,res,r){
   const u=new URL(req.url,'http://gateway.local'), target=new URL(r[0]); target.search=u.search;
-  const headers={...req.headers};
-  delete headers.host; delete headers.connection; delete headers['transfer-encoding'];
-  const upstream=https.request(target,{method:'GET',headers},up=>{
-    res.statusCode=up.statusCode||502;
-    for(const [k,v] of Object.entries(up.headers)){if(v!==undefined)res.setHeader(k,v);}
-    res.setHeader('x-x402-gateway','transparent-proxy');
-    up.pipe(res);
-  });
-  upstream.on('error',e=>send(res,502,{error:'gateway_upstream_error',detail:e.message}));
-  upstream.end();
+  const headers={};
+  for(const key of ['accept','payment-signature','x-payment'])if(req.headers[key])headers[key]=req.headers[key];
+  try{
+    const upstream=await fetchWithTimeout(target,{method:'GET',headers,redirect:'error'},10000);
+    const body=await upstream.text();
+    res.statusCode=upstream.status;
+    for(const key of ['content-type','payment-required','payment-response','x402-settled']){
+      const value=upstream.headers.get(key);if(value!==null)res.setHeader(key,value);
+    }
+    res.setHeader('cache-control','no-store');
+    res.setHeader('x-x402-gateway','bounded-proxy');
+    res.end(body);
+  }catch{if(!res.destroyed)send(res,502,{error:'gateway_upstream_unavailable'});}
 }
 
 http.createServer(async(req,res)=>{

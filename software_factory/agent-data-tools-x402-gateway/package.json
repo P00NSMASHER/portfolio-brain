@@ -9,6 +9,6 @@
   "scripts": {
     "start": "node server.mjs",
     "check": "node --check server.mjs",
-    "test": "node --test bounded-fetch.test.mjs && node test.mjs"
+    "test": "node --test bounded-fetch.test.mjs source-validation.test.mjs && node test.mjs"
   }
 }
