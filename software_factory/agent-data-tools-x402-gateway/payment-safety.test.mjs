@@ -113,6 +113,14 @@ for (const scenario of cases) {
     assert.ok(out.calls.slice(1, -1).every(x => x.startsWith('source:')));
     assert.equal(out.calls.at(-1), 'settle');
   });
+  test(scenario.name + ': contradictory success cannot override invalid x402 verification', async () => {
+    const out = await request(scenario.path, {
+      sourceReply: () => {throw new Error('upstream must not execute');},
+      paymentVerify: {isValid: false, success: true},
+    });
+    assert.equal(out.status, 402);
+    assert.deepEqual(out.calls, ['verify']);
+  });
   test(scenario.name + ': declined verify cannot call upstream or settle', async () => {
     const out = await request(scenario.path, {
       sourceReply: () => {throw new Error('upstream must not execute');},
@@ -148,4 +156,10 @@ test('authoritative RDAP 404 is a valid unregistered answer', async () => {
   assert.equal(out.status, 200);
   assert.equal(out.body.registered, false);
   assert.equal(out.calls.at(-1), 'settle');
+});
+
+test('Treasury rows missing dated security identity cannot be billed', async () => {
+  const out = await request(treasury, {sourceReply: () => json({data: [{}]})});
+  assert.equal(out.status, 502);
+  assert.equal(out.calls.includes('settle'), false);
 });
