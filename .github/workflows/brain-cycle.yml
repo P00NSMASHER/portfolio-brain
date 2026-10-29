@@ -1,8 +1,8 @@
 name: brain-cycle-v2
 
 on:
-  schedule:
-    - cron: "7,27,47 * * * *"
+  # Existing native cron remains active in brain-clock.yml, where its
+  # watchdog checks recent or active original cores before dispatch.
   workflow_dispatch:
     inputs:
       clock_commit:

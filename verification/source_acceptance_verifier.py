@@ -25,6 +25,7 @@ import zipfile
 from soak_v3.audit import REQUIRED_STEPS, require, sha40, sha64, verify_artifact
 from soak_v3.current_state_probe import verify_source_state
 from soak_v3.remote_probe import GitHubReadOnly
+from brain.watchdog import ClockError, verify_parent
 
 REPOSITORY = "P00NSMASHER/portfolio-brain"
 VERIFIER_APP_ID = 5121826
@@ -238,10 +239,76 @@ def _one_artifact(api: GitHubReadOnly, run: dict, source: str) -> tuple[dict, by
     return item, raw, delivery
 
 
+def _validated_automatic_origin(api, run: dict, raw: bytes, source: str) -> tuple[str | None, str]:
+    """Replay the actual origin: external signed Cron or authenticated GitHub watchdog.
+
+    A workflow_dispatch is never an automatic source merely because its job succeeded.
+    GitHub schedule times continue in brain-clock.yml; direct core schedules cannot
+    bypass the shared liveness admission after the coordination release.
+    """
+    event = run["event"]
+    if event == "push":
+        return None, "push"
+    req(event == "workflow_dispatch", "uncoordinated direct core schedule forbidden")
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            names = set(archive.namelist())
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise SourceAcceptanceError("automatic origin artifact ZIP invalid") from exc
+    external = "cloudflare-origin.json" in names
+    native = "watchdog-origin.json" in names
+    req(external != native, "automatic scheduler origin absent or ambiguous")
+    if external:
+        origin = _zip_json(raw, "cloudflare-origin.json")
+        req(origin.get("kind") == "cloudflare_cron_v1"
+            and origin.get("status") == "CLOUDFLARE_SIGNED_ORIGIN_VERIFIED"
+            and origin.get("signed_origin") is True
+            and origin.get("source_sha") == source
+            and origin.get("soak_pass") is False,
+            "signed Cloudflare origin invalid")
+        scheduled = origin.get("scheduled_at")
+        utc(scheduled)
+        return scheduled, "cloudflare_cron_v1"
+
+    receipt = _zip_json(raw, "watchdog-origin.json")
+    clock_id = receipt.get("clock_run_id")
+    req(type(clock_id) is int and clock_id > 0
+        and receipt.get("kind") == "github_schedule"
+        and receipt.get("core_actor") == "github-actions[bot]"
+        and run.get("actor", {}).get("login") == "github-actions[bot]",
+        "GitHub watchdog origin identity invalid")
+    parent = api.json(f"/actions/runs/{clock_id}")
+    try:
+        verified = verify_parent(
+            parent, source, clock_id, "github-actions[bot]",
+            now=utc(run.get("created_at")),
+        )
+    except (ClockError, ValueError, TypeError, KeyError) as exc:
+        raise SourceAcceptanceError("GitHub watchdog provider origin invalid") from exc
+    req(receipt == verified, "GitHub watchdog origin receipt mismatch")
+    jobs = api.json(f"/actions/runs/{clock_id}/jobs?filter=all&per_page=100")
+    job_rows = jobs.get("jobs")
+    req(jobs.get("total_count") == 2 and type(job_rows) is list
+        and len(job_rows) == 2,
+        "GitHub watchdog original job census incomplete")
+    by_name = {job.get("name"): job for job in job_rows if type(job) is dict}
+    req(len(by_name) == 2 and set(by_name) == {"dispatch", "scheduled-watchdog"}
+        and by_name["dispatch"].get("conclusion") == "skipped"
+        and by_name["scheduled-watchdog"].get("status") == "completed"
+        and by_name["scheduled-watchdog"].get("conclusion") == "success",
+        "GitHub watchdog original job verification failed")
+    steps = {step.get("name"): step.get("conclusion")
+             for step in by_name["scheduled-watchdog"].get("steps", []) if type(step) is dict}
+    req(steps.get("Check independent GitHub scheduling liveness") == "success"
+        and steps.get("Dispatch one overdue core without inventing a PASS") == "success",
+        "GitHub watchdog actual dispatch not verified")
+    return None, "github_schedule"
+
+
 def _require_nonoverlapping_scheduler_origins(rows: list[dict]) -> None:
     """Deny overlapping invocations from distinct automatic schedulers."""
     for previous, current in zip(rows, rows[1:]):
-        if previous["event"] != current["event"]:
+        if previous.get("origin_kind", previous["event"]) != current.get("origin_kind", current["event"]):
             req(current["created"] >= previous["completed"],
                 "competing scheduler origins overlapped")
 
@@ -294,19 +361,9 @@ def collect_original_runs(api: GitHubReadOnly, source: str, evidence: dict | Non
                 archive_path, item["digest"], run_id=run_id, source_sha=source,
                 state_parent=state_parent, state_commit=state_commit,
             )
-            scheduled = None
-            if run["event"] == "workflow_dispatch":
-                origin = _zip_json(raw, "cloudflare-origin.json")
-                req(origin.get("kind") == "cloudflare_cron_v1"
-                    and origin.get("status") == "CLOUDFLARE_SIGNED_ORIGIN_VERIFIED"
-                    and origin.get("signed_origin") is True
-                    and origin.get("source_sha") == source
-                    and origin.get("soak_pass") is False,
-                    "signed Cloudflare origin invalid")
-                scheduled = origin.get("scheduled_at")
-                utc(scheduled)
+            scheduled, origin_kind = _validated_automatic_origin(api, run, raw, source)
             proven.append({
-                "id": run_id, "event": run["event"],
+                "id": run_id, "event": run["event"], "origin_kind": origin_kind,
                 "created": utc(run.get("created_at")),
                 "completed": utc(job.get("completed_at")),
                 "state_parent": state_parent, "state_commit": state_commit,
@@ -326,12 +383,12 @@ def collect_original_runs(api: GitHubReadOnly, source: str, evidence: dict | Non
     span = int((automatic[-1]["completed"] - automatic[0]["completed"]).total_seconds())
     gaps = [int((right["completed"] - left["completed"]).total_seconds())
             for left, right in zip(automatic, automatic[1:])]
-    signed = [row["scheduled_at"] for row in automatic if row["event"] == "workflow_dispatch"]
+    signed = [row["scheduled_at"] for row in automatic if row["origin_kind"] == "cloudflare_cron_v1"]
     if evidence is not None:
         req(len(automatic) == evidence.get("original_qualifying_cores")
-            and sum(row["event"] == "workflow_dispatch" for row in automatic)
+            and sum(row["origin_kind"] == "cloudflare_cron_v1" for row in automatic)
                 == evidence.get("original_signed_cloudflare_dispatched_cores")
-            and sum(row["event"] == "schedule" for row in automatic)
+            and sum(row["origin_kind"] == "github_schedule" for row in automatic)
                 == evidence.get("original_github_native_schedule_cores"),
             "automatic origin census mismatch")
         req(automatic[0]["id"] == evidence.get("first_original_run_id")
