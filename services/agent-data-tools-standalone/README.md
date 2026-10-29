@@ -64,6 +64,6 @@ CI runs all of the following on the isolated branch:
 
 ## Render deployment
 
-The repository-root `render.yaml` on branch `agent-data-tools-standalone` is pinned to this directory and defines a free Ohio web service named `agent-data-tools-x402`. Auto-deploy is off by design for Deploy-to-Render use.
+The repository-root `render.yaml` is intentionally **unchanged from protected main** and continues to point to the existing `x402-render-gateway` service. This new standalone implementation is an isolated, **non-deployed code proposal**. It must not repoint the existing service or change its auto-deploy settings. Hosting location, authenticated payments, spending, customer use, and any external publication require separate authorization and independent tests; the optional Deploy-to-Render link above does not initiate deployment.
 
 No backend secrets are required. `PUBLIC_ORIGIN` is not required because discovery URLs are derived from the incoming public host.
