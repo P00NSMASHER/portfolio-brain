@@ -93,7 +93,7 @@ def validate_policy():
         "ref: ${{ github.sha }}", "persist-credentials: false",
         "actions: read", "contents: read", "pull-requests: read",
         "PORTFOLIO_VERIFIER_PRIVATE_KEY", 'app-id: "5121826"',
-        "519c6166714a431c720f65d76d8e5f5be70123ae",
+        "23273f38c5eb5d94a2564e22a2012301447276ea",
         "python -m verification.source_acceptance_verifier",
     ):
         require(fragment in acceptance,
@@ -121,7 +121,7 @@ def validate_policy():
         "ref: ${{ github.sha }}", "persist-credentials: false",
         "actions: read", "contents: read", "pull-requests: read",
         "bd26ebd33c967da4d1aa29f9ae6bf73339460e4e",
-        "519c6166714a431c720f65d76d8e5f5be70123ae",
+        "23273f38c5eb5d94a2564e22a2012301447276ea",
         "PORTFOLIO_RUNTIME_PRIVATE_KEY", "permission-contents: write",
         "permission-pull-requests: write", "skip-token-revoke: false",
         "python -m verification.source_acceptance_producer",
