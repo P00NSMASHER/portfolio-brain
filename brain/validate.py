@@ -32,7 +32,7 @@ def validate_policy():
             and "verification.bot_knowledge_admission import foundation_green" in bot_review
             and "--network none" in bot_review
             and "trusted/verification/independent_verifier.py" in bot_review
-            and 'sha="$CANDIDATE_SHA"' in bot_review
+            and '--head-sha "$CANDIDATE_SHA"' in bot_review
             and "PORTFOLIO_VERIFIER_PRIVATE_KEY" in bot_review
             and "NO_AUTOMATIC_MERGE_AUTHORITY" in bot_review
             and "gh api -X PUT" not in bot_review
