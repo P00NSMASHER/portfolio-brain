@@ -136,34 +136,13 @@ jobs:
             --phase1-exit-file verifier-results/phase1.exit \
             --operating-exit-file verifier-results/operating.exit
 
-      - name: Require signed-source acceptance handoff before protected promotion
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Preserve independent results without native merge authority
         shell: bash
         run: |
           set -euo pipefail
-          STATE="$(gh api "repos/$GITHUB_REPOSITORY/issues/684" --jq .state)"
-          if [[ "$STATE" != closed ]]; then
-            echo "SOURCE_FREEZE_ACTIVE: independent tests may pass but V6 acceptance is pending; do not merge."
-            exit 1
-          fi
-          echo "Acceptance tracker is closed; separate source-bound release gates still apply."
-
-      - name: Merge only the exact validated knowledge PR through GitHub protections
-        env:
-          GH_TOKEN: ${{ steps.verifier-token.outputs.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh api -X PUT "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge" \
-            -f merge_method=merge -f sha="$CANDIDATE_SHA" > verifier-results/merge.json
-          python3 - <<'PY'
-          import json
-          d=json.load(open("verifier-results/merge.json"))
-          if d.get("merged") is not True:
-              raise SystemExit("Protected merge response did not confirm merged=true")
-          print("Exact-head data-only upgrade integrated through separate verifier App.")
-          PY
+          echo "NO_AUTOMATIC_MERGE_AUTHORITY: independent checks are review evidence only."
+          echo "Require separate current-source 12-hour acceptance, protected exact-head checks and a new authenticated release decision."
+          echo "Do not use historical V6 issue #684 as a source-acceptance authorization."
 
       - name: Preserve sanitized verifier output
         if: ${{ always() }}
