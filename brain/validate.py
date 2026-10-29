@@ -93,7 +93,7 @@ def validate_policy():
         "ref: ${{ github.sha }}", "persist-credentials: false",
         "actions: read", "contents: read", "pull-requests: read",
         "PORTFOLIO_VERIFIER_PRIVATE_KEY", 'app-id: "5121826"',
-        "519c6166714a431c720f65d76d8e5f5be70123ae",
+        "d8f1883ad34a8ca2d0a1dd4a3d8e68cb1cf5003d",
         "python -m verification.source_acceptance_verifier",
     ):
         require(fragment in acceptance,
@@ -120,8 +120,8 @@ def validate_policy():
         "github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain'",
         "ref: ${{ github.sha }}", "persist-credentials: false",
         "actions: read", "contents: read", "pull-requests: read",
-        "bd26ebd33c967da4d1aa29f9ae6bf73339460e4e",
-        "519c6166714a431c720f65d76d8e5f5be70123ae",
+        "c6728ed7b2133e8ac5a7da381520c5165a32f185",
+        "d8f1883ad34a8ca2d0a1dd4a3d8e68cb1cf5003d",
         "PORTFOLIO_RUNTIME_PRIVATE_KEY", "permission-contents: write",
         "permission-pull-requests: write", "skip-token-revoke: false",
         "python -m verification.source_acceptance_producer",
@@ -137,7 +137,8 @@ def validate_policy():
             and "merge_pull_request" not in receipt,
             "source acceptance receipt producer adds forbidden trigger or authority")
     from operations.validate_operating_mode import scheduled_workflow_inventory
-    require(scheduled_workflow_inventory(workflow_dir)=={"brain-cycle":[p["cron"]], "brain-clock":[p["watchdog_cron"]]}, "only reviewed native Brain execution and watchdog may recur")
+    require(scheduled_workflow_inventory(workflow_dir)=={"brain-clock":[p["cron"], p["watchdog_cron"]]}, "only existing native Brain and watchdog crons may recur")
+    require("schedule:" not in (workflow_dir/"brain-cycle.yml").read_text(), "uncoordinated direct core schedule forbidden")
     source=(workflow_dir/"brain-cycle.yml").read_text()
     for fragment in ("group: brain-v2-state", "cancel-in-progress: false", "timeout-minutes: 5", "ref: brain-state-v2", "--expected-sha", "STATE_CONFLICT", "STATE_DELIVERY_UNVERIFIED", "MAIN_DRIFT", "soak_completed", "persist-credentials: false", "inputs.watchdog_run_id", "python -m brain.watchdog verify", "COMPETING_CLOCK_INPUTS", "python -m brain.cloudflare_clock", "inputs.cloudflare_attestation", "inputs.cloudflare_signature", "COMPETING_SCHEDULER_ORIGINS"):
         require(fragment in source, "missing workflow guarantee: "+fragment)

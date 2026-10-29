@@ -104,9 +104,9 @@ def build_receipt(api: GitHubReadOnly, source: str) -> tuple[dict, str]:
         "original_run_evidence": {
             "original_qualifying_cores": len(automatic),
             "original_signed_cloudflare_dispatched_cores": sum(
-                row["event"] == "workflow_dispatch" for row in automatic),
+                row["origin_kind"] == "cloudflare_cron_v1" for row in automatic),
             "original_github_native_schedule_cores": sum(
-                row["event"] == "schedule" for row in automatic),
+                row["origin_kind"] == "github_schedule" for row in automatic),
             "first_original_run_id": automatic[0]["id"],
             "first_original_monitor_completed_utc": _iso(automatic[0]["completed"]),
             "terminal_original_run_id": terminal["id"],
