@@ -102,6 +102,16 @@ class CensusTests(unittest.TestCase):
                     conclusion='success', run_attempt=1)
         self.assertFalse(verify_repairs(None, [late], 'a', {14}, cutoff=cutoff))
 
+    def test_failed_late_repair_remains_adverse_historical_evidence(self):
+        from verification.reliability_day import verify_repairs
+        from verification.source_acceptance_verifier import utc
+        failed = dict(id=9, head_sha='a', created_at='2026-10-29T12:00:00Z',
+                      updated_at='2026-10-29T12:31:00Z', status='completed',
+                      conclusion='failure', run_attempt=1)
+        with self.assertRaises(SourceAcceptanceError):
+            verify_repairs(None, [failed], 'a', {14},
+                           cutoff=utc('2026-10-29T12:30:00Z'))
+
     def test_late_uploaded_repair_artifact_does_not_retroactively_pass(self):
         from verification.reliability_day import verify_repairs
         from verification.source_acceptance_verifier import utc
