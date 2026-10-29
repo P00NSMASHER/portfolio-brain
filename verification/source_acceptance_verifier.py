@@ -286,6 +286,19 @@ def _validated_automatic_origin(api, run: dict, raw: bytes, source: str) -> tupl
     except (ClockError, ValueError, TypeError, KeyError) as exc:
         raise SourceAcceptanceError("GitHub watchdog provider origin invalid") from exc
     req(receipt == verified, "GitHub watchdog origin receipt mismatch")
+    jobs = api.json(f"/actions/runs/{clock_id}/jobs?filter=all&per_page=100")
+    job_rows = jobs.get("jobs")
+    req(jobs.get("total_count") == 1 and type(job_rows) is list
+        and len(job_rows) == 1
+        and job_rows[0].get("name") == "scheduled-watchdog"
+        and job_rows[0].get("status") == "completed"
+        and job_rows[0].get("conclusion") == "success",
+        "GitHub watchdog original job verification failed")
+    steps = {step.get("name"): step.get("conclusion")
+             for step in job_rows[0].get("steps", []) if type(step) is dict}
+    req(steps.get("Check independent GitHub scheduling liveness") == "success"
+        and steps.get("Dispatch one overdue core without inventing a PASS") == "success",
+        "GitHub watchdog actual dispatch not verified")
     return None, "github_schedule"
 
 
