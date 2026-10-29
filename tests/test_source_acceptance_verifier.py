@@ -289,12 +289,24 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
         }
 
         class Provider:
-            def __init__(self, document):
+            def __init__(self, document, *, dispatched=True):
                 self.document = document
+                self.dispatched = dispatched
             def json(self, path):
-                if path != "/actions/runs/501":
-                    raise AssertionError("unexpected provider read")
-                return self.document
+                if path == "/actions/runs/501":
+                    return self.document
+                if path == "/actions/runs/501/jobs?filter=all&per_page=100":
+                    return {"total_count": 1, "jobs": [{
+                        "name": "scheduled-watchdog",
+                        "status": "completed", "conclusion": "success",
+                        "steps": [
+                            {"name": "Check independent GitHub scheduling liveness",
+                             "conclusion": "success"},
+                            {"name": "Dispatch one overdue core without inventing a PASS",
+                             "conclusion": "success" if self.dispatched else "skipped"},
+                        ],
+                    }]}
+                raise AssertionError("unexpected provider read")
 
         def archive(**documents):
             stream = io.BytesIO()
@@ -317,6 +329,13 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
         ):
             with self.subTest(name=name), self.assertRaises(sav.SourceAcceptanceError):
                 sav._validated_automatic_origin(Provider(invalid_parent), run, data, SOURCE)
+
+        with self.assertRaisesRegex(
+            sav.SourceAcceptanceError, "actual dispatch not verified"
+        ):
+            sav._validated_automatic_origin(
+                Provider(parent, dispatched=False), run, data, SOURCE
+            )
 
         wrong_actor = dict(run, actor={"login": "P00NSMASHER"})
         with self.assertRaises(sav.SourceAcceptanceError):
