@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node src/server.mjs",
-    "test": "node --test --test-concurrency=1 test/*.test.mjs"
+    "test": "node --test --test-concurrency=1 test/contracts.test.mjs test/payment-flow.test.mjs",
+    "test:upstreams": "node --test --test-concurrency=1 test/upstream-smoke.test.mjs"
   },
   "dependencies": {
     "express": "^5.1.0"
