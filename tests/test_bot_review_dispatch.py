@@ -48,8 +48,7 @@ class BotReviewDispatchTests(unittest.TestCase):
             "--security-opt=no-new-privileges",
             "trusted/verification/independent_verifier.py",
             "PORTFOLIO_VERIFIER_PRIVATE_KEY",
-            "sha=\"$CANDIDATE_SHA\"",
-            "Merge only the exact validated knowledge PR",
+            "NO_AUTOMATIC_MERGE_AUTHORITY",
         ):
             if part == "github.event":
                 continue
@@ -61,8 +60,9 @@ class BotReviewDispatchTests(unittest.TestCase):
         self.assertNotIn("workflow_run:",s)
         self.assertNotIn("repository_dispatch:",s)
         self.assertNotIn("contents: write",s)
-        self.assertIn("SOURCE_FREEZE_ACTIVE",s)
-        self.assertIn("issues/684",s)
+        self.assertNotIn("gh api -X PUT",s)
+        self.assertNotIn("pulls/$PR_NUMBER/merge",s)
+        self.assertIn("NO_AUTOMATIC_MERGE_AUTHORITY",s)
 
     def test_pin_action_source_and_never_execute_candidate_in_privileged_runner(self):
         s=WORKFLOW.read_text(encoding="utf-8")
