@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fail-closed checks for public Portfolio Brain command-center publication."""
 from __future__ import annotations
+from legacy.workflow_archive import legacy_workflow_path
 
 import json
 import re
@@ -107,7 +108,7 @@ def validate_publication() -> dict[str, object]:
     require("Portfolio Brain Command Center" in html_text, "public page title missing")
     require("OBSERVE ONLY" in html_text, "public read-only boundary missing")
     require("Paid Cost Governor" in html_text and "GitHub Workload Controls" in html_text, "public paid/workload separation missing")
-    workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text(encoding="utf-8")
+    workflow=(legacy_workflow_path(ROOT/".github/workflows/command-center-pages.yml")).read_text(encoding="utf-8")
     require("\n  push:\n" in workflow and "      - main" in workflow, "Pages is not auto-triggered by relevant main pushes")
     require("\n  workflow_run:\n" in workflow, "Pages durable-state event trigger missing")
     event_block=re.search(r"(?m)^  workflow_run:\n((?:[ ]{4,}[^\n]*\n)+)", workflow)

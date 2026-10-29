@@ -5,11 +5,13 @@ This harness prepares evidence and reports blockers. It never changes repository
 settings, grants authority, publishes a check, or declares Step 24 COMPLETE.
 """
 from __future__ import annotations
+from legacy.workflow_archive import legacy_workflow_path
 
 import argparse
 import hashlib
 import json
 import re
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
@@ -187,15 +189,15 @@ def static_review(root: Path = ROOT) -> dict[str, Any]:
     observed: dict[str, Any] = {}
     paths = {
         "verifier_py": root / "verification" / "independent_verifier.py",
-        "verifier_yml": root / ".github" / "workflows" / "portfolio-independent-verifier.yml",
+        "verifier_yml": legacy_workflow_path(root / ".github" / "workflows" / "portfolio-independent-verifier.yml"),
         "repair_policy": root / "repair" / "AUTONOMOUS_REPAIR_POLICY.json",
-        "factory_yml": root / ".github" / "workflows" / "software-factory-candidate.yml",
+        "factory_yml": legacy_workflow_path(root / ".github" / "workflows" / "software-factory-candidate.yml"),
         "operating_policy": root / "operations" / "OPERATING_MODE_POLICY.json",
         "action_policy": root / "action_engine" / "ACTION_POLICY.json",
         "projects": root / "registry" / "projects.json",
-        "autonomous_repair_yml": root / ".github" / "workflows" / "portfolio-autonomous-repair.yml",
-        "scheduler_yml": root / ".github" / "workflows" / "portfolio-autonomous-scheduler.yml",
-        "reducer_yml": root / ".github" / "workflows" / "portfolio-state-reducer.yml",
+        "autonomous_repair_yml": legacy_workflow_path(root / ".github" / "workflows" / "portfolio-autonomous-repair.yml"),
+        "scheduler_yml": legacy_workflow_path(root / ".github" / "workflows" / "portfolio-autonomous-scheduler.yml"),
+        "reducer_yml": legacy_workflow_path(root / ".github" / "workflows" / "portfolio-state-reducer.yml"),
     }
     missing = [str(path.relative_to(root)) for path in paths.values() if not path.exists()]
     if missing:
@@ -274,7 +276,7 @@ def static_review(root: Path = ROOT) -> dict[str, Any]:
     workflow_permission_observations: dict[str, Any] = {}
     workflow_permissions_ok = True
     for workflow_path, expected_permissions in SENSITIVE_WORKFLOW_PERMISSIONS.items():
-        workflow_text = (root / workflow_path).read_text(encoding="utf-8")
+        workflow_text = legacy_workflow_path(root / workflow_path).read_text(encoding="utf-8")
         actual_permissions, job_level_overrides = _permissions_maps(workflow_text)
         top_level_exact = actual_permissions == expected_permissions
         bounded_overrides = all(
@@ -624,7 +626,12 @@ def live_review(evidence: dict[str, Any], expected_main_sha: str) -> dict[str, A
             isinstance(includes, list)
             and isinstance(excludes, list)
             and "refs/heads/main" in includes
-            and "refs/heads/main" not in excludes
+            and all(
+                isinstance(pattern, str)
+                and pattern not in {"~ALL", "~DEFAULT_BRANCH"}
+                and not fnmatchcase("refs/heads/main", pattern)
+                for pattern in excludes
+            )
         )
         rules_ok = (
             ruleset.get("enforcement") == "active"

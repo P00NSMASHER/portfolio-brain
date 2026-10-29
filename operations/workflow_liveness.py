@@ -6,6 +6,7 @@ workflow_dispatch for an overdue core workflow; the target workflow must still
 pass its own cost, authority, kill-switch, and concurrency gates.
 """
 from __future__ import annotations
+from legacy.workflow_archive import legacy_workflow_path
 
 import argparse
 import hashlib
@@ -107,12 +108,12 @@ def validate_policy(p:dict[str,Any])->None:
         req(isinstance(target["proof_member"],str) and target["proof_member"].endswith(".json") and "/" not in target["proof_member"],"workflow liveness proof member invalid")
         req(target["proof_kind"] in PROOF_KINDS,"workflow liveness proof kind invalid")
 
-        workflow_path=ROOT/".github"/"workflows"/target["workflow_file"]
+        workflow_path=legacy_workflow_path(ROOT/".github"/"workflows"/target["workflow_file"])
         req(workflow_path.exists(),"workflow liveness target file missing")
         workflow_body=workflow_path.read_text(encoding="utf-8")
         reusable_marker="uses: ./.github/workflows/runtime-worker.yml"
         if reusable_marker in workflow_body:
-            workflow_body+="\n"+(ROOT/".github"/"workflows"/"runtime-worker.yml").read_text(encoding="utf-8")
+            workflow_body+="\n"+(legacy_workflow_path(ROOT/".github"/"workflows"/"runtime-worker.yml")).read_text(encoding="utf-8")
         req(f'name: {target["proof_artifact_name"]}' in workflow_body,"workflow liveness proof artifact is not produced by target")
 
         if target["admission_domain"]=="WORKLOAD":
@@ -358,6 +359,7 @@ def recover_overdue(
     at:str|None=None,
     policy_data:dict[str,Any]|None=None,
     run_proofs:dict[int,dict[str,Any]]|None=None,
+    persistence_incident_open:bool=False,
 )->dict[str,Any]:
     p=policy_data or load_policy();validate_policy(p)
     at=at or now_iso()
@@ -374,6 +376,24 @@ def recover_overdue(
       for target in p["targets"]
     ]
     targets_by_name={row["workflow_name"]:row for row in p["targets"]}
+    if persistence_incident_open:
+        for row in evaluations:
+            if row["dispatch_required"]:
+                row["status"]="BLOCKED_PERSISTENCE_RECOVERY"
+                row["dispatch_required"]=False
+                row["reason"]="CHECKPOINT_RECOVERY_IN_PROGRESS"
+                row["admission_status"]="PERSISTENCE_RECOVERY_IN_PROGRESS"
+                row["admission_reason_codes"]=["CHECKPOINT_RECOVERY_IN_PROGRESS"]
+        return {
+          "schema_version":"1.0.0",
+          "status":"PERSISTENCE_RECOVERY_IN_PROGRESS",
+          "checked_at":at,
+          "hard_stop_reason":paid_stop,
+          "persistence_incident_open":True,
+          "dispatches":[],
+          "targets":evaluations,
+          "authority_granted":False,
+        }
     overdue=[row for row in evaluations if row["dispatch_required"]]
     overdue.sort(key=lambda row:targets_by_name[row["workflow_name"]]["priority"])
     dispatches=[]
@@ -438,6 +458,7 @@ def recover_overdue(
                 "HEALTHY_VERIFIED_WORK"),
       "checked_at":at,
       "hard_stop_reason":paid_stop,
+      "persistence_incident_open":False,
       "dispatches":dispatches,
       "targets":evaluations,
       "authority_granted":False,
@@ -566,6 +587,7 @@ def main()->int:
     ap.add_argument("--output",default=None)
     ap.add_argument("--state-metadata",default=None)
     ap.add_argument("--without-cost-state",action="store_true")
+    ap.add_argument("--persistence-incident-open",action="store_true")
     args=ap.parse_args()
     p=load_policy();validate_policy(p)
     token=os.environ.get("GITHUB_TOKEN")
@@ -642,7 +664,10 @@ def main()->int:
           payload={"ref":branch},
         )
     state=None if args.without_cost_state else load_state(args.state)
-    result=recover_overdue(state,runs,dispatch=dispatch,at=checked_at,run_proofs=run_proofs)
+    result=recover_overdue(
+      state,runs,dispatch=dispatch,at=checked_at,run_proofs=run_proofs,
+      persistence_incident_open=args.persistence_incident_open,
+    )
     meta_path=None if args.state_metadata is None else Path(args.state_metadata)
     metadata=json.loads(meta_path.read_text()) if meta_path is not None and meta_path.exists() else {}
     result["cost_state_proof"]=None if state is None else cost_state_observation(state,metadata,at=checked_at)

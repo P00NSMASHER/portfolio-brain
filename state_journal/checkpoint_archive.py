@@ -9,11 +9,61 @@ from pathlib import Path
 
 from runtime.artifact_restore import _atomic_write
 from state_journal.archive import ACTIVE_MANIFEST, build_rollover, load_active_manifest
-from state_journal.contracts import canonical, require, strict_load
+from state_journal.contracts import MAX_BYTES, MAX_EVENTS, canonical, require, strict_load
 from state_journal.reducer import validate_snapshot
 from state_journal.transport import SNAPSHOT_ARTIFACT, GitHubReader, artifact_digest, extract_json
 
 ROOT = Path(__file__).resolve().parents[1]
+ARCHIVE_HIGH_WATER_RATIO = 0.70
+
+
+def archive_due(event_count: int, serialized_bytes: int, *, max_events: int = MAX_EVENTS,
+                max_bytes: int = MAX_BYTES, ratio: float = ARCHIVE_HIGH_WATER_RATIO) -> bool:
+    """Start a protected archive before the active journal reaches either hard bound."""
+    require(type(event_count) is int and event_count >= 0, "Journal event count invalid")
+    require(type(serialized_bytes) is int and serialized_bytes >= 0, "Journal serialized size invalid")
+    require(type(max_events) is int and max_events > 0, "Journal event bound invalid")
+    require(type(max_bytes) is int and max_bytes > 0, "Journal byte bound invalid")
+    require(type(ratio) in (int, float) and 0 < ratio < 1, "Archive high-water ratio invalid")
+    return event_count >= int(max_events * ratio) or serialized_bytes >= int(max_bytes * ratio)
+
+
+def _latest_attempt_snapshot_artifact(run: dict, rows: list[dict]) -> dict:
+    """Select the immutable snapshot emitted by the successful current run attempt."""
+    run_id = run.get("id")
+    attempt = run.get("run_attempt")
+    require(type(run_id) is int and type(attempt) is int and attempt >= 1,
+            "Reducer run attempt identity malformed")
+    receipts = [
+        row for row in rows
+        if row.get("name") == f"portfolio-state-reducer-receipt-{run_id}-{attempt}"
+        and row.get("expired") is False
+    ]
+    require(len(receipts) == 1, "Latest reducer attempt receipt missing or ambiguous")
+    receipt = receipts[0]
+    require(type(receipt.get("id")) is int and isinstance(receipt.get("created_at"), str),
+            "Latest reducer attempt receipt metadata malformed")
+
+    snapshots = [
+        row for row in rows
+        if row.get("name") == SNAPSHOT_ARTIFACT
+        and row.get("expired") is False
+        and type(row.get("id")) is int
+        and isinstance(row.get("created_at"), str)
+        and row["created_at"] <= receipt["created_at"]
+    ]
+    require(bool(snapshots), "Latest reducer attempt snapshot missing")
+    snapshots.sort(key=lambda row: (row["created_at"], row["id"]))
+    selected = snapshots[-1]
+    later = [
+        row for row in rows
+        if row.get("name") == SNAPSHOT_ARTIFACT
+        and row.get("expired") is False
+        and isinstance(row.get("created_at"), str)
+        and row["created_at"] > receipt["created_at"]
+    ]
+    require(not later, "Reducer snapshot appeared after latest attempt receipt")
+    return selected
 
 
 def latest_canonical(reader: GitHubReader) -> tuple[dict, dict, dict]:
@@ -41,10 +91,9 @@ def latest_canonical(reader: GitHubReader) -> tuple[dict, dict, dict]:
             row for row in rows
             if row.get("name") == SNAPSHOT_ARTIFACT and row.get("expired") is False
         ]
-        require(len(matches) <= 1, "Reducer published multiple canonical snapshots")
         if not matches:
             continue
-        meta = matches[0]
+        meta = _latest_attempt_snapshot_artifact(run, rows)
         raw = reader.archive(meta["id"])
         artifact_digest(meta, raw)
         state = extract_json(raw, "snapshot.json")
@@ -68,7 +117,7 @@ def _recovery_runs_are_archived(policy: dict, state: dict) -> bool:
     return all(run_id in source_runs for run_id in recovery)
 
 
-def generate(root: Path, *, reader: GitHubReader) -> dict:
+def generate(root: Path, *, reader: GitHubReader, force: bool = False) -> dict:
     policy_path = root / "state_journal" / "POLICY.json"
     policy = strict_load(policy_path.read_bytes())
     state, run, artifact = latest_canonical(reader)
@@ -78,6 +127,18 @@ def generate(root: Path, *, reader: GitHubReader) -> dict:
             "status": "NOOP",
             "reason": "ACTIVE_ARCHIVE_IS_CURRENT",
             "archived_sequence": active["archived_sequence"],
+            "source_sequence": state["sequence"],
+        }
+
+    serialized_bytes = len(canonical(state))
+    if not force and not archive_due(state["event_count"], serialized_bytes):
+        return {
+            "status": "NOOP",
+            "reason": "BELOW_ARCHIVE_HIGH_WATER",
+            "event_count": state["event_count"],
+            "serialized_bytes": serialized_bytes,
+            "event_high_water": int(MAX_EVENTS * ARCHIVE_HIGH_WATER_RATIO),
+            "byte_high_water": int(MAX_BYTES * ARCHIVE_HIGH_WATER_RATIO),
             "source_sequence": state["sequence"],
         }
 
@@ -123,11 +184,24 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--output", type=Path, default=Path("state_journal/out/checkpoint_archive_receipt.json"))
+    parser.add_argument("--force", action="store_true",
+                        help="archive after a capacity failure even if the latest successful snapshot is below high water")
     args = parser.parse_args()
     token = os.environ.get("GITHUB_TOKEN", "")
     require(bool(token), "GITHUB_TOKEN required to create checkpoint/archive candidate")
-    result = generate(args.root.resolve(), reader=GitHubReader(token, max_requests=40))
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        result = generate(args.root.resolve(), reader=GitHubReader(token, max_requests=40), force=args.force)
+    except Exception as exc:
+        result = {
+            "status": "BLOCKED",
+            "reason_type": type(exc).__name__,
+            "reason": str(exc)[:1000],
+            "force": bool(args.force),
+        }
+        _atomic_write(args.output, canonical(result) + b"\n")
+        print(json.dumps(result, sort_keys=True))
+        raise
     _atomic_write(args.output, canonical(result) + b"\n")
     print(json.dumps(result, sort_keys=True))
 

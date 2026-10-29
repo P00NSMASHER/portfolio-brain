@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "purpose": "Coverage map for owner-named portfolio businesses, products, research streams, and infrastructure. Coverage registration does not assert independent business validation or grant authority.",
+  "purpose": "Coverage map for owner-named portfolio businesses, products, research streams, and infrastructure. Source-documented commercial concepts without a verified project binding retain a null canonical_project_id and PROJECT_IDENTITY_UNRESOLVED status. Coverage registration does not assert independent business validation, create a project or autonomy profile, or grant authority.",
   "items": [
     {
       "name": "RecoveryWorks",
@@ -178,9 +178,13 @@
     },
     {
       "name": "ScopeSignal",
-      "canonical_project_id": "PRJ-004",
+      "canonical_project_id": null,
       "item_kind": "COMMERCIAL_CONCEPT",
-      "coverage_status": "REGISTERED_COVERAGE_ONLY"
+      "coverage_status": "PROJECT_IDENTITY_UNRESOLVED",
+      "source_refs": [
+        "https://github.com/P00NSMASHER/github-value-hunt-ledger/blob/04252c375e8abf8564dd42a5fd5524bf6635a4fa/lanes/04-construction-scopesignal.md",
+        "https://github.com/P00NSMASHER/github-value-hunt-ledger/blob/bd169dba2539de9e9fa9338c063b60f453d903de/portfolio_prework/portfolio_inventory.json"
+      ]
     },
     {
       "name": "StarBlox",

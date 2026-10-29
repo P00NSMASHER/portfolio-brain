@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import copy,os,tempfile,unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -44,8 +45,8 @@ def proposal_state():
 class SchedulerTests(unittest.TestCase):
     def test_scheduler_stays_out_of_push_fanout_and_keeps_rerunnable_job_concurrency(self):
         root=Path(__file__).resolve().parents[1]
-        workflow=(root/".github/workflows/portfolio-autonomous-scheduler.yml").read_text()
-        runtime=(root/".github/workflows/runtime-event-observe.yml").read_text()
+        workflow=(legacy_workflow_path(root/".github/workflows/portfolio-autonomous-scheduler.yml")).read_text()
+        runtime=(legacy_workflow_path(root/".github/workflows/runtime-event-observe.yml")).read_text()
         self.assertNotIn("\n  push:",workflow)
         self.assertGreater(workflow.index("concurrency:",workflow.index("  schedule:")),workflow.index("  schedule:"))
         self.assertIn('.github/workflows/portfolio-autonomous-scheduler.yml',runtime)
@@ -101,7 +102,7 @@ class SchedulerTests(unittest.TestCase):
 
     def test_same_cycle_continuation_step_precedes_review_persistence(self):
         root=Path(__file__).resolve().parents[1]
-        workflow=(root/".github/workflows/portfolio-autonomous-scheduler.yml").read_text()
+        workflow=(legacy_workflow_path(root/".github/workflows/portfolio-autonomous-scheduler.yml")).read_text()
         self.assertIn("scheduler.same_cycle_continuation",workflow)
         self.assertIn("--max-items 8",workflow)
         self.assertLess(

@@ -1,0 +1,319 @@
+"""Private report publication with per-file atomic replacement.
+
+Every output carries potentially sensitive source evidence. Validate all
+existing targets before staging, never chmod unrelated directories/files, and
+never write confidential bytes through a pre-existing destination alias.
+"""
+import html
+import json
+import os
+import secrets
+import stat
+from pathlib import Path
+
+from brain.core import BrainError, require
+
+
+_REPORT_NAMES = ("report.md", "report.html", "report.json")
+_TEST_LOG_NAMES = ("tests.txt",)
+
+
+def _assert_private_target(directory, name):
+    """Reject symlinks, hard links and non-regular target files."""
+    try:
+        old = os.stat(name, dir_fd=directory, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    require(
+        stat.S_ISREG(old.st_mode) and old.st_nlink == 1,
+        "REPORT_OUTPUT_SYMLINK_HARDLINK_OR_NONFILE_REFUSED",
+    )
+
+
+def _write_private_bundle(output, contents, *, names=_REPORT_NAMES):
+    """Publish allowlisted private files without truncating destination inodes.
+
+    Individual renames are atomic, but a three-file report is not one
+    filesystem transaction. Machine-readable JSON is published LAST so
+    interrupted renders cannot advance its canonical receipt prematurely.
+    """
+    out = Path(output)
+    require(
+        names in (_REPORT_NAMES, _TEST_LOG_NAMES)
+        and set(contents) == set(names),
+        "REPORT_OUTPUT_SCHEMA_INVALID",
+    )
+    for part in (out, *out.parents):
+        require(not part.is_symlink(), "REPORT_OUTPUT_SYMLINK_DIRECTORY_REFUSED")
+
+    created = False
+    try:
+        out.mkdir(parents=True, mode=0o700, exist_ok=False)
+        created = True
+    except FileExistsError:
+        pass
+
+    try:
+        directory = os.open(out, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError as exc:
+        raise BrainError("REPORT_OUTPUT_UNSAFE_DIRECTORY") from exc
+
+    staged = []
+    try:
+        # Existing aliases are rejected before any new receipt is installed.
+        for name in names:
+            _assert_private_target(directory, name)
+        if created:
+            os.fchmod(directory, 0o700)
+        else:
+            require(
+                stat.S_IMODE(os.fstat(directory).st_mode) == 0o700,
+                "REPORT_OUTPUT_EXISTING_DIRECTORY_NOT_PRIVATE",
+            )
+
+        try:
+            for name in names:
+                temp_name = ".report-" + secrets.token_hex(12) + ".tmp"
+                handle = os.open(
+                    temp_name,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                    0o600,
+                    dir_fd=directory,
+                )
+                staged.append((name, temp_name))
+                with os.fdopen(handle, "w", encoding="utf-8") as target:
+                    os.fchmod(target.fileno(), 0o600)
+                    target.write(contents[name])
+                    target.flush()
+                    os.fsync(target.fileno())
+            for name, temp_name in staged[:]:
+                # Recheck against a target changed while the temp was written.
+                _assert_private_target(directory, name)
+                os.replace(
+                    temp_name, name,
+                    src_dir_fd=directory, dst_dir_fd=directory,
+                )
+                staged.remove((name, temp_name))
+            os.fsync(directory)
+        except OSError as exc:
+            raise BrainError("REPORT_OUTPUT_PRIVATE_WRITE_FAILED") from exc
+    finally:
+        try:
+            for _, temp_name in staged:
+                try:
+                    os.unlink(temp_name, dir_fd=directory)
+                except FileNotFoundError:
+                    pass
+        finally:
+            os.close(directory)
+
+
+def write_private_test_log(output, contents):
+    """Write only the preflight tests.txt using the report privacy contract."""
+    require(type(contents) is str, "REPORT_OUTPUT_SCHEMA_INVALID")
+    _write_private_bundle(output, {"tests.txt": contents}, names=_TEST_LOG_NAMES)
+
+
+def write_report(report, output):
+    raw=json.dumps(report,indent=2,sort_keys=True,ensure_ascii=False,allow_nan=False)
+    lines=["# Portfolio Brain", "", f'Status: {report.get("status", "UNKNOWN")}', "", f'Source: {report.get("source_sha", "UNAVAILABLE")}', "", "Read-only research. Structural code evidence is not proof of production usefulness or revenue.", ""]
+    if report.get("mission"):
+        lines.extend(["## Mission: research, upgrade and repair every current project", "",
+                      "Success means verified repairs, useful delivered upgrades, fewer recurring failures and less user intervention. Revenue is optional project context.", ""])
+        for task in report.get("mission_priorities", []):
+            lines.append(f'- {task["project_id"]}: {task["next_operation"]}; {task["improvement_focus"]}. Metric: {task["success_metric"]}; delivery remains unverified.')
+    for repo in report.get("repositories",[]):
+        failed=[x["name"] for x in repo["checks"] if x["conclusion"] not in {"success","neutral",None}]
+        lines.append(f'- {repo["repository"]}: `{repo["head_sha"]}`; adverse checks: {", ".join(failed) or "none observed"}; [{repo["source_ref"]}]({repo["source_ref"]})')
+    lines.extend(["", "## Repository changes since prior observation", ""])
+    changes = report.get("repository_changes", [])
+    if not changes:
+        lines.append("No repository has two distinct observed snapshots yet.")
+    for change in changes:
+        facts = []
+        if change["revision_changed"]:
+            facts.append(
+                f'revision {change["previous_revision"][:8]} → {change["current_revision"][:8]}'
+            )
+        tally = change["open_issue_pr_tally"]["net_delta"]
+        if tally:
+            facts.append(f'open GitHub issue/PR tally {tally:+d}')
+        if change["check_deteriorations"]:
+            names = ", ".join(row["name"] for row in change["check_deteriorations"])
+            facts.append(f'observed adverse check transitions: {names}')
+        if change["check_recoveries"]:
+            names = ", ".join(row["name"] for row in change["check_recoveries"])
+            facts.append(f'observed recovered check transitions: {names}')
+        if change["check_comparison"] != "COMPARABLE":
+            facts.append(f'check comparability: {change["check_comparison"]}')
+        if change["evidence_quality"] == "ACTUAL_STALE_BASELINE":
+            facts.append(
+                "earlier snapshot exceeds the freshness window; "
+                "the timing of these differences is not established"
+            )
+        lines.append(
+            f'- {change["repository"]} ({change["previous_observed_at"]} to '
+            f'{change["current_observed_at"]}; {change["evidence_quality"]}): '
+            + ("; ".join(facts) if facts else "no measured changes")
+        )
+    lines.append(
+        "GitHub's open_issues_count includes pull requests. Check transitions require "
+        "the same commit and uniquely named completed checks; these are observations, "
+        "not causes, verified usefulness, or revenue."
+    )
+    lines.extend(["", "## Reusable code to evaluate", ""])
+    for candidate in report.get("reuse_candidates",[])[:10]:
+        lines.append(f'- [{candidate["repository"]}/{candidate["path"]}]({candidate["source_ref"]}) — {candidate["target"]}; structural score {candidate["reuse_score"]}; license {candidate["license"]}; {candidate["utility_evidence"]}')
+    if report.get("scope") == "READ_ONLY_CROSS_PROJECT_IMPROVEMENT_QUEUE":
+        lines.extend(["", "## RETALLY and Product Factory priority experiments", ""])
+        for task in report.get("priority_improvements", []):
+            review = task.get("active_pr_review") or {}
+            if type(review.get("pr_number")) is int:
+                checks = review.get("checks", {})
+                parent = review.get("sampled_parent_pr")
+                dependency = (
+                    f"stacked on sampled PR #{parent}" if parent is not None
+                    else "unsampled parent branch" if review.get("stacked_on_nondefault_branch")
+                    else "based on observed default branch"
+                )
+                lines.append(
+                    f'- [Draft candidate PR #{review["pr_number"]}]({review["pr_url"]}) '
+                    f'@ {review["head_sha"][:12]}; {dependency}; '
+                    f'CI evidence: {checks.get("status", "NOT_VERIFIED")}; '
+                    f'draft={review["draft"]}. '
+                    f'{review.get("review_action", "Separate review required.")}'
+                )
+            else:
+                lines.append(
+                    f'- {task["project_id"]} PR evidence: '
+                    f'{review.get("status", "NOT_COLLECTED")} (not release evidence).'
+                )
+            sha = task["observed_source_sha"]
+            head = sha[:8] if isinstance(sha, str) else "UNOBSERVED"
+            lines.append(
+                f'- Priority {task["priority"]}: {task["project_id"]} @ {head}; '
+                f'{task["queue_status"]}; CI evidence: {task["source_check_state"]}. '
+                f'Next: {task["next_test"]} '
+                f'Required evidence: {task["required_evidence"]} '
+                f'Activation: {task["activation_gate"]}'
+            )
+        lines.extend(["", "## Source-pinned improvement work packets", ""])
+        for project in report.get("evidence_to_action_packets", []):
+            lines.append(
+                f'- {project["project_id"]}: '
+                f'{len(project["actionable_review_packets"])} candidate work packets; '
+                f'{project["missing_evidence"]}.'
+            )
+            for work in project["actionable_review_packets"][:3]:
+                lines.append(
+                    f'  - [PR #{work["source_pr_number"]}]({work["source_pr_url"]}) '
+                    f'@ {work["source_head_sha"][:12]} — '
+                    f'{work["theme"]}; heuristic relevance '
+                    f'{work["heuristic_relevance"]}/100 (NOT measured value); '
+                    f'CI: {work["source_ci_status"]}; next gate: {work["action_gate"]}. '
+                    f'Change: {work["next_reviewable_change"]} '
+                    f'Metric: {work["target_metric"]}. '
+                    f'Proof: {work["required_proof_artifact"]}. '
+                    f'Hold: {work["required_release_gate"]}'
+                )
+                for step in work["verification_steps"]:
+                    lines.append(f'    - Proposed validation: {step}')
+        lines.append(
+            "Work packets are operator review targets, not merged patches, executed "
+            "downstream tests, verified revenue or approved production releases."
+        )
+        execution = report.get("autonomous_repair_queue") or {}
+        if execution:
+            lines.extend(["", "## Owner-directed technical repair execution", ""])
+            lines.append(
+                f'{execution["selected_count"]} source-pinned actions selected; '
+                f'{execution["deferred_due_to_batch_bound"]} deferred by bounded batch; '
+                f'{execution["suppressed_duplicate_count"]} already reported exact fingerprints; '
+                f'overflow slot {execution.get("rotated_overflow_index")!s} '
+                f'from cycle {execution.get("rotation_cycle_index", "UNKNOWN")}.'
+            )
+            for step in execution["actions"]:
+                lines.append(
+                    f'- [{step["project_id"]} PR #{step["candidate_pr_number"]}]'
+                    f'({step["candidate_pr_url"]}) @ {step["source_head_sha"][:12]}: '
+                    f'{step["stage"]}. Owner: {step["owner_task"]}; '
+                    f'independent gate: {step["independent_gate_owner"]}. '
+                    f'Next: {step["first_action"]} '
+                    f'Release hold: {step["required_release_gate"]}'
+                )
+            lines.append(
+                "These are source-bound implementation instructions for existing owners. "
+                "No upstream provider code was executed; no protected merge, "
+                "customer action, revenue, or live deployment has been approved."
+            )
+        continuation = report.get("autonomous_repair_followthrough") or {}
+        if continuation:
+            lines.extend(["", "## Restart-safe repair follow-through", ""])
+            lines.append(
+                f'{continuation["unfinished_count"]} unfinished actions; '
+                f'{continuation["carried_forward_count"]} carried from previous '
+                f'unsampled issues; {continuation["technical_main_verified_count"]} '
+                f'main sources with explicit technical-check evidence.'
+            )
+            for task in continuation["actions"]:
+                lines.append(
+                    f'- {task["project_id"]} PR #{task["source_pr"]} '
+                    f'@ {task["source_head_sha"][:12]}: '
+                    f'{task["next_operation"]}; {task["provider_status"]}. '
+                    f'Implementation owner: {task["owner_task"]}.'
+                )
+            lines.append(
+                "Unchanged uncompleted work must resume rather than silently "
+                "disappear; technical main CI is not proof of production or "
+                "commercial effectiveness."
+            )
+        source_facts = report.get("original_repair_proof")
+        if source_facts:
+            lines.extend(["", "## Original repair PR evidence", ""])
+            lines.append(
+                f'Original status: {source_facts.get("status", "UNKNOWN")}; '
+                f'PRs={len(source_facts.get("proofs", []))}; '
+                f'gaps={len(source_facts.get("gaps", []))}; '
+                f'GETs={source_facts.get("requests_used", 0)}.'
+            )
+            for source_ci in source_facts.get("source_checks", []):
+                lines.append(
+                    f'- {source_ci["repository"]} PR #{source_ci["pr_number"]} '
+                    f'@ {source_ci["source_head_sha"][:12]}: '
+                    f'{source_ci["status"]}; '
+                    f'adverse={source_ci["adverse_count"]}, '
+                    f'incomplete={source_ci["incomplete_count"]}. '
+                    f'Owner must correct source or verify next gate.'
+                )
+            lines.append(
+                "Original CI and merge metadata are not production or "
+                "commercial acceptance."
+            )
+        lines.extend(["", "## Project improvement queue", ""])
+        for project in report.get("projects", []):
+            revision = project.get("repository_revision")
+            revision_text = revision[:8] if isinstance(revision, str) else "unobserved"
+            lines.append(
+                f'- {project["name"]} ({project["repository"]}@{revision_text}) — '
+                f'{project["status"]}; metric: {project["success_metric"]} '
+                f'({project["direction"]}); candidates: {project["current_candidate_count"]}; '
+                f'operator outcomes: {project["operator_outcome_count"]}. '
+                f'{project["next_action"]}'
+            )
+        lines.append(
+            "Baseline and measured-result fields remain empty until explicit before/after "
+            "evidence exists. This queue cannot write downstream repositories, merge code, "
+            "send messages, trade, spend money, or manufacture value claims."
+        )
+    lines.extend(["", "## Business opportunities", ""])
+    for opportunity in report.get("business_opportunities",[]):
+        lines.append(f'- {opportunity["target"]}: {opportunity["hypothesis"]} Customer demand {opportunity["customer_demand"]}; revenue {opportunity["revenue"]}.')
+    lines.extend(["", "## Experiments", ""])
+    for exp in report.get("learning",{}).get("experiments",[]):
+        lines.append(f'- {exp["experiment"]}: {exp["dataset_kind"]}, {exp["cases"]} cases, equal outputs, {exp["baseline_operations"]} → {exp["candidate_operations"]} defined operations. {exp["scope"]}')
+    html_text = ('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Portfolio Brain</title><style>body{font:16px system-ui;max-width:960px;margin:32px auto;padding:16px;color:#16304b;background:#f3f7fb}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:24px;border-radius:16px}</style><pre>' + html.escape("\n".join(lines)) + '</pre>')
+    _write_private_bundle(output, {
+        "report.md": "\n".join(lines) + "\n",
+        "report.html": html_text,
+        "report.json": raw + "\n",
+    })

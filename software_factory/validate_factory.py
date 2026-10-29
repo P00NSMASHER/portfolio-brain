@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
+from legacy.workflow_archive import legacy_workflow_path
 import json,tempfile
 from pathlib import Path
 from software_factory.software_factory import SoftwareFactory,identify_work
@@ -25,7 +26,7 @@ def validate_factory():
     req(identify_work(alloc,exps)==[],"current HOLD engineering allocation should produce no factory work")
     with tempfile.TemporaryDirectory() as td:
         sf=SoftwareFactory(Path(td)/"factory.sqlite3");req(sf.event_chain_valid(),"fresh factory event chain invalid");sf.close()
-    workflow=(ROOT/".github/workflows/software-factory-candidate.yml").read_text().lower()
+    workflow=(legacy_workflow_path(ROOT/".github/workflows/software-factory-candidate.yml")).read_text().lower()
     req("contents: write" in workflow and "pull-requests: write" in workflow,"candidate executor permissions missing")
     for forbidden in ["deployments: write","id-token: write","packages: write","actions: write"]:
         req(forbidden not in workflow,f"forbidden factory workflow permission: {forbidden}")

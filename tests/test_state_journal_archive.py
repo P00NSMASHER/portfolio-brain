@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import json
 import tempfile
 import unittest
@@ -13,6 +14,7 @@ from state_journal.archive import (
 )
 from state_journal.github_reducer import reduce_from_provider
 from state_journal.production_reader import _pending_events
+from state_journal.checkpoint_archive import archive_due, _latest_attempt_snapshot_artifact
 from state_journal.reducer import checkpoint, make_snapshot, set_authority
 
 
@@ -61,6 +63,66 @@ class ArchiveLifecycleTests(unittest.TestCase):
             (root / "state_journal/CHECKPOINT.json.gz").write_bytes(checkpoint_raw)
             loaded = load_active_manifest(root)
             self.assertEqual(loaded["manifest_hash"], manifest["manifest_hash"])
+
+    def test_latest_attempt_snapshot_selects_newest_snapshot_before_current_receipt(self):
+        run = {"id": 55, "run_attempt": 3}
+        rows = [
+            {"id": 101, "name": "portfolio-canonical-shadow-state", "expired": False, "created_at": "2026-10-07T06:27:17Z"},
+            {"id": 102, "name": "portfolio-state-reducer-receipt-55-1", "expired": False, "created_at": "2026-10-07T06:27:18Z"},
+            {"id": 201, "name": "portfolio-canonical-shadow-state", "expired": False, "created_at": "2026-10-07T06:35:23Z"},
+            {"id": 202, "name": "portfolio-state-reducer-receipt-55-2", "expired": False, "created_at": "2026-10-07T06:35:24Z"},
+            {"id": 301, "name": "portfolio-canonical-shadow-state", "expired": False, "created_at": "2026-10-07T06:39:50Z"},
+            {"id": 302, "name": "portfolio-state-reducer-receipt-55-3", "expired": False, "created_at": "2026-10-07T06:39:51Z"},
+        ]
+        self.assertEqual(_latest_attempt_snapshot_artifact(run, rows)["id"], 301)
+
+    def test_latest_attempt_snapshot_requires_current_attempt_receipt(self):
+        run = {"id": 55, "run_attempt": 3}
+        rows = [
+            {"id": 101, "name": "portfolio-canonical-shadow-state", "expired": False, "created_at": "2026-10-07T06:27:17Z"},
+            {"id": 102, "name": "portfolio-state-reducer-receipt-55-2", "expired": False, "created_at": "2026-10-07T06:27:18Z"},
+        ]
+        with self.assertRaisesRegex(Exception, "Latest reducer attempt receipt missing or ambiguous"):
+            _latest_attempt_snapshot_artifact(run, rows)
+
+    def test_latest_attempt_snapshot_rejects_snapshot_after_receipt(self):
+        run = {"id": 55, "run_attempt": 3}
+        rows = [
+            {"id": 301, "name": "portfolio-canonical-shadow-state", "expired": False, "created_at": "2026-10-07T06:39:50Z"},
+            {"id": 302, "name": "portfolio-state-reducer-receipt-55-3", "expired": False, "created_at": "2026-10-07T06:39:51Z"},
+            {"id": 303, "name": "portfolio-canonical-shadow-state", "expired": False, "created_at": "2026-10-07T06:39:52Z"},
+        ]
+        with self.assertRaisesRegex(Exception, "Reducer snapshot appeared after latest attempt receipt"):
+            _latest_attempt_snapshot_artifact(run, rows)
+
+    def test_archive_high_water_precedes_hard_event_and_byte_limits(self):
+        self.assertFalse(archive_due(69, 699, max_events=100, max_bytes=1000))
+        self.assertTrue(archive_due(70, 1, max_events=100, max_bytes=1000))
+        self.assertTrue(archive_due(0, 700, max_events=100, max_bytes=1000))
+
+    def test_repeated_rollovers_keep_a_hash_pinned_archive_chain(self):
+        first, _archive1, compacted1, _checkpoint1, _path1 = self.build(sequence=12)
+        next_state = set_authority(make_snapshot(
+            compacted1, [], sequence=first["checkpoint_sequence"], evidence={}
+        ), mode="CANONICAL", production_authority=True)
+        second, _archive2, compacted2, _checkpoint2, _path2 = build_rollover(
+            next_state,
+            source_reducer_run_id=902,
+            source_artifact_id=903,
+            source_head_sha="c" * 40,
+            source_artifact_digest="sha256:" + "d" * 64,
+            source_artifact_created_at="2026-09-30T14:17:34Z",
+            previous_manifest=first,
+        )
+        validate_manifest(
+            second, root=None, archived_state=next_state, checkpoint_doc=compacted2,
+            previous_manifest=first,
+        )
+        self.assertEqual(second["previous_manifest_hash"], first["manifest_hash"])
+        self.assertEqual(second["previous_manifest_path"], first["manifest_path"])
+        self.assertEqual(second["previous_checkpoint_hash"], first["new_checkpoint_hash"])
+        self.assertEqual(second["archived_checkpoint_hash"], first["new_checkpoint_hash"])
+        self.assertEqual(compacted2["states"], compacted1["states"])
 
     def test_public_archive_rejects_credential_like_material(self):
         for raw in (
@@ -181,17 +243,60 @@ class ArchiveLifecycleTests(unittest.TestCase):
 
     def test_checkpoint_candidate_and_reducer_are_recurring_but_protected(self):
         root = Path(__file__).resolve().parents[1]
-        reducer = (root / ".github/workflows/portfolio-state-reducer.yml").read_text()
-        candidate = (root / ".github/workflows/portfolio-state-checkpoint-candidate.yml").read_text()
+        reducer = (legacy_workflow_path(root / ".github/workflows/portfolio-state-reducer.yml")).read_text()
+        candidate = (legacy_workflow_path(root / ".github/workflows/portfolio-state-checkpoint-candidate.yml")).read_text()
         self.assertIn('cron: "11 4 * * *"', reducer)
-        self.assertIn('cron: "19 4 * * 0"', candidate)
+        self.assertIn('cron: "19 * * * *"', candidate)
+        self.assertIn("actions: read", reducer)
+        self.assertNotIn("actions: write", reducer)
+        self.assertIn("portfolio-schedule-delivery", candidate)
+        self.assertIn("Resolve reducer capacity source", candidate)
+        self.assertIn("steps.reducer_source.outputs.run_id", candidate)
+        self.assertIn("MANUAL_FORCE", candidate)
+        self.assertIn('force = event_name == "push"', candidate)
         self.assertIn("python -m state_journal.checkpoint_archive", candidate)
+        self.assertIn("--force", candidate)
+        self.assertIn("checkpoint_force", candidate)
         self.assertIn("gh pr create", candidate)
         self.assertNotIn("gh pr merge", candidate)
         self.assertNotIn("git push origin main", candidate)
-        self.assertIn("actions: read", candidate)
+        self.assertIn("actions: write", candidate)
         self.assertIn("contents: write", candidate)
         self.assertIn("pull-requests: write", candidate)
+        self.assertIn("workflow_run:", candidate)
+        self.assertIn("- portfolio-state-reducer", candidate)
+        self.assertIn("Journal capacity exceeded; do not drop evidence", candidate)
+        self.assertIn("receipt.get(\"reason_type\") == \"JournalError\"", candidate)
+        workflow_header = candidate.split("jobs:", 1)[0]
+        checkpoint_job = candidate.split("  checkpoint:", 1)[1].split("  acceptance-progress:", 1)[0]
+        progress_job = candidate.split("  acceptance-progress:", 1)[1]
+        self.assertNotIn("group: portfolio-state-checkpoint-candidate", workflow_header)
+        self.assertIn("group: portfolio-state-checkpoint-candidate", checkpoint_job)
+        self.assertNotIn("group: portfolio-state-checkpoint-candidate", progress_job)
+        self.assertIn('BRANCH="factory/checkpoint-archive-${GITHUB_RUN_ID}"', candidate)
+        self.assertIn("headRefOid", candidate)
+        self.assertIn('gh workflow run foundation-ci.yml --ref "$CHECKPOINT_BRANCH"', candidate)
+        self.assertIn("checks: read", candidate)
+        self.assertIn("Resolve and validate active checkpoint candidate", candidate)
+        self.assertIn("multiple open checkpoint recovery candidates", candidate)
+        self.assertIn("merge_base_commit", candidate)
+        self.assertIn('["gh", "pr", "close", str(candidate["number"])]', candidate)
+        self.assertIn("stale_retired=true", candidate)
+        self.assertIn("Wait for trusted exact-head verification", candidate)
+        self.assertIn('row.get("name")=="portfolio-phase1-gate"', candidate)
+        self.assertIn('row.get("app",{}).get("id")==5121826', candidate)
+        self.assertIn("actions/workflows/foundation-ci.yml/runs?branch=", candidate)
+        self.assertIn("event=workflow_dispatch", candidate)
+        self.assertIn('row.get("head_sha")==sha', candidate)
+        self.assertIn('row.get("status")!="completed"', candidate)
+        self.assertIn('latest("portfolio-phase1-gate",5121826)', candidate)
+        self.assertIn("Merge verified checkpoint candidate through branch protection", candidate)
+        self.assertIn('-f sha="$CHECKPOINT_SHA"', candidate)
+        self.assertIn("checkpoint candidate escaped protected path allowlist", candidate)
+        self.assertIn('pr_detail.get("user")', candidate)
+        self.assertIn('"github-actions[bot]"', candidate)
+        self.assertNotIn('pr.get("author")', candidate)
+        self.assertNotIn('BRANCH="checkpoint/archive-${GITHUB_RUN_ID}"', candidate)
 
 
 if __name__ == "__main__":

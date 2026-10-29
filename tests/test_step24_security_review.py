@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 #!/usr/bin/env python3
 import unittest
 from pathlib import Path
@@ -131,7 +132,7 @@ class Step24SecurityReviewTests(unittest.TestCase):
         }])
 
     def test_static_review_blocks_job_level_permission_widening(self):
-        target = ROOT / ".github" / "workflows" / "portfolio-autonomous-repair.yml"
+        target = legacy_workflow_path(ROOT / ".github" / "workflows" / "portfolio-autonomous-repair.yml")
         original_read_text = Path.read_text
 
         def drifted_read_text(path, *args, **kwargs):
@@ -151,7 +152,7 @@ class Step24SecurityReviewTests(unittest.TestCase):
         self.assertIn("WORKFLOW_PERMISSION_SCOPE_DRIFT", {x["code"] for x in result["findings"]})
 
     def test_static_review_blocks_sensitive_workflow_permission_drift(self):
-        target = ROOT / ".github" / "workflows" / "portfolio-autonomous-scheduler.yml"
+        target = legacy_workflow_path(ROOT / ".github" / "workflows" / "portfolio-autonomous-scheduler.yml")
         original_read_text = Path.read_text
 
         def drifted_read_text(path, *args, **kwargs):
@@ -198,6 +199,23 @@ class Step24SecurityReviewTests(unittest.TestCase):
         self.assertEqual(result["status"], "BLOCKED")
         self.assertFalse(result["observed"]["verifier_app_source_binding"])
         self.assertIn("VERIFIER_APP_SCOPE_WIDENED", {x["code"] for x in result["findings"]})
+
+    def test_ruleset_exclusions_covering_main_are_blocked(self):
+        for pattern in ("refs/heads/main", "refs/heads/*", "refs/heads/m*", "~ALL", "~DEFAULT_BRANCH", None):
+            with self.subTest(pattern=pattern):
+                evidence = good_live_evidence()
+                evidence["ruleset"]["conditions"]["ref_name"]["exclude"] = [pattern]
+                result = live_review(evidence, TEST_SHA)
+                self.assertEqual(result["status"], "BLOCKED")
+                self.assertFalse(result["observed"]["ruleset_covers_main"])
+                self.assertIn("MAIN_RULESET_INSUFFICIENT", {x["code"] for x in result["findings"]})
+
+    def test_unrelated_ruleset_exclusion_preserves_main_coverage(self):
+        evidence = good_live_evidence()
+        evidence["ruleset"]["conditions"]["ref_name"]["exclude"] = ["refs/heads/release/*"]
+        result = live_review(evidence, TEST_SHA)
+        self.assertEqual(result["status"], "READY_FOR_INDEPENDENT_SIGNOFF")
+        self.assertTrue(result["observed"]["ruleset_covers_main"])
 
     def test_verifier_app_event_subscription_widening_is_blocked(self):
         evidence = good_live_evidence()

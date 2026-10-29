@@ -1,0 +1,252 @@
+name: brain-cycle-v2
+
+on:
+  # Existing native cron remains active in brain-clock.yml, where its
+  # watchdog checks recent or active original cores before dispatch.
+  workflow_dispatch:
+    inputs:
+      clock_commit:
+        description: Immutable external-clock receipt commit; empty for native/manual runs
+        required: false
+        type: string
+      watchdog_run_id:
+        description: Real GitHub-native scheduled watchdog workflow run ID
+        required: false
+        type: string
+      cloudflare_attestation:
+        description: Signed envelope from scheduled Cloudflare Worker (not manual)
+        required: false
+        type: string
+      cloudflare_signature:
+        description: Cloudflare private-key P-256 ECDSA signature (public key in repository)
+        required: false
+        type: string
+  push:
+    branches: ["main"]
+    # Every source revision needs its own original deployment evidence.
+
+permissions:
+  contents: read
+
+concurrency:
+  group: brain-v2-state
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  monitor:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - name: Checkout exact source without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Bind execution to unchanged current main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)"
+          test "$SOURCE_SHA" = "$MAIN_SHA" || { echo "MAIN_DRIFT: cycle refused before state read"; exit 1; }
+          echo "BRAIN_SOURCE_SHA=$SOURCE_SHA" >> "$GITHUB_ENV"
+      - name: Verify external clock provenance when supplied
+        if: ${{ inputs.clock_commit != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOCK_COMMIT: ${{ inputs.clock_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$CLOCK_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "CLOCK_COMMIT_INVALID"; exit 1; }
+          mkdir -p /tmp/brain
+          gh api "repos/${GITHUB_REPOSITORY}/contents/clock/pulse.json?ref=${CLOCK_COMMIT}" --jq .content | base64 -d | python -m brain.clock "$BRAIN_SOURCE_SHA" > /tmp/brain/clock.json
+      - name: Validate GitHub-native watchdog scheduling origin
+        if: ${{ inputs.watchdog_run_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WATCHDOG_RUN_ID: ${{ inputs.watchdog_run_id }}
+          CLOCK_COMMIT: ${{ inputs.clock_commit }}
+        run: |
+          set -euo pipefail
+          test -z "$CLOCK_COMMIT" || { echo "COMPETING_CLOCK_INPUTS"; exit 1; }
+          [[ "$WATCHDOG_RUN_ID" =~ ^[1-9][0-9]*$ ]] || { echo "WATCHDOG_RUN_ID_INVALID"; exit 1; }
+          mkdir -p /tmp/brain
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/$WATCHDOG_RUN_ID" > /tmp/brain/watchdog-provider.json
+          python -m brain.watchdog verify --input /tmp/brain/watchdog-provider.json --source-sha "$BRAIN_SOURCE_SHA" --clock-run-id "$WATCHDOG_RUN_ID" --core-actor "$GITHUB_ACTOR" --output /tmp/brain/watchdog-origin.json
+      - name: Verify independently signed Cloudflare Cron provenance
+        if: ${{ inputs.cloudflare_attestation != '' || inputs.cloudflare_signature != '' }}
+        env:
+          CF_ENVELOPE: ${{ inputs.cloudflare_attestation }}
+          CF_SIGNATURE: ${{ inputs.cloudflare_signature }}
+          CLOCK_COMMIT: ${{ inputs.clock_commit }}
+          WATCHDOG_RUN_ID: ${{ inputs.watchdog_run_id }}
+        run: |
+          set -euo pipefail
+          test -z "$CLOCK_COMMIT" && test -z "$WATCHDOG_RUN_ID" || { echo "COMPETING_SCHEDULER_ORIGINS"; exit 1; }
+          test -n "$CF_ENVELOPE" && test -n "$CF_SIGNATURE" || { echo "CLOUDFLARE_SIGNATURE_REQUIRED"; exit 1; }
+          mkdir -p /tmp/brain
+          python -m brain.cloudflare_clock --envelope "$CF_ENVELOPE" --signature="$CF_SIGNATURE" --source-sha "$BRAIN_SOURCE_SHA" --output /tmp/brain/cloudflare-origin.json
+      - name: Restore dedicated durable state branch
+        uses: actions/checkout@v4
+        with:
+          ref: brain-state-v2
+          path: state
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Validate restoration and capture publication parent
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/brain
+          python -m brain.state_archive restore --root state --status /tmp/brain/state-restoration.json
+          echo "BRAIN_STATE_PARENT=$(git -C state rev-parse HEAD)" >> "$GITHUB_ENV"
+          python - <<'PY'
+          import sqlite3
+          with sqlite3.connect("file:state/state.sqlite?mode=ro", uri=True) as db:
+              if db.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+                  raise SystemExit("STATE_CORRUPT: preserved state failed SQLite integrity check")
+          PY
+      - name: Exact-SHA deterministic preflight
+        run: python -m brain preflight --output /tmp/brain/preflight --expected-sha "$BRAIN_SOURCE_SHA"
+      - name: Read-only public project monitoring
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python -m brain monitor --db state/state.sqlite --output /tmp/brain/report --expected-sha "$BRAIN_SOURCE_SHA"
+      - name: Bounded public code and opportunity research
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python -m brain research --db state/state.sqlite --output /tmp/brain/research --expected-sha "$BRAIN_SOURCE_SHA"
+      - name: Evidence-bound deterministic experiment
+        run: python -m brain experiment --db state/state.sqlite --output /tmp/brain/experiment --expected-sha "$BRAIN_SOURCE_SHA"
+      - name: Verify authoritative state and zero event backlog
+        run: python -m brain doctor --db state/state.sqlite --output /tmp/brain/doctor --expected-sha "$BRAIN_SOURCE_SHA"
+      - name: Build read-only all-project improvement queue
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python -m brain projects --db state/state.sqlite --output /tmp/brain/projects --expected-sha "$BRAIN_SOURCE_SHA"
+      - name: Build bounded v8 engineering owner handoffs
+        continue-on-error: true
+        run: |
+          python -m brain.v8 cycle --input /tmp/brain/projects/report.json --source-sha "$BRAIN_SOURCE_SHA" --cycle "$GITHUB_RUN_NUMBER" --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /tmp/brain/v8-engineering.json
+      - name: Persist v9 owner work and bounded original publication evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python -m brain.v9.batch_cycle cycle --db state/state.sqlite \
+            --input /tmp/brain/projects/report.json --expected-sha "$BRAIN_SOURCE_SHA" \
+            --cycle "$GITHUB_RUN_NUMBER" --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --proof-manifest brain/v9/repair-proof.json --output /tmp/brain/v9-engineering.json
+      - name: Propose a measured protected knowledge upgrade when eligible
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python -m brain evolve --db state/state.sqlite --output /tmp/brain/upgrade --expected-sha "$BRAIN_SOURCE_SHA"
+      - name: Bound working state to independently verified production capacity
+        run: |
+          python -m brain.state_maintenance --source state/state.sqlite \
+            --apply-capacity-bound --receipt /tmp/brain/state-maintenance.json
+      - name: Verify main and state parent before publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)"
+          STATE_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/branches/brain-state-v2" --jq .commit.sha)"
+          test "$MAIN_SHA" = "$BRAIN_SOURCE_SHA" || { echo "MAIN_DRIFT: no state publication or readiness claim"; exit 1; }
+          test "$STATE_SHA" = "$BRAIN_STATE_PARENT" || { echo "STATE_CONFLICT: no publication; rerun from the current durable parent after diagnosis"; exit 1; }
+          python - <<'PY'
+          import os, sqlite3
+          with sqlite3.connect("state/state.sqlite") as source, sqlite3.connect("/tmp/brain-publication.sqlite") as target:
+              source.backup(target)
+              if target.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+                  raise SystemExit("STATE_CORRUPT: publication backup failed integrity check")
+          os.replace("/tmp/brain-publication.sqlite", "state/state.sqlite")
+          PY
+      - name: Verify and pack durable state into bounded Git blobs
+        run: |
+          set -euo pipefail
+          python -m brain.state_archive pack --root state --status /tmp/brain/state-publication.json
+          test ! -f state/state.sqlite || { echo "STATE_RAW_FILE_NOT_REMOVED"; exit 1; }
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from brain.state_maintenance import validate_publication_receipt
+          from brain.core import canonical
+          receipt=json.loads(Path('/tmp/brain/state-publication.json').read_text())
+          proof=validate_publication_receipt(receipt)
+          with Path('/tmp/brain/state-capacity.json').open('x') as output:
+              output.write(canonical(proof)+'\n')
+          PY
+      - name: Publish one nonsecret state transaction without force
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git -C state config user.name "portfolio-brain-state"
+          git -C state config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C state add --all -- .
+          git -C state diff --cached --name-only | while IFS= read -r changed; do
+            case "$changed" in
+              state.sqlite|state-manifest.json|state-chunks/part-*.z) ;;
+              *) echo "STATE_STAGING_UNEXPECTED_PATH: refusing unrelated state-branch write"; exit 1 ;;
+            esac
+          done
+          if git -C state diff --cached --quiet; then
+            echo "NO_STATE_CHANGE: no new durable commit required"
+          else
+            git -C state commit -m "Persist Brain v2 cycle ${GITHUB_RUN_ID} source ${BRAIN_SOURCE_SHA}"
+            git -C state -c credential.helper='!gh auth git-credential' push origin HEAD:refs/heads/brain-state-v2
+          fi
+          PUBLICATION_SHA="$(git -C state rev-parse HEAD)"
+          # A successful git push without force can briefly precede visibility of the
+          # updated branch tip through GitHub's REST branch endpoint. Only an
+          # unchanged pre-push parent is retryable; any other tip fails closed.
+          REMOTE_SHA=""
+          for readback_attempt in 1 2 3 4 5 6; do
+            REMOTE_SHA="$(gh api --header 'Cache-Control: no-cache' "repos/${GITHUB_REPOSITORY}/branches/brain-state-v2" --jq .commit.sha)"
+            if [[ "$REMOTE_SHA" == "$PUBLICATION_SHA" ]]; then
+              break
+            fi
+            if [[ "$REMOTE_SHA" != "$BRAIN_STATE_PARENT" ]]; then
+              echo "STATE_DELIVERY_CONFLICT: remote tip differs from publication and preserved parent"
+              exit 1
+            fi
+            if [[ "$readback_attempt" == "6" ]]; then
+              echo "STATE_DELIVERY_UNVERIFIED: parent still visible after six bounded readbacks"
+              exit 1
+            fi
+            echo "STATE_VISIBILITY_PENDING: remote branch still at captured parent; bounded retry"
+            sleep 2
+          done
+          test "$REMOTE_SHA" = "$PUBLICATION_SHA" || { echo "STATE_DELIVERY_UNVERIFIED: exact published commit not verified"; exit 1; }
+          MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)"
+          test "$MAIN_SHA" = "$BRAIN_SOURCE_SHA" || { echo "MAIN_DRIFT: persisted historical cycle is not current readiness evidence"; exit 1; }
+          mkdir -p /tmp/brain
+          python - "$PUBLICATION_SHA" <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          Path("/tmp/brain/delivery.json").write_text(json.dumps({
+              "schema_version": 2, "source_sha": os.environ["BRAIN_SOURCE_SHA"],
+              "state_parent": os.environ["BRAIN_STATE_PARENT"], "state_commit": sys.argv[1],
+              "run_id": os.environ["GITHUB_RUN_ID"], "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "workflow": "brain-cycle-v2", "publication_verified": True,
+              "execution_boundary": "READ_ONLY_PUBLIC_METADATA", "soak_completed": False
+          }, indent=2) + "\n")
+          PY
+      - name: Preserve verifiable execution evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: brain-v2-cycle-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/brain/
+          if-no-files-found: error
+          retention-days: 30

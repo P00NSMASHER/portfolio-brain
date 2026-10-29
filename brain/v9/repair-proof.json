@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "repository": "P00NSMASHER/capturebrief",
+  "source_branch": "gh-pages",
+  "path": "assets/capturebrief.js",
+  "original_source_sha": "81e263b132cba256b5b497e486bed983ec7dc2ea",
+  "original_asset_sha256": "e69445d718fd9e2d2605042736150c0bdcd3e6599977aa199cd5e5d49cf10c09",
+  "candidate_sha": "31925cf8289cccadf8239e6a39817097b5b07e6a",
+  "pr_number": 75,
+  "expected_asset_sha256": "7868b42bde47a2fb87a0f87ada3ea29eeaf9745d590f3852ab29bae8261173a8",
+  "fingerprint": "77359ef8c4166d54452446522ee7c3f7dd66244b016b412452d570dfa9990179",
+  "recipe": "CAPTUREBRIEF_CLIPBOARD_RECOVERY_V1",
+  "public_url": "https://p00nsmasher.github.io/capturebrief/assets/capturebrief.js"
+}

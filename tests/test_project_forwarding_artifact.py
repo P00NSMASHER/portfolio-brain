@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import unittest
 from pathlib import Path
 
@@ -10,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[1]
 class ProjectForwardingArtifactTests(unittest.TestCase):
     def test_forwarding_uses_dedicated_artifact_namespace(self):
         self.assertEqual(ARTIFACT_NAME,"portfolio-project-forwarding-state")
-        workflow=(ROOT/".github/workflows/runtime-worker.yml").read_text(encoding="utf-8")
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/runtime-worker.yml")).read_text(encoding="utf-8")
         self.assertIn("name: portfolio-project-forwarding-state",workflow)
         self.assertIn("path: runtime/out/project_forwarding_state.json",workflow)
 

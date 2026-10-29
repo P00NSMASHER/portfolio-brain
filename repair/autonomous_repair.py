@@ -23,7 +23,7 @@ POLICY_PATH = ROOT / "repair" / "AUTONOMOUS_REPAIR_POLICY.json"
 REPOSITORY = "P00NSMASHER/portfolio-brain"
 SCHEDULER_REPOSITORY_ID = "REPO-008"
 TRUSTED_EVENTS = {"push", "schedule", "workflow_dispatch", "repository_dispatch", "workflow_run"}
-FAILURE_CONCLUSIONS = {"failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale"}
+FAILURE_CONCLUSIONS = {"failure", "timed_out", "action_required", "startup_failure", "stale"}
 SECRET_RE = re.compile(
     r"(?:github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|"
     r"sk-[A-Za-z0-9_-]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)",

@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import copy,io,json,re,unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -127,7 +128,7 @@ class HostileExaminationTests(unittest.TestCase):
         src=(ROOT/"action_engine/action_executor.py").read_text()
         self.assertNotIn("smtplib",src)
         self.assertNotIn("SMTP_",src)
-        self.assertFalse((ROOT/".github/workflows/portfolio-action-worker.yml").exists())
+        self.assertFalse((legacy_workflow_path(ROOT/".github/workflows/portfolio-action-worker.yml")).exists())
 
     def test_market_research_act_remains_prohibited(self):
         profiles=json.loads((ROOT/"registry/autonomy_profiles.json").read_text())["profiles"]

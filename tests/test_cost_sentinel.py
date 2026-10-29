@@ -276,7 +276,7 @@ class CostSentinelTests(unittest.TestCase):
         overhead=snapshot["github"]["watchdog_control_plane_overhead"]
         self.assertEqual(overhead["cron"],"53 * * * *")
         self.assertEqual(overhead["nominal_runs_per_day"],24)
-        self.assertEqual(overhead["nominal_max_runner_minutes_per_day"],72)
+        self.assertEqual(overhead["nominal_max_runner_minutes_per_day"],192)
 
     def test_publication_gate_ignores_volatile_metadata_only(self):
         current={"x":1,"snapshot_hash":"a","state_sources":{"sources":{"cost":{"source_run_id":1,"state_sequence":4}}}}

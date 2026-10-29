@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 #!/usr/bin/env python3
 import tempfile
 import unittest
@@ -159,7 +160,7 @@ def build_training_manifest(): pass
         )
 
     def test_live_workflow_has_read_only_repository_permission(self):
-        workflow=(probe.ROOT/".github/workflows/upstream-readonly-integration.yml").read_text()
+        workflow=(legacy_workflow_path(probe.ROOT/".github/workflows/upstream-readonly-integration.yml")).read_text()
         self.assertIn("contents: read", workflow)
         self.assertNotIn("contents: write", workflow)
         self.assertNotIn("pull-requests: write", workflow)

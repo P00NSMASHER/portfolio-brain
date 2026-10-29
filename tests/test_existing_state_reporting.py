@@ -1,4 +1,5 @@
 """Repairs to existing status signals; fixtures are not production outcomes."""
+from legacy.workflow_archive import legacy_workflow_path
 import copy
 import hashlib
 import io
@@ -180,7 +181,7 @@ class ExistingStateReportingTests(unittest.TestCase):
 
     def test_watchdog_does_not_publish_or_reset_cost_ledger(self):
         root=Path(__file__).resolve().parents[1]
-        s=(root/'.github/workflows/portfolio-cost-watchdog.yml').read_text()
+        s=(legacy_workflow_path(root/'.github/workflows/portfolio-cost-watchdog.yml')).read_text()
         self.assertIn('--metadata-output cost_governor/live/cost_restore.json',s)
         self.assertIn('--state-metadata cost_governor/live/cost_restore.json',s)
         self.assertNotIn('name: portfolio-cost-governor-state',s)

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,8 @@ PIN_PATH=ROOT/"truth"/"AI_BUSINESS_OS_TRUTH_ENGINE_PIN.json"
 
 SHA40=re.compile(r"^[0-9a-f]{40}$")
 SHA64=re.compile(r"^[0-9a-f]{64}$")
+PROJECT_ID=re.compile(r"^PRJ-[0-9]{3}$")
+RECEIPT_NAMESPACE_FIELDS={"scheme","authority","path_prefix","digest_algorithm","max_length"}
 VERDICTS={"PROVEN","CONTESTED","NOT_PROVEN","UNKNOWN"}
 FINDING_STATUSES={
     "SATISFIED","MISSING","STALE","INADMISSIBLE",
@@ -36,6 +39,51 @@ def _require(ok: bool, message: str) -> None:
 def _canonical_hash(value: Any) -> str:
     raw=json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode("utf-8")
     return "sha256:"+hashlib.sha256(raw).hexdigest()
+
+def validate_source_receipt_ref(
+    value: str,
+    *,
+    expected_receipt_hash: str | None = None,
+    namespace: dict[str,Any] | None = None,
+) -> str:
+    """Validate one pinned, non-dereferenced Truth receipt identifier."""
+    if namespace is None:
+        namespace=load_pin()["receipt_namespace"]
+    _require(
+        isinstance(namespace,dict) and set(namespace)==RECEIPT_NAMESPACE_FIELDS,
+        "source receipt namespace contract changed",
+    )
+    _require(
+        namespace=={
+            "scheme":"ai-business-os",
+            "authority":"truth",
+            "path_prefix":"/receipt",
+            "digest_algorithm":"sha256",
+            "max_length":512,
+        },
+        "source receipt namespace is not approved",
+    )
+    _require(
+        isinstance(value,str) and len(value)<=namespace["max_length"],
+        "source_receipt_ref must be a bounded string",
+    )
+    prefix=(
+        f'{namespace["scheme"]}://{namespace["authority"]}'
+        f'{namespace["path_prefix"]}/{namespace["digest_algorithm"]}/'
+    )
+    _require(value.startswith(prefix),"source_receipt_ref namespace is not approved")
+    digest=value[len(prefix):]
+    _require(SHA64.fullmatch(digest) is not None,
+             "source_receipt_ref must end in one canonical receipt digest")
+    if expected_receipt_hash is not None:
+        _require(
+            isinstance(expected_receipt_hash,str)
+            and re.fullmatch(r"sha256:[0-9a-f]{64}",expected_receipt_hash) is not None,
+            "expected source receipt hash invalid",
+        )
+        _require(expected_receipt_hash=="sha256:"+digest,
+                 "source_receipt_ref digest mismatch")
+    return value
 
 def _upstream_receipt_hash(receipt: dict[str,Any]) -> str:
     """Reproduce the exact receipt hash contract at the pinned upstream revision."""
@@ -60,7 +108,7 @@ def validate_pin(pin: dict[str,Any]) -> None:
         "schema_version","integration_id","source_repository","source_revision",
         "source_path","source_blob_sha","source_test_path","source_test_blob_sha",
         "integration_mode","copied_source_code","upstream_contract",
-        "observed_semantics","drift_policy"
+        "observed_semantics","drift_policy","receipt_namespace"
     }
     _require(set(pin)==required,"truth-engine pin fields changed")
     _require(pin["schema_version"]=="1.0.0","pin schema_version mismatch")
@@ -70,6 +118,13 @@ def validate_pin(pin: dict[str,Any]) -> None:
     _require(SHA40.fullmatch(pin["source_test_blob_sha"]) is not None,"invalid source test blob SHA")
     _require(pin["integration_mode"]=="PINNED_INTERFACE_ADAPTER","integration must remain pinned-interface")
     _require(pin["copied_source_code"] is False,"canonical Truth Engine source must not be copied")
+    _require(pin["receipt_namespace"]=={
+        "scheme":"ai-business-os",
+        "authority":"truth",
+        "path_prefix":"/receipt",
+        "digest_algorithm":"sha256",
+        "max_length":512,
+    },"truth receipt namespace changed")
     contract=pin["upstream_contract"]
     _require(set(contract["verdicts"])==VERDICTS,"upstream verdict contract changed")
     _require(set(contract["finding_statuses"])==FINDING_STATUSES,"upstream finding-status contract changed")
@@ -97,14 +152,25 @@ def _validate_finding(finding: dict[str,Any]) -> None:
     _require(isinstance(finding["required"],bool),"finding.required must be boolean")
     _require(finding["status"] in FINDING_STATUSES,"unknown upstream finding status")
     _require(isinstance(finding["reason"],str) and finding["reason"],"finding reason required")
-    for key in [
+    lineage_buckets=[
         "supporting_evidence_ids","contradicting_evidence_ids",
         "stale_evidence_ids","inadmissible_evidence_ids",
-    ]:
+    ]
+    for key in lineage_buckets:
         values=finding[key]
         _require(isinstance(values,list),"finding evidence IDs must be lists")
         _require(all(isinstance(x,str) and x for x in values),"finding evidence IDs must be non-empty strings")
         _require(len(values)==len(set(values)),"finding evidence IDs must be unique")
+
+    lineage_ids=[
+        evidence_id
+        for key in lineage_buckets
+        for evidence_id in finding[key]
+    ]
+    _require(
+        len(lineage_ids)==len(set(lineage_ids)),
+        "finding evidence ID cannot span lineage buckets",
+    )
 
 def validate_upstream_receipt(receipt: dict[str,Any]) -> None:
     _require(isinstance(receipt,dict),"truth receipt must be an object")
@@ -113,7 +179,16 @@ def validate_upstream_receipt(receipt: dict[str,Any]) -> None:
     _require(isinstance(receipt["claim_id"],str) and receipt["claim_id"],"claim_id required")
     _require(SHA64.fullmatch(receipt["claim_hash"]) is not None,"claim_hash must be 64 hex")
     _require(receipt["verdict"] in VERDICTS,"unknown upstream verdict")
-    _require(isinstance(receipt["evaluated_at"],(int,float)),"evaluated_at must be numeric")
+    evaluated_at=receipt["evaluated_at"]
+    # An unbounded Python int can overflow math.isfinite's implicit float
+    # conversion. Admit only safely representable signed JSON integers;
+    # preserve the historical finite-float contract without coercing types.
+    _require(
+        (type(evaluated_at) is int
+         and -(2**53-1)<=evaluated_at<=(2**53-1))
+        or (type(evaluated_at) is float and math.isfinite(evaluated_at)),
+        "evaluated_at must be finite numeric",
+    )
     _require(SHA64.fullmatch(receipt["evidence_set_hash"]) is not None,"evidence_set_hash must be 64 hex")
     _require(SHA64.fullmatch(receipt["receipt_hash"]) is not None,"receipt_hash must be 64 hex")
     findings=receipt["findings"]
@@ -160,9 +235,34 @@ def project_receipt(
     source_blob_sha: str,
     source_receipt_ref: str,
 ) -> dict[str,Any]:
+    _require(
+        isinstance(project_id,str) and PROJECT_ID.fullmatch(project_id) is not None,
+        "project_id must be canonical",
+    )
+    project_registry=json.loads((ROOT/"registry"/"projects.json").read_text(encoding="utf-8"))
+    projects=project_registry.get("projects") if isinstance(project_registry,dict) else None
+    _require(isinstance(projects,list),"project registry is invalid")
+    registered_ids=[
+        row.get("project_id")
+        for row in projects
+        if isinstance(row,dict)
+    ]
+    _require(
+        len(registered_ids)==len(projects)
+        and all(isinstance(value,str) and PROJECT_ID.fullmatch(value) is not None
+                for value in registered_ids)
+        and len(registered_ids)==len(set(registered_ids)),
+        "project registry identities are invalid",
+    )
+    _require(project_id in registered_ids,"project_id is not registered")
     pin=load_pin()
     verify_source_identity(pin,source_revision=source_revision,source_blob_sha=source_blob_sha)
     state=project_truth_state(receipt)
+    validate_source_receipt_ref(
+        source_receipt_ref,
+        expected_receipt_hash="sha256:"+receipt["receipt_hash"],
+        namespace=pin["receipt_namespace"],
+    )
     required=[f for f in receipt["findings"] if f["required"]]
     projection={
         "schema_version":"1.0.0",
@@ -192,4 +292,3 @@ def project_receipt(
         } for f in required],
     }
     return projection | {"projection_hash":_canonical_hash(projection)}
-

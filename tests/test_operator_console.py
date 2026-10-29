@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import json
 import tempfile
 import unittest
@@ -12,13 +13,13 @@ ROOT=Path(__file__).resolve().parents[1]
 
 class OperatorConsoleTests(unittest.TestCase):
     def test_workflow_is_owner_gated_and_not_part_of_public_pages(self):
-        workflow=(ROOT/".github/workflows/operator-console.yml").read_text()
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/operator-console.yml")).read_text()
         self.assertIn("github.actor == github.repository_owner",workflow)
         self.assertNotIn("environment:",workflow)
         self.assertIn("actions: write",workflow)
         self.assertIn("pull-requests: write",workflow)
         self.assertIn("operator_console.operator_console",workflow)
-        pages=(ROOT/".github/workflows/command-center-pages.yml").read_text()
+        pages=(legacy_workflow_path(ROOT/".github/workflows/command-center-pages.yml")).read_text()
         self.assertNotIn("operator-console",pages)
         self.assertNotIn("operator_console",pages)
 

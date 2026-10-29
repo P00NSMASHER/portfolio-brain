@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 #!/usr/bin/env python3
 import json
 from pathlib import Path
@@ -34,8 +35,8 @@ def validate_hostile():
     executor=(ROOT/"action_engine/action_executor.py").read_text()
     req("DUPLICATE_SUPPRESSED" in executor and "RECIPIENT_DAILY_LIMIT" in executor and "GMAIL_GATEWAY_LEDGER" in executor,"Gmail idempotency/rate/ledger defense missing")
     req("smtplib" not in executor and "SMTP_" not in executor,"obsolete SMTP transport remains")
-    req(not (ROOT/".github/workflows/portfolio-action-worker.yml").exists(),"obsolete GitHub SMTP action worker remains")
-    operator=(ROOT/".github/workflows/operator-console.yml").read_text().lower()
+    req(not (legacy_workflow_path(ROOT/".github/workflows/portfolio-action-worker.yml")).exists(),"obsolete GitHub SMTP action worker remains")
+    operator=(legacy_workflow_path(ROOT/".github/workflows/operator-console.yml")).read_text().lower()
     req("github.actor == github.repository_owner" in operator,"operator console owner-auth gate missing")
     req("\n  schedule:" not in operator,"operator console must not run on a schedule")
     req("git push origin main" not in operator and "git push origin head:main" not in operator,"operator console may not directly push main")

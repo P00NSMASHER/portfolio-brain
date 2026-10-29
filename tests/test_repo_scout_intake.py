@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import unittest
 from pathlib import Path
 
@@ -8,6 +9,7 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def queue():
     return {"schema_version":2,"authority":"PRE_VERIFICATION_DISCOVERY_ONLY","worker_id":"HUNTER-01","candidates":[
+      {"repository":"metadata/only","exact_revision":"e"*40,"status":"PRE_VERIFICATION_CANDIDATE","archived":False,"triage_score":100,"published_license_spdx":"UNKNOWN","root_code_signals":[".github"]},
       {"repository":"bigfootpp/sync","exact_revision":"a"*40,"status":"PRE_VERIFICATION_CANDIDATE","archived":False,"triage_score":42,"published_license_spdx":"MIT","root_code_signals":["src","tests"]},
       {"repository":"MingauRM/fobos-framework","exact_revision":"b"*40,"status":"PRE_VERIFICATION_CANDIDATE","archived":False,"triage_score":41,"published_license_spdx":"Zlib","root_code_signals":["src"]},
       {"repository":"bad/unknown","exact_revision":"c"*40,"status":"PRE_VERIFICATION_CANDIDATE","archived":False,"triage_score":99,"published_license_spdx":"UNKNOWN","root_code_signals":["src"]},
@@ -17,13 +19,15 @@ def queue():
 class RepoScoutIntakeTests(unittest.TestCase):
     def test_scout_state_uses_dedicated_artifact_family(self):
         self.assertEqual(ARTIFACT_NAME,"portfolio-repo-scout-intake-state")
-        workflow=(ROOT/".github/workflows/hunter-autonomous-cycle.yml").read_text()
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/hunter-autonomous-cycle.yml")).read_text()
         self.assertIn("name: portfolio-repo-scout-intake-state",workflow)
         self.assertIn("path: hunting/out/repo_scout_intake_state.json",workflow)
 
     def test_intake_is_bounded_eligible_and_preverification_only(self):
         state,receipt=build_intake(queue(),source_revision="1"*40,prior_state=seed_state(),at="2026-09-30T14:00:00Z")
+        self.assertEqual(receipt["filtered_metadata_only_candidates"],1)
         self.assertEqual(receipt["selected_candidates"],2)
+        self.assertNotIn("metadata/only",{x["repository_full_name"] for x in receipt["hints"]})
         self.assertLessEqual(receipt["selected_candidates"],receipt["max_intake"])
         self.assertTrue(all(x["project_ids"]==["PRJ-005"] for x in receipt["hints"]))
         self.assertTrue(all(x["status"]=="ELIGIBLE_FOR_EXISTING_HUNTER_INSPECTION" for x in receipt["hints"]))
@@ -31,6 +35,23 @@ class RepoScoutIntakeTests(unittest.TestCase):
         self.assertFalse(receipt["license_based_blocking"])
         self.assertTrue(any(x["published_license_spdx"]=="UNKNOWN" for x in receipt["hints"]))
         self.assertEqual(state["sequence"],1)
+
+    def test_same_repository_revision_dedup_prefers_strongest_deterministically(self):
+        q=queue()
+        original=q["candidates"][1]
+        duplicate=dict(original)
+        duplicate["triage_score"]=original["triage_score"]+1
+        q["candidates"]=[original,duplicate]
+        state,receipt=build_intake(q,source_revision="1"*40,prior_state=seed_state(),at="2026-09-30T14:00:00Z")
+        q["candidates"].reverse()
+        reversed_state,reversed_receipt=build_intake(q,source_revision="1"*40,prior_state=seed_state(),at="2026-09-30T14:00:00Z")
+        self.assertEqual(receipt["selected_candidates"],1)
+        self.assertEqual(receipt["eligible_candidates"],1)
+        self.assertEqual(receipt["hints"][0]["triage_score"],43)
+        self.assertEqual(receipt["receipt_hash"],reversed_receipt["receipt_hash"])
+        self.assertEqual(state,reversed_state)
+        self.assertEqual(len(state["candidate_keys"]),1)
+        self.assertEqual(len(state["source_keys"]),1)
 
     def test_source_repo_revision_and_candidate_identity_are_deduplicated(self):
         state,first=build_intake(queue(),source_revision="1"*40,prior_state=seed_state(),at="2026-09-30T14:00:00Z")

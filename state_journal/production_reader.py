@@ -1,12 +1,14 @@
 """Restore production state exclusively from the reducer-owned canonical snapshot."""
 from __future__ import annotations
 import argparse, os, time
+from datetime import datetime
 from pathlib import Path
 
 from runtime.artifact_restore import _atomic_write
 from state_journal.archive import archived_artifact_ids, load_active_manifest
 from state_journal.contracts import DOMAINS, canonical, digest, require, strict_load, validate_domain
 from state_journal.github_reducer import latest_snapshot_artifact, restore_snapshot
+from state_journal.provider_quarantine import reducer_run_is_quarantined
 from state_journal.reducer import validate_snapshot
 from state_journal.transport import EVENT_PREFIX, SNAPSHOT_ARTIFACT, GitHubReader
 
@@ -68,32 +70,57 @@ def _pending_events(state: dict, artifacts: list[dict], *, archived_ids: set[int
     ]
 
 
+def _provider_time(value: object) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else None
+
+
 def _wait_for_reduction(token: str, policy: dict, pending: list[dict], *, current_run: str,
                         archived_ids: set[int] | None = None,
                         timeout_seconds: int = 300, poll_seconds: float = 5.0,
                         clock=time.monotonic, sleep=time.sleep) -> tuple[GitHubReader, dict, list[dict]]:
     require(pending, "Pending-event wait requires at least one event")
-    latest_event_time = max(str(row.get("created_at") or "") for row in pending)
+    event_times = [_provider_time(row.get("created_at")) for row in pending]
+    require(all(at is not None for at in event_times), "Pending-event creation time missing or invalid")
+    latest_event_time = max(event_times)
     pending_ids = {row["id"] for row in pending}
     deadline = clock() + timeout_seconds
-    seen_reducers: set[int] = set()
+    seen_reducers: set[tuple[int, object, str]] = set()
     poller = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
     while clock() < deadline:
-        runs = poller.get("/actions/runs?branch=main&event=workflow_run&per_page=50").get("workflow_runs", [])
+        # Any genuine reducer completion can unblock the production reader.
+        # A queued reducer may be created before events it later incorporates.
+        # Its completion/update time bounds relevance; verified snapshot coverage
+        # remains the proof that every pending event was actually reduced.
+        # Scheduled evidence still has its separate, strict acceptance gate.
+        # Snapshot validation and pending-artifact coverage remain mandatory.
+        runs = poller.get("/actions/runs?branch=main&per_page=50").get("workflow_runs", [])
         require(isinstance(runs, list), "Reducer run listing malformed")
         successes = [
             row for row in runs
             if row.get("name") == "portfolio-state-reducer"
             and row.get("head_branch") == "main"
+            and not reducer_run_is_quarantined(row.get("id"))
             and row.get("status") == "completed"
             and row.get("conclusion") == "success"
-            and str(row.get("created_at") or "") >= latest_event_time
+            and (completed_at := _provider_time(row.get("updated_at"))) is not None
+            and completed_at >= latest_event_time
             and type(row.get("id")) is int
         ]
-        for reducer_run in sorted(successes, key=lambda row: row["id"]):
-            if reducer_run["id"] in seen_reducers:
+        for reducer_run in sorted(successes, key=lambda row: (row["id"], row.get("run_attempt") or 0)):
+            # One Actions run ID may have multiple genuine rerun attempts. A
+            # later attempt can publish a newer canonical snapshot that covers
+            # pending events missed by an earlier attempt, so dedupe by the
+            # provider attempt/completion identity rather than run ID alone.
+            completion_key = (reducer_run["id"], reducer_run.get("run_attempt"), reducer_run["updated_at"])
+            if completion_key in seen_reducers:
                 continue
-            seen_reducers.add(reducer_run["id"])
+            seen_reducers.add(completion_key)
             fresh = GitHubReader(token, max_requests=policy["limits"]["max_read_requests"])
             artifacts = getattr(fresh, "list_recent_journal_artifacts", fresh.list_recent_artifacts)(
                 policy["artifact_scan_start"], max_pages=policy["limits"]["max_artifact_pages"]

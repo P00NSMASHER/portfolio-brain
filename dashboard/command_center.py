@@ -7,6 +7,7 @@ state, contacts customers, spends money, deploys, merges, or invokes external
 services.
 """
 from __future__ import annotations
+from legacy.workflow_archive import legacy_workflow_path
 
 import argparse
 import hashlib
@@ -442,7 +443,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
             }
         )
 
-    workflows = sorted(p.name for p in (ROOT / ".github" / "workflows").glob("*.yml") if p.name != "operator-console.yml")
+    workflows = sorted(p.name for p in (legacy_workflow_path(ROOT / ".github" / "workflows")).glob("*.yml") if p.name != "operator-console.yml")
     kill_switches = [
         _kill_switch("Runtime", "runtime/KILL_SWITCH.json"),
         _kill_switch("Scheduler", "scheduler/KILL_SWITCH.json"),
@@ -927,17 +928,6 @@ def _chatgpt_action_link(prompt: str) -> str:
     # ChatGPT currently accepts prompt-prefill links, but external links do not
     # receive execution authority from this read-only dashboard.
     return "https://chatgpt.com/?prompt=" + quote(prompt, safe="")
-
-def _github_workflow_link(workflow: str) -> str:
-    allowed = {
-        "command-center-pages.yml",
-        "portfolio-autonomous-scheduler.yml",
-        "hunter-autonomous-cycle.yml",
-    }
-    if workflow not in allowed:
-        raise ValueError("workflow link is not allowlisted")
-    return "https://github.com/P00NSMASHER/portfolio-brain/actions/workflows/" + workflow
-
 
 def _status_tone(value: str) -> str:
     upper = value.upper()

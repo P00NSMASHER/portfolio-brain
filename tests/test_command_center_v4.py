@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import copy
 import json
 import tempfile
@@ -57,7 +58,7 @@ class CommandCenterV4Tests(unittest.TestCase):
           ".github/workflows/software-factory-candidate.yml":"AGT-ENGINEER",
         }
         for path,agent in expected.items():
-            body=(ROOT/path).read_text()
+            body=legacy_workflow_path(ROOT/path).read_text()
             self.assertIn("python -m state_journal.production_reader --domain heartbeat",body,path)
             self.assertIn("python -m agents.heartbeat_state",body,path)
             self.assertIn(agent,body,path)
@@ -117,7 +118,7 @@ class CommandCenterV4Tests(unittest.TestCase):
                 self.assertIsNone(_owner_approval(exp,u))
 
     def test_operator_console_is_owner_only_manual_and_not_public_ui(self):
-        workflow=(ROOT/".github/workflows/operator-console.yml").read_text()
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/operator-console.yml")).read_text()
         self.assertIn("workflow_dispatch:",workflow)
         self.assertNotIn("\n  schedule:",workflow)
         self.assertIn("github.actor == github.repository_owner",workflow)
@@ -134,7 +135,7 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertNotIn("operator console",public)
 
     def test_command_center_history_is_persisted_and_public_summary_only(self):
-        workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text()
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/command-center-pages.yml")).read_text()
         self.assertIn("state_journal.production_reader",workflow)
         self.assertIn("--domain history",workflow)
         self.assertIn("dashboard.history_state",workflow)
@@ -175,12 +176,12 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertIn("cross-checks Hunter, model feedback, and continuous learning",public)
 
     def test_pages_artifact_is_rerun_safe_and_attempt_scoped(self):
-        workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text()
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/command-center-pages.yml")).read_text()
         self.assertIn("name: github-pages-${{ github.run_attempt }}",workflow)
         self.assertIn("artifact_name: github-pages-${{ github.run_attempt }}",workflow)
 
     def test_command_center_auto_publishes_relevant_main_changes_with_proof(self):
-        workflow=(ROOT/".github/workflows/command-center-pages.yml").read_text()
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/command-center-pages.yml")).read_text()
         self.assertIn("\n  push:\n",workflow)
         self.assertIn("      - main",workflow)
         self.assertIn("\n  workflow_run:\n",workflow)
@@ -323,7 +324,7 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertIn("License metadata",public)
 
     def test_scheduler_executes_work_before_heartbeating_workers(self):
-        workflow=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text()
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml")).read_text()
         self.assertIn("python -m scheduler.work_executor",workflow)
         self.assertIn("--selected-work scheduler/out/executed_work.json",workflow)
         self.assertNotIn("--selected-work scheduler/out/scheduled_work.json",workflow)
@@ -335,7 +336,7 @@ class CommandCenterV4Tests(unittest.TestCase):
         )
 
     def test_blanket_heartbeat_is_backed_by_real_subsystem_probes(self):
-        workflow=(ROOT/".github/workflows/agent-heartbeat-sweep.yml").read_text()
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/agent-heartbeat-sweep.yml")).read_text()
         self.assertIn("python -m agents.validate_agents",workflow)
         self.assertIn("python -m scheduler.validate_scheduler",workflow)
         self.assertIn("python -m hunting.validate_hunter",workflow)

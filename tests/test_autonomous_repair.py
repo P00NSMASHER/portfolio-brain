@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import json
 import subprocess
 import tempfile
@@ -67,6 +68,7 @@ class AutonomousRepairTests(unittest.TestCase):
         for bad in (
             run_doc(head_branch="feature"),
             run_doc(conclusion="success"),
+            run_doc(conclusion="cancelled"),
             run_doc(name="foundation-ci", path=".github/workflows/foundation-ci.yml"),
         ):
             with self.subTest(bad=bad), self.assertRaises(AutonomousRepairError):
@@ -232,10 +234,15 @@ class AutonomousRepairTests(unittest.TestCase):
         self.assertTrue(policy["require_test_change"])
 
     def test_workflow_is_event_driven_guarded_and_has_no_merge_command(self):
-        text = (ROOT / ".github/workflows/portfolio-autonomous-repair.yml").read_text()
+        text = (legacy_workflow_path(ROOT / ".github/workflows/portfolio-autonomous-repair.yml")).read_text()
         lower = text.lower()
         self.assertIn("workflow_run:", text)
         self.assertIn("workflow_dispatch:", text)
+        self.assertIn("  classify:", text)
+        self.assertIn("CHECKPOINT_RECOVERY_IN_PROGRESS", text)
+        self.assertIn("CHECKPOINT_REQUIRED", text)
+        self.assertIn("CANCELLED_RUN_NOT_REPAIR_EVIDENCE", text)
+        self.assertIn("factory/checkpoint-archive-", text)
         self.assertNotIn("\n  schedule:", text)
         self.assertIn("copilot-requests: write", text)
         self.assertIn("python -m repair.autonomous_repair validate-diff", text)

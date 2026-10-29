@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+brain-local/
+brain/out/
+state_journal/live/
+*.sqlite
+*.sqlite-journal

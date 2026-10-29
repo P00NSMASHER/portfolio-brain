@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import os
 import unittest
 from pathlib import Path
@@ -9,7 +10,7 @@ ROOT=Path(__file__).resolve().parents[1]
 
 class Steps1012LiveAcceptanceTests(unittest.TestCase):
     def test_workflow_rechecks_main_after_controlled_proof(self):
-        workflow=(ROOT/".github/workflows/steps10-12-live-acceptance.yml").read_text(encoding="utf-8")
+        workflow=(legacy_workflow_path(ROOT/".github/workflows/steps10-12-live-acceptance.yml")).read_text(encoding="utf-8")
         self.assertIn("Fail closed unless checkout is exact current main", workflow)
         self.assertIn("Fail closed if protected main moved during acceptance", workflow)
         self.assertIn("STALE_MAIN_ACCEPTANCE_AFTER_PROOF", workflow)

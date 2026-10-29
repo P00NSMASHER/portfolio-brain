@@ -1,0 +1,376 @@
+# Unattended operation, restart, and recovery
+
+The scheduled main-only workflow restores `brain-state-v2/state.sqlite`, verifies it,
+executes exact-SHA tests, observes sources, researches, experiments, diagnoses state,
+and publishes one verified non-force state commit. It does not launch a soak.
+It requires an initialized dedicated state branch; missing state fails closed instead
+of silently substituting an empty database. Report artifacts include exact source,
+run, attempt, state parent, delivered commit, canonical hash and pending count.
+
+## Accepted v4: operator handoff (October 8, 2026)
+
+V4's six-hour production acceptance is **terminal PASS** for protected main
+`9fc08c72e2d050359e7f119bfcbfb82b23f95b5b`. The sole authoritative
+acceptance record is
+[`brain-acceptance-v4/acceptance/finish-soak-v4.json`](https://github.com/P00NSMASHER/portfolio-brain/blob/brain-acceptance-v4/acceptance/finish-soak-v4.json)
+at terminal commit `b1b9f63dc8136f259abdc1b9ad18fcd47cf3b681`.
+Historical v2 FAIL and v3 BLOCKED remain separate and immutable.
+
+- **Actual core:** `.github/workflows/brain-cycle.yml` has native GitHub cron
+  `7,27,47 * * * *` UTC and serializes state publication on
+  `brain-state-v2/state.sqlite`. Verify the completed core and mandatory
+  monitor, research, experiment, doctor and nonforce state-delivery steps.
+- **Native watchdog:** `.github/workflows/brain-clock.yml` uses
+  `16,36,56 * * * *` UTC; a green watchdog by itself is not a completed core.
+- **Independent recovery clock:** Cloudflare Worker `portfolio-brain-recovery`
+  runs `*/10 * * * *` UTC and avoids duplicate cores after recent same-source
+  success. Provider result `FRESH` means no new dispatch was needed.
+  `DISPATCH_ACCEPTED_NOT_COMPLETED` means only that a request was accepted;
+  look up the child GitHub core and validate its signed origin and completion.
+- **State/health:** For each material issue, check protected main SHA, actual
+  provider event, recent GitHub core jobs (including failures), artifact ZIP
+  SHA256 and `delivery.json`, nonforce state commit parent, doctor sequence
+  and canonical chain, and pending events. Never infer availability from
+  configured crons alone or overwrite historical state to manufacture a pass.
+
+The v4 record counts 14 Cloudflare cycles with independently verified original
+provider logs and matching P-256 origin receipts, from 13:50:59Z to 21:50:51Z
+on October 8 (28,792 seconds; largest accepted gap 3,625 seconds).
+All 18 core attempts in that window completed successfully. Three signed jobs
+at 15:20, 16:20, and 18:50 UTC lacked retrievable **original Cloudflare
+provider event logs** and are explicitly **successful but nonqualifying**;
+one additional GitHub-native scheduled core is also inventoried separately.
+Do not relabel unavailable provider logs as verified, and do not erase those
+successful nonqualifying runs. Every original ZIP SHA256 and durable state
+parent was checked, with zero pending events.
+
+Final independent raw SQLite verification, performed on the exact terminal
+state commit `f2fb6ffd4f4a3cfd979c6ce28b990b9ad8379b05`, passed the
+210-event hash chain, SQLite integrity, foreign keys, report and backlog in
+[Foundation CI run 37850145136](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/37850145136).
+The separate [independent hosted verifier](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/37850298010)
+passed its code checks; its intentionally network-disabled raw-transport
+skip is **not** the evidence for the binary replay.
+
+**Release boundary:** Never alter the accepted v4 record, restart its clock,
+or infer that a future source inherits this PASS. Draft evidence-only
+[PR #655](https://github.com/P00NSMASHER/portfolio-brain/pull/655) must
+remain unmerged unless separately authorized. A new source candidate must
+follow the existing protected exact-head CI, independent verifier,
+controlled integration, and a **new acceptance version**, not rewrite v4.
+Continue existing production reliability tasks with their current schedules
+and notification settings; diagnose failures without silently disabling
+workers, changing credentials, or weakening gates.
+
+Requests are GET-only for source acquisition, capped24 per operation, ten-second
+timeouts, one bounded retry for429/502/503/504 with retry delay at most two seconds.
+No full-preflight speculative retry loop exists. A source failure preserves successful
+other observations but fails full monitored coverage. V5 research now distinguishes
+an unavailable optional *public search result* from a search-API
+failure or an explicitly requested source. A default-branch GET 404 is
+quarantined only when GitHub's search metadata reports an exact integer
+`size=0` (never-initialized repository); a missing branch on a nonempty,
+missing-size, or malformed-size repository remains fatal. V5 additionally
+handles a disappearing search-derived tree/blob GET 404, never an identity
+or integrity mismatch. A skipped result permits a PASS only when another
+source is fully hash-inspected, and the report records
+`OBSERVED_WITH_SEARCH_RESULT_GAPS`, repository/stage and a nonadoption
+reason. With zero verified source after any skipped 404, research FAILS;
+private-mode discovery, 403, 5xx, malformed metadata, incomplete search,
+and explicit target failures remain fatal. This
+source-only candidate is not a production recovery or a retroactive
+reclassification of the four failed 18:00–18:30 UTC October 9 v4 runs. The next scheduled cycle starts
+from durable acknowledged state and drains interrupted input. Last failure remains
+visible in attempts. Optional knowledge-upgrade failure is BLOCKED without discarding
+core observations. Authentication/rate-limit/provider outage is never renamed success.
+
+### Source GET failure context (candidate, not deployed)
+
+When one bounded GitHub GET definitively fails, the adapter prints a single
+`SOURCE_API_GET_FAILURE_CONTEXT` JSON line to the existing job stderr. The
+only fields are a fixed, non-sensitive request family, HTTP status (or a
+whitelisted read-failure class) and the bounded request number. Families
+distinguish repository search, metadata, branch lookup, Git tree, blob,
+commit checks, and unknown GET. **It never prints the raw URL, search query,
+repository identifier, branch name, exception message or credential.**
+Successfully recovered transient retries do not emit a failure context.
+
+This is **endpoint-class** evidence for a *future failed provider GET*, not
+a complete request audit and not proof of the unlogged October 9 incident.
+It preserves the existing `BrainError` text/type for each individual
+failed GET, the 2,000,000-byte response cap, 24-request cap and retry bounds,
+SQLite/event schemas, report format, public/private source separation and
+scheduled state writer. Optional public discovery has a separate narrowly
+reviewed size-bound quarantine described below. A skipped optional hit can
+produce a GET diagnostic while the research report separately records
+`OBSERVED_WITH_SEARCH_RESULT_GAPS`; this is **partial verified observation**,
+not proof of complete search coverage. Production gains none of these changes
+until a separately approved, protected source transition.
+
+### October 10: recurring `SOURCE_RESPONSE_TOO_LARGE` production failures
+
+Preserve the original **FAILED** GitHub cycles on protected V5 source
+`35c1955bbfea1e2cd760ed39c8f6978ce5102f1d`:
+native schedule [#38033926025](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38033926025)
+at 07:17 UTC, and genuinely signed Cloudflare-origin cycles
+[#38039272940](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38039272940)
+08:50, [#38039853142](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38039853142)
+09:00, [#38040447668](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38040447668)
+09:10, [#38041038489](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/38041038489)
+09:20. All five jobs stopped in bounded public research with the actual
+`BrainError: SOURCE_RESPONSE_TOO_LARGE`, after real monitoring. The **older
+production logs do not identify the failing GitHub GET family or repository**,
+so the actual request cannot be claimed or reconstructed from guessed search
+ranking. Separately read Cloudflare provider `scheduled()` events confirm
+the four 08:50–09:20 dispatches (dispatch ACK never equals GitHub completion);
+the 07:17 run was GitHub-native. Later successful 09:30 onward executions
+do not convert any of the five historical failures to success.
+
+**Further independent incident evidence, 18:41 UTC:** the full October 10
+GitHub run census and original failed-step/job logs establish **18 total
+mandatory research failures** on this same protected source: the initial
+five above, another native `schedule` at **13:52**, seven signed
+Cloudflare-dispatched failures from **15:30 through 16:30**, and five
+failures from **18:10 through 18:40** (four Cloudflare-dispatched and
+one native at 18:25). Every inspected original job failed in the same
+mandatory research step with `SOURCE_RESPONSE_TOO_LARGE`. Previous
+intervening successful half-hour cycles do not make these failed cores
+eligible for V5 acceptance. The full run-ID/evidence roster is preserved
+in [production incident #673](https://github.com/P00NSMASHER/portfolio-brain/issues/673).
+As of the original 18:41 observation, no source-specific unbroken
+six-hour runtime acceptance had been independently established. Do not
+guess which upstream request stage triggered the historical failures.
+
+**Bounded future response behavior — this DRAFT only:** A real oversized
+GET emits a single fixed-category diagnostic `ResponseTooLarge` with a
+numeric request ordinal, never endpoint URL, query, branch or credential.
+The 2,000,000-byte maximum remains **unchanged**: the reader fetches at most
+2,000,001 bytes, refuses to parse an oversized response, and does not
+retry it or increase spending. Only when the failed operation is an
+*optional public search-derived* `tree` or `blob` inspection may the
+result be explicitly recorded as
+`SEARCH_RESULT_RESPONSE_TOO_LARGE_NOT_INSPECTED`. A verified alternate
+fully hash-inspected candidate is necessary before the whole research
+operation may report `OBSERVED_WITH_SEARCH_RESULT_GAPS`.
+
+**Additional source-bounded fallback in this review candidate:** If *only*
+an optional public recursive Git-tree GET exceeds 2 MB, bind the original
+HEAD commit to its root Git tree via the existing original GitHub provider,
+then inspect **one pinned root and at most four pinned nonrecursive child
+trees** to a maximum of two descendant levels. Every tree object must
+match its expected SHA and not declare truncation. File modes are also
+validated: only Git regular blobs (100644 or 100755) can become source
+candidates; symbolic-link blobs (120000) are skipped, submodules (160000)
+are never traversed, and malformed/mismatched modes fail closed. Every
+selected code blob must still match original size, Git blob SHA and
+original bytes SHA256.
+Never fetch/interpret the oversized recursive body or invent unvisited
+paths. A verified source under the partial tree reports explicit
+`bounded_tree_scans` metadata and `OBSERVED_WITH_BOUNDED_TREE_COVERAGE`
+(unless other skipped hits also require
+`OBSERVED_WITH_SEARCH_RESULT_GAPS`). This is verified **selected-source
+content**, not full repository coverage, verified tests, adoption or
+licensed reuse. An explored limited tree without an eligible source
+is recorded `SEARCH_RESULT_BOUNDED_TREE_NO_ELIGIBLE_SOURCE`; if no
+other source passes its own original blob check, research FAILS with
+`DISCOVERY_ALL_SEARCH_RESULTS_UNAVAILABLE`. Root/child tree SHA mismatch,
+truncation, malformed tree, unreadable provider, privacy/explicit-source
+scope, search/branch oversize, budget exhaustion and source blob hash
+mismatch all remain **fatal**. The root-lookup fallback must not exceed
+the same 24 overall GET budget. The fallback cannot be claimed as the
+definitive remediation for historical failures because the original
+failing GitHub GET endpoints were not logged.
+
+The original 24-GET budget, 10-second timeout, 2 MB per-response cap,
+provider retry policy and P-256/nonforce state protections are not
+loosened.
+
+This candidate must stay a **DRAFT / NOT DEPLOYED** until separate
+source-quality checks and a future authorized source transition. Any merge
+would change the currently observed V5 production SHA and require a new
+source-specific acceptance interval. Historical V2/V3/V4 acceptance facts
+and these five original FAIL records are immutable.
+
+Knowledge proposal delivery uses narrowly scoped repository contents, pull-request,
+and Actions permissions. After creating a fixed-file candidate PR, it dispatches
+the existing Foundation workflow exactly once on that candidate branch. Token-created
+PR events can require workflow approval; the explicit dispatch avoids depending on
+that event for validation. The unchanged independent verifier still binds and checks
+the actual head and alone merges eligible bot candidates through main protection.
+API failures expose sanitized status/endpoint evidence and leave the proposal
+unaccepted. Repository policy may still refuse bot PR creation; permissions do not
+override that policy. Failed attempts retain the weekly new-proposal cooldown.
+A recorded interrupted proposal may resume once after at least one hour, only for
+the identical evidence fingerprint and unchanged source main. Recovery verifies
+branch ancestry, the sole changed knowledge file, exact content and bot PR identity;
+it reuses the branch/PR and delivers the missing validation dispatch. A second
+failure, different evidence or main drift cannot create a rapid retry loop. Legacy
+orphan proposals without the new recovery receipt remain blocked/inert evidence.
+
+## Private report-output requirement in the unmerged V5 candidate
+
+V5's report renderer no longer changes permission bits on an existing shared
+output folder. Every direct `write_report` destination must either be newly
+created (private 0700) or an *existing* directory with mode exactly 0700.
+Report JSON/Markdown/HTML files and the exact-source preflight's `tests.txt`
+are staged at 0600 and individually replaced atomically, with report JSON
+installed last. Symlinked ancestor/destination paths,
+hard-linked output files, or other non-regular targets fail closed; unrelated
+files and their permissions are never changed. A three-file bundle is not one
+transaction, and only the final JSON replacement establishes the latest
+machine-readable receipt. An unsafe output cannot trigger a secondary CLI
+failure report at another path under the rejected folder.
+
+Existing manually provisioned report folders may need an **operator-reviewed**
+permission migration before separately authorized promotion. The renderer
+must not silently modify such existing folders. This candidate does not
+retroactively secure artifacts written by the v4 process or alter any live
+runtime path, state branch, accepting clock or credentials.
+
+## Local continuous process on an existing host
+
+```ini
+[Unit]
+Description=Portfolio Brain read-only intelligence
+After=network-online.target
+[Service]
+WorkingDirectory=/path/to/portfolio-brain
+ExecStart=/usr/bin/python3 -m brain service --db /private/brain/state.sqlite --output /private/brain/reports
+Restart=on-failure
+RestartSec=60
+NoNewPrivileges=true
+PrivateTmp=true
+[Install]
+WantedBy=multi-user.target
+```
+
+This is an installation example, not a deployed host or new paid service. Bind the
+checkout to an accepted commit, set file access appropriately, and use an existing
+service manager. The CLI checks source SHA before every cycle; code changes require
+a process restart. Create a `STOP` file beside the database for a clean stop; normal
+SIGTERM interruption also rolls back an open transaction safely. GitHub schedules
+can be delayed or paused by provider/repository conditions, so nonstop availability
+is not claimed.
+
+## Recover current state
+
+1. Stop concurrent writers or wait for the serialized GitHub owner to finish.
+2. Preserve the failing database and commit identity; do not overwrite evidence.
+3. Restore the last verified `state.sqlite` from the dedicated branch's immutable
+   commit history, or `python -m brain backup --db ... --output backup.sqlite`.
+   The unmerged V5 backup implementation stages an exclusive 0600 file and
+   verifies a complete SQLite and ledger snapshot before replacing only an
+   ordinary, single-linked backup. Destination folders must belong to the
+   caller and not be group/world writable (0755 and 0700 are accepted).
+   Symlink and hardlink destinations are refused, and failed backups leave
+   both prior backup files and unprocessed canonical events unchanged.
+   No secondary CLI error report is written into the backup destination.
+4. Verify SQLite integrity and use `Store` to verify event IDs, content, contiguous
+   sequence and chain. Drain pending work, then generate a new exact-source report.
+5. Rerun complete monitor → research → experiment → doctor. Compare expected sequence
+   and canonical hash; missing acknowledged input or uncertain lineage stays BLOCKED.
+
+A corrupt canonical event is not automatically deleted. Snapshot corruption may
+be repaired by generating a new report from verified ledger facts; report reads
+never accept a corrupt old projection. Loss of the authoritative branch or secrets
+requires external restoration; no honest software can guarantee otherwise.
+
+## Restore original implementation
+
+Create a recovery branch from exact preserved Brain commit
+`f0814f55fb5abf83135181d447171fb45d01933c`, verify its tree
+`e3306d6608608e6d2771914399f6e3cdb4b34243`, compare it with the replacement, and use
+protected reviewed integration. Do not reset/force-push main, erase history, change
+credentials, or replay old paid schedulers blindly. Old Step23 evidence remains
+blocked by issue640 unless GitHub actually repairs the provider record.
+
+## Historical external clock fallback (earlier GitHub cron outage)
+
+The following describes the original `brain-clock-v2` pulse-based recovery
+protocol and its provenance rules; **it is not an instruction to create a
+new pulse, dispatch a manual core, or start another soak**. The earlier single
+native Cron ran `17 * * * *`, but that schedule is no longer current.
+Today, the protected core uses `7,27,47 * * * *`, its native watchdog uses
+`16,36,56 * * * *`, and Cloudflare's independent recovery clock uses
+`*/10 * * * *` (all UTC; details above). GitHub scheduled events may be
+delayed or dropped, so a configured workflow is never completed-run proof.
+
+The existing Portfolio Brain Reliability task was the designated owner of the
+historical pulse fallback; this historical mechanism did not require a new
+account, credential, service or subscription. Its specification called for no
+more than one `clock/pulse.json` per UTC hour on `brain-clock-v2`, with a
+nonforce expected-parent update, after 45 minutes without a successful
+current-main core and with no competing active writer. Check current task
+instructions and real provider evidence before claiming this fallback ran. The branch tree is
+copied from the current protected main, changing only this nonsecret receipt.
+The receipt contains exactly schema_version=1, source_sha=current main,
+issued_at=UTC timestamp, slot=YYYYMMDDTHH, producer=the existing reliability
+job ID, and kind=scheduled (only inside an actual scheduled task execution)
+or manual_probe (operator demonstration). A retry must not create another
+signal for the same slot. Do not refresh a failed receipt to hide its age.
+
+`brain-clock-v2` validates the receipt with code checked out from protected
+main, refuses stale/future timestamps and source drift, and requests exactly
+one dispatch of `brain-cycle.yml` at main. A request accepted by the API is
+not a completed workload. The core independently validates the immutable
+receipt again and includes clock.json in its actual execution artifact.
+The optional clock gate is absent on native cron/push runs; every existing
+mandatory core gate remains required. No source change is needed per pulse.
+The normal core concurrency and nonforce state publication remain authoritative.
+
+A fallback automatic acceptance cycle must have an actual scheduled task
+execution, immutable kind=scheduled receipt, successful clock job/artifact,
+and the associated successful workflow_dispatch core run/artifact containing
+that same receipt. Manual probes never count as automatic delivery. Native
+cron gaps remain recorded; fallback proof must be labelled external scheduling,
+not event=schedule. Require three automatically delivered complete cycles on
+one unchanged main over at least two hours, gaps at most 90 minutes, all
+failures accounted for, existing freshness/lineage/replay/zero-backlog gates,
+and post-soak validation. Invalid dispatches or provider failure are preserved
+and diagnosed without rerun loops. There is no guarantee of uninterrupted
+availability from either hosting provider.
+
+## Historical v3 redundant native delivery (superseded by v4)
+
+The earlier v2 hourly cron/ChatGPT fallback missed a complete automatic cycle for more than 90 minutes and was recorded FAIL. The governed v3 candidate preserves existing ledger and gates while replacing the sparse scheduler with two *GitHub-native* crons declared in `brain/POLICY.json`. The primary runs full core on main every 20 minutes. The offset watchdog reads GitHub's actual recent core runs and only dispatches a missing core after 35 minutes, never changing state or source. It fails closed on stale active writers and records decisions. The core re-verifies that the watchdog's origin was a real GitHub `event=schedule` parent run, and its artifact retains the exact parent metadata. A separate acceptance verifier must authenticate both parent and child, and cannot count a manual request or a scheduling intention as a successful automatic run. More frequent GitHub Actions use and state growth must be measured after release. No new paid services or credentials are assumed.
+
+
+## October 15 source-specific emergency: GitHub state blob capacity
+
+The first V6 public-state archive grew from 104,284,160 bytes to more than
+GitHub's 100 MiB per-file cap. Original signed automatic cores reached the
+publish step, but GitHub rejected the newly enlarged state.sqlite blob with
+GH001. Monitor/research/experiment/doctor success does not make those cores
+successful. Preserve their original failed-run evidence and issue #684's
+source-specific six-hour acceptance requirement.
+
+The bounded archive migration in this candidate is non-destructive:
+- Restore **either** legacy state.sqlite or state-manifest.json and its exact
+  state-chunks/part-NNNNNN.z set; never accept both or silently fall back from
+  a corrupted archive. A legacy file is the sole source on the first run.
+- Run the unchanged integrity, exact-source preflight, canonical event-chain,
+  experiment, zero-backlog, source-head and Git parent gates against a restored
+  byte-identical SQLite database. The code never deletes canonical events,
+  adjusts source labels, or prunes reports.
+- After the original SQLite backup, chunk and zlib-compress into deterministic
+  8 MiB uncompressed slices (each resulting Git blob is under 9 MiB), verify
+  all individual and end-to-end SHA-256 digests, reconstruct the entire database
+  in isolation, and run SQLite integrity/foreign-key checks before staging.
+- Stage deletion of raw state.sqlite and addition of the manifest/chunks in
+  **one nonforce commit** on the existing brain-state-v2 branch. Verify the
+  exact published commit and its captured original parent using the unchanged
+  GitHub readback gate. Never overwrite the remote parent with a force push.
+- Future cores restore chunks, do their normal bounded work and repack; stable
+  identical chunks are content-addressed by Git and need no new object. Archive
+  size and an 80 MiB raw-size warning are emitted as original run artifacts.
+  The chunked format removes the single-blob ceiling; it does not eliminate
+  future aggregate repository growth, quotas, provider outage or cost concerns.
+
+An archive missing a chunk, carrying an altered digest, containing unapproved
+paths, producing a decompression bomb, failing SQLite checks or racing another
+writer is a **hard failure**. Restore from the last exact verified state commit;
+no automated tampering with production history, unsigned soak receipts, clocks,
+credentials, branch protection, downstream projects or trading authority.
+The first new-source run is not the V6 six-hour soak PASS. After an authorized
+reviewed source transition, separately reestablish source-specific production
+delivery and strict independent automatic-core acceptance on its exact SHA.

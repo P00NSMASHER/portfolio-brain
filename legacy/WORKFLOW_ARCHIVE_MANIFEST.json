@@ -1,0 +1,206 @@
+{
+  "scope": "INERT_HISTORICAL_EVIDENCE_ONLY",
+  "source_sha": "f0814f55fb5abf83135181d447171fb45d01933c",
+  "workflows": [
+    {
+      "source": ".github/workflows/abvm-constrained-observation-proof.yml",
+      "archive": "legacy/workflows/abvm-constrained-observation-proof.yml",
+      "sha256": "45077ccfe497551a511755fdd7cdc0f932359c0dfc498c509b99a0b4a685a310"
+    },
+    {
+      "source": ".github/workflows/agent-heartbeat-sweep.yml",
+      "archive": "legacy/workflows/agent-heartbeat-sweep.yml",
+      "sha256": "c1dfe3bb7c5fa25f74a7713cd468ef1f3d39f2eec0b4a43073c0fe5e070a4e5f"
+    },
+    {
+      "source": ".github/workflows/command-center-pages.yml",
+      "archive": "legacy/workflows/command-center-pages.yml",
+      "sha256": "e4b8497a5acac529eea0ed1d371615932f309e29f4cbdf54f6bba14b8dd980d9"
+    },
+    {
+      "source": ".github/workflows/continuous-learning-bootstrap.yml",
+      "archive": "legacy/workflows/continuous-learning-bootstrap.yml",
+      "sha256": "1b5160ca86e6440dd019ef0b1110e4197b68e3255b31963496d3d7aa738bad31"
+    },
+    {
+      "source": ".github/workflows/hunter-autonomous-cycle.yml",
+      "archive": "legacy/workflows/hunter-autonomous-cycle.yml",
+      "sha256": "3c46895ecdaeb00040726a03d74fad3aa92eae729aee2b9706eca18ea88775f1"
+    },
+    {
+      "source": ".github/workflows/hunter-controlled-proof.yml",
+      "archive": "legacy/workflows/hunter-controlled-proof.yml",
+      "sha256": "3cde294803453cae35e8698280b56a60f06d200ed963f3007db05a2849c46018"
+    },
+    {
+      "source": ".github/workflows/model-value-proof.yml",
+      "archive": "legacy/workflows/model-value-proof.yml",
+      "sha256": "4930ebf1dbfcd2513b0b32a196d6dec50f2ecfd3c72f629fd811302595a2b9e0"
+    },
+    {
+      "source": ".github/workflows/operator-console.yml",
+      "archive": "legacy/workflows/operator-console.yml",
+      "sha256": "cd3d16b271ee9a8a7f86a97be27db5e20914310b9e64bafe9bda56a509cefce6"
+    },
+    {
+      "source": ".github/workflows/phase1-verification.yml",
+      "archive": "legacy/workflows/phase1-verification.yml",
+      "sha256": "0108da6f974770ed938d24d45218c4e760b9d8baea286f4f04cb767822e6e36f"
+    },
+    {
+      "source": ".github/workflows/portfolio-autonomous-repair.yml",
+      "archive": "legacy/workflows/portfolio-autonomous-repair.yml",
+      "sha256": "e5f0a39dc77b0c51769b3356288dc115b9bbc131adcab68c793ed4bef38e6cb7"
+    },
+    {
+      "source": ".github/workflows/portfolio-autonomous-scheduler.yml",
+      "archive": "legacy/workflows/portfolio-autonomous-scheduler.yml",
+      "sha256": "36367741a0d990d1b6ecd887ceb1aea733ec5807c989c2d20796c8be5ade5c04"
+    },
+    {
+      "source": ".github/workflows/portfolio-cost-watchdog.yml",
+      "archive": "legacy/workflows/portfolio-cost-watchdog.yml",
+      "sha256": "1db1d82654a02ce755c5517dd4c2e5a8416f964046cb467f8ee5ca05b47fe8e9"
+    },
+    {
+      "source": ".github/workflows/portfolio-notification-cycle.yml",
+      "archive": "legacy/workflows/portfolio-notification-cycle.yml",
+      "sha256": "ad4d3f69f14fe5eecac5fab2c4663ed6d88b63699ae23581ec315a064e0cbe63"
+    },
+    {
+      "source": ".github/workflows/portfolio-schedule-clock-daemon.yml",
+      "archive": "legacy/workflows/portfolio-schedule-clock-daemon.yml",
+      "sha256": "c7b152d1bbbcf20916eab35f6d1f4b53c7d4a17e04e38476c8fccd4d5798bcb3"
+    },
+    {
+      "source": ".github/workflows/portfolio-schedule-clock-tick.yml",
+      "archive": "legacy/workflows/portfolio-schedule-clock-tick.yml",
+      "sha256": "c4308d3c8b0206215b67807773a81ec8aa3ec5f5085f827425ecb2977fbe3892"
+    },
+    {
+      "source": ".github/workflows/portfolio-schedule-delivery.yml",
+      "archive": "legacy/workflows/portfolio-schedule-delivery.yml",
+      "sha256": "a8dcf98ef50af975cb2f5a7e738e5cff8ca05e29c9312eb3790984d5b770aebc"
+    },
+    {
+      "source": ".github/workflows/portfolio-state-checkpoint-candidate.yml",
+      "archive": "legacy/workflows/portfolio-state-checkpoint-candidate.yml",
+      "sha256": "bf667e30e12c80c2a76f78ea3ab1c5acaacdb4f26b00d2402fe1e72e6f4a4448"
+    },
+    {
+      "source": ".github/workflows/portfolio-state-reducer.yml",
+      "archive": "legacy/workflows/portfolio-state-reducer.yml",
+      "sha256": "43b20e3df5c24c042980f8d3ddda0868b2fbe3fe89126381d26674a40116647c"
+    },
+    {
+      "source": ".github/workflows/project-forwarding-live-proof.yml",
+      "archive": "legacy/workflows/project-forwarding-live-proof.yml",
+      "sha256": "e1fe8bd6df235bee894eb8b0df232448d0379ed7be0a09a19802f84a302f7f46"
+    },
+    {
+      "source": ".github/workflows/provider-usability-acceptance.yml",
+      "archive": "legacy/workflows/provider-usability-acceptance.yml",
+      "sha256": "103331fb5bdae8c95735f4620fc11c8839b29dbc0e103c9930c3abaa523f1e9c"
+    },
+    {
+      "source": ".github/workflows/repo-scout-intake-proof.yml",
+      "archive": "legacy/workflows/repo-scout-intake-proof.yml",
+      "sha256": "5492fc35502317b98ae4e627915e434a36a3092c8c32a2bea70951fc3b9839d9"
+    },
+    {
+      "source": ".github/workflows/runtime-daily-learning.yml",
+      "archive": "legacy/workflows/runtime-daily-learning.yml",
+      "sha256": "5c82af20a1fd8d399d60a3d2a6fdf2ca69ca3da784c18d7fe95e1250423c531b"
+    },
+    {
+      "source": ".github/workflows/runtime-event-observe.yml",
+      "archive": "legacy/workflows/runtime-event-observe.yml",
+      "sha256": "36d54e4b574596f70932daf40142ab0268e36d1eb7bbdf3aed663ce1481e0f38"
+    },
+    {
+      "source": ".github/workflows/runtime-hourly-sync.yml",
+      "archive": "legacy/workflows/runtime-hourly-sync.yml",
+      "sha256": "380e9f1130adf45608557512e3f7b18682207a426855ce08f6d6533c8ff27728"
+    },
+    {
+      "source": ".github/workflows/runtime-weekly-synthesis.yml",
+      "archive": "legacy/workflows/runtime-weekly-synthesis.yml",
+      "sha256": "0a46f9509958c7daa9d1ce9841424a3824e0e614b6f4359142986e5a947093bf"
+    },
+    {
+      "source": ".github/workflows/runtime-worker.yml",
+      "archive": "legacy/workflows/runtime-worker.yml",
+      "sha256": "c3dc93295fd69c333857bd713571c99c7154685106fb1bcd78b99e4f980ddcaa"
+    },
+    {
+      "source": ".github/workflows/software-factory-candidate.yml",
+      "archive": "legacy/workflows/software-factory-candidate.yml",
+      "sha256": "a26785431592a2889f62546d88000e795cc28ed3c2227b1138d8054b866f0385"
+    },
+    {
+      "source": ".github/workflows/step18-exact-main-acceptance.yml",
+      "archive": "legacy/workflows/step18-exact-main-acceptance.yml",
+      "sha256": "efbfddc58507d7b8b9713ebf002b5aad2c0b507d0b87dd79d188a3d3f8a459ad"
+    },
+    {
+      "source": ".github/workflows/step2-isolated-proof.yml",
+      "archive": "legacy/workflows/step2-isolated-proof.yml",
+      "sha256": "5050dedf0575690fbc85a1179d70d7ae45c3399fe29b4c712e6f299cc9a7ca73"
+    },
+    {
+      "source": ".github/workflows/step2-shadow-smoke.yml",
+      "archive": "legacy/workflows/step2-shadow-smoke.yml",
+      "sha256": "fbc4bf24b34664a7c3004df2e8a65df19bb1224332615a61a353e87787b584d7"
+    },
+    {
+      "source": ".github/workflows/step21-live-acceptance.yml",
+      "archive": "legacy/workflows/step21-live-acceptance.yml",
+      "sha256": "edcaebef0e30a439623825e5876c5192096925d8f9a8a01cef6047cdd01302cd"
+    },
+    {
+      "source": ".github/workflows/step22-controlled-repair-acceptance.yml",
+      "archive": "legacy/workflows/step22-controlled-repair-acceptance.yml",
+      "sha256": "8d774c65c6e59e9425fe172b779d54ec51a542085073e207c2edc1771ee7ca02"
+    },
+    {
+      "source": ".github/workflows/step23-live-soak-observer.yml",
+      "archive": "legacy/workflows/step23-live-soak-observer.yml",
+      "sha256": "3ceffc1eaab41afa48c3ae36fdf72c7b46b8321b36a72eeca99905d5306a7973"
+    },
+    {
+      "source": ".github/workflows/step23-prearm-validation.yml",
+      "archive": "legacy/workflows/step23-prearm-validation.yml",
+      "sha256": "12a869b9f5749d3309d8354061fed906b12179b80953993f73aefe224631e329"
+    },
+    {
+      "source": ".github/workflows/step8-executor-acceptance.yml",
+      "archive": "legacy/workflows/step8-executor-acceptance.yml",
+      "sha256": "622673e805904a16cfaad0723b9a2550b0acd73b796a8422078619da4a4b80d7"
+    },
+    {
+      "source": ".github/workflows/steps10-12-live-acceptance.yml",
+      "archive": "legacy/workflows/steps10-12-live-acceptance.yml",
+      "sha256": "446a597c0b59149c2bed545e8c2683a70eaf5d46e85b1070d0908ac849012973"
+    },
+    {
+      "source": ".github/workflows/steps13-14-live-acceptance.yml",
+      "archive": "legacy/workflows/steps13-14-live-acceptance.yml",
+      "sha256": "169d6d681ab848c9a931f0fb7bd3fb2708599018d4f1cf7f4e76544675cbe0ad"
+    },
+    {
+      "source": ".github/workflows/steps16-17-exact-main-acceptance.yml",
+      "archive": "legacy/workflows/steps16-17-exact-main-acceptance.yml",
+      "sha256": "42a74b2ced780d5deae4f5463f187d5eda4281f29041a49a39de9e73381cf362"
+    },
+    {
+      "source": ".github/workflows/upstream-readonly-integration.yml",
+      "archive": "legacy/workflows/upstream-readonly-integration.yml",
+      "sha256": "3120ee712dfb125980e20004c64a98e17b76f6f56cdd5f3f663730b5af9ad0af"
+    },
+    {
+      "source": ".github/workflows/verified-feedback-bootstrap.yml",
+      "archive": "legacy/workflows/verified-feedback-bootstrap.yml",
+      "sha256": "a8954089afab214a957724eeca96eb7fabe19879ab2371dbfdc6fc87e78cf6b3"
+    }
+  ]
+}

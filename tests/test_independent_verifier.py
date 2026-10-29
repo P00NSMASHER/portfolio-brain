@@ -1,3 +1,4 @@
+from legacy.workflow_archive import legacy_workflow_path
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -116,7 +117,7 @@ class IndependentVerifierTests(unittest.TestCase):
         self.assertEqual(payload["conclusion"],"success")
 
     def test_hosted_verifier_auto_integrates_only_bot_repair_prs(self):
-        text=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text()
+        text=(legacy_workflow_path(ROOT/".github/workflows/portfolio-independent-verifier.yml")).read_text()
         permissions=text.split("permissions:",1)[1].split("concurrency:",1)[0]
         self.assertIn("contents: write",permissions)
         self.assertIn("pull-requests: write",permissions)
@@ -130,7 +131,7 @@ class IndependentVerifierTests(unittest.TestCase):
         self.assertIn('-f sha="$CANDIDATE_SHA"',text)
 
     def test_verifier_still_uses_independent_app_gate_before_merge(self):
-        text=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text()
+        text=(legacy_workflow_path(ROOT/".github/workflows/portfolio-independent-verifier.yml")).read_text()
         self.assertLess(text.index("Publish exact-head independent gate"),text.index("Merge verified autonomous repair through branch protection"))
         self.assertIn('app-id: "5121826"',text)
         self.assertIn("secrets.PORTFOLIO_VERIFIER_PRIVATE_KEY",text)
@@ -138,7 +139,7 @@ class IndependentVerifierTests(unittest.TestCase):
         self.assertNotIn("--admin",text.lower())
 
     def test_hosted_verifier_copy_preserves_isolation_without_privileged_ownership_copy(self):
-        text=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text()
+        text=(legacy_workflow_path(ROOT/".github/workflows/portfolio-independent-verifier.yml")).read_text()
         self.assertNotIn("cp -a /src /work",text)
         self.assertEqual(text.count("cp -R --no-preserve=ownership /src/. /work/"),3)
         self.assertEqual(text.count("--network none"),3)
@@ -146,7 +147,7 @@ class IndependentVerifierTests(unittest.TestCase):
         self.assertEqual(text.count("--security-opt=no-new-privileges"),3)
 
     def test_hosted_verifier_discovers_non_package_tests_under_isolated_python(self):
-        text=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text()
+        text=(legacy_workflow_path(ROOT/".github/workflows/portfolio-independent-verifier.yml")).read_text()
         self.assertNotIn("-t /work",text)
         self.assertEqual(text.count('defaultTestLoader.discover("/work/tests"'),2)
         self.assertIn('pattern="test_*.py"',text)
@@ -155,7 +156,7 @@ class IndependentVerifierTests(unittest.TestCase):
         self.assertEqual(text.count("python -I -c"),3)
 
     def test_hosted_verifier_image_includes_git_without_relaxing_isolation(self):
-        text=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text()
+        text=(legacy_workflow_path(ROOT/".github/workflows/portfolio-independent-verifier.yml")).read_text()
         self.assertNotIn("python:3.12-slim",text)
         self.assertEqual(text.count("python:3.12-bookworm"),4)
         self.assertEqual(text.count("--network none"),3)

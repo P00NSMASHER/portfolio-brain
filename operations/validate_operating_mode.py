@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
+from legacy.workflow_archive import legacy_workflow_path
 import json,re
 from pathlib import Path
 
@@ -145,7 +146,8 @@ def validate_gmail_gateway_status(gmail,gateway_status,ledger):
     req(gateway_status.get("raw_connector_identifiers_persisted") is False,"Gmail gateway status permits raw connector identifiers")
     return {"status":gateway_status["status"],"proof_sequence":gateway_status["proof_sequence"]}
 
-def validate_operating_mode():
+def validate_legacy_operating_mode():
+    """Offline historical regression contract; never claims active deployment."""
     p=load("operations/OPERATING_MODE_POLICY.json")
     s=load("operations/OPERATING_MODE_STATUS.json")
     build=load("PORTFOLIO_BUILD_STATE.json")
@@ -202,7 +204,7 @@ def validate_operating_mode():
       "command-center-pages":"37 * * * *",
       "agent-heartbeat-sweep":"29 */2 * * *",
       "portfolio-state-reducer":"11 4 * * *",
-      "portfolio-state-checkpoint-candidate":"19 4 * * 0",
+      "portfolio-state-checkpoint-candidate":"19 * * * *",
       "verified-feedback-bootstrap":"17 * * * *",
     }
     req(expected["runtime-daily-learning"].split()[0] != expected["command-center-pages"].split()[0],
@@ -212,32 +214,47 @@ def validate_operating_mode():
     req(expected["portfolio-state-reducer"].split()[0] != expected["portfolio-state-checkpoint-candidate"].split()[0],
         "checkpoint candidate must not collide with daily reducer refresh")
     req(set(p["approved_recurring_workflows"])==set(expected),"approved recurring workflow set changed")
-    # Exact, date-bounded Step-23 soak windows. These do not replace the
-    # approved steady-state cadence. They exist solely to collect the three
-    # genuine event=schedule cycles required by final acceptance on one SHA.
-    step23_bounded_crons={
-      "portfolio-state-reducer":["7 15 2 10 *","37 15 2 10 *","7 16 2 10 *","37 16 2 10 *"],
-      "runtime-hourly-sync":["9 15 2 10 *","39 15 2 10 *","9 16 2 10 *","39 16 2 10 *"],
-      "portfolio-autonomous-scheduler":["11 15 2 10 *","41 15 2 10 *","11 16 2 10 *","41 16 2 10 *"],
-      "hunter-autonomous-cycle":["13 15 2 10 *","43 15 2 10 *","13 16 2 10 *","43 16 2 10 *"],
-      "agent-heartbeat-sweep":["15 15 2 10 *","45 15 2 10 *","15 16 2 10 *","45 16 2 10 *"],
-      "portfolio-cost-watchdog":["5 15 2 10 *","35 15 2 10 *","5 16 2 10 *","35 16 2 10 *"],
-      "portfolio-notification-cycle":["17 15 2 10 *","47 15 2 10 *","17 16 2 10 *","47 16 2 10 *"],
-      "command-center-pages":["19 15 2 10 *","49 15 2 10 *","19 16 2 10 *","49 16 2 10 *"],
-    }
-    req(set(step23_bounded_crons)=={
+    # Step 23 is deliberately disarmed here. Pre-arm state carries only the
+    # reviewed steady-state schedules; temporary soak crons are injected only
+    # by a later exact-main re-arm change.
+    delivery=load("operations/SCHEDULE_DELIVERY_POLICY.json")
+    req(delivery == {
+        "schema_version":"1.0.0", "workflow":"portfolio-schedule-delivery",
+        "cron":"7,17,27,37,47,57 * * * *", "purpose":"DELIVERY_PREFLIGHT_AND_DIAGNOSTICS",
+        "max_api_requests":80, "timeout_seconds":15, "new_soak_start":None,
+    }, "schedule delivery monitor policy changed")
+    window=load("operations/STEP23_DELIVERY_WINDOW.json")
+    required_temp={
       "portfolio-state-reducer","runtime-hourly-sync","portfolio-autonomous-scheduler",
       "hunter-autonomous-cycle","agent-heartbeat-sweep","portfolio-cost-watchdog",
       "portfolio-notification-cycle","command-center-pages",
-    },"Step 23 bounded schedule scope changed")
-    req(all(cron.split()[2:4]==["2","10"] for rows in step23_bounded_crons.values() for cron in rows),
-        "Step 23 bounded schedules are not date-scoped to 2026-10-02 UTC")
-    workflow_dir=ROOT/".github/workflows"
+    }
+    final_step23=load("acceptance/FINAL_ACCEPTANCE_POLICY.json")["step23"]
+    req(window["schema_version"]=="1.0.0" and window["status"]=="PREARM_READY",
+        "Step 23 pre-arm identity changed")
+    req(set(window["temporary_crons"])==required_temp,"Step 23 pre-arm workflow set changed")
+    req(window["qualification_horizon_start"] is None and window["qualification_horizon_end"] is None,
+        "Step 23 pre-arm state must not carry a stale qualification horizon")
+    req(window["required_successes_per_workflow"]==final_step23["min_successful_scheduled_cycles_per_workflow"],
+        "Step 23 success-count contract drifted")
+    req(window["max_soak_duration_seconds"]==final_step23["max_soak_duration_seconds"]==7200,
+        "Step 23 two-hour duration contract drifted")
+    req(all(crons==[] for crons in window["temporary_crons"].values())
+        and window["observer_crons"]==[], "Step 23 pre-arm state contains temporary crons")
+    workflow_dir=legacy_workflow_path(ROOT/".github/workflows")
     actual=scheduled_workflow_inventory(workflow_dir)
-    req(set(actual)==set(expected),"scheduled workflow inventory differs from approved operating policy")
+    req(set(actual)==set(expected)|{delivery["workflow"]},
+        "scheduled workflow inventory differs from approved pre-arm policy")
     for name,cron in expected.items():
-        approved=[cron,*step23_bounded_crons.get(name,[])]
-        req(actual[name]==approved,f"{name} cron mismatch")
+        req(actual[name]==[cron],f"{name} steady-state cron mismatch")
+    req(actual[delivery["workflow"]]==[delivery["cron"]],"delivery probe cron mismatch")
+    control=load("operations/STEP23_CONTROL.json")
+    req(control.get("status")=="PREARM_READY" and control.get("next_soak_start") is None
+        and control.get("qualification_horizon_start") is None
+        and control.get("qualification_horizon_end") is None
+        and control.get("max_soak_duration_seconds")==7200
+        and control.get("acceptance_complete") is False,
+        "Step 23 pre-arm control is not cleanly disarmed")
     workload=load("workload_control/WORKLOAD_POLICY.json")
     req(workload["mode"]=="GITHUB_NATIVE_WORKLOAD_CONTROL","workload control mode changed")
     workload_workflows={
@@ -248,7 +265,7 @@ def validate_operating_mode():
       "agent-heartbeat-sweep":("heartbeat","portfolio-heartbeat"),
     }
     for name,(job_id,group) in workload_workflows.items():
-        body=(ROOT/".github/workflows"/f"{name}.yml").read_text().lower()
+        body=(legacy_workflow_path(ROOT/".github/workflows"/f"{name}.yml")).read_text().lower()
         req("workload_control.workload_gate preflight" in body,f"{name} is not workload controlled")
         req("cost_governor.workflow_gate" not in body,f"{name} is still coupled to paid cost governance")
         req(f"group: {group}" in body,f"{name} independent concurrency lane missing")
@@ -258,10 +275,10 @@ def validate_operating_mode():
         req(scope in workload["services"],f"{name} workload policy entry missing")
         req(workload["services"][scope]["concurrency_group"]==group,f"{name} workload policy lane drifted")
     for name in ["portfolio-autonomous-scheduler","agent-heartbeat-sweep"]:
-        triggers=workflow_top_level_triggers(ROOT/".github/workflows"/f"{name}.yml")
+        triggers=workflow_top_level_triggers(legacy_workflow_path(ROOT/".github/workflows"/f"{name}.yml"))
         req("push" not in triggers,f"{name} must not fan out on push")
 
-    worker=(ROOT/".github/workflows/runtime-worker.yml").read_text().lower()
+    worker=(legacy_workflow_path(ROOT/".github/workflows/runtime-worker.yml")).read_text().lower()
     req("portfolio-cost-governed-autonomy" in worker and "cost_governor.workflow_gate preflight" in worker,
         "runtime worker lost serialized paid-wrapper governance")
     req("workload_control.workload_gate preflight" in worker,
@@ -276,13 +293,13 @@ def validate_operating_mode():
     req("steps.admission.outputs.allowed != 'true'" in worker and "exit 1" in worker,
         "runtime worker can still report green after mode-specific admission blocks")
 
-    proof=(ROOT/".github/workflows/model-value-proof.yml").read_text().lower()
+    proof=(legacy_workflow_path(ROOT/".github/workflows/model-value-proof.yml")).read_text().lower()
     req("portfolio-cost-governed-autonomy" in proof and "cost_governor.workflow_gate preflight" in proof,
         "model value proof lost paid cost governance")
     req("steps.cost.outputs.allowed != 'true'" in proof and "exit 1" in proof,
         "model value proof can still report green after paid admission blocks")
 
-    factory=(ROOT/".github/workflows/software-factory-candidate.yml").read_text().lower()
+    factory=(legacy_workflow_path(ROOT/".github/workflows/software-factory-candidate.yml")).read_text().lower()
     req("workflow_call" in factory and "schedule:" not in factory,"software factory unexpectedly recurring")
     req("workload_control.workload_gate preflight" in factory,"software factory is not workload controlled")
     req("cost_governor.workflow_gate" not in factory,"software factory is still coupled to paid cost governance")
@@ -322,8 +339,8 @@ def validate_operating_mode():
     req(set(p["event_driven_workflows"])=={
           "runtime-event-observe","portfolio-autonomous-repair","portfolio-independent-verifier"
         },"event-driven workflow inventory changed")
-    repair_workflow=(ROOT/".github/workflows/portfolio-autonomous-repair.yml").read_text().lower()
-    repair_triggers=workflow_top_level_triggers(ROOT/".github/workflows/portfolio-autonomous-repair.yml")
+    repair_workflow=(legacy_workflow_path(ROOT/".github/workflows/portfolio-autonomous-repair.yml")).read_text().lower()
+    repair_triggers=workflow_top_level_triggers(legacy_workflow_path(ROOT/".github/workflows/portfolio-autonomous-repair.yml"))
     req({"workflow_run","workflow_dispatch"}<=repair_triggers and "schedule" not in repair_triggers,
         "autonomous repair trigger class invalid")
     for permission in ("actions: write","contents: write","pull-requests: write","copilot-requests: write"):
@@ -339,7 +356,7 @@ def validate_operating_mode():
         req(marker in repair_workflow,f"autonomous repair control missing: {marker}")
     for forbidden in ("gh pr merge","/merges","git push origin main","--allow-tool='shell","--allow-all","--yolo"):
         req(forbidden not in repair_workflow,f"autonomous repair contains prohibited integration action: {forbidden}")
-    scheduler_repair=(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml").read_text().lower()
+    scheduler_repair=(legacy_workflow_path(ROOT/".github/workflows/portfolio-autonomous-scheduler.yml")).read_text().lower()
     req("actions: write" in scheduler_repair and "contents: read" in scheduler_repair
         and "contents: write" not in scheduler_repair and "pull-requests: read" in scheduler_repair,
         "scheduler repair dispatch permissions invalid")
@@ -349,8 +366,8 @@ def validate_operating_mode():
         "scheduler repair dispatch path missing")
     req("repair.autonomous_repair dispatch" not in scheduler_repair,
         "scheduler repair dispatch duplicated outside the leased handler")
-    verifier=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text().lower()
-    verifier_triggers=workflow_top_level_triggers(ROOT/".github/workflows/portfolio-independent-verifier.yml")
+    verifier=(legacy_workflow_path(ROOT/".github/workflows/portfolio-independent-verifier.yml")).read_text().lower()
+    verifier_triggers=workflow_top_level_triggers(legacy_workflow_path(ROOT/".github/workflows/portfolio-independent-verifier.yml"))
     req(verifier_triggers=={"workflow_run"},"independent verifier must be workflow_run-only")
     req("actions: read" in verifier and "contents: write" in verifier and "pull-requests: write" in verifier,
         "independent verifier/integrator permissions missing")
@@ -393,17 +410,17 @@ def validate_operating_mode():
     req(verifier.index("checkout trusted verifier controls from main")
         < verifier.index("mint short-lived independent verifier app token"),
         "trusted verifier controls are not loaded before token minting")
-    event=(ROOT/".github/workflows/runtime-event-observe.yml").read_text().lower()
+    event=(legacy_workflow_path(ROOT/".github/workflows/runtime-event-observe.yml")).read_text().lower()
     req("push:" in event and 'branches: ["main"]' in event,"main push observer missing")
     req('"operations/command_center_refresh_request.json"' in event,"trigger-only command-center refresh still creates redundant runtime work")
-    watchdog=(ROOT/".github/workflows/portfolio-cost-watchdog.yml").read_text().lower()
+    watchdog=(legacy_workflow_path(ROOT/".github/workflows/portfolio-cost-watchdog.yml")).read_text().lower()
     req("actions: write" in watchdog and "contents: read" in watchdog and "contents: write" not in watchdog,"watchdog permissions invalid")
-    watchdog_triggers=workflow_top_level_triggers(ROOT/".github/workflows/portfolio-cost-watchdog.yml")
+    watchdog_triggers=workflow_top_level_triggers(legacy_workflow_path(ROOT/".github/workflows/portfolio-cost-watchdog.yml"))
     req({"schedule","workflow_run","push","workflow_dispatch"}<=watchdog_triggers,"watchdog independent recovery triggers incomplete")
     for producer in ("portfolio-autonomous-scheduler","runtime-hourly-sync","agent-heartbeat-sweep","hunter-autonomous-cycle","portfolio-notification-cycle"):
         req(f'- "{producer}"' in watchdog,f"watchdog liveness recovery anchor missing: {producer}")
     req("types: [completed]" in watchdog and 'branches: ["main"]' in watchdog,"watchdog liveness recovery anchors drifted")
-    runtime_sync=(ROOT/".github/workflows/runtime-hourly-sync.yml").read_text().lower()
+    runtime_sync=(legacy_workflow_path(ROOT/".github/workflows/runtime-hourly-sync.yml")).read_text().lower()
     req("push:" in runtime_sync and 'branches: ["main"]' in runtime_sync and '"adapters/**"' in runtime_sync and '"runtime/**"' in runtime_sync,"runtime repair wakeup trigger missing")
     req('"operations/trigger_workflow_liveness"' in watchdog,"watchdog explicit liveness trigger path missing")
     req("paths:" in watchdog,"watchdog push trigger must remain path-scoped")
@@ -418,10 +435,10 @@ def validate_operating_mode():
     recovery_names={row["workflow_name"] for row in liveness["targets"]}
     req(recovery_names<=set(expected),"workflow liveness recovery target is not an approved recurring workflow")
     for target in liveness["targets"]:
-        path=ROOT/".github/workflows"/target["workflow_file"]
+        path=legacy_workflow_path(ROOT/".github/workflows"/target["workflow_file"])
         req(path.exists(),f"workflow liveness target file missing: {target['workflow_file']}")
         req("workflow_dispatch" in workflow_top_level_triggers(path),f"workflow liveness target not dispatchable: {target['workflow_name']}")
-    foundation=(ROOT/".github/workflows/foundation-ci.yml").read_text().lower()
+    foundation=(legacy_workflow_path(ROOT/".github/workflows/foundation-ci.yml")).read_text().lower()
     req('branches: ["main", "step*-*"]' in foundation,"foundation CI main trigger missing")
 
     req(p["durable_state_artifacts"]=={
@@ -444,7 +461,7 @@ def validate_operating_mode():
     req(gmail.get("execution_task_id")=="6ab377c25df08191a6e2aa1537d9d2ef","Gmail gateway executor task mismatch")
     req(gmail.get("planner_task_id")=="6ab377be3184819186a3075f37a530b8","Gmail gateway planner task mismatch")
     req(load("action_engine/KILL_SWITCH.json").get("disabled") is False,"checked-in Gmail action kill switch unexpectedly active")
-    req(not (ROOT/".github/workflows/portfolio-action-worker.yml").exists(),"obsolete SMTP action worker still present")
+    req(not (legacy_workflow_path(ROOT/".github/workflows/portfolio-action-worker.yml")).exists(),"obsolete SMTP action worker still present")
     gateway_status=s.get("connector_gateways",{}).get("gmail",{})
     ledger=load("action_engine/GMAIL_GATEWAY_LEDGER.json")
     validate_gmail_gateway_status(gmail,gateway_status,ledger)
@@ -479,5 +496,18 @@ def validate_operating_mode():
       "promoted_main_sha":s["promoted_main_sha"]
     }
 
+def validate_operating_mode():
+    """Validate the active replacement and preserve all historical regressions.
+
+    Historical configuration is not current operational readiness evidence.
+    """
+    from brain.validate import validate_policy
+    historical = validate_legacy_operating_mode()
+    active = validate_policy()
+    return {"active": active, "historical_regression": "PASS",
+            "historical_scope": "RETIRED_OFFLINE_EVIDENCE_ONLY",
+            "historical_promoted_sha": historical["promoted_main_sha"]}
+
+
 if __name__=="__main__":
-    print("portfolio-brain Step 25 operating mode: PASS",json.dumps(validate_operating_mode(),sort_keys=True))
+    print("portfolio-brain active policy and archived regressions:",json.dumps(validate_operating_mode(),sort_keys=True))
