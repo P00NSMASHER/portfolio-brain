@@ -137,7 +137,8 @@ def validate_policy():
             and "merge_pull_request" not in receipt,
             "source acceptance receipt producer adds forbidden trigger or authority")
     from operations.validate_operating_mode import scheduled_workflow_inventory
-    require(scheduled_workflow_inventory(workflow_dir)=={"brain-cycle":[p["cron"]], "brain-clock":[p["watchdog_cron"]]}, "only reviewed native Brain execution and watchdog may recur")
+    require(scheduled_workflow_inventory(workflow_dir)=={"brain-clock":[p["cron"], p["watchdog_cron"]]}, "only existing native Brain and watchdog crons may recur")
+    require("schedule:" not in (workflow_dir/"brain-cycle.yml").read_text(), "uncoordinated direct core schedule forbidden")
     source=(workflow_dir/"brain-cycle.yml").read_text()
     for fragment in ("group: brain-v2-state", "cancel-in-progress: false", "timeout-minutes: 5", "ref: brain-state-v2", "--expected-sha", "STATE_CONFLICT", "STATE_DELIVERY_UNVERIFIED", "MAIN_DRIFT", "soak_completed", "persist-credentials: false", "inputs.watchdog_run_id", "python -m brain.watchdog verify", "COMPETING_CLOCK_INPUTS", "python -m brain.cloudflare_clock", "inputs.cloudflare_attestation", "inputs.cloudflare_signature", "COMPETING_SCHEDULER_ORIGINS"):
         require(fragment in source, "missing workflow guarantee: "+fragment)
