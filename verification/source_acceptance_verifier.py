@@ -288,14 +288,17 @@ def _validated_automatic_origin(api, run: dict, raw: bytes, source: str) -> tupl
     req(receipt == verified, "GitHub watchdog origin receipt mismatch")
     jobs = api.json(f"/actions/runs/{clock_id}/jobs?filter=all&per_page=100")
     job_rows = jobs.get("jobs")
-    req(jobs.get("total_count") == 1 and type(job_rows) is list
-        and len(job_rows) == 1
-        and job_rows[0].get("name") == "scheduled-watchdog"
-        and job_rows[0].get("status") == "completed"
-        and job_rows[0].get("conclusion") == "success",
+    req(jobs.get("total_count") == 2 and type(job_rows) is list
+        and len(job_rows) == 2,
+        "GitHub watchdog original job census incomplete")
+    by_name = {job.get("name"): job for job in job_rows if type(job) is dict}
+    req(len(by_name) == 2 and set(by_name) == {"dispatch", "scheduled-watchdog"}
+        and by_name["dispatch"].get("conclusion") == "skipped"
+        and by_name["scheduled-watchdog"].get("status") == "completed"
+        and by_name["scheduled-watchdog"].get("conclusion") == "success",
         "GitHub watchdog original job verification failed")
     steps = {step.get("name"): step.get("conclusion")
-             for step in job_rows[0].get("steps", []) if type(step) is dict}
+             for step in by_name["scheduled-watchdog"].get("steps", []) if type(step) is dict}
     req(steps.get("Check independent GitHub scheduling liveness") == "success"
         and steps.get("Dispatch one overdue core without inventing a PASS") == "success",
         "GitHub watchdog actual dispatch not verified")
