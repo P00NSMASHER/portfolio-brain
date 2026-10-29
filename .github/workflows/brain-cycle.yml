@@ -1,8 +1,8 @@
 name: brain-cycle-v2
 
 on:
-  schedule:
-    - cron: "7,27,47 * * * *"
+  # Existing native cron remains active in brain-clock.yml, where its
+  # watchdog checks recent or active original cores before dispatch.
   workflow_dispatch:
     inputs:
       clock_commit:
@@ -23,9 +23,7 @@ on:
         type: string
   push:
     branches: ["main"]
-    paths:
-      - "brain/**"
-      - ".github/workflows/brain-cycle.yml"
+    # Every source revision needs its own original deployment evidence.
 
 permissions:
   contents: read
@@ -108,7 +106,8 @@ jobs:
       - name: Validate restoration and capture publication parent
         run: |
           set -euo pipefail
-          test -f state/state.sqlite || { echo "STATE_UNAVAILABLE: restore the verified brain-state-v2 seed; no implicit bootstrap"; exit 1; }
+          mkdir -p /tmp/brain
+          python -m brain.state_archive restore --root state --status /tmp/brain/state-restoration.json
           echo "BRAIN_STATE_PARENT=$(git -C state rev-parse HEAD)" >> "$GITHUB_ENV"
           python - <<'PY'
           import sqlite3
@@ -130,10 +129,31 @@ jobs:
         run: python -m brain experiment --db state/state.sqlite --output /tmp/brain/experiment --expected-sha "$BRAIN_SOURCE_SHA"
       - name: Verify authoritative state and zero event backlog
         run: python -m brain doctor --db state/state.sqlite --output /tmp/brain/doctor --expected-sha "$BRAIN_SOURCE_SHA"
+      - name: Build read-only all-project improvement queue
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python -m brain projects --db state/state.sqlite --output /tmp/brain/projects --expected-sha "$BRAIN_SOURCE_SHA"
+      - name: Build bounded v8 engineering owner handoffs
+        continue-on-error: true
+        run: |
+          python -m brain.v8 cycle --input /tmp/brain/projects/report.json --source-sha "$BRAIN_SOURCE_SHA" --cycle "$GITHUB_RUN_NUMBER" --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /tmp/brain/v8-engineering.json
+      - name: Persist v9 owner work and bounded original publication evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python -m brain.v9.batch_cycle cycle --db state/state.sqlite \
+            --input /tmp/brain/projects/report.json --expected-sha "$BRAIN_SOURCE_SHA" \
+            --cycle "$GITHUB_RUN_NUMBER" --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --proof-manifest brain/v9/repair-proof.json --output /tmp/brain/v9-engineering.json
       - name: Propose a measured protected knowledge upgrade when eligible
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python -m brain evolve --db state/state.sqlite --output /tmp/brain/upgrade --expected-sha "$BRAIN_SOURCE_SHA"
+      - name: Bound working state to independently verified production capacity
+        run: |
+          python -m brain.state_maintenance --source state/state.sqlite \
+            --apply-capacity-bound --receipt /tmp/brain/state-maintenance.json
       - name: Verify main and state parent before publication
         env:
           GH_TOKEN: ${{ github.token }}
@@ -151,6 +171,21 @@ jobs:
                   raise SystemExit("STATE_CORRUPT: publication backup failed integrity check")
           os.replace("/tmp/brain-publication.sqlite", "state/state.sqlite")
           PY
+      - name: Verify and pack durable state into bounded Git blobs
+        run: |
+          set -euo pipefail
+          python -m brain.state_archive pack --root state --status /tmp/brain/state-publication.json
+          test ! -f state/state.sqlite || { echo "STATE_RAW_FILE_NOT_REMOVED"; exit 1; }
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from brain.state_maintenance import validate_publication_receipt
+          from brain.core import canonical
+          receipt=json.loads(Path('/tmp/brain/state-publication.json').read_text())
+          proof=validate_publication_receipt(receipt)
+          with Path('/tmp/brain/state-capacity.json').open('x') as output:
+              output.write(canonical(proof)+'\n')
+          PY
       - name: Publish one nonsecret state transaction without force
         env:
           GH_TOKEN: ${{ github.token }}
@@ -158,7 +193,13 @@ jobs:
           set -euo pipefail
           git -C state config user.name "portfolio-brain-state"
           git -C state config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C state add -- state.sqlite
+          git -C state add --all -- .
+          git -C state diff --cached --name-only | while IFS= read -r changed; do
+            case "$changed" in
+              state.sqlite|state-manifest.json|state-chunks/part-*.z) ;;
+              *) echo "STATE_STAGING_UNEXPECTED_PATH: refusing unrelated state-branch write"; exit 1 ;;
+            esac
+          done
           if git -C state diff --cached --quiet; then
             echo "NO_STATE_CHANGE: no new durable commit required"
           else

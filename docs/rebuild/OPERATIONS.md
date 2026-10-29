@@ -333,3 +333,44 @@ availability from either hosting provider.
 ## Historical v3 redundant native delivery (superseded by v4)
 
 The earlier v2 hourly cron/ChatGPT fallback missed a complete automatic cycle for more than 90 minutes and was recorded FAIL. The governed v3 candidate preserves existing ledger and gates while replacing the sparse scheduler with two *GitHub-native* crons declared in `brain/POLICY.json`. The primary runs full core on main every 20 minutes. The offset watchdog reads GitHub's actual recent core runs and only dispatches a missing core after 35 minutes, never changing state or source. It fails closed on stale active writers and records decisions. The core re-verifies that the watchdog's origin was a real GitHub `event=schedule` parent run, and its artifact retains the exact parent metadata. A separate acceptance verifier must authenticate both parent and child, and cannot count a manual request or a scheduling intention as a successful automatic run. More frequent GitHub Actions use and state growth must be measured after release. No new paid services or credentials are assumed.
+
+
+## October 15 source-specific emergency: GitHub state blob capacity
+
+The first V6 public-state archive grew from 104,284,160 bytes to more than
+GitHub's 100 MiB per-file cap. Original signed automatic cores reached the
+publish step, but GitHub rejected the newly enlarged state.sqlite blob with
+GH001. Monitor/research/experiment/doctor success does not make those cores
+successful. Preserve their original failed-run evidence and issue #684's
+source-specific six-hour acceptance requirement.
+
+The bounded archive migration in this candidate is non-destructive:
+- Restore **either** legacy state.sqlite or state-manifest.json and its exact
+  state-chunks/part-NNNNNN.z set; never accept both or silently fall back from
+  a corrupted archive. A legacy file is the sole source on the first run.
+- Run the unchanged integrity, exact-source preflight, canonical event-chain,
+  experiment, zero-backlog, source-head and Git parent gates against a restored
+  byte-identical SQLite database. The code never deletes canonical events,
+  adjusts source labels, or prunes reports.
+- After the original SQLite backup, chunk and zlib-compress into deterministic
+  8 MiB uncompressed slices (each resulting Git blob is under 9 MiB), verify
+  all individual and end-to-end SHA-256 digests, reconstruct the entire database
+  in isolation, and run SQLite integrity/foreign-key checks before staging.
+- Stage deletion of raw state.sqlite and addition of the manifest/chunks in
+  **one nonforce commit** on the existing brain-state-v2 branch. Verify the
+  exact published commit and its captured original parent using the unchanged
+  GitHub readback gate. Never overwrite the remote parent with a force push.
+- Future cores restore chunks, do their normal bounded work and repack; stable
+  identical chunks are content-addressed by Git and need no new object. Archive
+  size and an 80 MiB raw-size warning are emitted as original run artifacts.
+  The chunked format removes the single-blob ceiling; it does not eliminate
+  future aggregate repository growth, quotas, provider outage or cost concerns.
+
+An archive missing a chunk, carrying an altered digest, containing unapproved
+paths, producing a decompression bomb, failing SQLite checks or racing another
+writer is a **hard failure**. Restore from the last exact verified state commit;
+no automated tampering with production history, unsigned soak receipts, clocks,
+credentials, branch protection, downstream projects or trading authority.
+The first new-source run is not the V6 six-hour soak PASS. After an authorized
+reviewed source transition, separately reestablish source-specific production
+delivery and strict independent automatic-core acceptance on its exact SHA.

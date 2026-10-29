@@ -15,7 +15,7 @@ from hunting.lifecycle import (
 from hunting.proposal_review_state import digest
 from software_factory.software_factory import SoftwareFactory
 
-H=lambda c:"sha256:"+c*64
+H=lambda c:digest(c)
 
 def controlled_review():
     core={
@@ -104,6 +104,7 @@ class HunterLifecycleTests(unittest.TestCase):
 
                 sf.verify(
                   work["work_id"],"AGT-TESTER","PASS",report_hash=H("r"),
+                  candidate_binding_hash=sf.candidate_binding_hash(work["work_id"]),
                   evidence_refs=["test:independent"],now=4.0,
                 )
                 lifecycle=apply_factory_evidence(lifecycle,sf.get(work["work_id"]),at="2026-09-30T13:03:00Z")

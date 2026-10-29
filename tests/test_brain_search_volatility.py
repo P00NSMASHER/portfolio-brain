@@ -124,6 +124,46 @@ class StaleSearchResultTests(unittest.TestCase):
         self.assertTrue(all(path.startswith(("/search/","/repos/")) for
                             path in transport.paths))
 
+    def test_two_deleted_index_hits_can_recover_from_a_third_verified_source(self):
+        # Real production 2026-10-15 encountered two search-index results
+        # with missing empty default branches. Earlier per_page=2 ended
+        # without *any* inspected source even when another existed.
+        transport = FakeGitHub(names=[MISSING, BAD, GOOD], fail_stage="branch")
+        api = GitHub(transport=transport)
+        found = api.discover(TARGET)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0][0]["repository"], GOOD)
+        self.assertEqual(found[0][0]["code_sha256"], hashlib.sha256(BLOB).hexdigest())
+        self.assertEqual(len(api.discovery_unavailable), 2)
+        self.assertEqual({x["reason"] for x in api.discovery_unavailable},
+                         {"SEARCH_RESULT_SOURCE_404_NOT_INSPECTED"})
+        self.assertEqual(api.requests, 6)
+        self.assertIn("per_page=8", transport.paths[0])
+        self.assertLessEqual(api.requests, 24)
+
+    def test_search_pool_does_not_add_more_than_two_fully_verified_candidates(self):
+        extra = "ExampleOrg/third-inspect-not-authorized"
+        transport = FakeGitHub(names=[GOOD, "ExampleOrg/second-stable", extra])
+        api = GitHub(transport=transport)
+        result = api.discover(TARGET)
+        self.assertEqual(len(result), 2)
+        self.assertEqual({x[0]["repository"] for x in result},
+                         {GOOD, "ExampleOrg/second-stable"})
+        self.assertFalse(any(extra in path for path in transport.paths))
+        self.assertEqual(api.requests, 7)
+        self.assertEqual(api.discovery_unavailable, [])
+
+    def test_nonempty_404_still_fatal_before_inspecting_later_valid_source(self):
+        transport = FakeGitHub(
+            names=[MISSING, BAD, GOOD], fail_stage="branch", missing_size=5
+        )
+        api = GitHub(transport=transport)
+        with self.assertRaisesRegex(BrainError, "SOURCE_API_404"):
+            api.discover(TARGET)
+        self.assertEqual(api.requests, 2)
+        self.assertEqual(api.discovery_unavailable, [])
+        self.assertFalse(any(GOOD in path for path in transport.paths))
+
     def test_nonempty_or_ill_typed_branch_404_stays_fatal(self):
         for size in (1, 10, None, False, "0", 0.0):
             with self.subTest(size=size):

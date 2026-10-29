@@ -29,7 +29,17 @@ def validate_shared_value_memory()->dict[str,object]:
             "Value Memory source cursor drifted; reconformance required")
     require(mem_schema["additionalProperties"] is False,"memory schema must be closed")
     require(out_schema["additionalProperties"] is False,"outcome schema must be closed")
-    require(conf["schema_version"]=="1.0.0","conformance schema mismatch")
+    binding_variants=mem_schema["properties"]["verification_binding"]["oneOf"]
+    binding_schema=next(
+        variant for variant in binding_variants
+        if variant.get("type")=="object"
+    )
+    require(
+        binding_schema["properties"]["source_receipt_ref"]["pattern"]
+        ==r"^ai-business-os://truth/receipt/sha256/[0-9a-f]{64}$",
+        "memory schema source receipt namespace drifted",
+    )
+    require(conf["schema_version"]=="1.1.1","conformance schema mismatch")
     source=conf["source"]
     require(source["repository"]==pin["source_repository"],"source repository mismatch")
     require(source["revision"]==pin["source_revision"],"source revision mismatch")
@@ -50,7 +60,13 @@ def validate_shared_value_memory()->dict[str,object]:
       "objective_conditioning":"REQUIRED",
       "untested_memory_prior":"NEUTRAL",
       "recency_decay":"HALF_LIFE",
+      "duplicate_outcome_identity":"REJECT",
       "duplicate_event_per_memory":"REJECT",
+      "verified_memory_binding":"REQUIRED",
+      "canonical_source_receipt_reference":"REQUIRED",
+      "receipt_reference_hash_binding":"REQUIRED",
+      "unverified_memory_binding":"PROHIBITED",
+      "memory_record_integrity":"CANONICAL_SHA256_REQUIRED",
     },"canonical Value Memory semantics changed")
 
     require(ledger["schema_version"]=="1.0.0","ledger schema mismatch")

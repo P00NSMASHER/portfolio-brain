@@ -9,7 +9,8 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from truth.truth_adapter import (
     TruthIntegrationError, load_pin, project_receipt, project_truth_state,
-    validate_pin, validate_upstream_receipt, verify_source_identity,
+    validate_pin, validate_source_receipt_ref, validate_upstream_receipt,
+    verify_source_identity,
 )
 
 H="a"*64
@@ -50,12 +51,22 @@ def receipt(verdict,status):
         "receipt_hash":"",
     })
 
+def receipt_ref(value):
+    return "ai-business-os://truth/receipt/sha256/"+value["receipt_hash"]
+
 class TruthIntegrationTests(unittest.TestCase):
     def test_pin_is_exact_and_source_is_not_copied(self):
         pin=load_pin()
         self.assertEqual(pin["source_revision"],"c6276c80828d2632d5fee37cdaaf65f1d5b36427")
         self.assertEqual(pin["source_blob_sha"],"9b3eaa9412ece784c05e9c93dfcea04e1ec96105")
         self.assertFalse(pin["copied_source_code"])
+        self.assertEqual(pin["receipt_namespace"],{
+            "scheme":"ai-business-os",
+            "authority":"truth",
+            "path_prefix":"/receipt",
+            "digest_algorithm":"sha256",
+            "max_length":512,
+        })
         validate_pin(pin)
 
     def test_source_revision_drift_fails_closed(self):
@@ -90,12 +101,46 @@ class TruthIntegrationTests(unittest.TestCase):
         self.assertEqual(project_truth_state(receipt("CONTESTED","CONFLICTED")),"CONTRADICTED")
         self.assertEqual(project_truth_state(receipt("CONTESTED","CONTRADICTED")),"CONTRADICTED")
 
+    def test_evidence_id_cannot_support_and_contradict_same_finding(self):
+        r=receipt("PROVEN","SATISFIED")
+        r["findings"][0]["contradicting_evidence_ids"]=["support"]
+        resign_receipt(r)
+        with self.assertRaisesRegex(TruthIntegrationError,"cannot span lineage buckets"):
+            project_truth_state(r)
+
     def test_repeated_support_does_not_change_verdict_without_upstream_proof(self):
         r=receipt("NOT_PROVEN","INSUFFICIENT_INDEPENDENCE")
         r["findings"][0]["supporting_evidence_ids"]=["a","b","c","d","e"]
         resign_receipt(r)
         validate_upstream_receipt(r)
         self.assertEqual(project_truth_state(r),"UNKNOWN")
+
+    def test_non_finite_or_boolean_evaluated_at_is_invalid(self):
+        for invalid in (True,False,float("nan"),float("inf"),float("-inf")):
+            with self.subTest(evaluated_at=invalid):
+                r=receipt("PROVEN","SATISFIED")
+                r["evaluated_at"]=invalid
+                resign_receipt(r)
+                with self.assertRaisesRegex(TruthIntegrationError,"finite numeric"):
+                    project_truth_state(r)
+
+    def test_oversized_signed_integer_timestamps_reject_with_stable_error(self):
+        # Signed JSON remains hash-valid; arbitrary-size timestamps must not
+        # leak a raw OverflowError or lose numeric identity by float coercion.
+        for invalid in (10**309,-(10**309),2**53,-(2**53)):
+            with self.subTest(value=invalid):
+                row=receipt("PROVEN","SATISFIED")
+                row["evaluated_at"]=invalid
+                resign_receipt(row)
+                with self.assertRaisesRegex(TruthIntegrationError,"finite numeric"):
+                    project_truth_state(row)
+        for valid in (0,1,-1,1700000000,(2**53)-1,-((2**53)-1)):
+            with self.subTest(valid=valid):
+                row=receipt("PROVEN","SATISFIED")
+                row["evaluated_at"]=valid
+                resign_receipt(row)
+                self.assertEqual(project_truth_state(row),"VERIFIED")
+                self.assertEqual(row["evaluated_at"],valid)
 
     def test_tampered_receipt_body_fails_closed_even_when_shape_is_valid(self):
         r=receipt("PROVEN","SATISFIED")
@@ -112,23 +157,77 @@ class TruthIntegrationTests(unittest.TestCase):
 
     def test_projection_binds_upstream_provenance(self):
         pin=load_pin()
+        source=receipt("PROVEN","SATISFIED")
         p=project_receipt(
-            receipt("PROVEN","SATISFIED"),
+            source,
             project_id="PRJ-001",
             source_revision=pin["source_revision"],
             source_blob_sha=pin["source_blob_sha"],
-            source_receipt_ref="ai-business-os://truth/receipt/1",
+            source_receipt_ref=receipt_ref(source),
         )
         self.assertEqual(p["truth_state"],"VERIFIED")
         self.assertEqual(p["upstream_source"]["revision"],pin["source_revision"])
         self.assertEqual(p["upstream_source"]["blob_sha"],pin["source_blob_sha"])
         self.assertTrue(p["projection_hash"].startswith("sha256:"))
 
+    def test_projection_rejects_malformed_or_unregistered_project_identity(self):
+        pin=load_pin()
+        source=receipt("PROVEN","SATISFIED")
+        for project_id in (None,""," ","PRJ-999","not-a-project","prj-001"):
+            with self.subTest(project_id=project_id):
+                with self.assertRaisesRegex(TruthIntegrationError,"project_id"):
+                    project_receipt(
+                        source,
+                        project_id=project_id,
+                        source_revision=pin["source_revision"],
+                        source_blob_sha=pin["source_blob_sha"],
+                        source_receipt_ref=receipt_ref(source),
+                    )
+
+    def test_projection_rejects_malformed_registry_rows_and_duplicate_ids(self):
+        from unittest.mock import patch
+        pin=load_pin()
+        source=receipt("PROVEN","SATISFIED")
+        for rows in ([{"project_id":"PRJ-000"},None],
+                     [{"project_id":"PRJ-000"},{"project_id":[]}],
+                     [{"project_id":"PRJ-000"},{"project_id":"PRJ-000"}]):
+            with self.subTest(rows=rows),patch("pathlib.Path.read_text",return_value=json.dumps({"projects":rows})):
+                with self.assertRaisesRegex(TruthIntegrationError,"registry identities"):
+                    project_receipt(source,project_id="PRJ-000",
+                        source_revision=pin["source_revision"],source_blob_sha=pin["source_blob_sha"],
+                        source_receipt_ref=receipt_ref(source))
+
     def test_projection_hash_changes_when_source_receipt_changes(self):
         pin=load_pin()
-        a=project_receipt(receipt("PROVEN","SATISFIED"),project_id="PRJ-001",source_revision=pin["source_revision"],source_blob_sha=pin["source_blob_sha"],source_receipt_ref="receipt/1")
-        b=project_receipt(receipt("PROVEN","SATISFIED"),project_id="PRJ-001",source_revision=pin["source_revision"],source_blob_sha=pin["source_blob_sha"],source_receipt_ref="receipt/2")
+        first=receipt("PROVEN","SATISFIED")
+        second=receipt("PROVEN","SATISFIED")
+        second["claim_id"]="claim-2"
+        resign_receipt(second)
+        a=project_receipt(first,project_id="PRJ-001",source_revision=pin["source_revision"],source_blob_sha=pin["source_blob_sha"],source_receipt_ref=receipt_ref(first))
+        b=project_receipt(second,project_id="PRJ-001",source_revision=pin["source_revision"],source_blob_sha=pin["source_blob_sha"],source_receipt_ref=receipt_ref(second))
         self.assertNotEqual(a["projection_hash"],b["projection_hash"])
+
+    def test_receipt_reference_namespace_and_digest_fail_closed(self):
+        source=receipt("PROVEN","SATISFIED")
+        expected="sha256:"+source["receipt_hash"]
+        valid=receipt_ref(source)
+        self.assertEqual(validate_source_receipt_ref(valid,expected_receipt_hash=expected),valid)
+        invalid=(
+            None,"","   ",42,
+            "javascript://truth/receipt/sha256/"+source["receipt_hash"],
+            "file://localhost/etc/sha256/"+source["receipt_hash"],
+            "https://127.0.0.1/receipt/sha256/"+source["receipt_hash"],
+            valid+"?token=SYNTHETIC",
+            valid+"#fragment",
+            valid+"\nRECOVERY-INJECTION",
+            "AI-business-os://truth/receipt/sha256/"+source["receipt_hash"],
+            "ai-business-os://truth/other/sha256/"+source["receipt_hash"],
+            "ai-business-os://truth/receipt/sha256/"+"0"*64,
+        )
+        for value in invalid:
+            with self.subTest(value=str(value)[:80]):
+                with self.assertRaises(TruthIntegrationError):
+                    validate_source_receipt_ref(value,expected_receipt_hash=expected)
 
     def test_optional_stale_finding_does_not_override_required_satisfied(self):
         r=receipt("PROVEN","SATISFIED")
@@ -138,4 +237,3 @@ class TruthIntegrationTests(unittest.TestCase):
 
 if __name__=="__main__":
     unittest.main()
-

@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "baseline_source": "d25b54041341089482ad55e5d270171879e186b1",
+  "scope": "V9 program; unknown is not zero. Do not import v8 or human-mediated outcomes as v9 results.",
+  "metrics": {
+    "autonomous_repairs_delivered": {
+      "value": null,
+      "status": "UNMEASURED",
+      "evidence": []
+    },
+    "mean_time_to_diagnose_seconds": {
+      "value": null,
+      "status": "UNMEASURED",
+      "evidence": []
+    },
+    "mean_time_to_recover_seconds": {
+      "value": null,
+      "status": "UNMEASURED",
+      "evidence": []
+    },
+    "recurring_failures_prevented": {
+      "value": null,
+      "status": "UNMEASURED",
+      "evidence": []
+    },
+    "human_interventions": {
+      "value": null,
+      "status": "UNMEASURED",
+      "evidence": []
+    },
+    "cross_repository_improvements_delivered": {
+      "value": null,
+      "status": "UNMEASURED",
+      "evidence": []
+    },
+    "critical_regressions_detected": {
+      "value": null,
+      "status": "UNMEASURED",
+      "evidence": []
+    },
+    "deployment_reliability": {
+      "value": null,
+      "status": "UNMEASURED",
+      "evidence": []
+    },
+    "rollback_reliability": {
+      "value": null,
+      "status": "UNMEASURED",
+      "evidence": []
+    },
+    "reusable_capabilities_created": {
+      "value": null,
+      "status": "UNMEASURED",
+      "evidence": []
+    },
+    "performance_improvement": {
+      "value": null,
+      "status": "UNMEASURED",
+      "evidence": []
+    },
+    "resource_consumption": {
+      "value": null,
+      "status": "UNMEASURED",
+      "evidence": []
+    },
+    "verified_research_outcomes": {
+      "value": null,
+      "status": "UNMEASURED",
+      "evidence": []
+    },
+    "new_functionality_delivered": {
+      "value": null,
+      "status": "UNMEASURED",
+      "evidence": []
+    }
+  }
+}

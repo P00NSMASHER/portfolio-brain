@@ -1,9 +1,8 @@
 # Portfolio Brain replacement
 
-The product goal is a progressively more useful research and engineering assistant
-for a business portfolio: gather information, discover code, learn from measured
-outcomes, conduct experiments, and find commercial hypotheses. Financial holdings
-analysis is an optional explicitly supplied-input capability, not the primary product.
+The mission is autonomous research, maintenance, repairs and useful upgrades across
+all registered projects. Prioritize reliability, correctness, usability and reduced
+manual work. Revenue and financial holdings are optional project-specific inputs.
 
 ```mermaid
 flowchart TD
@@ -17,8 +16,8 @@ flowchart TD
 ```
 
 Three runtime responsibilities: source acquisition, state authority, and intelligence.
-Reporting and the reviewed experiment are ordinary library code, not services. One
-hourly workflow owns execution. No legacy package, artifact namespace, reducer,
+Reporting and the reviewed experiment are ordinary library code, not services. The existing
+scheduled core owns execution; v8 adds no second scheduler. No legacy package, artifact namespace, reducer,
 writer lock, agent heartbeat, cost governor, or orphaned-run cleanup is imported by
 `brain/`. The existing protected merge verifier is preserved byte-identically.
 
@@ -216,3 +215,25 @@ completed soak is implied by an hourly scheduled cycle.
 | Exact-main hosted pre-arm | NOT TESTED here | Main-only live cycle must publish and verify doctor/delivery |
 | Lengthy soak and post-soak | NOT TESTED | Explicit authorization required; no soak launched |
 | Legacy orphan repair | BLOCKED | GitHub run37655516971 remains queued; issue640 stays open |
+
+
+## V8 engineering integration
+
+The supported owner interface is `python -m brain.v8 cycle`. It consumes the
+already-collected, source-bound project report and uses the v8 kernel to issue
+at most five fair, incident-first owner handoffs. The optional existing-core
+step emits a separate diagnostic artifact; it does not write the canonical DB,
+grant permissions, execute fetched code or certify release. An optional-step
+failure is not a successful v8 handoff and must remain visible in original logs.
+
+Project contracts, recipe tests, deployed asset observations, private task
+reconciliation, recovery supervision and outcome memory have separate modules
+under `brain/v8`. Their supported capabilities and remaining production gates
+are in [V8_ENGINEERING_LOOP.md](V8_ENGINEERING_LOOP.md). The current kernel refuses
+release-state advancement without an independent adapter.
+
+The legacy packages remain CI dependencies: Foundation explicitly compiles and
+executes their validation CLIs and regressions. The established core, clock,
+state schema and signed provenance path remain active. No package can be removed
+based solely on version age or absence from static `brain` imports. Preserve
+source/state history, existing watchdog recovery and protected verification.

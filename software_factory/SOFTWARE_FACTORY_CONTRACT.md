@@ -38,6 +38,8 @@ Candidate submission requires:
 - test receipt hash(es);
 - immutable diff hash.
 
+Independent verification must supply the canonical candidate-binding hash covering the factory work identity, repository, base/branch/attempt, exact commit, changed paths, test commands, test receipt hashes, and diff hash. The verifier receipt stores that binding, and PR creation rechecks it before emitting a handoff packet.
+
 A README-only or untested candidate cannot become VERIFYING/PR-ready.
 
 ## GitHub executor

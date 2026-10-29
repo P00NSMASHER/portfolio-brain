@@ -39,10 +39,6 @@ def _time(value: str | None) -> datetime | None:
     return dt.astimezone(timezone.utc)
 
 
-def _iso_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
-
-
 def _zero_usage() -> dict[str,Any]:
     return {k:(0.0 if k=="cost_usd" else 0) for k in USAGE_FIELDS}
 

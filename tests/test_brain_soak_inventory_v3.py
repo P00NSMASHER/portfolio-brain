@@ -66,3 +66,19 @@ class ProviderInventoryTests(unittest.TestCase):
         result=collect_core_run_inventory(API([{'total_count':0,'workflow_runs':[]}]),started_at=START,ended_at=END)
         self.assertEqual(result['core_count'],0)
         self.assertFalse(result['soak_pass'])
+
+    def test_green_rerun_cannot_hide_failed_original_attempt(self):
+        record = row(11)
+        record['run_attempt'] = 2
+        with self.assertRaisesRegex(EvidenceError, 'INVENTORY_RERUN_REQUIRES_ATTEMPT_CENSUS'):
+            collect_core_run_inventory(API([{'total_count':1,'workflow_runs':[record]}]),
+                                       started_at=START, ended_at=END)
+
+    def test_malformed_attempt_cannot_claim_complete_coverage(self):
+        for value in (True, False, 0, -1, 1.0, '1', None):
+            with self.subTest(value=value):
+                record = row(11)
+                record['run_attempt'] = value
+                with self.assertRaisesRegex(EvidenceError, 'INVENTORY_RUN_ATTEMPT_INVALID'):
+                    collect_core_run_inventory(API([{'total_count':1,'workflow_runs':[record]}]),
+                                               started_at=START, ended_at=END)

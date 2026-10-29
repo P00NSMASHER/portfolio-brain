@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "ACTUAL_LOCAL_FIXED_RECIPE_EXECUTION_ON_AUTHENTIC_SOURCE",
+  "observed_at": "2026-10-18T04:23:05Z",
+  "repository": "P00NSMASHER/permitplate-nyc",
+  "source_head_sha": "cf0b459217245a7799550104cc37a9bad462bdf2",
+  "source_path": ".github/workflows/permitplate-tests.yml",
+  "source_git_blob": "167cf0a263b41da50927b300decdbce6ecadeaf9",
+  "source_sha256": "1b5521af1a05d25f8323a6cd9f612f4595711dce070c3ad615ba9f8d433cfa23",
+  "adapter_scope": "LOCAL_GENERATED_REGRESSION_ONLY",
+  "original_returncode": 1,
+  "corrected_returncode": 0,
+  "first_process_reused_result": false,
+  "second_process_reused_result": true,
+  "journal_identical_after_restart": true,
+  "journal_record_count": 9,
+  "journal_tip": "4f2729f1650cdf309a331be9991b2645efc750490439b7f8bb24ea9e37f81715",
+  "artifact_sha256": "bae3eaba613749a0da7d4479b5a4607b3b3813d8e99b7384c77680cff226ffa3",
+  "patch_sha256": "257b6ea703c9beac4a59bf0494e1486dc71b8727c8c1aba37042fea111565365",
+  "regression_sha256": "c31a3e559e1473d5dcc129ce8a4f4f909d3fb2e4b21c74fc470a8f2f42c254e6",
+  "provider_calls": 0,
+  "target_repository_writes": 0,
+  "production_accepted": false,
+  "independent_acceptance": false,
+  "limitations": [
+    "Local result produced by implementation session, independently reproducible through committed tests",
+    "Fixed generated regression only; target application code and actual GitHub workflow not executed",
+    "No OS sandbox, no release authority, no live deployment or portfolio outcome"
+  ],
+  "implementation_file_sha256": {
+    "brain/v9/local_recipe.py": "185e9ce25755877bb92b040344e946b9b9e846de75d7524f3f4aa0336cc526a6",
+    "brain/v9/__main__.py": "a48449febcff2d625d24890b8ac51de33ac63f33594afd3900f70122a72d834e",
+    "brain/repair_patch_executor.py": "2892b789cb7332094d47f3facb8803c6ba77ae2d20013c2f82975d757cc153b8"
+  }
+}
