@@ -325,7 +325,7 @@ class CheckHistoryCapacityTests(unittest.TestCase):
                         elif mutation == "total": result["total_count"] = 533
                         else: return []
                     return result
-                with self.assertRaisesRegex(BrainError, "CHECK_COVERAGE_(AMBIGUOUS|CHANGED)"):
+                with self.assertRaisesRegex(BrainError, "CHECK_COVERAGE_(AMBIGUOUS|CHANGED|UNAVAILABLE)"):
                     GitHub(transport=transport).observe(REPO)
                 self.assertEqual(provider.calls.count(BRANCH), 1)
 
@@ -348,3 +348,55 @@ class CheckHistoryCapacityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ChangingHistoryRetryTests(unittest.TestCase):
+    def test_retry_discards_partial_pages_and_accepts_complete_fresh_history(self):
+        provider=Provider([check(i) for i in range(1,102)])
+        def transport(path):
+            result=provider(path)
+            if path.endswith('&page=2') and provider.calls.count(CHECKS)==1:
+                result['total_count']=102
+                provider.rows=[check(i) for i in range(1001,1103)]
+            return result
+        api=GitHub(transport=transport)
+        from unittest.mock import patch
+        with patch('brain.adapters.time.sleep') as sleep:
+            payload,_=api.observe(REPO)
+        self.assertEqual(len(payload['checks']),102)
+        self.assertTrue(all(int(r['url'].rsplit('/',1)[1])>=1001 for r in payload['checks']))
+        self.assertEqual(api.requests,7)
+        self.assertEqual(provider.calls.count(CHECKS),2)
+        self.assertEqual(provider.calls.count(BRANCH),2)
+        sleep.assert_called_once_with(1)
+
+    def test_retry_exhaustion_preserves_failure_and_shared_budget(self):
+        from unittest.mock import patch
+        for budget,reason,expected in [(24,'CHECK_COVERAGE_CHANGED',6),(5,'CHECK_COVERAGE_BUDGET_EXCEEDED',4)]:
+            provider=Provider([check(i) for i in range(1,102)],page_totals={1:101,2:102})
+            api=GitHub(transport=provider,max_requests=budget)
+            with patch('brain.adapters.time.sleep'),self.assertRaisesRegex(BrainError,reason):
+                api.observe(REPO)
+            self.assertEqual(api.requests,expected)
+            self.assertEqual(provider.calls.count(BRANCH),1)
+
+    def test_malformed_later_page_is_not_retried(self):
+        provider=Provider([check(i) for i in range(1,102)])
+        def transport(path):
+            value=provider(path)
+            return [] if path.endswith('&page=2') else value
+        from unittest.mock import patch
+        with patch('brain.adapters.time.sleep') as sleep,self.assertRaisesRegex(BrainError,'CHECK_COVERAGE_UNAVAILABLE'):
+            GitHub(transport=transport).observe(REPO)
+        sleep.assert_not_called()
+        self.assertEqual(provider.calls.count(CHECKS),1)
+
+    def test_invalid_page_total_is_never_retried(self):
+        from unittest.mock import patch
+        for total in (-1,True,None):
+            provider=Provider([check(i) for i in range(1,102)],page_totals={2:total})
+            with self.subTest(total=total),patch('brain.adapters.time.sleep') as sleep:
+                with self.assertRaisesRegex(BrainError,'CHECK_COVERAGE_UNAVAILABLE'):
+                    GitHub(transport=provider).observe(REPO)
+                sleep.assert_not_called()
+                self.assertEqual(provider.calls.count(CHECKS),1)
