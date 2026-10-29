@@ -1,6 +1,6 @@
 # Agent Data Tools x402 — standalone seller
 
-[![Standalone CI](https://github.com/P00NSMASHER/portfolio-brain/actions/workflows/agent-data-tools-standalone.yml/badge.svg?branch=agent-data-tools-standalone)](https://github.com/P00NSMASHER/portfolio-brain/actions/workflows/agent-data-tools-standalone.yml?query=branch%3Aagent-data-tools-standalone)
+Historical standalone branch test: [successful original mocked-contract run](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/40973212283). This link is historical proof, not a currently installed workflow.
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/P00NSMASHER/portfolio-brain/tree/agent-data-tools-standalone)
 
@@ -52,14 +52,14 @@ The service verifies payment before doing paid work, obtains a successful author
 
 ## Verification gates
 
-CI runs all of the following on the isolated branch:
+The original isolated-branch workflow is preserved as an **inert recipe** at `ci-reference.yml`, not installed under `.github/workflows/`. This intentionally preserves protected main's reviewed active-workflow inventory. The mock contract checks can be reproduced locally with `npm test`; a future independent release must explicitly requalify any live checks:
 
 1. contract tests for public discovery and all eight unpaid HTTP 402 challenges;
 2. exact Base USDC / `USD Coin` payment metadata checks;
 3. mocked verify → data → settle ordering plus no-settle-on-upstream-failure;
 4. deterministic mock-payment contracts, never settling real payments;
-5. `@agentcash/discovery` origin discovery in the isolated CI job;
-6. `@agentcash/discovery` checks against every paid route;
+5. `@agentcash/discovery` origin discovery in the earlier isolated test recipe;
+6. `@agentcash/discovery` checks against every paid route in the earlier isolated test recipe;
 7. warning-free discovery enforcement.
 
 ## Live upstream qualification (not a CI release pass)
