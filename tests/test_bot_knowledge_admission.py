@@ -69,5 +69,47 @@ class BotKnowledgeTests(unittest.TestCase):
         with self.assertRaises(BotAdmissionError):
             foundation_green(checks,B)
 
+    def test_duplicate_validate_check_is_not_laundered_by_one_green_issuer(self):
+        checks={"total_count":2,"check_runs":[
+            {"name":"validate","head_sha":B,"status":"completed",
+             "conclusion":"success","app":{"id":15368}},
+            {"name":"validate","head_sha":A,"status":"completed",
+             "conclusion":"failure","app":{"id":999}},
+        ]}
+        with self.assertRaisesRegex(BotAdmissionError,
+                                    "FOUNDATION_CHECK_MISSING_OR_AMBIGUOUS"):
+            foundation_green(checks,B)
+
+    def test_wrong_head_and_incomplete_original_check_page_fail_closed(self):
+        approved={"name":"validate","head_sha":B,"status":"completed",
+                  "conclusion":"success","app":{"id":15368}}
+        for checks in (
+            {"total_count":2,"check_runs":[approved]},
+            {"total_count":1,"check_runs":[dict(approved,head_sha=A)]},
+            {"total_count":1,"check_runs":[dict(approved,conclusion="neutral")]},
+            {"total_count":1,"check_runs":[dict(approved,app={"id":0})]},
+            {"total_count":1,"check_runs":[None]},
+            {"total_count":True,"check_runs":[approved]},
+        ):
+            with self.subTest(checks=checks), self.assertRaises(BotAdmissionError):
+                foundation_green(checks,B)
+
+    def test_nonfinite_and_duplicate_json_values_never_become_admission(self):
+        pr, main, comparison, original = fixture()
+        rows = json.loads(original.decode())["sources"]
+        rows[0]["matched_terms"].append(float("nan"))
+        payload = json.dumps(dict(
+            schema_version=2,
+            scope="STRUCTURAL_REUSE_KNOWLEDGE_NOT_EXECUTED_OR_REVENUE_VERIFIED",
+            sources=rows,
+            fingerprint="f"*64,
+        )).encode()
+        with self.assertRaisesRegex(BotAdmissionError,
+                                    "KNOWLEDGE_JSON_INVALID"):
+            inspect(pr,main,comparison,payload,number=688,head_sha=B)
+        broken = original[:-1] + b', "schema_version":2}'
+        with self.assertRaises(BotAdmissionError):
+            inspect(pr,main,comparison,broken,number=688,head_sha=B)
+
 if __name__=="__main__":
     unittest.main()
