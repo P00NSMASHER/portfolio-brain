@@ -92,6 +92,16 @@ jobs:
         run: python -m operations.validate_operating_mode
       - name: Run regression tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Verify isolated seller protocol without npm or network
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd services/agent-data-tools-standalone
+          node --version
+          node --check src/data.mjs
+          node --check src/server.mjs
+          node --check src/x402.mjs
+          node --test --test-concurrency=1 test/protocol-security.test.mjs
       # This additional lane checks out the immutable PR head separately.
       # The existing required "validate" suite above checks GitHub's
       # synthetic merge tree; its artifacts must not be relabeled as HEAD.
