@@ -38,6 +38,14 @@ The proposed fixes add **bounded original job re-reads** to V8 repair core admis
 
 Both source code paths are bound by new immutable Git blob pins in their trusted workflows and active policy validator. Mock-only adversarial tests cover temporary completion, persistent partial steps, explicit negative steps, wrong attempt, job identity drift, source drift, quota/forbidden denials and exhausted GitHub transport.
 
+## Additional original state-push defect (October 30)
+
+- [Brain core 41117144407](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/41117144407) failed its original state publication step with `git push` HTTP **408**: `RPC failed`, `send-pack: unexpected disconnect`, and `Everything up-to-date` appearing together. The workflow originally exited immediately on the nonzero push status and could not determine whether the Git remote had accepted the exact commit.
+- Original read-only state-branch history later contained neighboring `41113037967` and `41118500349` committed cycles, but no `41117144407` publication in the inspected recent history. The failed run **remains failed**; a console message is not publication proof.
+- The repair modifies **only** the existing `.github/workflows/brain-cycle.yml` state publication shell. One original non-force Git push is still attempted. Whether it succeeds, times out, or disconnects, the workflow requires the **exact local Git commit SHA** to be observed through the original remote GitHub branch GET before issuing its delivery receipt. The previous parent may be seen during a maximum of six bounded readbacks; a foreign SHA or exhausted readback denies success. **Never issue a second Git write** merely because the first transport returned an unknown result.
+- Seven offline, black-box tests in `tests/test_brain_state_push_uncertain.py` extract and execute the actual production Bash segment under mocked `git`, `gh`, and `sleep`. They cover ambiguous HTTP 408 with exact publication, persistent parent, foreign writer, successful push with delayed visibility, unchanged state, remote API errors, and local commit failure. Nothing sends live Git writes or HTTP calls.
+- Any genuinely undelivered prior state transaction still fails closed. The new code prevents false failure for a **genuinely delivered** exact commit after a transport ambiguity; it does not manufacture a state commit, replay the failed run, or treat stdout as confirmation.
+
 ## Release and resumption boundary
 
 This is a draft repair until exact-head Foundation `validate` from App 15368, independent `portfolio-phase1-gate` from App 5121826 and review of the complete changed file list succeed, and protected ruleset 24182301 remains active with zero bypass. Do not bypass any permission or rule to merge.
