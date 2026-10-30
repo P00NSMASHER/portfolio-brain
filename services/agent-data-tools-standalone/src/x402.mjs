@@ -214,7 +214,10 @@ export async function verifyPayment(path, paymentPayload) {
   const result = await facilitatorPost('verify', paymentPayload, reqs);
   // A body flag cannot override a failed HTTP response from the facilitator.
   const ok = result.status >= 200 && result.status < 300;
-  const valid = ok && (result.body?.isValid === true || result.body?.success === true);
+  // A generic success flag is not proof of a valid payment. Reject absent or
+  // contradictory isValid and malformed optional success values fail-closed.
+  const valid = ok && result.body?.isValid === true &&
+    (result.body.success === undefined || result.body.success === true);
   return {
     valid,
     reason: valid ? 'verified' : 'payment_verification_failed',
