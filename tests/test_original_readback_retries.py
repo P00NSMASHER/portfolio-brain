@@ -66,6 +66,15 @@ class RepairAPI:
 
 
 class OriginalRepairReadbackTests(unittest.TestCase):
+    def test_first_complete_snapshot_does_not_make_unneeded_api_reads(self):
+        api = RepairAPI([core_step_doc(repair_steps())])
+        pauses = []
+        receipt = repair.admit(api, SOURCE, CORE, sleep=pauses.append)
+        self.assertEqual(receipt["status"], "ORIGINAL_AUTOMATIC_CORE_AUTHENTICATED")
+        self.assertEqual(api.calls.count(JOB_PATH), 1)
+        self.assertEqual(api.calls.count(ROOT + "branches/main"), 1)
+        self.assertEqual(pauses, [])
+
     def test_incomplete_snapshot_recovers_without_minting_token(self):
         complete = repair_steps()
         partial = dict(complete)
