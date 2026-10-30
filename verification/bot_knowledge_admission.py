@@ -28,6 +28,10 @@ def _unique(pairs):
     return doc
 
 
+def _reject_nonfinite(value):
+    raise BotAdmissionError("KNOWLEDGE_JSON_NONFINITE")
+
+
 def inspect(pr, main, comparison, candidate_bytes, *, number, head_sha):
     req(type(number) is int and 0 < number < 1000000000
         and type(head_sha) is str and SHA.fullmatch(head_sha),
@@ -57,7 +61,7 @@ def inspect(pr, main, comparison, candidate_bytes, *, number, head_sha):
         "KNOWLEDGE_BYTES_BOUNDED")
     try:
         data = json.loads(candidate_bytes.decode("utf-8"),
-                          object_pairs_hook=_unique)
+                          object_pairs_hook=_unique, parse_constant=_reject_nonfinite)
     except (UnicodeError, ValueError, RecursionError) as exc:
         raise BotAdmissionError("KNOWLEDGE_JSON_INVALID") from exc
     req(type(data) is dict and set(data) == {
@@ -99,16 +103,27 @@ def inspect(pr, main, comparison, candidate_bytes, *, number, head_sha):
 
 
 def foundation_green(checks, sha):
+    """Require exactly one original issuer-bound Foundation check on this head.
+
+    A duplicate status from a different App/head cannot be ignored merely
+    because another row is green. This is review evidence only, not merge
+    authorization or 12-hour acceptance.
+    """
+    req(type(sha) is str and SHA.fullmatch(sha), "FOUNDATION_SHA_INVALID")
     req(type(checks) is dict and type(checks.get("total_count")) is int
         and 0 <= checks["total_count"] <= 100
         and type(checks.get("check_runs")) is list
-        and len(checks["check_runs"]) == checks["total_count"],
+        and len(checks["check_runs"]) == checks["total_count"]
+        and all(type(row) is dict for row in checks["check_runs"]),
         "INCOMPLETE_FOUNDATION_CHECK_PAGE")
-    req(any(type(x) is dict and x.get("name") == "validate"
-            and x.get("head_sha") == sha
-            and (x.get("app") or {}).get("id") == 15368
-            and x.get("status") == "completed"
-            and x.get("conclusion") == "success"
-            for x in checks["check_runs"]),
+    matching = [row for row in checks["check_runs"]
+                if row.get("name") == "validate"]
+    req(len(matching) == 1, "FOUNDATION_CHECK_MISSING_OR_AMBIGUOUS")
+    row = matching[0]
+    req(row.get("head_sha") == sha
+        and type(row.get("app")) is dict
+        and row["app"].get("id") == 15368
+        and row.get("status") == "completed"
+        and row.get("conclusion") == "success",
         "EXACT_HEAD_FOUNDATION_NOT_GREEN")
     return True
