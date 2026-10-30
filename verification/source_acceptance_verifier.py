@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 import base64
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import hashlib
 import io
 import json
@@ -37,7 +37,8 @@ APPROVAL_BASIS = (
     "artifacts, state ancestry and terminal SQLite replay. Separate App attestation required."
 )
 REQUIRED_CRITERIA = {
-    "minimum_completed_span_seconds": 21600,
+    "minimum_completed_span_seconds": 43200,
+    "requires_terminal_30_minute_repair_follow_through": True,
     "maximum_intercore_gap_seconds": 5400,
     "required_original_first_attempt_success": True,
     "excludes_push_triggered_completions": True,
@@ -394,7 +395,8 @@ def collect_original_runs(api: GitHubReadOnly, source: str, evidence: dict | Non
         req(automatic[0]["id"] == evidence.get("first_original_run_id")
             and automatic[-1]["id"] == evidence.get("terminal_original_run_id"),
             "acceptance endpoints mismatch")
-        req(span == evidence.get("completed_span_seconds") and span >= 21600
+        req(span == evidence.get("completed_span_seconds")
+            and span >= REQUIRED_CRITERIA["minimum_completed_span_seconds"]
             and max(gaps) == evidence.get("maximum_gap_seconds") and max(gaps) <= 5400,
             "acceptance timing mismatch")
         req(automatic[0]["completed"] == utc(evidence["first_original_monitor_completed_utc"])
@@ -404,6 +406,29 @@ def collect_original_runs(api: GitHubReadOnly, source: str, evidence: dict | Non
         "runs": proven, "automatic": automatic, "terminal": automatic[-1],
         "span": span, "maximum_gap": max(gaps), "signed_timestamps": signed,
     }
+
+
+def verify_terminal_repair_follow_through(
+    api: GitHubReadOnly, summary: dict, source: str, *, now=None,
+) -> None:
+    """Require the full 30-minute terminal interval and replay original repairs.
+
+    The observer's source-bounded window and repair verifier are reused here,
+    but the producer and independent App must each perform their own reads.
+    """
+    from verification.reliability_day import inventory, verify_repairs
+    cutoff = summary["terminal"]["completed"] + timedelta(minutes=30)
+    instant = datetime.now(timezone.utc) if now is None else now
+    req(isinstance(instant, datetime) and instant.tzinfo is not None
+        and instant >= cutoff,
+        "terminal 30-minute repair follow-through interval not complete")
+    repairs = inventory(
+        api, "/actions/workflows/v8-scoped-repair.yml/runs?branch=main&per_page=100&head_sha=" + source,
+    )
+    req(verify_repairs(
+        api, repairs, source, {row["id"] for row in summary["automatic"]},
+        cutoff=cutoff,
+    ), "original terminal repair follow-through incomplete")
 
 
 def _verify_receipt_contract(receipt: dict) -> None:
@@ -423,7 +448,7 @@ def _verify_receipt_contract(receipt: dict) -> None:
         and evidence.get("historical_adverse_automatic_cores_for_this_source") == []
         and evidence.get("prior_source_acceptance_is_not_transferable") is True
         and evidence.get("original_proof_status")
-            == "SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED",
+            == "TWELVE_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED",
         "acceptance original-run contract invalid")
     external = receipt.get("external_cloudflare_provider")
     req(type(external) is dict
@@ -451,6 +476,7 @@ def _verify_original_runs(api: GitHubReadOnly, receipt: dict, source: str) -> di
         and external.get("standalone_worker_invocation_never_counts_as_completed_cycle")
             is True,
         "external origin evidence mismatch")
+    verify_terminal_repair_follow_through(api, summary, source)
     return summary["terminal"]
 
 

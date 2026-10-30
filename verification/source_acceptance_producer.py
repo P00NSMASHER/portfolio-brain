@@ -19,7 +19,7 @@ from soak_v3.remote_probe import GitHubReadOnly
 from verification.source_acceptance_verifier import (
     APPROVAL_BASIS, REPOSITORY, REQUIRED_AUTHORITY_LIMITS, REQUIRED_CRITERIA,
     SCOPE, _decode_content, _verify_receipt_contract, collect_original_runs,
-    req, strict_json, verify_acceptance,
+    req, strict_json, verify_acceptance, verify_terminal_repair_follow_through,
 )
 
 
@@ -76,11 +76,17 @@ def _foundation_run(api: GitHubReadOnly, source: str) -> int:
 def build_receipt(api: GitHubReadOnly, source: str) -> tuple[dict, str]:
     main = api.json("/branches/main").get("commit", {}).get("sha")
     req(main == source, "current main changed before acceptance collection")
-    summary = collect_original_runs(api, source)
+    # Freeze the first bounded 12.5-hour observation: later cores cannot
+    # move its terminal and postpone legitimate repair follow-through forever.
+    from verification.reliability_day import CORE, Snapshot, inventory, window
+    rows = window(inventory(api, CORE + "&head_sha=" + source), source)
+    summary = collect_original_runs(Snapshot(api, rows), source)
     automatic = summary["automatic"]
     terminal = summary["terminal"]
-    req(summary["span"] >= 21600 and summary["maximum_gap"] <= 5400,
-        "six-hour automatic window not complete")
+    req(summary["span"] >= REQUIRED_CRITERIA["minimum_completed_span_seconds"]
+        and summary["maximum_gap"] <= REQUIRED_CRITERIA["maximum_intercore_gap_seconds"],
+        "12-hour automatic window not complete")
+    verify_terminal_repair_follow_through(api, summary, source)
     state = verify_source_state(
         api, state_commit=terminal["state_commit"], source_sha=source,
         expected_parent=terminal["state_parent"], expected_sequence=terminal["sequence"],
@@ -120,7 +126,7 @@ def build_receipt(api: GitHubReadOnly, source: str) -> tuple[dict, str]:
             "original_artifacts_sha256_size_crc_verified": True,
             "historical_adverse_automatic_cores_for_this_source": [],
             "prior_source_acceptance_is_not_transferable": True,
-            "original_proof_status": "SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED",
+            "original_proof_status": "TWELVE_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED",
         },
         "terminal_state_replay": {
             "source_sha": source,
