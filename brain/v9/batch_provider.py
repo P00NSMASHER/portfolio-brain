@@ -5,6 +5,11 @@ from brain.v9.batch_queue import BatchFault,PROJECTS,hashval
 REQUIRED={'validate':15368,'portfolio-phase1-gate':5121826}
 MAX_BYTES=2*1024*1024
 
+def _same_document(first, second):
+    # JSON comparison preserves number/bool distinctions lost by dict equality.
+    return json.dumps(first,sort_keys=True,allow_nan=False) == json.dumps(
+        second,sort_keys=True,allow_nan=False)
+
 def validate_original_checks(doc,sha):
     if not hashval(sha,40) or type(doc) is not dict: raise BatchFault('CHECK_SOURCE_INVALID')
     rows=doc.get('check_runs');total=doc.get('total_count')
@@ -91,19 +96,21 @@ class GitHubOriginalReader:
         marker='BRAIN_BATCH_OPERATION_ID: '+operation_id
         if (type(head) is not dict or type(base) is not dict
                 or type(head.get('repo')) is not dict or type(base.get('repo')) is not dict
-                or pr.get('number')!=number or pr.get('state')!='open'
+                or type(pr.get('number')) is not int or pr.get('number')!=number or pr.get('state')!='open'
                 or pr.get('draft') is not True or pr.get('merged') is not False
                 or head.get('sha')!=head_sha or head['repo'].get('full_name')!=repo
                 or base.get('ref')!='main' or base.get('sha')!=base_sha
                 or base['repo'].get('full_name')!=repo or type(pr.get('body')) is not str
                 or marker not in pr['body'].splitlines()):
             raise BatchFault('READBACK_DRAFT_OR_OPERATION_UNVERIFIED')
+        if not _same_document(pr,self._get(repo,'/pulls/'+str(number))):
+            raise BatchFault('READBACK_PR_CHANGED')
         second=self._get(repo,'/branches/main')
         if type(second.get('commit')) is not dict or second['commit'].get('sha')!=base_sha:
             raise BatchFault('READBACK_SOURCE_CHANGED')
         return dict(status='ORIGINAL_DRAFT_WRITE_OBSERVED_CHECKS_UNKNOWN',
                     repository=repo,base_sha=base_sha,candidate_sha=head_sha,
-                    pr_number=number,operation_id=operation_id,original_get_count=3,
+                    pr_number=number,operation_id=operation_id,original_get_count=4,
                     independent_check_verified=False,provider_writes=0,
                     production_accepted=False)
 
@@ -121,21 +128,26 @@ class GitHubOriginalReader:
         head=pr.get('head');base=pr.get('base')
         if (type(head) is not dict or type(base) is not dict
                 or type(head.get('repo')) is not dict or type(base.get('repo')) is not dict
-                or pr.get('number')!=number or pr.get('state')!='open'
+                or type(pr.get('number')) is not int or pr.get('number')!=number or pr.get('state')!='open'
                 or pr.get('draft') is not True or pr.get('merged') is not False
                 or head.get('sha')!=head_sha or head['repo'].get('full_name')!=repo
                 or base.get('ref')!='main' or base.get('sha')!=base_sha
                 or base['repo'].get('full_name')!=repo or type(pr.get('body')) is not str
                 or marker not in pr['body'].splitlines()):
             raise BatchFault('READBACK_DRAFT_OR_OPERATION_UNVERIFIED')
-        result=validate_original_checks(
-            self._get(repo,'/commits/'+head_sha+'/check-runs?per_page=100'),head_sha)
+        check_doc=self._get(repo,'/commits/'+head_sha+'/check-runs?per_page=100')
+        result=validate_original_checks(check_doc,head_sha)
+        if not _same_document(check_doc,self._get(
+                repo,'/commits/'+head_sha+'/check-runs?per_page=100')):
+            raise BatchFault('READBACK_CHECKS_CHANGED')
+        if not _same_document(pr,self._get(repo,'/pulls/'+str(number))):
+            raise BatchFault('READBACK_PR_CHANGED')
         second=self._get(repo,'/branches/main')
         if type(second.get('commit')) is not dict or second['commit'].get('sha')!=base_sha:
             raise BatchFault('READBACK_SOURCE_CHANGED')
         return dict(status='OBSERVED_BY_GITHUB_READBACK_NOT_RELEASED',
                     repository=repo,base_sha=base_sha,candidate_sha=head_sha,
                     pr_number=number,operation_id=operation_id,
-                    check_issuers=result['check_issuers'],original_get_count=4,
+                    check_issuers=result['check_issuers'],original_get_count=6,
                     production_accepted=False,six_hour_acceptance_passed=False,
                     provider_writes=0)

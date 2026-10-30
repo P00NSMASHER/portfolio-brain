@@ -61,7 +61,15 @@ A separate isolated deep smoke was used during development to verify live govern
 
 The 402 challenge includes x402 v2 Base USDC payment requirements plus Bazaar discovery metadata. The same-origin discovery document publishes the eight route URLs, accepted payment requirements, examples, tags, and service names. The Agent402-style manifest is available at `/.well-known/agent.json`.
 
-Catalog inclusion is settlement-driven on Bazaar-style facilitators: a public route still needs a successful paid settlement that carries the discovery extension before that facilitator can catalog it. Self-funded catalog-seeding payments should be tracked separately from outside-buyer revenue.
+PayAI Bazaar admission is **metadata-and-policy dependent**, not proof of a purchase. For x402 v2, participating buyers must preserve both `resource` and `extensions` from PAYMENT-REQUIRED in their payment payload. PayAI may queue catalog updates after either `/verify` or `/settle`; a verification-only flow with an appropriate signed payload can initiate discovery without transferring funds. Admission remains conditional, and an HTTP 402 probe plus the exact resource URL must validate. Do not self-fund or manufacture buyer transactions.
+
+### Verified public Pennsylvania seller (2026-10-23)
+
+The current canonical Pennsylvania best-match x402 resource is `https://pa-entity-x402.floot.app/_api/pa-entity-one` (without example query parameters). Its unpaid `?q=OpenAI` request returns HTTP 402, and Floot's `/.well-known/x402.json` advertises the same URL and Base USDC payment terms. PayAI's exact-URL `/discovery/listing-status` reports `listed:true`, `hidden:false`, and a healthy 402 reachability probe; its `/discovery/resources` public catalog also contains the Floot resource. The last catalog update is 2026-10-14, and catalog service metadata can be older than the current 402.
+
+**Do not substitute the unverified Netlify fallback as canonical.** As of October 23, the candidate `https://agent-data-tools-x402.netlify.app/api/pa-entity-one` and its `/.well-known/x402` return Netlify HTTP 404. PR #495 implemented a local adapter and tests but does not establish an actual production deployment. Netlify must be deployed and observed returning a live 402 before its URL is used for discovery or catalog diagnostics.
+
+Run a zero-payment live check with `node x402-render-gateway/scripts/bazaar-audit.mjs`. It uses GET only to compare live 402 challenges, manifest, PayAI listing-status, public catalog, and the fallback's deployment status. The default check fails if the **primary Floot** listing is unhealthy; use `--require-netlify` only when the Netlify deployment is expected to exist. Neither mode submits a payment nor invokes verify/settle. Review any proposed deployment or source-of-truth switch independently.
 
 
 ## Netlify free-host runtime
