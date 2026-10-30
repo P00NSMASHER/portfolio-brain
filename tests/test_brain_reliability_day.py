@@ -5,6 +5,15 @@ from verification.source_acceptance_verifier import SourceAcceptanceError
 class ObservationTests(unittest.TestCase):
     def test_short_window_cannot_pass(self):
         self.assertEqual(evaluate({'span':43199,'maximum_gap':1800})['status'],'COLLECTING')
+    def test_terminal_follow_through_never_passes_before_thirty_minutes(self):
+        from datetime import datetime, timedelta, timezone
+        from verification.reliability_day import terminal_follow_through_ready
+        terminal = {'completed': datetime(2026, 10, 29, 12, tzinfo=timezone.utc)}
+        self.assertFalse(terminal_follow_through_ready(
+            terminal, now=terminal['completed'] + timedelta(minutes=29, seconds=59)))
+        self.assertTrue(terminal_follow_through_ready(
+            terminal, now=terminal['completed'] + timedelta(minutes=30)))
+
     def test_twelve_hours_requires_bounded_gaps(self):
         result=evaluate({'span':43200,'maximum_gap':1800})
         self.assertEqual(result['status'],'PASS')
@@ -83,6 +92,38 @@ class CensusTests(unittest.TestCase):
         rows=[dict(id=3,head_sha='a',status='completed',conclusion='success',run_attempt=1)]
         self.assertFalse(verify_repairs(API(),rows,'a',{1}))
         self.assertTrue(verify_repairs(API(),rows,'a',{2}))
+
+    def test_repair_completed_after_cutoff_is_not_retrospective_proof(self):
+        from verification.reliability_day import verify_repairs
+        from verification.source_acceptance_verifier import utc
+        cutoff = utc('2026-10-29T12:30:00Z')
+        late = dict(id=7, head_sha='a', created_at='2026-10-29T12:00:00Z',
+                    updated_at='2026-10-29T12:31:00Z', status='completed',
+                    conclusion='success', run_attempt=1)
+        self.assertFalse(verify_repairs(None, [late], 'a', {14}, cutoff=cutoff))
+
+    def test_failed_late_repair_remains_adverse_historical_evidence(self):
+        from verification.reliability_day import verify_repairs
+        from verification.source_acceptance_verifier import utc
+        failed = dict(id=9, head_sha='a', created_at='2026-10-29T12:00:00Z',
+                      updated_at='2026-10-29T12:31:00Z', status='completed',
+                      conclusion='failure', run_attempt=1)
+        with self.assertRaises(SourceAcceptanceError):
+            verify_repairs(None, [failed], 'a', {14},
+                           cutoff=utc('2026-10-29T12:30:00Z'))
+
+    def test_late_uploaded_repair_artifact_does_not_retroactively_pass(self):
+        from verification.reliability_day import verify_repairs
+        from verification.source_acceptance_verifier import utc
+        class API:
+            def json(self, path):
+                return {'total_count': 1, 'artifacts': [{
+                    'id': 91, 'created_at': '2026-10-29T12:31:00Z'}]}
+        ontime_run = dict(id=8, head_sha='a', created_at='2026-10-29T12:00:00Z',
+                          updated_at='2026-10-29T12:03:00Z',
+                          status='completed', conclusion='success', run_attempt=1)
+        self.assertFalse(verify_repairs(API(), [ontime_run], 'a', {14},
+                                        cutoff=utc('2026-10-29T12:30:00Z')))
 
     def test_later_repairs_do_not_consume_window_budget(self):
         from verification.reliability_day import verify_repairs
