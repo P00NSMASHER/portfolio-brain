@@ -35,7 +35,7 @@ def legitimate_core(path, event="workflow_dispatch", original=True):
         return {"commit": {"sha": SHA}}
     if path == CORE_ROOT + "actions/runs/17":
         return dict(
-            name="brain-cycle-v2", path=".github/workflows/brain-cycle.yml",
+            id=17, name="brain-cycle-v2", path=".github/workflows/brain-cycle.yml",
             repository={"full_name": origin.REPOSITORY}, head_branch="main",
             head_sha=SHA, run_attempt=1, status="completed",
             conclusion="success", event=event)
@@ -44,6 +44,7 @@ def legitimate_core(path, event="workflow_dispatch", original=True):
             ["Verify independently signed Cloudflare Cron provenance"]
             if original else [])
         return {"total_count": 1, "jobs": [{
+            "id": 101, "run_id": 17, "run_attempt": 1, "head_sha": SHA,
             "name": "monitor", "status": "completed", "conclusion": "success",
             "steps": [{"name": n, "conclusion": "success"} for n in steps]
         }]}
