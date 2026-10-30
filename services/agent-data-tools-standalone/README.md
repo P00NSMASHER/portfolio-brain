@@ -1,73 +1,53 @@
-# Agent Data Tools x402 — standalone seller
+# Agent Data Tools x402 | isolated seller code
 
-Historical standalone branch test: [successful original mocked-contract run](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/40973212283). This link is historical proof, not a currently installed workflow.
+**State: tested source proposal, not deployed.** This is an optional standalone service in Portfolio Brain, not a replacement for its existing running gateway. No production Render configuration, protected branch rule, billing permission, credential or scheduled task is changed by including these files.
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/P00NSMASHER/portfolio-brain/tree/agent-data-tools-standalone)
+The code serves eight pay-per-call public-data tools and free discovery endpoints. A separate, approved launch is required before accepting customer payments. A historic [offline mock CI run](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/40973212283) passed; a historic [live Census smoke test](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/40972971832) failed with upstream HTTP 502. Both records are preserved, and neither certifies the code on its own.
 
-Quota-independent standalone seller for the x402 data-tool portfolio. This isolated branch does not modify Portfolio Brain production code.
+## Tools
 
-## Paid routes
+| Endpoint | Display price |
+|---|---:|
+| `/api/pa-entity-one` | $0.001 USDC |
+| `/api/pa-business` | $0.005 USDC |
+| `/api/vendor-intake-gate` | $0.020 USDC |
+| `/api/sec-filings` | $0.005 USDC |
+| `/api/us-address-geocode` | $0.005 USDC |
+| `/api/ofac-sdn-screen` | $0.005 USDC |
+| `/api/domain-rdap` | $0.005 USDC |
+| `/api/treasury-average-rates` | $0.005 USDC |
 
-- `/api/pa-entity-one` — $0.001 USDC
-- `/api/pa-business` — $0.005 USDC
-- `/api/vendor-intake-gate` — $0.020 USDC
-- `/api/sec-filings` — $0.005 USDC
-- `/api/us-address-geocode` — $0.005 USDC
-- `/api/ofac-sdn-screen` — $0.005 USDC
-- `/api/domain-rdap` — $0.005 USDC
-- `/api/treasury-average-rates` — $0.005 USDC
+Discovery and health routes remain unpaid: `/.well-known/x402`, `/.well-known/agent.json`, `/openapi.json`, `/llms.txt`, `/skill.md`, `/robots.txt`, `/sitemap.xml`, `/api/health`.
 
-## Discovery
+Sources are public Pennsylvania registry data, SEC EDGAR, Census geocoding, Treasury OFAC, IANA/authoritative RDAP and Treasury Fiscal Data. Source availability and permission remain service-specific and must be checked again before a launch.
 
-These surfaces are deliberately free and unpaywalled:
+## Getting started, locally
 
-- `/.well-known/x402`
-- `/.well-known/agent.json`
-- `/openapi.json`
-- `/llms.txt`
-- `/skill.md`
-- `/robots.txt`
-- `/sitemap.xml`
-- `/api/health`
+Requires Node.js 20+ and network access **only to install the declared Express dependency**. After dependencies are installed, the following tests use mocked payment/provider responses and make no live paid requests.
 
-## Payment contract
+```sh
+npm install
+npm run test:protocol
+npm test
+PORT=3000 npm start
+```
 
-- x402 v2 exact
-- Base `eip155:8453`
-- Base USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
-- EIP-712 domain name `USD Coin`, version `2`
-- Seller wallet `0x708f7b52b56eafd7fc1de65fc7752ed732914021`
-- PayAI facilitator
+Visit `http://127.0.0.1:3000/api/health`. Unpaid GETs to any paid route return a testable HTTP 402 challenge, never settle a payment without a valid signed payload. Local testing uses a loopback-only host and peer; spoofed public `Host` and `X-Forwarded-Proto` values are not trusted.
 
-The service verifies payment before doing paid work, obtains a successful authoritative result, and settles only after that result exists. Validation/upstream failures do not settle.
+## Security and money controls
 
-## Authoritative sources
+- x402 v2 exact, Base `eip155:8453`, Base USDC asset `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`, seller pay-to `0x708f7b52b56eafd7fc1de65fc7752ed732914021`, PayAI facilitator.
+- A **public HTTPS deployment must set `PUBLIC_ORIGIN` to a reviewed HTTPS origin**, such as `https://tools.example.com`, with no path, query or embedded user credentials. It is never inferred from a client-supplied `Host` or proxy header. Without a valid origin, public paid/discovery challenges fail closed.
+- Validate request inputs; verify the payment only against a successful facilitator HTTP response; fetch source data only after verification; settle **once** after a successful upstream result; serve paid data only when settlement has been positively confirmed.
+- An ambiguous settlement may already have charged a payment. **Never automatically repeat that settlement POST.** Return `503` with `paymentState: unresolved` and `retrySamePayment: false`, requiring independent reconciliation before any subsequent financial action.
+- Mocked fail-closed tests cover forged host/origin, HTTP-error success flags, duplicate-settlement risk, upstream failures, no-payment challenges and ordinary success. They are NOT live customer-payment certification.
 
-- Pennsylvania Department of State via data.pa.gov
-- U.S. SEC EDGAR
-- U.S. Census Bureau Geocoding Services
-- U.S. Treasury OFAC SDN exports
-- IANA RDAP bootstrap + authoritative registry RDAP
-- U.S. Treasury Fiscal Data
+The existing protected Foundation suite also syntax-checks the standalone JavaScript and executes its pure Node.js protocol-security tests without Express, paid API calls or a network connection. Full `npm test` additionally covers the Express route contract using local HTTP only.
 
-## Verification gates
+## Qualification and deployment hold
 
-The original isolated-branch workflow is preserved as an **inert recipe** at `ci-reference.yml`, not installed under `.github/workflows/`. This intentionally preserves protected main's reviewed active-workflow inventory. The mock contract checks can be reproduced locally with `npm test`; a future independent release must explicitly requalify any live checks:
+`npm run test:upstreams` is intentionally **outside ordinary CI** because it calls live public third-party services. Do not run it without specific authorization. The previously observed Census 502 must be independently reproduced and addressed if it remains current. A production launch also requires host, wallet/payee, facilitator, real payment verification and reconciliation acceptance, security review and explicit approval for deployment and customer traffic.
 
-1. contract tests for public discovery and all eight unpaid HTTP 402 challenges;
-2. exact Base USDC / `USD Coin` payment metadata checks;
-3. mocked verify → data → settle ordering plus no-settle-on-upstream-failure;
-4. deterministic mock-payment contracts, never settling real payments;
-5. `@agentcash/discovery` origin discovery in the earlier isolated test recipe;
-6. `@agentcash/discovery` checks against every paid route in the earlier isolated test recipe;
-7. warning-free discovery enforcement.
+The repository-root `render.yaml` still references the existing `x402-render-gateway`; it is never repointed by this code. No new active GitHub Actions workflow is installed for this package. The original inactive workflow recipe remains on the source PR branch for historical review, not as an enabled task.
 
-## Live upstream qualification (not a CI release pass)
-
-The original [standalone CI run 40972971832](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/40972971832) failed its live upstream smoke on an actual U.S. Census 502 response. That failure remains preserved and **does not establish readiness**. The live upstream check is now separate from deterministic mock-payment CI so external outages cannot masquerade as a code regression. A future deployment requires a new successful `npm run test:upstreams` on an explicitly authorized network plus independent upstream/settlement security review. No real payment tests are authorized.
-
-## Render deployment
-
-The repository-root `render.yaml` is intentionally **unchanged from protected main** and continues to point to the existing `x402-render-gateway` service. This new standalone implementation is an isolated, **non-deployed code proposal**. It must not repoint the existing service or change its auto-deploy settings. Hosting location, authenticated payments, spending, customer use, and any external publication require separate authorization and independent tests; the optional Deploy-to-Render link above does not initiate deployment.
-
-No backend secrets are required. `PUBLIC_ORIGIN` is not required because discovery URLs are derived from the incoming public host.
+**Current claim:** independently reviewable functionality and mocked/offline tests, not a deployed seller, realized revenue or permission to handle payments.
