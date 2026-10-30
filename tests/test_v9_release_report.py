@@ -21,7 +21,7 @@ def census():
         "verified_original_cores": 3,
         "completion_span_seconds": 3766,
         "maximum_gap_seconds": 1967,
-        "seconds_remaining_minimum": 17834,
+        "seconds_remaining_minimum": 39434,
         "anchor_run": 39347813668,
         "latest_run": 39353850712,
         "last_sequence": 3425,
@@ -55,7 +55,7 @@ class ReleaseDigestTests(unittest.TestCase):
         self.assertEqual(found["completed_span_seconds"], 3766)
         self.assertEqual(found["state_replay_result"],
                          "PRELIMINARY_RAW_SQLITE_REPLAY_PASSED_NOT_ACCEPTANCE")
-        self.assertEqual(found["seconds_remaining_minimum"], 17834)
+        self.assertEqual(found["seconds_remaining_minimum"], 39434)
         self.assertFalse(found["production_accepted"])
         self.assertFalse(found["merge_authorized"])
         self.assertFalse(found["auto_merge_enrollment_authorized"])
@@ -63,9 +63,9 @@ class ReleaseDigestTests(unittest.TestCase):
 
     def test_technical_window_later_still_requires_separate_cloudflare_and_owner(self):
         proof = census()
-        proof.update(status="SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED",
-                     completion_span_seconds=22000, maximum_gap_seconds=2000,
-                     verified_original_cores=12,latest_completion_utc="2026-10-20T06:36:07+00:00")
+        proof.update(status="TWELVE_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED",
+                     completion_span_seconds=43260, maximum_gap_seconds=2000,
+                     verified_original_cores=25,latest_completion_utc="2026-10-20T12:30:27+00:00")
         proof.pop("seconds_remaining_minimum")
         proof["terminal_replay"] = {
             "status": "ORIGINAL_TERMINAL_RAW_SQLITE_REPLAY_VERIFIED",
@@ -84,9 +84,20 @@ class ReleaseDigestTests(unittest.TestCase):
         self.assertFalse(result["production_accepted"])
         self.assertFalse(result["merge_authorized"])
 
+    def test_six_hour_historical_status_is_not_current_readiness(self):
+        x = census()
+        x.update(status="SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED",
+                 completion_span_seconds=22000, maximum_gap_seconds=2000,
+                 verified_original_cores=12,
+                 latest_completion_utc="2026-10-20T06:36:07+00:00")
+        x.pop("seconds_remaining_minimum")
+        with self.assertRaisesRegex(report.EvidenceError,
+                                    "CENSUS_STATUS_UNTRUSTED"):
+            report.compile_report(x, source_sha=SRC)
+
     def test_forced_pass_status_without_seconds_is_denied(self):
         x = census()
-        x["status"] = "SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED"
+        x["status"] = "TWELVE_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED"
         with self.assertRaisesRegex(report.EvidenceError,
                                     "WINDOW_STATUS_CONTRADICTION"):
             report.compile_report(x, source_sha=SRC)
