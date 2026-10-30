@@ -32,7 +32,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.sha }}"
-          test "$(git hash-object brain/v8/repair_core_origin.py)" = "d57ff91a7783455f5efb429717b2871edd8fa543"
+          test "$(git hash-object brain/v8/repair_core_origin.py)" = "0caf91b20aaad741f27f361f2963d5818d053aab"
           test "$(git hash-object brain/v8/repair_runtime.py)" = "6619993314d32af11a0fbab9b914837bc7f556b4"
           install -m 0500 brain/v8/repair_core_origin.py "$RUNNER_TEMP/v8-origin.py"
           install -m 0500 brain/v8/repair_runtime.py "$RUNNER_TEMP/v8-repair.py"

@@ -12,8 +12,8 @@ from brain.core import require
 REPOSITORY = "P00NSMASHER/portfolio-brain"
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github/workflows/brain-cycle.yml"
 # A scope-name scan cannot establish which credentials the workflow uses.
-# Any workflow edit requires renewed source review before issuing this receipt.
-REVIEWED_WORKFLOW_SHA256 = "e0962df102f568068be1f3abf3697c5802efec591191c3950d979ae0c7a6320c"
+# Workflow source change reviewed: state push now uses exact readback and both\n# source acceptance jobs are hard-held pending explicit user re-arm.
+REVIEWED_WORKFLOW_SHA256 = "91dd5f7ab8108f1ade660d7038f8a5da6783e3ebe014e51c762aaf626fe61269"
 
 
 def runtime_authority(workflow_text=None):
