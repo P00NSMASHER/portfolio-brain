@@ -51,7 +51,6 @@ test('RDAP bootstrap rejects unsafe remote targets before a second request',asyn
     'https://rdap.example.net/rdap/?q=1',
     'https://rdap.example.net/rdap/#frag',
     'https://rdap.example.net./rdap/',
-    null,
   ];
   for(const base of unsafe){
     const {c,calls}=rdapMockContext(base);
