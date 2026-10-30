@@ -1,3 +1,5 @@
+> Current draft hold (October 29, 2026): the original six-hour discussion below is retained for history, not current acceptance. The report compiler now requires a 43,200-second source-bound technical window, while a separate 30-minute terminal repair replay and independent App acceptance remain mandatory. Old `SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED` inputs are rejected rather than promoted. This advisory module never grants release authority.
+
 > October 29 integration note: original review notes below are historical. Prepared on main 25e697c in PR #787; fresh checks and independent review are required. No release authority or live acceptance is granted.
 
 # V9 source-specific evidence report — independent-review candidate
