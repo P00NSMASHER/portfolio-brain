@@ -19,6 +19,10 @@ Two existing workflow_run jobs now require the *same* explicit opt-in repository
 - Independent receipt attestation remains gated by its existing trusted receipt-PR provenance; no new public release authority is granted.
 - Do not turn on this variable, invoke an observer/acceptance workflow, or reclassify historical runs until the user explicitly requests a fresh observation. On consent, verify actual current source and the accepted mode first, then enable only the reviewed path. Never transfer an old source's elapsed seconds to a new SHA.
 
+## Additional job identity hardening
+
+Original GitHub REST job snapshots for cores 41103100254 and 41108902012 contain positive monitor job IDs, matching numeric run IDs, attempt 1 and the exact d67bcf source SHA. The candidate now rejects absent or inconsistent original job IDs, mismatched job-to-run IDs, non-first attempts and wrong source SHA, even if every step claims success. The read-only verifier binds its original monitor to the exact source being replayed. These constraints cannot retroactively turn the historical failures into successful repairs.
+
 ## Original failures and repair plan
 
 Historical immutable original evidence:

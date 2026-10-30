@@ -16,7 +16,8 @@ OBS_PATH = "/actions/runs/17/jobs?filter=all&per_page=100"
 
 def core_step_doc(names, *, job_id=101, conclusion="success"):
     return {"total_count": 1, "jobs": [{
-        "id": job_id, "name": "monitor", "status": "completed",
+        "id": job_id, "run_id": 17, "run_attempt": 1, "head_sha": SOURCE,
+        "name": "monitor", "status": "completed",
         "conclusion": conclusion,
         "steps": [{"name": name, "conclusion": result}
                   for name, result in names.items()],
@@ -50,6 +51,7 @@ class RepairAPI:
             return {"commit": {"sha": sha}}
         if path == ROOT + "actions/runs/17":
             return {
+                "id": 17,
                 "name": "brain-cycle-v2",
                 "path": ".github/workflows/brain-cycle.yml",
                 "repository": {"full_name": repair.REPOSITORY},
@@ -132,6 +134,33 @@ class OriginalRepairReadbackTests(unittest.TestCase):
             with self.subTest(config=config), self.assertRaises(repair.OriginError):
                 repair.admit(api, SOURCE, CORE, sleep=lambda _: None)
             self.assertNotIn(JOB_PATH, api.calls)
+
+
+    def test_original_run_metadata_mismatch_fails_before_job_read(self):
+        class WrongCoreID(RepairAPI):
+            def __call__(self, path):
+                row = super().__call__(path)
+                if path == ROOT + "actions/runs/17":
+                    row["id"] = 18
+                return row
+        api = WrongCoreID([core_step_doc(repair_steps())])
+        with self.assertRaisesRegex(repair.OriginError,
+                                    "ORIGINAL_PRODUCTION_CORE_NOT_SUCCESS"):
+            repair.admit(api, SOURCE, CORE, sleep=lambda _: None)
+        self.assertNotIn(JOB_PATH, api.calls)
+
+    def test_original_job_requires_complete_stable_run_identity(self):
+        for change in ({"id": None}, {"run_id": 18},
+                       {"run_attempt": 2}, {"head_sha": "b" * 40}):
+            with self.subTest(change=change):
+                snapshot = core_step_doc(repair_steps())
+                snapshot["jobs"][0].update(change)
+                api = RepairAPI([snapshot])
+                pauses = []
+                with self.assertRaises(repair.OriginError):
+                    repair.admit(api, SOURCE, CORE, sleep=pauses.append)
+                self.assertEqual(pauses, [])
+                self.assertEqual(api.calls.count(JOB_PATH), 1)
 
 
 class ObservationAPI:
@@ -223,6 +252,26 @@ class OriginalObserverReadbackTests(unittest.TestCase):
         with self.assertRaisesRegex(observer.SourceAcceptanceError,
                                     "monitor job failed"):
             observer._one_job(api, 17, sleep=lambda _: None)
+
+
+    def test_original_job_source_run_and_attempt_must_match(self):
+        for change in ({"id": None}, {"run_id": 18},
+                       {"run_attempt": 2}, {"head_sha": "b" * 40}):
+            with self.subTest(change=change):
+                snapshot = core_step_doc(observer_steps())
+                snapshot["jobs"][0].update(change)
+                api = ObservationAPI([snapshot])
+                pauses = []
+                with self.assertRaises(observer.SourceAcceptanceError):
+                    observer._one_job(api, 17, source=SOURCE, sleep=pauses.append)
+                self.assertEqual(pauses, [])
+                self.assertEqual(api.calls, [OBS_PATH])
+
+    def test_production_source_bound_original_identity_positive(self):
+        api = ObservationAPI([core_step_doc(observer_steps())])
+        observed = observer._one_job(api, 17, source=SOURCE, sleep=lambda _: None)
+        self.assertEqual(observed["run_id"], 17)
+        self.assertEqual(observed["head_sha"], SOURCE)
 
 
 if __name__ == "__main__":

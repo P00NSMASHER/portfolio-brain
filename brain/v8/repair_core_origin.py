@@ -53,6 +53,7 @@ def admit(get, source, run_id, *, sleep=time.sleep):
             and row.get("path") == ".github/workflows/brain-cycle.yml"
             and row.get("repository", {}).get("full_name") == REPOSITORY
             and row.get("head_branch") == "main" and row.get("head_sha") == source
+            and row.get("id") == int(run_id)
             and row.get("run_attempt") == 1
             and row.get("status") == "completed"
             and row.get("conclusion") == "success",
@@ -71,12 +72,16 @@ def admit(get, source, run_id, *, sleep=time.sleep):
                 "ORIGINAL_JOB_CENSUS_UNVERIFIED")
         job = rows[0]
         job_id = job.get("id")
-        if job_id is not None:
-            require(type(job_id) is int and job_id > 0,
-                    "ORIGINAL_JOB_ID_INVALID")
-            if original_job_id is None:
-                original_job_id = job_id
-            require(job_id == original_job_id, "ORIGINAL_JOB_ID_CHANGED")
+        require(type(job_id) is int and job_id > 0,
+                "ORIGINAL_JOB_ID_INVALID")
+        if original_job_id is None:
+            original_job_id = job_id
+        require(job_id == original_job_id, "ORIGINAL_JOB_ID_CHANGED")
+        require(type(job.get("run_id")) is int
+                and job["run_id"] == int(run_id)
+                and job.get("run_attempt") == 1
+                and job.get("head_sha") == source,
+                "ORIGINAL_JOB_RUN_OR_SOURCE_MISMATCH")
         steps = job.get("steps")
         require(job.get("name") == "monitor" and type(steps) is list
                 and all(type(step) is dict for step in steps),

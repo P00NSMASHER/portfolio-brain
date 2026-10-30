@@ -201,7 +201,7 @@ def _zip_json(raw: bytes, name: str) -> dict:
         raise SourceAcceptanceError("artifact ZIP invalid") from exc
 
 
-def _one_job(api: GitHubReadOnly, run_id: int, *, sleep=time.sleep) -> dict:
+def _one_job(api: GitHubReadOnly, run_id: int, *, source=None, sleep=time.sleep) -> dict:
     """Replay the original monitor with bounded fail-closed GitHub readbacks.
 
     A successful workflow_run may momentarily expose a partial job-step list.
@@ -224,11 +224,17 @@ def _one_job(api: GitHubReadOnly, run_id: int, *, sleep=time.sleep) -> dict:
             "run job census incomplete")
         job = rows[0]
         job_id = job.get("id")
-        if job_id is not None:
-            req(type(job_id) is int and job_id > 0, "original monitor ID invalid")
-            if original_job_id is None:
-                original_job_id = job_id
-            req(job_id == original_job_id, "original monitor ID changed")
+        req(type(job_id) is int and job_id > 0, "original monitor ID invalid")
+        if original_job_id is None:
+            original_job_id = job_id
+        req(job_id == original_job_id, "original monitor ID changed")
+        req(type(job.get("run_id")) is int and job["run_id"] == run_id
+            and job.get("run_attempt") == 1,
+            "original monitor run identity mismatch")
+        if source is not None:
+            req(type(source) is str and re.fullmatch(r"[0-9a-f]{40}", source)
+                and job.get("head_sha") == source,
+                "original monitor source mismatch")
         req(job.get("name") == "monitor"
             and job.get("status") == "completed"
             and job.get("conclusion") == "success",
@@ -391,7 +397,7 @@ def collect_original_runs(api: GitHubReadOnly, source: str, evidence: dict | Non
                 and run.get("status") == "completed"
                 and run.get("conclusion") == "success"
                 and run.get("run_attempt") == 1, "source run failed, retried, or invalid")
-            job = _one_job(api, run_id)
+            job = _one_job(api, run_id, source=source)
             item, raw, delivery = _one_artifact(api, run, source)
             state_parent = sha40(delivery.get("state_parent"))
             state_commit = sha40(delivery.get("state_commit"))
