@@ -212,35 +212,39 @@ async function facilitatorPost(path, paymentPayload, paymentRequirements) {
 export async function verifyPayment(path, paymentPayload) {
   const reqs = requirements(path);
   const result = await facilitatorPost('verify', paymentPayload, reqs);
-  const valid = result.body?.isValid === true || result.body?.success === true;
+  // A body flag cannot override a failed HTTP response from the facilitator.
+  const ok = result.status >= 200 && result.status < 300;
+  const valid = ok && (result.body?.isValid === true || result.body?.success === true);
   return {
     valid,
-    reason: String(result.body?.invalidReason ?? result.body?.errorReason ?? 'payment_verification_failed'),
+    reason: valid ? 'verified' : 'payment_verification_failed',
     requirements: reqs,
   };
 }
 
 export async function settlePayment(path, paymentPayload) {
   const reqs = requirements(path);
-  const waits = [0, 250, 750];
-  for (let i = 0; i < waits.length; i += 1) {
-    if (waits[i]) await new Promise(resolve => setTimeout(resolve, waits[i]));
-    let result;
-    try {
-      result = await facilitatorPost('settle', paymentPayload, reqs);
-    } catch {
-      if (i === waits.length - 1) return { ok: false, unresolved: true, reason: 'settlement_transport_unknown' };
-      continue;
-    }
-    if (result.body?.success === true) return { ok: true, receipt: result.body };
-    const reason = String(result.body?.errorReason ?? (result.status === 429 ? 'rate_limited' : result.status >= 500 ? 'facilitator_unavailable' : 'payment_settlement_failed'));
-    if (['settlement_pending', 'duplicate_settlement', 'rate_limited', 'facilitator_unavailable'].includes(reason)) {
-      if (i === waits.length - 1) return { ok: false, unresolved: true, reason };
-      continue;
-    }
-    return { ok: false, unresolved: false, reason };
+  // An ambiguous settlement response is a potential charge, not permission to
+  // issue another POST. We make ONE original call, then fail closed pending
+  // independently authorized settlement reconciliation.
+  let result;
+  try {
+    result = await facilitatorPost('settle', paymentPayload, reqs);
+  } catch {
+    return { ok: false, unresolved: true, reason: 'settlement_transport_unknown' };
   }
-  return { ok: false, unresolved: true, reason: 'settlement_unknown' };
+  if (result.status >= 200 && result.status < 300 && result.body?.success === true) {
+    return { ok: true, receipt: result.body };
+  }
+  const reason = result.body?.errorReason;
+  const pending = result.status === 429 || result.status >= 500 ||
+    ['settlement_pending', 'duplicate_settlement', 'rate_limited',
+      'facilitator_unavailable'].includes(reason);
+  return {
+    ok: false,
+    unresolved: pending,
+    reason: pending ? 'settlement_status_unresolved' : 'payment_settlement_failed',
+  };
 }
 
 export function encodePaymentResponse(value) {
@@ -288,7 +292,8 @@ export async function paidRoute(req, res, path, validate, execute) {
         return res.status(503).json({
           error: settled.reason,
           paymentState: 'unresolved',
-          retrySamePayment: true,
+          retrySamePayment: false,
+          action: 'reconcile_settlement_before_retry',
         });
       }
       return sendPaymentRequired(res, origin, path, settled.reason);
@@ -309,7 +314,29 @@ export async function paidRoute(req, res, path, validate, execute) {
 }
 
 export function requestOrigin(req) {
-  const forwarded = String(req.get('x-forwarded-proto') || '').split(',')[0].trim();
-  const protocol = forwarded || req.protocol || 'https';
-  return protocol + '://' + req.get('host');
+  // Never derive payment resource URLs from untrusted Host / forwarded headers.
+  // Production must supply a reviewed public HTTPS origin. Loopback is allowed
+  // without configuration strictly for local tests and development.
+  const configured = process.env.PUBLIC_ORIGIN;
+  if (configured) {
+    let parsed;
+    try {
+      parsed = new URL(configured);
+    } catch {
+      throw new Error('public_origin_invalid');
+    }
+    if (parsed.protocol !== 'https:' || !parsed.hostname ||
+        parsed.username || parsed.password || parsed.pathname !== '/' ||
+        parsed.search || parsed.hash) {
+      throw new Error('public_origin_invalid');
+    }
+    return parsed.origin;
+  }
+  const host = String(req.get('host') || '');
+  const peer = req.socket?.remoteAddress;
+  if (!/^(?:localhost|127\.0\.0\.1)(?::[1-9][0-9]{0,4})?$/.test(host) ||
+      !['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(peer)) {
+    throw new Error('public_origin_required');
+  }
+  return 'http://' + host;
 }
