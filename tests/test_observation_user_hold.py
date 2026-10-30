@@ -27,6 +27,9 @@ class ObservationOptInTests(unittest.TestCase):
             with self.subTest(file=file):
                 wf = read(file)
                 self.assertEqual(wf.count(FLAG), 1)
+                # A repository variable alone cannot restart a paused observation.
+                # Deliberate re-arming needs a separately reviewed source change.
+                self.assertRegex(wf, r"(?m)^\\s+false &&$")
                 self.assertIn("workflow_run:", wf)
                 self.assertNotIn("workflow_dispatch:", wf)
                 self.assertNotIn("schedule:", wf)
