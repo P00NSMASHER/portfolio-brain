@@ -70,7 +70,9 @@ class FakeProvider:
                         for k, v in gm.REQUIRED_CHECKS.items()]}}]}
         self.record = {"source_sha": BASE, "status": "PASS", "decision": "RELEASED",
             "scope": "SOURCE_SPECIFIC_UNATTENDED_PRODUCTION_CORE_RELIABILITY_ONLY",
-            "original_run_evidence": {"completed_span_seconds": 21601,
+            "criteria": {"minimum_completed_span_seconds": 43200,
+                "requires_terminal_30_minute_repair_follow_through": True},
+            "original_run_evidence": {"completed_span_seconds": 43201,
                 "maximum_gap_seconds": 1801, "all_success_attempt_one": True,
                 "all_original_core_state_parent_child_links_contiguous": True},
             "terminal_state_replay": {"pending_events": 0, "sqlite_integrity": "PASS",
@@ -413,6 +415,25 @@ class GuardedAdmissionTests(unittest.TestCase):
         f = FakeProvider()
         f.rules["rules"][-1]["parameters"]["required_status_checks"][1]["integration_id"] = 0
         self.assert_blocked(f, "INDEPENDENT_CHECK_ISSUER_MISSING")
+
+    def test_signed_six_hour_record_cannot_admit_native_merge(self):
+        # Reproduce the old six-hour release threshold against the new 12h
+        # source-specific contract without making any external API writes.
+        for span in (21600, 21601, 43199, True, 43200.0, "43200"):
+            with self.subTest(span=repr(span)):
+                f = FakeProvider()
+                f.record["original_run_evidence"]["completed_span_seconds"] = span
+                self.assert_blocked(f, "ACCEPTANCE_ORIGINAL_EVIDENCE_MISSING")
+
+    def test_acceptance_requires_current_terminal_repair_contract(self):
+        good = {"minimum_completed_span_seconds": 43200,
+                "requires_terminal_30_minute_repair_follow_through": True}
+        for candidate in (None, {}, dict(good, minimum_completed_span_seconds=21600),
+                          dict(good, requires_terminal_30_minute_repair_follow_through=False)):
+            with self.subTest(criteria=candidate):
+                f = FakeProvider()
+                f.record["criteria"] = candidate
+                self.assert_blocked(f, "ACCEPTANCE_CURRENT_CONTRACT_REQUIRED")
 
     def test_acceptance_not_authorized_by_old_or_fake_evidence(self):
         f = FakeProvider()
