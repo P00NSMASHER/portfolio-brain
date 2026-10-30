@@ -1,41 +1,21 @@
-# Narrow unattended Brain knowledge upgrade review
+# Bot-authored knowledge review | code-only security library
 
-The existing Brain scheduler creates a bot-authored, exact-source knowledge-only
-PR and explicitly dispatches Foundation CI. On October 14, bot-created PR #688
-had a successful dispatch validation but no completed independent
-`portfolio-phase1-gate`; the separate trusted reviewer was activated by
-`workflow_run` for human PRs, not reliably for that GitHub-token-created
-dispatch. Do not mark source green CI as an accepted protected merge.
+**State: safe review helper, not a deployed authorization or merge workflow.**
 
-This proposal adds an **explicit main-owned dispatch** for knowledge-only bot
-PRs, reusing the same independently installed verifier App 5121826 and original
-Foundation check from Actions App 15368. It does not create a cron or remove
-the existing `portfolio-independent-verifier.yml` workflow.
+This module and its tests originate from historical [PR #691](https://github.com/P00NSMASHER/portfolio-brain/pull/691). The proposed new `.github/workflows/portfolio-bot-knowledge-verifier.yml` is **not installed** in the active source; the release never adds an independent App token, GitHub merge writer, new schedule or source-acceptance receipt. No bot-generated knowledge update receives permission to merge merely because a Python predicate is true.
 
-Controls: exact bot author, main as base, bot branch matched to a full
-SHA-256 knowledge fingerprint, current-main ancestry, **exactly one modified
-file** (`brain/REUSE_KNOWLEDGE.json`), bounded schema and public source refs,
-validated source hashes, a real successful Foundation `validate` at the
-candidate SHA, network-disabled/capability-dropped full + Phase 1 +
-operating-mode tests, independent verification run from main (not candidate),
-a separately minted verifier App token after tests, and a SHA-guarded
-branch-protection merge. Any missing provider evidence, changed base, other
-file mutation, failed check, unverified source or lack of privileges fails
-closed. The merge response must report `merged=true` and resulting main
-needs separate readback before claiming a completed live upgrade.
+## What the library checks
 
-The bot may propose safe **read-only structural reuse knowledge**, not
-arbitrary code patches, paid calls, real customer contact, credential changes,
-money actions, trading, financial source promotion, protected V5/V6 signed
-soak evidence or independent security approval. Source status remains
-**DRAFT / NOT DEPLOYED** until the preexisting protected-main release
-authority has independently cleared the unchanged original signed-soak gate.
-Bot self-review is deliberately restricted to knowledge-data-only PRs,
-not arbitrary assistant-generated code.
+`verification.bot_knowledge_admission.inspect(...)` accepts only an explicit original provider snapshot for one in-repository, non-draft, bot-authored proposal. It checks the exact matching branch/fingerprint, the current protected-source ancestry, precisely one changed knowledge-data file, bounded public source records, duplicate-free/non-finite-free JSON, schema v2, 12-source ceiling, public reference structure and source-bound fingerprint.
 
-This is a source-pinned independent gate improvement, not proof that PR #688
-merged or that autonomous remediation can handle every human-only task.
+`foundation_green(...)` separately requires **exactly one** successful `validate` check for the immutable head, issued by Foundation App **15368**, with a complete bounded check page. A duplicate `validate` status, stale head, wrong issuer or missing result fails closed. Its output is only evidence for review, never authority to publish App **5121826** checks or merge anything.
 
-## October 29 source-bound restriction
+The historical signed source-acceptance gate is separate and not transferable. The user has explicitly paused new 12-hour observations. No part of this helper can re-arm observers, approve a protected source, issue credentials, change workflow inventory or override a human reviewer.
 
-The historical V6 issue #684 is not valid source acceptance for the protected 12-hour reliability contract. The obsolete `issues/684` merge gate and immediate App-token merge action have been **removed** from this draft. This workflow may validate and publish an independent exact-head check, but is strictly **review-only**, does not merge a PR, and has no authority to treat a six-hour receipt as final. A later independent protected integration must separately inspect authenticated 12-hour source acceptance and terminal repairs. Preserve all original PR #688 evidence; no new cron, buyer payment, or external contact.
+## Tests and integration limits
+
+The package includes offline negative tests for substituted authors, forks, conflicting check issuers/heads, stale ancestry, extra code changes, invalid schema, duplicate JSON fields and non-finite values. It requires no live GitHub requests, payments or connection to other repositories.
+
+A future bot-authorized production integration would require a separate source-bound protected PR, original authenticated API reads, independent App approval, positive and adversarial tests, and explicit authorization for any new merge or credential authority. Nothing in this reviewed code grants those capabilities.
+
+**Documentation claim:** a reliable standalone admission check exists; an unattended protected bot-release pipeline does **not** follow from including it.
