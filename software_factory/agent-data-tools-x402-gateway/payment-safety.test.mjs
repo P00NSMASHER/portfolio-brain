@@ -150,6 +150,14 @@ test('malformed Census match cannot be billed', async () => {
   assert.equal(out.status, 502);
   assert.equal(out.calls.includes('settle'), false);
 });
+test('malformed SEC CIK must not resolve to a different billable issuer', async () => {
+  for (const raw of ['320193abc', '32-0193', '0x320193', '+320193', '3.20193']) {
+    const out = await request('/api/sec-filings?cik=' + encodeURIComponent(raw));
+    assert.equal(out.status, 400, raw);
+    assert.deepEqual(out.calls, [], 'must not verify, read upstream or settle: ' + raw);
+  }
+});
+
 test('authoritative RDAP 404 is a valid unregistered answer', async () => {
   const out = await request(rdap, {sourceReply: url =>
     url.includes('dns.json') ? json(rdapBootstrap) : json({}, 404)});

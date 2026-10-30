@@ -294,8 +294,9 @@ async function secJson(url){
   return await r.json();
 }
 function normalizeCik(value){
-  const digits=String(value||'').replace(/\D/g,'');
-  if(!digits||digits.length>10)return null;
+  const digits=String(value??'').trim();
+  // Do not silently convert malformed CIK input into a different billable issuer.
+  if(!/^\d{1,10}$/.test(digits))return null;
   return digits.padStart(10,'0');
 }
 async function resolveTicker(ticker){

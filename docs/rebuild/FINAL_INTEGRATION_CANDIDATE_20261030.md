@@ -14,7 +14,7 @@
 | #793 | `7d2689e41ba2d0516b19f81c85f4d8d179a37105` | 2 | Exact 12-of-19 structural-only public reuse-source census with seven historical holds documented |
 | #756 | `484c56f08028d5b9e5e66a90a41b54621c836fe8` | 4 | GET-only Bazaar diagnostic, mocked tests, source documentation, existing Render smoke workflow test only |
 
-All 28 selected file blobs came from GitHub's original PR changed-file API and were composed over the exact protected baseline tree. Six common readback files have the same blob identity across the five original PR branches. The consolidation is **one new candidate** with no main, state-branch or scheduler mutation.
+The initial combined head `eac4802df346366ed19e4a4e3e3ba50f992b8a74` adopted 28 original file blobs unchanged, including identical common readback files. During combined source review, one SEC issuer-input defect was found: `normalizeCik` silently stripped letters and punctuation and could return billable results for the wrong CIK. The candidate branch now contains a narrow source-reviewed correction in `software_factory/agent-data-tools-x402-gateway/server.mjs` plus adversarial offline regression coverage in `payment-safety.test.mjs`. Thus **26 of the original 28 adopted file blobs remain unchanged**; the 2 amended files are intentionally not represented as identical to predecessor #790 blobs. The protected baseline, other input source identities, existing cron, credentials, state branch and authority remain untouched. Fresh combined-head checks are mandatory; the initial combined head's checks must not be reused.
 
 ## Explicit exclusions
 - #691: separate App workflow / bot admission path; keep on independent authority/security review, no hidden new verifier or automatic merge.
