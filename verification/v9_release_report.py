@@ -15,7 +15,7 @@ import re
 
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 HEX256 = re.compile(r"[0-9a-f]{64}\Z")
-MINIMUM_SECONDS = 21600
+MINIMUM_SECONDS = 43200
 MAX_GAP_SECONDS = 5400
 MAX_CORES = 80
 MAX_DOCUMENT = 1024 * 1024
@@ -83,7 +83,7 @@ def compile_report(census, replay=None, *, source_sha):
             "TECHNICAL_REPORT_MUST_NOT_SELF_APPROVE")
     status = census.get("status")
     require(status in ("WINDOW_RUNNING_NOT_ACCEPTED",
-                       "SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED"),
+                       "TWELVE_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED"),
             "CENSUS_STATUS_UNTRUSTED")
     count = census.get("verified_original_cores")
     span = census.get("completion_span_seconds")
@@ -145,7 +145,7 @@ def compile_report(census, replay=None, *, source_sha):
         state_replay_pass = True
 
     terminal = census.get("terminal_replay")
-    if status == "SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED":
+    if status == "TWELVE_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED":
         require(type(terminal) is dict
                 and terminal.get("status") == "ORIGINAL_TERMINAL_RAW_SQLITE_REPLAY_VERIFIED"
                 and terminal.get("terminal_source_sha") == source_sha
@@ -160,7 +160,7 @@ def compile_report(census, replay=None, *, source_sha):
         replay_kind = terminal["status"]
 
     ready_for_separate_provider_review = (
-        status == "SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED"
+        status == "TWELVE_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED"
         and state_replay_pass
     )
     return {
@@ -186,7 +186,7 @@ def compile_report(census, replay=None, *, source_sha):
              "SEPARATE_GOVERNED_SOURCE_SPECIFIC_RELEASE_DECISION",
              "FRESH_EXACT_HEAD_PROTECTION_CHECKS_FOR_EACH_RELEASE"]
             if ready_for_separate_provider_review else
-            ["COMPLETE_SIX_HOURS_OF_ORIGINAL_SUCCESSFUL_AUTOMATIC_CORES",
+            ["COMPLETE_TWELVE_HOURS_OF_ORIGINAL_SUCCESSFUL_AUTOMATIC_CORES",
              "INDEPENDENT_FINAL_RAW_SQLITE_LEDGER_REPORT_REPLAY",
              "INDEPENDENT_CLOUDFLARE_ORIGINAL_PROVIDER_CORRELATION",
              "SEPARATE_GOVERNED_SOURCE_SPECIFIC_RELEASE_DECISION"]
