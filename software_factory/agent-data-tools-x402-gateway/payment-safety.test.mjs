@@ -65,7 +65,7 @@ const censusGood = {result: {addressMatches: [{
   matchedAddress: '4600 SILVER HILL RD', coordinates: {x: -76.93, y: 38.85},
   geographies: {},
 }]}};
-const rdapBootstrap = {services: [[['com'], ['https://rdap.test/']]]};
+const rdapBootstrap = {services: [[['com'], ['https://rdap.example.net/']]]};
 const rdapGood = {objectClassName: 'domain', ldhName: 'example.com'};
 const secGood = {
   cik: 320193, name: 'Example Corp', filings: {recent: {
