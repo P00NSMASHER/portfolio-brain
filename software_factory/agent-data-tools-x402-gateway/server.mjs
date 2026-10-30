@@ -236,11 +236,28 @@ function eventMap(events){
   }
   return out;
 }
+// IANA bootstrap entries are discovery data, not authority to access arbitrary URLs.
+// Never allow plaintext, local/IP endpoints, credentials, nonstandard ports or
+// redirects that could turn a public RDAP lookup into an internal request.
+function validatedRdapBase(raw){
+  if(typeof raw!=='string')throw new Error('rdap_service_url_invalid');
+  let url;
+  try{url=new URL(raw);}catch{throw new Error('rdap_service_url_invalid');}
+  const host=url.hostname.toLowerCase();
+  if(url.protocol!=='https:'||url.username||url.password||url.port
+      ||url.search||url.hash||!host.includes('.')
+      ||!/^[a-z0-9.-]+$/.test(host)||host.includes('..')||host.endsWith('.')
+      ||host==='localhost'||/\.(localhost|local|internal|test|invalid)$/.test(host)
+      ||/^(?:\d{1,3}\.){3}\d{1,3}$/.test(host))
+    throw new Error('rdap_service_url_invalid');
+  return url.href.replace(/\/+$/,'');
+}
 async function lookupRdap(domain){
-  const tld=domain.split('.').pop()||'', registry=await rdapBootstrap(), base=findRdapBase(registry,tld);
-  if(!base)throw new Error('rdap_service_unavailable');
-  const u=base.replace(/\/+$/,'')+'/domain/'+encodeURIComponent(domain);
-  const r=await fetchWithTimeout(u,{headers:{accept:'application/rdap+json, application/json','user-agent':'agent-data-tools-x402/1.0'},redirect:'follow'},10000);
+  const tld=domain.split('.').pop()||'', registry=await rdapBootstrap(), rawBase=findRdapBase(registry,tld);
+  if(!rawBase)throw new Error('rdap_service_unavailable');
+  const base=validatedRdapBase(rawBase);
+  const u=base+'/domain/'+encodeURIComponent(domain);
+  const r=await fetchWithTimeout(u,{headers:{accept:'application/rdap+json, application/json','user-agent':'agent-data-tools-x402/1.0'},redirect:'error'},10000);
   if(r.status===404)return {domain,registered:false,authoritativeRdap:base,source:'Authoritative RDAP server discovered via IANA bootstrap'};
   if(!r.ok)throw new Error('rdap_http_'+r.status);
   const data=await r.json();
