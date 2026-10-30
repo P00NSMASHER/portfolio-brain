@@ -19,6 +19,7 @@ jobs:
     if: >-
       ${{
         github.repository == 'P00NSMASHER/portfolio-brain' &&
+        vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true' &&
         github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain' &&
         github.event.workflow_run.name == 'brain-cycle-v2' &&
         github.event.workflow_run.conclusion == 'success' &&
