@@ -166,8 +166,16 @@ def accepted_source(api, main):
     run = record.get("original_run_evidence", {})
     terminal = record.get("terminal_state_replay", {})
     proof = record.get("proof", {})
+    # The independent verifier now requires 12 completed hours and an
+    # additional 30-minute terminal repair follow-through. Reject stale
+    # six-hour receipt contracts even when the attestation is present.
+    criteria = record.get("criteria")
+    require(type(criteria) is dict
+            and criteria.get("minimum_completed_span_seconds") == 43200
+            and criteria.get("requires_terminal_30_minute_repair_follow_through") is True,
+            "ACCEPTANCE_CURRENT_CONTRACT_REQUIRED")
     require(type(run.get("completed_span_seconds")) is int
-            and run["completed_span_seconds"] >= 21600
+            and run["completed_span_seconds"] >= 43200
             and type(run.get("maximum_gap_seconds")) is int
             and run["maximum_gap_seconds"] <= 5400
             and run.get("all_success_attempt_one") is True
