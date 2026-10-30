@@ -204,10 +204,17 @@ jobs:
             echo "NO_STATE_CHANGE: no new durable commit required"
           else
             git -C state commit -m "Persist Brain v2 cycle ${GITHUB_RUN_ID} source ${BRAIN_SOURCE_SHA}"
-            git -C state -c credential.helper='!gh auth git-credential' push origin HEAD:refs/heads/brain-state-v2
+            # A network HTTP 408 or broken upload can leave push status uncertain.
+            # Never treat the console text as proof: read the exact GitHub branch
+            # commit after this one original push, without retrying a Git write.
+            if git -C state -c credential.helper='!gh auth git-credential' push origin HEAD:refs/heads/brain-state-v2; then
+              echo "STATE_PUSH_TRANSPORT_SUCCESS: authoritative tip readback still required"
+            else
+              echo "STATE_PUSH_TRANSPORT_UNCERTAIN: verify the exact source commit through GitHub before trusting this attempt"
+            fi
           fi
           PUBLICATION_SHA="$(git -C state rev-parse HEAD)"
-          # A successful git push without force can briefly precede visibility of the
+          # The original push outcome does not authorize a receipt. Only the
           # updated branch tip through GitHub's REST branch endpoint. Only an
           # unchanged pre-push parent is retryable; any other tip fails closed.
           REMOTE_SHA=""
