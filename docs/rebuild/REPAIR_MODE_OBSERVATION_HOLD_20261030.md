@@ -8,16 +8,18 @@ Current protected starting SHA: `d67bcf066210c54d908d47576dd82286a09308d1`. Exis
 
 ## Observation and acceptance hold
 
-Two existing workflow_run jobs now require the *same* explicit opt-in repository variable before executing their observer logic or creating acceptance receipts:
+Both workflow_run observer/receipt jobs are now **hard-disabled** by a literal `false &&` job-level condition, irrespective of any previously set repository variable. The same explicit opt-in variable is preserved for later controlled re-arming:
 
 `vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true'`
 
-- `.github/workflows/reliability-day.yml` observer **does not run** when that repository variable is unset or not exactly `true`.
-- `.github/workflows/portfolio-source-acceptance-producer.yml` receipt producer **does not run** when it is unset or not exactly `true`.
+**Setting the variable alone cannot start an observation**. Resumption requires new explicit user authorization and a separately reviewed protected source change that removes the literal hold. This prevents accidental new 12-hour windows during ongoing repairs.
+
+- `.github/workflows/reliability-day.yml` observer **does not run**, regardless of that repository variable's current value, while the literal hold remains.
+- `.github/workflows/portfolio-source-acceptance-producer.yml` receipt producer **does not run**, regardless of that repository variable's current value, while the literal hold remains.
 - The existing core and V8 repair workflows continue under their unchanged triggers; no existing cron is edited.
 - Workflow-run events may still appear with **skipped** jobs, but a skipped job is not a newly started 12-hour observation, acceptance proof, source PASS or missing core.
 - Independent receipt attestation remains gated by its existing trusted receipt-PR provenance; no new public release authority is granted.
-- Do not turn on this variable, invoke an observer/acceptance workflow, or reclassify historical runs until the user explicitly requests a fresh observation. On consent, verify actual current source and the accepted mode first, then enable only the reviewed path. Never transfer an old source's elapsed seconds to a new SHA.
+- Do not turn on this variable, invoke an observer/acceptance workflow, or reclassify historical runs until the user explicitly requests a fresh observation. On consent, verify actual current source and the accepted mode first; a separate protected, independently tested re-arming change is required. Do not silently flip an existing variable and claim the hard gate is lifted. Never transfer an old source's elapsed seconds to a new SHA.
 
 ## Additional job identity hardening
 
@@ -50,4 +52,4 @@ Both source code paths are bound by new immutable Git blob pins in their trusted
 
 This is a draft repair until exact-head Foundation `validate` from App 15368, independent `portfolio-phase1-gate` from App 5121826 and review of the complete changed file list succeed, and protected ruleset 24182301 remains active with zero bypass. Do not bypass any permission or rule to merge.
 
-A protected merge of a code fix changes the production source. **The opt-in hold must be part of the same protected release** so the new SHA does not automatically begin a new 12-hour source window. The user will explicitly decide when to resume observation later. Historical original GitHub evidence remains immutable and no FINAL PASS is claimed now.
+A protected merge of a code fix changes the production source. **The hard opt-in hold must be part of the same protected release** so the new SHA does not automatically begin a new 12-hour source window. The user will explicitly decide when to resume observation later. Historical original GitHub evidence remains immutable and no FINAL PASS is claimed now.
