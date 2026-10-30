@@ -103,12 +103,14 @@ def admit(get, source, run_id, *, sleep=time.sleep):
             results.get(name) == "success" for name in AUTOMATIC)
         job_ready = job.get("status") == "completed" and job.get("conclusion") == "success"
         if mandatory_ready and origin_ready and job_ready:
-            # Do not complete a delayed admission after current source drifts.
-            main_again = get(ROOT + "branches/main")
-            require(type(main_again) is dict
-                    and type(main_again.get("commit")) is dict
-                    and main_again["commit"].get("sha") == source,
-                    "PROTECTED_MAIN_SOURCE_CHANGED")
+            # No extra API read on the already-authenticated first snapshot.
+            # But delayed rereads require confirming current main did not drift.
+            if attempt:
+                main_again = get(ROOT + "branches/main")
+                require(type(main_again) is dict
+                        and type(main_again.get("commit")) is dict
+                        and main_again["commit"].get("sha") == source,
+                        "PROTECTED_MAIN_SOURCE_CHANGED")
             return {"status": "ORIGINAL_AUTOMATIC_CORE_AUTHENTICATED",
                     "source_sha": source, "run_id": run_id,
                     "source_pinned": True, "writer_token_issued": False,
