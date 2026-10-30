@@ -24,7 +24,22 @@ const routes = {
   '/api/treasury-average-rates': ['https://api-v2.appdeploy.ai/app/treasury-average-interest-rates-x402-xeqftl/api/treasury-average-rates','0.005000','Treasury average interest rates',['Treasury','Interest Rates','Macro'],[['security',false,{type:'string',maxLength:100},'Total Marketable']]]
 };
 
-const origin = req => `${String(req.headers['x-forwarded-proto']||'https').split(',')[0].trim()}://${String(req.headers['x-forwarded-host']||req.headers.host||'localhost').split(',')[0].trim()}`;
+// Payment challenges must be bound to an operator-configured canonical host.
+// The draft may run locally without one; real production must fail closed.
+const PUBLIC_ORIGIN = (() => {
+  const configured = String(process.env.PUBLIC_ORIGIN || '').trim().replace(/\/$/, '');
+  if (!configured) {
+    if (process.env.NODE_ENV === 'production') throw new Error('PUBLIC_ORIGIN_REQUIRED');
+    return null;
+  }
+  let parsed;
+  try { parsed = new URL(configured); } catch { throw new Error('PUBLIC_ORIGIN_INVALID'); }
+  if (parsed.protocol !== 'https:' || parsed.origin !== configured
+      || parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash)
+    throw new Error('PUBLIC_ORIGIN_INVALID');
+  return parsed.origin;
+})();
+const origin = req => PUBLIC_ORIGIN || `${String(req.headers['x-forwarded-proto']||'https').split(',')[0].trim()}://${String(req.headers['x-forwarded-host']||req.headers.host||'localhost').split(',')[0].trim()}`;
 const send = (res,status,value,type='application/json; charset=utf-8') => {
   const body = type.startsWith('application/json') ? JSON.stringify(value,null,2) : String(value);
   res.writeHead(status,{'content-type':type,'content-length':Buffer.byteLength(body),'cache-control':status===200?'public, max-age=300':'no-store','access-control-allow-origin':'*'});
