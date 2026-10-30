@@ -136,12 +136,13 @@ def validate_policy():
             and "gh pr merge" not in receipt
             and "merge_pull_request" not in receipt,
             "source acceptance receipt producer adds forbidden trigger or authority")
-    # Observation and receipt creation stay dormant until the user explicitly
-    # opts in through the same single repository variable. Core and repair
-    # schedules remain unchanged; this checks source contract, not variable state.
+    # The user's 12-hour observation is PAUSED, irrespective of any existing
+    # repository-variable value. Re-arming is a separate protected code change.
     observation_flag = "vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true'"
     observation = (workflow_dir/"reliability-day.yml").read_text(encoding="utf-8")
     require(observation_flag in observation and observation_flag in receipt
+            and observation.count("      false &&") == 1
+            and receipt.count("        false &&") == 1
             and "workflow_run:" in observation
             and "workflow_dispatch:" not in observation
             and "schedule:" not in observation,
@@ -153,6 +154,14 @@ def validate_policy():
     for fragment in ("group: brain-v2-state", "cancel-in-progress: false", "timeout-minutes: 5", "ref: brain-state-v2", "--expected-sha", "STATE_CONFLICT", "STATE_DELIVERY_UNVERIFIED", "MAIN_DRIFT", "soak_completed", "persist-credentials: false", "inputs.watchdog_run_id", "python -m brain.watchdog verify", "COMPETING_CLOCK_INPUTS", "python -m brain.cloudflare_clock", "inputs.cloudflare_attestation", "inputs.cloudflare_signature", "COMPETING_SCHEDULER_ORIGINS"):
         require(fragment in source, "missing workflow guarantee: "+fragment)
     require("force" not in source.replace("without force", "") and "portfolio-state-writer" not in source, "unsafe publication or legacy lock")
+    # One original non-force write only. A timed-out transport cannot be
+    # claimed delivered without the exact original GitHub remote SHA readback.
+    require(source.count("push origin HEAD:refs/heads/brain-state-v2") == 1
+            and "STATE_PUSH_TRANSPORT_UNCERTAIN" in source
+            and "STATE_DELIVERY_CONFLICT" in source
+            and 'test "$REMOTE_SHA" = "$PUBLICATION_SHA"' in source,
+            "unreviewed state publication retry or receipt bypass")
+
     clock=(workflow_dir/"brain-clock.yml").read_text()
     for fragment in ("branches: [brain-clock-v2]", "paths: [clock/pulse.json]", "timeout-minutes: 2", "actions: write", "contents: read", "python -m brain.clock", "-f ref=main", "inputs[clock_commit]", "steps.source.outputs.sha", "persist-credentials: false", "python -m brain.watchdog decide", "github.event_name == 'schedule'", "inputs[watchdog_run_id]"):
         require(fragment in clock, "missing bounded clock guarantee: "+fragment)
