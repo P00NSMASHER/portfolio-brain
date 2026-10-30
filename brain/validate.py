@@ -32,7 +32,7 @@ def validate_policy():
         "github.event.workflow_run.head_sha == github.sha",
         "github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain'",
         "persist-credentials: false", "actions: read",
-        "d57ff91a7783455f5efb429717b2871edd8fa543",
+        "874c32e309fa0081adf211bf5d247a7602ccbfc7",
         "6619993314d32af11a0fbab9b914837bc7f556b4",
         "repositories: capturebrief", "permission-contents: write",
         "permission-pull-requests: write", "skip-token-revoke: false",
@@ -93,7 +93,7 @@ def validate_policy():
         "ref: ${{ github.sha }}", "persist-credentials: false",
         "actions: read", "contents: read", "pull-requests: read",
         "PORTFOLIO_VERIFIER_PRIVATE_KEY", 'app-id: "5121826"',
-        "af428eeee49c0bd16ca1b42755e15c2ac6caf725",
+        "4a1dc56b502326e60e74b05f13f556fe8fbfe383",
         "python -m verification.source_acceptance_verifier",
     ):
         require(fragment in acceptance,
@@ -121,7 +121,7 @@ def validate_policy():
         "ref: ${{ github.sha }}", "persist-credentials: false",
         "actions: read", "contents: read", "pull-requests: read",
         "2c059583e7ff73558cc303b2ce2ceaf44f40bd77",
-        "af428eeee49c0bd16ca1b42755e15c2ac6caf725",
+        "4a1dc56b502326e60e74b05f13f556fe8fbfe383",
         "PORTFOLIO_RUNTIME_PRIVATE_KEY", "permission-contents: write",
         "permission-pull-requests: write", "skip-token-revoke: false",
         "python -m verification.source_acceptance_producer",
@@ -136,6 +136,16 @@ def validate_policy():
             and "gh pr merge" not in receipt
             and "merge_pull_request" not in receipt,
             "source acceptance receipt producer adds forbidden trigger or authority")
+    # Observation and receipt creation stay dormant until the user explicitly
+    # opts in through the same single repository variable. Core and repair
+    # schedules remain unchanged; this checks source contract, not variable state.
+    observation_flag = "vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true'"
+    observation = (workflow_dir/"reliability-day.yml").read_text(encoding="utf-8")
+    require(observation_flag in observation and observation_flag in receipt
+            and "workflow_run:" in observation
+            and "workflow_dispatch:" not in observation
+            and "schedule:" not in observation,
+            "unapproved source-specific 12-hour observation or acceptance activation")
     from operations.validate_operating_mode import scheduled_workflow_inventory
     require(scheduled_workflow_inventory(workflow_dir)=={"brain-clock":[p["cron"], p["watchdog_cron"]]}, "only existing native Brain and watchdog crons may recur")
     require("schedule:" not in (workflow_dir/"brain-cycle.yml").read_text(), "uncoordinated direct core schedule forbidden")
