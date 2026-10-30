@@ -5,6 +5,7 @@ The standalone product remains a non-deployed review-only code artifact.
 """
 from pathlib import Path
 import json
+import re
 import shutil
 import subprocess
 import unittest
@@ -51,7 +52,14 @@ class StandaloneX402ProtocolTests(unittest.TestCase):
                          "Offline x402 protocol regressions failed:\n"
                          + result.stdout[-3500:] + "\n" + result.stderr[-1500:])
         self.assertIn("# fail 0", result.stdout)
-        self.assertIn("# pass 9", result.stdout)
+        passed = re.search(r"(?m)^# pass ([0-9]+)$", result.stdout)
+        total = re.search(r"(?m)^# tests ([0-9]+)$", result.stdout)
+        self.assertIsNotNone(passed, "TAP passed-test total missing")
+        self.assertIsNotNone(total, "TAP test total missing")
+        self.assertGreaterEqual(int(passed.group(1)), 9,
+                                "baseline security test coverage regressed")
+        self.assertEqual(passed.group(1), total.group(1),
+                         "TAP test count and passed count differ")
 
     def test_review_only_code_does_not_activate_existing_hosting(self):
         self.assertTrue((SERVICE / "package.json").is_file())

@@ -104,6 +104,46 @@ test('failed HTTP verify with forged positive body cannot authorize settlement',
   assert.ok(called[0].endsWith('/verify'));
 });
 
+test('HTTP 200 verification rejects missing or contradictory isValid claims', async () => {
+  delete process.env.PUBLIC_ORIGIN;
+  const cases = [
+    ['generic success without isValid', { success: true }, false],
+    ['explicit invalid despite generic success', { isValid: false, success: true }, false],
+    ['explicit valid contradicted by failure', { isValid: true, success: false }, false],
+    ['malformed optional success', { isValid: true, success: 'true' }, false],
+    ['explicit valid with no success flag', { isValid: true }, true],
+    ['both explicit valid flags', { isValid: true, success: true }, true],
+  ];
+  for (const [label, body, expected] of cases) {
+    let calls = 0;
+    globalThis.fetch = async url => {
+      assert.ok(String(url).endsWith('/verify'));
+      calls += 1;
+      return new Response(JSON.stringify(body), { status: 200 });
+    };
+    const verified = await verifyPayment('/api/pa-business', { x402Version: 2 });
+    assert.equal(verified.valid, expected, label);
+    assert.equal(calls, 1, label);
+  }
+});
+
+test('contradictory verification cannot execute upstream data or settle', async () => {
+  delete process.env.PUBLIC_ORIGIN;
+  const called = [];
+  globalThis.fetch = async url => {
+    called.push(String(url));
+    return new Response(JSON.stringify({ isValid: false, success: true }), { status: 200 });
+  };
+  const result = reply();
+  await paidRoute(req({host:'localhost:3000','payment-signature':signature()}),
+    result, '/api/pa-business', () => ({q:'Test'}),
+    async () => { throw new Error('contradictory verification must block data'); });
+  assert.equal(result.code, 402);
+  assert.equal(result.body.error, 'payment_verification_failed');
+  assert.equal(called.length, 1);
+  assert.ok(called[0].endsWith('/verify'));
+});
+
 test('settlement timeout/HTTP unknown never submits a second financial POST', async () => {
   let calls = 0;
   globalThis.fetch = async () => {
