@@ -37,9 +37,8 @@ test('invalid, attacker-controlled and noncanonical public origins are rejected'
   for (const candidate of [
     'http://trusted.example', 'https://trusted.example/path',
     'https://trusted.example/?redirect=1', 'https://user:pass@trusted.example',
-    'https://trusted.example#fragment', 'https://trusted.example.evil.invalid:443',
+    'https://trusted.example#fragment',
   ]) {
-    if (candidate === 'https://trusted.example.evil.invalid:443') continue;
     assert.throws(() => start({NODE_ENV: 'production', PUBLIC_ORIGIN: candidate}),
       /PUBLIC_ORIGIN_INVALID/, candidate);
   }
