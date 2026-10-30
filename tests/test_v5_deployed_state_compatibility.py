@@ -107,10 +107,15 @@ class DeployedV5ReadOnlyProof(unittest.TestCase):
             git("fetch", "--quiet", "--no-tags", "origin", branch_ref)
             source = git("rev-parse", "FETCH_HEAD")
             self.assertEqual(source, expected_head, "Reviewed head drift")
-            self.assertEqual(git("rev-parse", "HEAD^{tree}"),
-                             git("rev-parse", f"{source}^{{tree}}"),
-                             "CI checkout tree differs from reviewed candidate")
-            if checkout != source:
+            # GitHub PR jobs run a synthetic merge; its tree can legitimately
+            # differ from the exact candidate tree. Require exact candidate
+            # head identity independently and require BOTH merge parent SHAs.
+            # The separate Foundation lane checks out and tests exact head.
+            if checkout == source:
+                self.assertEqual(git("rev-parse", "HEAD^{tree}"),
+                                 git("rev-parse", f"{source}^{{tree}}"),
+                                 "Exact-head checkout tree drift")
+            else:
                 parents = [
                     line[7:] for line in git("cat-file", "-p", "HEAD").splitlines()
                     if line.startswith("parent ")
@@ -241,6 +246,9 @@ class DeployedV5ReadOnlyProof(unittest.TestCase):
         print("POST_V5_SOURCE_STATE_RECEIPT=" + json.dumps({
             "status": "PASS_READONLY_COMPATIBILITY_NOT_ACCEPTANCE",
             "trigger": trigger, "reviewed_source": source,
+            "execution_tree_sha": git("rev-parse", "HEAD^{tree}"),
+            "reviewed_head_tree_sha": git("rev-parse", f"{source}^{{tree}}"),
+            "execution_is_exact_head": checkout == source,
             "protected_main": main, "state_commit": state_commit,
             "sqlite_blob": blob, "manifest_blob": manifest_blob,
             "storage_format": storage_format, "sqlite_sha256": raw_sha256,

@@ -52,6 +52,67 @@ try{
   const badBody=await badPayment.json();
   assert.equal(badBody.error,'invalid_payment_header');
 
+  const census=await fetch(base+'/api/us-address-geocode?address=4600%20Silver%20Hill%20Rd%2C%20Washington%2C%20DC%2020233');
+  assert.equal(census.status,402);
+  const censusHeader=census.headers.get('payment-required');
+  assert.ok(censusHeader,'native Census route should emit PAYMENT-REQUIRED');
+  const censusDoc=JSON.parse(Buffer.from(censusHeader,'base64').toString('utf8'));
+  assert.equal(censusDoc.resource.url.endsWith('/api/us-address-geocode'),true);
+  assert.equal(censusDoc.accepts[0].amount,'5000');
+  assert.equal(censusDoc.accepts[0].asset,'0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913');
+  assert.equal(censusDoc.accepts[0].extra.name,'USD Coin');
+  assert.equal(censusDoc.resource.serviceName,'Census Address Geocoder');
+
+  const badCensus=await fetch(base+'/api/us-address-geocode?address=x',{
+    headers:{'PAYMENT-SIGNATURE':Buffer.from(JSON.stringify({x402Version:2}),'utf8').toString('base64')}
+  });
+  assert.equal(badCensus.status,400);
+
+  const rdap=await fetch(base+'/api/domain-rdap?domain=example.com');
+  assert.equal(rdap.status,402);
+  const rdapHeader=rdap.headers.get('payment-required');
+  assert.ok(rdapHeader,'native RDAP route should emit PAYMENT-REQUIRED');
+  const rdapDoc=JSON.parse(Buffer.from(rdapHeader,'base64').toString('utf8'));
+  assert.equal(rdapDoc.resource.url.endsWith('/api/domain-rdap'),true);
+  assert.equal(rdapDoc.accepts[0].amount,'5000');
+  assert.equal(rdapDoc.accepts[0].extra.name,'USD Coin');
+  assert.equal(rdapDoc.resource.serviceName,'Domain RDAP Lookup');
+
+  const badRdap=await fetch(base+'/api/domain-rdap?domain=bad_domain',{
+    headers:{'PAYMENT-SIGNATURE':Buffer.from(JSON.stringify({x402Version:2}),'utf8').toString('base64')}
+  });
+  assert.equal(badRdap.status,400);
+
+  const sec=await fetch(base+'/api/sec-filings?ticker=AAPL&form=10-K&limit=1');
+  assert.equal(sec.status,402);
+  const secHeader=sec.headers.get('payment-required');
+  assert.ok(secHeader,'native SEC route should emit PAYMENT-REQUIRED');
+  const secDoc=JSON.parse(Buffer.from(secHeader,'base64').toString('utf8'));
+  assert.equal(secDoc.resource.url.endsWith('/api/sec-filings'),true);
+  assert.equal(secDoc.accepts[0].amount,'5000');
+  assert.equal(secDoc.accepts[0].extra.name,'USD Coin');
+  assert.equal(secDoc.resource.serviceName,'SEC Recent Filings');
+
+  const badSec=await fetch(base+'/api/sec-filings',{
+    headers:{'PAYMENT-SIGNATURE':Buffer.from(JSON.stringify({x402Version:2}),'utf8').toString('base64')}
+  });
+  assert.equal(badSec.status,400);
+
+  const ofac=await fetch(base+'/api/ofac-sdn-screen?name=VLADIMIR%20PUTIN&limit=3&minScore=85');
+  assert.equal(ofac.status,402);
+  const ofacHeader=ofac.headers.get('payment-required');
+  assert.ok(ofacHeader,'native OFAC route should emit PAYMENT-REQUIRED');
+  const ofacDoc=JSON.parse(Buffer.from(ofacHeader,'base64').toString('utf8'));
+  assert.equal(ofacDoc.resource.url.endsWith('/api/ofac-sdn-screen'),true);
+  assert.equal(ofacDoc.accepts[0].amount,'5000');
+  assert.equal(ofacDoc.accepts[0].extra.name,'USD Coin');
+  assert.equal(ofacDoc.resource.serviceName,'OFAC Name Screen');
+
+  const badOfac=await fetch(base+'/api/ofac-sdn-screen?name=x',{
+    headers:{'PAYMENT-SIGNATURE':Buffer.from(JSON.stringify({x402Version:2}),'utf8').toString('base64')}
+  });
+  assert.equal(badOfac.status,400);
+
   for(const path of ['/api/pa-entity-one?q=OpenAI','/api/pa-business?q=OpenAI&limit=1']){
     const r=await fetch(base+path,{redirect:'manual'});
     assert.equal(r.status,402,path+' should return 402 unpaid');
