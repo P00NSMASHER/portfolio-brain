@@ -1,0 +1,73 @@
+# Agent Data Tools x402 — standalone seller
+
+Historical standalone branch test: [successful original mocked-contract run](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/40973212283). This link is historical proof, not a currently installed workflow.
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/P00NSMASHER/portfolio-brain/tree/agent-data-tools-standalone)
+
+Quota-independent standalone seller for the x402 data-tool portfolio. This isolated branch does not modify Portfolio Brain production code.
+
+## Paid routes
+
+- `/api/pa-entity-one` — $0.001 USDC
+- `/api/pa-business` — $0.005 USDC
+- `/api/vendor-intake-gate` — $0.020 USDC
+- `/api/sec-filings` — $0.005 USDC
+- `/api/us-address-geocode` — $0.005 USDC
+- `/api/ofac-sdn-screen` — $0.005 USDC
+- `/api/domain-rdap` — $0.005 USDC
+- `/api/treasury-average-rates` — $0.005 USDC
+
+## Discovery
+
+These surfaces are deliberately free and unpaywalled:
+
+- `/.well-known/x402`
+- `/.well-known/agent.json`
+- `/openapi.json`
+- `/llms.txt`
+- `/skill.md`
+- `/robots.txt`
+- `/sitemap.xml`
+- `/api/health`
+
+## Payment contract
+
+- x402 v2 exact
+- Base `eip155:8453`
+- Base USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
+- EIP-712 domain name `USD Coin`, version `2`
+- Seller wallet `0x708f7b52b56eafd7fc1de65fc7752ed732914021`
+- PayAI facilitator
+
+The service verifies payment before doing paid work, obtains a successful authoritative result, and settles only after that result exists. Validation/upstream failures do not settle.
+
+## Authoritative sources
+
+- Pennsylvania Department of State via data.pa.gov
+- U.S. SEC EDGAR
+- U.S. Census Bureau Geocoding Services
+- U.S. Treasury OFAC SDN exports
+- IANA RDAP bootstrap + authoritative registry RDAP
+- U.S. Treasury Fiscal Data
+
+## Verification gates
+
+The original isolated-branch workflow is preserved as an **inert recipe** at `ci-reference.yml`, not installed under `.github/workflows/`. This intentionally preserves protected main's reviewed active-workflow inventory. The mock contract checks can be reproduced locally with `npm test`; a future independent release must explicitly requalify any live checks:
+
+1. contract tests for public discovery and all eight unpaid HTTP 402 challenges;
+2. exact Base USDC / `USD Coin` payment metadata checks;
+3. mocked verify → data → settle ordering plus no-settle-on-upstream-failure;
+4. deterministic mock-payment contracts, never settling real payments;
+5. `@agentcash/discovery` origin discovery in the earlier isolated test recipe;
+6. `@agentcash/discovery` checks against every paid route in the earlier isolated test recipe;
+7. warning-free discovery enforcement.
+
+## Live upstream qualification (not a CI release pass)
+
+The original [standalone CI run 40972971832](https://github.com/P00NSMASHER/portfolio-brain/actions/runs/40972971832) failed its live upstream smoke on an actual U.S. Census 502 response. That failure remains preserved and **does not establish readiness**. The live upstream check is now separate from deterministic mock-payment CI so external outages cannot masquerade as a code regression. A future deployment requires a new successful `npm run test:upstreams` on an explicitly authorized network plus independent upstream/settlement security review. No real payment tests are authorized.
+
+## Render deployment
+
+The repository-root `render.yaml` is intentionally **unchanged from protected main** and continues to point to the existing `x402-render-gateway` service. This new standalone implementation is an isolated, **non-deployed code proposal**. It must not repoint the existing service or change its auto-deploy settings. Hosting location, authenticated payments, spending, customer use, and any external publication require separate authorization and independent tests; the optional Deploy-to-Render link above does not initiate deployment.
+
+No backend secrets are required. `PUBLIC_ORIGIN` is not required because discovery URLs are derived from the incoming public host.
