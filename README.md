@@ -6,6 +6,8 @@ through existing owners, and requires independent checks and actual delivery
 verification. Success means reliable useful projects and less user intervention.
 Revenue is optional project context, not the portfolio objective.
 
+**Current product status:** [Operator quickstart, tested source matrix, and explicit security/deployment holds](docs/rebuild/PRODUCT_RELEASE_READINESS_20261030.md). The Brain core runs under existing source-bound controls; optional bot admission, native approval and standalone x402 seller code are **review-only** and cannot independently authorize a protected merge, real payment or hosted launch. The user's 12-hour observation remains explicitly **paused**; ordinary code quality tests are not a substitute for a signed 12-hour acceptance.
+
 The active implementation is **`brain/`**. The former workflow control plane is
 retired. Its code and historical evidence remain available for recovery and offline
 regression testing; they do not establish current operational readiness. Historical
