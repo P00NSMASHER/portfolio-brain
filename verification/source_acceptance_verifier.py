@@ -18,11 +18,12 @@ from pathlib import Path
 from types import MappingProxyType
 import re
 import tempfile
+import time
 import urllib.parse
 import urllib.request
 import zipfile
 
-from soak_v3.audit import REQUIRED_STEPS, require, sha40, sha64, verify_artifact
+from soak_v3.audit import EvidenceError, REQUIRED_STEPS, require, sha40, sha64, verify_artifact
 from soak_v3.current_state_probe import verify_source_state
 from soak_v3.remote_probe import GitHubReadOnly
 from brain.watchdog import ClockError, verify_parent
@@ -200,19 +201,61 @@ def _zip_json(raw: bytes, name: str) -> dict:
         raise SourceAcceptanceError("artifact ZIP invalid") from exc
 
 
-def _one_job(api: GitHubReadOnly, run_id: int) -> dict:
-    jobs = api.json(f"/actions/runs/{run_id}/jobs?filter=all&per_page=100")
-    rows = jobs.get("jobs")
-    req(jobs.get("total_count") == 1 and type(rows) is list and len(rows) == 1,
-        "run job census incomplete")
-    job = rows[0]
-    req(job.get("name") == "monitor" and job.get("status") == "completed"
-        and job.get("conclusion") == "success", "monitor job failed")
-    steps = {row.get("name"): row.get("conclusion") for row in job.get("steps", [])
-             if type(row) is dict and type(row.get("name")) is str}
-    req(all(steps.get(name) == "success" for name in REQUIRED_STEPS),
-        "required production step failed")
-    return job
+def _one_job(api: GitHubReadOnly, run_id: int, *, sleep=time.sleep) -> dict:
+    """Replay the original monitor with bounded fail-closed GitHub readbacks.
+
+    A successful workflow_run may momentarily expose a partial job-step list.
+    Explicit failed steps, adverse jobs, inconsistent identities, and exhausted
+    transport or incomplete reads cannot be converted into acceptance.
+    """
+    path = f"/actions/runs/{run_id}/jobs?filter=all&per_page=100"
+    original_job_id = None
+    for attempt in range(3):
+        try:
+            jobs = api.json(path)
+        except EvidenceError as exc:
+            if str(exc) != "GITHUB_API_UNAVAILABLE" or attempt == 2:
+                raise
+            sleep(attempt + 1)
+            continue
+        rows = jobs.get("jobs") if type(jobs) is dict else None
+        req(type(jobs) is dict and jobs.get("total_count") == 1
+            and type(rows) is list and len(rows) == 1 and type(rows[0]) is dict,
+            "run job census incomplete")
+        job = rows[0]
+        job_id = job.get("id")
+        if job_id is not None:
+            req(type(job_id) is int and job_id > 0, "original monitor ID invalid")
+            if original_job_id is None:
+                original_job_id = job_id
+            req(job_id == original_job_id, "original monitor ID changed")
+        req(job.get("name") == "monitor"
+            and job.get("status") == "completed"
+            and job.get("conclusion") == "success",
+            "monitor job failed")
+        rows = job.get("steps")
+        req(type(rows) is list and all(type(row) is dict for row in rows),
+            "original job steps invalid")
+        steps = {}
+        for row in rows:
+            name = row.get("name")
+            if name not in REQUIRED_STEPS:
+                continue
+            req(type(name) is str and name not in steps,
+                "duplicate original required step")
+            result = row.get("conclusion")
+            req(result in (None, "success", "skipped", "failure", "cancelled",
+                           "timed_out", "neutral"), "original step result invalid")
+            steps[name] = result
+        req(all(steps.get(name) in (None, "success") for name in REQUIRED_STEPS),
+            "required production step failed")
+        if all(steps.get(name) == "success" for name in REQUIRED_STEPS):
+            return job
+        if attempt == 2:
+            raise SourceAcceptanceError(
+                "required production step still incomplete after bounded rereads")
+        sleep(attempt + 1)
+    raise SourceAcceptanceError("original monitor job readback unavailable")
 
 
 def _one_artifact(api: GitHubReadOnly, run: dict, source: str) -> tuple[dict, bytes, dict]:
