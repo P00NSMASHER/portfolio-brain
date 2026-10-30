@@ -24,7 +24,7 @@ def valid_receipt():
         "first_original_monitor_completed_utc": "2026-10-24T10:31:00Z",
         "historical_adverse_automatic_cores_for_this_source": [],
         "prior_source_acceptance_is_not_transferable": True,
-        "original_proof_status": "SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED",
+        "original_proof_status": "TWELVE_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED",
         "all_success_attempt_one": True,
         "all_original_core_state_parent_child_links_contiguous": True,
         "all_required_original_job_steps_success": True,
@@ -142,6 +142,56 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
                 with self.assertRaises(sav.SourceAcceptanceError):
                     sav._verify_receipt_contract(changed)
 
+
+
+    def test_twelve_hour_contract_rejects_the_discarded_six_hour_receipt(self):
+        self.assertEqual(sav.REQUIRED_CRITERIA["minimum_completed_span_seconds"], 43200)
+        self.assertIs(sav.REQUIRED_CRITERIA[
+            "requires_terminal_30_minute_repair_follow_through"], True)
+        receipt = valid_receipt()
+        sav._verify_receipt_contract(receipt)
+        receipt["criteria"]["minimum_completed_span_seconds"] = 21600
+        with self.assertRaises(sav.SourceAcceptanceError):
+            sav._verify_receipt_contract(receipt)
+        receipt = valid_receipt()
+        receipt["original_run_evidence"]["original_proof_status"] = (
+            "SIX_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED"
+        )
+        with self.assertRaises(sav.SourceAcceptanceError):
+            sav._verify_receipt_contract(receipt)
+
+    def test_terminal_repair_follow_through_is_independently_time_bounded(self):
+        terminal = datetime(2026, 10, 29, 12, 0, tzinfo=timezone.utc)
+        summary = {"terminal": {"completed": terminal},
+                   "automatic": [{"id": 100}, {"id": 101}]}
+        early = datetime(2026, 10, 29, 12, 29, tzinfo=timezone.utc)
+        later = datetime(2026, 10, 29, 12, 31, tzinfo=timezone.utc)
+        with mock.patch("verification.reliability_day.inventory",
+                        return_value=[{"id": 200}]) as inventory, \
+             mock.patch("verification.reliability_day.verify_repairs",
+                        return_value=True) as repairs:
+            with self.assertRaises(sav.SourceAcceptanceError):
+                sav.verify_terminal_repair_follow_through(
+                    object(), summary, SOURCE, now=early)
+            inventory.assert_not_called()
+            repairs.assert_not_called()
+            sav.verify_terminal_repair_follow_through(
+                object(), summary, SOURCE, now=later)
+            repairs.assert_called_once()
+            args, kwargs = repairs.call_args
+            self.assertEqual(args[3], {100, 101})
+            self.assertEqual(kwargs["cutoff"],
+                             datetime(2026, 10, 29, 12, 30, tzinfo=timezone.utc))
+
+        with mock.patch("verification.reliability_day.inventory",
+                        return_value=[{"id": 200}]), \
+             mock.patch("verification.reliability_day.verify_repairs",
+                        return_value=False):
+            with self.assertRaisesRegex(
+                sav.SourceAcceptanceError, "repair follow-through incomplete"
+            ):
+                sav.verify_terminal_repair_follow_through(
+                    object(), summary, SOURCE, now=later)
 
     def test_nested_provenance_claims_denied_by_verifier_and_producer(self):
         denied_claims = (
