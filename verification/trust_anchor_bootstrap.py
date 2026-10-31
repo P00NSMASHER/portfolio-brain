@@ -80,7 +80,8 @@ def _api(token: str, path: str, *, method="GET", payload=None) -> Any:
         headers={"Authorization": "Bearer " + token,
                  "Accept": "application/vnd.github+json",
                  "X-GitHub-Api-Version": "2022-11-28",
-                 "User-Agent": "PortfolioBrain-trust-anchor-bootstrap"},
+                 "User-Agent": "PortfolioBrain-trust-anchor-bootstrap",
+                 **({"Content-Type": "application/json"} if data is not None else {})},
         method=method,
     )
     with urllib.request.urlopen(req, timeout=25) as response:
