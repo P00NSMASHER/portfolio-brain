@@ -1,31 +1,41 @@
-# Source-admission gate cutover: protected draft, not deployed
+# Portfolio Brain cross-path source admission and authorized verifier cutover
 
-**Scope:** Portfolio Brain governance issue [#795](https://github.com/P00NSMASHER/portfolio-brain/issues/795). This is a proposed, source-bound admission control for **every** ordinary GitHub PR merge route, not a reliability acceptance result.
+**Status: review-only draft PR #804; NOT deployed.** Issue #795 is still OPEN and historical issue #796 remains untouched.
 
-## Observed defect
+## Verified root cause
 
-The existing protected `main` ruleset #24182301 requires two successful checks: `validate` (GitHub Actions App 15368) and `portfolio-phase1-gate` (independent App 5121826). It does **not** itself require an accepted predecessor source. The existing v9 `accepted_source()` check only applies to opt-in documentation-only native auto-merge enrollment, not owner/manual GitHub UI or REST merges. Historical PR #794 merged without the matching observed predecessor acceptance ref. That original event and every recorded failure remain immutable.
+Protected GitHub ruleset 24182301 has zero bypass actors and two required issuer-pinned checks: `validate` (GitHub Actions App15368) and `portfolio-phase1-gate` (App5121826). The deployed second verifier currently checks immutable trust anchors and tests, but *not* accepted predecessor source. The optional v9 auto-merge controller checks predecessor acceptance only in its special docs-only path. Therefore manual GitHub UI/API PR merges can pass the required rules while failing the separate app-specific source acceptance contract.
 
-## Proposed fail-closed admission
+The deployed verifier rejects candidates changing `verification/independent_verifier.py`; that behavior is correct and must not be bypassed with a forged green status, direct protected update, forced Git push, or unilateral ruleset weakening. PR #804's genuine App5121826 check is currently red for that exact reason.
 
-The draft makes the trusted-main independent verifier require `verify_predecessor_acceptance(main_sha, read)` before publishing a successful **existing required** App5121826 `portfolio-phase1-gate` check. It reuses the reviewed `brain/v9/guarded_merge.py::accepted_source` proof: exact one-child receipt branch, valid one-file source-specific receipt, 43,200 completed seconds, 5,400-second gap cap, 30-minute terminal follow-through, correct Git ancestry/SQLite evidence and independent App5121826 receipt-hash attestation. Missing, ambiguous, forged, stale, wrong-source, unavailable-API or improperly issued evidence **denies** the check. It does not accept user comments, manual actions, synthetic local successes or successful 6-hour evidence as a substitute. The read-only adapter allows only five fixed GitHub route families, with a hard eight-read cap.
+## Correct canonical receipt proof
 
-The verifier protects its own implementation, the read-only adapter and the underlying reviewed acceptance engine as immutable trust anchors. Any PR that modifies those anchors is blocked by the existing protected gate, rather than changing verification rules under candidate control.
+The canonical active receipt producer **does NOT** use legacy `brain-acceptance-<sha8>-YYYYMMDD`. It creates `auto-repair/pb-01-acceptance-receipt-<sha8>-YYYYMMDD`, a single-child branch and an open non-mergeable-as-certification PR with one `acceptance/finish-soak-<sha8>-YYYYMMDD.json` file. The independent source-acceptance verifier reads original GitHub cycles, signed Cloudflare provenance, state, SQLite, terminal follow-through and artifacts, then posts App5121826 `portfolio-source-acceptance` on the exact receipt head with `external_id=source-acceptance:<main_sha>:<sha256(exact_receipt_bytes)>`.
 
-## Known deployment and bootstrap blocker
+PR #804 uses that **canonical** branch and independently issued check. It validates exact source, one child, one added file, raw Git blob hash, strict receipt schema, 43,200 completed seconds, gap at most 5,400s, required 30-minute follow-through, source/SQLite/ledger invariants, positive signed origin and the unique issuer-pinned receipt-hash binding. A prior source, a simulated receipt, 6-hour evidence, wrong App, duplicate check, wrong SHA, incomplete provider census or absent ref all FAIL CLOSED. It does not replay original cycles itself: it relies on the separately credentialed App's original full replay.
 
-This draft necessarily changes `verification/independent_verifier.py`, which the *currently deployed verifier* forbids any normal PR candidate from changing. Therefore **the candidate's independent App check must not be described as green or mergeable**. Do not bypass or remove that protection, fabricate an App check, force push, direct commit to protected main, or expand credentials. An owner-reviewed, independently governed *separate trust-root bootstrap* must be planned and explicitly authorized before installing this change. A green offline test suite or Foundation CI alone does not authorize merging.
+## Observation activation deadlock fixed in candidate, still OFF in production
 
-A second ordering constraint: the current source has no completed 12-hour acceptance and the observation/receipt producer intentionally contain literal `false &&` user holds. Switching on unconditional predecessor admission immediately would block all later PRs, **including a PR to enable the observation**, until an authentic accepted source exists. The approved cutover must explicitly solve this sequencing without a fake acceptance, waiver based on a PR label, or an insecure exception for manual merges. A new protected source after any merge requires its own independent 12-hour acceptance.
+The current main workflows retain literal `false &&`. Within PR #804 only, both observers replace the literal hold with an additional new, exact-source opt-in: `vars.PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA == github.sha`, **in addition** to existing `vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true'`. Current main and the candidate are different SHAs; no value is set by this PR. No 12-hour workflow is started or enabled.
 
-## Negative tests required before final close
+After a genuine protected cutover, the user can explicitly approve starting the observation by setting **both** GitHub repository variables, with `PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA` equal to the *then-current protected main full SHA*. A source change automatically invalidates that authorization. Never set these variables before the user's separate explicit approval. Observation must still genuinely pass the original 12h time/gap/follow-through and separate App acceptance requirements.
 
-1. A same-repo PR with both normal CI tests passing, but **no** predecessor source acceptance, must be denied by App5121826 and cannot merge through GitHub UI, REST or automation.
-2. A verified predecessor source must have valid original ZIP/CRC evidence, source SHA, valid acceptance commit ancestry and *independent* issuer-pinned source receipt. A wrong App, different source, stale 6-hour receipt or missing terminal follow-through must deny.
-3. A PR modifying trusted verifier, acceptance engine, new adapter, ruleset or CI controls must not bypass this admission.
-4. Re-run the existing no-bypass, strict issuer-pinned branch ruleset proof. Neither existing check may be removed or replaced.
-5. Verify actual unmodified Cloudflare/GitHub automatic core cadence and exact-source durable state. Preserve issues #795 and #796 until independently evidenced resolution.
+This ordering avoids needing another PR *after* source acceptance has been made mandatory, which would otherwise create a circular deadlock.
 
-## Current operator restrictions
+## Required protected trust-root bootstrap
 
-**Do not enable, start or backdate the 12-hour observation.** Both `.github/workflows/reliability-day.yml` and `.github/workflows/portfolio-source-acceptance-producer.yml` retain literal `false &&` plus `vars.PORTFOLIO_12H_OBSERVATION_ENABLED`. No credential, schedule, payment, production deployment or branch-ruleset changes are part of this draft. Final status: **cross-path enforcement designed and testable, not installed**; issue #795 remains open.
+This PR alters an anchor protected by the existing verifier, so Foundation success and simulations alone will never satisfy the currently required App5121826 gate. The owner has explicitly authorized the trust-anchor upgrade but not a downgrade of issuer guarantees. Safe installation requires an **independently signed, equivalent-or-stronger bootstrap gate** deployed and audited via a separate protected PR that does **not** edit the old anchor. An administrator then atomically configures the protected ruleset to require the temporary independently signed bootstrap check from App5121826 alongside the original Foundation check, verifying no protected PR other than the exact reviewed upgrade head can pass. The old normal gate cannot be taken out before this alternate protection is proven live and required. After exact-head protected release, restore the normal App5121826 `portfolio-phase1-gate` requirement and verify a real negative test. Never add a bypass actor or allow a time interval with only an unverified check.
+
+GitHub's connected app has no ruleset-write endpoint. The available connected browser tool reported insufficient credits and performed no admin action. Do not claim server-side enforcement or merge #804 until the required admin-controlled trusted-root bootstrap is genuinely completed, original check issuers verified, and the two-flag observation hold audited.
+
+## Required final evidence before closing #795
+
+1. Exact-head Foundation App15368 and *authentic* independent issuer-pinned bootstrap App5121826 success with reviewed trust-root hash and app identity.
+2. Original protected GitHub merge on the candidate head; no forced updates, admin bypass, or fabricated statuses.
+3. Original postmerge Foundation and production core cycle successes, verified state publication and ancestry.
+4. The two-variable observer jobs remain **skipped** after merge until the explicit authorization that sets both variables for the new source.
+5. A real manual/REST PR against unaccepted protected main is blocked by the independent App gate; forged/old-source receipt or missing App check fails.
+6. Zero unrelated open PRs after resolving them through their own independent green checks.
+7. Keep original #794, #796 and all historical failure artifacts immutable. No retroactive PASS.
+
+**Decision until all originals are available: NOT DEPLOYED, NO-GO FOR GOVERNANCE CERTIFICATION.**
