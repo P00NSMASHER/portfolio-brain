@@ -19,6 +19,7 @@ from soak_v3.current_state_probe import verify_source_state
 from soak_v3.remote_probe import GitHubReadOnly
 from verification.source_acceptance_verifier import (
     APPROVAL_BASIS, REPOSITORY, REQUIRED_AUTHORITY_LIMITS, REQUIRED_CRITERIA,
+    SOURCE_ACCEPTANCE_API_CALL_BUDGET,
     SCOPE, _decode_content, _verify_receipt_contract, collect_original_runs,
     req, strict_json, verify_acceptance, verify_terminal_repair_follow_through,
 )
@@ -291,7 +292,7 @@ def main(argv=None) -> int:
     read_token = os.environ.get("GITHUB_TOKEN", "")
     write_token = os.environ.get("PORTFOLIO_RUNTIME_TOKEN", "")
     try:
-        api = GitHubReadOnly(read_token, max_calls=256)
+        api = GitHubReadOnly(read_token, max_calls=SOURCE_ACCEPTANCE_API_CALL_BUDGET)
         receipt, date = build_receipt(api, source)
         result = publish_receipt(
             api, GitHubWrite(write_token), source=source, receipt=receipt, date=date,
