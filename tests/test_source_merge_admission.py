@@ -1,160 +1,255 @@
-"""Adversarial read-only checks for predecessor-source branch-policy admission."""
+"""Hostile acceptance-census and manual merge-path tests; no network or App writes."""
+import base64
 import copy
-import io
+import hashlib
+import json
 import unittest
 import urllib.error
 from unittest.mock import patch
 
-from brain.v9 import guarded_merge as gm
+from brain.v9.guarded_merge import REPO, git_blob_sha
+from verification import independent_verifier as independent
 from verification.source_admission import (
-    SourceAdmissionError,
-    verify_predecessor_acceptance,
+    SourceAdmissionError, verify_predecessor_acceptance,
 )
-from verification import independent_verifier as verifier
-from test_brain_v9_guarded_merge import BASE, REVIEW_TIP, FakeProvider
+from test_source_acceptance_verifier import valid_receipt
+
+SOURCE = "a" * 40
+TIP = "b" * 40
+DATE = "20261024"
+BRANCH = "auto-repair/pb-01-acceptance-receipt-" + SOURCE[:8] + "-" + DATE
+PATH = "acceptance/finish-soak-" + SOURCE[:8] + "-" + DATE + ".json"
+
+
+def authentic_receipt():
+    receipt = valid_receipt()
+    receipt["source_sha"] = SOURCE
+    receipt["decision_date_utc"] = "2026-10-25"
+    run = receipt["original_run_evidence"]
+    run.update(
+        completed_span_seconds=43201, maximum_gap_seconds=1800,
+        original_qualifying_cores=24, original_signed_cloudflare_dispatched_cores=24,
+        original_github_native_schedule_cores=0, source_run_census_count=24,
+        first_original_run_id=101, terminal_original_run_id=125,
+        terminal_original_monitor_completed_utc="2026-10-25T00:31:01Z",
+    )
+    terminal = receipt["terminal_state_replay"]
+    terminal.update(
+        source_sha=SOURCE, pending_events=0, sqlite_integrity="PASS",
+        foreign_keys="PASS", strict_event_ledger_replay="PASS",
+        deterministic_report_reproduction="PASS",
+        terminal_replay_status="ORIGINAL_TERMINAL_RAW_SQLITE_REPLAY_VERIFIED",
+    )
+    external = receipt["external_cloudflare_provider"]
+    external.update(
+        signed_dispatch_count=24,
+        signed_dispatch_timestamps_utc=["2026-10-24T10:31:00Z"],
+        all_signed_origin_records_source_bound=True,
+        all_origin_verification_steps_success=True,
+    )
+    proof = receipt["proof"]
+    proof.update(
+        technical_workflow_run_id=42,
+        technical_workflow_run_attempt=1,
+        technical_workflow_conclusion="success",
+        technical_audit_url="https://github.com/" + REPO + "/actions/runs/42",
+        hosted_review_result_source_bound=True,
+    )
+    return receipt
+
+
+class OriginalProvider:
+    """Faithful canonical producer ref, bytes and independent App attestation."""
+    def __init__(self):
+        self.receipt = authentic_receipt()
+        self.refs = [{"ref": "refs/heads/" + BRANCH,
+                      "object": {"sha": TIP, "type": "commit"}}]
+        self.commit = {"sha": TIP, "parents": [{"sha": SOURCE}]}
+        self.compare = {
+            "ahead_by": 1, "behind_by": 0,
+            "merge_base_commit": {"sha": SOURCE},
+            "files": [{"filename": PATH, "status": "added"}],
+        }
+        self.main = {"protected": True, "commit": {"sha": SOURCE}}
+        self.issuer = 5121826
+        self.binding_override = None
+        self.paid = False
+        self.calls = []
+
+    def get(self, route):
+        self.calls.append(route)
+        raw = (json.dumps(self.receipt, indent=2, sort_keys=True,
+                          allow_nan=False) + "\n").encode()
+        if route == "/git/matching-refs/heads/auto-repair/pb-01-acceptance-receipt-" + SOURCE[:8] + "-":
+            return copy.deepcopy(self.refs)
+        if route == "/git/commits/" + TIP:
+            return copy.deepcopy(self.commit)
+        if route == "/compare/" + SOURCE + "..." + TIP:
+            return copy.deepcopy(self.compare)
+        if route == "/contents/" + PATH + "?ref=" + TIP:
+            return {"type": "file", "encoding": "base64", "size": len(raw),
+                    "sha": git_blob_sha(raw),
+                    "content": base64.b64encode(raw).decode()}
+        if route == "/commits/" + TIP + "/check-runs?per_page=100":
+            binding = "source-acceptance:" + SOURCE + ":" + hashlib.sha256(raw).hexdigest()
+            return {"total_count": 1, "check_runs": [{
+                "id": 700, "head_sha": TIP, "name": "portfolio-source-acceptance",
+                "app": {"id": self.issuer},
+                "external_id": self.binding_override or binding,
+                "status": "completed", "conclusion": "success",
+            }]}
+        if route == "/branches/main":
+            return copy.deepcopy(self.main)
+        raise AssertionError("unexpected provider endpoint: " + route)
 
 
 class SourceMergeAdmissionTests(unittest.TestCase):
-    def observe(self, provider, *, calls=None):
-        def read(path):
-            if calls is not None:
-                calls.append(path)
-            return provider.get("repos/" + gm.REPO + path)
-        return verify_predecessor_acceptance(BASE, read)
+    def verify(self, provider):
+        return verify_predecessor_acceptance(SOURCE, provider.get)
 
-    def test_real_source_specific_attestation_passes_only_exact_main(self):
-        provider = FakeProvider()
-        calls = []
-        proof = self.observe(provider, calls=calls)
-        self.assertEqual(proof["acceptance_commit"], REVIEW_TIP)
-        self.assertIn("brain-acceptance-" + BASE[:8], proof["acceptance_ref"])
-        self.assertEqual(len(calls), 5)
-        self.assertTrue(all(path.startswith("/") for path in calls))
-        self.assertTrue(all("/repos/" not in path for path in calls))
+    def test_canonical_producer_branch_with_real_app_receipt_is_admitted(self):
+        provider = OriginalProvider()
+        proof = self.verify(provider)
+        self.assertEqual(proof["acceptance_ref"], BRANCH)
+        self.assertEqual(proof["acceptance_commit"], TIP)
+        self.assertEqual(len(provider.calls), 6)
+        self.assertEqual(provider.calls[-1], "/branches/main")
 
-    def test_missing_predecessor_acceptance_does_not_invent_one(self):
-        provider = FakeProvider()
-        provider.no_acceptance = True
+    def test_legacy_branch_must_not_substitute_for_canonical_producer(self):
+        provider = OriginalProvider()
+        provider.refs[0]["ref"] = "refs/heads/brain-acceptance-" + SOURCE[:8] + "-" + DATE
+        with self.assertRaisesRegex(SourceAdmissionError, "ACCEPTANCE_BRANCH_IDENTITY"):
+            self.verify(provider)
+
+    def test_no_receipt_and_no_fabricated_producer_branch(self):
+        provider = OriginalProvider()
+        provider.refs = []
         with self.assertRaisesRegex(SourceAdmissionError, "SOURCE_ACCEPTANCE_NOT_YET_RECORDED"):
-            self.observe(provider)
+            self.verify(provider)
+        self.assertEqual(len(provider.calls), 1)
 
-    def test_wrong_source_and_forged_receipt_rejected(self):
-        for field, value in (
-            ("source_sha", "f" * 40),
-            ("decision", "RELEASED_WITHOUT_EVIDENCE"),
-            ("status", "COLLECTING"),
-        ):
-            provider = FakeProvider()
-            provider.record[field] = value
-            with self.subTest(field=field), self.assertRaises(SourceAdmissionError):
-                self.observe(provider)
+    def test_missing_ref_provider_404_is_not_accepted(self):
+        def missing(_):
+            raise urllib.error.HTTPError(
+                "https://api.github.com", 404, "Not Found", {}, None)
+        with self.assertRaisesRegex(SourceAdmissionError, "SOURCE_ACCEPTANCE_NOT_YET_RECORDED"):
+            verify_predecessor_acceptance(SOURCE, missing)
 
-    def test_six_hour_window_is_not_twelve_hour_acceptance(self):
-        provider = FakeProvider()
-        provider.record["criteria"]["minimum_completed_span_seconds"] = 21600
-        with self.assertRaisesRegex(SourceAdmissionError, "ACCEPTANCE_CURRENT_CONTRACT_REQUIRED"):
-            self.observe(provider)
-
-    def test_underlength_repair_interval_is_not_acceptance(self):
-        provider = FakeProvider()
-        provider.record["criteria"]["requires_terminal_30_minute_repair_follow_through"] = False
-        with self.assertRaisesRegex(SourceAdmissionError, "ACCEPTANCE_CURRENT_CONTRACT_REQUIRED"):
-            self.observe(provider)
-
-    def test_wrong_attestation_issuer_is_denied(self):
-        provider = FakeProvider()
-        original = provider.get
-
-        def mutated(path):
-            value = original(path)
-            if path.endswith("commits/" + REVIEW_TIP + "/check-runs?per_page=100"):
-                value["check_runs"][0]["app"]["id"] = 15368
-            return value
-
-        provider.get = mutated
-        with self.assertRaisesRegex(SourceAdmissionError, "ACCEPTANCE_ATTESTATION_UNVERIFIED"):
-            self.observe(provider)
-
-    def test_wrong_attestation_receipt_digest_is_denied(self):
-        provider = FakeProvider()
-        original = provider.get
-
-        def mutated(path):
-            value = original(path)
-            if path.endswith("commits/" + REVIEW_TIP + "/check-runs?per_page=100"):
-                value["check_runs"][0]["external_id"] = "source-acceptance:" + BASE + ":" + ("f" * 64)
-            return value
-
-        provider.get = mutated
-        with self.assertRaisesRegex(SourceAdmissionError, "ACCEPTANCE_ATTESTATION_UNVERIFIED"):
-            self.observe(provider)
-
-    def test_nonchild_acceptance_commit_is_denied(self):
-        provider = FakeProvider()
-        provider.commit["parents"][0]["sha"] = "f" * 40
-        with self.assertRaisesRegex(SourceAdmissionError, "ACCEPTANCE_COMMIT_ANCESTRY"):
-            self.observe(provider)
-
-    def test_ambiguous_multiple_refs_are_denied(self):
-        provider = FakeProvider()
+    def test_duplicate_receipt_refs_are_denied(self):
+        provider = OriginalProvider()
         provider.refs.append(copy.deepcopy(provider.refs[0]))
         with self.assertRaisesRegex(SourceAdmissionError, "ACCEPTANCE_BRANCH_NOT_UNIQUE"):
-            self.observe(provider)
+            self.verify(provider)
 
-    def test_wrong_provider_scope_is_denied_without_any_read(self):
-        invoked = []
-        with patch.object(gm, "accepted_source"):
-            with self.assertRaisesRegex(SourceAdmissionError, "SOURCE_SHA_INVALID"):
-                verify_predecessor_acceptance("unknown", lambda path: invoked.append(path))
-        self.assertEqual(invoked, [])
-        with self.assertRaisesRegex(SourceAdmissionError, "SOURCE_READ_PRINCIPAL_MISSING"):
-            verify_predecessor_acceptance(BASE, None)
+    def test_wrong_source_ancestry_and_bogus_changed_file_denied(self):
+        for mutant, code in [
+            (lambda p: p.commit["parents"][0].update(sha="f" * 40), "ACCEPTANCE_COMMIT_ANCESTRY"),
+            (lambda p: p.compare["files"][0].update(filename=".github/override.yml"), "ACCEPTANCE_BRANCH_SCOPE"),
+            (lambda p: p.compare.update(ahead_by=2), "ACCEPTANCE_BRANCH_SCOPE"),
+            (lambda p: p.main["commit"].update(sha="f" * 40), "ACCEPTANCE_MAIN_MOVED"),
+            (lambda p: p.main.update(protected=False), "ACCEPTANCE_MAIN_MOVED"),
+        ]:
+            p = OriginalProvider()
+            mutant(p)
+            with self.subTest(code=code), self.assertRaisesRegex(SourceAdmissionError, code):
+                self.verify(p)
 
-    def test_404_is_a_missing_receipt_not_a_positive_signal(self):
-        def read(path):
-            raise urllib.error.HTTPError("https://api.github.com", 404, "Not Found", {}, io.BytesIO())
-        with self.assertRaisesRegex(SourceAdmissionError, "SOURCE_ACCEPTANCE_NOT_YET_RECORDED"):
-            verify_predecessor_acceptance(BASE, read)
+    def test_less_than_twelve_completed_hours_denied(self):
+        p = OriginalProvider()
+        p.receipt["original_run_evidence"]["completed_span_seconds"] = 43199
+        with self.assertRaisesRegex(SourceAdmissionError, "ACCEPTANCE_ORIGINAL_EVIDENCE_MISSING"):
+            self.verify(p)
 
-    def test_transient_provider_failure_never_becomes_green(self):
+    def test_discarded_six_hour_contract_denied(self):
+        p = OriginalProvider()
+        p.receipt["criteria"]["minimum_completed_span_seconds"] = 21600
+        with self.assertRaisesRegex(SourceAdmissionError, "ACCEPTANCE_RECEIPT_INVALID"):
+            self.verify(p)
+
+    def test_missing_terminal_followthrough_contract_denied(self):
+        p = OriginalProvider()
+        p.receipt["criteria"]["requires_terminal_30_minute_repair_follow_through"] = False
+        with self.assertRaisesRegex(SourceAdmissionError, "ACCEPTANCE_RECEIPT_INVALID"):
+            self.verify(p)
+
+    def test_bad_gap_missing_original_step_and_nonzero_backlog_denied(self):
+        for group, key, value in [
+            ("original_run_evidence", "maximum_gap_seconds", 5401),
+            ("original_run_evidence", "all_success_attempt_one", False),
+            ("original_run_evidence", "all_required_original_job_steps_success", False),
+            ("original_run_evidence", "all_original_core_state_parent_child_links_contiguous", False),
+            ("external_cloudflare_provider", "all_signed_origin_records_source_bound", False),
+            ("terminal_state_replay", "pending_events", 1),
+            ("terminal_state_replay", "strict_event_ledger_replay", "FAIL"),
+        ]:
+            p = OriginalProvider()
+            p.receipt[group][key] = value
+            with self.subTest(group=group, key=key), self.assertRaises(SourceAdmissionError):
+                self.verify(p)
+
+    def test_wrong_issuer_or_receipt_hash_cannot_authorize(self):
+        p = OriginalProvider()
+        p.issuer = 15368
+        with self.assertRaisesRegex(SourceAdmissionError, "ACCEPTANCE_ATTESTATION_UNVERIFIED"):
+            self.verify(p)
+        p = OriginalProvider()
+        p.binding_override = "source-acceptance:" + SOURCE + ":" + "f" * 64
+        with self.assertRaisesRegex(SourceAdmissionError, "ACCEPTANCE_ATTESTATION_UNVERIFIED"):
+            self.verify(p)
+
+    def test_source_specific_receipt_cannot_certify_another_main_sha(self):
+        p = OriginalProvider()
+        p.receipt["source_sha"] = "f" * 40
+        with self.assertRaisesRegex(SourceAdmissionError, "ACCEPTANCE_STATUS_OR_SOURCE"):
+            self.verify(p)
+
+    def test_invalid_or_extra_receipt_claim_denied(self):
+        p = OriginalProvider()
+        p.receipt["proof"]["revenue_verified"] = True
+        with self.assertRaisesRegex(SourceAdmissionError, "ACCEPTANCE_RECEIPT_INVALID"):
+            self.verify(p)
+
+    def test_transient_provider_error_denies_without_retry(self):
         for status in (403, 429, 500, 502, 503, 504):
-            def read(path):
-                raise urllib.error.HTTPError("https://api.github.com", status, "Service Unavailable", {}, io.BytesIO())
+            def fail(_):
+                raise urllib.error.HTTPError(
+                    "https://api.github.com", status, "unavailable", {}, None)
             with self.subTest(status=status), self.assertRaisesRegex(
                 SourceAdmissionError, "SOURCE_API_UNAVAILABLE"
             ):
-                verify_predecessor_acceptance(BASE, read)
+                verify_predecessor_acceptance(SOURCE, fail)
 
-    def test_manual_protected_pr_still_requires_predecessor_attestation(self):
-        # No optional v9 enrollment or label is involved: this is the one
-        # issuer-pinned independent check GitHub requires on *every* PR merge.
-        records = [
-            {"head": {"repo": {"full_name": gm.REPO}, "sha": "c" * 40},
-             "base": {"repo": {"full_name": gm.REPO}, "ref": "main"}},
-            {"commit": {"sha": "b" * 40}},
-            {"merge_base_commit": {"sha": "b" * 40}, "files": []},
+    def test_any_write_or_unreviewed_read_is_denied(self):
+        p = OriginalProvider()
+        with self.assertRaisesRegex(SourceAdmissionError, "SOURCE_API_ROUTE_DENIED"):
+            # Only GET routes from the reviewed source-specific proof are permitted.
+            verify_predecessor_acceptance(SOURCE, lambda path:
+                p.get(path) if path.startswith("/git/matching-refs/") else 1)
+        # The original real branch identity is independent of any fake 2xx.
+
+    def test_independent_gate_blocks_owner_manual_merge_without_source_acceptance(self):
+        responses = [
+            {"head": {"repo": {"full_name": REPO}, "sha": "c" * 40},
+             "base": {"repo": {"full_name": REPO}, "ref": "main"}},
+            {"commit": {"sha": SOURCE}},
+            {"merge_base_commit": {"sha": SOURCE}, "files": []},
         ]
-        routes = []
-        def api(token, path, **kwargs):
-            routes.append(path)
-            return records.pop(0)
-        with patch.object(verifier, "_api", side_effect=api), patch.object(
-            verifier, "verify_predecessor_acceptance",
+        with patch.object(independent, "_api", side_effect=responses), patch.object(
+            independent, "verify_predecessor_acceptance",
             side_effect=SourceAdmissionError("SOURCE_ACCEPTANCE_NOT_YET_RECORDED"),
         ):
             with self.assertRaisesRegex(SourceAdmissionError, "SOURCE_ACCEPTANCE_NOT_YET_RECORDED"):
-                verifier.verify_exact_head(
-                    token="independent-verifier-token", pr_number=901,
-                    expected_head_sha="c" * 40, full_exit=0,
-                    phase1_exit=0, operating_exit=0,
+                independent.verify_exact_head(
+                    token="independent-token", pr_number=804,
+                    expected_head_sha="c" * 40,
+                    full_exit=0, phase1_exit=0, operating_exit=0,
                 )
-        self.assertFalse(any("/check-runs?" in path for path in routes))
-        self.assertEqual(len(routes), 3)
 
-    def test_trusted_verifier_change_remains_self_protected(self):
-        self.assertIn("verification/independent_verifier.py", verifier.IMMUTABLE_TRUST_ANCHORS)
-        self.assertIn("verification/source_admission.py", verifier.IMMUTABLE_TRUST_ANCHORS)
-        self.assertIn("brain/v9/guarded_merge.py", verifier.IMMUTABLE_TRUST_ANCHORS)
+    def test_verifier_and_receipt_source_are_immutable_trust_anchors(self):
+        for name in ("verification/independent_verifier.py",
+                     "verification/source_admission.py",
+                     "brain/v9/guarded_merge.py"):
+            self.assertIn(name, independent.IMMUTABLE_TRUST_ANCHORS)
 
 
 if __name__ == "__main__":
