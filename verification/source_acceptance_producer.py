@@ -81,7 +81,6 @@ def build_receipt(api: GitHubReadOnly, source: str) -> tuple[dict, str]:
     # never at the first pre-activation automatic core. Existing source history
     # is replayed for state continuity without earning owner-window time.
     from verification.reliability_day import CORE, Snapshot, inventory, window
-    from verification.owner_observation_window import utc as activation_utc
     marker = activation(api, source)
     rows = window(inventory(api, CORE + "&head_sha=" + source), source,
                   activation_start=marker["created"])
@@ -91,14 +90,28 @@ def build_receipt(api: GitHubReadOnly, source: str) -> tuple[dict, str]:
     # Freeze at the FIRST terminal eligible core so later normal activity
     # never advances the 30-minute follow-through deadline.
     frozen_terminal = scoped["terminal"]
-    rows = [r for r in rows
-            if activation_utc(r["created_at"]) <= frozen_terminal["completed"]]
-    summary = collect_original_runs(Snapshot(api, rows), source)
-    scoped = post_activation(summary, marker)
-    req(scoped["status"] == "PASS"
-        and scoped["terminal"]["id"] == summary["terminal"]["id"],
+    # Do NOT re-fetch all original artifacts a second time: use only the
+    # verified original proofs returned by the single complete replay.
+    # The independent App will separately re-read each original source run.
+    proven = [row for row in summary["runs"]
+              if row["created"] <= frozen_terminal["completed"]]
+    automatic = [row for row in proven if row["event"] != "push"]
+    req(len(proven) >= 3 and len(automatic) >= 2
+        and automatic[-1]["id"] == frozen_terminal["id"]
+        and len([row for row in proven if row["event"] == "push"]) == 1,
         "post-activation terminal or source census changed")
-    automatic = summary["automatic"]
+    gaps = [int((right["completed"] - left["completed"]).total_seconds())
+            for left, right in zip(automatic, automatic[1:])]
+    summary = {
+        "runs": proven, "automatic": automatic, "terminal": automatic[-1],
+        "span": int((automatic[-1]["completed"] - automatic[0]["completed"]).total_seconds()),
+        "maximum_gap": max(gaps),
+        "signed_timestamps": [row["scheduled_at"] for row in automatic
+                              if row["origin_kind"] == "cloudflare_cron_v1"],
+    }
+    scoped = post_activation(summary, marker)
+    req(scoped["status"] == "PASS" and scoped["terminal"]["id"] == summary["terminal"]["id"],
+        "frozen owner interval changed during source replay")
     terminal = summary["terminal"]
     req(summary["span"] >= REQUIRED_CRITERIA["minimum_completed_span_seconds"]
         and summary["maximum_gap"] <= REQUIRED_CRITERIA["maximum_intercore_gap_seconds"],
