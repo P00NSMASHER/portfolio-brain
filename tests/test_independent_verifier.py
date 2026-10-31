@@ -14,6 +14,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class IndependentVerifierTests(unittest.TestCase):
+    def setUp(self):
+        # The historical verifier fixture already covers exact-head isolated
+        # tests. Source-admission behavior is adversarially exercised in
+        # test_source_merge_admission.py; don't invent a receipt in fixtures.
+        patcher = patch(
+            "verification.independent_verifier.verify_predecessor_acceptance",
+            return_value={"acceptance_ref": "fixture-only", "acceptance_commit": "b" * 40},
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def responses(self, *, foundation_app=15368, foundation_conclusion="success", compare_files=None):
         main_sha="b"*40
         head_sha="c"*40
