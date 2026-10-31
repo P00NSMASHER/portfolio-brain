@@ -37,6 +37,8 @@ EXPECTED = {
     "tests/test_source_merge_admission.py": "a83f909a3bc9854719a3cce9083921355f41959d",
     "tests/test_source_observation_activation.py": "3177be6864aa5ecd0bcf10bd7790f7416b3e7346",
     "docs/rebuild/SOURCE_ADMISSION_CUTOVER.md": "f90818af1f194445ee66830d9dc0e668b895165a",
+    "tests/test_observation_user_hold.py": "a3ad9f5e8e02ba3844f7e80cce689e8923fce997",
+    "tests/test_standalone_x402_protocol.py": "710c6f1aacc41b15dd63bd06730981e8e86ff5e0",
 }
 
 
@@ -163,7 +165,7 @@ def main() -> int:
     result=issue_check(
         os.environ.get("PORTFOLIO_VERIFIER_TOKEN", ""), a.head_sha,
         "Independently re-ran full, phase1 and operating-mode tests in network-disabled "
-        "containers; pinned all nine reviewed candidate file blobs, verified exact "
+        "containers; pinned all eleven reviewed candidate file blobs, verified exact "
         "GitHub PR head/current-main ancestry, and checked issuer-pinned Foundation. "
         "One authorized verifier trust-root upgrade only; no 12-hour acceptance.",
     )
