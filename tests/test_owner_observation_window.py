@@ -35,14 +35,16 @@ def observer_job(run_id=900, source=SOURCE, status="completed", conclusion="succ
 
 
 class FakeAPI:
-    def __init__(self, runs=None, jobs=None, current=None):
+    def __init__(self, runs=None, jobs=None, current=None, total_count=None):
         self.runs = [observer_run()] if runs is None else runs
         self.jobs = ({900: observer_job()} if jobs is None else jobs)
         self.current = current
+        self.total_count = total_count
 
     def json(self, route):
-        if route == ow.OBSERVER_RUNS:
-            return {"total_count": len(self.runs), "workflow_runs": self.runs}
+        if route == ow.OBSERVER_RUNS + SOURCE:
+            return {"total_count": len(self.runs) if self.total_count is None else self.total_count,
+                    "workflow_runs": self.runs}
         if route.startswith("/actions/runs/") and route.endswith("/jobs?filter=all&per_page=100"):
             run_id = int(route.split("/")[3])
             job = self.jobs[run_id]
@@ -143,6 +145,15 @@ class OriginalObserverActivationTests(unittest.TestCase):
             jobs={900: observer_job(), 901: observer_job(run_id=901)})
         result = ow.activation(api, SOURCE)
         self.assertEqual(result["created"], early)
+
+    def test_truncated_source_history_cannot_reanchor_at_later_observer(self):
+        # The provider has 101 source runs but its first page omits the oldest.
+        # A falsely newer anchor could otherwise convert preactivation time
+        # into 12-hour acceptance credit after the original falls off page 1.
+        api = FakeAPI(runs=[observer_run(run_id=901, when=START+timedelta(hours=12))],
+                      jobs={901: observer_job(run_id=901)}, total_count=101)
+        with self.assertRaisesRegex(ow.OwnerWindowError, "SOURCE_CENSUS_TRUNCATED"):
+            ow.activation(api, SOURCE)
 
     def test_initial_run_can_anchor_only_verified_running_self(self):
         run = observer_run(status="in_progress", conclusion=None)
