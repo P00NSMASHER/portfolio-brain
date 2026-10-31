@@ -376,8 +376,21 @@ def preflight(output, expected=None):
     sha=source_sha(expected)
     from brain.validate import validate_policy
     validate_policy()
-    test=subprocess.run([sys.executable,"-m","unittest","discover","-s","tests","-p","test_brain*.py","-v"],cwd=ROOT,capture_output=True,text=True,timeout=60)
-    write_private_test_log(output, test.stdout+test.stderr)
+    command=[sys.executable,"-m","unittest","discover","-s","tests","-p","test_brain*.py","-v"]
+    # Hosted core tests normally finish in ~48s; 60s occasionally expired on
+    # a signed original core. Keep a finite 120s cap, never accept a partial suite.
+    try:
+        test=subprocess.run(command,cwd=ROOT,capture_output=True,text=True,timeout=120)
+    except subprocess.TimeoutExpired as exc:
+        # TimeoutExpired may carry bytes even with text=True. Preserve bounded
+        # partial evidence without promoting the interrupted suite to PASS.
+        partial="".join(
+            part.decode("utf-8","replace") if isinstance(part,bytes) else (part or "")
+            for part in (exc.stdout,exc.stderr)
+        )
+        write_private_test_log(output,partial+"\nPREFLIGHT_TEST_TIMEOUT: 120s test limit exceeded\n")
+        raise BrainError("PREFLIGHT_TEST_TIMEOUT: full regression evidence missing") from exc
+    write_private_test_log(output,test.stdout+test.stderr)
     require(test.returncode==0, "PREFLIGHT_TEST_FAILURE: inspect tests.txt before retry")
     require("Ran 0 tests" not in test.stderr and "\nOK\n" in test.stderr,"PREFLIGHT_TEST_EVIDENCE_MISSING")
     # Preflight is a deterministic product test, never a substitute for live delivery/soak.
