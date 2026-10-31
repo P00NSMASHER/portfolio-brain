@@ -44,3 +44,7 @@ Offline synthetic adversarial tests cover incorrect source/branch/path/event, no
 - [ ] Exact new main verified, all original postmerge CI/core/repair receipts healthy.
 - [ ] No open significant safety/reliability blockers.
 - [ ] New source observer is deliberately activated and the fresh 12-hour window starts with verified original GitHub evidence.
+
+## Read-only capacity safety
+
+The producer and independent App verifier formerly each admitted only 256 GitHub reads. A 12-hour window with delayed owner activation may need more than 256 original GETs because every source-bound core, repair, observer and final SQLite state must be inspected. Both now share an explicit **512 GET maximum**, within the existing hard read-only transport ceiling of 656. No tokens, permissions, GitHub writes, spending or acceptance criteria were expanded. Adversarial tests exercise the 257th through 512th read and confirm the 513th fails closed. Real provider-rate and terminal-replay success remain unverified until a real source-qualified observation.
