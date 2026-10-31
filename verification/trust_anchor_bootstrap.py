@@ -61,15 +61,15 @@ def _api(token: str, path: str, *, method="GET", payload=None) -> Any:
     if method == "GET":
         approved = (
             path in {"/branches/main", "/pulls/804"}
-            or re.fullmatch(r"/compare/[0-9a-f]{40}\\.\\.\\.[0-9a-f]{40}", path) is not None
-            or re.fullmatch(r"/commits/[0-9a-f]{40}/check-runs\\?per_page=100", path)
+            or re.fullmatch(r"/compare/[0-9a-f]{40}\.\.\.[0-9a-f]{40}", path) is not None
+            or re.fullmatch(r"/commits/[0-9a-f]{40}/check-runs\?per_page=100", path)
                 is not None
         )
         # For contents, bind the request to one approved immutable path and
         # a syntactically exact SHA. verify_candidate separately pins the HEAD.
         approved = approved or any(
             re.fullmatch(r"/contents/" + re.escape(filename)
-                         + r"\\?ref=[0-9a-f]{40}", path) is not None
+                         + r"\?ref=[0-9a-f]{40}", path) is not None
             for filename in EXPECTED
         )
         must(approved, "API_ROUTE_NOT_ALLOWLISTED")
