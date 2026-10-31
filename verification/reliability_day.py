@@ -68,7 +68,7 @@ def window(rows, source, activation_start=None):
                 created = first
             # Include a boundary cycle at exactly 12.5h; the collector uses
             # job completion times to establish the required 12-hour span.
-            if (created - first).total_seconds() >= WINDOW_LIMIT_SECONDS:
+            if activation_start is None and (created - first).total_seconds() >= WINDOW_LIMIT_SECONDS:
                 break
     return completed
 
