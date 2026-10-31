@@ -1,5 +1,6 @@
 """Standalone adversarial tests for a one-time App5121826 trust-root bootstrap."""
 import copy
+import io
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -177,6 +178,24 @@ class BootstrapAdmissionTests(unittest.TestCase):
                 boot.BootstrapDenied, "API_WRITE_FORBIDDEN"
             ):
                 boot._api("token", path, method="POST", payload={})
+
+    def test_api_read_allowlist_accepts_only_genuine_five_scoped_routes(self):
+        # Red on the prior double-backslash regex, green on precisely matched
+        # original GET paths. No network or App token is used in this test.
+        paths = [
+            "/branches/main",
+            "/pulls/804",
+            "/compare/" + MAIN + "..." + HEAD,
+            "/commits/" + HEAD + "/check-runs?per_page=100",
+            "/contents/verification/independent_verifier.py?ref=" + HEAD,
+            "/contents/.github/workflows/reliability-day.yml?ref=" + HEAD,
+        ]
+        with patch.object(boot.urllib.request, "urlopen",
+                          side_effect=lambda *args, **kwargs: io.BytesIO(b"{}")) as opener:
+            for path in paths:
+                with self.subTest(path=path):
+                    self.assertEqual(boot._api("simulated-app-token", path, method="GET"), {})
+        self.assertEqual(opener.call_count, len(paths))
 
     def test_api_read_allowlist_refuses_unreviewed_routes(self):
         for path in ("/settings", "/actions/secrets", "/pulls/805",
