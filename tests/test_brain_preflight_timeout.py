@@ -20,7 +20,7 @@ class PreflightTimeoutTests(unittest.TestCase):
             patch.object(cli, "write_report") as report,
         ):
             runner.return_value = SimpleNamespace(
-                returncode=0, stdout="", stderr="Ran 124 tests in 69.4s\\n\\nOK\\n"
+                returncode=0, stdout="", stderr="Ran 124 tests in 69.4s\n\nOK\n"
             )
             result = cli.preflight("/tmp/preflight", SHA)
             self.assertEqual(runner.call_args.kwargs["timeout"], 120)
@@ -59,7 +59,7 @@ class PreflightTimeoutTests(unittest.TestCase):
             patch.object(cli, "write_report") as report,
         ):
             runner.return_value = SimpleNamespace(
-                returncode=1, stdout="", stderr="Ran 7 tests\\nFAILED (failures=1)\\n"
+                returncode=1, stdout="", stderr="Ran 7 tests\nFAILED (failures=1)\n"
             )
             with self.assertRaisesRegex(BrainError, "PREFLIGHT_TEST_FAILURE"):
                 cli.preflight("/tmp/preflight", SHA)
