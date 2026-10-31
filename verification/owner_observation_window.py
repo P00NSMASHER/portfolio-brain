@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 import re
 
 OBSERVER = ".github/workflows/reliability-day.yml"
-OBSERVER_RUNS = "/actions/workflows/reliability-day.yml/runs?branch=main&per_page=100"
+OBSERVER_RUNS = "/actions/workflows/reliability-day.yml/runs?branch=main&per_page=100&head_sha="
 MINIMUM_SECONDS = 43_200
 MAX_GAP_SECONDS = 5_400
 TERMINAL_REPAIR_SECONDS = 1_800
@@ -99,10 +99,14 @@ def activation(api, source, *, current_run_id=None):
     """
     require(type(source) is str and SHA.fullmatch(source) is not None,
             "ACTIVATION_SOURCE_INVALID")
-    response = api.json(OBSERVER_RUNS)
+    response = api.json(OBSERVER_RUNS + source)
     rows = response.get("workflow_runs") if type(response) is dict else None
     require(type(rows) is list and type(response.get("total_count")) is int
             and len(rows) <= 100, "ACTIVATION_RUN_CENSUS_INVALID")
+    # Never silently re-anchor after the true first observer ages off page 1.
+    # The provider must return the complete source-filtered original census.
+    require(response["total_count"] == len(rows),
+            "ACTIVATION_SOURCE_CENSUS_TRUNCATED")
     matching = sorted((r for r in rows if _run_identity(r, source)),
                       key=lambda r: (r["created_at"], r["id"]))
     eligible = []
