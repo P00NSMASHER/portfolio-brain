@@ -146,6 +146,10 @@ RECEIPT_NESTED_FIELDS = MappingProxyType({
 })
 
 MAX_RUNS = 100
+# An owner activation can happen hours after deployment. 12h replay may
+# require >256 read-only GETs for original core, repair, observer and state
+# evidence. Keep this finite and within GitHubReadOnly's hard maximum (656).
+SOURCE_ACCEPTANCE_API_CALL_BUDGET = 512
 
 
 class SourceAcceptanceError(RuntimeError):
@@ -701,7 +705,7 @@ def main(argv=None) -> int:
     external_id = ""
     try:
         source, external_id = verify_acceptance(
-            GitHubReadOnly(read_token, max_calls=256),
+            GitHubReadOnly(read_token, max_calls=SOURCE_ACCEPTANCE_API_CALL_BUDGET),
             pr_number=args.pr_number, head_sha=args.head_sha,
         )
         check = publish_check(
