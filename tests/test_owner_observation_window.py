@@ -127,6 +127,32 @@ class OriginalObserverActivationTests(unittest.TestCase):
             with self.subTest(steps=steps), self.assertRaises(ow.OwnerWindowError):
                 ow.activation(FakeAPI(jobs={900: observer_job(steps=steps)}), SOURCE)
 
+    def test_aggregate_success_cannot_mask_adverse_observer_steps(self):
+        # A continue-on-error artifact upload can fail while the job says
+        # SUCCESS. The original observer is not a valid activation anchor.
+        proof = {"name": "Replay original cycle artifacts and contiguous state publications",
+                 "status": "completed", "conclusion": "success"}
+        for adverse in ("failure", "skipped", "cancelled", "timed_out", None):
+            steps = [proof, {"name": "Upload original observer artifact",
+                             "status": "completed", "conclusion": adverse}]
+            api = FakeAPI(jobs={900: observer_job(steps=steps)})
+            with self.subTest(adverse=adverse), self.assertRaisesRegex(
+                    ow.OwnerWindowError, "ACTIVATION_ORIGINAL_STEP_ADVERSE"):
+                ow.activation(api, SOURCE)
+
+    def test_running_observer_denies_nonproof_adverse_step(self):
+        run = observer_run(status="in_progress", conclusion=None)
+        steps = [
+            {"name": "Replay original cycle artifacts and contiguous state publications",
+             "status": "in_progress", "conclusion": None},
+            {"name": "Original setup", "status": "completed", "conclusion": "failure"},
+        ]
+        api = FakeAPI(runs=[run], current=run,
+                      jobs={900: observer_job(status="in_progress", conclusion=None,
+                                              steps=steps)})
+        with self.assertRaisesRegex(ow.OwnerWindowError, "ACTIVATION_RUNNING_STEP_ADVERSE"):
+            ow.activation(api, SOURCE, current_run_id=900)
+
     def test_first_running_observer_denies_explicit_failed_or_skipped_proof(self):
         running = observer_run(status="in_progress", conclusion=None)
         step_name = "Replay original cycle artifacts and contiguous state publications"
