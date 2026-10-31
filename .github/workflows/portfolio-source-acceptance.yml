@@ -155,6 +155,13 @@ jobs:
           set -e
 
 
+      - name: Gate independent credential issuance on three genuine isolated PASS exits
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat verifier-results/full.exit)" = "0"
+          test "$(cat verifier-results/phase1.exit)" = "0"
+          test "$(cat verifier-results/operating.exit)" = "0"
       - name: Mint separate App5121826 token ONLY after isolated tests
         id: independent-token
         uses: actions/create-github-app-token@v2
