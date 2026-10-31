@@ -61,6 +61,26 @@ def _observer_job(api, run_id, source, *, pending_allowed):
             and job.get("run_attempt") == 1
             and job.get("name") == "observe",
             "ACTIVATION_JOB_IDENTITY_INVALID")
+    # GitHub records a successful job even when individual steps are skipped
+    # or configured as continue-on-error; require the original proof step.
+    steps = job.get("steps")
+    require(type(steps) is list and all(type(step) is dict for step in steps),
+            "ACTIVATION_ORIGINAL_STEPS_INVALID")
+    replay = [step for step in steps
+              if step.get("name") == "Replay original cycle artifacts and contiguous state publications"]
+    require(len(replay) == 1, "ACTIVATION_ORIGINAL_REPLAY_STEP_MISSING")
+    if pending_allowed and job.get("status") == "in_progress":
+        # A running first observer reaches its proof step only after the job
+        # is live. Pending means no successful clock is certified yet.
+        require(replay[0].get("status") in ("queued", "in_progress", "completed"),
+                "ACTIVATION_CURRENT_REPLAY_NOT_STARTED")
+        require(replay[0].get("conclusion") not in
+                ("failure", "cancelled", "timed_out", "skipped", "neutral"),
+                "ACTIVATION_ORIGINAL_REPLAY_ADVERSE")
+    else:
+        require(replay[0].get("status") == "completed"
+                and replay[0].get("conclusion") == "success",
+                "ACTIVATION_ORIGINAL_REPLAY_NOT_SUCCESS")
     if pending_allowed:
         require(job.get("status") in ("in_progress", "completed")
                 and (job.get("status") != "completed" or job.get("conclusion") == "success"),
