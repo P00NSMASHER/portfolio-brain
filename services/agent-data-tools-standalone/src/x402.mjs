@@ -293,7 +293,11 @@ export async function paidRoute(req, res, path, validate, execute) {
     try {
       result = await execute(input);
     } catch (error) {
-      const status = Number(error?.status) || 502;
+      // An upstream exception is never an HTTP success or redirect. Reject
+      // malformed/non-error statuses rather than leaking a 2xx/3xx as success.
+      const candidateStatus = Number(error?.status);
+      const status = Number.isInteger(candidateStatus) &&
+        candidateStatus >= 400 && candidateStatus <= 599 ? candidateStatus : 502;
       return res.status(status).json({
         error: error instanceof Error ? error.message : 'upstream_unavailable',
         paymentSettled: false,
