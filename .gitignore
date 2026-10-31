@@ -5,3 +5,8 @@ brain/out/
 state_journal/live/
 *.sqlite
 *.sqlite-journal
+
+# Private, user-supplied investing data and generated local reports.
+# Do not publish portfolios, account exports, tokens or live market feeds.
+private_runtime/
+personal_investing/local_data/
