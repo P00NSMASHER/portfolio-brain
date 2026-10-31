@@ -73,8 +73,10 @@ class StandaloneX402ProtocolTests(unittest.TestCase):
         self.assertTrue((ROOT / ".github/workflows/reliability-day.yml").is_file())
         observer = (ROOT / ".github/workflows/reliability-day.yml").read_text()
         receipt = (ROOT / ".github/workflows/portfolio-source-acceptance-producer.yml").read_text()
-        self.assertIn("      false &&", observer)
-        self.assertIn("        false &&", receipt)
+        for held in (observer, receipt):
+            self.assertIn("vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true'", held)
+            self.assertIn("vars.PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA == github.sha", held)
+            self.assertNotIn("false &&", held)
 
     def test_live_upstream_checks_are_opt_in_and_not_in_ci(self):
         manifest = json.loads((SERVICE / "package.json").read_text(encoding="utf-8"))
