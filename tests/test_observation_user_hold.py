@@ -6,6 +6,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 FLAG = "vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true'"
+SOURCE_FLAG = "vars.PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA == github.sha"
 REPAIR = ".github/workflows/v8-scoped-repair.yml"
 OBSERVER = ".github/workflows/reliability-day.yml"
 PRODUCER = ".github/workflows/portfolio-source-acceptance-producer.yml"
@@ -27,9 +28,9 @@ class ObservationOptInTests(unittest.TestCase):
             with self.subTest(file=file):
                 wf = read(file)
                 self.assertEqual(wf.count(FLAG), 1)
-                # A repository variable alone cannot restart a paused observation.
-                # Deliberate re-arming needs a separately reviewed source change.
-                self.assertRegex(wf, r"(?m)^\s+false &&$")
+                # Owner must separately authorize the exact protected commit.
+                self.assertEqual(wf.count(SOURCE_FLAG), 1)
+                self.assertNotIn("false &&", wf)
                 self.assertIn("workflow_run:", wf)
                 self.assertNotIn("workflow_dispatch:", wf)
                 self.assertNotIn("schedule:", wf)
