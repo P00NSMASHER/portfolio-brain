@@ -76,6 +76,8 @@ class BootstrapAdmissionTests(unittest.TestCase):
             "tests/test_source_merge_admission.py",
             "tests/test_source_observation_activation.py",
             "docs/rebuild/SOURCE_ADMISSION_CUTOVER.md",
+            "tests/test_observation_user_hold.py",
+            "tests/test_standalone_x402_protocol.py",
         })
 
     def test_isolated_tests_must_all_pass(self):
