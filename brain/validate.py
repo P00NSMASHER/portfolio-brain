@@ -7,6 +7,12 @@ from brain.adapters import policy
 
 ROOT=Path(__file__).resolve().parents[1]
 
+
+def _observation_workflow_blob(source: str) -> str:
+    """Exact Git blob identity: block comment relocation and OR-bypass edits."""
+    raw = source.encode("utf-8")
+    return hashlib.sha1(b"blob " + str(len(raw)).encode("ascii") + b"\x00" + raw).hexdigest()
+
 def validate_policy():
     p=policy()
     require(p["schema_version"]==2 and p["active_runtime"]=="brain", "active runtime/schema changed")
@@ -136,21 +142,26 @@ def validate_policy():
             and "gh pr merge" not in receipt
             and "merge_pull_request" not in receipt,
             "source acceptance receipt producer adds forbidden trigger or authority")
-    # Observation remains HELD by two independent opt-in variables. The
-    # second has a new, source-specific name; its value must equal the exact
-    # protected commit. It cannot be set before the protected merge SHA exists.
-    # Thus the trust-anchor cutover itself cannot start the observation.
+    # Literal job-level false guards preserve the explicit observation pause,
+    # regardless of present or future repository-variable settings. The exact
+    # source-specific opt-in is retained but is not sufficient to re-arm.
     observation_flag = "vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true'"
     source_flag = "vars.PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA == github.sha"
     observation = (workflow_dir/"reliability-day.yml").read_text(encoding="utf-8")
     require(observation_flag in observation and observation_flag in receipt
             and source_flag in observation and source_flag in receipt
-            and "false &&" not in observation
-            and "false &&" not in receipt
+            and observation.count("      false &&") == 1
+            and receipt.count("        false &&") == 1
             and "workflow_run:" in observation
             and "workflow_dispatch:" not in observation
             and "schedule:" not in observation,
             "unapproved source-specific 12-hour observation or acceptance activation")
+    # A matching "false &&" substring can sit in a comment or be defeated
+    # by a top-level OR. Freeze the entire two job workflows while paused.
+    # Any legitimate re-arm requires a separate reviewed protected code change.
+    require(_observation_workflow_blob(observation) == "504cb4cb09a4677ff6cb71ed9fbd214bf7ad36ca"
+            and _observation_workflow_blob(receipt) == "d73799033b0100411ac2369a8b30e2b2e1a4ddbd",
+            "paused 12-hour workflow identity changed without protected authorization")
     from operations.validate_operating_mode import scheduled_workflow_inventory
     require(scheduled_workflow_inventory(workflow_dir)=={"brain-clock":[p["cron"], p["watchdog_cron"]]}, "only existing native Brain and watchdog crons may recur")
     require("schedule:" not in (workflow_dir/"brain-cycle.yml").read_text(), "uncoordinated direct core schedule forbidden")

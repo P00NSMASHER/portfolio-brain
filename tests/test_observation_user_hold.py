@@ -3,6 +3,8 @@ import hashlib
 from pathlib import Path
 import unittest
 
+from brain.validate import _observation_workflow_blob
+
 
 ROOT = Path(__file__).resolve().parents[1]
 FLAG = "vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true'"
@@ -30,11 +32,33 @@ class ObservationOptInTests(unittest.TestCase):
                 self.assertEqual(wf.count(FLAG), 1)
                 # Owner must separately authorize the exact protected commit.
                 self.assertEqual(wf.count(SOURCE_FLAG), 1)
-                self.assertNotIn("false &&", wf)
+                self.assertEqual(wf.count("false &&"), 1)
+                self.assertRegex(wf, r"(?m)^\s+false &&$")
                 self.assertIn("workflow_run:", wf)
                 self.assertNotIn("workflow_dispatch:", wf)
                 self.assertNotIn("schedule:", wf)
                 self.assertNotIn("pull_request_target:", wf)
+
+    def test_held_job_workflow_bytes_reject_disguised_rearms(self):
+        pinned = (
+            (OBSERVER, "504cb4cb09a4677ff6cb71ed9fbd214bf7ad36ca"),
+            (PRODUCER, "d73799033b0100411ac2369a8b30e2b2e1a4ddbd"),
+        )
+        for path, expected in pinned:
+            original = read(path)
+            with self.subTest(path=path, mutation="identity"):
+                self.assertEqual(_observation_workflow_blob(original), expected)
+            hostile_edits = {
+                "guard_removed": original.replace("false &&", "true &&", 1),
+                "commented_guard": original.replace("false &&", "# false &&", 1),
+                "comment_relocation": original.replace("false &&", "", 1) + "\n# false &&\n",
+                "or_precedence_bypass": original.replace("false &&", "false &&\n      || true", 1),
+                "extra_dispatch_trigger": original.replace("workflow_run:", "workflow_dispatch:", 1),
+            }
+            for mutation, altered in hostile_edits.items():
+                with self.subTest(path=path, mutation=mutation):
+                    self.assertNotEqual(altered, original)
+                    self.assertNotEqual(_observation_workflow_blob(altered), expected)
 
     def test_original_core_and_repair_cadences_remain_authorized_unchanged(self):
         clock = read(".github/workflows/brain-clock.yml")
