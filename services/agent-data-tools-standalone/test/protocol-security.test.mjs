@@ -144,6 +144,72 @@ test('contradictory verification cannot execute upstream data or settle', async 
   assert.ok(called[0].endsWith('/verify'));
 });
 
+
+test('HTTP 202 verification cannot authorize data or settlement', async () => {
+  delete process.env.PUBLIC_ORIGIN;
+  const called = [];
+  globalThis.fetch = async url => {
+    called.push(String(url));
+    return new Response(JSON.stringify({isValid:true,success:true}), {status:202});
+  };
+  const result = reply();
+  let executed = false;
+  await paidRoute(req({host:'localhost:3000','payment-signature':signature()}),
+    result, '/api/pa-business', () => ({q:'Test'}),
+    async () => { executed = true; return {privateData:'forbidden'}; });
+  assert.equal(result.code, 402);
+  assert.equal(result.body.error, 'payment_verification_failed');
+  assert.equal(executed, false);
+  assert.equal(called.length, 1);
+  assert.ok(called[0].endsWith('/verify'));
+});
+
+test('nonfinal or contradictory settlement success is unresolved, never paid', async () => {
+  for (const [label, status, body] of [
+    ['202 accepted but not settled', 202, {success:true}],
+    ['201 nonfinal success', 201, {success:true}],
+    ['200 pending error conflicts with success', 200,
+      {success:true,errorReason:'settlement_pending'}],
+    ['200 duplicate error conflicts with success', 200,
+      {success:true,errorReason:'duplicate_settlement'}],
+  ]) {
+    let calls = 0;
+    globalThis.fetch = async url => {
+      assert.ok(String(url).endsWith('/settle'));
+      calls += 1;
+      return new Response(JSON.stringify(body), {status});
+    };
+    const settled = await settlePayment('/api/pa-business', {x402Version:2});
+    assert.equal(settled.ok, false, label);
+    assert.equal(settled.unresolved, true, label);
+    assert.equal(settled.reason, 'settlement_status_unresolved', label);
+    assert.equal(calls, 1, label);
+  }
+});
+
+test('HTTP 202 settlement does not return paid result or repeat the POST', async () => {
+  delete process.env.PUBLIC_ORIGIN;
+  const called = [];
+  globalThis.fetch = async url => {
+    const path = String(url);
+    called.push(path);
+    if (path.endsWith('/verify'))
+      return new Response(JSON.stringify({isValid:true}), {status:200});
+    if (path.endsWith('/settle'))
+      return new Response(JSON.stringify({success:true,transaction:'unconfirmed'}), {status:202});
+    throw new Error('unexpected outbound destination');
+  };
+  const result = reply();
+  await paidRoute(req({host:'localhost:3000','payment-signature':signature()}),
+    result, '/api/pa-business', () => ({q:'Test'}),
+    async () => ({privateData:'must-not-be-served'}));
+  assert.equal(result.code, 503);
+  assert.equal(result.body.paymentState, 'unresolved');
+  assert.equal(result.body.privateData, undefined);
+  assert.equal(result.body.retrySamePayment, false);
+  assert.equal(called.filter(x => x.endsWith('/settle')).length, 1);
+});
+
 test('settlement timeout/HTTP unknown never submits a second financial POST', async () => {
   let calls = 0;
   globalThis.fetch = async () => {

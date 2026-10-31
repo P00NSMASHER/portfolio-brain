@@ -213,7 +213,8 @@ export async function verifyPayment(path, paymentPayload) {
   const reqs = requirements(path);
   const result = await facilitatorPost('verify', paymentPayload, reqs);
   // A body flag cannot override a failed HTTP response from the facilitator.
-  const ok = result.status >= 200 && result.status < 300;
+  // HTTP 202 means accepted for processing, not a final verification.
+  const ok = result.status === 200;
   // A generic success flag is not proof of a valid payment. Reject absent or
   // contradictory isValid and malformed optional success values fail-closed.
   const valid = ok && result.body?.isValid === true &&
@@ -236,11 +237,18 @@ export async function settlePayment(path, paymentPayload) {
   } catch {
     return { ok: false, unresolved: true, reason: 'settlement_transport_unknown' };
   }
-  if (result.status >= 200 && result.status < 300 && result.body?.success === true) {
+  // A 202 or other non-final 2xx is not proof of settlement, even if a
+  // facilitator incorrectly includes success:true. A success flag paired
+  // with an errorReason is contradictory: do not serve paid data.
+  const finalSuccess = result.status === 200 &&
+    result.body?.success === true && result.body?.errorReason == null;
+  if (finalSuccess) {
     return { ok: true, receipt: result.body };
   }
   const reason = result.body?.errorReason;
-  const pending = result.status === 429 || result.status >= 500 ||
+  const ambiguous2xx = result.status >= 200 && result.status < 300 &&
+    (result.status !== 200 || result.body?.success === true);
+  const pending = ambiguous2xx || result.status === 429 || result.status >= 500 ||
     ['settlement_pending', 'duplicate_settlement', 'rate_limited',
       'facilitator_unavailable'].includes(reason);
   return {
