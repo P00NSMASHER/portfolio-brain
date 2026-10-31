@@ -10,7 +10,7 @@ from unittest.mock import patch
 from brain.v9.guarded_merge import REPO, git_blob_sha
 from verification import independent_verifier as independent
 from verification.source_admission import (
-    SourceAdmissionError, verify_predecessor_acceptance,
+    SourceAdmissionError, verify_predecessor_acceptance, _allowed_route,
 )
 from test_source_acceptance_verifier import valid_receipt
 
@@ -219,13 +219,17 @@ class SourceMergeAdmissionTests(unittest.TestCase):
             ):
                 verify_predecessor_acceptance(SOURCE, fail)
 
-    def test_any_write_or_unreviewed_read_is_denied(self):
+    def test_unreviewed_route_and_malformed_read_are_denied(self):
+        for path in ("/check-runs", "/repos/evil/private",
+                     "/git/refs", "/contents/secret?ref=" + TIP,
+                     "/commits/" + TIP + "/check-runs?per_page=100&page=2"):
+            with self.subTest(path=path):
+                self.assertFalse(_allowed_route(path, SOURCE))
         p = OriginalProvider()
-        with self.assertRaisesRegex(SourceAdmissionError, "SOURCE_API_ROUTE_DENIED"):
-            # Only GET routes from the reviewed source-specific proof are permitted.
+        with self.assertRaisesRegex(SourceAdmissionError, "ACCEPTANCE_COMMIT_ANCESTRY"):
+            # Never interpret a malformed response as valid acceptance.
             verify_predecessor_acceptance(SOURCE, lambda path:
                 p.get(path) if path.startswith("/git/matching-refs/") else 1)
-        # The original real branch identity is independent of any fake 2xx.
 
     def test_independent_gate_blocks_owner_manual_merge_without_source_acceptance(self):
         responses = [
