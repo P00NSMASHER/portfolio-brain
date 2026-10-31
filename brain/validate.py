@@ -136,17 +136,16 @@ def validate_policy():
             and "gh pr merge" not in receipt
             and "merge_pull_request" not in receipt,
             "source acceptance receipt producer adds forbidden trigger or authority")
-    # Observation remains HELD by two independent opt-in variables. The
-    # second has a new, source-specific name; its value must equal the exact
-    # protected commit. It cannot be set before the protected merge SHA exists.
-    # Thus the trust-anchor cutover itself cannot start the observation.
+    # Literal job-level false guards preserve the explicit observation pause,
+    # regardless of present or future repository-variable settings. The exact
+    # source-specific opt-in is retained but is not sufficient to re-arm.
     observation_flag = "vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true'"
     source_flag = "vars.PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA == github.sha"
     observation = (workflow_dir/"reliability-day.yml").read_text(encoding="utf-8")
     require(observation_flag in observation and observation_flag in receipt
             and source_flag in observation and source_flag in receipt
-            and "false &&" not in observation
-            and "false &&" not in receipt
+            and observation.count("      false &&") == 1
+            and receipt.count("        false &&") == 1
             and "workflow_run:" in observation
             and "workflow_dispatch:" not in observation
             and "schedule:" not in observation,

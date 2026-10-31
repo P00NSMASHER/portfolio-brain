@@ -24,7 +24,8 @@ class SourceScopedObservationActivationTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn(ACTIVE, source)
                 self.assertIn(SOURCE, source)
-                self.assertNotIn("false &&", source)
+                self.assertEqual(source.count("false &&"), 1)
+                self.assertRegex(source, r"(?m)^\s+false &&$")
                 self.assertIn("github.event.workflow_run.head_sha == github.sha", source)
                 self.assertIn("workflow_run:", source)
                 self.assertNotIn("schedule:", source)
@@ -45,9 +46,9 @@ class SourceScopedObservationActivationTests(unittest.TestCase):
                 with self.subTest(flag=original, approved=approved):
                     self.assertFalse(original == "true" and approved == current)
 
-        # Only a new user action setting BOTH values for the EXACT protected
-        # commit can make the reviewed conjunction true after protected merge.
-        self.assertTrue("true" == "true" and current == current)
+        # Even perfectly matching flags cannot overcome the separate literal
+        # false guard. Re-arming needs fresh user approval and protected code.
+        self.assertFalse(False and "true" == "true" and current == current)
 
     def test_runtime_policy_enforces_the_new_double_hold(self):
         receipt = validate_policy()

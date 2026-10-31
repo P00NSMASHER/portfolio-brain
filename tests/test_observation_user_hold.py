@@ -30,7 +30,8 @@ class ObservationOptInTests(unittest.TestCase):
                 self.assertEqual(wf.count(FLAG), 1)
                 # Owner must separately authorize the exact protected commit.
                 self.assertEqual(wf.count(SOURCE_FLAG), 1)
-                self.assertNotIn("false &&", wf)
+                self.assertEqual(wf.count("false &&"), 1)
+                self.assertRegex(wf, r"(?m)^\s+false &&$")
                 self.assertIn("workflow_run:", wf)
                 self.assertNotIn("workflow_dispatch:", wf)
                 self.assertNotIn("schedule:", wf)
