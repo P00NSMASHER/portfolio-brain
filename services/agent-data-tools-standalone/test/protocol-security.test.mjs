@@ -313,6 +313,32 @@ test('successful paid flow verifies, calculates and settles once in that order',
   assert.equal(result.headers['x402-settled'], 'true');
 });
 
+test('upstream exceptions cannot return HTTP success, redirect or invalid status', async () => {
+  delete process.env.PUBLIC_ORIGIN;
+  for (const [reported, expected] of [
+    [200, 502], [201, 502], [302, 502], [399, 502], [600, 502],
+    [NaN, 502], [404, 404], [503, 503],
+  ]) {
+    const calls = [];
+    globalThis.fetch = async url => {
+      calls.push(String(url));
+      assert.ok(String(url).endsWith('/verify'), 'never settle after upstream failure');
+      return new Response(JSON.stringify({ isValid: true }), { status: 200 });
+    };
+    const result = reply();
+    await paidRoute(req({ host: 'localhost:3000', 'payment-signature': signature() }),
+      result, '/api/pa-business', () => ({ q: 'Test' }), async () => {
+        const error = new Error('mock upstream failure');
+        error.status = reported;
+        throw error;
+      });
+    assert.equal(result.code, expected, 'reported upstream status: ' + String(reported));
+    assert.equal(result.body.paymentSettled, false);
+    assert.equal(result.body.paid, undefined);
+    assert.equal(calls.length, 1);
+  }
+});
+
 test('upstream error after verify does not settle or return private result', async () => {
   delete process.env.PUBLIC_ORIGIN;
   const calls = [];
