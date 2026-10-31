@@ -126,6 +126,20 @@ class AdversarialPersonalInvesting(unittest.TestCase):
         p["positions"][0]["total_cost_usd"] = None
         self.assertIsNone(analyze(p)["unrealized_gain_usd"])
 
+    def test_unhashable_provenance_fails_closed_with_fixed_error(self):
+        p = fixture()
+        p["data_kind"] = ["SIMULATED"]
+        with self.assertRaisesRegex(PersonalDataError, "DATA_KIND_INVALID"):
+            analyze(p)
+
+    def test_nonfinite_and_malformed_paper_quantity_fails_closed(self):
+        p = fixture()
+        for value in ("NaN", "Infinity", "abc", True, {}, None):
+            with self.subTest(value=str(value)), self.assertRaisesRegex(
+                PersonalDataError, "DELTA_INVALID"
+            ):
+                paper_preview(p, "AAPL", value, proposed_price="10")
+
     def test_cash_only_snapshot(self):
         p = fixture(count=1)
         p["positions"] = []
