@@ -58,6 +58,21 @@ def _api(token: str, path: str, *, method="GET", payload=None) -> Any:
          and ".." not in path.split("/"), "API_PATH_INVALID")
     must(method in {"GET", "POST"}, "API_METHOD_FORBIDDEN")
     must(method != "POST" or path == "/check-runs", "API_WRITE_FORBIDDEN")
+    if method == "GET":
+        approved = (
+            path in {"/branches/main", "/pulls/804"}
+            or re.fullmatch(r"/compare/[0-9a-f]{40}\\.\\.\\.[0-9a-f]{40}", path) is not None
+            or re.fullmatch(r"/commits/[0-9a-f]{40}/check-runs\\?per_page=100", path)
+                is not None
+        )
+        # For contents, bind the request to one approved immutable path and
+        # a syntactically exact SHA. verify_candidate separately pins the HEAD.
+        approved = approved or any(
+            re.fullmatch(r"/contents/" + re.escape(filename)
+                         + r"\\?ref=[0-9a-f]{40}", path) is not None
+            for filename in EXPECTED
+        )
+        must(approved, "API_ROUTE_NOT_ALLOWLISTED")
     data = None if payload is None else json.dumps(payload, separators=(",", ":")).encode()
     req = urllib.request.Request(
         "https://api.github.com/repos/" + REPO + path,
@@ -158,12 +173,15 @@ def main() -> int:
     a=p.parse_args()
     exits=tuple(int(p.read_text(encoding="utf-8").strip()) for p in
                 (a.full_exit_file, a.phase1_exit_file, a.operating_exit_file))
+    # Both original reads and the one check publication use the *separate*
+    # App5121826 principal; candidate code never receives this credential.
+    independent_token = os.environ.get("PORTFOLIO_VERIFIER_TOKEN", "")
     verified=verify_candidate(
-        lambda route: _api(os.environ.get("GITHUB_TOKEN", ""), route),
+        lambda route: _api(independent_token, route),
         a.head_sha, exits=exits,
     )
     result=issue_check(
-        os.environ.get("PORTFOLIO_VERIFIER_TOKEN", ""), a.head_sha,
+        independent_token, a.head_sha,
         "Independently re-ran full, phase1 and operating-mode tests in network-disabled "
         "containers; pinned all eleven reviewed candidate file blobs, verified exact "
         "GitHub PR head/current-main ancestry, and checked issuer-pinned Foundation. "
