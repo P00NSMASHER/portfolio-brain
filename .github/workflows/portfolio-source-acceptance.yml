@@ -127,7 +127,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.sha }}"
-          test "$(git hash-object verification/trust_anchor_bootstrap.py)" = "334764851375c876212d106af0eedbbfe996840b"
+          test "$(git hash-object verification/trust_anchor_bootstrap.py)" = "cefcc4eb47697f022278cf4acf5667deba432df8"
       - name: Checkout candidate exact PR head to unprivileged test directory
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -165,7 +165,6 @@ jobs:
           repositories: portfolio-brain
       - name: Publish exact-head one-time bootstrap check; never merge
         env:
-          GITHUB_TOKEN: ${{ github.token }}
           PORTFOLIO_VERIFIER_TOKEN: ${{ steps.independent-token.outputs.token }}
         run: >-
           python -m verification.trust_anchor_bootstrap
