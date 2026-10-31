@@ -178,6 +178,15 @@ class BootstrapAdmissionTests(unittest.TestCase):
             ):
                 boot._api("token", path, method="POST", payload={})
 
+    def test_api_read_allowlist_refuses_unreviewed_routes(self):
+        for path in ("/settings", "/actions/secrets", "/pulls/805",
+                     "/git/refs", "/commits/" + HEAD,
+                     "/contents/README.md?ref=" + HEAD):
+            with self.subTest(path=path), self.assertRaisesRegex(
+                boot.BootstrapDenied, "API_ROUTE_NOT_ALLOWLISTED"
+            ):
+                boot._api("separately-issued-token", path, method="GET")
+
     def test_workflow_is_scoped_to_one_branch_and_no_merge_authority(self):
         text = (ROOT / ".github/workflows/portfolio-source-acceptance.yml").read_text()
         self.assertIn("bootstrap-trust-anchor:", text)
