@@ -43,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.sha }}"
-          test "$(git hash-object verification/source_acceptance_producer.py)" = "4a72fc670255d42634a69aff0b714ec9775cd47d"
+          test "$(git hash-object verification/source_acceptance_producer.py)" = "2c611ec6a43c9b21145fdf58af0bf9bd2af052fd"
           test "$(git hash-object verification/source_acceptance_verifier.py)" = "43bed3ab55896cb1e4f3f8f258529b3ae6511938"
 
       - name: Python 3.12
