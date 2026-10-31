@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src data:; font-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'">
+<title>Private Brain | Personal Investing</title>
+<style>
+:root{color-scheme:dark;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;background:#0b1020;color:#eff5ff}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 70% -20%,#28415f 0,transparent 48%),#0b1020}
+.shell{max-width:1200px;margin:auto;padding:22px}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;margin-bottom:24px}
+.brand{font-weight:850;font-size:20px;letter-spacing:-.4px}.brand span{color:#71e6cc}
+.muted{color:#9eb0c8;font-size:13px}.tag{border:1px solid #2e5070;border-radius:50px;padding:6px 10px;font-size:12px;color:#a9d0ec}
+button,.file{border:1px solid #3c5471;border-radius:11px;padding:10px 13px;background:#1b324d;color:#f6fbff;font:inherit;font-weight:650;cursor:pointer}
+button:hover,.file:hover{background:#294464}button:focus-visible,input:focus-visible{outline:2px solid #71e6cc;outline-offset:2px}
+.file input{display:none}.actions{display:flex;gap:8px;flex-wrap:wrap}
+h1{font-size:clamp(27px,4vw,43px);margin:6px 0 8px;letter-spacing:-1.2px}
+h2{font-size:18px;margin:0 0 12px;letter-spacing:-.3px}p{line-height:1.5}
+.hero{margin-bottom:20px}.hero p{max-width:800px;color:#aabbd2;margin:0}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(4,minmax(0,1fr))}
+.card{background:#121e32;border:1px solid #273b57;border-radius:18px;padding:18px;min-width:0;box-shadow:0 10px 32px #0001}
+.kpi{font-size:clamp(22px,2.3vw,34px);font-weight:760;letter-spacing:-.8px;margin:7px 0}
+.kpi small{font-size:14px;letter-spacing:0}
+.wide{grid-column:span 3}.double{grid-column:span 2}.full{grid-column:span 4}
+.primary{background:#1d5b62;border-color:#2c7978}.primary:hover{background:#26717a}
+.label{text-transform:uppercase;letter-spacing:1.5px;color:#8ea6c5;font-size:11px;font-weight:700}
+.warn{color:#ffc987}.good{color:#80dfb6}.status{font-size:12px;padding:5px 9px;border-radius:20px;background:#293348;display:inline-block}
+table{border-collapse:collapse;width:100%;font-size:13px;text-align:left}
+th{color:#9bb2ce;font-size:11px;letter-spacing:.7px;text-transform:uppercase}
+td,th{border-bottom:1px solid #293a51;padding:10px 7px}td:first-child{font-weight:670}
+.scroll{overflow-x:auto}.scroll table{min-width:480px}.plot{width:100%;height:210px;display:block}
+input,select{background:#0c182a;border:1px solid #3b5474;color:#f6fbff;border-radius:10px;font:inherit;padding:11px;min-width:0;width:100%}
+.field{display:flex;flex-direction:column;gap:6px;font-size:12px;color:#a2b5d1}
+.inline{display:grid;gap:10px;grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:12px}
+.notice{border:1px solid #57472a;background:#2c261d;padding:10px 13px;border-radius:11px;color:#ffd79b;font-size:13px}
+.small{font-size:12px;color:#9fb0c8}.pills{display:flex;gap:6px;flex-wrap:wrap}.pill{padding:5px 9px;border:1px solid #364d65;border-radius:24px;font-size:12px}
+.row{display:flex;justify-content:space-between;gap:14px;align-items:center}.list{margin:0;padding-left:18px;color:#c4d1e4;font-size:13px}
+.list li{margin:6px 0}.hidden{display:none!important}.empty{padding:40px;text-align:center;color:#b2c5e0}
+#message{min-height:1.4em;color:#f7ce85;font-size:13px;margin:8px 0}
+footer{margin:26px 0;color:#8fa4bc;font-size:12px;line-height:1.65}
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.wide,.full{grid-column:span 2}.double{grid-column:span 2}}
+@media(max-width:570px){.shell{padding:13px}.grid{grid-template-columns:1fr}.wide,.full,.double{grid-column:span 1}.inline{grid-template-columns:1fr}.card{padding:14px}.kpi{font-size:26px}.scroll table{min-width:500px}}
+</style>
+</head>
+<body>
+<div class="shell">
+<header>
+  <div class="brand">◈ PRIVATE <span>BRAIN</span> <span class="muted">/ Personal Investing</span></div>
+  <div class="actions">
+    <label class="file">Import private JSON<input id="inputFile" type="file" accept=".json,application/json"></label>
+    <button class="primary" id="demo">Synthetic demo</button>
+    <button id="clear">Clear memory</button>
+  </div>
+</header>
+<section class="hero">
+  <div class="tag" style="display:inline-block">100% offline · local browser memory · no brokerage orders</div>
+  <h1>Your investments, without the noise.</h1>
+  <p>Import your own private snapshot to explore holdings, risk, watchlists, historical scenarios and hypothetical trades. Nothing is transmitted, stored in this page, or pulled from the internet.</p>
+  <div id="message" role="status" aria-live="polite">Select the synthetic demo to explore the interface.</div>
+</section>
+<div class="grid">
+  <div class="card"><div class="label">Portfolio value</div><div class="kpi" id="nav">—</div><div class="muted">User-supplied marks, not verified quotes</div></div>
+  <div class="card"><div class="label">Cash balance</div><div class="kpi" id="cash">—</div><div class="muted">From imported snapshot only</div></div>
+  <div class="card"><div class="label">Largest position</div><div class="kpi" id="concentration">—</div><div class="muted" id="largestLabel">Concentration</div></div>
+  <div class="card"><div class="label">Scenario drawdown</div><div class="kpi" id="drawdown">—</div><div class="muted">Fixed-current-shares, price only</div></div>
+
+  <section class="card wide">
+    <div class="row"><h2>Historical portfolio scenario</h2><span class="status" id="sourceKind">NO DATA</span></div>
+    <svg class="plot" id="historyChart" viewBox="0 0 700 210" role="img" aria-label="Price-only fixed holdings scenario"></svg>
+    <div class="row small"><span id="historyCount">No complete aligned history</span><span id="volatility">Interval volatility: —</span></div>
+  </section>
+  <section class="card">
+    <h2>Risk & quality checks</h2>
+    <div class="pills" id="alerts"><span class="pill">Load a snapshot</span></div>
+    <p class="muted" id="riskInfo">Historical risk describes the imported sample, not the next market move.</p>
+    <div class="label">Equities −20% stress</div><div class="kpi" id="stress">—</div>
+  </section>
+
+  <section class="card double">
+    <h2>Holdings</h2>
+    <div class="scroll"><table><thead><tr><th>Ticker</th><th>Shares</th><th>Price</th><th>Value</th><th>Weight</th><th>Age</th></tr></thead><tbody id="holdingsBody"><tr><td colspan="6">No holdings imported</td></tr></tbody></table></div>
+  </section>
+  <section class="card double">
+    <h2>Research watchlist</h2>
+    <div class="scroll"><table><thead><tr><th>Ticker</th><th>Trailing move*</th><th>Evidence</th><th>Research note</th></tr></thead><tbody id="watchlistBody"><tr><td colspan="4">No watchlist imported</td></tr></tbody></table></div>
+    <p class="small">*Last 21 imported closes. Descriptive only, not a buy/sell recommendation.</p>
+  </section>
+  <section class="card double">
+    <h2>Paper trade preview</h2>
+    <p class="small">Calculates cash and shares after a hypothetical transaction. Never updates holdings or submits orders.</p>
+    <div class="inline">
+      <label class="field">Ticker<input id="paperSymbol" placeholder="SPY" maxlength="16" autocomplete="off"></label>
+      <label class="field">Share change (+buy, −sell)<input id="paperQty" value="1" type="number" step="any"></label>
+      <label class="field">Assumed price (USD)<input id="paperPrice" value="100" type="number" min=".01" step=".01"></label>
+    </div>
+    <button id="paperRun" class="primary">Preview only</button><p id="paperResult" class="muted" aria-live="polite">Import a snapshot first.</p>
+  </section>
+  <section class="card double">
+    <h2>Offline historical experiment</h2>
+    <p class="small">5/20-bar simple-moving-average, previous bar's signal, hypothetical 5-basis-point costs. No shorts, dividends, real fills or lookahead.</p>
+    <div class="inline" style="grid-template-columns:1fr 1fr">
+      <label class="field">Historical ticker<select id="backtestSymbol"></select></label>
+      <div class="field"><span>Execution</span><div class="tag" style="text-align:center">SIMULATION ONLY</div></div>
+    </div>
+    <button id="runBacktest">Run experiment</button><p id="backtestResult" class="muted" aria-live="polite">Select a ticker with at least 22 closes.</p>
+  </section>
+  <section class="card full">
+    <h2>Evidence boundaries</h2>
+    <ul class="list">
+      <li>Data stays in this browser tab's memory. Closing or clearing the tab discards it. No cloud sync or browser storage.</li>
+      <li>The snapshot is user-supplied, not verified against an exchange or a brokerage.</li>
+      <li>Historical curves use today's quantities across the imported dates. They are not actual account performance.</li>
+      <li>Watchlist changes and moving-average results are descriptive research, not forecasts or trading instructions.</li>
+      <li>Live orders, options execution, account transfers and external requests are intentionally unavailable.</li>
+    </ul>
+  </section>
+</div>
+<footer>PRIVATE BRAIN / Personal-use companion · Local only · No remote fonts, analytics, scripts, cookies, network access or persistent data. Keep imported snapshots and any screenshots private.</footer>
+</div>
+<script>
+(function () {
+"use strict";
+var snapshot = null, portfolio = null;
+var $ = function(id) { return document.getElementById(id); };
+var money = function(n) { return Number.isFinite(n) ? new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:2}).format(n) : "—"; };
+var percent = function(n) { return Number.isFinite(n) ? n.toFixed(2)+"%" : "—"; };
+function fail(reason) { throw new Error(reason); }
+function text(id,value) { $(id).textContent = String(value); }
+function cell(tr,value) { var td=document.createElement("td"); td.textContent=String(value); tr.appendChild(td); }
+function number(v,label,positive) {
+  if (typeof v!=="string" && typeof v!=="number") fail(label+" must be numeric");
+  var n=Number(v);
+  if (!Number.isFinite(n) || (positive?n<=0:n<0) || n>1e11) fail(label+" out of range");
+  return n;
+}
+function day(s) {
+  if (typeof s!=="string"||!/^\d{4}-\d{2}-\d{2}$/.test(s)) fail("Invalid ISO date");
+  var d=new Date(s+"T00:00:00Z");
+  if (isNaN(d.getTime()) || d.toISOString().slice(0,10)!==s) fail("Impossible date");
+  return d;
+}
+function sym(s) {if(typeof s!=="string"|| !/^[A-Z][A-Z0-9.^-]{0,15}$/.test(s))fail("Invalid ticker");return s;}
+function strict(obj,keys,label) {if(!obj||typeof obj!=="object"||Array.isArray(obj)||Object.keys(obj).sort().join("|")!==keys.slice().sort().join("|"))fail(label+" format not recognized");}
+function validate(o) {
+  strict(o,["currency","as_of","data_kind","cash_usd","positions","quotes","history","watchlist"],"Snapshot");
+  if(o.currency!=="USD"||!["SIMULATED","USER_SUPPLIED","ESTIMATED"].includes(o.data_kind))fail("USD and labelled evidence required");
+  var asof=day(o.as_of),cash=number(o.cash_usd,"Cash",false);
+  if(!Array.isArray(o.positions)||o.positions.length>100)fail("Invalid holdings count");
+  var set=new Set(),positions=[];
+  o.positions.forEach(function(p) {
+    strict(p,["symbol","shares","total_cost_usd","sector"],"Position");
+    var s=sym(p.symbol);if(set.has(s))fail("Duplicate holding");set.add(s);
+    if(typeof p.sector!=="string"||p.sector.length===0||p.sector.length>60)fail("Invalid sector");
+    positions.push({symbol:s,shares:number(p.shares,"Shares",true),cost:p.total_cost_usd===null?null:number(p.total_cost_usd,"Cost",false),sector:p.sector});
+  });
+  if(!positions.length&&!cash)fail("Empty portfolio");
+  strict(o.quotes,Array.from(set),"Quote coverage");
+  var quotes={};positions.forEach(function(p) {
+    var q=o.quotes[p.symbol];strict(q,["price","observed_on","source"],"Quote");
+    var observed=day(q.observed_on);if(observed>asof)fail("Future quote");
+    if(typeof q.source!=="string"||!q.source||q.source.length>150)fail("Missing source");
+    quotes[p.symbol]={price:number(q.price,"Quote",true),observed:observed,source:q.source};
+  });
+  if(!o.history||typeof o.history!=="object"||Array.isArray(o.history)||Object.keys(o.history).length>200)fail("Invalid history");
+  var hist={};Object.keys(o.history).forEach(function(s){
+    sym(s);var rows=o.history[s];if(!Array.isArray(rows)||rows.length>2500)fail("Invalid bar count");
+    var last=null;hist[s]=rows.map(function(r){
+      strict(r,["date","close"],"History");var d=day(r.date);
+      if(d>asof||(last!==null&&d<=last))fail("History must be ordered and not future-dated");
+      last=d;return {date:r.date,close:number(r.close,"Historical price",true)};
+    });
+  });
+  if(!Array.isArray(o.watchlist)||o.watchlist.length>100)fail("Invalid watchlist");
+  var wset=new Set();o.watchlist.forEach(function(w) {
+    strict(w,["symbol","note"],"Watchlist");sym(w.symbol);
+    if(wset.has(w.symbol))fail("Duplicate watchlist");wset.add(w.symbol);
+    if(typeof w.note!=="string"||w.note.length>180)fail("Invalid note");
+  });
+  return {asof:asof,cash:cash,positions:positions,quotes:quotes,history:hist,watchlist:o.watchlist,evidence:o.data_kind};
+}
+function compute(s){
+  var nav=s.cash,sectors={},line=[];
+  s.positions.forEach(function(p){
+    var q=s.quotes[p.symbol],v=p.shares*q.price,age=Math.floor((s.asof-q.observed)/86400000);
+    nav+=v;sectors[p.sector]=(sectors[p.sector]||0)+v;
+    line.push({symbol:p.symbol,shares:p.shares,price:q.price,value:v,age:age,sector:p.sector});
+  });if(nav<=0)fail("NAV must be positive");
+  line.forEach(function(p){p.weight=p.value/nav*100;});
+  var dates=null;
+  s.positions.forEach(function(p) {
+    var rows=s.history[p.symbol]||[];
+    var set=new Set(rows.map(function(r){return r.date;}));
+    if(dates===null)dates=set;else dates=new Set(Array.from(dates).filter(function(d){return set.has(d);}));
+  });
+  var hist=[];
+  if(dates!==null)Array.from(dates).sort().forEach(function(d){
+    var v=s.cash;s.positions.forEach(function(p){v+=p.shares*s.history[p.symbol].find(function(x){return x.date===d;}).close;});
+    hist.push({date:d,value:v});
+  });
+  var peak=0,dd=0;hist.forEach(function(x){peak=Math.max(peak,x.value);dd=Math.min(dd,x.value/peak-1);});
+  var alerts=[];if(line.some(function(x){return x.weight>35;}))alerts.push("Single position >35%");
+  if(Object.keys(sectors).some(function(x){return sectors[x]/nav>0.5;}))alerts.push("Sector >50%");
+  if(line.some(function(x){return x.age>7;}))alerts.push("Quote older than 7 days");
+  if(hist.length<20)alerts.push("Insufficient aligned history");
+  return {nav:nav,line:line,history:hist,drawdown:hist.length?dd*100:null,sectors:sectors,alerts:alerts};
+}
+function trend(vals){if(vals.length<3)return null;var returns=[];for(var i=1;i<vals.length;i++)returns.push(vals[i]/vals[i-1]-1);var mean=returns.reduce(function(a,b){return a+b;},0)/returns.length;var varsum=returns.reduce(function(a,b){return a+(b-mean)*(b-mean);},0);return Math.sqrt(varsum/(returns.length-1))*100;}
+function chart(rows){
+  var svg=$("historyChart");svg.replaceChildren();
+  if(rows.length<2){var label=document.createElementNS("http://www.w3.org/2000/svg","text");label.setAttribute("x","50%");label.setAttribute("y","50%");label.setAttribute("text-anchor","middle");label.setAttribute("fill","#91a8c6");label.textContent="Import aligned historical bars";svg.appendChild(label);return;}
+  var values=rows.map(function(x){return x.value;}),low=Math.min.apply(null,values),high=Math.max.apply(null,values);
+  var gap=Math.max(high-low,Math.max(1,high)*.01),coords=values.map(function(v,i){return (25+(i/(values.length-1))*650).toFixed(1)+","+(184-((v-low)/gap)*150).toFixed(1);}).join(" ");
+  var baseline=document.createElementNS("http://www.w3.org/2000/svg","line");baseline.setAttribute("x1","24");baseline.setAttribute("x2","675");baseline.setAttribute("y1","185");baseline.setAttribute("y2","185");baseline.setAttribute("stroke","#31465e");svg.appendChild(baseline);
+  var line=document.createElementNS("http://www.w3.org/2000/svg","polyline");line.setAttribute("points",coords);line.setAttribute("fill","none");line.setAttribute("stroke","#71e6cc");line.setAttribute("stroke-width","2.5");line.setAttribute("vector-effect","non-scaling-stroke");svg.appendChild(line);
+}
+function render(){
+  if(!snapshot||!portfolio)return;
+  var s=snapshot,p=portfolio;
+  text("nav",money(p.nav));text("cash",money(s.cash));
+  var sorted=p.line.slice().sort(function(a,b){return b.weight-a.weight;});
+  text("concentration",sorted.length?percent(sorted[0].weight):"0%");
+  text("largestLabel",sorted.length?sorted[0].symbol:"Cash only");
+  text("drawdown",percent(p.drawdown));text("stress",money(s.cash+(p.nav-s.cash)*.8));
+  text("sourceKind",s.evidence);text("historyCount",p.history.length+" aligned dates · fixed current shares");
+  text("volatility","Interval volatility: "+percent(trend(p.history.map(function(x){return x.value;}))));
+  chart(p.history);
+  var body=$("holdingsBody");body.replaceChildren();p.line.forEach(function(q){var tr=document.createElement("tr");[q.symbol,q.shares,money(q.price),money(q.value),percent(q.weight),q.age+"d"].forEach(function(x){cell(tr,x);});body.appendChild(tr);});
+  if(!p.line.length){var tr=document.createElement("tr");cell(tr,"Cash-only portfolio");body.appendChild(tr);}
+  body=$("watchlistBody");body.replaceChildren();s.watchlist.forEach(function(w){
+    var rows=s.history[w.symbol]||[],ret=rows.length>=21?(rows[rows.length-1].close/rows[rows.length-21].close-1)*100:null;
+    var tr=document.createElement("tr");[w.symbol,percent(ret),rows.length>=21?"Imported history":"Insufficient",w.note].forEach(function(x){cell(tr,x);});body.appendChild(tr);
+  });
+  var alerts=$("alerts");alerts.replaceChildren();
+  (p.alerts.length?p.alerts:["No configured risk flags"]).forEach(function(a){var span=document.createElement("span");span.className="pill"+(p.alerts.length?" warn":" good");span.textContent=a;alerts.appendChild(span);});
+  var sel=$("backtestSymbol");sel.replaceChildren();
+  Object.keys(s.history).sort().forEach(function(symbol){var op=document.createElement("option");op.value=symbol;op.textContent=symbol;sel.appendChild(op);});
+  text("riskInfo","As of "+s.asof.toISOString().slice(0,10)+" · Sample only; historical VaR and predictions are not guarantees.");
+  text("paperResult","Preview does not alter this imported snapshot.");
+  text("backtestResult","Choose a ticker with at least 22 imported closes.");
+}
+function demo(){
+  var d=new Date("2026-09-01T00:00:00Z"),history={AAPL:[],SPY:[],MSFT:[]};
+  for(var i=0;i<45;i++){
+    var date=new Date(d.getTime()+i*86400000).toISOString().slice(0,10);
+    history.AAPL.push({date:date,close:String(140+i*.45+Math.sin(i)*2)});
+    history.SPY.push({date:date,close:String(490+i*.65+Math.cos(i)*4)});
+    history.MSFT.push({date:date,close:String(340-i*.26+Math.sin(i/2)*3)});
+  }
+  return {currency:"USD",as_of:"2026-10-31",data_kind:"SIMULATED",cash_usd:"12500",
+    positions:[{symbol:"AAPL",shares:"15",total_cost_usd:"1800",sector:"Technology"},{symbol:"SPY",shares:"20",total_cost_usd:"9000",sector:"ETF"}],
+    quotes:{AAPL:{price:"163.20",observed_on:"2026-10-31",source:"Synthetic illustration"},SPY:{price:"528.50",observed_on:"2026-10-31",source:"Synthetic illustration"}},
+    history:history,watchlist:[{symbol:"MSFT",note:"Review synthetic trend and data quality"},{symbol:"SPY",note:"Diversification reference, not advice"}]};
+}
+function load(obj) {snapshot=validate(obj);portfolio=compute(snapshot);render();text("message","Loaded "+snapshot.evidence+" snapshot. No data left your device.");}
+$("demo").addEventListener("click",function(){try{load(demo());}catch(e){text("message",e.message);}});
+$("clear").addEventListener("click",function(){snapshot=null;portfolio=null;text("message","Memory cleared. Close this tab to discard all remaining content.");location.reload();});
+$("inputFile").addEventListener("change",function(e){
+  var f=e.target.files&&e.target.files[0];if(!f)return;
+  if(f.size>2000000){text("message","File exceeds 2 MB safety bound.");return;}
+  var reader=new FileReader();
+  reader.onload=function(){try{load(JSON.parse(String(reader.result)));}catch(e){snapshot=null;portfolio=null;text("message","Snapshot rejected: "+e.message);}};
+  reader.onerror=function(){text("message","Unable to read local file.");};
+  reader.readAsText(f);e.target.value="";
+});
+$("paperRun").addEventListener("click",function(){
+  try{
+    if(!snapshot)fail("Import a snapshot first.");
+    var symbol=sym($("paperSymbol").value.toUpperCase().trim());
+    var change=Number($("paperQty").value),price=number($("paperPrice").value,"Price",true);
+    if(!Number.isFinite(change)||change===0||Math.abs(change)>1e8)fail("Share change must be nonzero and finite.");
+    var p=snapshot.positions.find(function(p){return p.symbol===symbol;});
+    var existing=p?p.shares:0,after=existing+change,cash=snapshot.cash-change*price;
+    if(after<0)fail("Cannot paper-sell more shares than held.");
+    if(cash<0)fail("Insufficient hypothetical cash.");
+    text("paperResult",(change>0?"PAPER BUY ":"PAPER SELL ")+Math.abs(change)+" "+symbol+" @ "+money(price)+" · cash after "+money(cash)+" · shares after "+after+". No order submitted.");
+  }catch(e){text("paperResult","Blocked: "+e.message);}
+});
+$("runBacktest").addEventListener("click",function(){
+  try{
+    if(!snapshot)fail("Import a snapshot first.");
+    var rows=snapshot.history[$("backtestSymbol").value]||[];
+    if(rows.length<22)fail("Need at least 22 dated bars.");
+    var cash=10000,shares=0,trades=0,fees=0;
+    for(var i=20;i<rows.length;i++){
+      var prior=rows.slice(i-20,i),fast=prior.slice(-5).reduce(function(a,b){return a+b.close;},0)/5;
+      var slow=prior.reduce(function(a,b){return a+b.close;},0)/20;
+      var px=rows[i].close,signal=fast>slow;
+      if(signal&&!shares){shares=cash/(px*1.0005);fees+=shares*px*.0005;cash=0;trades++;}
+      else if(!signal&&shares){var gross=shares*px;fees+=gross*.0005;cash=gross*.9995;shares=0;trades++;}
+    }
+    var finalValue=cash+shares*rows[rows.length-1].close;
+    text("backtestResult","Simulated end "+money(finalValue)+" from $10,000 · "+trades+" trades · "+money(fees)+" modeled fees. Buy/hold on same dates "+money(10000*rows[rows.length-1].close/rows[20].close)+". No real fills or forecast.");
+  }catch(e){text("backtestResult","Blocked: "+e.message);}
+});
+})();
+</script>
+</body>
+</html>
