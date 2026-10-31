@@ -76,7 +76,8 @@ class StandaloneX402ProtocolTests(unittest.TestCase):
         for held in (observer, receipt):
             self.assertIn("vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true'", held)
             self.assertIn("vars.PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA == github.sha", held)
-            self.assertNotIn("false &&", held)
+            self.assertEqual(held.count("false &&"), 1)
+            self.assertRegex(held, r"(?m)^\\s+false &&$")
 
     def test_live_upstream_checks_are_opt_in_and_not_in_ci(self):
         manifest = json.loads((SERVICE / "package.json").read_text(encoding="utf-8"))
