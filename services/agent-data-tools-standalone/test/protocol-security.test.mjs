@@ -145,6 +145,34 @@ test('contradictory verification cannot execute upstream data or settle', async 
 });
 
 
+test('contradictory positive verification with invalidReason never serves paid data', async () => {
+  delete process.env.PUBLIC_ORIGIN;
+  for (const invalidReason of ['invalid_exact_payload', 'authorization_expired', ['malformed']]) {
+    const called = [];
+    globalThis.fetch = async url => {
+      called.push(String(url));
+      return new Response(JSON.stringify({isValid:true, invalidReason}), {status:200});
+    };
+    const result = reply();
+    let executed = false;
+    await paidRoute(req({host:'localhost:3000','payment-signature':signature()}),
+      result, '/api/pa-business', () => ({q:'Test'}),
+      async () => { executed = true; return {secret:'not_paid'}; });
+    assert.equal(result.code, 402);
+    assert.equal(result.body.error, 'payment_verification_failed');
+    assert.equal(executed, false);
+    assert.equal(called.length, 1);
+    assert.ok(called[0].endsWith('/verify'));
+  }
+});
+
+test('a facilitator may leave valid verification invalidReason empty', async () => {
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({isValid:true, invalidReason:''}), {status:200});
+  const checked = await verifyPayment('/api/pa-business', {x402Version:2});
+  assert.equal(checked.valid, true);
+});
+
 test('HTTP 202 verification cannot authorize data or settlement', async () => {
   delete process.env.PUBLIC_ORIGIN;
   const called = [];
