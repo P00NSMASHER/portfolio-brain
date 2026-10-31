@@ -72,6 +72,9 @@ def verify_predecessor_acceptance(
                 if error.code == 404:
                     raise Denied("HTTP_404") from None
                 raise SourceAdmissionError("SOURCE_API_UNAVAILABLE") from None
+            except Denied:
+                # Preserve the reviewed verifier's own fixed denial taxonomy.
+                raise
             except (OSError, TimeoutError, ValueError, TypeError):
                 raise SourceAdmissionError("SOURCE_API_UNAVAILABLE") from None
 
