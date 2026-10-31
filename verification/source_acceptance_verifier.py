@@ -39,6 +39,7 @@ APPROVAL_BASIS = (
 )
 REQUIRED_CRITERIA = {
     "minimum_completed_span_seconds": 43200,
+    "requires_original_successful_owner_activation_observer": True,
     "requires_terminal_30_minute_repair_follow_through": True,
     "maximum_intercore_gap_seconds": 5400,
     "required_original_first_attempt_success": True,
@@ -93,6 +94,15 @@ RECEIPT_NESTED_FIELDS = MappingProxyType({
         "historical_adverse_automatic_cores_for_this_source",
         "prior_source_acceptance_is_not_transferable",
         "original_proof_status",
+        "owner_activation_observer_run_id",
+        "owner_activation_observer_created_utc",
+        "post_activation_qualifying_cores",
+        "post_activation_first_run_id",
+        "post_activation_first_completed_utc",
+        "post_activation_terminal_run_id",
+        "post_activation_terminal_completed_utc",
+        "post_activation_completed_span_seconds",
+        "post_activation_maximum_gap_seconds",
     }),
     "terminal_state_replay": frozenset({
         "source_sha",
@@ -136,6 +146,10 @@ RECEIPT_NESTED_FIELDS = MappingProxyType({
 })
 
 MAX_RUNS = 100
+# An owner activation can happen hours after deployment. 12h replay may
+# require >256 read-only GETs for original core, repair, observer and state
+# evidence. Keep this finite and within GitHubReadOnly's hard maximum (656).
+SOURCE_ACCEPTANCE_API_CALL_BUDGET = 512
 
 
 class SourceAcceptanceError(RuntimeError):
@@ -494,6 +508,8 @@ def _verify_receipt_contract(receipt: dict) -> None:
         "acceptance receipt contract invalid")
     evidence = receipt.get("original_run_evidence")
     req(type(evidence) is dict
+        and (type(evidence.get("owner_activation_observer_run_id")) is int
+             or evidence.get("owner_activation_observer_run_id") is None)
         and evidence.get("historical_adverse_automatic_cores_for_this_source") == []
         and evidence.get("prior_source_acceptance_is_not_transferable") is True
         and evidence.get("original_proof_status")
@@ -514,6 +530,13 @@ def _verify_receipt_contract(receipt: dict) -> None:
 def _verify_original_runs(api: GitHubReadOnly, receipt: dict, source: str) -> dict:
     evidence = receipt.get("original_run_evidence")
     summary = collect_original_runs(api, source, evidence)
+    from verification.owner_observation_window import (verify_post_activation, OwnerWindowError)
+    try:
+        owner_window = verify_post_activation(api, source, summary, evidence)
+    except OwnerWindowError as exc:
+        raise SourceAcceptanceError(str(exc)) from exc
+    req(owner_window["terminal"]["id"] == summary["terminal"]["id"],
+        "owner-activated terminal is not exact receipt terminal")
     external = receipt.get("external_cloudflare_provider")
     signed = summary["signed_timestamps"]
     req(type(external) is dict and signed == external.get("signed_dispatch_timestamps_utc")
@@ -682,7 +705,7 @@ def main(argv=None) -> int:
     external_id = ""
     try:
         source, external_id = verify_acceptance(
-            GitHubReadOnly(read_token, max_calls=256),
+            GitHubReadOnly(read_token, max_calls=SOURCE_ACCEPTANCE_API_CALL_BUDGET),
             pr_number=args.pr_number, head_sha=args.head_sha,
         )
         check = publish_check(
