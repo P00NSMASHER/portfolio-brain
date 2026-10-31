@@ -1,5 +1,6 @@
 """Standalone adversarial tests for a one-time App5121826 trust-root bootstrap."""
 import copy
+import io
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -177,6 +178,57 @@ class BootstrapAdmissionTests(unittest.TestCase):
                 boot.BootstrapDenied, "API_WRITE_FORBIDDEN"
             ):
                 boot._api("token", path, method="POST", payload={})
+
+    def test_api_get_allowlist_accepts_only_canonical_live_read_shapes(self):
+        routes = [
+            "/branches/main",
+            "/pulls/804",
+            "/compare/" + MAIN + "..." + HEAD,
+            "/commits/" + HEAD + "/check-runs?per_page=100",
+        ] + [
+            "/contents/" + filename + "?ref=" + HEAD
+            for filename in boot.EXPECTED
+        ]
+        with patch.object(
+            boot.urllib.request, "urlopen",
+            side_effect=lambda req, timeout: io.BytesIO(b'{"ok": true}'),
+        ) as open_url:
+            for route in routes:
+                with self.subTest(route=route):
+                    self.assertEqual(
+                        boot._api("offline-synthetic-token", route, method="GET"),
+                        {"ok": True},
+                    )
+            self.assertEqual(open_url.call_count, len(routes))
+            for observed, route in zip(open_url.call_args_list, routes):
+                request = observed.args[0]
+                self.assertEqual(request.get_method(), "GET")
+                self.assertEqual(
+                    request.full_url,
+                    "https://api.github.com/repos/" + boot.REPO + route,
+                )
+
+    def test_api_get_rejects_near_miss_punctuation_without_network_calls(self):
+        denied = [
+            "/compare/" + MAIN + ".." + HEAD,
+            "/compare/" + MAIN + "...." + HEAD,
+            "/compare/" + MAIN + "%2E%2E%2E" + HEAD,
+            "/compare/" + MAIN.upper() + "..." + HEAD,
+            "/commits/" + HEAD + "/check-runs/per_page=100",
+            "/commits/" + HEAD + "/check-runs?per_page=101",
+            "/commits/" + HEAD + "/check-runs?per_page=100&page=2",
+            "/contents/verification/trust_anchor_bootstrap.py?ref=" + HEAD,
+            "/contents/verification/independent_verifier.py&ref=" + HEAD,
+            "/contents/verification/independent_verifier.py?ref=" + HEAD + "&path=evil",
+            "/contents/verification/independent_verifier.py?ref=" + HEAD.upper(),
+        ]
+        with patch.object(boot.urllib.request, "urlopen") as open_url:
+            for route in denied:
+                with self.subTest(route=route), self.assertRaisesRegex(
+                    boot.BootstrapDenied, "API_ROUTE_NOT_ALLOWLISTED"
+                ):
+                    boot._api("offline-synthetic-token", route, method="GET")
+            open_url.assert_not_called()
 
     def test_api_read_allowlist_refuses_unreviewed_routes(self):
         for path in ("/settings", "/actions/secrets", "/pulls/805",
