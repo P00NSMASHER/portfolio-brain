@@ -164,6 +164,19 @@ class OriginalObserverActivationTests(unittest.TestCase):
         with self.assertRaisesRegex(ow.OwnerWindowError, "GAP_INVALID"):
             ow.post_activation(summary, {"created": START})
 
+    def test_qualified_terminal_is_frozen_against_later_activity(self):
+        # A later run cannot retroactively change a completed, bounded proof.
+        summary = sample_summary(n=25)
+        first_proof = ow.post_activation(summary, {"created": START})
+        frozen = first_proof["terminal"]
+        summary["automatic"].append(record(999, frozen["completed"] + timedelta(hours=4)))
+        proof = ow.post_activation(summary, {"created": START})
+        self.assertEqual(proof["status"], "PASS")
+        self.assertEqual(proof["terminal"]["id"], frozen["id"])
+        self.assertEqual(len(proof["automatic"]), 25)
+        self.assertEqual(proof["completed_span_seconds"], 43200)
+        self.assertEqual(proof["maximum_gap_seconds"], 1800)
+
     def test_same_core_or_zero_gap_refused(self):
         summary = sample_summary(n=3)
         summary["automatic"][1] = dict(summary["automatic"][0])

@@ -118,14 +118,16 @@ def post_activation(summary, activation_record):
     if not after:
         return {"status": "COLLECTING", "automatic": [], "completed_span_seconds": 0,
                 "maximum_gap_seconds": 0, "terminal": None}
-    gaps = [int((right["completed"] - left["completed"]).total_seconds())
-            for left, right in zip(after, after[1:])]
-    require(all(0 < gap <= MAX_GAP_SECONDS for gap in gaps),
-            "POST_ACTIVATION_AUTOMATIC_GAP_INVALID")
     first = after[0]
     terminal = next((r for r in after[1:] if
                     int((r["completed"] - first["completed"]).total_seconds()) >= MINIMUM_SECONDS), None)
+    # The acceptance interval is frozen at its FIRST qualifying terminal.
+    # Later routine activity cannot silently change the already bounded proof.
     proof_rows = after[:after.index(terminal) + 1] if terminal else after
+    gaps = [int((right["completed"] - left["completed"]).total_seconds())
+            for left, right in zip(proof_rows, proof_rows[1:])]
+    require(all(0 < gap <= MAX_GAP_SECONDS for gap in gaps),
+            "POST_ACTIVATION_AUTOMATIC_GAP_INVALID")
     span = int((proof_rows[-1]["completed"] - first["completed"]).total_seconds())
     return {"status": "PASS" if terminal else "COLLECTING", "automatic": proof_rows,
             "completed_span_seconds": span, "maximum_gap_seconds": max(gaps) if gaps else 0,
