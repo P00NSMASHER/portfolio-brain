@@ -92,3 +92,95 @@ jobs:
           python -m verification.source_acceptance_verifier
           --pr-number "$PR_NUMBER"
           --head-sha "$ACCEPTANCE_HEAD_SHA"
+
+  # One-time independent App5121826 bootstrap gate. This does NOT merge PRs,
+  # replace any currently required check or change the protected ruleset.
+  # A separately approved admin-side ruleset swap is required for cutover.
+  bootstrap-trust-anchor:
+    if: >-
+      ${{
+        github.repository == 'P00NSMASHER/portfolio-brain' &&
+        github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain' &&
+        github.event.workflow_run.name == 'foundation-ci' &&
+        github.event.workflow_run.event == 'pull_request' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_repository.full_name == 'P00NSMASHER/portfolio-brain' &&
+        github.event.workflow_run.head_branch == 'audit/source-admission-crosspath-20261030' &&
+        github.event.workflow_run.head_sha != github.sha
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    env:
+      CANDIDATE_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Checkout immutable trusted main (never candidate credentials)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Pin reviewed one-time bootstrap policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(git hash-object verification/trust_anchor_bootstrap.py)" = "638778e195754414f256fa7dde5d7b401241bed9"
+      - name: Checkout candidate exact PR head to unprivileged test directory
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          path: candidate
+          persist-credentials: false
+      - name: Check exact candidate tree identity before isolated tests
+        run: test "$(git -C candidate rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - name: Pull pinned Python verifier runtime image
+        run: docker pull python:3.12-bookworm
+      - name: Run candidate regressions in network-disabled containers
+        run: |
+          set -euo pipefail
+          mkdir -p verifier-results
+          set +e
+          docker run --rm --network none --cap-drop=ALL --security-opt=no-new-privileges             -v "$PWD/candidate:/src:ro" python:3.12-bookworm             sh -lc 'mkdir -p /work && cp -R --no-preserve=ownership /src/. /work/ && cd /work && python -I -c '"'"'import sys,unittest;sys.path.insert(0,"/work");r=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.discover("/work/tests",pattern="test_*.py"));raise SystemExit(not r.wasSuccessful())'"'"''             > verifier-results/full.txt 2>&1
+          FULL=$?
+          echo "$FULL" > verifier-results/full.exit
+          docker run --rm --network none --cap-drop=ALL --security-opt=no-new-privileges             -v "$PWD/candidate:/src:ro" python:3.12-bookworm             sh -lc 'mkdir -p /work && cp -R --no-preserve=ownership /src/. /work/ && cd /work && python -I -c '"'"'import sys,unittest;sys.path.insert(0,"/work");r=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.discover("/work/tests",pattern="test_phase1_*.py"));raise SystemExit(not r.wasSuccessful())'"'"''             > verifier-results/phase1.txt 2>&1
+          PHASE1=$?
+          echo "$PHASE1" > verifier-results/phase1.exit
+          docker run --rm --network none --cap-drop=ALL --security-opt=no-new-privileges             -v "$PWD/candidate:/src:ro" python:3.12-bookworm             sh -lc 'mkdir -p /work && cp -R --no-preserve=ownership /src/. /work/ && cd /work && python -I -c '"'"'import sys;sys.path.insert(0,"/work");from operations.validate_operating_mode import validate_operating_mode;print(validate_operating_mode())'"'"''             > verifier-results/operating.txt 2>&1
+          OPERATING=$?
+          echo "$OPERATING" > verifier-results/operating.exit
+          set -e
+
+
+      - name: Mint separate App5121826 token ONLY after isolated tests
+        id: independent-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: "5121826"
+          private-key: ${{ secrets.PORTFOLIO_VERIFIER_PRIVATE_KEY }}
+          owner: P00NSMASHER
+          repositories: portfolio-brain
+      - name: Publish exact-head one-time bootstrap check; never merge
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PORTFOLIO_VERIFIER_TOKEN: ${{ steps.independent-token.outputs.token }}
+        run: >-
+          python -m verification.trust_anchor_bootstrap
+          --head-sha "$CANDIDATE_SHA"
+          --full-exit-file verifier-results/full.exit
+          --phase1-exit-file verifier-results/phase1.exit
+          --operating-exit-file verifier-results/operating.exit
+      - name: Retain untrusted candidate's isolated test evidence without credentials
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: portfolio-bootstrap-${{ github.event.workflow_run.head_sha }}-${{ github.run_id }}
+          path: |
+            verifier-results/full.txt
+            verifier-results/phase1.txt
+            verifier-results/operating.txt
+          if-no-files-found: warn
+          retention-days: 30
