@@ -15,6 +15,26 @@
 
    Output defaults to `private_runtime/personal/investing-report.json`, now explicitly excluded by `.gitignore`. **Do not commit or upload real data, generated reports, screenshots, or user-specific account details.**
 
+## Import a spreadsheet export without entering JSON
+
+If you have your own **local CSV exports**, keep the actual files under the ignored `private_runtime/personal/` directory. The importer accepts three small, transparent CSV contracts:
+
+`holdings.csv` columns: `symbol,shares,total_cost_usd,sector,price,observed_on,source`. Prices and sectors are **user-supplied marks**, not authenticated quotes. Leave `total_cost_usd` blank if unavailable.
+
+`history.csv` columns: `symbol,date,close`. Dates are ISO `YYYY-MM-DD`; duplicates, future bars and invalid prices fail closed.
+
+Optional `watchlist.csv` columns: `symbol,note`. These are research notes only.
+
+```sh
+python -m personal_investing.import_csv \
+  --holdings private_runtime/personal/holdings.csv \
+  --history private_runtime/personal/history.csv \
+  --watchlist private_runtime/personal/watchlist.csv \
+  --cash 2500 --as-of 2026-10-31
+```
+
+It validates all inputs **before** creating an owner-local `private_runtime/personal/portfolio.json`. Output is atomic, local, restricted to `private_runtime/personal/` and has user-only permissions on POSIX. Import that JSON into the dashboard. The converter never connects to Tradier, never fetches quotes, never uploads your data, and never adds secret fields.
+
 ## Dashboard features
 
 - Long-only holdings, cash, net asset value, relative position weights, single-name and sector concentration, cash-preserving 20% equity shock.
