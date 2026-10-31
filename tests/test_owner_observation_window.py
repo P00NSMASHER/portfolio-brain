@@ -25,9 +25,13 @@ def observer_run(run_id=900, source=SOURCE, status="completed", conclusion="succ
 
 
 def observer_job(run_id=900, source=SOURCE, status="completed", conclusion="success",
-                 name="observe", attempt=1):
+                 name="observe", attempt=1, steps=None):
+    if steps is None:
+        steps = [{"name": "Replay original cycle artifacts and contiguous state publications",
+                  "status": "in_progress" if status == "in_progress" else "completed",
+                  "conclusion": None if status == "in_progress" else "success"}]
     return {"run_id": run_id, "head_sha": source, "run_attempt": attempt,
-            "name": name, "status": status, "conclusion": conclusion}
+            "name": name, "status": status, "conclusion": conclusion, "steps": steps}
 
 
 class FakeAPI:
@@ -106,6 +110,31 @@ class OriginalObserverActivationTests(unittest.TestCase):
                 api = FakeAPI(jobs={900: observer_job(**values)})
                 with self.assertRaises(ow.OwnerWindowError):
                     ow.activation(api, SOURCE)
+
+    def test_successful_job_without_proof_step_is_not_a_valid_activation(self):
+        step_name = "Replay original cycle artifacts and contiguous state publications"
+        variants = [
+            [],
+            [{"name": "Unrelated step", "status": "completed", "conclusion": "success"}],
+            [{"name": step_name, "status": "completed", "conclusion": "skipped"}],
+            [{"name": step_name, "status": "completed", "conclusion": "failure"}],
+            [{"name": step_name, "status": "in_progress", "conclusion": None}],
+            [{"name": step_name, "status": "completed", "conclusion": "success"}] * 2,
+        ]
+        for steps in variants:
+            with self.subTest(steps=steps), self.assertRaises(ow.OwnerWindowError):
+                ow.activation(FakeAPI(jobs={900: observer_job(steps=steps)}), SOURCE)
+
+    def test_first_running_observer_denies_explicit_failed_or_skipped_proof(self):
+        running = observer_run(status="in_progress", conclusion=None)
+        step_name = "Replay original cycle artifacts and contiguous state publications"
+        for adverse in ("failure", "skipped", "cancelled", "timed_out"):
+            step = {"name": step_name, "status": "completed", "conclusion": adverse}
+            api = FakeAPI(runs=[running], current=running,
+                          jobs={900: observer_job(status="in_progress", conclusion=None,
+                                                  steps=[step])})
+            with self.subTest(adverse=adverse), self.assertRaises(ow.OwnerWindowError):
+                ow.activation(api, SOURCE, current_run_id=900)
 
     def test_choose_earliest_original_success_not_newer_success(self):
         early = START - timedelta(hours=1)
