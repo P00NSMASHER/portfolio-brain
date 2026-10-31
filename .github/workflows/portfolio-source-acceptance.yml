@@ -127,7 +127,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.sha }}"
-          test "$(git hash-object verification/trust_anchor_bootstrap.py)" = "cefcc4eb47697f022278cf4acf5667deba432df8"
+          test "$(git hash-object verification/trust_anchor_bootstrap.py)" = "623a3dc9f65a34c7ae3275d334e7d8f1b7ccdf0a"
       - name: Checkout candidate exact PR head to unprivileged test directory
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
