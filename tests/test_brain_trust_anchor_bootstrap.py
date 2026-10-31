@@ -208,6 +208,33 @@ class BootstrapAdmissionTests(unittest.TestCase):
                     "https://api.github.com/repos/" + boot.REPO + route,
                 )
 
+    def test_check_post_uses_real_json_media_type_without_other_write_authority(self):
+        payload = {
+            "name": boot.BOOTSTRAP_NAME,
+            "head_sha": HEAD,
+            "status": "completed",
+            "conclusion": "success",
+        }
+        with patch.object(
+            boot.urllib.request, "urlopen",
+            side_effect=lambda req, timeout: io.BytesIO(b'{"ok": true}'),
+        ) as open_url:
+            self.assertEqual(
+                boot._api("offline-synthetic-token", "/check-runs",
+                          method="POST", payload=payload),
+                {"ok": True},
+            )
+            open_url.assert_called_once()
+            request = open_url.call_args.args[0]
+            self.assertEqual(request.get_method(), "POST")
+            self.assertEqual(request.get_header("Content-type"), "application/json")
+            self.assertEqual(request.get_header("Accept"), "application/vnd.github+json")
+            self.assertEqual(
+                request.full_url,
+                "https://api.github.com/repos/" + boot.REPO + "/check-runs",
+            )
+            self.assertEqual(__import__("json").loads(request.data), payload)
+
     def test_api_get_rejects_near_miss_punctuation_without_network_calls(self):
         denied = [
             "/compare/" + MAIN + ".." + HEAD,
