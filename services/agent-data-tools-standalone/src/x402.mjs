@@ -217,7 +217,11 @@ export async function verifyPayment(path, paymentPayload) {
   const ok = result.status === 200;
   // A generic success flag is not proof of a valid payment. Reject absent or
   // contradictory isValid and malformed optional success values fail-closed.
-  const valid = ok && result.body?.isValid === true &&
+  // V2 invalidReason is omitted (or empty in some facilitators) when valid.
+  // A reason accompanying isValid:true is contradictory and cannot authorize data.
+  const noInvalidity = result.body?.invalidReason == null ||
+    result.body.invalidReason === '';
+  const valid = ok && noInvalidity && result.body?.isValid === true &&
     (result.body.success === undefined || result.body.success === true);
   return {
     valid,
