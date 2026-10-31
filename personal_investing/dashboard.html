@@ -253,15 +253,27 @@ function demo(){
     quotes:{AAPL:{price:"163.20",observed_on:"2026-10-31",source:"Synthetic illustration"},SPY:{price:"528.50",observed_on:"2026-10-31",source:"Synthetic illustration"}},
     history:history,watchlist:[{symbol:"MSFT",note:"Review synthetic trend and data quality"},{symbol:"SPY",note:"Diversification reference, not advice"}]};
 }
+function resetView(){
+  snapshot=null;portfolio=null;
+  ["nav","cash","concentration","drawdown","stress"].forEach(function(id){text(id,"—");});
+  text("largestLabel","Concentration");
+  text("sourceKind","NO DATA");
+  text("historyCount","No complete aligned history");
+  text("volatility","Interval volatility: —");
+  text("riskInfo","No validated snapshot loaded.");
+  text("paperResult","Import a snapshot first.");
+  text("backtestResult","Import a snapshot first.");
+  ["holdingsBody","watchlistBody","historyChart","alerts","backtestSymbol"].forEach(function(id){$(id).replaceChildren();});
+}
 function load(obj) {snapshot=validate(obj);portfolio=compute(snapshot);render();text("message","Loaded "+snapshot.evidence+" snapshot. No data left your device.");}
-$("demo").addEventListener("click",function(){try{load(demo());}catch(e){text("message",e.message);}});
-$("clear").addEventListener("click",function(){snapshot=null;portfolio=null;text("message","Memory cleared. Close this tab to discard all remaining content.");location.reload();});
+$("demo").addEventListener("click",function(){try{load(demo());}catch(e){resetView();text("message",e.message);}});
+$("clear").addEventListener("click",function(){resetView();text("message","Memory cleared. Close this tab to discard all remaining content.");location.reload();});
 $("inputFile").addEventListener("change",function(e){
   var f=e.target.files&&e.target.files[0];if(!f)return;
-  if(f.size>2000000){text("message","File exceeds 2 MB safety bound.");return;}
+  if(f.size>2000000){resetView();text("message","File exceeds 2 MB safety bound.");return;}
   var reader=new FileReader();
-  reader.onload=function(){try{load(JSON.parse(String(reader.result)));}catch(e){snapshot=null;portfolio=null;text("message","Snapshot rejected: "+e.message);}};
-  reader.onerror=function(){text("message","Unable to read local file.");};
+  reader.onload=function(){try{load(JSON.parse(String(reader.result)));}catch(e){resetView();text("message","Snapshot rejected: "+e.message);}};
+  reader.onerror=function(){resetView();text("message","Unable to read local file.");};
   reader.readAsText(f);e.target.value="";
 });
 $("paperRun").addEventListener("click",function(){
