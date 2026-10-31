@@ -201,6 +201,23 @@ class OriginalObserverActivationTests(unittest.TestCase):
                 ow.verify_post_activation(FakeAPI(), SOURCE, summary, forged,
                                           now=scoped["terminal"]["completed"]+timedelta(hours=1))
 
+    def test_new_window_keeps_old_ancestry_but_not_old_12h_truncation(self):
+        from verification.reliability_day import window
+        first = START - timedelta(hours=5)
+        rows = [{"head_sha": SOURCE, "created_at": fmt(first),
+                 "status": "completed", "conclusion": "success",
+                 "run_attempt": 1, "event": "push"}]
+        for i in range(36):
+            rows.append({"head_sha": SOURCE,
+                         "created_at": fmt(first + timedelta(minutes=30*(i+1))),
+                         "status": "completed", "conclusion": "success",
+                         "run_attempt": 1, "event": "workflow_dispatch"})
+        scoped = window(rows, SOURCE, activation_start=START)
+        self.assertEqual(scoped[0]["event"], "push")
+        # Source is 17.5h old but actual user-started 12h must remain observable.
+        self.assertTrue(any(ow.utc(x["created_at"]) >= START + timedelta(hours=12)
+                            for x in scoped))
+
     def test_no_last_mile_passing_if_post_activation_cores_missing(self):
         # Many earlier sources and a deployment-run success cannot fake time.
         summary = {"automatic": [
