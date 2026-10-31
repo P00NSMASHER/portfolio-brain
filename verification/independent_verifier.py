@@ -10,10 +10,18 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
+
+# The hosted verifier executes from a separate trusted-main checkout beside
+# the candidate checkout. Never resolve governance code from candidate files.
+TRUSTED_CONTROL_ROOT = Path(__file__).resolve().parents[1]
+if str(TRUSTED_CONTROL_ROOT) not in sys.path:
+    sys.path.insert(0, str(TRUSTED_CONTROL_ROOT))
+from verification.source_admission import verify_predecessor_acceptance
 
 REPOSITORY = "P00NSMASHER/portfolio-brain"
 CHECK_NAME = "portfolio-phase1-gate"
@@ -23,6 +31,8 @@ VERIFIER_APP_ID = 5121826
 IMMUTABLE_TRUST_ANCHORS = {
     ".github/workflows/portfolio-independent-verifier.yml",
     "verification/independent_verifier.py",
+    "verification/source_admission.py",
+    "brain/v9/guarded_merge.py",
 }
 MAX_COMPARE_FILES = 300
 
@@ -116,6 +126,12 @@ def verify_exact_head(
     changed_files = _current_main_changed_files(compare)
     touched_anchors = sorted(changed_files & IMMUTABLE_TRUST_ANCHORS)
     req(not touched_anchors, "candidate modifies immutable verifier trust anchor: " + ",".join(touched_anchors))
+
+    # Unlike the optional documentation-only v9 auto-merge controller, this
+    # independently issued required App check gates every supported PR merge
+    # route, including owner-initiated GitHub UI and REST merges. No source
+    # acceptance means no green issuer-pinned required check.
+    verify_predecessor_acceptance(main_sha, lambda path: _api(token, path))
 
     checks = _api(token, f"/commits/{expected_head_sha}/check-runs?per_page=100").get("check_runs", [])
     foundation = [
