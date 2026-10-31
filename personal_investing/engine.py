@@ -84,7 +84,8 @@ def load_snapshot(obj):
     }, "SNAPSHOT_SCHEMA_INVALID")
     require(obj["currency"] == "USD", "USD_ONLY")
     as_of = day(obj["as_of"])
-    require(obj["data_kind"] in ALLOWED_KINDS, "DATA_KIND_INVALID")
+    require(type(obj["data_kind"]) is str and obj["data_kind"] in ALLOWED_KINDS,
+            "DATA_KIND_INVALID")
     cash = money(obj["cash_usd"], "CASH")
     positions = obj["positions"]
     require(type(positions) is list and len(positions) <= MAX_POSITIONS,
@@ -314,8 +315,14 @@ def paper_preview(snapshot, symbol, delta_shares, *, proposed_price):
     """Hypothetical long-only trade impact; does not place any order."""
     s = load_snapshot(snapshot)
     sym = ticker(symbol)
-    shares = money(str(abs(Decimal(str(delta_shares)))), "DELTA", zero=False)
-    direction = "SELL" if Decimal(str(delta_shares)) < 0 else "BUY"
+    require(type(delta_shares) in (int, float, str), "DELTA_INVALID")
+    try:
+        signed = Decimal(str(delta_shares))
+    except (InvalidOperation, ValueError):
+        raise PersonalDataError("DELTA_INVALID") from None
+    require(signed.is_finite() and signed != 0, "DELTA_INVALID")
+    shares = money(str(abs(signed)), "DELTA", zero=False)
+    direction = "SELL" if signed < 0 else "BUY"
     px = money(proposed_price, "PAPER_PRICE", zero=False)
     existing = next((p["shares"] for p in s["positions"] if p["symbol"] == sym), Decimal(0))
     if direction == "SELL":
