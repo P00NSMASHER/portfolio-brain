@@ -1,72 +1,42 @@
-"""Review-only tests: observation must be explicitly opted in, never automatic by default."""
-import hashlib
+"""Retired timed observations must not reappear in the active release pipeline."""
 from pathlib import Path
 import unittest
-
-
+from brain.validate import validate_policy
 ROOT = Path(__file__).resolve().parents[1]
-FLAG = "vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true'"
-SOURCE_FLAG = "vars.PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA == github.sha"
-REPAIR = ".github/workflows/v8-scoped-repair.yml"
-OBSERVER = ".github/workflows/reliability-day.yml"
-PRODUCER = ".github/workflows/portfolio-source-acceptance-producer.yml"
-VERIFIER = ".github/workflows/portfolio-source-acceptance.yml"
+RETIRED = (
+    ".github/workflows/reliability-day.yml",
+    ".github/workflows/portfolio-source-acceptance-producer.yml",
+    ".github/workflows/portfolio-source-acceptance.yml",
+)
 
+class NoTimedObservationTests(unittest.TestCase):
+    def test_all_timed_jobs_removed_and_owner_variables_unused(self):
+        for path in RETIRED:
+            with self.subTest(path=path):
+                self.assertFalse((ROOT/path).exists())
+        workflow_dir = ROOT / ".github/workflows"
+        for path in workflow_dir.glob("*.yml"):
+            body=path.read_text(encoding="utf-8")
+            with self.subTest(workflow=path.name):
+                self.assertNotIn("PORTFOLIO_12H_OBSERVATION_ENABLED", body)
+                self.assertNotIn("PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA", body)
+                self.assertNotIn("python -m verification.source_acceptance_producer", body)
+                self.assertNotIn("python -m verification.reliability_day", body)
 
-def read(path):
-    return (ROOT / path).read_text(encoding="utf-8")
-
-
-def blob(path):
-    raw = (ROOT / path).read_bytes()
-    return hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\x00" + raw).hexdigest()
-
-
-class ObservationOptInTests(unittest.TestCase):
-    def test_both_observer_and_receipt_producer_require_explicit_opt_in(self):
-        for file in (OBSERVER, PRODUCER):
-            with self.subTest(file=file):
-                wf = read(file)
-                self.assertEqual(wf.count(FLAG), 1)
-                # Owner must separately authorize the exact protected commit.
-                self.assertEqual(wf.count(SOURCE_FLAG), 1)
-                self.assertNotIn("false &&", wf)
-                self.assertIn("workflow_run:", wf)
-                self.assertNotIn("workflow_dispatch:", wf)
-                self.assertNotIn("schedule:", wf)
-                self.assertNotIn("pull_request_target:", wf)
-
-    def test_original_core_and_repair_cadences_remain_authorized_unchanged(self):
-        clock = read(".github/workflows/brain-clock.yml")
-        core = read(".github/workflows/brain-cycle.yml")
-        repair = read(REPAIR)
-        self.assertIn("workflow_run:", repair)
-        self.assertIn('workflows: ["brain-cycle-v2"]', repair)
-        self.assertNotIn("schedule:", repair)
-        self.assertNotIn("schedule:", core)
+    def test_original_core_schedule_and_independent_release_gates_remain(self):
+        core=(ROOT/".github/workflows/brain-cycle.yml").read_text()
+        clock=(ROOT/".github/workflows/brain-clock.yml").read_text()
+        verifier=(ROOT/".github/workflows/portfolio-independent-verifier.yml").read_text()
+        self.assertIn('name: brain-cycle-v2', core)
         self.assertIn("schedule:", clock)
-        self.assertNotIn(FLAG, clock)
-        self.assertNotIn(FLAG, core)
-        self.assertNotIn(FLAG, repair)
+        self.assertIn("portfolio-phase1-gate", (ROOT/"verification/independent_verifier.py").read_text())
+        self.assertIn('app-id: "5121826"', verifier)
+        self.assertNotIn("pull_request_target:", verifier)
 
-    def test_immutable_original_code_hashes_are_still_pinned(self):
-        for workflow, implementation in (
-            (REPAIR, "brain/v8/repair_core_origin.py"),
-            (PRODUCER, "verification/source_acceptance_verifier.py"),
-            (VERIFIER, "verification/source_acceptance_verifier.py"),
-        ):
-            with self.subTest(workflow=workflow, implementation=implementation):
-                self.assertIn(blob(implementation), read(workflow))
+    def test_contract_passes_without_timed_wait(self):
+        result=validate_policy()
+        self.assertEqual(result["status"],"PASS")
+        self.assertFalse(result["production_accepted"])
 
-    def test_no_automatic_receipt_mint_without_user_opt_in(self):
-        wf = read(PRODUCER)
-        before = wf.index(FLAG)
-        before += len(FLAG)
-        self.assertLess(before, wf.index("Mint short-lived one-repository"))
-        self.assertNotIn(FLAG, read(REPAIR))
-        self.assertNotIn(FLAG, read(VERIFIER))
-        self.assertNotIn(FLAG, read(".github/workflows/v9-guarded-native-automerge.yml"))
-
-
-if __name__ == "__main__":
+if __name__=="__main__":
     unittest.main()
