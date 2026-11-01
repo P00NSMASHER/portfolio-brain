@@ -258,7 +258,7 @@ class BatchQueue:
             # An old clean head with no lease/evidence is a stale observation,
             # not a diagnosed fix. Keep its COMPLETE event history in the
             # immutable, hash-linked archive rather than silently dropping it.
-            reserve=min(8,max(1,MAX_WORK//16))
+            reserve=min(8,MAX_WORK//8)
             if len(state)>=MAX_WORK-reserve:
                 retired=[ident for ident,prior in state.items()
                          if self._superseded_unclaimed(prior,row)]
