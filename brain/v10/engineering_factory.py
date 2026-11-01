@@ -257,7 +257,13 @@ def verify_original_sources(api, spec):
     return sources
 
 def run_isolated_tests(workspace, candidate, *, runner=subprocess.run):
-    """Run real changed files inside a Docker container with NO network."""
+    """Reproduce a failing regression on ORIGINAL bytes, then prove the fix.
+
+    Green-only suites are NOT engineering repair evidence. The baseline
+    must run at least one real test and fail as a unittest suite, while the
+    patched copy must run the same number of tests and PASS. Both executions
+    use the same isolated, network-disabled, nonroot Docker command.
+    """
     supplied = Path(workspace)
     require(not supplied.is_symlink(), "FACTORY_WORKSPACE_INVALID")
     root = supplied.resolve(strict=True)
@@ -270,11 +276,10 @@ def run_isolated_tests(workspace, candidate, *, runner=subprocess.run):
         shutil.copytree(root, stage, ignore=shutil.ignore_patterns(
             ".git", "node_modules", "private_runtime", "__pycache__", ".venv"),
             symlinks=True)
-        # copytree preserves the source directory mode. TemporaryDirectory
-        # defaults to 0700, so nonroot Docker cannot read /src unless the
-        # DISPOSABLE copied checkout root (never the source) is traversable.
-        # The bind mount is still read-only, with no network or credentials.
+        # Only the ephemeral checkout is opened for nonroot access.
+        # The original workspace is never chmod'd or modified.
         stage.chmod(0o755)
+        targets = []
         for change in candidate["changes"]:
             target = stage / change["path"]
             require(target.is_file() and not target.is_symlink()
@@ -283,11 +288,14 @@ def run_isolated_tests(workspace, candidate, *, runner=subprocess.run):
                             if ancestor != stage and stage in ancestor.parents)
                     and sha256(target.read_bytes()) == change["before_sha256"],
                     "FACTORY_WORKTREE_SOURCE_CHANGED")
-            target.write_bytes(change["updated_bytes"])
+            targets.append((target,change))
         script = ('import sys,unittest;sys.path.insert(0,"/work");'
-                  'result=unittest.TextTestRunner(verbosity=1).run('
-                  'unittest.defaultTestLoader.discover("/work/tests",'
-                  'pattern="test_*.py"));'
+                  'suite=unittest.defaultTestLoader.discover('
+                  '"/work/tests",pattern="test_*.py");'
+                  'count=suite.countTestCases();'
+                  'print("V10_TEST_COUNT="+str(count),file=sys.stderr);'
+                  'raise SystemExit(3) if count<1 else None;'
+                  'result=unittest.TextTestRunner(verbosity=1).run(suite);'
                   'raise SystemExit(not result.wasSuccessful())')
         command = [
             "docker", "run", "--rm", "--network", "none",
@@ -301,16 +309,42 @@ def run_isolated_tests(workspace, candidate, *, runner=subprocess.run):
             "cp -R /src/. /work/ && cd /work && python -I -B -c " +
             json.dumps(script),
         ]
-        try:
-            completed = runner(command, capture_output=True, text=True,
-                               timeout=300, check=False)
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            raise FactoryError("FACTORY_ISOLATED_TEST_UNAVAILABLE") from exc
-    require(type(completed.returncode) is int and completed.returncode == 0,
-            "FACTORY_ISOLATED_TEST_FAILED")
-    return dict(status="ISOLATED_TESTS_PASSED_NOT_INDEPENDENT_CI",
+
+        def execute():
+            try:
+                result = runner(command, capture_output=True, text=True,
+                                timeout=300, check=False)
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                raise FactoryError("FACTORY_ISOLATED_TEST_UNAVAILABLE") from exc
+            require(type(result.returncode) is int
+                    and type(result.stdout) is str
+                    and type(result.stderr) is str,
+                    "FACTORY_ISOLATED_TEST_RESULT_INVALID")
+            output = result.stdout + result.stderr
+            match = re.search(r"V10_TEST_COUNT=([1-9][0-9]*)", output)
+            require(match is not None and int(match[1]) <= 100000,
+                    "FACTORY_TEST_CENSUS_UNVERIFIED")
+            require(re.search(r"Ran [1-9][0-9]* tests? in ", output) is not None,
+                    "FACTORY_TEST_CENSUS_UNVERIFIED")
+            return result, int(match[1]), sha256(output.encode())
+
+        original, red_count, original_hash = execute()
+        require(original.returncode == 1
+                and "FAILED" in (original.stdout + original.stderr),
+                "FACTORY_REGRESSION_NOT_REPRODUCED")
+        for target, change in targets:
+            target.write_bytes(change["updated_bytes"])
+        corrected, green_count, corrected_hash = execute()
+        require(corrected.returncode == 0
+                and green_count >= red_count
+                and "OK" in (corrected.stdout + corrected.stderr),
+                "FACTORY_ISOLATED_TEST_FAILED")
+    return dict(status="ISOLATED_RED_GREEN_TESTS_PASSED_NOT_INDEPENDENT_CI",
                 operation_id=candidate["operation_id"],
-                output_sha256=sha256((completed.stdout + completed.stderr).encode()),
+                baseline_test_cases=red_count, corrected_test_cases=green_count,
+                baseline_output_sha256=original_hash,
+                output_sha256=corrected_hash,
+                regression_red_verified=True, corrected_green_verified=True,
                 production_accepted=False, provider_writes=0)
 
 def _write_intent(path, data):
@@ -335,7 +369,16 @@ def _write_intent(path, data):
 def create_draft(api, spec, candidate, tested, *, intent_path):
     """One unsafe-to-repeat write attempt; zero merge or deployment authority."""
     require(candidate["operation_id"] == tested.get("operation_id")
-            and tested.get("status") == "ISOLATED_TESTS_PASSED_NOT_INDEPENDENT_CI",
+            and tested.get("status") == "ISOLATED_RED_GREEN_TESTS_PASSED_NOT_INDEPENDENT_CI"
+            and tested.get("regression_red_verified") is True
+            and tested.get("corrected_green_verified") is True
+            and type(tested.get("baseline_test_cases")) is int
+            and type(tested.get("corrected_test_cases")) is int
+            and 1 <= tested["baseline_test_cases"] <= tested["corrected_test_cases"] <= 100000
+            and type(tested.get("baseline_output_sha256")) is str
+            and VALID_HASH.fullmatch(tested["baseline_output_sha256"])
+            and type(tested.get("output_sha256")) is str
+            and VALID_HASH.fullmatch(tested["output_sha256"]),
             "FACTORY_TEST_RECEIPT_MISMATCH")
     installation = api.request(
         "GET", "installation/repositories?per_page=100")
