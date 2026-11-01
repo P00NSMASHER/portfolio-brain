@@ -40,9 +40,14 @@ class FakeProvider:
         self.final_content = None
         self.branch = None
         self.pr_body = None
+        self.token_scope = [f.REPOSITORY]
     def request(self, method, route, payload=None):
         self.calls.append((method, route, payload))
         if method == "GET":
+            if route == "installation/repositories?per_page=100":
+                return {"total_count": len(self.token_scope),
+                        "repositories": [{"full_name": name}
+                                         for name in self.token_scope]}
             if route == "branches/main":
                 return {"commit": {"sha": self.main}}
             if route.startswith("branches/auto-repair/v10-"):
@@ -260,6 +265,36 @@ class FactoryTests(unittest.TestCase):
                     "operation_id": candidate["operation_id"],
                     "status": "ISOLATED_TESTS_PASSED_NOT_INDEPENDENT_CI",
                 }, intent_path=intent)
+            self.assertFalse(intent.exists())
+            self.assertFalse(any(method != "GET" for method,_,_ in api.calls))
+
+    def test_other_repositories_in_token_scope_block_before_any_write(self):
+        api = FakeProvider()
+        api.token_scope.append("P00NSMASHER/capturebrief")
+        spec = manifest()
+        candidate = f.prepare(spec, {"brain/demo.py": ORIGINAL})
+        tested = {"operation_id": candidate["operation_id"],
+                  "status": "ISOLATED_TESTS_PASSED_NOT_INDEPENDENT_CI"}
+        with tempfile.TemporaryDirectory() as tmp:
+            intent = Path(tmp) / "intent.json"
+            with self.assertRaisesRegex(f.FactoryError,
+                                        "FACTORY_TOKEN_SCOPE_NOT_SINGLE_REPOSITORY"):
+                f.create_draft(api, spec, candidate, tested, intent_path=intent)
+            self.assertFalse(intent.exists())
+            self.assertFalse(any(method != "GET" for method,_,_ in api.calls))
+
+    def test_mutated_candidate_bytes_do_not_inherit_original_test_receipt(self):
+        api = FakeProvider()
+        spec = manifest()
+        candidate = f.prepare(spec, {"brain/demo.py": ORIGINAL})
+        candidate["changes"][0]["updated_bytes"] = b"tampered after testing"
+        tested = {"operation_id": candidate["operation_id"],
+                  "status": "ISOLATED_TESTS_PASSED_NOT_INDEPENDENT_CI"}
+        with tempfile.TemporaryDirectory() as tmp:
+            intent = Path(tmp) / "intent.json"
+            with self.assertRaisesRegex(f.FactoryError,
+                                        "FACTORY_SOURCE_MOVED_BEFORE_WRITE"):
+                f.create_draft(api, spec, candidate, tested, intent_path=intent)
             self.assertFalse(intent.exists())
             self.assertFalse(any(method != "GET" for method,_,_ in api.calls))
 
