@@ -286,10 +286,12 @@ def run_isolated_tests(workspace, candidate, *, runner=subprocess.run):
                   'raise SystemExit(not result.wasSuccessful())')
         command = [
             "docker", "run", "--rm", "--network", "none",
+            "--read-only", "--user", "65534:65534",
             "--cap-drop=ALL", "--security-opt=no-new-privileges",
             "--pids-limit=128", "--memory=768m",
             "--mount", "type=bind,src=" + str(stage) + ",dst=/src,readonly",
-            "--tmpfs", "/work:rw,nosuid,size=512m",
+            "--tmpfs", "/tmp:rw,nosuid,nodev,size=64m,mode=1777",
+            "--tmpfs", "/work:rw,nosuid,nodev,size=512m,mode=1777",
             TEST_IMAGE, "sh", "-c",
             "cp -R /src/. /work/ && cd /work && python -I -B -c " +
             json.dumps(script),
