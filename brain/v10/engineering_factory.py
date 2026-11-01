@@ -270,6 +270,11 @@ def run_isolated_tests(workspace, candidate, *, runner=subprocess.run):
         shutil.copytree(root, stage, ignore=shutil.ignore_patterns(
             ".git", "node_modules", "private_runtime", "__pycache__", ".venv"),
             symlinks=True)
+        # copytree preserves the source directory mode. TemporaryDirectory
+        # defaults to 0700, so nonroot Docker cannot read /src unless the
+        # DISPOSABLE copied checkout root (never the source) is traversable.
+        # The bind mount is still read-only, with no network or credentials.
+        stage.chmod(0o755)
         for change in candidate["changes"]:
             target = stage / change["path"]
             require(target.is_file() and not target.is_symlink()
