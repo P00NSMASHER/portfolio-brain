@@ -136,21 +136,31 @@ def validate_policy():
             and "gh pr merge" not in receipt
             and "merge_pull_request" not in receipt,
             "source acceptance receipt producer adds forbidden trigger or authority")
-    # Observation remains HELD by two independent opt-in variables. The
-    # second has a new, source-specific name; its value must equal the exact
-    # protected commit. It cannot be set before the protected merge SHA exists.
-    # Thus the trust-anchor cutover itself cannot start the observation.
+    # A single explicit owner enable controls BOTH observer and producer.
+    # When disabled, no 12h observation starts. When enabled, GitHub's
+    # workflow_run main-SHA identity automatically binds each NEW main source.
+    # Never accept a stale source, an arbitrary event, or a synthetic PR SHA.
+    # Original source-bound verifier still requires genuine owner-activation
+    # observer, 12h of post-activation cores, and independent App attestation.
     observation_flag = "vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true'"
-    source_flag = "vars.PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA == github.sha"
+    source_flag = "github.event.workflow_run.head_sha == github.sha"
+    old_manual_flag = "PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA"
     observation = (workflow_dir/"reliability-day.yml").read_text(encoding="utf-8")
     require(observation_flag in observation and observation_flag in receipt
             and source_flag in observation and source_flag in receipt
+            and old_manual_flag not in observation
+            and old_manual_flag not in receipt
+            and "github.event.workflow_run.head_branch == 'main'" in observation
+            and "github.event.workflow_run.head_branch == 'main'" in receipt
             and "false &&" not in observation
             and "false &&" not in receipt
             and "workflow_run:" in observation
+            and "workflow_run:" in receipt
             and "workflow_dispatch:" not in observation
-            and "schedule:" not in observation,
-            "unapproved source-specific 12-hour observation or acceptance activation")
+            and "workflow_dispatch:" not in receipt
+            and "schedule:" not in observation
+            and "schedule:" not in receipt,
+            "unapproved owner-disabled or wrong-source observation activation")
     from operations.validate_operating_mode import scheduled_workflow_inventory
     require(scheduled_workflow_inventory(workflow_dir)=={"brain-clock":[p["cron"], p["watchdog_cron"]]}, "only existing native Brain and watchdog crons may recur")
     require("schedule:" not in (workflow_dir/"brain-cycle.yml").read_text(), "uncoordinated direct core schedule forbidden")
