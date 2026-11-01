@@ -16,6 +16,7 @@ jobs:
       vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true' &&
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.head_sha == github.sha &&
+      github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'workflow_run'
     runs-on: ubuntu-latest
     timeout-minutes: 20
