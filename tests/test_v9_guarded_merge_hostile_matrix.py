@@ -31,11 +31,14 @@ class HostileRulesetMatrix(unittest.TestCase):
         self.assertEqual(provider.mutations, 0)
         self.assertFalse(provider.enabled)
 
-    def test_realistic_restricted_token_positive_still_requires_source_gate(self):
+    def test_realistic_restricted_token_uses_genuine_independent_ci_not_time(self):
         f = Tamper()
         f.no_acceptance = True
-        self.denied(f, "SOURCE_ACCEPTANCE_NOT_YET_RECORDED")
-        self.assertEqual(f._ruleset_reads, 1)
+        status = gm.run(f, number=PR, expected_main=BASE, apply=False)
+        self.assertEqual(status["status"], "ADMISSIBLE")
+        self.assertEqual(status["provider_writes"], 0)
+        self.assertNotIn("acceptance", status)
+        self.assertGreaterEqual(f._ruleset_reads, 1)
 
     def test_forged_graphql_identity_and_enforcement_fail_closed(self):
         defects = [
@@ -117,11 +120,14 @@ class HostileRulesetMatrix(unittest.TestCase):
                 f.rules["bypass_actors"] = bypass
                 self.denied(f, "PROTECTED_RULESET_MISMATCH")
 
-    def test_source_acceptance_must_exist_even_when_every_setting_is_true(self):
+    def test_no_historical_receipt_needed_when_exact_independent_checks_pass(self):
         f = Tamper()
         f.no_acceptance = True
-        self.denied(f, "SOURCE_ACCEPTANCE_NOT_YET_RECORDED")
-        self.assertEqual(f._ruleset_reads, 1)
+        result = gm.run(f, number=PR, expected_main=BASE, apply=False)
+        self.assertEqual(result["status"], "ADMISSIBLE")
+        self.assertFalse(result["enrolled"])
+        self.assertTrue(all("acceptance-" not in path
+                            for method,path in f.calls if method == "GET"))
 
     def test_check_issuer_substitution_blocks_enrollment(self):
         f = Tamper()
