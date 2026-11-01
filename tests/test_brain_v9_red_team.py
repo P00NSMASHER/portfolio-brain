@@ -150,7 +150,9 @@ class RedTeamTests(unittest.TestCase):
 
     def test_blocked_candidate_is_not_reported_as_success(self):
         provider = early_fixture(EventRunnerProvider)
-        provider.no_acceptance = True
+        # A forged check issuer still blocks original native enrollment,
+        # even though 12-hour source receipts are no longer required.
+        provider.checks["check_runs"][0]["app"]["id"] = 0
         result = runner.dispatch_once(lambda: provider, BASE, early=True, event_head=HEAD)
         self.assertEqual(result['status'], 'CANDIDATES_BLOCKED')
         with patch.object(runner, 'dispatch_once', return_value=result), patch('builtins.print'):
