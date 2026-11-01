@@ -389,21 +389,22 @@ class GuardedAdmissionTests(unittest.TestCase):
         self.assertIn("bypassActors(first: 100)", gm.RULESET_QUERY)
         self.assertIn("rulesets(first: 100)", gm.RULESET_QUERY)
 
-    def test_unaccepted_source_blocks_every_mutation(self):
+    def test_no_historical_receipt_is_required_for_ci_review(self):
         f = FakeProvider()
         f.no_acceptance = True
-        self.assert_blocked(f, "SOURCE_ACCEPTANCE_NOT_YET_RECORDED")
+        f.refs = []
+        result = gm.run(f, number=PR, expected_main=BASE, apply=False)
+        self.assertEqual(result["status"], "ADMISSIBLE")
+        self.assertEqual(result["release_gate"],
+                         "INDEPENDENT_APP_AND_FOUNDATION_NO_TIMED_SOAK")
+        self.assertEqual(f.mutations, 0)
+        self.assertFalse(any("acceptance-" in path for method,path in f.calls
+                             if method == "GET"))
 
-    def test_source_or_branch_ambiguity_blocks(self):
+    def test_current_protected_main_identity_still_blocks(self):
         f = FakeProvider()
         f.main["commit"]["sha"] = "e" * 40
         self.assert_blocked(f, "PROTECTED_MAIN_SOURCE_MOVED")
-        f = FakeProvider()
-        f.refs.append(copy.deepcopy(f.refs[0]))
-        self.assert_blocked(f, "ACCEPTANCE_BRANCH_NOT_UNIQUE")
-        f = FakeProvider()
-        f.extra_acceptance_file = True
-        self.assert_blocked(f, "ACCEPTANCE_BRANCH_SCOPE")
 
     def test_protection_bypass_or_independent_check_mutation_blocks(self):
         f = FakeProvider()
@@ -416,38 +417,18 @@ class GuardedAdmissionTests(unittest.TestCase):
         f.rules["rules"][-1]["parameters"]["required_status_checks"][1]["integration_id"] = 0
         self.assert_blocked(f, "INDEPENDENT_CHECK_ISSUER_MISSING")
 
-    def test_signed_six_hour_record_cannot_admit_native_merge(self):
-        # Reproduce the old six-hour release threshold against the new 12h
-        # source-specific contract without making any external API writes.
-        for span in (21600, 21601, 43199, True, 43200.0, "43200"):
-            with self.subTest(span=repr(span)):
+    def test_legacy_elapsed_time_and_receipt_fields_do_not_control_merges(self):
+        for span in (0, 21600, 43199, 43200, False, None):
+            with self.subTest(span=span):
                 f = FakeProvider()
+                f.no_acceptance = True
                 f.record["original_run_evidence"]["completed_span_seconds"] = span
-                self.assert_blocked(f, "ACCEPTANCE_ORIGINAL_EVIDENCE_MISSING")
-
-    def test_acceptance_requires_current_terminal_repair_contract(self):
-        good = {"minimum_completed_span_seconds": 43200,
-                "requires_terminal_30_minute_repair_follow_through": True}
-        for candidate in (None, {}, dict(good, minimum_completed_span_seconds=21600),
-                          dict(good, requires_terminal_30_minute_repair_follow_through=False)):
-            with self.subTest(criteria=candidate):
-                f = FakeProvider()
-                f.record["criteria"] = candidate
-                self.assert_blocked(f, "ACCEPTANCE_CURRENT_CONTRACT_REQUIRED")
-
-    def test_acceptance_not_authorized_by_old_or_fake_evidence(self):
-        f = FakeProvider()
-        f.record["source_sha"] = "f" * 40
-        self.assert_blocked(f, "ACCEPTANCE_STATUS_OR_SOURCE")
-        for key, value in (("completed_span_seconds", 20000), ("maximum_gap_seconds", 6000),
-                           ("all_success_attempt_one", False)):
-            f = FakeProvider()
-            f.record["original_run_evidence"][key] = value
-            with self.subTest(key=key):
-                self.assert_blocked(f, "ACCEPTANCE_ORIGINAL_EVIDENCE_MISSING")
-        f = FakeProvider()
-        f.commit["parents"] = [{"sha": "f" * 40}]
-        self.assert_blocked(f, "ACCEPTANCE_COMMIT_ANCESTRY")
+                f.record["status"] = "BLOCKED"
+                f.extra_acceptance_file = True
+                result = gm.run(f, number=PR, expected_main=BASE, apply=False)
+                self.assertEqual(result["status"], "ADMISSIBLE")
+                self.assertFalse(result["enrolled"])
+        self.assertFalse(hasattr(gm, "accepted_source"))
 
     def test_wrong_actor_draft_or_missing_label_blocks(self):
         for field, value, reason in (
@@ -604,13 +585,14 @@ class EventRunnerTests(unittest.TestCase):
         self.assertEqual(result["provider_writes"], 0)
         self.assertEqual(f.mutations, 0)
 
-    def test_source_acceptance_hold_stops_native_enrollment(self):
+    def test_no_source_soak_hold_on_opted_in_native_enrollment(self):
         from brain.v9 import guarded_merge_runner as runner
         f = EventRunnerProvider()
         f.no_acceptance = True
-        result = runner.dispatch_once(lambda: f, BASE, apply=True)
-        self.assertEqual(result["decisions"][0]["status"],
-                         "BLOCKED:SOURCE_ACCEPTANCE_NOT_YET_RECORDED")
+        outcome = runner.dispatch_once(lambda: f, BASE, apply=False)
+        self.assertEqual(outcome["candidate_count"], 1)
+        self.assertFalse(any("SOURCE_ACCEPTANCE_NOT_YET_RECORDED" in
+                             item["status"] for item in outcome["decisions"]))
         self.assertEqual(f.mutations, 0)
 
     def test_ambiguous_write_halts_other_candidates(self):
