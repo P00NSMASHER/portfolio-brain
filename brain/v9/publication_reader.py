@@ -105,6 +105,20 @@ class PublicationReader(GitHubOriginalReader):
         need(self.gets_remaining >= REQUIRED_BUDGET, 'READBACK_BUDGET_EXHAUSTED')
         start = self.used_gets
         number, candidate = spec['pr_number'], spec['candidate_sha']
+        # Check the currently deployed, immutable source bytes before
+        # replaying expensive old CI evidence. A superseded historical proof
+        # fails closed in two GETs instead of consuming most of the reserved
+        # public monitoring budget. Matching bytes still require full replay.
+        branch = self._get('branches/gh-pages')
+        deployed = branch.get('commit', {}).get('sha')
+        need(hashval(deployed, 40), 'PUBLICATION_BRANCH_INVALID')
+        document = self._get('contents/' + ASSET + '?ref=' + deployed)
+        need(document.get('type') == 'file' and document.get('encoding') == 'base64'
+             and type(document.get('size')) is int and 0 < document['size'] < 256000,
+             'PUBLICATION_ASSET_INVALID')
+        raw = base64.b64decode(document['content'].replace('\n', ''), validate=True)
+        need(len(raw) == document['size'] and hashlib.sha256(raw).hexdigest() == CORRECTED_HASH,
+             'PUBLICATION_SOURCE_BYTES_MISMATCH')
         pr = self._get('pulls/' + str(number))
         need(pr.get('number') == number and pr.get('merged') is True and pr.get('state') == 'closed'
              and pr.get('head', {}).get('sha') == candidate
@@ -120,9 +134,6 @@ class PublicationReader(GitHubOriginalReader):
                  and matching[0].get('app', {}).get('id') == 15368
                  and matching[0].get('status') == 'completed'
                  and matching[0].get('conclusion') == 'success', 'PUBLICATION_CANDIDATE_QA_NOT_VERIFIED')
-        branch = self._get('branches/gh-pages')
-        deployed = branch.get('commit', {}).get('sha')
-        need(hashval(deployed, 40), 'PUBLICATION_BRANCH_INVALID')
         if deployed != merge_sha:
             comparison = self._get('compare/' + merge_sha + '...' + deployed)
             need(comparison.get('merge_base_commit', {}).get('sha') == merge_sha
@@ -152,13 +163,6 @@ class PublicationReader(GitHubOriginalReader):
                 actual = [s for s in steps if s.get('name') == required]
                 need(len(actual) == 1 and actual[0].get('status') == 'completed'
                      and actual[0].get('conclusion') == 'success', 'PUBLICATION_LIVE_STEP_NOT_VERIFIED')
-        document = self._get('contents/' + ASSET + '?ref=' + deployed)
-        need(document.get('type') == 'file' and document.get('encoding') == 'base64'
-             and type(document.get('size')) is int and 0 < document['size'] < 256000,
-             'PUBLICATION_ASSET_INVALID')
-        raw = base64.b64decode(document['content'].replace('\n', ''), validate=True)
-        need(len(raw) == document['size'] and hashlib.sha256(raw).hexdigest() == CORRECTED_HASH,
-             'PUBLICATION_SOURCE_BYTES_MISMATCH')
         live = self._bytes(LIVE + '?brain-repair=' + deployed, authenticated=False, maximum=256000)
         need(hashlib.sha256(live).hexdigest() == CORRECTED_HASH, 'PUBLICATION_LIVE_BYTES_MISMATCH')
         need(self._get('branches/gh-pages').get('commit', {}).get('sha') == deployed,

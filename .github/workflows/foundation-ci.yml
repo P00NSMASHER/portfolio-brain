@@ -181,3 +181,24 @@ jobs:
           path: hunting/out/license_admission_receipt.json
           if-no-files-found: error
           retention-days: 30
+
+  v10-docker-sandbox:
+    # Separate from 5-minute Foundation validate to test actual container
+    # execution rather than mocked subprocess calls. No secrets or writes.
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Pull verified standard-library Python test image
+        run: docker pull python:3.12-bookworm
+      - name: Execute real v10 red-to-green patch inside nonroot offline Docker
+        env:
+          PB_V10_DOCKER_SMOKE: "1"
+        run: python -m unittest discover -s tests -p "test_v10_docker_acceptance.py" -v
