@@ -38,6 +38,28 @@ class SourceScopedObservationActivationTests(unittest.TestCase):
                 self.assertEqual(source.count(LEGACY_SHA_VAR), 0)
                 self.assertEqual(source.count(ACTIVE), 1)
 
+    def test_failed_repair_is_ineligible_to_anchor_the_owner_clock(self):
+        # A failed V8 trigger must not produce a successful observer that
+        # could become the first source-attested activation. This policy
+        # check deliberately runs without changing Actions owner variables.
+        observer = (ROOT / WORKFLOWS[0]).read_text(encoding="utf-8")
+        gate = observer.split("  observe:\n    if: >-\n", 1)[1].split(
+            "    runs-on:", 1)[0]
+        clauses = [part.strip() for part in gate.strip().split("&&")]
+        self.assertEqual(
+            clauses.count("github.event.workflow_run.conclusion == 'success'"),
+            1,
+        )
+        self.assertIn("github.event.workflow_run.head_sha == github.sha", clauses)
+        self.assertIn(ACTIVE, clauses)
+        self.assertNotIn("||", gate)
+        # GitHub's completed adverse statuses are outside this exact
+        # success-only condition, including a skipped or timed-out repair.
+        for adverse in (None, "failure", "cancelled", "timed_out",
+                        "skipped", "neutral"):
+            with self.subTest(conclusion=adverse):
+                self.assertNotEqual(adverse, "success")
+
     def test_disabled_owner_flag_and_wrong_source_never_activate(self):
         main = "a" * 40
         for enabled in (None, "", "false", "TRUE"):
