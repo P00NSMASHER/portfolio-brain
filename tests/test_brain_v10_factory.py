@@ -36,11 +36,17 @@ class FakeProvider:
         self.failed_step = "Exact-SHA deterministic preflight"
         self.fail_write = False
         self.pr_number = 900
+        self.final_sha = "c" * 40
+        self.final_content = None
+        self.branch = None
+        self.pr_body = None
     def request(self, method, route, payload=None):
         self.calls.append((method, route, payload))
         if method == "GET":
             if route == "branches/main":
                 return {"commit": {"sha": self.main}}
+            if route.startswith("branches/auto-repair/v10-"):
+                return {"commit": {"sha": self.final_sha}}
             if route == "actions/runs/" + str(RUN_ID):
                 return {
                     "id": RUN_ID, "name": "brain-cycle-v2",
@@ -58,20 +64,36 @@ class FakeProvider:
                         "name": self.failed_step, "conclusion": self.conclusion,
                     }],
                 }]}
-            if route == "contents/brain/demo.py?ref=" + SOURCE:
+            if route.startswith("contents/brain/demo.py?ref="):
+                raw = (ORIGINAL if route.endswith(SOURCE)
+                       else self.final_content)
+                if raw is None:
+                    raise AssertionError("candidate content unavailable")
                 return {
                     "type": "file", "encoding": "base64", "sha": "b"*40,
-                    "size": len(ORIGINAL),
-                    "content": base64.b64encode(ORIGINAL).decode(),
+                    "size": len(raw),
+                    "content": base64.b64encode(raw).decode(),
+                }
+            if route == "pulls/" + str(self.pr_number):
+                return {
+                    "number": self.pr_number, "state": "open",
+                    "draft": True, "merged": False, "body": self.pr_body,
+                    "head": {"ref": self.branch, "sha": self.final_sha,
+                             "repo": {"full_name": f.REPOSITORY}},
+                    "base": {"ref": "main",
+                             "repo": {"full_name": f.REPOSITORY}},
                 }
             raise AssertionError(route)
         if self.fail_write:
             raise f.FactoryError("FAKE_WRITE_FAILED")
         if method == "POST" and route == "git/refs":
+            self.branch = payload["ref"].replace("refs/heads/", "", 1)
             return {"ref": payload["ref"], "object": {"sha": SOURCE}}
         if method == "PUT" and route == "contents/brain/demo.py":
-            return {"commit": {"sha": "c"*40}, "content": {"sha": "d"*40}}
+            self.final_content = base64.b64decode(payload["content"])
+            return {"commit": {"sha": self.final_sha}, "content": {"sha": "d"*40}}
         if method == "POST" and route == "pulls":
+            self.pr_body = payload["body"]
             return {
                 "number": self.pr_number, "state": "open", "draft": True,
                 "head": {"ref": payload["head"]},
@@ -210,6 +232,10 @@ class FactoryTests(unittest.TestCase):
             self.assertEqual([method + ":" + route for method,route,_ in writes],
                              ["POST:git/refs", "PUT:contents/brain/demo.py", "POST:pulls"])
             self.assertTrue(writes[-1][2]["draft"])
+            readbacks = [route for method,route,_ in api.calls if method=="GET"]
+            self.assertIn("branches/" + candidate["branch"], readbacks)
+            self.assertIn("contents/brain/demo.py?ref=" + api.final_sha, readbacks)
+            self.assertIn("pulls/900", readbacks)
             self.assertTrue(intent.exists())
             with self.assertRaisesRegex(f.FactoryError,
                                         "FACTORY_PRIOR_INTENT_NEEDS_RECONCILIATION"):
