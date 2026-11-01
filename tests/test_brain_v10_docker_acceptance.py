@@ -37,16 +37,21 @@ class RealDockerAcceptanceTests(unittest.TestCase):
                                     old="    return 0\n",new="    return 1\n")])
             patch=factory.prepare(spec,{"brain/demo.py": OLD})
             self.assertEqual(patch["changes"][0]["updated_bytes"], NEW)
+            observed = []
             def reveal_synthetic_fixture_failure(command, **kwargs):
                 completed = subprocess.run(command, **kwargs)
-                if completed.returncode:
+                observed.append(completed.returncode)
+                # The ORIGINAL fixture must fail. Only a failed corrected
+                # execution is unexpected and needs diagnostic output.
+                if len(observed) == 2 and completed.returncode:
                     self.fail(
-                        "ISOLATED_SYNTHETIC_FIXTURE_EXECUTION_FAILED "
+                        "ISOLATED_CORRECTED_FIXTURE_EXECUTION_FAILED "
                         + "stdout=" + completed.stdout[-3500:]
                         + " stderr=" + completed.stderr[-3500:])
                 return completed
             receipt=factory.run_isolated_tests(
                 root,patch,runner=reveal_synthetic_fixture_failure)
+            self.assertEqual(observed, [1, 0])
             self.assertEqual(receipt["status"],
                              "ISOLATED_RED_GREEN_TESTS_PASSED_NOT_INDEPENDENT_CI")
             self.assertTrue(receipt["regression_red_verified"])
