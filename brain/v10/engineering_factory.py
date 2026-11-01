@@ -144,7 +144,7 @@ class GitHubTransport:
     def request(self, method, suffix, payload=None):
         require(method in ("GET", "POST", "PUT"), "FACTORY_METHOD_REFUSED")
         route = (
-            re.fullmatch(r"(branches/main|actions/runs/[1-9]\d*|"
+            re.fullmatch(r"(branches/main|branches/auto-repair/v10-[0-9a-f]{16}|pulls/[1-9]\d*|actions/runs/[1-9]\d*|
                          r"actions/runs/[1-9]\d*/jobs\?per_page=100|"
                          r"contents/(?:brain|tests|docs)/[a-zA-Z0-9_./-]+\."
                          r"(?:py|json|md)\?ref=[0-9a-f]{40})", suffix)
@@ -153,6 +153,9 @@ class GitHubTransport:
             re.fullmatch(r"contents/(?:brain|tests|docs)/[a-zA-Z0-9_./-]+\."
                          r"(?:py|json|md)",suffix))
         require(bool(route), "FACTORY_ROUTE_REFUSED")
+        if method in ("GET", "PUT") and suffix.startswith("contents/"):
+            rawpath = suffix[len("contents/"):].split("?ref=", 1)[0]
+            require(safe_path(rawpath), "FACTORY_ROUTE_REFUSED")
         if method == "GET":
             require(payload is None, "FACTORY_GET_BODY_REFUSED")
         else:
@@ -249,9 +252,10 @@ def verify_original_sources(api, spec):
 
 def run_isolated_tests(workspace, candidate, *, runner=subprocess.run):
     """Run real changed files inside a Docker container with NO network."""
-    root = Path(workspace).resolve(strict=True)
-    require(root.is_dir() and not root.is_symlink(),
-            "FACTORY_WORKSPACE_INVALID")
+    supplied = Path(workspace)
+    require(not supplied.is_symlink(), "FACTORY_WORKSPACE_INVALID")
+    root = supplied.resolve(strict=True)
+    require(root.is_dir(), "FACTORY_WORKSPACE_INVALID")
     require(type(candidate) is dict and candidate.get("status") ==
             "SOURCE_PINNED_PATCH_PREPARED_NOT_TESTED",
             "FACTORY_CANDIDATE_INVALID")
@@ -263,6 +267,9 @@ def run_isolated_tests(workspace, candidate, *, runner=subprocess.run):
         for change in candidate["changes"]:
             target = stage / change["path"]
             require(target.is_file() and not target.is_symlink()
+                    and target.resolve(strict=True).is_relative_to(stage.resolve())
+                    and all(not ancestor.is_symlink() for ancestor in target.parents
+                            if ancestor != stage and stage in ancestor.parents)
                     and sha256(target.read_bytes()) == change["before_sha256"],
                     "FACTORY_WORKTREE_SOURCE_CHANGED")
             target.write_bytes(change["updated_bytes"])
@@ -319,6 +326,10 @@ def create_draft(api, spec, candidate, tested, *, intent_path):
             "FACTORY_TEST_RECEIPT_MISMATCH")
     evidence = verify_original_failed_core(api, spec)
     sources = verify_original_sources(api, spec)
+    # A source transition during evidence collection must not cause an
+    # unreviewed branch to be based on a different release.
+    require(api.request("GET", "branches/main").get("commit", {}).get("sha")
+            == spec["base_sha"], "FACTORY_MAIN_MOVED")
     reread = prepare(spec, {p: row["raw"] for p, row in sources.items()})
     require(reread["operation_id"] == candidate["operation_id"],
             "FACTORY_SOURCE_MOVED_BEFORE_WRITE")
@@ -334,14 +345,31 @@ def create_draft(api, spec, candidate, tested, *, intent_path):
             "ref": "refs/heads/" + candidate["branch"],
             "sha": spec["base_sha"],
         })
+        final_sha = spec["base_sha"]
         for patch in candidate["changes"]:
             source = sources[patch["path"]]
-            api.request("PUT", "contents/" + patch["path"], {
+            updated = api.request("PUT", "contents/" + patch["path"], {
                 "message": "fix(v10): source-bound repair " +
                            candidate["operation_id"][:12],
                 "content": base64.b64encode(patch["updated_bytes"]).decode(),
                 "sha": source["sha"], "branch": candidate["branch"],
             })
+            final_sha = updated.get("commit", {}).get("sha")
+            require(type(final_sha) is str and VALID_SHA.fullmatch(final_sha),
+                    "FACTORY_WRITE_SOURCE_UNVERIFIED")
+        branch_ref = api.request("GET", "branches/" + candidate["branch"])
+        require(branch_ref.get("commit", {}).get("sha") == final_sha,
+                "FACTORY_DRAFT_BRANCH_READBACK_MISMATCH")
+        for patch in candidate["changes"]:
+            read = api.request("GET", "contents/" + patch["path"] +
+                               "?ref=" + final_sha)
+            require(read.get("type") == "file"
+                    and read.get("encoding") == "base64"
+                    and type(read.get("content")) is str,
+                    "FACTORY_DRAFT_SOURCE_READBACK_MISMATCH")
+            raw = base64.b64decode(read["content"].replace("\n", ""), validate=True)
+            require(raw == patch["updated_bytes"],
+                    "FACTORY_DRAFT_SOURCE_READBACK_MISMATCH")
         marker = "BRAIN_V10_OPERATION_ID: " + candidate["operation_id"]
         response = api.request("POST", "pulls", {
             "title": "fix(v10): verified original core " +
@@ -354,11 +382,24 @@ def create_draft(api, spec, candidate, tested, *, intent_path):
         })
     except (FactoryError, ValueError, OSError) as exc:
         raise FactoryError("FACTORY_WRITE_UNCERTAIN_NEEDS_READBACK") from exc
-    require(type(response.get("number")) is int
-            and response.get("draft") is True
-            and response.get("state") == "open"
-            and response.get("head", {}).get("ref") == candidate["branch"]
-            and response.get("base", {}).get("ref") == "main",
+    require(type(response.get("number")) is int and
+            0 < response["number"] < 10**9,
+            "FACTORY_PR_PROVIDER_READBACK_REQUIRED")
+    # A POST response is not enough. Re-read the PR from GitHub and bind
+    # exact head, branch, repository, main base, operation marker and draft.
+    try:
+        pr = api.request("GET", "pulls/" + str(response["number"]))
+    except (FactoryError, ValueError, OSError) as exc:
+        raise FactoryError("FACTORY_WRITE_UNCERTAIN_NEEDS_READBACK") from exc
+    require(pr.get("number") == response["number"]
+            and pr.get("state") == "open" and pr.get("draft") is True
+            and pr.get("merged") is False
+            and pr.get("head", {}).get("ref") == candidate["branch"]
+            and pr["head"].get("sha") == final_sha
+            and pr["head"].get("repo", {}).get("full_name") == REPOSITORY
+            and pr.get("base", {}).get("ref") == "main"
+            and pr["base"].get("repo", {}).get("full_name") == REPOSITORY
+            and marker in (pr.get("body") or "").splitlines(),
             "FACTORY_PR_PROVIDER_READBACK_REQUIRED")
     return dict(status="DRAFT_PR_CREATED_NOT_APPROVED",
                 pr_number=response["number"],
