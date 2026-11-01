@@ -454,7 +454,7 @@ def create_draft(api, spec, candidate, tested, *, intent_path):
             "body": marker + "\nOriginal run: " + str(spec["failure_run_id"])
                 + "\nExact source: " + spec["base_sha"]
                 + "\nLocal isolated tests passed; independent CI and"
-                  " source acceptance remain required. NO AUTOMERGE.",
+                  " independent exact-head checks remain required. NO AUTOMERGE.",
         })
     except (FactoryError, ValueError, OSError) as exc:
         raise FactoryError("FACTORY_WRITE_UNCERTAIN_NEEDS_READBACK") from exc

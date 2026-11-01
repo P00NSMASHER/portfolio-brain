@@ -150,36 +150,29 @@ class RedTeamTests(unittest.TestCase):
 
     def test_blocked_candidate_is_not_reported_as_success(self):
         provider = early_fixture(EventRunnerProvider)
-        provider.no_acceptance = True
+        # A forged check issuer still blocks original native enrollment,
+        # even though 12-hour source receipts are no longer required.
+        provider.checks["check_runs"][0]["app"]["id"] = 0
         result = runner.dispatch_once(lambda: provider, BASE, early=True, event_head=HEAD)
         self.assertEqual(result['status'], 'CANDIDATES_BLOCKED')
         with patch.object(runner, 'dispatch_once', return_value=result), patch('builtins.print'):
             self.assertEqual(runner.main(), 2)
 
-    def test_receipt_without_independent_attestation_is_denied(self):
+    def test_obsolete_source_receipt_cannot_authorize_or_block_new_ci(self):
         provider = FakeProvider()
-        original = provider.get
-        provider.get = lambda route: ({'total_count': 0, 'check_runs': []}
-            if route == ROOT + 'commits/' + REVIEW_TIP + '/check-runs?per_page=100'
-            else original(route))
-        with self.assertRaisesRegex(gm.Denied, 'ACCEPTANCE_ATTESTATION'):
-            gm.accepted_source(provider, BASE)
+        provider.no_acceptance = True
+        self.assertFalse(hasattr(gm, "accepted_source"))
+        result = gm.run(provider, number=PR, expected_main=BASE, apply=False)
+        self.assertEqual(result["status"], "ADMISSIBLE")
+        self.assertEqual(result["provider_writes"], 0)
+        self.assertNotIn("acceptance", result)
 
-    def test_attestation_cannot_be_replayed_for_other_source_or_receipt(self):
-        for field, value in [('external_id', 'source-acceptance:' + 'f'*40 + ':' + 'e'*64),
-                             ('head_sha', 'e'*40), ('app', {'id': 15368}),
-                             ('conclusion', 'failure')]:
-            with self.subTest(field=field):
-                provider = FakeProvider()
-                original = provider.get
-                def hostile(route):
-                    result = original(route)
-                    if route == ROOT + 'commits/' + REVIEW_TIP + '/check-runs?per_page=100':
-                        result['check_runs'][0][field] = value
-                    return result
-                provider.get = hostile
-                with self.assertRaisesRegex(gm.Denied, 'ACCEPTANCE_ATTESTATION'):
-                    gm.accepted_source(provider, BASE)
+    def test_forged_foundation_issuer_still_blocks_native_merger(self):
+        provider = FakeProvider()
+        provider.checks["check_runs"][0]["app"]["id"] = 0
+        with self.assertRaisesRegex(gm.Denied, "INDEPENDENT_HEAD_CHECK_FAILED"):
+            gm.run(provider, number=PR, expected_main=BASE, apply=False)
+        self.assertEqual(provider.mutations, 0)
 
     def test_source_churn_does_not_exhaust_observation_queue(self):
         with tempfile.TemporaryDirectory() as directory:

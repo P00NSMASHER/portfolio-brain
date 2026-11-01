@@ -14,16 +14,22 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class IndependentVerifierTests(unittest.TestCase):
-    def setUp(self):
-        # The historical verifier fixture already covers exact-head isolated
-        # tests. Source-admission behavior is adversarially exercised in
-        # test_source_merge_admission.py; don't invent a receipt in fixtures.
-        patcher = patch(
-            "verification.independent_verifier.verify_predecessor_acceptance",
-            return_value={"acceptance_ref": "fixture-only", "acceptance_commit": "b" * 40},
-        )
-        patcher.start()
-        self.addCleanup(patcher.stop)
+    def test_no_elapsed_time_or_legacy_receipt_required_for_independent_ci(self):
+        from verification import independent_verifier as iv
+        self.assertFalse(hasattr(iv, "verify_predecessor_acceptance"))
+        self.assertIn("portfolio-phase1-gate", iv.CHECK_NAME)
+        self.assertIn("verification/independent_verifier.py",
+                      iv.IMMUTABLE_TRUST_ANCHORS)
+        self.assertNotIn("verification/source_admission.py",
+                         iv.IMMUTABLE_TRUST_ANCHORS)
+        responses = self.responses()
+        with patch.object(iv, "_api", side_effect=responses) as provider:
+            verified, _ = iv.verify_exact_head(
+                token="scoped", pr_number=7,
+                expected_head_sha="c"*40,
+                full_exit=0, phase1_exit=0, operating_exit=0)
+        self.assertTrue(verified)
+        self.assertEqual(provider.call_count, 4)
 
     def responses(self, *, foundation_app=15368, foundation_conclusion="success", compare_files=None):
         main_sha="b"*40
