@@ -294,7 +294,7 @@ def run_isolated_tests(workspace, candidate, *, runner=subprocess.run):
                   '"/work/tests",pattern="test_*.py");'
                   'count=suite.countTestCases();'
                   'print("V10_TEST_COUNT="+str(count),file=sys.stderr);'
-                  'raise SystemExit(3) if count<1 else None;'
+                  'sys.exit(3) if count<1 else None;'
                   'result=unittest.TextTestRunner(verbosity=1).run(suite);'
                   'raise SystemExit(not result.wasSuccessful())')
         command = [
