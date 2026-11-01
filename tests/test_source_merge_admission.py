@@ -231,29 +231,52 @@ class SourceMergeAdmissionTests(unittest.TestCase):
             verify_predecessor_acceptance(SOURCE, lambda path:
                 p.get(path) if path.startswith("/git/matching-refs/") else 1)
 
-    def test_independent_gate_blocks_owner_manual_merge_without_source_acceptance(self):
+    def test_independent_gate_no_longer_requires_twelve_hour_receipt(self):
         responses = [
             {"head": {"repo": {"full_name": REPO}, "sha": "c" * 40},
              "base": {"repo": {"full_name": REPO}, "ref": "main"}},
             {"commit": {"sha": SOURCE}},
             {"merge_base_commit": {"sha": SOURCE}, "files": []},
+            {"check_runs": [{
+                "name": "validate", "conclusion": "success",
+                "app": {"id": independent.FOUNDATION_APP_ID},
+            }]},
         ]
-        with patch.object(independent, "_api", side_effect=responses), patch.object(
-            independent, "verify_predecessor_acceptance",
-            side_effect=SourceAdmissionError("SOURCE_ACCEPTANCE_NOT_YET_RECORDED"),
-        ):
-            with self.assertRaisesRegex(SourceAdmissionError, "SOURCE_ACCEPTANCE_NOT_YET_RECORDED"):
-                independent.verify_exact_head(
-                    token="independent-token", pr_number=804,
-                    expected_head_sha="c" * 40,
-                    full_exit=0, phase1_exit=0, operating_exit=0,
-                )
+        with patch.object(independent, "_api", side_effect=responses) as api:
+            result, _ = independent.verify_exact_head(
+                token="independent-token", pr_number=804,
+                expected_head_sha="c" * 40,
+                full_exit=0, phase1_exit=0, operating_exit=0)
+        self.assertTrue(result)
+        self.assertEqual(api.call_count, 4)
+        self.assertFalse(hasattr(independent, "verify_predecessor_acceptance"))
 
-    def test_verifier_and_receipt_source_are_immutable_trust_anchors(self):
-        for name in ("verification/independent_verifier.py",
-                     "verification/source_admission.py",
-                     "brain/v9/guarded_merge.py"):
-            self.assertIn(name, independent.IMMUTABLE_TRUST_ANCHORS)
+    def test_independent_gate_still_blocks_failed_isolated_tests(self):
+        responses = [
+            {"head": {"repo": {"full_name": REPO}, "sha": "c" * 40},
+             "base": {"repo": {"full_name": REPO}, "ref": "main"}},
+            {"commit": {"sha": SOURCE}},
+            {"merge_base_commit": {"sha": SOURCE}, "files": []},
+            {"check_runs": [{
+                "name": "validate", "conclusion": "success",
+                "app": {"id": independent.FOUNDATION_APP_ID},
+            }]},
+        ]
+        with patch.object(independent, "_api", side_effect=responses):
+            result, summary = independent.verify_exact_head(
+                token="independent-token", pr_number=804,
+                expected_head_sha="c" * 40,
+                full_exit=1, phase1_exit=0, operating_exit=0)
+        self.assertFalse(result)
+        self.assertIn("full=1", summary)
+
+    def test_old_receipt_is_not_an_immutable_live_release_anchor(self):
+        self.assertIn("verification/independent_verifier.py",
+                      independent.IMMUTABLE_TRUST_ANCHORS)
+        self.assertIn("brain/v9/guarded_merge.py",
+                      independent.IMMUTABLE_TRUST_ANCHORS)
+        self.assertNotIn("verification/source_admission.py",
+                         independent.IMMUTABLE_TRUST_ANCHORS)
 
 
 if __name__ == "__main__":
