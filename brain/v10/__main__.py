@@ -69,7 +69,12 @@ def run(spec, workspace, *, publish=False, intent=None, receipt=None,
         workspace, candidate, **({"runner":test_runner} if test_runner else {}))
     output = {
         "schema_version": 1,
-        "status": "ISOLATED_TESTS_PASSED_NOT_INDEPENDENT_CI",
+        "status": tests["status"],
+        "regression_red_verified": tests["regression_red_verified"],
+        "corrected_green_verified": tests["corrected_green_verified"],
+        "baseline_test_cases": tests["baseline_test_cases"],
+        "corrected_test_cases": tests["corrected_test_cases"],
+        "baseline_output_sha256": tests["baseline_output_sha256"],
         "source_sha": spec["base_sha"],
         "operation_id": candidate["operation_id"],
         "changed_paths": [row["path"] for row in candidate["changes"]],
