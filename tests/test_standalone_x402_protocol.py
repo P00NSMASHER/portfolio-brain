@@ -75,7 +75,9 @@ class StandaloneX402ProtocolTests(unittest.TestCase):
         receipt = (ROOT / ".github/workflows/portfolio-source-acceptance-producer.yml").read_text()
         for held in (observer, receipt):
             self.assertIn("vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true'", held)
-            self.assertIn("vars.PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA == github.sha", held)
+            self.assertNotIn("PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA", held)
+            self.assertIn("github.event.workflow_run.head_sha == github.sha", held)
+            self.assertIn("github.event.workflow_run.head_branch == 'main'", held)
             self.assertNotIn("false &&", held)
 
     def test_live_upstream_checks_are_opt_in_and_not_in_ci(self):
