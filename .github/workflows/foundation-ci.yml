@@ -201,4 +201,4 @@ jobs:
       - name: Execute real v10 red-to-green patch inside nonroot offline Docker
         env:
           PB_V10_DOCKER_SMOKE: "1"
-        run: python -m unittest discover -s tests -p "test_brain_v10_docker_acceptance.py" -v
+        run: python -m unittest discover -s tests -p "test_v10_docker_acceptance.py" -v
