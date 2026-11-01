@@ -59,9 +59,17 @@ class SourceScopedObservationActivationTests(unittest.TestCase):
             self.assertIn(ACTIVE, source)
         # A new run must prove its NEW source, not borrow old acceptance.
         from verification.owner_observation_window import activation, OwnerWindowError
-        from test_owner_observation_window import FakeAPI, observer_run
-        with self.assertRaises(OwnerWindowError):
-            activation(FakeAPI(runs=[observer_run(source=older)]), current)
+        class OriginalRunAPI:
+            def json(self, path):
+                return {"total_count": 1, "workflow_runs": [{
+                    "id": 1, "head_sha": older, "head_branch": "main",
+                    "path": ".github/workflows/reliability-day.yml",
+                    "event": "workflow_run", "run_attempt": 1,
+                    "status": "completed", "conclusion": "success",
+                    "created_at": "2026-11-01T12:00:00Z",
+                }]}
+        with self.assertRaisesRegex(OwnerWindowError, "NOT_FOUND"):
+            activation(OriginalRunAPI(), current)
 
     def test_runtime_policy_does_not_claim_a_completed_soak(self):
         receipt = validate_policy()
