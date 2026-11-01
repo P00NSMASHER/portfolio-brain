@@ -18,7 +18,12 @@ class V10CLITests(unittest.TestCase):
             spec = root / "spec.json"
             spec.write_text(json.dumps(manifest()))
             output = root / "receipt.json"
-            fake_tests = {"status": "ISOLATED_TESTS_PASSED_NOT_INDEPENDENT_CI",
+            fake_tests = {"status": "ISOLATED_RED_GREEN_TESTS_PASSED_NOT_INDEPENDENT_CI",
+                          "regression_red_verified": True,
+                          "corrected_green_verified": True,
+                          "baseline_test_cases": 1,
+                          "corrected_test_cases": 1,
+                          "baseline_output_sha256": "a"*64,
                           "operation_id": factory.prepare(
                               manifest(), {"brain/demo.py": ORIGINAL})["operation_id"],
                           "output_sha256": "c"*64}
@@ -30,7 +35,7 @@ class V10CLITests(unittest.TestCase):
             transport.assert_not_called()
             self.assertTrue(output.is_file())
             self.assertEqual(json.loads(output.read_text())["status"],
-                             "ISOLATED_TESTS_PASSED_NOT_INDEPENDENT_CI")
+                             "ISOLATED_RED_GREEN_TESTS_PASSED_NOT_INDEPENDENT_CI")
             self.assertFalse(result["production_accepted"])
             self.assertFalse(result["merged"])
             self.assertFalse(result["independent_ci_verified"])
@@ -42,7 +47,12 @@ class V10CLITests(unittest.TestCase):
             spec = root / "spec.json"
             spec.write_text(json.dumps(manifest()))
             candidate = factory.prepare(manifest(), {"brain/demo.py": ORIGINAL})
-            fake_tests = {"status": "ISOLATED_TESTS_PASSED_NOT_INDEPENDENT_CI",
+            fake_tests = {"status": "ISOLATED_RED_GREEN_TESTS_PASSED_NOT_INDEPENDENT_CI",
+                          "regression_red_verified": True,
+                          "corrected_green_verified": True,
+                          "baseline_test_cases": 1,
+                          "corrected_test_cases": 1,
+                          "baseline_output_sha256": "a"*64,
                           "operation_id": candidate["operation_id"],
                           "output_sha256": "d" * 64}
             api = FakeProvider()
