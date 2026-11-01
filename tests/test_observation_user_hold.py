@@ -1,4 +1,4 @@
-"""Review-only tests: observation must be explicitly opted in, never automatic by default."""
+"""Observation stays owner-disabled unless enabled; source is auto-bound to main."""
 import hashlib
 from pathlib import Path
 import unittest
@@ -6,7 +6,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 FLAG = "vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true'"
-SOURCE_FLAG = "vars.PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA == github.sha"
+LEGACY_SOURCE_FLAG = "vars.PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA == github.sha"
 REPAIR = ".github/workflows/v8-scoped-repair.yml"
 OBSERVER = ".github/workflows/reliability-day.yml"
 PRODUCER = ".github/workflows/portfolio-source-acceptance-producer.yml"
@@ -28,8 +28,11 @@ class ObservationOptInTests(unittest.TestCase):
             with self.subTest(file=file):
                 wf = read(file)
                 self.assertEqual(wf.count(FLAG), 1)
-                # Owner must separately authorize the exact protected commit.
-                self.assertEqual(wf.count(SOURCE_FLAG), 1)
+                # Enabled is a standing owner opt-in, never implicit. Source is
+                # bound by GitHub's protected default-branch workflow identity.
+                self.assertNotIn(LEGACY_SOURCE_FLAG, wf)
+                self.assertEqual(wf.count("github.event.workflow_run.head_sha == github.sha"), 1)
+                self.assertIn("github.event.workflow_run.head_branch == 'main'", wf)
                 self.assertNotIn("false &&", wf)
                 self.assertIn("workflow_run:", wf)
                 self.assertNotIn("workflow_dispatch:", wf)
