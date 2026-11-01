@@ -200,6 +200,7 @@ class FactoryTests(unittest.TestCase):
                 self.assertIn("/work:rw,nosuid,nodev,size=512m,mode=1777", command)
                 bind = command[command.index("--mount") + 1]
                 source = Path(bind.split("src=", 1)[1].split(",dst=", 1)[0])
+                self.assertTrue(source.stat().st_mode & 0o005 == 0o005)
                 self.assertIn(b"return 2", (source / "brain/demo.py").read_bytes())
                 self.assertEqual((path / "brain/demo.py").read_bytes(), ORIGINAL)
                 seen.append(command)
