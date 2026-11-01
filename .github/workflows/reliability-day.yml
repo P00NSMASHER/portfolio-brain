@@ -14,7 +14,6 @@ jobs:
     if: >-
       github.repository == 'P00NSMASHER/portfolio-brain' &&
       vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true' &&
-      vars.PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA == github.sha &&
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.head_sha == github.sha &&
       github.event.workflow_run.event == 'workflow_run'
