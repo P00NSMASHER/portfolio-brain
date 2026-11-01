@@ -40,7 +40,9 @@ class HeadroomReserveTests(unittest.TestCase):
                 ).fetchall(),
                 "events": db.execute("SELECT * FROM events").fetchall(),
                 "ledger": db.execute("SELECT * FROM ledger").fetchall(),
-                "attempts": db.execute("SELECT * FROM attempts").fetchall(),
+                "attempts": (db.execute("SELECT * FROM attempts").fetchall()
+                             if db.execute("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='attempts'").fetchone()
+                             else []),
             }
 
     def compact_at_headroom(self, headroom):
