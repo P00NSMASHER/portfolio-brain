@@ -65,6 +65,14 @@ class PressureReliefTests(unittest.TestCase):
         self.assertEqual(self.queue.checkpoint(), checkpoint)
         self.assertEqual(set(self.queue.snapshot()["work"]), {result})
 
+    def test_inconclusive_unclaimed_source_is_reobserved_without_erasing_history(self):
+        ids = self.seed(priority=2)
+        fresh = self.queue.observe(candidate(9, priority=2), now=tick(9))
+        self.assertEqual(set(self.queue.snapshot()["work"]), {fresh})
+        archived = self.queue.db.execute("SELECT body FROM batch_archive").fetchone()[0]
+        self.assertEqual(set(json.loads(zlib.decompress(archived))["retired"]), set(ids))
+        self.assertEqual(self.queue.checkpoint()["sequence"], 8)
+
     def test_claimed_diagnosed_and_evidenced_rows_never_retired(self):
         ids = self.seed()
         token = self.queue.claim(ids[0], "research-provenance", now=tick(7))
