@@ -183,8 +183,9 @@ class BatchQueue:
 
         Old source observations remain in the tamper-evident compressed journal.
         Never retire claimed, diagnosed, patched, tested, pending or proof-bearing
-        work. A clean, never-claimed source-level observation is re-observed
-        from the new head; it is not an independently reproduced defect.
+        work. Clean OR inconclusive, never-claimed source-level observations
+        are re-observed from the new head; they are not reproduced defects.
+        Adverse priority-1 findings from different fingerprints remain active.
         """
         if not BatchQueue._retirable(old) or old["source_sha"]==new["source_sha"]:
             return False
@@ -192,7 +193,7 @@ class BatchQueue:
                 "project_id","repository","owner","path")):
             return False
         return (old["fingerprint"]==new["fingerprint"] or
-                (old["priority"]==3 and old["path"]=="repository-observation"))
+                (old["priority"] in (2,3) and old["path"]=="repository-observation"))
 
 
     def _rotate(self,retired=()):
