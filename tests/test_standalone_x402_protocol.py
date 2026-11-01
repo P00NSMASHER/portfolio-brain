@@ -70,13 +70,15 @@ class StandaloneX402ProtocolTests(unittest.TestCase):
         render = (ROOT / "render.yaml").read_text(encoding="utf-8")
         self.assertIn("x402-render-gateway", render)
         self.assertNotIn("agent-data-tools-standalone", render)
-        self.assertTrue((ROOT / ".github/workflows/reliability-day.yml").is_file())
-        observer = (ROOT / ".github/workflows/reliability-day.yml").read_text()
-        receipt = (ROOT / ".github/workflows/portfolio-source-acceptance-producer.yml").read_text()
-        for held in (observer, receipt):
-            self.assertIn("vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true'", held)
-            self.assertIn("vars.PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA == github.sha", held)
-            self.assertNotIn("false &&", held)
+        # Standalone vendor tests must not accidentally resurrect the retired
+        # 12h source-observation or receipt-minter workflows.
+        for retired in ("reliability-day.yml",
+                        "portfolio-source-acceptance-producer.yml",
+                        "portfolio-source-acceptance.yml"):
+            self.assertFalse((ROOT / ".github/workflows" / retired).exists())
+        independent=(ROOT / "verification/independent_verifier.py").read_text()
+        self.assertNotIn("verify_predecessor_acceptance", independent)
+        self.assertIn('CHECK_NAME = "portfolio-phase1-gate"', independent)
 
     def test_live_upstream_checks_are_opt_in_and_not_in_ci(self):
         manifest = json.loads((SERVICE / "package.json").read_text(encoding="utf-8"))
