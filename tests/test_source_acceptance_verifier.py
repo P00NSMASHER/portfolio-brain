@@ -444,18 +444,13 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
         self.assertEqual(payload["external_id"], external)
         self.assertEqual(payload["conclusion"], "success")
 
-    def test_workflow_is_narrow_and_pins_trusted_main_producer(self):
-        workflow = Path(".github/workflows/portfolio-source-acceptance.yml").read_text()
-        source = Path("verification/source_acceptance_verifier.py").read_bytes()
-        blob = hashlib.sha1(b"blob " + str(len(source)).encode() + b"\0" + source).hexdigest()
-        self.assertIn(blob, workflow)
-        self.assertIn("github.event.workflow_run.event == 'pull_request'", workflow)
-        self.assertIn("startsWith(github.event.workflow_run.head_branch, 'auto-repair/pb-01-acceptance-receipt-')", workflow)
-        self.assertIn("ref: ${{ github.sha }}", workflow)
-        self.assertIn("persist-credentials: false", workflow)
-        self.assertNotIn("workflow_dispatch:", workflow)
-        self.assertNotIn("pull_request_target:", workflow)
-        self.assertNotIn("schedule:", workflow)
+    def test_historical_receipt_verifier_is_offline_not_a_live_workflow(self):
+        # Historical receipt validators and their old evidence can remain for
+        # audit, but may not mint release checks or run in production.
+        for workflow in ("reliability-day.yml",
+                         "portfolio-source-acceptance-producer.yml",
+                         "portfolio-source-acceptance.yml"):
+            self.assertFalse((Path(".github/workflows") / workflow).exists())
 
     def test_failure_does_not_publish_unbound_check_or_exception_text(self):
         marker = "UNTRUSTED_VERIFIER_MARKER_MUST_NOT_PERSIST"
@@ -475,23 +470,11 @@ class SourceAcceptanceVerifierTests(unittest.TestCase):
         })
         self.assertNotIn(marker, output.getvalue())
 
-    def test_receipt_producer_is_automatic_only_and_uses_separate_runtime_app(self):
-        workflow = Path(".github/workflows/portfolio-source-acceptance-producer.yml").read_text()
-        for path in ("verification/source_acceptance_producer.py",
-                     "verification/source_acceptance_verifier.py"):
-            source = Path(path).read_bytes()
-            blob = hashlib.sha1(b"blob " + str(len(source)).encode() + b"\0" + source).hexdigest()
-            self.assertIn(blob, workflow)
-        self.assertIn("github.event.workflow_run.event == 'schedule'", workflow)
-        self.assertIn("github.event.workflow_run.event == 'workflow_dispatch'", workflow)
-        self.assertIn("PORTFOLIO_RUNTIME_PRIVATE_KEY", workflow)
-        self.assertIn("python -m verification.source_acceptance_producer", workflow)
-        self.assertNotIn("PORTFOLIO_VERIFIER_PRIVATE_KEY", workflow)
-        self.assertNotIn("\n  schedule:", workflow)
-        self.assertNotIn("pull_request_target:", workflow)
-
-        verifier_workflow = Path(".github/workflows/portfolio-source-acceptance.yml").read_text()
-        self.assertIn("python -m verification.source_acceptance_verifier", verifier_workflow)
+    def test_no_runtime_path_publishes_historical_timed_source_receipts(self):
+        from verification import independent_verifier as live
+        from brain import validate
+        self.assertFalse(hasattr(live, "verify_predecessor_acceptance"))
+        self.assertNotIn("PORTFOLIO_12H", validate.validate_policy.__code__.co_consts)
 
     def test_source_receipt_key_uses_first_qualifying_core(self):
         first = datetime(2026, 10, 24, 10, 31, tzinfo=timezone.utc)
