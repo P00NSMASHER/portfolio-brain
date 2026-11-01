@@ -5,6 +5,7 @@ The test executes generated patched source inside a real network-disabled,
 read-only, nonroot container and verifies both RED and GREEN assertions.
 """
 import os
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -36,7 +37,16 @@ class RealDockerAcceptanceTests(unittest.TestCase):
                                     old="    return 0\n",new="    return 1\n")])
             patch=factory.prepare(spec,{"brain/demo.py": OLD})
             self.assertEqual(patch["changes"][0]["updated_bytes"], NEW)
-            receipt=factory.run_isolated_tests(root,patch)
+            def reveal_synthetic_fixture_failure(command, **kwargs):
+                completed = subprocess.run(command, **kwargs)
+                if completed.returncode:
+                    self.fail(
+                        "ISOLATED_SYNTHETIC_FIXTURE_EXECUTION_FAILED "
+                        + "stdout=" + completed.stdout[-3500:]
+                        + " stderr=" + completed.stderr[-3500:])
+                return completed
+            receipt=factory.run_isolated_tests(
+                root,patch,runner=reveal_synthetic_fixture_failure)
             self.assertEqual(receipt["status"],
                              "ISOLATED_TESTS_PASSED_NOT_INDEPENDENT_CI")
             self.assertEqual(receipt["operation_id"],patch["operation_id"])
