@@ -14,10 +14,12 @@ import urllib.parse
 import urllib.request
 
 from soak_v3.audit import require, sha40
+from verification.owner_observation_window import activation, post_activation, evidence_fields
 from soak_v3.current_state_probe import verify_source_state
 from soak_v3.remote_probe import GitHubReadOnly
 from verification.source_acceptance_verifier import (
     APPROVAL_BASIS, REPOSITORY, REQUIRED_AUTHORITY_LIMITS, REQUIRED_CRITERIA,
+    SOURCE_ACCEPTANCE_API_CALL_BUDGET,
     SCOPE, _decode_content, _verify_receipt_contract, collect_original_runs,
     req, strict_json, verify_acceptance, verify_terminal_repair_follow_through,
 )
@@ -76,16 +78,45 @@ def _foundation_run(api: GitHubReadOnly, source: str) -> int:
 def build_receipt(api: GitHubReadOnly, source: str) -> tuple[dict, str]:
     main = api.json("/branches/main").get("commit", {}).get("sha")
     req(main == source, "current main changed before acceptance collection")
-    # Freeze the first bounded 12.5-hour observation: later cores cannot
-    # move its terminal and postpone legitimate repair follow-through forever.
+    # Anchor this source at the first genuine successful source-bound observer,
+    # never at the first pre-activation automatic core. Existing source history
+    # is replayed for state continuity without earning owner-window time.
     from verification.reliability_day import CORE, Snapshot, inventory, window
-    rows = window(inventory(api, CORE + "&head_sha=" + source), source)
+    marker = activation(api, source)
+    rows = window(inventory(api, CORE + "&head_sha=" + source), source,
+                  activation_start=marker["created"])
     summary = collect_original_runs(Snapshot(api, rows), source)
-    automatic = summary["automatic"]
+    scoped = post_activation(summary, marker)
+    req(scoped["status"] == "PASS", "post-activation 12-hour window not complete")
+    # Freeze at the FIRST terminal eligible core so later normal activity
+    # never advances the 30-minute follow-through deadline.
+    frozen_terminal = scoped["terminal"]
+    # Do NOT re-fetch all original artifacts a second time: use only the
+    # verified original proofs returned by the single complete replay.
+    # The independent App will separately re-read each original source run.
+    proven = [row for row in summary["runs"]
+              if row["created"] <= frozen_terminal["completed"]]
+    automatic = [row for row in proven if row["event"] != "push"]
+    req(len(proven) >= 3 and len(automatic) >= 2
+        and automatic[-1]["id"] == frozen_terminal["id"]
+        and len([row for row in proven if row["event"] == "push"]) == 1,
+        "post-activation terminal or source census changed")
+    gaps = [int((right["completed"] - left["completed"]).total_seconds())
+            for left, right in zip(automatic, automatic[1:])]
+    summary = {
+        "runs": proven, "automatic": automatic, "terminal": automatic[-1],
+        "span": int((automatic[-1]["completed"] - automatic[0]["completed"]).total_seconds()),
+        "maximum_gap": max(gaps),
+        "signed_timestamps": [row["scheduled_at"] for row in automatic
+                              if row["origin_kind"] == "cloudflare_cron_v1"],
+    }
+    scoped = post_activation(summary, marker)
+    req(scoped["status"] == "PASS" and scoped["terminal"]["id"] == summary["terminal"]["id"],
+        "frozen owner interval changed during source replay")
     terminal = summary["terminal"]
     req(summary["span"] >= REQUIRED_CRITERIA["minimum_completed_span_seconds"]
         and summary["maximum_gap"] <= REQUIRED_CRITERIA["maximum_intercore_gap_seconds"],
-        "12-hour automatic window not complete")
+        "full source original-run ancestry or timing invalid")
     verify_terminal_repair_follow_through(api, summary, source)
     state = verify_source_state(
         api, state_commit=terminal["state_commit"], source_sha=source,
@@ -127,6 +158,7 @@ def build_receipt(api: GitHubReadOnly, source: str) -> tuple[dict, str]:
             "historical_adverse_automatic_cores_for_this_source": [],
             "prior_source_acceptance_is_not_transferable": True,
             "original_proof_status": "TWELVE_HOUR_ORIGINAL_GITHUB_EVIDENCE_VERIFIED",
+            **evidence_fields(marker, scoped),
         },
         "terminal_state_replay": {
             "source_sha": source,
@@ -260,7 +292,7 @@ def main(argv=None) -> int:
     read_token = os.environ.get("GITHUB_TOKEN", "")
     write_token = os.environ.get("PORTFOLIO_RUNTIME_TOKEN", "")
     try:
-        api = GitHubReadOnly(read_token, max_calls=256)
+        api = GitHubReadOnly(read_token, max_calls=SOURCE_ACCEPTANCE_API_CALL_BUDGET)
         receipt, date = build_receipt(api, source)
         result = publish_receipt(
             api, GitHubWrite(write_token), source=source, receipt=receipt, date=date,
