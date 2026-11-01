@@ -194,6 +194,10 @@ class FactoryTests(unittest.TestCase):
                 self.assertEqual(command[command.index("--network") + 1], "none")
                 self.assertIn("--cap-drop=ALL", command)
                 self.assertIn("--security-opt=no-new-privileges", command)
+                self.assertIn("--read-only", command)
+                self.assertEqual(command[command.index("--user") + 1], "65534:65534")
+                self.assertIn("/tmp:rw,nosuid,nodev,size=64m,mode=1777", command)
+                self.assertIn("/work:rw,nosuid,nodev,size=512m,mode=1777", command)
                 bind = command[command.index("--mount") + 1]
                 source = Path(bind.split("src=", 1)[1].split(",dst=", 1)[0])
                 self.assertIn(b"return 2", (source / "brain/demo.py").read_bytes())
