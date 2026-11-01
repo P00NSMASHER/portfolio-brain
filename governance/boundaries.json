@@ -10,7 +10,8 @@
     "Registration or observation never grants write, deploy, external-action, or child-facing authority.",
     "Project capabilities are evaluated per project; Portfolio Brain privileges never inherit downstream.",
     "Heartbeats, notifications, and Pages publication are telemetry or publication evidence only and never verification.",
-    "Public persistence is sanitized-only."
+    "Public persistence is sanitized-only.",
+    "CaptureBrief draft candidate authority is opt-in for one exact existing approved documentation recipe only; it never grants merge, deployment, workflow editing or sibling project write rights."
   ],
   "actions": {
     "OBSERVATION": {
@@ -196,9 +197,13 @@
         ]
       },
       "CANDIDATE_PR": {
-        "allowed": false,
-        "repository_ids": [],
-        "branch_prefixes": []
+        "allowed": true,
+        "repository_ids": [
+          "REPO-007"
+        ],
+        "branch_prefixes": [
+          "v8-capturebrief-hosting-doc-"
+        ]
       },
       "DEPLOY": {
         "allowed": false

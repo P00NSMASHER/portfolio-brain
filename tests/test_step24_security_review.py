@@ -102,6 +102,28 @@ class Step24SecurityReviewTests(unittest.TestCase):
         self.assertNotIn("GOVERNANCE_AUTHORITY_MATRIX_NOT_FAIL_CLOSED", codes)
         self.assertNotIn("CHATGPT_GMAIL_CUSTOMER_EMAIL_AUTHORITY_PRESENT", codes)
 
+    def test_static_review_rejects_widened_capturebrief_candidate_grant(self):
+        import json
+        target = ROOT / "governance" / "boundaries.json"
+        original_read_text = Path.read_text
+
+        def drifted_read_text(path, *args, **kwargs):
+            value = original_read_text(path, *args, **kwargs)
+            if path == target:
+                body = json.loads(value)
+                capture = next(row for row in body["project_capabilities"]
+                               if row["project_id"] == "PRJ-004")
+                capture["CANDIDATE_PR"]["repository_ids"].append("REPO-003")
+                return json.dumps(body)
+            return value
+
+        with patch.object(Path, "read_text", new=drifted_read_text):
+            result = static_review(ROOT)
+        self.assertFalse(result["observed"]["governance_canonical_action_schema"])
+        self.assertFalse(result["observed"]["governance_authority_matrix_fail_closed"])
+        self.assertIn("GOVERNANCE_AUTHORITY_MATRIX_NOT_FAIL_CLOSED",
+                      {row["code"] for row in result["findings"]})
+
     def test_static_review_blocks_unbounded_gmail_daily_limit(self):
         target = ROOT / "action_engine" / "ACTION_POLICY.json"
         original_read_text = Path.read_text

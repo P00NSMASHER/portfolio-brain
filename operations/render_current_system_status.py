@@ -40,7 +40,7 @@ def render()->str:
       "",
       f"- Authority model: {boundaries['authority_model']}; default effect: {boundaries['default_effect']}.",
       f"- Registered projects: **{len(projects)}**; enabled read-only repository adapters: **{enabled}/{len(adapters)}**.",
-      f"- Downstream projects inheriting Portfolio Brain candidate-PR authority: **{downstream_candidate}**.",
+      f"- Downstream projects with explicitly scoped candidate-PR authority: **{downstream_candidate}**.",
       f"- Production deployment: {boundaries['actions']['PRODUCTION_DEPLOYMENT']['decision']}.",
       f"- Financial actions: {boundaries['actions']['FINANCIAL_ACTION']['decision']}; destructive actions: {boundaries['actions']['DESTRUCTIVE_ACTION']['decision']}.",
       f"- Live trading: {boundaries['actions']['LIVE_TRADING']['decision']}.",

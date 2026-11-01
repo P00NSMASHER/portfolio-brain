@@ -69,6 +69,14 @@ def validate_boundaries()->dict[str,object]:
         if pid=="PRJ-000":
             req(candidate["allowed"] is True and candidate["repository_ids"]==["REPO-008"],"Portfolio Brain candidate scope changed")
             req(candidate["branch_prefixes"]==["factory/","auto-repair/"],"candidate branch scope changed")
+        elif pid=="PRJ-004":
+            # The owner explicitly enabled one existing, already source-pinned
+            # CaptureBrief documentation-only repair recipe. This is NOT
+            # inherited by any other project and grants no protected merge,
+            # workflow edit, deployment, or arbitrary code patching authority.
+            req(candidate=={"allowed":True,"repository_ids":["REPO-007"],
+                            "branch_prefixes":["v8-capturebrief-hosting-doc-"]},
+                "CaptureBrief draft grant escaped reviewed single-recipe scope")
         else:
             req(candidate=={"allowed":False,"repository_ids":[],"branch_prefixes":[]},"downstream project inherited candidate PR authority")
 
