@@ -48,7 +48,12 @@ class RealDockerAcceptanceTests(unittest.TestCase):
             receipt=factory.run_isolated_tests(
                 root,patch,runner=reveal_synthetic_fixture_failure)
             self.assertEqual(receipt["status"],
-                             "ISOLATED_TESTS_PASSED_NOT_INDEPENDENT_CI")
+                             "ISOLATED_RED_GREEN_TESTS_PASSED_NOT_INDEPENDENT_CI")
+            self.assertTrue(receipt["regression_red_verified"])
+            self.assertTrue(receipt["corrected_green_verified"])
+            self.assertGreaterEqual(receipt["corrected_test_cases"], 1)
+            self.assertGreaterEqual(receipt["corrected_test_cases"],
+                                    receipt["baseline_test_cases"])
             self.assertEqual(receipt["operation_id"],patch["operation_id"])
             self.assertEqual((root/"brain/demo.py").read_bytes(),OLD)
             self.assertFalse(receipt["production_accepted"])
