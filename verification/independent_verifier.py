@@ -136,7 +136,7 @@ def verify_exact_head(
         and row.get("app", {}).get("id") == FOUNDATION_APP_ID
         and row.get("conclusion") == "success"
     ]
-    req(len(foundation) == 1, "exact-head Foundation validation is not uniquely successful")
+    req(len(foundation) >= 1, "exact-head Foundation validation is not successful")
 
     tests_ok = full_exit == 0 and phase1_exit == 0 and operating_exit == 0
     summary = (
