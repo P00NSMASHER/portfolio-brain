@@ -144,7 +144,10 @@ class GitHubTransport:
     def request(self, method, suffix, payload=None):
         require(method in ("GET", "POST", "PUT"), "FACTORY_METHOD_REFUSED")
         route = (
-            re.fullmatch(r"(installation/repositories\?per_page=100|branches/main|branches/auto-repair/v10-[0-9a-f]{16}|pulls/[1-9]\d*|actions/runs/[1-9]\d*|
+            re.fullmatch(
+                         r"(installation/repositories\?per_page=100|branches/main|"
+                         r"branches/auto-repair/v10-[0-9a-f]{16}|"
+                         r"pulls/[1-9]\d*|actions/runs/[1-9]\d*|"
                          r"actions/runs/[1-9]\d*/jobs\?per_page=100|"
                          r"contents/(?:brain|tests|docs)/[a-zA-Z0-9_./-]+\."
                          r"(?:py|json|md)\?ref=[0-9a-f]{40})", suffix)
