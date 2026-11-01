@@ -47,6 +47,8 @@ class FakeProvider:
         self.final_content = None
         self.branch = None
         self.pr_body = None
+        self.pr_base_sha = SOURCE
+        self.main_drift_after_pr = False
         self.token_scope = [f.REPOSITORY]
     def request(self, method, route, payload=None):
         self.calls.append((method, route, payload))
@@ -92,7 +94,7 @@ class FakeProvider:
                     "draft": True, "merged": False, "body": self.pr_body,
                     "head": {"ref": self.branch, "sha": self.final_sha,
                              "repo": {"full_name": f.REPOSITORY}},
-                    "base": {"ref": "main",
+                    "base": {"ref": "main", "sha": self.pr_base_sha,
                              "repo": {"full_name": f.REPOSITORY}},
                 }
             raise AssertionError(route)
@@ -106,6 +108,8 @@ class FakeProvider:
             return {"commit": {"sha": self.final_sha}, "content": {"sha": "d"*40}}
         if method == "POST" and route == "pulls":
             self.pr_body = payload["body"]
+            if self.main_drift_after_pr:
+                self.main = "f" * 40
             return {
                 "number": self.pr_number, "state": "open", "draft": True,
                 "head": {"ref": payload["head"]},
@@ -266,6 +270,34 @@ class FactoryTests(unittest.TestCase):
                                         "FACTORY_PRIOR_INTENT_NEEDS_RECONCILIATION"):
                 f.create_draft(api, spec, candidate, tested,
                                intent_path=intent)
+
+    def test_post_creation_draft_cannot_hide_old_base_or_main_source_drift(self):
+        spec = manifest()
+        candidate = f.prepare(spec, {"brain/demo.py": ORIGINAL})
+        tested = trusted_synthetic_red_green(candidate["operation_id"])
+        for mode, code in (
+            ("wrong_base_sha", "FACTORY_DRAFT_BASE_SOURCE_DRIFT"),
+            ("main_moved_after_post", "FACTORY_MAIN_MOVED_AFTER_DRAFT"),
+        ):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp:
+                api = FakeProvider()
+                if mode == "wrong_base_sha":
+                    api.pr_base_sha = "f" * 40
+                else:
+                    api.main_drift_after_pr = True
+                intent = Path(tmp) / "intent.json"
+                with self.assertRaisesRegex(f.FactoryError, code):
+                    f.create_draft(api, spec, candidate, tested,
+                                   intent_path=intent)
+                # The PR can already exist: preserve intent, never auto-retry.
+                self.assertTrue(intent.exists())
+                self.assertEqual(
+                    [(method, route) for method, route, _ in api.calls
+                     if method != "GET"],
+                    [("POST", "git/refs"),
+                     ("PUT", "contents/brain/demo.py"),
+                     ("POST", "pulls")],
+                )
 
     def test_denied_source_or_test_cannot_write_or_create_intent(self):
         api = FakeProvider()

@@ -480,6 +480,12 @@ def create_draft(api, spec, candidate, tested, *, intent_path):
             and pr["base"].get("repo", {}).get("full_name") == REPOSITORY
             and marker in (pr.get("body") or "").splitlines(),
             "FACTORY_PR_PROVIDER_READBACK_REQUIRED")
+    # Main may advance after the final pre-POST read. Validate the actual
+    # draft's base SHA and main again before claiming source-pinned identity.
+    require(pr["base"].get("sha") == spec["base_sha"],
+            "FACTORY_DRAFT_BASE_SOURCE_DRIFT")
+    require(api.request("GET", "branches/main").get("commit", {}).get("sha")
+            == spec["base_sha"], "FACTORY_MAIN_MOVED_AFTER_DRAFT")
     return dict(status="DRAFT_PR_CREATED_NOT_APPROVED",
                 pr_number=response["number"],
                 operation_id=candidate["operation_id"],
