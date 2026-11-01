@@ -17,11 +17,10 @@ def validate_policy():
         require(p[name] is False, "forbidden authority/filter: "+name)
     workflow_dir=ROOT/".github/workflows"
     expected={"foundation-ci.yml","portfolio-independent-verifier.yml",
-              "portfolio-source-acceptance.yml", "portfolio-source-acceptance-producer.yml",
               "x402-gateway-ci.yml","x402-render-gateway-smoke.yml",
               "brain-cycle.yml","brain-clock.yml",
               "state-capacity-qualification.yml", "v8-runtime-preflight.yml",
-              "v8-scoped-repair.yml", "v9-guarded-native-automerge.yml", "reliability-day.yml"}
+              "v8-scoped-repair.yml", "v9-guarded-native-automerge.yml"}
     require({x.name for x in workflow_dir.iterdir() if x.suffix in {".yml",".yaml"}}==expected, "active workflow inventory changed")
     scoped=(workflow_dir/"v8-scoped-repair.yml").read_text(encoding="utf-8")
     for phrase in (
@@ -81,76 +80,21 @@ def validate_policy():
             and "PORTFOLIO_RUNTIME_PRIVATE_KEY" not in native
             and "PORTFOLIO_VERIFIER_PRIVATE_KEY" not in native,
             "guarded native merger adds forbidden trigger, privilege or direct merge")
-    acceptance = (workflow_dir/"portfolio-source-acceptance.yml").read_text(encoding="utf-8")
-    for fragment in (
-        "workflow_run:", 'workflows: ["foundation-ci"]', "types: [completed]",
-        "cancel-in-progress: false",
-        "github.event.workflow_run.event == 'pull_request'",
-        "github.event.workflow_run.conclusion == 'success'",
-        "startsWith(github.event.workflow_run.head_branch, 'auto-repair/pb-01-acceptance-receipt-')",
-        "github.event.workflow_run.head_repository.full_name == 'P00NSMASHER/portfolio-brain'",
-        "github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain'",
-        "ref: ${{ github.sha }}", "persist-credentials: false",
-        "actions: read", "contents: read", "pull-requests: read",
-        "PORTFOLIO_VERIFIER_PRIVATE_KEY", 'app-id: "5121826"',
-        "87ddcff01d74a97ba74e889126355049f745809a",
-        "python -m verification.source_acceptance_verifier",
-    ):
-        require(fragment in acceptance,
-                "source acceptance producer original control changed: "+fragment)
-    require("schedule:" not in acceptance
-            and "workflow_dispatch:" not in acceptance
-            and "pull_request_target:" not in acceptance
-            and "contents: write" not in acceptance
-            and "pull-requests: write" not in acceptance
-            and "actions: write" not in acceptance
-            and "id-token: write" not in acceptance
-            and "gh pr merge" not in acceptance
-            and "merge_pull_request" not in acceptance,
-            "source acceptance producer adds forbidden trigger, privilege or merge")
-    receipt = (workflow_dir/"portfolio-source-acceptance-producer.yml").read_text(encoding="utf-8")
-    for fragment in (
-        "workflow_run:", 'workflows: ["brain-cycle-v2"]', "types: [completed]",
-        "cancel-in-progress: false",
-        "github.event.workflow_run.conclusion == 'success'",
-        "github.event.workflow_run.head_branch == 'main'",
-        "github.event.workflow_run.head_sha == github.sha",
-        "github.event.workflow_run.event == 'schedule'",
-        "github.event.workflow_run.event == 'workflow_dispatch'",
-        "github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain'",
-        "ref: ${{ github.sha }}", "persist-credentials: false",
-        "actions: read", "contents: read", "pull-requests: read",
-        "1b857c412399a5a366be521b64f24953f01ffd2e",
-        "87ddcff01d74a97ba74e889126355049f745809a",
-        "PORTFOLIO_RUNTIME_PRIVATE_KEY", "permission-contents: write",
-        "permission-pull-requests: write", "skip-token-revoke: false",
-        "python -m verification.source_acceptance_producer",
-    ):
-        require(fragment in receipt,
-                "source acceptance receipt producer control changed: "+fragment)
-    require("schedule:" not in receipt
-            and "workflow_dispatch:" not in receipt
-            and "pull_request_target:" not in receipt
-            and "id-token: write" not in receipt
-            and "PORTFOLIO_VERIFIER_PRIVATE_KEY" not in receipt
-            and "gh pr merge" not in receipt
-            and "merge_pull_request" not in receipt,
-            "source acceptance receipt producer adds forbidden trigger or authority")
-    # Observation remains HELD by two independent opt-in variables. The
-    # second has a new, source-specific name; its value must equal the exact
-    # protected commit. It cannot be set before the protected merge SHA exists.
-    # Thus the trust-anchor cutover itself cannot start the observation.
-    observation_flag = "vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true'"
-    source_flag = "vars.PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA == github.sha"
-    observation = (workflow_dir/"reliability-day.yml").read_text(encoding="utf-8")
-    require(observation_flag in observation and observation_flag in receipt
-            and source_flag in observation and source_flag in receipt
-            and "false &&" not in observation
-            and "false &&" not in receipt
-            and "workflow_run:" in observation
-            and "workflow_dispatch:" not in observation
-            and "schedule:" not in observation,
-            "unapproved source-specific 12-hour observation or acceptance activation")
+    # The owner retired ALL twelve-hour workflows and release prerequisites.
+    # Core clock and mandatory CI still run; trusted App5121826 verifies exact
+    # candidate head and isolated tests without waiting for elapsed time.
+    retired = ("reliability-day.yml",
+               "portfolio-source-acceptance-producer.yml",
+               "portfolio-source-acceptance.yml")
+    require(all(not (workflow_dir / name).exists() for name in retired),
+            "retired timed observation workflow reactivated")
+    verifier = (ROOT / "verification/independent_verifier.py").read_text(
+        encoding="utf-8")
+    require("verify_predecessor_acceptance" not in verifier
+            and "portfolio-phase1-gate" in verifier
+            and "FOUNDATION_APP_ID = 15368" in verifier
+            and "VERIFIER_APP_ID = 5121826" in verifier,
+            "independent code check or no-soak release policy changed")
     from operations.validate_operating_mode import scheduled_workflow_inventory
     require(scheduled_workflow_inventory(workflow_dir)=={"brain-clock":[p["cron"], p["watchdog_cron"]]}, "only existing native Brain and watchdog crons may recur")
     require("schedule:" not in (workflow_dir/"brain-cycle.yml").read_text(), "uncoordinated direct core schedule forbidden")
