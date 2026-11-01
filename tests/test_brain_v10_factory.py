@@ -28,6 +28,13 @@ def manifest():
         }],
     }
 
+def trusted_synthetic_red_green(operation_id):
+    return dict(operation_id=operation_id,
+                status="ISOLATED_RED_GREEN_TESTS_PASSED_NOT_INDEPENDENT_CI",
+                regression_red_verified=True, corrected_green_verified=True,
+                baseline_test_cases=1, corrected_test_cases=1,
+                baseline_output_sha256="a"*64, output_sha256="b"*64)
+
 class FakeProvider:
     def __init__(self):
         self.calls = []
@@ -201,14 +208,22 @@ class FactoryTests(unittest.TestCase):
                 bind = command[command.index("--mount") + 1]
                 source = Path(bind.split("src=", 1)[1].split(",dst=", 1)[0])
                 self.assertTrue(source.stat().st_mode & 0o005 == 0o005)
-                self.assertIn(b"return 2", (source / "brain/demo.py").read_bytes())
+                staged = (source / "brain/demo.py").read_bytes()
                 self.assertEqual((path / "brain/demo.py").read_bytes(), ORIGINAL)
                 seen.append(command)
-                return types.SimpleNamespace(returncode=0, stdout="PASS", stderr="")
+                if len(seen) == 1:
+                    self.assertEqual(staged, ORIGINAL)
+                    return types.SimpleNamespace(returncode=1, stdout="",
+                        stderr="V10_TEST_COUNT=1\nRan 1 test in 0.01s\nFAILED (failures=1)\n")
+                self.assertIn(b"return 2", staged)
+                return types.SimpleNamespace(returncode=0, stdout="",
+                    stderr="V10_TEST_COUNT=1\nRan 1 test in 0.01s\nOK\n")
             result = f.run_isolated_tests(path, candidate, runner=runner)
             self.assertEqual(result["status"],
-                             "ISOLATED_TESTS_PASSED_NOT_INDEPENDENT_CI")
-            self.assertEqual(len(seen), 1)
+                             "ISOLATED_RED_GREEN_TESTS_PASSED_NOT_INDEPENDENT_CI")
+            self.assertEqual(len(seen), 2)
+            self.assertTrue(result["regression_red_verified"])
+            self.assertTrue(result["corrected_green_verified"])
             self.assertEqual(result["provider_writes"], 0)
 
     def test_failed_isolated_test_does_not_become_a_green_receipt(self):
@@ -219,7 +234,8 @@ class FactoryTests(unittest.TestCase):
             (path / "tests").mkdir()
             (path / "brain/demo.py").write_bytes(ORIGINAL)
             def runner(*args, **kwargs):
-                return types.SimpleNamespace(returncode=1, stdout="RED", stderr="")
+                return types.SimpleNamespace(returncode=1, stdout="",
+                    stderr="V10_TEST_COUNT=1\nRan 1 test in 0.01s\nFAILED (failures=1)\n")
             with self.assertRaisesRegex(f.FactoryError, "FACTORY_ISOLATED_TEST_FAILED"):
                 f.run_isolated_tests(path, candidate, runner=runner)
 
@@ -227,8 +243,7 @@ class FactoryTests(unittest.TestCase):
         api = FakeProvider()
         spec = manifest()
         candidate = f.prepare(spec, {"brain/demo.py": ORIGINAL})
-        tested = {"operation_id": candidate["operation_id"],
-                  "status": "ISOLATED_TESTS_PASSED_NOT_INDEPENDENT_CI"}
+        tested = trusted_synthetic_red_green(candidate["operation_id"])
         with tempfile.TemporaryDirectory() as tmp:
             intent = Path(tmp) / "intent.json"
             result = f.create_draft(api, spec, candidate, tested,
@@ -266,10 +281,9 @@ class FactoryTests(unittest.TestCase):
             self.assertFalse(intent.exists())
             api.main = "f" * 40
             with self.assertRaisesRegex(f.FactoryError, "FACTORY_MAIN_MOVED"):
-                f.create_draft(api, spec, candidate, {
-                    "operation_id": candidate["operation_id"],
-                    "status": "ISOLATED_TESTS_PASSED_NOT_INDEPENDENT_CI",
-                }, intent_path=intent)
+                f.create_draft(api, spec, candidate,
+                               trusted_synthetic_red_green(candidate["operation_id"]),
+                               intent_path=intent)
             self.assertFalse(intent.exists())
             self.assertFalse(any(method != "GET" for method,_,_ in api.calls))
 
@@ -278,8 +292,7 @@ class FactoryTests(unittest.TestCase):
         api.token_scope.append("P00NSMASHER/capturebrief")
         spec = manifest()
         candidate = f.prepare(spec, {"brain/demo.py": ORIGINAL})
-        tested = {"operation_id": candidate["operation_id"],
-                  "status": "ISOLATED_TESTS_PASSED_NOT_INDEPENDENT_CI"}
+        tested = trusted_synthetic_red_green(candidate["operation_id"])
         with tempfile.TemporaryDirectory() as tmp:
             intent = Path(tmp) / "intent.json"
             with self.assertRaisesRegex(f.FactoryError,
@@ -293,8 +306,7 @@ class FactoryTests(unittest.TestCase):
         spec = manifest()
         candidate = f.prepare(spec, {"brain/demo.py": ORIGINAL})
         candidate["changes"][0]["updated_bytes"] = b"tampered after testing"
-        tested = {"operation_id": candidate["operation_id"],
-                  "status": "ISOLATED_TESTS_PASSED_NOT_INDEPENDENT_CI"}
+        tested = trusted_synthetic_red_green(candidate["operation_id"])
         with tempfile.TemporaryDirectory() as tmp:
             intent = Path(tmp) / "intent.json"
             with self.assertRaisesRegex(f.FactoryError,
@@ -310,8 +322,7 @@ class FactoryTests(unittest.TestCase):
         candidate = f.prepare(spec, {"brain/demo.py": ORIGINAL})
         with tempfile.TemporaryDirectory() as tmp:
             intent = Path(tmp) / "intent.json"
-            tested = {"operation_id": candidate["operation_id"],
-                      "status": "ISOLATED_TESTS_PASSED_NOT_INDEPENDENT_CI"}
+            tested = trusted_synthetic_red_green(candidate["operation_id"])
             with self.assertRaisesRegex(f.FactoryError,
                                         "FACTORY_WRITE_UNCERTAIN_NEEDS_READBACK"):
                 f.create_draft(api, spec, candidate, tested, intent_path=intent)
