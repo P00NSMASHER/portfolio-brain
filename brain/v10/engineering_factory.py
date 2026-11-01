@@ -144,7 +144,7 @@ class GitHubTransport:
     def request(self, method, suffix, payload=None):
         require(method in ("GET", "POST", "PUT"), "FACTORY_METHOD_REFUSED")
         route = (
-            re.fullmatch(r"(branches/main|branches/auto-repair/v10-[0-9a-f]{16}|pulls/[1-9]\d*|actions/runs/[1-9]\d*|
+            re.fullmatch(r"(installation/repositories\?per_page=100|branches/main|branches/auto-repair/v10-[0-9a-f]{16}|pulls/[1-9]\d*|actions/runs/[1-9]\d*|
                          r"actions/runs/[1-9]\d*/jobs\?per_page=100|"
                          r"contents/(?:brain|tests|docs)/[a-zA-Z0-9_./-]+\."
                          r"(?:py|json|md)\?ref=[0-9a-f]{40})", suffix)
@@ -163,8 +163,11 @@ class GitHubTransport:
         body = None if payload is None else canonical(payload).encode()
         require(body is None or len(body) <= MAX_HTTP_BYTES,
                 "FACTORY_WRITE_TOO_LARGE")
+        url = ("https://api.github.com/" + suffix
+               if suffix.startswith("installation/")
+               else "https://api.github.com/repos/" + REPOSITORY + "/" + suffix)
         req = urllib.request.Request(
-            "https://api.github.com/repos/" + REPOSITORY + "/" + suffix,
+            url,
             method=method, data=body, headers={
                 "Authorization": "Bearer " + self._token,
                 "Accept": "application/vnd.github+json",
@@ -324,6 +327,14 @@ def create_draft(api, spec, candidate, tested, *, intent_path):
     require(candidate["operation_id"] == tested.get("operation_id")
             and tested.get("status") == "ISOLATED_TESTS_PASSED_NOT_INDEPENDENT_CI",
             "FACTORY_TEST_RECEIPT_MISMATCH")
+    installation = api.request(
+        "GET", "installation/repositories?per_page=100")
+    entries = installation.get("repositories")
+    require(type(entries) is list and type(installation.get("total_count")) is int
+            and installation["total_count"] == len(entries) == 1
+            and type(entries[0]) is dict
+            and entries[0].get("full_name") == REPOSITORY,
+            "FACTORY_TOKEN_SCOPE_NOT_SINGLE_REPOSITORY")
     evidence = verify_original_failed_core(api, spec)
     sources = verify_original_sources(api, spec)
     # A source transition during evidence collection must not cause an
@@ -331,7 +342,10 @@ def create_draft(api, spec, candidate, tested, *, intent_path):
     require(api.request("GET", "branches/main").get("commit", {}).get("sha")
             == spec["base_sha"], "FACTORY_MAIN_MOVED")
     reread = prepare(spec, {p: row["raw"] for p, row in sources.items()})
-    require(reread["operation_id"] == candidate["operation_id"],
+    require(reread["operation_id"] == candidate["operation_id"]
+            and len(reread["changes"]) == len(candidate["changes"])
+            and all(left == right for left,right in
+                    zip(reread["changes"], candidate["changes"])),
             "FACTORY_SOURCE_MOVED_BEFORE_WRITE")
     intent = dict(operation_id=candidate["operation_id"],
                   source_sha=spec["base_sha"], branch=candidate["branch"],
@@ -370,6 +384,8 @@ def create_draft(api, spec, candidate, tested, *, intent_path):
             raw = base64.b64decode(read["content"].replace("\n", ""), validate=True)
             require(raw == patch["updated_bytes"],
                     "FACTORY_DRAFT_SOURCE_READBACK_MISMATCH")
+        require(api.request("GET", "branches/main").get("commit", {}).get("sha")
+                == spec["base_sha"], "FACTORY_MAIN_MOVED_DURING_WRITE")
         marker = "BRAIN_V10_OPERATION_ID: " + candidate["operation_id"]
         response = api.request("POST", "pulls", {
             "title": "fix(v10): verified original core " +
@@ -391,7 +407,10 @@ def create_draft(api, spec, candidate, tested, *, intent_path):
         pr = api.request("GET", "pulls/" + str(response["number"]))
     except (FactoryError, ValueError, OSError) as exc:
         raise FactoryError("FACTORY_WRITE_UNCERTAIN_NEEDS_READBACK") from exc
-    require(pr.get("number") == response["number"]
+    require(type(pr.get("head")) is dict and type(pr.get("base")) is dict
+            and type(pr["head"].get("repo")) is dict
+            and type(pr["base"].get("repo")) is dict
+            and pr.get("number") == response["number"]
             and pr.get("state") == "open" and pr.get("draft") is True
             and pr.get("merged") is False
             and pr.get("head", {}).get("ref") == candidate["branch"]
