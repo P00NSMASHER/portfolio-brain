@@ -30,12 +30,15 @@ def load_intent(path):
                     "FACTORY_INTENT_FIELDS")
     return intent
 
-def _require_exact_pr(row, *, number, source, branch, head, marker):
+def _require_exact_pr(row, *, number, source, branch, head, marker,
+                      list_entry=False):
     factory.require(
         type(row) is dict and type(row.get("number")) is int
         and row["number"] == number
         and row.get("state") == "open"
-        and row.get("merged") is False
+        and row.get("merged_at") is None
+        and (row.get("merged") is False or
+             (list_entry and "merged" not in row))
         and row.get("draft") is True
         and type(row.get("head")) is dict
         and type(row.get("base")) is dict
@@ -118,7 +121,8 @@ def reconcile_draft(api, spec, candidate, intent):
                     "FACTORY_DRAFT_PR_NUMBER_INVALID")
     marker = "BRAIN_V10_OPERATION_ID: " + candidate["operation_id"]
     _require_exact_pr(pr, number=number, source=spec["base_sha"],
-                      branch=candidate["branch"], head=head, marker=marker)
+                      branch=candidate["branch"], head=head, marker=marker,
+                      list_entry=True)
     reread = api.request("GET", "pulls/" + str(number))
     _require_exact_pr(reread, number=number, source=spec["base_sha"],
                       branch=candidate["branch"], head=head, marker=marker)

@@ -22,6 +22,8 @@ class ReadbackProvider(FakeProvider):
         self.pr_head_sha = self.final_sha
         self.pr_base_sha = manifest()["base_sha"]
         self.matches = 1
+        self.list_omits_merged = False
+        self.detail_omits_merged = False
         self.mutate_after_initial = False
         self.main_requests = 0
 
@@ -40,9 +42,17 @@ class ReadbackProvider(FakeProvider):
         if method == "GET":
             self.calls.append((method,route,payload))
             if route.startswith("pulls?head="):
-                return [self._pr() for _ in range(self.matches)]
+                rows = [self._pr() for _ in range(self.matches)]
+                if self.list_omits_merged:
+                    for row in rows:
+                        row.pop("merged")
+                        row["merged_at"] = None
+                return rows
             if route == "pulls/" + str(self.pr_number):
-                return self._pr()
+                row = self._pr()
+                if self.detail_omits_merged:
+                    row.pop("merged")
+                return row
             if route == "branches/main":
                 self.main_requests += 1
                 return {"commit": {"sha":
@@ -81,6 +91,27 @@ class UncertainDraftReadbackTests(unittest.TestCase):
         self.assertTrue(any(q.startswith("pulls?head=") for m,q in calls))
         self.assertIn(("GET","pulls/"+str(self.api.pr_number)),calls)
         self.assertFalse(any(method!="GET" for method,_,_ in self.api.calls))
+
+    def test_native_github_pr_list_omits_merged_but_detail_is_verified(self):
+        # GitHub's actual GET /pulls list omits 'merged'; GET /pulls/N
+        # supplies merged=False. Both raw provider shapes must be honored.
+        self.api.list_omits_merged = True
+        observed = rec.reconcile_draft(self.api, self.spec,
+                                       self.candidate, intent(self.candidate))
+        self.assertEqual(observed["status"],
+                         "ORIGINAL_GITHUB_DRAFT_RECONCILED_NOT_RELEASED")
+        self.assertEqual(observed["provider_writes"], 0)
+
+        # A detail endpoint lacking the required explicit merged=False must
+        # still fail closed instead of accepting an ambiguous PR identity.
+        self.api = ReadbackProvider(self.candidate)
+        self.api.list_omits_merged = True
+        self.api.detail_omits_merged = True
+        with self.assertRaisesRegex(
+                f.FactoryError, "FACTORY_RECONCILED_DRAFT_IDENTITY_INVALID"):
+            rec.reconcile_draft(self.api, self.spec, self.candidate,
+                                intent(self.candidate))
+        self.assertFalse(any(method != "GET" for method, _, _ in self.api.calls))
 
     def test_missing_or_multiple_open_drafts_never_trigger_retry(self):
         for count in (0,2):
