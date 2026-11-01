@@ -177,6 +177,24 @@ class BatchQueue:
         return (row["stage"]=="OBSERVED" and row["claim"] is None
                 and row["pending"] is None and not row["effects"] and not row["evidence"])
 
+    @staticmethod
+    def _superseded_unclaimed(old, new):
+        """Archive only genuinely superseded, evidence-free observations.
+
+        Old source observations remain in the tamper-evident compressed journal.
+        Never retire claimed, diagnosed, patched, tested, pending or proof-bearing
+        work. A clean, never-claimed source-level observation is re-observed
+        from the new head; it is not an independently reproduced defect.
+        """
+        if not BatchQueue._retirable(old) or old["source_sha"]==new["source_sha"]:
+            return False
+        if any(old[key]!=new[key] for key in (
+                "project_id","repository","owner","path")):
+            return False
+        return (old["fingerprint"]==new["fingerprint"] or
+                (old["priority"]==3 and old["path"]=="repository-observation"))
+
+
     def _rotate(self,retired=()):
         # Called only in the same IMMEDIATE transaction as the new append.
         # Preserve the full event chain in compressed segments in this SAME
@@ -235,14 +253,18 @@ class BatchQueue:
             if old:
                 must(all(old[k]==row[k] for k in IMMUTABLE if k!="created_at"),"OBSERVATION_CONFLICT")
                 return wid
-            if len(state)>=MAX_WORK:
-                retired=[ident for ident,prior in state.items() if self._retirable(prior)
-                         and all(prior[k]==row[k] for k in ("project_id","repository","path","fingerprint"))
-                         and prior["source_sha"]!=row["source_sha"]]
-                must(bool(retired),"WORK_CAPACITY_RECONCILIATION_REQUIRED")
-                self._rotate(retired)
-                state,_,_=self.scan()
-            must(len(state)<MAX_WORK,"WORK_BOUND")
+            # Leave a bounded reserve before the 256-slot queue fills.
+            # An old clean head with no lease/evidence is a stale observation,
+            # not a diagnosed fix. Keep its COMPLETE event history in the
+            # immutable, hash-linked archive rather than silently dropping it.
+            reserve=min(8,max(1,MAX_WORK//16))
+            if len(state)>=MAX_WORK-reserve:
+                retired=[ident for ident,prior in state.items()
+                         if self._superseded_unclaimed(prior,row)]
+                if retired:
+                    self._rotate(retired)
+                    state,_,_=self.scan()
+            must(len(state)<MAX_WORK,"WORK_CAPACITY_RECONCILIATION_REQUIRED")
             self._append(row,now)
         return wid
     def claim(self,wid,owner,*,now,ttl_seconds=3600):
