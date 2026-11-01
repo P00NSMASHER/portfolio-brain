@@ -151,6 +151,7 @@ def validate_policy():
             and old_manual_flag not in observation
             and old_manual_flag not in receipt
             and "github.event.workflow_run.head_branch == 'main'" in observation
+            and "github.event.workflow_run.conclusion == 'success'" in observation
             and "github.event.workflow_run.head_branch == 'main'" in receipt
             and "false &&" not in observation
             and "false &&" not in receipt
