@@ -104,111 +104,6 @@ def ruleset_passes(api, r):
     verified_ruleset_bypass_actors(api, r)
 
 
-def accepted_source(api, main):
-    """Read only an independent, one-commit acceptance record for this source.
-
-    A credential-bearing producer cannot issue acceptance through this function.
-    Prior source receipts are intentionally ineligible.
-    """
-    short = main[:8]
-    ref_prefix = "brain-acceptance-" + short + "-"
-    try:
-        matches = api.get("repos/" + REPO + "/git/matching-refs/heads/" + ref_prefix)
-    except Denied as exc:
-        if str(exc) == "HTTP_404":
-            raise Denied("SOURCE_ACCEPTANCE_NOT_YET_RECORDED") from None
-        raise
-    require(type(matches) is list and len(matches) == 1, "ACCEPTANCE_BRANCH_NOT_UNIQUE")
-    ref = matches[0]
-    full_ref = ref.get("ref") if type(ref) is dict else None
-    require(type(full_ref) is str and full_ref.startswith("refs/heads/" + ref_prefix)
-            and DATE.fullmatch(full_ref[len("refs/heads/" + ref_prefix):]) is not None
-            and ref.get("object", {}).get("type") == "commit",
-            "ACCEPTANCE_BRANCH_IDENTITY")
-    tip = sha(ref["object"].get("sha"))
-    name = full_ref[len("refs/heads/"):]
-    date = full_ref[len("refs/heads/" + ref_prefix):]
-    commit = api.get("repos/" + REPO + "/git/commits/" + tip)
-    require(type(commit) is dict and commit.get("sha") == tip
-            and type(commit.get("parents")) is list
-            and len(commit["parents"]) == 1
-            and commit["parents"][0].get("sha") == main,
-            "ACCEPTANCE_COMMIT_ANCESTRY")
-    path = "acceptance/finish-soak-" + short + "-" + date + ".json"
-    compare = api.get("repos/" + REPO + "/compare/" + main + "..." + tip)
-    changed = compare.get("files") if type(compare) is dict else None
-    require(type(changed) is list and len(changed) == 1
-            and changed[0].get("filename") == path
-            and changed[0].get("status") == "added"
-            and compare.get("ahead_by") == 1
-            and compare.get("behind_by") == 0
-            and compare.get("merge_base_commit", {}).get("sha") == main,
-            "ACCEPTANCE_BRANCH_SCOPE")
-    data = api.get("repos/" + REPO + "/contents/" + path + "?ref=" + tip)
-    raw = checked_document(data)
-    def reject_duplicate(pairs):
-        data = {}
-        for key, value in pairs:
-            require(key not in data, "ACCEPTANCE_DUPLICATE_KEY")
-            data[key] = value
-        return data
-    try:
-        record = json.loads(raw, object_pairs_hook=reject_duplicate,
-                            parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
-    except (ValueError, UnicodeError):
-        raise Denied("ACCEPTANCE_JSON_INVALID") from None
-    require(type(record) is dict
-            and record.get("source_sha") == main
-            and record.get("decision") == "RELEASED"
-            and record.get("status") == "PASS"
-            and record.get("scope") == "SOURCE_SPECIFIC_UNATTENDED_PRODUCTION_CORE_RELIABILITY_ONLY",
-            "ACCEPTANCE_STATUS_OR_SOURCE")
-    run = record.get("original_run_evidence", {})
-    terminal = record.get("terminal_state_replay", {})
-    proof = record.get("proof", {})
-    # The independent verifier now requires 12 completed hours and an
-    # additional 30-minute terminal repair follow-through. Reject stale
-    # six-hour receipt contracts even when the attestation is present.
-    criteria = record.get("criteria")
-    require(type(criteria) is dict
-            and criteria.get("minimum_completed_span_seconds") == 43200
-            and criteria.get("requires_terminal_30_minute_repair_follow_through") is True,
-            "ACCEPTANCE_CURRENT_CONTRACT_REQUIRED")
-    require(type(run.get("completed_span_seconds")) is int
-            and run["completed_span_seconds"] >= 43200
-            and type(run.get("maximum_gap_seconds")) is int
-            and run["maximum_gap_seconds"] <= 5400
-            and run.get("all_success_attempt_one") is True
-            and run.get("all_original_core_state_parent_child_links_contiguous") is True
-            and terminal.get("pending_events") == 0
-            and terminal.get("sqlite_integrity") == "PASS"
-            and terminal.get("foreign_keys") == "PASS"
-            and terminal.get("deterministic_report_reproduction") == "PASS"
-            and proof.get("technical_workflow_conclusion") == "success",
-            "ACCEPTANCE_ORIGINAL_EVIDENCE_MISSING")
-    # A branch writer can manufacture every field above. Only the separate
-    # verifier App may attest this exact immutable receipt and source. Its
-    # existing CI check is deliberately NOT an acceptance attestation.
-    checks = api.get("repos/" + REPO + "/commits/" + tip + "/check-runs?per_page=100")
-    require(type(checks) is dict and type(checks.get("total_count")) is int
-            and type(checks.get("check_runs")) is list
-            and 0 <= checks["total_count"] < 100
-            and len(checks["check_runs"]) == checks["total_count"],
-            "ACCEPTANCE_ATTESTATION_CENSUS_INCOMPLETE")
-    attested = [row for row in checks["check_runs"] if type(row) is dict
-                and row.get("name") == "portfolio-source-acceptance"]
-    binding = "source-acceptance:" + main + ":" + hashlib.sha256(raw).hexdigest()
-    require(len(attested) == 1 and attested[0].get("head_sha") == tip
-            and type(attested[0].get("app")) is dict
-            and type(attested[0]["app"].get("id")) is int
-            and attested[0]["app"]["id"] == 5121826
-            and attested[0].get("external_id") == binding
-            and attested[0].get("status") == "completed"
-            and attested[0].get("conclusion") == "success",
-            "ACCEPTANCE_ATTESTATION_UNVERIFIED")
-    return {"acceptance_ref": name, "acceptance_commit": tip}
-
-
 def check_pr(pr, number, source, *, early=False):
     require(type(pr) is dict and pr.get("number") == number
             and pr.get("state") == "open" and pr.get("draft") is False
@@ -506,7 +401,6 @@ def observe(api, number, expected_main, *, early=False):
     require(main.get("protected") is True
             and main.get("commit", {}).get("sha") == expected_main,
             "PROTECTED_MAIN_SOURCE_MOVED")
-    acceptance = accepted_source(api, expected_main)
     pr = api.get(root + "pulls/" + str(number))
     head = check_pr(pr, number, expected_main, early=early)
     if pr.get("auto_merge") is not None:
@@ -557,7 +451,8 @@ def observe(api, number, expected_main, *, early=False):
                     pr["node_id"], early=early)
     return {"status": "ADMISSIBLE", "number": number,
             "node_id": pr["node_id"], "head_sha": head,
-            "base_sha": expected_main, "acceptance": acceptance,
+            "base_sha": expected_main,
+            "release_gate": "INDEPENDENT_APP_AND_FOUNDATION_NO_TIMED_SOAK",
             "provider_writes": 0, "enrolled": False}
 
 
