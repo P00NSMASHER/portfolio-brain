@@ -147,7 +147,9 @@ class GitHubTransport:
             re.fullmatch(
                          r"(installation/repositories\?per_page=100|branches/main|"
                          r"branches/auto-repair/v10-[0-9a-f]{16}|"
-                         r"pulls/[1-9]\d*|actions/runs/[1-9]\d*|"
+                         r"pulls/[1-9]\d*|"
+                         r"pulls\?head=P00NSMASHER%3Aauto-repair%2Fv10-[0-9a-f]{16}&state=open&per_page=100|"
+                         r"actions/runs/[1-9]\d*|"
                          r"actions/runs/[1-9]\d*/jobs\?per_page=100|"
                          r"contents/(?:brain|tests|docs)/[a-zA-Z0-9_./-]+\."
                          r"(?:py|json|md)\?ref=[0-9a-f]{40})", suffix)
@@ -188,7 +190,12 @@ class GitHubTransport:
             raise FactoryError("FACTORY_PROVIDER_UNCERTAIN_RECONCILE") from exc
         require(len(raw) <= MAX_HTTP_BYTES, "FACTORY_PROVIDER_RESPONSE_BOUND")
         result = _strict_json(raw)
-        require(type(result) is dict, "FACTORY_PROVIDER_INVALID_OBJECT")
+        if method == "GET" and suffix.startswith("pulls?head="):
+            require(type(result) is list and len(result) < 100
+                    and all(type(row) is dict for row in result),
+                    "FACTORY_PR_LIST_TRUNCATED_OR_INVALID")
+        else:
+            require(type(result) is dict, "FACTORY_PROVIDER_INVALID_OBJECT")
         return result
 
 def verify_original_failed_core(api, spec):
