@@ -41,7 +41,8 @@ def read_blob(api, path, sha):
 
 
 def verify_reviewed_patch(api, *, main_sha, head_sha, run_id,
-                          operation_id, changed_paths, failed_families):
+                          operation_id, reviewed_regression_sha256,
+                          changed_paths, failed_families):
     """Read-only proof that every changed byte is exactly a reviewed recipe."""
     require(type(main_sha) is str and gm.SHA.fullmatch(main_sha) is not None
             and type(head_sha) is str and gm.SHA.fullmatch(head_sha) is not None
@@ -50,6 +51,9 @@ def verify_reviewed_patch(api, *, main_sha, head_sha, run_id,
             and type(operation_id) is str
             and factory.VALID_HASH.fullmatch(operation_id) is not None,
             "OPERATION_ID_INVALID")
+    require(type(reviewed_regression_sha256) is str
+            and factory.VALID_HASH.fullmatch(reviewed_regression_sha256)
+            is not None, "REVIEWED_REGRESSION_DIGEST_INVALID")
     require(type(changed_paths) is list
             and 1 <= len(changed_paths) <= MAX_CANDIDATE_FILES
             and changed_paths == sorted(set(changed_paths))
@@ -74,6 +78,8 @@ def verify_reviewed_patch(api, *, main_sha, head_sha, run_id,
                 if row["stage_family"] in failed_families]
     require(len(matching) == 1, "RECIPE_MISSING_OR_AMBIGUOUS")
     row, spec = matching[0]
+    require(row["regression"]["sha256"] == reviewed_regression_sha256,
+            "REVIEWED_REGRESSION_NOT_SOURCE_BOUND")
     expected_paths = sorted(change["path"] for change in spec["changes"])
     require(expected_paths == changed_paths,
             "UNREVIEWED_OR_MISSING_CHANGED_FILES")
@@ -101,5 +107,6 @@ def verify_reviewed_patch(api, *, main_sha, head_sha, run_id,
             "operation_id": operation_id,
             "reviewed_changed_paths": expected_paths,
             "exact_reviewed_patch_verified": True,
+            "reviewed_regression_sha256": reviewed_regression_sha256,
             "red_green_artifact_independently_verified": False,
             "provider_writes": 0}
