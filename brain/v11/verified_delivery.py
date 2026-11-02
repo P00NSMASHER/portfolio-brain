@@ -21,6 +21,7 @@ ROOT = "repos/" + REPO + "/"
 BRANCH = re.compile(r"auto-repair/v10-[0-9a-f]{16}\Z")
 OPERATION = re.compile(r"BRAIN_V10_OPERATION_ID: ([0-9a-f]{64})\Z")
 RECEIPT = re.compile(r"V10_RED_GREEN_RECEIPT_SHA256: ([0-9a-f]{64})\Z")
+REGRESSION = re.compile(r"V10_REVIEWED_REGRESSION_SHA256: ([0-9a-f]{64})\Z")
 ORIGINAL = re.compile(r"Original run: ([1-9][0-9]{0,11})\Z")
 # The dedicated runtime App is an origin boundary, not a nickname for every
 # GitHub Actions job with broad repository tokens.
@@ -54,7 +55,8 @@ def _markers(body):
         matches = [m.group(1) for line in lines if (m := pattern.fullmatch(line))]
         need(len(matches) == 1, "V11_MISSING_OR_DUPLICATE_PROOF")
         return matches[0]
-    return unique(OPERATION), unique(RECEIPT), int(unique(ORIGINAL))
+    return (unique(OPERATION), unique(RECEIPT),
+            int(unique(ORIGINAL)), unique(REGRESSION))
 
 
 def _original_failed_run(api, run_id, main):
@@ -211,7 +213,7 @@ def evaluate(api, *, main_sha, event_head):
          and type(pr.get("node_id")) is str
          and 10 < len(pr["node_id"]) < 200,
          "V11_PR_SOURCE_UNAUTHORIZED")
-    operation, receipt, run_id = _markers(pr.get("body"))
+    operation, receipt, run_id, regression_sha = _markers(pr.get("body"))
     need(pr["head"]["ref"] == "auto-repair/v10-" + operation[:16]
          and len(receipt) == 64, "V11_FACTORY_PROVENANCE_MISMATCH")
     failed_families = _original_failed_run(api, run_id, main_sha)
@@ -220,6 +222,7 @@ def evaluate(api, *, main_sha, event_head):
         reviewed = reviewed_patch.verify_reviewed_patch(
             api, main_sha=main_sha, head_sha=event_head,
             run_id=run_id, operation_id=operation,
+            reviewed_regression_sha256=regression_sha,
             changed_paths=paths, failed_families=failed_families)
     except (reviewed_patch.ReviewDenied, factory.FactoryError, gm.Denied):
         # Only a provider source match to an already reviewed recipe may
@@ -246,6 +249,7 @@ def evaluate(api, *, main_sha, event_head):
         "paths": paths, "original_failure_run_id": run_id,
         "reviewed_recipe_id": reviewed["recipe_id"],
         "exact_reviewed_patch_verified": True,
+        "reviewed_regression_sha256": regression_sha,
         "red_green_artifact_independently_verified": False,
         "independent_merge_gate": "GITHUB_REQUIRED_APP_5121826",
         "writes": 0,
