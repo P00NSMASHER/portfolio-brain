@@ -262,7 +262,7 @@ def enroll(api, plan, *, runner=subprocess.run):
 def main():
     # Called from trusted main only after the real Foundation event.
     source = os.environ.get("GITHUB_SHA", "")
-    head = os.environ.get("FOUNDATION_HEAD_SHA", "")
+    head = os.environ.get("V11_EVENT_HEAD", "")
     try:
         client = gm.GitHub(os.environ.get("GH_TOKEN", ""))
         decision = evaluate(client, main_sha=source, event_head=head)
