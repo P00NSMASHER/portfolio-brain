@@ -249,6 +249,17 @@ jobs:
               "execution_boundary": "READ_ONLY_PUBLIC_METADATA", "soak_completed": False
           }, indent=2) + "\n")
           PY
+      - name: Capture original GitHub repair outcomes and open-issue backlog
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/brain
+          python -m brain.v11.results_dashboard \
+            --expected-main "$BRAIN_SOURCE_SHA" \
+            --json /tmp/brain/v11-results.json \
+            --html /tmp/brain/v11-results.html
       - name: Preserve verifiable execution evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
