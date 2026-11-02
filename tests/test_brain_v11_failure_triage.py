@@ -124,6 +124,45 @@ class OriginalFailureIntakeTests(unittest.TestCase):
         with self.assertRaisesRegex(factory.FactoryError, "PROTECTED_MAIN_MOVED"):
             self.review()
 
+
+    def test_original_source_workflow_steps_are_all_explicitly_classified(self):
+        # The actual protected core is the source of truth, not hand-typed
+        # hypothetical stages. Unknown provider steps still fail closed.
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github" / "workflows" / "brain-cycle.yml")
+        names = [line.strip()[len("- name: "):].strip('"\'')
+                 for line in workflow.read_text(encoding="utf-8").splitlines()
+                 if line.strip().startswith("- name: ")]
+        self.assertGreaterEqual(len(names), 20)
+        self.assertEqual(sorted(set(names) - set(triage.STEP_FAMILIES)), [])
+
+    def test_real_source_state_and_queue_failures_have_distinct_safe_labels(self):
+        expected = {
+            "Restore dedicated durable state branch": "STATE_RESTORATION",
+            "Validate restoration and capture publication parent": "STATE_RESTORATION",
+            "Build read-only all-project improvement queue": "PROJECT_REPORT",
+            "Build bounded v8 engineering owner handoffs": "ENGINEERING_HANDOFF",
+            "Propose a measured protected knowledge upgrade when eligible":
+                "KNOWLEDGE_UPGRADE",
+            "Bound working state to independently verified production capacity":
+                "STATE_CAPACITY",
+            "Verify and pack durable state into bounded Git blobs": "STATE_ARCHIVE",
+        }
+        for name, family in expected.items():
+            with self.subTest(original_workflow_step=name):
+                self.api = OriginalGitHub()
+                self.api.original_steps = [
+                    copy.deepcopy(GOOD_ORIGIN),
+                    {"name": name, "status": "completed",
+                     "conclusion": "failure"},
+                ]
+                receipt = self.review()
+                self.assertEqual(receipt["failed_stage_families"], [family])
+                self.assertFalse(receipt["stage_is_root_cause"])
+                self.assertFalse(receipt["candidate_patch_prepared"])
+                self.assertFalse(receipt["production_accepted"])
+                self.assertEqual(receipt["provider_writes"], 0)
+
     def test_provider_step_names_never_enter_sanitized_receipt(self):
         self.api.original_steps = [
             copy.deepcopy(GOOD_ORIGIN),
