@@ -20,7 +20,7 @@ class Fake:
         self.main = BASE
         self.check_app = 15368
         self.core_outcome = "failure"
-        self.file_path = "brain/v11/example.py"
+        self.file_path = "brain/changes.py"
         self.thread_resolved = True
         self.bypass = []
         self.prs = True
@@ -178,6 +178,37 @@ class DeliveryTests(unittest.TestCase):
         self.api.main = "f" * 40
         with self.assertRaisesRegex(d.DeliveryDenied, "MAIN_DRIFT"):
             self.eligible()
+
+
+    def test_github_actions_bot_cannot_impersonate_dedicated_repair_app(self):
+        self.api.pr["user"]["login"] = "github-actions[bot]"
+        with self.assertRaisesRegex(d.DeliveryDenied, "UNAUTHORIZED"):
+            self.eligible()
+
+    def test_bot_cannot_modify_verifier_tests_or_control_plane(self):
+        protected = (
+            "brain/v11/verified_delivery.py",
+            "brain/v10/engineering_factory.py",
+            "brain/v9/batch_queue.py",
+            "brain/v8/authority.py",
+            "brain/validate.py",
+            "brain/core.py",
+            "tests/test_brain_v11_delivery.py",
+        )
+        for path in protected:
+            with self.subTest(path=path):
+                self.api = Fake()
+                self.api.file_path = path
+                with self.assertRaisesRegex(
+                        d.DeliveryDenied,
+                        "CONTROL_PLANE_REPAIR_REVIEW_REQUIRED|TEST_OR_UNREVIEWED"):
+                    self.eligible()
+        self.checked.assert_not_called()
+
+    def test_known_low_risk_functional_repair_remains_eligible(self):
+        self.api.file_path = "brain/changes.py"
+        plan = self.eligible()
+        self.assertEqual(plan["paths"], ["brain/changes.py"])
 
     def test_no_graphql_mutation_until_read_checks_pass(self):
         with patch.object(d, "_gh", side_effect=AssertionError("write")):

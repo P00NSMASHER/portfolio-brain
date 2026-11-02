@@ -21,7 +21,19 @@ BRANCH = re.compile(r"auto-repair/v10-[0-9a-f]{16}\Z")
 OPERATION = re.compile(r"BRAIN_V10_OPERATION_ID: ([0-9a-f]{64})\Z")
 RECEIPT = re.compile(r"V10_RED_GREEN_RECEIPT_SHA256: ([0-9a-f]{64})\Z")
 ORIGINAL = re.compile(r"Original run: ([1-9][0-9]{0,11})\Z")
-TRUSTED_BOTS = frozenset({"portfolio-brain-v8-runtime[bot]", "github-actions[bot]"})
+# The dedicated runtime App is an origin boundary, not a nickname for every
+# GitHub Actions job with broad repository tokens.
+TRUSTED_BOTS = frozenset({"portfolio-brain-v8-runtime[bot]"})
+# Only explicitly reviewed functional source files may enter bot-native
+# auto-merge. Test changes, scheduler/authority, privileged runtime and
+# versioned governance modules require an ordinary independently reviewed PR.
+LOW_RISK_BRAIN_FILES = frozenset({
+    "brain/changes.py", "brain/experiments.py", "brain/fair_ci_rotation.py",
+    "brain/intelligence.py", "brain/mission.py", "brain/operational_outcomes.py",
+    "brain/pr_intelligence.py", "brain/project_evidence.py", "brain/projects.py",
+    "brain/render.py", "brain/transfer.py", "brain/upgrades.py",
+    "brain/value_actions.py",
+})
 MAX_FILES = 4
 
 
@@ -85,9 +97,18 @@ def _verify_files(api, number, head, expected):
              and type(row.get("sha")) is str
              and factory.VALID_SHA.fullmatch(row["sha"]) is not None,
              "V11_REPAIR_FILE_UNSAFE")
-        paths.append(row["filename"])
+        path = row["filename"]
+        # A forged bot provenance marker must never upgrade a source patch
+        # to authority over verifier, repair policies, test suite, or runtime.
+        if path.startswith("brain/"):
+            need(path in LOW_RISK_BRAIN_FILES and row["status"] == "modified",
+                 "V11_CONTROL_PLANE_REPAIR_REVIEW_REQUIRED")
+        else:
+            need(path.startswith("docs/") and row["status"] == "modified",
+                 "V11_TEST_OR_UNREVIEWED_FILE_MUTATION_FORBIDDEN")
+        paths.append(path)
     need(len(paths) == len(set(paths))
-         and any(p.startswith("brain/") and p.endswith(".py") for p in paths),
+         and any(p in LOW_RISK_BRAIN_FILES for p in paths),
          "V11_REPAIR_SCOPE_UNVERIFIED")
     # Git-tree proof rejects symlinks, submodules and nonregular tracked files.
     gm.checked_git_tree_files(api, head, files)
