@@ -107,7 +107,7 @@ def validate_registry(registry, *, source_sha, run_id):
     ids = set()
     for row in registry["recipes"]:
         factory.require(type(row) is dict and
-                        set(row) == {"id", "stage_family", "changes"}
+                        set(row) == {"id", "stage_family", "changes", "regression"}
                         and type(row["id"]) is str
                         and RECIPE_NAME.fullmatch(row["id"]) is not None
                         and row["id"] not in ids
@@ -115,6 +115,7 @@ def validate_registry(registry, *, source_sha, run_id):
                         and row["stage_family"] in ALLOWED_STAGES,
                         "RECIPE_ENTRY_INVALID")
         ids.add(row["id"])
+        factory.validate_reviewed_regression(row["regression"])
         changes = row["changes"]
         spec = {
             "schema_version": 1, "repository": REPO,
@@ -162,6 +163,8 @@ def choose(root, receipt, registry):
         "source_sha": main_sha,
         "source_run_id": receipt["source_run_id"],
         "operation_id": candidate["operation_id"],
+        "reviewed_regression_sha256": row["regression"]["sha256"],
+        "reviewed_regression_path": row["regression"]["path"],
         "red_green_tested": False, "independent_check_passed": False,
         "draft_pr_created": False, "merged": False,
         "provider_writes": 0,
@@ -187,12 +190,18 @@ def main(argv=None):
     parser.add_argument("--workspace", required=True)
     parser.add_argument("--spec", required=True)
     parser.add_argument("--decision", required=True)
+    parser.add_argument("--reviewed-test", required=True)
     args = parser.parse_args(argv)
     try:
         receipt = _strict_doc(args.receipt, max_size=MAX_RECEIPT_BYTES)
         registry = _strict_doc(args.registry, max_size=MAX_MANIFEST_BYTES)
         decision, spec = choose(args.workspace, receipt, registry)
         if spec is not None:
+            selected = [row for row in registry["recipes"]
+                        if row["id"] == decision["recipe_id"]]
+            factory.require(len(selected) == 1,
+                            "RECIPE_REVIEWED_TEST_UNVERIFIED")
+            _write_once(args.reviewed_test, selected[0]["regression"])
             _write_once(args.spec, spec)
         _write_once(args.decision, decision)
         print(json.dumps({"status": decision["status"],
