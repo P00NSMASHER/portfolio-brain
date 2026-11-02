@@ -10,6 +10,20 @@ from brain.v10 import engineering_factory as factory
 from brain.v11 import approved_recipe_runner as recipes
 
 SOURCE = b"def compute():\n    return 1\n"
+REGRESSION_SOURCE = (
+    "import unittest\n"
+    "from brain.changes import compute\n"
+    "\n"
+    "class ReviewedComputeRegression(unittest.TestCase):\n"
+    "    def test_compute_is_corrected(self):\n"
+    "        self.assertEqual(compute(), 2)\n"
+)
+REGRESSION = {
+    "path": "tests/test_v11_reviewed_compute.py",
+    "source": REGRESSION_SOURCE,
+    "sha256": factory.sha256(REGRESSION_SOURCE.encode("utf-8")),
+}
+
 
 
 class ApprovedRecipeTests(unittest.TestCase):
@@ -50,6 +64,7 @@ class ApprovedRecipeTests(unittest.TestCase):
             "recipes": [{
                 "id": "bounded-safe-preflight-recipe",
                 "stage_family": "PREFLIGHT",
+                "regression": REGRESSION,
                 "changes": [{
                     "path": "brain/changes.py",
                     "expected_sha256": factory.sha256(SOURCE),
@@ -73,6 +88,8 @@ class ApprovedRecipeTests(unittest.TestCase):
         self.assertFalse(result["draft_pr_created"])
         self.assertFalse(result["merged"])
         self.assertEqual(result["provider_writes"], 0)
+        self.assertEqual(result["reviewed_regression_sha256"], REGRESSION["sha256"])
+        self.assertEqual(result["reviewed_regression_path"], REGRESSION["path"])
 
     def test_empty_registry_creates_no_spec_or_fake_fix(self):
         empty = {**self.registry, "recipes": []}
@@ -127,6 +144,26 @@ class ApprovedRecipeTests(unittest.TestCase):
         with self.assertRaisesRegex(factory.FactoryError, "WORKSPACE_DIRTY"):
             recipes.choose(self.root, self.receipt, self.registry)
 
+
+    def test_missing_changed_or_forged_reviewed_regression_cannot_select(self):
+        for variant in ("missing", "changed_content", "changed_digest",
+                        "path_traversal", "existing_trusted_test"):
+            with self.subTest(variant=variant):
+                bad = deepcopy(self.registry)
+                item = bad["recipes"][0]
+                if variant == "missing":
+                    del item["regression"]
+                elif variant == "changed_content":
+                    item["regression"]["source"] += "\n# uncontrolled edit\n"
+                elif variant == "changed_digest":
+                    item["regression"]["sha256"] = "f" * 64
+                elif variant == "path_traversal":
+                    item["regression"]["path"] = "../../tests/test_forged.py"
+                else:
+                    item["regression"]["path"] = "tests/test_brain_v11_delivery.py"
+                with self.assertRaises(factory.FactoryError):
+                    recipes.choose(self.root, self.receipt, bad)
+
     def test_document_outputs_exclusive_and_no_git_writes(self):
         with tempfile.TemporaryDirectory(prefix="v11-recipe-receipts-") as outside:
             destination = Path(outside)
@@ -136,14 +173,19 @@ class ApprovedRecipeTests(unittest.TestCase):
             receipt_path.write_text(json.dumps(self.receipt))
             spec_path = destination / "spec.json"
             decision_path = destination / "decision.json"
+            reviewed_test_path = destination / "reviewed-test.json"
             args = ["--receipt", str(receipt_path), "--registry", str(registry_path),
                     "--workspace", str(self.root), "--spec", str(spec_path),
-                    "--decision", str(decision_path)]
+                    "--decision", str(decision_path),
+                    "--reviewed-test", str(reviewed_test_path)]
             self.assertEqual(recipes.main(args), 0)
             self.assertTrue(spec_path.exists())
             self.assertTrue(decision_path.exists())
+            self.assertTrue(reviewed_test_path.exists())
+            self.assertEqual(json.loads(reviewed_test_path.read_text()), REGRESSION)
             self.assertEqual(spec_path.stat().st_mode & 0o077, 0)
             self.assertEqual(decision_path.stat().st_mode & 0o077, 0)
+            self.assertEqual(reviewed_test_path.stat().st_mode & 0o077, 0)
             self.assertEqual(recipes.main(args), 2)  # no clobber or retry
 
 
