@@ -1,6 +1,6 @@
 """Read-only durable-state snapshot race must retry exact Git objects, not fake success."""
 import unittest
-from tests.test_v5_deployed_state_compatibility import read_consistent_state_revision
+from test_v5_deployed_state_compatibility import read_consistent_state_revision
 
 A = "a"*40
 B = "b"*40
