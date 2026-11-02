@@ -14,11 +14,17 @@ from pathlib import Path
 import re
 import urllib.request
 
+from brain.v10.engineering_factory import verified_automatic_origin
+
 REPO = "P00NSMASHER/portfolio-brain"
 ROOT = "https://api.github.com/repos/" + REPO + "/"
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 MAX_RESPONSE = 1_800_000
 MAX_READS = 20
+# Bounded original provider job readbacks. This is a recent sample, never an
+# exhaustive source-acceptance certification or elapsed-time observation.
+MAX_CORE_CENSUS = 5
+TRUSTED_CORE_WORKFLOW = ".github/workflows/brain-cycle.yml"
 REQUIRED = {"validate": 15368, "portfolio-phase1-gate": 5121826}
 RETIREMENT = re.compile(r"\b(?:12[\s-]*h(?:our)?|six[\s-]*hour|soak|source[\s-]*acceptance)\b", re.I)
 NEVER_AUTO_CLOSE = {210, 689, 811}
@@ -47,6 +53,8 @@ class GitHubReadOnly:
                              "issues?state=open&per_page=60",
                              "actions/runs?per_page=30", "rulesets/24182301"}
                    or re.fullmatch(r"commits/[0-9a-f]{40}/check-runs\?per_page=100",
+                                   route) is not None
+                   or re.fullmatch(r"actions/runs/[1-9][0-9]{0,11}/jobs\?per_page=100",
                                    route) is not None),
               "RESULTS_ROUTE_DENIED")
         self.count += 1
@@ -117,6 +125,44 @@ def _issue_class(row):
     return "ACTIVE_OR_UNRECONCILED"
 
 
+
+def _original_core_verdict(api, row, source_sha):
+    """Only original GitHub job and authenticated schedule may count as core."""
+    if not (type(row) is dict and row.get("name") == "brain-cycle-v2"
+            and row.get("path") == TRUSTED_CORE_WORKFLOW
+            and row.get("head_sha") == source_sha
+            and row.get("head_branch") == "main"
+            and type(row.get("repository")) is dict
+            and row["repository"].get("full_name") == REPO
+            and type(row.get("run_attempt")) is int and row["run_attempt"] == 1
+            and row.get("status") == "completed"
+            and row.get("conclusion") in {"success", "failure", "timed_out"}
+            and row.get("event") in {"schedule", "workflow_dispatch"}
+            and type(row.get("id")) is int and 0 < row["id"] < 10**12):
+        return "SOURCE_ORIGIN_UNVERIFIED"
+    jobs = api.get("actions/runs/" + str(row["id"]) + "/jobs?per_page=100")
+    records = jobs.get("jobs") if type(jobs) is dict else None
+    if not (type(records) is list
+            and type(jobs.get("total_count")) is int
+            and len(records) == jobs["total_count"] < 100):
+        return "JOB_CENSUS_INCOMPLETE"
+    matching = [j for j in records if type(j) is dict and
+                j.get("name") == "monitor"]
+    if len(matching) != 1:
+        return "ORIGINAL_MONITOR_UNVERIFIED"
+    job = matching[0]
+    if not (job.get("run_id") == row["id"]
+            and job.get("run_attempt") == 1
+            and job.get("head_sha") == source_sha
+            and job.get("status") == "completed"
+            and job.get("conclusion") == row["conclusion"]
+            and type(job.get("steps")) is list
+            and len(job["steps"]) > 0
+            and verified_automatic_origin(row["event"], job["steps"])):
+        return "AUTOMATIC_CORE_PROVENANCE_UNVERIFIED"
+    return "ORIGINAL_SUCCESS" if row["conclusion"] == "success" else "ORIGINAL_FAILURE"
+
+
 def report(api, *, expected_main, generated_at):
     check(type(expected_main) is str and SHA.fullmatch(expected_main) is not None,
           "RESULTS_MAIN_INVALID")
@@ -180,6 +226,18 @@ def report(api, *, expected_main, generated_at):
         for run in runs_document["workflow_runs"]
         if type(run) is dict and run.get("head_sha") == expected_main
     ]
+    relevant_cores = [
+        run for run in runs_document["workflow_runs"]
+        if type(run) is dict and run.get("name") == "brain-cycle-v2"
+        and run.get("head_sha") == expected_main
+        and run.get("status") == "completed"
+        and run.get("conclusion") in {"success", "failure", "timed_out"}
+    ]
+    core_verifications = [
+        {"run_id": run.get("id"), "event": run.get("event"),
+         "outcome": _original_core_verdict(api, run, expected_main)}
+        for run in relevant_cores[:MAX_CORE_CENSUS]
+    ]
     repair_prs = [p for p in prs if type(p) is dict and
                   (str(p.get("title") or "").lower().startswith(("fix", "repair"))
                    or str(p.get("head", {}).get("ref", "")).startswith("auto-repair/"))]
@@ -193,6 +251,8 @@ def report(api, *, expected_main, generated_at):
         "coverage": {"pull_requests": "PARTIAL_OR_UNKNOWN" if len(prs) == 30 else "RECENT_SAMPLE_ONLY",
                      "issues": "PARTIAL" if len(issues) == 60 else "OPEN_ISSUES_SAMPLE",
                      "run_history": "LATEST_30_MAX",
+                     "core_runs_checked": len(core_verifications),
+                     "core_runs_unchecked": max(0, len(relevant_cores) - MAX_CORE_CENSUS),
                      "checked_merged_prs": len(verified_rows)},
         "metrics": {
             "repair_prs_seen_in_sample": len(repair_prs),
@@ -201,11 +261,12 @@ def report(api, *, expected_main, generated_at):
             "merged_prs_verified_by_both_apps": sum(
                 x["verification"] == "VERIFIED_BOTH_APPS" for x in verified_rows),
             "main_cycle_successes_in_sample": sum(
-                x["name"] == "brain-cycle-v2" and x["conclusion"] == "success"
-                for x in recent_runs),
+                x["outcome"] == "ORIGINAL_SUCCESS" for x in core_verifications),
             "main_cycle_failures_in_sample": sum(
-                x["name"] == "brain-cycle-v2" and x["conclusion"] in
-                ("failure", "timed_out") for x in recent_runs),
+                x["outcome"] == "ORIGINAL_FAILURE" for x in core_verifications),
+            "unverified_main_cycle_runs_in_sample": sum(
+                not x["outcome"].startswith("ORIGINAL_")
+                for x in core_verifications),
             "open_issue_sample": len(open_issues),
             "historical_retired_issue_candidates": sum(
                 x["classification"] == "RETIRED_POLICY_REVIEW_CANDIDATE"
@@ -221,6 +282,8 @@ def report(api, *, expected_main, generated_at):
             "actual_operating_cost_usd": "NO_BILLING_PROVIDER_DATA",
             "retired_issue_candidates": "REVIEW_ONLY_NOT_AUTOCLOSED",
             "green_actions": "WORKFLOW_SUCCESS_IS_NOT_REPAIR_OR_BUSINESS_OUTCOME",
+            "verified_core_scope": "FIRST_ATTEMPT_SOURCE_AND_AUTHENTIC_ORIGIN_ONLY",
+            "unverified_core_runs": "NOT_COUNTED_AS_SUCCESS_OR_FAILURE",
         },
         "merged_pr_evidence": verified_rows,
         "backlog_evidence": sorted(
@@ -231,6 +294,7 @@ def report(api, *, expected_main, generated_at):
                  "RETIRED_POLICY_REVIEW_CANDIDATE": 3}.get(x["classification"], 4),
                 x["number"])),
         "core_run_evidence": recent_runs[:12],
+        "core_run_verifications": core_verifications,
     }
 
 
