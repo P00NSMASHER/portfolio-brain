@@ -12,12 +12,12 @@ from brain.v9 import guarded_merge as gm
 BASE = "a" * 40
 HEAD = "b" * 40
 RUN = 12345678
-ORIGINAL_SOURCE = b"def compute():\\n    return 1\\n"
-APPROVED_SOURCE = b"def compute():\\n    return 2\\n"
-FORGED_SOURCE = b"def compute():\\n    return -999\\n"
+ORIGINAL_SOURCE = b"def compute():\n    return 1\n"
+APPROVED_SOURCE = b"def compute():\n    return 2\n"
+FORGED_SOURCE = b"def compute():\n    return -999\n"
 CHANGE = {"path": "brain/changes.py",
           "expected_sha256": factory.sha256(ORIGINAL_SOURCE),
-          "old": "    return 1\\n", "new": "    return 2\\n"}
+          "old": "    return 1\n", "new": "    return 2\n"}
 SPEC = {"schema_version": 1, "repository": d.REPO, "base_sha": BASE,
         "failure_run_id": RUN, "changes": [CHANGE]}
 OP = factory.prepare(SPEC, {"brain/changes.py": ORIGINAL_SOURCE})["operation_id"]
