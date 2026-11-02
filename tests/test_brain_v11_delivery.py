@@ -22,6 +22,17 @@ SPEC = {"schema_version": 1, "repository": d.REPO, "base_sha": BASE,
         "failure_run_id": RUN, "changes": [CHANGE]}
 OP = factory.prepare(SPEC, {"brain/changes.py": ORIGINAL_SOURCE})["operation_id"]
 RECEIPT = "d" * 64
+REVIEWED_TEST_SOURCE = (
+    "import unittest\n"
+    "from brain.changes import compute\n"
+    "class ReviewedComputeRegression(unittest.TestCase):\n"
+    "    def test_compute_correct(self): self.assertEqual(compute(), 2)\n"
+)
+REVIEWED_TEST = {
+    "path": "tests/test_v11_reviewed_compute.py",
+    "source": REVIEWED_TEST_SOURCE,
+    "sha256": factory.sha256(REVIEWED_TEST_SOURCE.encode("utf-8")),
+}
 BRANCH = "auto-repair/v10-" + OP[:16]
 
 
@@ -46,7 +57,8 @@ class Fake:
             "auto_merge": None, "node_id": "PR_some_exact_node_777",
             "changed_files": 1, "user": {"login": "portfolio-brain-v8-runtime[bot]"},
             "body": "BRAIN_V10_OPERATION_ID: " + OP + "\nOriginal run: " + str(RUN) +
-                    "\nV10_RED_GREEN_RECEIPT_SHA256: " + RECEIPT,
+                    "\nV10_RED_GREEN_RECEIPT_SHA256: " + RECEIPT +
+                    "\nV10_REVIEWED_REGRESSION_SHA256: " + REVIEWED_TEST["sha256"],
             "base": {"ref": "main", "sha": BASE, "repo": {"full_name": d.REPO}},
             "head": {"ref": BRANCH, "sha": HEAD, "repo": {"full_name": d.REPO}},
         }
@@ -115,7 +127,8 @@ class Fake:
                     "id": "preflight-known-source-fix",
                     "stage_family": ("STATE_DELIVERY" if self.wrong_recipe_stage
                                      else "PREFLIGHT"),
-                    "changes": [CHANGE]
+                    "changes": [CHANGE],
+                    "regression": REVIEWED_TEST
                 }]
             }
             return self.document(json.dumps(registry, sort_keys=True).encode())
@@ -286,6 +299,14 @@ class DeliveryTests(unittest.TestCase):
     def test_recipe_must_match_actual_original_failed_stage(self):
         self.api.wrong_recipe_stage = True
         with self.assertRaisesRegex(d.DeliveryDenied, "V11_APPROVED_PATCH"):
+            self.eligible()
+
+
+    def test_unreviewed_or_forged_regression_digest_blocks_bot(self):
+        original = self.api.pr["body"]
+        self.api.pr["body"] = original.replace(
+            REVIEWED_TEST["sha256"], "e" * 64)
+        with self.assertRaisesRegex(d.DeliveryDenied, "REGRESSION|APPROVED_PATCH"):
             self.eligible()
 
     def test_no_graphql_mutation_until_read_checks_pass(self):

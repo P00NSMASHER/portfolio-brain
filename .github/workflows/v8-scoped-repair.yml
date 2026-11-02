@@ -197,7 +197,8 @@ jobs:
             --registry repair/V11_PREAPPROVED_SOURCE_RECIPES.json \
             --workspace . \
             --spec /tmp/brain-v11-failure/approved-spec.json \
-            --decision /tmp/brain-v11-failure/recipe-decision.json
+            --decision /tmp/brain-v11-failure/recipe-decision.json \
+            --reviewed-test /tmp/brain-v11-failure/approved-reviewed-test.json
           if test -s /tmp/brain-v11-failure/approved-spec.json; then
             echo "eligible=true" >> "$GITHUB_OUTPUT"
           else
@@ -226,6 +227,7 @@ jobs:
             --spec /tmp/brain-v11-failure/approved-spec.json \
             --workspace . \
             --receipt /tmp/brain-v11-failure/v10-redgreen.json \
+            --reviewed-test /tmp/brain-v11-failure/approved-reviewed-test.json \
             --publish --intent /tmp/brain-v11-failure/external-write-intent.json
       - name: Preserve original failure evidence without secrets or false repair claims
         if: ${{ always() }}

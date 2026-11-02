@@ -64,5 +64,61 @@ class RealDockerAcceptanceTests(unittest.TestCase):
             self.assertFalse(receipt["production_accepted"])
             self.assertEqual(receipt["provider_writes"],0)
 
+
+    def test_reviewed_regression_makes_previously_green_source_red_then_green(self):
+        # Original repository tests alone are GREEN. A separately reviewed,
+        # source-locked regression exposes the real newly tested defect.
+        with tempfile.TemporaryDirectory(prefix="v10-approved-regression-") as temp:
+            root = Path(temp)
+            (root / "brain").mkdir()
+            (root / "tests").mkdir()
+            (root / "brain/demo.py").write_bytes(OLD)
+            (root / "tests/test_original.py").write_text(
+                "import unittest\n"
+                "class OriginalSuite(unittest.TestCase):\n"
+                "    def test_healthy(self): self.assertTrue(True)\n"
+            )
+            source = (
+                "import unittest\n"
+                "from brain.demo import answer\n"
+                "class ReviewedRegression(unittest.TestCase):\n"
+                "    def test_repaired_source(self): self.assertEqual(answer(), 1)\n"
+            )
+            reviewed = {
+                "path": "tests/test_v11_reviewed_demo.py",
+                "source": source, "sha256": factory.sha256(source.encode()),
+            }
+            spec = {
+                "schema_version": 1,
+                "repository": factory.REPOSITORY,
+                "base_sha": "a" * 40,
+                "failure_run_id": 123,
+                "changes": [{
+                    "path": "brain/demo.py",
+                    "expected_sha256": factory.sha256(OLD),
+                    "old": "    return 0\n",
+                    "new": "    return 1\n",
+                }],
+            }
+            candidate = factory.prepare(spec, {"brain/demo.py": OLD})
+            observed = []
+            def run_real_container(command, **kwargs):
+                result = subprocess.run(command, **kwargs)
+                observed.append(result.returncode)
+                if len(observed) == 2 and result.returncode != 0:
+                    self.fail("REVIEWED_REGRESSION_GREEN_FAILED "
+                              + result.stdout[-1200:] + result.stderr[-1200:])
+                return result
+            proof = factory.run_isolated_tests(
+                root, candidate, runner=run_real_container,
+                reviewed_regression=reviewed)
+            self.assertEqual(observed, [1, 0])
+            self.assertEqual(proof["baseline_test_cases"], 2)
+            self.assertEqual(proof["corrected_test_cases"], 2)
+            self.assertEqual(proof["reviewed_regression_sha256"], reviewed["sha256"])
+            self.assertFalse((root / reviewed["path"]).exists())
+            self.assertEqual((root / "brain/demo.py").read_bytes(), OLD)
+            self.assertEqual(proof["provider_writes"], 0)
+
 if __name__ == "__main__":
     unittest.main()

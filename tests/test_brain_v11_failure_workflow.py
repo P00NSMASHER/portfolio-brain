@@ -68,6 +68,7 @@ class ReadOnlyOriginalFailureJobTests(unittest.TestCase):
             "--registry repair/V11_PREAPPROVED_SOURCE_RECIPES.json",
             "--receipt /tmp/brain-v11-failure/receipt.json",
             "--workspace .", "--spec /tmp/brain-v11-failure/approved-spec.json",
+            "--reviewed-test /tmp/brain-v11-failure/approved-reviewed-test.json",
             "if test -s /tmp/brain-v11-failure/approved-spec.json",
             'eligible=true', 'eligible=false',
             "if: " + "$" + "{{ steps.recipe.outputs.eligible == 'true' }}",
@@ -81,6 +82,8 @@ class ReadOnlyOriginalFailureJobTests(unittest.TestCase):
         ):
             with self.subTest(required=required):
                 self.assertIn(required, candidate)
+        self.assertEqual(candidate.count("--reviewed-test /tmp/brain-v11-failure/approved-reviewed-test.json"), 2)
+        self.assertNotIn("skip-reviewed-regression", candidate)
         for forbidden in ("gh pr merge", "pull_request_target:", "id-token: write",
                           "gh api --method", "refs/heads/main", "write-all",
                           "portfolio-phase1-gate: success"):
