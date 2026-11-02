@@ -447,7 +447,15 @@ def static_review(root: Path = ROOT) -> dict[str, Any]:
                     and row.get("CANDIDATE_PR", {}).get("branch_prefixes") == ["factory/", "auto-repair/"]
                 )
                 or (
-                    row.get("project_id") != "PRJ-000"
+                    row.get("project_id") == "PRJ-004"
+                    and row.get("CANDIDATE_PR") == {
+                        "allowed": True,
+                        "repository_ids": ["REPO-007"],
+                        "branch_prefixes": ["v8-capturebrief-hosting-doc-"],
+                    }
+                )
+                or (
+                    row.get("project_id") not in ("PRJ-000", "PRJ-004")
                     and row.get("CANDIDATE_PR") == {
                         "allowed": False,
                         "repository_ids": [],

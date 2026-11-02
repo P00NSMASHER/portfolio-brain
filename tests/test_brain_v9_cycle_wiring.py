@@ -98,19 +98,45 @@ class CycleWiringTests(unittest.TestCase):
         self.assertFalse(outcome['production_accepted'])
         self.assertFalse(outcome['automatic_execution_authority'])
 
-    def test_non_portfolio_clean_checks_do_not_become_incidents(self):
+    def test_non_portfolio_clean_checks_do_not_create_engineering_work(self):
         payload = report()
         payload['projects'][0]['source_check_state'] = (
             'NO_ADVERSE_CHECKS_OBSERVED_NOT_RELEASE_APPROVAL')
+        original_checkpoint = self.queue.checkpoint()
         outcome = run_cycle(payload, self.queue, source_sha=SOURCE, cycle=0, now=NOW)
-        self.assertEqual(len(outcome['owner_jobs']), 1)
-        handoff = outcome['owner_jobs'][0]
-        self.assertEqual(handoff['priority'], 3)
-        self.assertEqual(handoff['source_check_state'],
-                         'NO_ADVERSE_CHECKS_OBSERVED_NOT_RELEASE_APPROVAL')
-        self.assertEqual(handoff['incident_classification'],
-                         'NO_PRODUCTION_INCIDENT_CLAIM')
+        self.assertEqual(outcome['owner_jobs'], [])
+        self.assertEqual(outcome['metrics']['work_items'], 0)
+        self.assertEqual(self.queue.checkpoint(), original_checkpoint)
+        self.assertEqual(outcome['nonactionable_source_signals'], [{
+            'project_id': 'abvm',
+            'repository': 'P00NSMASHER/abvmschoolstarworld',
+            'source_sha': TARGET,
+            'source_check_state': 'NO_ADVERSE_CHECKS_OBSERVED_NOT_RELEASE_APPROVAL',
+            'disposition': 'OBSERVED_NON_ACTIONABLE',
+        }])
         self.assertFalse(outcome['production_accepted'])
+
+        # Normal continuous deployments must not saturate the 256-item queue.
+        for index in range(70):
+            payload['projects'][0]['repository_revision'] = f'{index:040x}'
+            next_result = run_cycle(payload, self.queue, source_sha=SOURCE,
+                                    cycle=index + 1, now=LATER)
+            self.assertEqual(next_result['owner_jobs'], [])
+            self.assertEqual(next_result['metrics']['work_items'], 0)
+        self.assertEqual(self.queue.checkpoint(), original_checkpoint)
+
+    def test_clean_reobservation_never_deletes_existing_adverse_evidence(self):
+        first = run_cycle(report(), self.queue, source_sha=SOURCE, cycle=0, now=NOW)
+        work_id = first['owner_jobs'][0]['work_id']
+        evidence_before = self.queue.checkpoint()
+        clean = report()
+        clean['projects'][0]['source_check_state'] = (
+            'NO_ADVERSE_CHECKS_OBSERVED_NOT_RELEASE_APPROVAL')
+        second = run_cycle(clean, self.queue, source_sha=SOURCE, cycle=1, now=LATER)
+        self.assertEqual(second['owner_jobs'], [])
+        self.assertEqual(second['metrics']['stages']['OBSERVED'], 1)
+        self.assertEqual(self.queue.checkpoint(), evidence_before)
+        self.assertIn(work_id, self.queue.snapshot()['work'])
 
     def test_missing_source_remains_unknown(self):
         payload = report()

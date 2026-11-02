@@ -266,19 +266,15 @@ class BootstrapAdmissionTests(unittest.TestCase):
             ):
                 boot._api("separately-issued-token", path, method="GET")
 
-    def test_workflow_is_scoped_to_one_branch_and_no_merge_authority(self):
-        text = (ROOT / ".github/workflows/portfolio-source-acceptance.yml").read_text()
-        self.assertIn("bootstrap-trust-anchor:", text)
-        self.assertIn("head_branch == 'audit/source-admission-crosspath-20261030'", text)
-        self.assertIn("test \"$(git hash-object verification/trust_anchor_bootstrap.py)\"", text)
-        self.assertIn("app-id: \"5121826\"", text)
-        self.assertIn("python -m verification.trust_anchor_bootstrap", text)
-        self.assertIn("persist-credentials: false", text)
-        self.assertIn("--network none", text)
-        self.assertNotIn("merge_pull_request", text)
-        self.assertNotIn("gh pr merge", text)
-        self.assertNotIn("pull_request_target:", text)
-        self.assertNotIn("workflow_dispatch:", text)
+    def test_historical_bootstrap_is_not_an_active_actions_workflow(self):
+        # Offline forensic validators remain readable, but their old 12-hour
+        # receipt workflow and trust-anchor bootstrap cannot reactivate.
+        self.assertFalse((ROOT / ".github/workflows/portfolio-source-acceptance.yml").exists())
+        self.assertFalse((ROOT / ".github/workflows/reliability-day.yml").exists())
+        self.assertFalse((ROOT / ".github/workflows/portfolio-source-acceptance-producer.yml").exists())
+        active=(ROOT / ".github/workflows/portfolio-independent-verifier.yml").read_text()
+        self.assertIn('app-id: "5121826"', active)
+        self.assertNotIn("pull_request_target:", active)
 
 
 if __name__ == "__main__":

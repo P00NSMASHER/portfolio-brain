@@ -1,60 +1,26 @@
-"""No accidental 12-hour start from a trust-anchor release.
-
-These are deterministic policy and condition-shape checks, not real GitHub
-repository-variable inspection and NOT original unattended reliability data.
-"""
-import unittest
+"""A merged release does not require a manually activated timed observation."""
 from pathlib import Path
+import unittest
 
-from brain.validate import validate_policy
-
+from verification import independent_verifier as iv
 ROOT = Path(__file__).resolve().parents[1]
-ACTIVE = "vars.PORTFOLIO_12H_OBSERVATION_ENABLED == 'true'"
-SOURCE = "vars.PORTFOLIO_12H_AUTHORIZED_SOURCE_SHA == github.sha"
-WORKFLOWS = (
-    ".github/workflows/reliability-day.yml",
-    ".github/workflows/portfolio-source-acceptance-producer.yml",
-)
+class NoObservationActivationTests(unittest.TestCase):
+    def test_no_timed_workflows_or_per_sha_variables(self):
+        for path in ("reliability-day.yml", "portfolio-source-acceptance-producer.yml",
+                     "portfolio-source-acceptance.yml"):
+            self.assertFalse((ROOT/".github/workflows"/path).exists())
+        body=(ROOT/"verification/independent_verifier.py").read_text()
+        self.assertNotIn("verify_predecessor_acceptance",body)
+        self.assertNotIn("PORTFOLIO_12H_",body)
 
+    def test_release_retains_immutable_exact_head_and_independent_issuers(self):
+        self.assertEqual(iv.CHECK_NAME,"portfolio-phase1-gate")
+        self.assertEqual(iv.VERIFIER_APP_ID,5121826)
+        self.assertEqual(iv.FOUNDATION_APP_ID,15368)
+        self.assertIn("verification/independent_verifier.py",
+                      iv.IMMUTABLE_TRUST_ANCHORS)
+        self.assertTrue(iv._sha40("a"*40))
+        self.assertFalse(iv._sha40("a"*39))
 
-class SourceScopedObservationActivationTests(unittest.TestCase):
-    def test_both_jobs_require_two_independent_source_scoped_optins(self):
-        for path in WORKFLOWS:
-            source = (ROOT / path).read_text(encoding="utf-8")
-            with self.subTest(path=path):
-                self.assertIn(ACTIVE, source)
-                self.assertIn(SOURCE, source)
-                self.assertNotIn("false &&", source)
-                self.assertIn("github.event.workflow_run.head_sha == github.sha", source)
-                self.assertIn("workflow_run:", source)
-                self.assertNotIn("schedule:", source)
-                self.assertNotIn("workflow_dispatch:", source)
-
-    def test_source_requires_current_main_and_is_not_a_static_old_sha(self):
-        for path in WORKFLOWS:
-            source = (ROOT / path).read_text(encoding="utf-8")
-            with self.subTest(path=path):
-                self.assertNotIn("0061071667cfb273a15b9e25a8854794316d12cb", source)
-                self.assertEqual(source.count(SOURCE), 1)
-                self.assertEqual(source.count(ACTIVE), 1)
-
-    def test_missing_or_stale_approval_var_is_always_a_denial(self):
-        current = "a" * 40
-        for original in (None, "", "false", "TRUE"):
-            for approved in (None, "", "b" * 40):
-                with self.subTest(flag=original, approved=approved):
-                    self.assertFalse(original == "true" and approved == current)
-
-        # Only a new user action setting BOTH values for the EXACT protected
-        # commit can make the reviewed conjunction true after protected merge.
-        self.assertTrue("true" == "true" and current == current)
-
-    def test_runtime_policy_enforces_the_new_double_hold(self):
-        receipt = validate_policy()
-        self.assertEqual(receipt["status"], "PASS")
-        self.assertIs(receipt["soak_started"], False)
-        self.assertIs(receipt["production_accepted"], False)
-
-
-if __name__ == "__main__":
+if __name__=="__main__":
     unittest.main()

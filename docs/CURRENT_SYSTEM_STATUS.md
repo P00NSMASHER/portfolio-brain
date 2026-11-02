@@ -11,7 +11,7 @@
 
 - Authority model: DENY_BY_DEFAULT_PROJECT_SCOPED_NO_INHERITANCE; default effect: DENY.
 - Registered projects: **12**; enabled read-only repository adapters: **7/8**.
-- Downstream projects inheriting Portfolio Brain candidate-PR authority: **0**.
+- Downstream projects with explicitly scoped candidate-PR authority: **1**.
 - Production deployment: HUMAN_APPROVAL_REQUIRED.
 - Financial actions: HUMAN_APPROVAL_REQUIRED; destructive actions: HUMAN_APPROVAL_REQUIRED.
 - Live trading: PROHIBITED.

@@ -23,6 +23,11 @@ VERIFIED_PRODUCTION_COMPRESSED_BYTES = 20_602_941
 COMPACTION_TRIGGER_BYTES = 80 * 1024 * 1024
 COMPACTION_TRIGGER_COMPRESSED_BYTES = VERIFIED_PRODUCTION_COMPRESSED_BYTES * 3 // 4
 COMPACTION_TRIGGER_REPORTS = 256
+# Keep stronger recent-history retention until the already-triggered bounded
+# compaction reaches the independently verified low-headroom reserve. Every
+# non-PASS report and the latest report per source is always preserved.
+HEADROOM_RETENTION_TRIGGER_BYTES = 16 * 1024 * 1024
+LOW_HEADROOM_KEEP_RECENT = 64
 
 def storage_pressure(source):
     """Measure the production codec with one bounded chunk in memory."""
@@ -132,10 +137,19 @@ def maintain_within_verified_capacity(
             verified_raw_capacity_bytes=verified_raw_bytes,
             verified_compressed_capacity_bytes=VERIFIED_PRODUCTION_COMPRESSED_BYTES,
             remote_writes=0,published=False)
+    # The raw Git publication cap is independently measured. At less than
+    # 16 MiB headroom, reduce only redundant recent PASS report copies in
+    # this already-required compaction. Full canonical event/attempt ledger,
+    # all failure reports and the latest source report remain immutable.
+    remaining=verified_raw_bytes-before
+    recent_retention=keep_recent
+    if remaining<HEADROOM_RETENTION_TRIGGER_BYTES and keep_recent>LOW_HEADROOM_KEEP_RECENT:
+        recent_retention=LOW_HEADROOM_KEEP_RECENT
+        reasons.append('VERIFIED_RAW_HEADROOM_RESERVE')
     fd,name=tempfile.mkstemp(prefix='.capacity-',suffix='.sqlite',dir=source.parent)
     os.close(fd);target=Path(name);target.unlink()
     try:
-        receipt=compact_snapshot(source,target,keep_recent=keep_recent)
+        receipt=compact_snapshot(source,target,keep_recent=recent_retention)
         require(receipt['target_bytes']<=verified_raw_bytes,
                 'compacted state exceeds verified production capacity')
         after=storage_pressure(target)
@@ -146,6 +160,7 @@ def maintain_within_verified_capacity(
         target.unlink(missing_ok=True)
     return dict(receipt,status='COMPACTED_TO_VERIFIED_PRODUCTION_CAPACITY',
         compacted=True,compaction_reasons=reasons,storage_pressure=after,
+        retained_recent_report_target=recent_retention,
         verified_raw_capacity_bytes=verified_raw_bytes,
         verified_compressed_capacity_bytes=VERIFIED_PRODUCTION_COMPRESSED_BYTES,
         published=False)

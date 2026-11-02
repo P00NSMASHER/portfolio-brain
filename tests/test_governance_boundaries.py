@@ -15,22 +15,42 @@ class GovernanceBoundaryTests(unittest.TestCase):
         self.assertEqual(result["projects"],12)
         self.assertEqual(result["authority_model"],"DENY_BY_DEFAULT_PROJECT_SCOPED_NO_INHERITANCE")
 
-    def test_no_downstream_project_inherits_candidate_pr_deploy_or_external_action(self):
+    def test_exact_single_downstream_candidate_grant_is_not_inherited(self):
         policy=json.loads((ROOT/"governance/boundaries.json").read_text())
         downstream=[row for row in policy["project_capabilities"] if row["project_id"]!="PRJ-000"]
-        self.assertTrue(all(row["CANDIDATE_PR"]["allowed"] is False for row in downstream))
+        permitted=[row for row in downstream if row["CANDIDATE_PR"]["allowed"]]
+        self.assertEqual([x["project_id"] for x in permitted], ["PRJ-004"])
+        self.assertEqual(permitted[0]["CANDIDATE_PR"], {
+            "allowed": True, "repository_ids": ["REPO-007"],
+            "branch_prefixes": ["v8-capturebrief-hosting-doc-"],
+        })
+        self.assertTrue(all(row["CANDIDATE_PR"]["allowed"] is False
+                            for row in downstream if row["project_id"]!="PRJ-004"))
         self.assertTrue(all(row["DEPLOY"]["allowed"] is False for row in downstream))
         self.assertTrue(all(row["EXTERNAL_ACTION"]["allowed"] is False for row in downstream))
 
 
     def test_candidate_write_authority_gates_downstream_token_mint(self):
-        denied=candidate_pr_authority(
+        scoped=candidate_pr_authority(
             "PRJ-004","REPO-007","v8-capturebrief-hosting-doc-4a7c5d6c223b")
-        self.assertFalse(denied["allowed"])
-        self.assertFalse(denied["token_mint_allowed"])
-        self.assertEqual(denied["reason"],"PROJECT_SCOPED_CANDIDATE_WRITE_DENIED")
-        self.assertFalse(denied["merge_authority"])
-        self.assertFalse(denied["deploy_authority"])
+        self.assertTrue(scoped["allowed"])
+        self.assertTrue(scoped["token_mint_allowed"])
+        self.assertEqual(scoped["reason"],"PROJECT_SCOPED_CANDIDATE_WRITE_AUTHORIZED")
+        self.assertFalse(scoped["merge_authority"])
+        self.assertFalse(scoped["deploy_authority"])
+        self.assertFalse(scoped["external_action_authority"])
+        for project, repo, branch in [
+            ("PRJ-004","REPO-007","auto-repair/other-recipe"),
+            ("PRJ-004","REPO-005","v8-capturebrief-hosting-doc-4a7c5d6c223b"),
+            ("PRJ-006","REPO-003","v8-capturebrief-hosting-doc-4a7c5d6c223b"),
+            ("PRJ-007","REPO-004","v8-capturebrief-hosting-doc-4a7c5d6c223b"),
+        ]:
+            with self.subTest(project=project, repository=repo, branch=branch):
+                denied=candidate_pr_authority(project,repo,branch)
+                self.assertFalse(denied["allowed"])
+                self.assertFalse(denied["token_mint_allowed"])
+                self.assertFalse(denied["merge_authority"])
+                self.assertFalse(denied["deploy_authority"])
 
         allowed=candidate_pr_authority(
             "PRJ-000","REPO-008","factory/pb-07-authority-test")

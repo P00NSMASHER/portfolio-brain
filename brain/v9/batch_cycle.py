@@ -80,7 +80,7 @@ def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=
          and used <= ceiling, 'CYCLE_GET_BUDGET_INVALID')
     rows = report.get('projects')
     need(type(rows) is list and len(rows) <= 16, 'CYCLE_PROJECTS_INVALID')
-    inputs, missing, skipped, seen = [], [], [], set()
+    inputs, missing, skipped, signals, seen = [], [], [], [], set()
     for row in rows:
         need(type(row) is dict and type(row.get('id')) is str and row['id'] not in seen,
              'CYCLE_PROJECTS_INVALID')
@@ -100,6 +100,15 @@ def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=
         need(hashval(sha, 40), 'CYCLE_PROJECT_SOURCE_INVALID')
         adverse = state == 'ADVERSE_CHECKS_OBSERVED'
         clean = state == 'NO_ADVERSE_CHECKS_OBSERVED_NOT_RELEASE_APPROVAL'
+        if clean:
+            # A clean source revision is useful telemetry, NOT a demonstrated
+            # defect. Do not consume scarce engineering leases and queue slots
+            # for every healthy source SHA. Retain the bounded observation in
+            # the original core artifact, without promoting it to a repair.
+            signals.append(dict(project_id=project, repository=row['repository'],
+                                source_sha=sha, source_check_state=state,
+                                disposition='OBSERVED_NON_ACTIONABLE'))
+            continue
         # Check-run history for a commit also includes checks from unrelated
         # feature-branch runs on that SHA.  This source-only envelope cannot
         # prove that an adverse check was from a protected-main runtime cycle.
@@ -184,6 +193,7 @@ def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=
                 source_sha=source_sha, owner_jobs=selected['selected'],
                 deferred_work_ids=[row['work_id'] for row in selected['deferred']],
                 held_work_ids=held, unobserved_projects=missing,
+                nonactionable_source_signals=signals,
                 outside_owner_scope=skipped, queue_checkpoint=queue.checkpoint(),
                 metrics=queue.metrics(now=now), provider_readback=provider,
                 provider_gets=provider.get('provider_gets', 0), total_project_gets=total,

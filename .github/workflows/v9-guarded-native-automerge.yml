@@ -34,6 +34,9 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: read
+      checks: read
+      issues: read
     steps:
       - name: Checkout exact trusted main without persisted credentials
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -45,7 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.sha }}"
-          test "$(git hash-object brain/v9/guarded_merge.py)" = "8a792b7469099767967e3f0625747c7dac95db7c"
+          test "$(git hash-object brain/v9/guarded_merge.py)" = "62c3d4346eefea2f10fc0759dd51a1738de49f1c"
           test "$(git hash-object brain/v9/guarded_merge_runner.py)" = "03b019cbcb1bd057e486456dff8ac8c40a6aa1ee"
       - name: Python 3.12
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -56,3 +59,28 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           FOUNDATION_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: python -m brain.v9.guarded_merge_runner
+      - name: Admit source-bound v10 bot repair to native protected auto-merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V11_EVENT_HEAD: ${{ github.event.workflow_run.head_sha }}
+        run: python -m brain.v11.verified_delivery
+      - name: Build bounded verified-results and issue backlog report
+        if: ${{ always() }}
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/brain-v11
+          python -m brain.v11.results_dashboard \
+            --expected-main "${{ github.sha }}" \
+            --json /tmp/brain-v11/results.json \
+            --html /tmp/brain-v11/results.html
+      - name: Upload sampled no-secrets engineering evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: brain-v11-results-${{ github.event.workflow_run.head_sha }}-${{ github.run_id }}
+          path: /tmp/brain-v11/
+          if-no-files-found: ignore
+          retention-days: 7

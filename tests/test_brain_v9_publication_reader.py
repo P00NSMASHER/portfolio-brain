@@ -72,6 +72,26 @@ class PublicationReaderTests(unittest.TestCase):
         self.assertEqual(result['provider_gets'], 8)
         self.assertFalse(result['production_accepted'])
         self.assertFalse(result['six_hour_acceptance_passed'])
+    def test_superseded_deployment_fails_after_two_original_reads(self):
+        docs = provider_documents()
+        asset = 'contents/' + module.ASSET + '?ref=' + MERGE
+        stale = b'new deployed asset invalidates the old historical proof'
+        docs[asset]['content'] = base64.b64encode(stale).decode()
+        docs[asset]['size'] = len(stale)
+        reader = module.PublicationReader(max_gets=10)
+        reads = []
+        def get(route):
+            reader.used_gets += 1
+            reads.append(route)
+            return deepcopy(docs[route])
+        with patch.object(module, 'CORRECTED_HASH', HASH), \
+             patch.object(reader, '_get', side_effect=get), \
+             patch.object(reader, '_bytes', side_effect=AssertionError('live site must not be read')):
+            with self.assertRaisesRegex(BatchFault, 'PUBLICATION_SOURCE_BYTES_MISMATCH'):
+                reader.verify(specification())
+        self.assertEqual(reads, ['branches/gh-pages', asset])
+        self.assertEqual(reader.used_gets, 2)
+
     def test_changed_candidate_and_wrong_check_publisher_are_refused(self):
         for attack in ('candidate','issuer','pending','missing','duplicate'):
             docs = provider_documents()
