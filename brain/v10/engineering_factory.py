@@ -518,6 +518,9 @@ def create_draft(api, spec, candidate, tested, *, intent_path):
             "body": marker + "\nOriginal run: " + str(spec["failure_run_id"])
                 + "\nV10_RED_GREEN_RECEIPT_SHA256: "
                 + sha256(canonical(tested).encode())
+                + ("\nV10_REVIEWED_REGRESSION_SHA256: "
+                   + tested["reviewed_regression_sha256"]
+                   if tested.get("reviewed_regression_sha256") else "")
                 + "\nExact source: " + spec["base_sha"]
                 + "\nLocal red/green tests passed; independent CI and"
                   " exact-head App checks remain mandatory. Draft-only"
