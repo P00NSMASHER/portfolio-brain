@@ -164,7 +164,7 @@ jobs:
          github.event.workflow_run.event == 'workflow_dispatch')
       }}
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 10
     permissions:
       contents: read
       actions: read
@@ -188,11 +188,50 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN"
           mkdir -p /tmp/brain-v11-failure
           python -m brain.v11.failure_triage --source-sha "$EXPECTED_MAIN" --run-id "$ORIGINAL_RUN_ID" --output /tmp/brain-v11-failure/receipt.json
+      - name: Match one preapproved exact-source repair recipe before requesting any token
+        id: recipe
+        run: |
+          set -euo pipefail
+          python -m brain.v11.approved_recipe_runner \
+            --receipt /tmp/brain-v11-failure/receipt.json \
+            --registry repair/V11_PREAPPROVED_SOURCE_RECIPES.json \
+            --workspace . \
+            --spec /tmp/brain-v11-failure/approved-spec.json \
+            --decision /tmp/brain-v11-failure/recipe-decision.json
+          if test -s /tmp/brain-v11-failure/approved-spec.json; then
+            echo "eligible=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Mint one-repository short-lived repair token only for an exact reviewed recipe
+        id: repair-token
+        if: ${{ steps.recipe.outputs.eligible == 'true' }}
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: '5352505'
+          private-key: ${{ secrets.PORTFOLIO_RUNTIME_PRIVATE_KEY }}
+          owner: P00NSMASHER
+          repositories: portfolio-brain
+          permission-contents: write
+          permission-pull-requests: write
+          permission-actions: read
+          skip-token-revoke: false
+      - name: Prove original RED and candidate GREEN offline before creating draft PR
+        if: ${{ steps.recipe.outputs.eligible == 'true' }}
+        env:
+          PORTFOLIO_RUNTIME_TOKEN: ${{ steps.repair-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          python -m brain.v10 \
+            --spec /tmp/brain-v11-failure/approved-spec.json \
+            --workspace . \
+            --receipt /tmp/brain-v11-failure/v10-redgreen.json \
+            --publish --intent /tmp/brain-v11-failure/external-write-intent.json
       - name: Preserve original failure evidence without secrets or false repair claims
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: brain-v11-original-failure-${{ github.event.workflow_run.id }}-${{ github.run_id }}
-          path: /tmp/brain-v11-failure/receipt.json
+          path: /tmp/brain-v11-failure/
           if-no-files-found: error
           retention-days: 7

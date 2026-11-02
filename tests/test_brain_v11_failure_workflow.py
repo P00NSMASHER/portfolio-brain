@@ -44,6 +44,10 @@ class ReadOnlyOriginalFailureJobTests(unittest.TestCase):
         ):
             with self.subTest(needle=needle):
                 self.assertIn(needle, step)
+        # Initial provider authentication receives NO writer token. The
+        # conditional one-repo candidate token is strictly a later step.
+        before_candidate = step.split(
+            "      - name: Match one preapproved exact-source repair recipe", 1)[0]
         for forbidden in (
             "create-github-app-token", "PORTFOLIO_RUNTIME_PRIVATE_KEY",
             "PORTFOLIO_VERIFIER_PRIVATE_KEY", "pull-requests: write",
@@ -52,8 +56,35 @@ class ReadOnlyOriginalFailureJobTests(unittest.TestCase):
             "permissions: write-all", "gh api --method",
         ):
             with self.subTest(forbidden=forbidden):
-                self.assertNotIn(forbidden, step)
+                self.assertNotIn(forbidden, before_candidate)
         self.assertNotIn("pull_request_target:", WORKFLOW.read_text())
+
+    def test_approved_repair_never_receives_token_without_source_proof(self):
+        stage = self.stage()
+        candidate = stage.split(
+            "      - name: Match one preapproved exact-source repair recipe", 1)[1]
+        for required in (
+            "python -m brain.v11.approved_recipe_runner",
+            "--registry repair/V11_PREAPPROVED_SOURCE_RECIPES.json",
+            "--receipt /tmp/brain-v11-failure/receipt.json",
+            "--workspace .", "--spec /tmp/brain-v11-failure/approved-spec.json",
+            "if test -s /tmp/brain-v11-failure/approved-spec.json",
+            'eligible=true', 'eligible=false',
+            "if: " + "$" + "{{ steps.recipe.outputs.eligible == 'true' }}",
+            "app-id: '5352505'", "repositories: portfolio-brain",
+            "permission-contents: write", "permission-pull-requests: write",
+            "permission-actions: read", "skip-token-revoke: false",
+            "PORTFOLIO_RUNTIME_PRIVATE_KEY", "PORTFOLIO_RUNTIME_TOKEN:",
+            "python -m brain.v10", "--publish --intent",
+            "--receipt /tmp/brain-v11-failure/v10-redgreen.json",
+            "if-no-files-found: error", "retention-days: 7",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, candidate)
+        for forbidden in ("gh pr merge", "pull_request_target:", "id-token: write",
+                          "gh api --method", "refs/heads/main", "write-all",
+                          "portfolio-phase1-gate: success"):
+            self.assertNotIn(forbidden, candidate)
 
 
 if __name__ == "__main__":
