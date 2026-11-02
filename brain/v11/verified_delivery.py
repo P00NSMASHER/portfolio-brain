@@ -104,7 +104,8 @@ def _verify_files(api, number, head, expected):
             need(path in LOW_RISK_BRAIN_FILES and row["status"] == "modified",
                  "V11_CONTROL_PLANE_REPAIR_REVIEW_REQUIRED")
         else:
-            need(path.startswith("docs/") and row["status"] == "modified",
+            need(path.startswith("docs/") and path.endswith(".md")
+                 and row["status"] == "modified",
                  "V11_TEST_OR_UNREVIEWED_FILE_MUTATION_FORBIDDEN")
         paths.append(path)
     need(len(paths) == len(set(paths))
