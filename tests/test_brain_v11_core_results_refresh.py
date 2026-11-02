@@ -14,7 +14,8 @@ class V11CoreResultRefreshTests(unittest.TestCase):
     def test_existing_repair_job_and_exact_core_authority_survive(self):
         text = SCOPED.read_text(encoding="utf-8")
         self.assertEqual(text.count(MARKER), 1)
-        prior, report = text.split(MARKER, 1)
+        prior, remainder = text.split(MARKER, 1)
+        report = remainder.split("\n  classify-original-failed-core:", 1)[0]
         self.assertIn("  propose-only:", prior)
         self.assertIn("repositories: capturebrief", prior)
         self.assertIn("permission-pull-requests: write", prior)
@@ -29,7 +30,7 @@ class V11CoreResultRefreshTests(unittest.TestCase):
     def test_read_only_report_job_is_bound_to_original_completed_main_cycle(self):
         scoped = SCOPED.read_text(encoding="utf-8")
         self.assertIn('workflows: ["brain-cycle-v2"]', scoped)
-        report = scoped.split(MARKER, 1)[1]
+        report = scoped.split(MARKER, 1)[1].split("\n  classify-original-failed-core:", 1)[0]
         for fragment in (
             "github.event.workflow_run.name == 'brain-cycle-v2'",
             "github.event.workflow_run.conclusion == 'success'",
