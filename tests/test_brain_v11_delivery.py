@@ -1,16 +1,27 @@
 """V11 repair completion: original-provider checks, no fake review or bypass."""
 from copy import deepcopy
+import base64
+import json
 import unittest
 from unittest.mock import patch
 
 from brain.v11 import verified_delivery as d
+from brain.v10 import engineering_factory as factory
 from brain.v9 import guarded_merge as gm
 
 BASE = "a" * 40
 HEAD = "b" * 40
-OP = "c" * 64
-RECEIPT = "d" * 64
 RUN = 12345678
+ORIGINAL_SOURCE = b"def compute():\\n    return 1\\n"
+APPROVED_SOURCE = b"def compute():\\n    return 2\\n"
+FORGED_SOURCE = b"def compute():\\n    return -999\\n"
+CHANGE = {"path": "brain/changes.py",
+          "expected_sha256": factory.sha256(ORIGINAL_SOURCE),
+          "old": "    return 1\\n", "new": "    return 2\\n"}
+SPEC = {"schema_version": 1, "repository": d.REPO, "base_sha": BASE,
+        "failure_run_id": RUN, "changes": [CHANGE]}
+OP = factory.prepare(SPEC, {"brain/changes.py": ORIGINAL_SOURCE})["operation_id"]
+RECEIPT = "d" * 64
 BRANCH = "auto-repair/v10-" + OP[:16]
 
 
@@ -39,6 +50,12 @@ class Fake:
             "base": {"ref": "main", "sha": BASE, "repo": {"full_name": d.REPO}},
             "head": {"ref": BRANCH, "sha": HEAD, "repo": {"full_name": d.REPO}},
         }
+
+    @staticmethod
+    def document(raw):
+        return {"type": "file", "encoding": "base64",
+                "size": len(raw), "sha": gm.git_blob_sha(raw),
+                "content": base64.b64encode(raw).decode("ascii")}
 
     def get(self, route):
         self.calls.append(("GET", route))
@@ -83,11 +100,30 @@ class Fake:
                     "steps": ([{"name": "Verify independently signed Cloudflare Cron provenance",
                                 "conclusion": self.origin_step_conclusion}]
                               if self.origin_step else []) + [
-                                  {"name": "original failed core",
+                                  {"name": "Exact-SHA deterministic preflight",
                                    "conclusion": "failure"}]}]}
         if route == root + "pulls/777/files?per_page=100":
+            raw = FORGED_SOURCE if self.forged_patch else APPROVED_SOURCE
             return [{"filename": self.file_path, "status": "modified",
-                     "sha": "e" * 40}]
+                     "sha": gm.git_blob_sha(raw)}]
+        if route == root + "contents/repair/V11_PREAPPROVED_SOURCE_RECIPES.json?ref=" + BASE:
+            if self.approved_registry_missing:
+                return {"type": "missing"}
+            registry = {
+                "schema_version": 1, "repository": d.REPO,
+                "recipes": [{
+                    "id": "preflight-known-source-fix",
+                    "stage_family": ("STATE_DELIVERY" if self.wrong_recipe_stage
+                                     else "PREFLIGHT"),
+                    "changes": [CHANGE]
+                }]
+            }
+            return self.document(json.dumps(registry, sort_keys=True).encode())
+        if route == root + "contents/brain/changes.py?ref=" + BASE:
+            return self.document(ORIGINAL_SOURCE)
+        if route == root + "contents/brain/changes.py?ref=" + HEAD:
+            return self.document(FORGED_SOURCE if self.forged_patch
+                                 else APPROVED_SOURCE)
         if route == root + "commits/" + HEAD + "/check-runs?per_page=100":
             return {"total_count": 1, "check_runs": [{
                 "name": "validate", "app": {"id": self.check_app},
