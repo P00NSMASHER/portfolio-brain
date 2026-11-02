@@ -81,7 +81,8 @@ class ResultsTests(unittest.TestCase):
         self.assertEqual(x["metrics"]["main_cycle_failures_in_sample"], 1)
         self.assertIsNone(x["metrics"]["actual_operating_cost_usd"])
         self.assertIsNone(x["metrics"]["production_deployments_verified"])
-        self.assertEqual(x["metrics"]["historical_retired_issue_candidates"], 1)
+        self.assertEqual(x["metrics"]["historical_retired_issue_candidates"], 0)
+        self.assertEqual(x["metrics"]["open_incident_review_count"], 1)
         self.assertEqual(x["backlog_evidence"][-1]["number"], 210)
         self.assertEqual(x["merged_pr_evidence"][0]["verification"],
                          "VERIFIED_BOTH_APPS")
@@ -115,9 +116,14 @@ class ResultsTests(unittest.TestCase):
                     client.get(path)
         self.assertEqual(client.count, 0)
 
-    def test_historical_failure_remains_retired_review_not_success(self):
+    def test_original_failed_repair_is_not_hidden_as_retired_observation(self):
         issue = {"number": 796, "title": "original six-hour failure", "body": ""}
-        self.assertEqual(v._issue_class(issue), "RETIRED_POLICY_REVIEW_CANDIDATE")
+        self.assertEqual(v._issue_class(issue), "OPEN_INCIDENT_REVIEW_REQUIRED")
+        historical = {"number": 699, "title": "six-hour acceptance pending", "body": ""}
+        self.assertEqual(v._issue_class(historical), "RETIRED_POLICY_REVIEW_CANDIDATE")
+        unrelated = {"number": 999, "title": "Fix current canonical state",
+                     "body": "Earlier acceptance/soak was mentioned"}
+        self.assertEqual(v._issue_class(unrelated), "ACTIVE_OR_UNRECONCILED")
         active = {"number": 811, "title": "12-hour observation completed?",
                   "body": "Legacy instructions"}
         self.assertEqual(v._issue_class(active), "ACTIVE_REVIEW_REQUIRED")
