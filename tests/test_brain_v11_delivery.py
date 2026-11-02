@@ -27,6 +27,9 @@ class Fake:
         self.thread_resolved = True
         self.bypass = []
         self.prs = True
+        self.forged_patch = False
+        self.approved_registry_missing = False
+        self.wrong_recipe_stage = False
         self.pr = {
             "number": 777, "state": "open", "draft": True, "merged": False,
             "auto_merge": None, "node_id": "PR_some_exact_node_777",
@@ -232,6 +235,22 @@ class DeliveryTests(unittest.TestCase):
         self.api.file_path = "brain/changes.py"
         plan = self.eligible()
         self.assertEqual(plan["paths"], ["brain/changes.py"])
+
+
+    def test_forged_bot_changed_bytes_cannot_use_self_asserted_receipt(self):
+        self.api.forged_patch = True
+        with self.assertRaisesRegex(d.DeliveryDenied, "V11_APPROVED_PATCH"):
+            self.eligible()
+
+    def test_missing_original_main_approved_recipe_blocks_native_write(self):
+        self.api.approved_registry_missing = True
+        with self.assertRaisesRegex(d.DeliveryDenied, "V11_APPROVED_PATCH"):
+            self.eligible()
+
+    def test_recipe_must_match_actual_original_failed_stage(self):
+        self.api.wrong_recipe_stage = True
+        with self.assertRaisesRegex(d.DeliveryDenied, "V11_APPROVED_PATCH"):
+            self.eligible()
 
     def test_no_graphql_mutation_until_read_checks_pass(self):
         with patch.object(d, "_gh", side_effect=AssertionError("write")):
