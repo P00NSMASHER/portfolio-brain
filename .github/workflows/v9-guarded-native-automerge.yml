@@ -61,3 +61,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           V11_EVENT_HEAD: ${{ github.event.workflow_run.head_sha }}
         run: python -m brain.v11.verified_delivery
+      - name: Build bounded verified-results and issue backlog report
+        if: ${{ always() }}
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/brain-v11
+          python -m brain.v11.results_dashboard \
+            --expected-main "${{ github.sha }}" \
+            --json /tmp/brain-v11/results.json \
+            --html /tmp/brain-v11/results.html
+      - name: Upload sampled no-secrets engineering evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: brain-v11-results-${{ github.event.workflow_run.head_sha }}-${{ github.run_id }}
+          path: /tmp/brain-v11/
+          if-no-files-found: ignore
+          retention-days: 7
