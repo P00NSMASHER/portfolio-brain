@@ -354,8 +354,24 @@ def run_isolated_tests(workspace, candidate, *, runner=subprocess.run,
                     and sha256(target.read_bytes()) == change["before_sha256"],
                     "FACTORY_WORKTREE_SOURCE_CHANGED")
             targets.append((target,change))
+        reviewed_script = ""
+        if reviewed_regression is not None:
+            # Separate, source-reviewed negative control. Full-suite failure
+            # alone does not prove the approved regression ever went RED.
+            reviewed_script = (
+                'reviewed=unittest.defaultTestLoader.discover('
+                '"/work/tests",pattern=' +
+                json.dumps(Path(reviewed_regression["path"]).name) + ');'
+                'reviewed_count=reviewed.countTestCases();'
+                'print("V10_REVIEWED_COUNT="+str(reviewed_count),file=sys.stderr);'
+                'reviewed_result=unittest.TextTestRunner(verbosity=1).run(reviewed);'
+                'print("V10_REVIEWED_RESULT="+'
+                '("PASS" if reviewed_result.wasSuccessful() else "FAIL"),'
+                'file=sys.stderr);'
+            )
         script = ('import sys,unittest;sys.path.insert(0,"/work");'
-                  'suite=unittest.defaultTestLoader.discover('
+                  + reviewed_script
+                  + 'suite=unittest.defaultTestLoader.discover('
                   '"/work/tests",pattern="test_*.py");'
                   'count=suite.countTestCases();'
                   'print("V10_TEST_COUNT="+str(count),file=sys.stderr);'
@@ -391,19 +407,30 @@ def run_isolated_tests(workspace, candidate, *, runner=subprocess.run,
                     "FACTORY_TEST_CENSUS_UNVERIFIED")
             require(re.search(r"Ran [1-9][0-9]* tests? in ", output) is not None,
                     "FACTORY_TEST_CENSUS_UNVERIFIED")
-            return result, int(match[1]), sha256(output.encode())
+            focus = None
+            if reviewed_regression is not None:
+                n = re.search(r"V10_REVIEWED_COUNT=([1-9][0-9]*)", output)
+                verdict = re.search(r"V10_REVIEWED_RESULT=(PASS|FAIL)", output)
+                require(n is not None and int(n[1]) <= 1000
+                        and verdict is not None,
+                        "FACTORY_REVIEWED_TEST_CENSUS_UNVERIFIED")
+                focus = verdict[1]
+            return result, int(match[1]), sha256(output.encode()), focus
 
-        original, red_count, original_hash = execute()
+        original, red_count, original_hash, original_focus = execute()
         require(original.returncode == 1
                 and "FAILED" in (original.stdout + original.stderr),
                 "FACTORY_REGRESSION_NOT_REPRODUCED")
         for target, change in targets:
             target.write_bytes(change["updated_bytes"])
-        corrected, green_count, corrected_hash = execute()
+        corrected, green_count, corrected_hash, corrected_focus = execute()
         require(corrected.returncode == 0
                 and green_count >= red_count
                 and "OK" in (corrected.stdout + corrected.stderr),
                 "FACTORY_ISOLATED_TEST_FAILED")
+        if reviewed_regression is not None:
+            require(original_focus == "FAIL" and corrected_focus == "PASS",
+                    "FACTORY_REVIEWED_TEST_NOT_RED_GREEN")
     return dict(status="ISOLATED_RED_GREEN_TESTS_PASSED_NOT_INDEPENDENT_CI",
                 operation_id=candidate["operation_id"],
                 baseline_test_cases=red_count, corrected_test_cases=green_count,
