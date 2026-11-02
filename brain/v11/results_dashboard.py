@@ -22,6 +22,7 @@ MAX_READS = 20
 REQUIRED = {"validate": 15368, "portfolio-phase1-gate": 5121826}
 RETIREMENT = re.compile(r"\b(?:12[\s-]*h(?:our)?|six[\s-]*hour|soak|source[\s-]*acceptance)\b", re.I)
 NEVER_AUTO_CLOSE = {210, 689, 811}
+OPEN_INCIDENT = re.compile(r"\b(?:failure|failures|failed|outage|incident|errors?|repair|repairs|blocked|blocker|unverified)\b", re.I)
 
 
 class ReportError(ValueError):
@@ -106,7 +107,12 @@ def _issue_class(row):
           "RESULTS_ISSUE_INVALID")
     if number in NEVER_AUTO_CLOSE:
         return "ACTIVE_REVIEW_REQUIRED"
-    if RETIREMENT.search(title) or RETIREMENT.search((row.get("body") or "")[:2000]):
+    # An obsolete waiting rule does not erase an original failed repair.
+    # Title is the owning issue classification; arbitrary body mentions of
+    # historical source acceptance never retire unrelated active incidents.
+    if OPEN_INCIDENT.search(title):
+        return "OPEN_INCIDENT_REVIEW_REQUIRED"
+    if RETIREMENT.search(title):
         return "RETIRED_POLICY_REVIEW_CANDIDATE"
     return "ACTIVE_OR_UNRECONCILED"
 
@@ -204,6 +210,9 @@ def report(api, *, expected_main, generated_at):
             "historical_retired_issue_candidates": sum(
                 x["classification"] == "RETIRED_POLICY_REVIEW_CANDIDATE"
                 for x in open_issues),
+            "open_incident_review_count": sum(
+                x["classification"] == "OPEN_INCIDENT_REVIEW_REQUIRED"
+                for x in open_issues),
             "production_deployments_verified": None,
             "actual_operating_cost_usd": None,
         },
@@ -214,10 +223,13 @@ def report(api, *, expected_main, generated_at):
             "green_actions": "WORKFLOW_SUCCESS_IS_NOT_REPAIR_OR_BUSINESS_OUTCOME",
         },
         "merged_pr_evidence": verified_rows,
-        "backlog_evidence": sorted(open_issues,
-                                   key=lambda x: (x["classification"] !=
-                                                  "RETIRED_POLICY_REVIEW_CANDIDATE",
-                                                  x["number"])),
+        "backlog_evidence": sorted(
+            open_issues, key=lambda x: (
+                {"OPEN_INCIDENT_REVIEW_REQUIRED": 0,
+                 "ACTIVE_REVIEW_REQUIRED": 1,
+                 "ACTIVE_OR_UNRECONCILED": 2,
+                 "RETIRED_POLICY_REVIEW_CANDIDATE": 3}.get(x["classification"], 4),
+                x["number"])),
         "core_run_evidence": recent_runs[:12],
     }
 
