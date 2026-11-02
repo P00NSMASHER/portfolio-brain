@@ -138,7 +138,7 @@ class DeliveryTests(unittest.TestCase):
         with self.assertRaisesRegex(d.DeliveryDenied, "ISSUER"):
             self.eligible()
         self.api = Fake()
-        self.api.pr["head"]["sha"] = "f" * 40
+        self.api.pr["base"]["sha"] = "f" * 40
         with self.assertRaisesRegex(d.DeliveryDenied, "SOURCE"):
             self.eligible()
 
