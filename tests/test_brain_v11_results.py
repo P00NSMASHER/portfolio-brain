@@ -54,6 +54,16 @@ class Fake:
             return copy.deepcopy(self.issues)
         if path == "actions/runs?per_page=30":
             return {"workflow_runs": copy.deepcopy(self.runs)}
+        if path.startswith("actions/runs/") and path.endswith("/jobs?per_page=100"):
+            run_id = int(path.split("/")[2])
+            return {"total_count": 1, "jobs": [{
+                "name": "monitor", "run_id": run_id, "run_attempt": 1,
+                "head_sha": MAIN, "status": "completed",
+                "conclusion": next(
+                    (x["conclusion"] for x in self.runs if x.get("id") == run_id),
+                    "success"),
+                "steps": copy.deepcopy(getattr(self, "core_steps", [])),
+            }]}
         if path == "commits/" + HEAD + "/check-runs?per_page=100":
             return {"total_count": 2, "check_runs": [
                 {"name": "validate", "head_sha": HEAD,
@@ -128,6 +138,66 @@ class ResultsTests(unittest.TestCase):
                   "body": "Legacy instructions"}
         self.assertEqual(v._issue_class(active), "ACTIVE_REVIEW_REQUIRED")
 
+
+
+    def test_same_named_or_manually_dispatched_core_has_no_verified_cycle_credit(self):
+        # Original GitHub identity and authenticated scheduling are mandatory;
+        # an arbitrary name+SHA+green conclusion is never core evidence.
+        self.api.runs = [
+            {"id": 101, "name": "brain-cycle-v2",
+             "path": ".github/workflows/unreviewed.yml",
+             "head_sha": MAIN, "head_branch": "main",
+             "repository": {"full_name": v.REPO},
+             "run_attempt": 1, "event": "schedule",
+             "status": "completed", "conclusion": "success"},
+            {"id": 102, "name": "brain-cycle-v2",
+             "path": ".github/workflows/brain-cycle.yml",
+             "head_sha": MAIN, "head_branch": "main",
+             "repository": {"full_name": v.REPO},
+             "run_attempt": 2, "event": "schedule",
+             "status": "completed", "conclusion": "success"},
+            {"id": 103, "name": "brain-cycle-v2",
+             "path": ".github/workflows/brain-cycle.yml",
+             "head_sha": MAIN, "head_branch": "main",
+             "repository": {"full_name": v.REPO},
+             "run_attempt": 1, "event": "workflow_dispatch",
+             "status": "completed", "conclusion": "success"},
+        ]
+        self.api.core_steps = []
+        result = self.snapshot()
+        self.assertEqual(result["metrics"]["main_cycle_successes_in_sample"], 0)
+        self.assertEqual(result["metrics"]["unverified_main_cycle_runs_in_sample"], 3)
+
+    def test_verified_original_signed_dispatch_and_failed_run_have_distinct_credit(self):
+        def origin_run(run_id, conclusion):
+            return {"id": run_id, "name": "brain-cycle-v2",
+                    "path": ".github/workflows/brain-cycle.yml",
+                    "head_sha": MAIN, "head_branch": "main",
+                    "repository": {"full_name": v.REPO},
+                    "run_attempt": 1, "event": "workflow_dispatch",
+                    "status": "completed", "conclusion": conclusion}
+        self.api.runs = [origin_run(104, "success"), origin_run(105, "failure")]
+        self.api.core_steps = [{"name": "Verify independently signed Cloudflare Cron provenance",
+                                "conclusion": "success"}]
+        result = self.snapshot()
+        self.assertEqual(result["metrics"]["main_cycle_successes_in_sample"], 1)
+        self.assertEqual(result["metrics"]["main_cycle_failures_in_sample"], 1)
+        self.assertEqual(result["metrics"]["unverified_main_cycle_runs_in_sample"], 0)
+
+    def test_failed_original_without_signed_origin_not_counted(self):
+        self.api.runs = [
+            {"id": 106, "name": "brain-cycle-v2",
+             "path": ".github/workflows/brain-cycle.yml",
+             "head_sha": MAIN, "head_branch": "main",
+             "repository": {"full_name": v.REPO},
+             "run_attempt": 1, "event": "workflow_dispatch",
+             "status": "completed", "conclusion": "failure"},
+        ]
+        self.api.core_steps = [{"name": "Verify independently signed Cloudflare Cron provenance",
+                                "conclusion": "failure"}]
+        got = self.snapshot()
+        self.assertEqual(got["metrics"]["main_cycle_failures_in_sample"], 0)
+        self.assertEqual(got["metrics"]["unverified_main_cycle_runs_in_sample"], 1)
 
 if __name__ == "__main__":
     unittest.main()
