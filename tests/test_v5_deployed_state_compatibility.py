@@ -77,6 +77,46 @@ def _original_state_at_commit(commit):
     return raw, None, "sqlite-zlib-chunks-v1", manifest_blob
 
 
+def read_consistent_state_revision(*, git_reader=None, state_reader=None,
+                                   max_attempts=2):
+    """Re-read a concurrently advancing state tip with immutable verified bytes.
+
+    A real scheduled Brain core may publish a new state head while Foundation
+    replays the previous exact Git object. Retry at most twice, without sleeps,
+    only on a proven ref-identity change. Every accepted tip must be fetched
+    AND independently verified from its own raw Git blobs and archive CRC/hash.
+    A corrupt manifest, failed git, unknown ref or repeated drift always fails.
+    No production write and no acceptance inference.
+    """
+    import re
+    if type(max_attempts) is not int or not 1 <= max_attempts <= 2:
+        raise ValueError("STATE_READBACK_ATTEMPTS_NOT_BOUNDED")
+    provider = git if git_reader is None else git_reader
+    read_original = (_original_state_at_commit if state_reader is None
+                     else state_reader)
+
+    def exact_sha(value):
+        if type(value) is not str or re.fullmatch(r"[0-9a-f]{40}",value) is None:
+            raise AssertionError("STATE_REF_IDENTITY_INVALID")
+        return value
+
+    for attempt in range(1,max_attempts+1):
+        before = exact_sha(provider("ls-remote", "origin", STATE_REF).split()[0])
+        provider("fetch", "--quiet", "--no-tags", "--depth=1", "origin", STATE_REF)
+        fetched = exact_sha(provider("rev-parse", "FETCH_HEAD"))
+        if fetched != before:
+            # The original transport observed a moved tip. Never replay the
+            # earlier branch under its later revision or call it success.
+            continue
+        raw, blob, storage_format, manifest_blob = read_original(fetched)
+        # read_original validates every exact original object, including all
+        # archive chunks, their Git SHA, CRC and raw SQLite content digest.
+        final = exact_sha(provider("ls-remote", "origin", STATE_REF).split()[0])
+        if final == fetched:
+            return (fetched, raw, blob, storage_format, manifest_blob, attempt)
+    raise AssertionError("STATE_REF_CHANGED_BEYOND_BOUNDED_READBACK")
+
+
 class DeployedV5ReadOnlyProof(unittest.TestCase):
     def test_current_source_and_sqlite_replay_without_production_writes(self):
         if os.environ.get("GITHUB_ACTIONS") != "true":
@@ -126,17 +166,10 @@ class DeployedV5ReadOnlyProof(unittest.TestCase):
         # The earlier full-history fetch timed out against years of large
         # state-branch blobs. A pinned shallow tip includes the entire exact
         # current tree/blob identity without downloading the full history.
-        state_remote = git("ls-remote", "origin", STATE_REF).split()[0]
-        git("fetch", "--quiet", "--no-tags", "--depth=1", "origin", STATE_REF)
-        state_commit = git("rev-parse", "FETCH_HEAD")
-        self.assertEqual(state_commit, state_remote, "State head drift on fetch")
-        raw, blob, storage_format, manifest_blob = _original_state_at_commit(
-            state_commit
-        )
+        (state_commit, raw, blob, storage_format, manifest_blob,
+         state_snapshot_attempts) = read_consistent_state_revision()
         self.assertTrue(raw.startswith(b"SQLite format 3\x00"))
         raw_sha256 = hashlib.sha256(raw).hexdigest()
-        self.assertEqual(git("ls-remote", "origin", STATE_REF).split()[0],
-                         state_commit, "State branch drift during immutable replay")
         self.assertEqual(git("ls-remote", "origin", "refs/heads/main").split()[0],
                          main, "Main drift during snapshot")
         if branch_ref is not None:
@@ -250,6 +283,7 @@ class DeployedV5ReadOnlyProof(unittest.TestCase):
             "reviewed_head_tree_sha": git("rev-parse", f"{source}^{{tree}}"),
             "execution_is_exact_head": checkout == source,
             "protected_main": main, "state_commit": state_commit,
+            "original_state_snapshot_attempts": state_snapshot_attempts,
             "sqlite_blob": blob, "manifest_blob": manifest_blob,
             "storage_format": storage_format, "sqlite_sha256": raw_sha256,
             "sqlite_bytes": len(raw), "sequence": before["sequence"],
