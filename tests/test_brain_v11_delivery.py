@@ -20,6 +20,9 @@ class Fake:
         self.main = BASE
         self.check_app = 15368
         self.core_outcome = "failure"
+        self.core_event = "workflow_dispatch"
+        self.origin_step = True
+        self.origin_step_conclusion = "success"
         self.file_path = "brain/changes.py"
         self.thread_resolved = True
         self.bypass = []
@@ -68,12 +71,17 @@ class Fake:
                     "path": ".github/workflows/brain-cycle.yml",
                     "repository": {"full_name": d.REPO},
                     "head_branch": "main", "head_sha": BASE,
-                    "run_attempt": 1, "event": "workflow_dispatch",
+                    "run_attempt": 1, "event": self.core_event,
                     "status": "completed", "conclusion": self.core_outcome}
         if route == root + "actions/runs/" + str(RUN) + "/jobs?per_page=100":
             return {"total_count": 1, "jobs": [{"name": "monitor",
-                    "run_id": RUN, "run_attempt": 1, "conclusion": self.core_outcome,
-                    "steps": [{"name": "original failed core", "conclusion": "failure"}]}]}
+                    "run_id": RUN, "run_attempt": 1, "head_sha": BASE,
+                    "status": "completed", "conclusion": self.core_outcome,
+                    "steps": ([{"name": "Verify independently signed Cloudflare Cron provenance",
+                                "conclusion": self.origin_step_conclusion}]
+                              if self.origin_step else []) + [
+                                  {"name": "original failed core",
+                                   "conclusion": "failure"}]}]}
         if route == root + "pulls/777/files?per_page=100":
             return [{"filename": self.file_path, "status": "modified",
                      "sha": "e" * 40}]
@@ -128,6 +136,20 @@ class DeliveryTests(unittest.TestCase):
                          "GITHUB_REQUIRED_APP_5121826")
         self.checked.assert_called_once()
         self.assertFalse(any(k not in {"GET", "GRAPHQL"} for k, _ in self.api.calls))
+
+    def test_manual_failed_core_without_signed_origin_cannot_enroll(self):
+        self.api.origin_step = False
+        with self.assertRaisesRegex(d.DeliveryDenied, "AUTOMATIC_ORIGIN"):
+            self.eligible()
+        self.api = Fake()
+        self.api.origin_step_conclusion = "failure"
+        with self.assertRaisesRegex(d.DeliveryDenied, "AUTOMATIC_ORIGIN"):
+            self.eligible()
+        self.api = Fake()
+        self.api.core_event = "schedule"
+        self.api.origin_step = False
+        self.assertEqual(self.eligible()["status"],
+                         "V10_REPAIR_ELIGIBLE_FOR_NATIVE_PROTECTION")
 
     def test_unrelated_pr_is_inert_and_does_not_inspect_forged_body(self):
         self.api.prs = False

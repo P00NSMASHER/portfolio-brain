@@ -76,12 +76,14 @@ def _original_failed_run(api, run_id, main):
     need(any(
         type(row) is dict and row.get("name") == "monitor"
         and row.get("run_id") == run_id and row.get("run_attempt") == 1
+        and row.get("head_sha") == main and row.get("status") == "completed"
         and row.get("conclusion") in {"failure", "timed_out"}
+        and factory.verified_automatic_origin(run.get("event"), row.get("steps"))
         and any(type(step) is dict
                 and step.get("conclusion") in {"failure", "timed_out"}
                 for step in row.get("steps", []))
         for row in jobs
-    ), "V11_ORIGINAL_FAILED_STEP_MISSING")
+    ), "V11_ORIGINAL_FAILED_STEP_OR_AUTOMATIC_ORIGIN_MISSING")
 
 
 def _verify_files(api, number, head, expected):

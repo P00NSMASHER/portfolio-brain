@@ -198,6 +198,24 @@ class GitHubTransport:
             require(type(result) is dict, "FACTORY_PROVIDER_INVALID_OBJECT")
         return result
 
+# A manually dispatched failing core is not autonomous repair evidence.
+# Trust only GitHub-native schedule or a successful original signed-origin step.
+AUTOMATIC_ORIGIN_STEPS = frozenset({
+    "Verify independently signed Cloudflare Cron provenance",
+    "Validate GitHub-native watchdog scheduling origin",
+    "Verify external clock provenance when supplied",
+})
+
+
+def verified_automatic_origin(event, steps):
+    if event == "schedule":
+        return True
+    return (event == "workflow_dispatch" and type(steps) is list
+            and any(type(row) is dict
+                    and row.get("name") in AUTOMATIC_ORIGIN_STEPS
+                    and row.get("conclusion") == "success" for row in steps))
+
+
 def verify_original_failed_core(api, spec):
     """Original GitHub provider run and job steps; no user-supplied PASS flags."""
     validate_request(spec)
@@ -223,6 +241,7 @@ def verify_original_failed_core(api, spec):
             and jobs["total_count"] == len(rows) and len(rows) <= 100,
             "FACTORY_JOB_CENSUS_INCOMPLETE")
     bad = []
+    origin_authenticated = False
     for job in rows:
         if (type(job) is dict and job.get("name") == "monitor"
                 and job.get("run_id") == run_id and job.get("run_attempt") == 1
@@ -231,10 +250,13 @@ def verify_original_failed_core(api, spec):
                 and job.get("conclusion") in ("failure", "timed_out")):
             steps = job.get("steps")
             if type(steps) is list:
+                origin_authenticated = (origin_authenticated or
+                    verified_automatic_origin(run.get("event"), steps))
                 bad.extend(step.get("name") for step in steps
                            if type(step) is dict and
                            step.get("conclusion") in ("failure", "timed_out")
                            and type(step.get("name")) is str)
+    require(origin_authenticated, "FACTORY_ORIGINAL_AUTOMATIC_ORIGIN_UNVERIFIED")
     require(bool(bad), "FACTORY_FAILED_STEP_NOT_VERIFIED")
     return dict(status="ORIGINAL_FAILED_CORE_REPRODUCED_NOT_DIAGNOSED",
                 source_sha=spec["base_sha"], run_id=run_id,

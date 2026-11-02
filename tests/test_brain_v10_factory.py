@@ -40,6 +40,9 @@ class FakeProvider:
         self.calls = []
         self.main = SOURCE
         self.conclusion = "failure"
+        self.event = "workflow_dispatch"
+        self.origin_step = True
+        self.origin_step_conclusion = "success"
         self.failed_step = "Exact-SHA deterministic preflight"
         self.fail_write = False
         self.pr_number = 900
@@ -67,14 +70,17 @@ class FakeProvider:
                     "path": ".github/workflows/brain-cycle.yml",
                     "repository": {"full_name": f.REPOSITORY},
                     "head_branch": "main", "head_sha": SOURCE,
-                    "run_attempt": 1, "event": "workflow_dispatch",
+                    "run_attempt": 1, "event": self.event,
                     "status": "completed", "conclusion": self.conclusion,
                 }
             if route == "actions/runs/" + str(RUN_ID) + "/jobs?per_page=100":
                 return {"total_count": 1, "jobs": [{
                     "name": "monitor", "run_id": RUN_ID, "run_attempt": 1,
                     "head_sha": SOURCE, "status": "completed",
-                    "conclusion": self.conclusion, "steps": [{
+                    "conclusion": self.conclusion, "steps": (
+                        [{"name": "Verify independently signed Cloudflare Cron provenance",
+                          "conclusion": self.origin_step_conclusion}]
+                        if self.origin_step else []) + [{
                         "name": self.failed_step, "conclusion": self.conclusion,
                     }],
                 }]}
@@ -178,6 +184,21 @@ class FactoryTests(unittest.TestCase):
         api.conclusion = "success"
         with self.assertRaisesRegex(f.FactoryError, "FACTORY_NO_ORIGINAL_FAILED_CORE"):
             f.verify_original_failed_core(api, manifest())
+
+    def test_manual_failed_dispatch_without_authenticated_origin_is_denied(self):
+        api = FakeProvider()
+        api.origin_step = False
+        with self.assertRaisesRegex(f.FactoryError,
+                                    "FACTORY_ORIGINAL_AUTOMATIC_ORIGIN_UNVERIFIED"):
+            f.verify_original_failed_core(api, manifest())
+        api.origin_step = True
+        api.origin_step_conclusion = "failure"
+        with self.assertRaisesRegex(f.FactoryError,
+                                    "FACTORY_ORIGINAL_AUTOMATIC_ORIGIN_UNVERIFIED"):
+            f.verify_original_failed_core(api, manifest())
+        api.event = "schedule"
+        api.origin_step = False
+        self.assertEqual(f.verify_original_failed_core(api, manifest())["run_id"], RUN_ID)
 
     def test_exact_source_provider_contents_verified_independent_of_manifest(self):
         api = FakeProvider()
