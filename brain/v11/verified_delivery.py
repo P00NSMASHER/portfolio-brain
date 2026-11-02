@@ -14,6 +14,7 @@ import subprocess
 
 from brain.v9 import guarded_merge as gm
 from brain.v10 import engineering_factory as factory
+from brain.v11 import failure_triage, reviewed_patch
 
 REPO = factory.REPOSITORY
 ROOT = "repos/" + REPO + "/"
@@ -73,17 +74,28 @@ def _original_failed_run(api, run_id, main):
     need(type(jobs) is list and type(data.get("total_count")) is int
          and data["total_count"] == len(jobs) < 100,
          "V11_ORIGINAL_JOB_CENSUS_INCOMPLETE")
-    need(any(
-        type(row) is dict and row.get("name") == "monitor"
+    matching = [
+        row for row in jobs
+        if type(row) is dict and row.get("name") == "monitor"
         and row.get("run_id") == run_id and row.get("run_attempt") == 1
         and row.get("head_sha") == main and row.get("status") == "completed"
         and row.get("conclusion") in {"failure", "timed_out"}
         and factory.verified_automatic_origin(run.get("event"), row.get("steps"))
+        and type(row.get("steps")) is list
         and any(type(step) is dict
                 and step.get("conclusion") in {"failure", "timed_out"}
-                for step in row.get("steps", []))
-        for row in jobs
-    ), "V11_ORIGINAL_FAILED_STEP_OR_AUTOMATIC_ORIGIN_MISSING")
+                for step in row["steps"])
+    ]
+    need(len(matching) == 1,
+         "V11_ORIGINAL_FAILED_STEP_OR_AUTOMATIC_ORIGIN_MISSING")
+    families = {
+        failure_triage.STEP_FAMILIES.get(
+            step.get("name"), "UNCLASSIFIED_ORIGINAL_STEP")
+        for step in matching[0]["steps"]
+        if type(step) is dict
+        and step.get("conclusion") in {"failure", "timed_out"}
+    }
+    return families
 
 
 def _verify_files(api, number, head, expected):
@@ -202,8 +214,17 @@ def evaluate(api, *, main_sha, event_head):
     operation, receipt, run_id = _markers(pr.get("body"))
     need(pr["head"]["ref"] == "auto-repair/v10-" + operation[:16]
          and len(receipt) == 64, "V11_FACTORY_PROVENANCE_MISMATCH")
-    _original_failed_run(api, run_id, main_sha)
+    failed_families = _original_failed_run(api, run_id, main_sha)
     paths = _verify_files(api, number, event_head, pr.get("changed_files"))
+    try:
+        reviewed = reviewed_patch.verify_reviewed_patch(
+            api, main_sha=main_sha, head_sha=event_head,
+            run_id=run_id, operation_id=operation,
+            changed_paths=paths, failed_families=failed_families)
+    except (reviewed_patch.ReviewDenied, factory.FactoryError, gm.Denied):
+        # Only a provider source match to an already reviewed recipe may
+        # enroll native auto-merge; a bot-authored receipt proves nothing.
+        raise DeliveryDenied("V11_APPROVED_PATCH_UNVERIFIED") from None
     _check_issuers(api, event_head)
     _review_threads(api, pr["node_id"])
     # Final race boundary: source, rules, threads and PR still agree.
@@ -223,6 +244,9 @@ def evaluate(api, *, main_sha, event_head):
         "pr_number": number, "pr_node": pr["node_id"],
         "head_sha": event_head, "base_sha": main_sha,
         "paths": paths, "original_failure_run_id": run_id,
+        "reviewed_recipe_id": reviewed["recipe_id"],
+        "exact_reviewed_patch_verified": True,
+        "red_green_artifact_independently_verified": False,
         "independent_merge_gate": "GITHUB_REQUIRED_APP_5121826",
         "writes": 0,
     }
