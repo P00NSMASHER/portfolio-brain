@@ -193,6 +193,7 @@ class DeliveryTests(unittest.TestCase):
             "brain/v8/authority.py",
             "brain/validate.py",
             "brain/core.py",
+            "docs/unsafe_executor.py",
             "tests/test_brain_v11_delivery.py",
         )
         for path in protected:
