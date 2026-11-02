@@ -123,7 +123,8 @@ def report(api, *, expected_main, generated_at):
     rules = api.get("rulesets/24182301")
     check(type(rules) is dict and rules.get("enforcement") == "active"
           and rules.get("conditions", {}).get("ref_name", {}).get("include") ==
-          ["refs/heads/main"] and rules.get("bypass_actors") == [],
+          ["refs/heads/main"]
+          and ("bypass_actors" not in rules or rules["bypass_actors"] == []),
           "RESULTS_PROTECTION_NOT_CONFIRMED")
     statuses = [r["parameters"] for r in rules.get("rules", [])
                 if r.get("type") == "required_status_checks"]
@@ -181,6 +182,8 @@ def report(api, *, expected_main, generated_at):
         "repository": REPO, "main_sha": expected_main,
         "generated_at": generated_at,
         "source": "ORIGINAL_GITHUB_API",
+        "ruleset_bypass_visibility": ("VERIFIED_EMPTY" if "bypass_actors" in rules
+                                       else "NOT_VISIBLE_TO_TOKEN"),
         "coverage": {"pull_requests": "PARTIAL_OR_UNKNOWN" if len(prs) == 30 else "RECENT_SAMPLE_ONLY",
                      "issues": "PARTIAL" if len(issues) == 60 else "OPEN_ISSUES_SAMPLE",
                      "run_history": "LATEST_30_MAX",
