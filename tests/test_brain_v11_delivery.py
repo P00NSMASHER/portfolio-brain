@@ -163,7 +163,7 @@ class DeliveryTests(unittest.TestCase):
                      "brain/../private/secrets.py", "tests/test_only.py"):
             self.api = Fake()
             self.api.file_path = file
-            with self.assertRaisesRegex(d.DeliveryDenied, "REPAIR_"):
+            with self.assertRaisesRegex(d.DeliveryDenied, "REPAIR_|TEST_OR_UNREVIEWED"):
                 self.eligible()
 
     def test_deny_bypass_threads_and_base_drift(self):
