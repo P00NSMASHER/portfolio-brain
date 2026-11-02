@@ -23,11 +23,20 @@ class GovernanceTests(unittest.TestCase):
 
     def test_original_core_artifact_not_new_recurring_workflow(self):
         core = (ROOT / ".github/workflows/brain-cycle.yml").read_text()
-        self.assertIn("python -m brain.v11.results_dashboard", core)
-        self.assertIn("--expected-main \"$BRAIN_SOURCE_SHA\"", core)
-        self.assertIn("continue-on-error: true", core)
-        self.assertIn("--json /tmp/brain/v11-results.json", core)
-        self.assertIn("--html /tmp/brain/v11-results.html", core)
+        # The original core is immutable under reviewed V8 authority.
+        from brain.v8.authority import runtime_authority
+        from brain.core import BrainError
+        self.assertEqual(runtime_authority()["workflow_declares"]["repository_default"],
+                         {"contents": "read"})
+        self.assertNotIn("python -m brain.v11.results_dashboard", core)
+        # Reports attach to existing, trusted-main Foundation follow-up.
+        native = (ROOT / ".github/workflows/v9-guarded-native-automerge.yml").read_text()
+        self.assertIn("python -m brain.v11.results_dashboard", native)
+        self.assertIn("--expected-main \"${{ github.sha }}\"", native)
+        self.assertIn("continue-on-error: true", native)
+        self.assertIn("--json /tmp/brain-v11/results.json", native)
+        self.assertIn("--html /tmp/brain-v11/results.html", native)
+        self.assertIn("actions/upload-artifact@v4", native)
         self.assertEqual(delivery.REPO, results.REPO)
         self.assertEqual(delivery.gm.REQUIRED_CHECKS, results.REQUIRED)
 
