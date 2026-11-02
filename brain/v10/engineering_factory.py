@@ -25,6 +25,8 @@ VALID_HASH = re.compile(r"[0-9a-f]{64}\Z")
 VALID_PATH = re.compile(r"(?:brain|tests|docs)/[a-zA-Z0-9_./-]+\.(?:py|json|md)\Z")
 MAX_CHANGES = 4
 MAX_FILE_BYTES = 256 * 1024
+MAX_REVIEWED_TEST_BYTES = 16 * 1024
+REVIEWED_TEST_PATH = re.compile(r"tests/test_v11_reviewed_[a-z0-9_]{4,64}\.py\Z")
 MAX_HTTP_BYTES = 2 * 1024 * 1024
 TEST_IMAGE = "python:3.12-bookworm"
 
@@ -285,7 +287,27 @@ def verify_original_sources(api, spec):
         sources[path] = dict(sha=data["sha"], raw=raw)
     return sources
 
-def run_isolated_tests(workspace, candidate, *, runner=subprocess.run):
+
+def validate_reviewed_regression(doc):
+    """Reviewed main-source regression, executed only in disposable Docker."""
+    require(type(doc) is dict and set(doc) == {"path", "source", "sha256"}
+            and type(doc["path"]) is str
+            and REVIEWED_TEST_PATH.fullmatch(doc["path"]) is not None
+            and type(doc["source"]) is str
+            and type(doc["sha256"]) is str
+            and VALID_HASH.fullmatch(doc["sha256"]) is not None,
+            "FACTORY_REVIEWED_TEST_SCHEMA_INVALID")
+    raw = doc["source"].encode("utf-8")
+    require(80 <= len(raw) <= MAX_REVIEWED_TEST_BYTES
+            and sha256(raw) == doc["sha256"]
+            and "\x00" not in doc["source"]
+            and "unittest" in doc["source"]
+            and "def test_" in doc["source"],
+            "FACTORY_REVIEWED_TEST_SOURCE_INVALID")
+    return doc
+
+def run_isolated_tests(workspace, candidate, *, runner=subprocess.run,
+                       reviewed_regression=None):
     """Reproduce a failing regression on ORIGINAL bytes, then prove the fix.
 
     Green-only suites are NOT engineering repair evidence. The baseline
@@ -300,6 +322,8 @@ def run_isolated_tests(workspace, candidate, *, runner=subprocess.run):
     require(type(candidate) is dict and candidate.get("status") ==
             "SOURCE_PINNED_PATCH_PREPARED_NOT_TESTED",
             "FACTORY_CANDIDATE_INVALID")
+    if reviewed_regression is not None:
+        validate_reviewed_regression(reviewed_regression)
     with tempfile.TemporaryDirectory(prefix="brain-v10-isolated-") as tmp:
         stage = Path(tmp) / "checkout"
         shutil.copytree(root, stage, ignore=shutil.ignore_patterns(
@@ -308,6 +332,18 @@ def run_isolated_tests(workspace, candidate, *, runner=subprocess.run):
         # Only the ephemeral checkout is opened for nonroot access.
         # The original workspace is never chmod'd or modified.
         stage.chmod(0o755)
+        if reviewed_regression is not None:
+            # A reviewed regression does not alter any tracked repo test.
+            # It is added to this one disposable, non-networked checkout only.
+            candidate_test = stage / reviewed_regression["path"]
+            require(not candidate_test.exists() and
+                    not candidate_test.is_symlink() and
+                    candidate_test.parent.is_dir() and
+                    not candidate_test.parent.is_symlink() and
+                    candidate_test.resolve().is_relative_to(stage.resolve()),
+                    "FACTORY_REVIEWED_TEST_OVERWRITE_REFUSED")
+            candidate_test.write_text(reviewed_regression["source"],
+                                      encoding="utf-8")
         targets = []
         for change in candidate["changes"]:
             target = stage / change["path"]
@@ -374,6 +410,12 @@ def run_isolated_tests(workspace, candidate, *, runner=subprocess.run):
                 baseline_output_sha256=original_hash,
                 output_sha256=corrected_hash,
                 regression_red_verified=True, corrected_green_verified=True,
+                reviewed_regression_sha256=(
+                    reviewed_regression["sha256"]
+                    if reviewed_regression is not None else None),
+                reviewed_regression_path=(
+                    reviewed_regression["path"]
+                    if reviewed_regression is not None else None),
                 production_accepted=False, provider_writes=0)
 
 def _write_intent(path, data):
