@@ -251,6 +251,100 @@ class FactoryTests(unittest.TestCase):
             self.assertTrue(result["corrected_green_verified"])
             self.assertEqual(result["provider_writes"], 0)
 
+
+    def test_reviewed_regression_is_only_in_offline_disposable_checkout(self):
+        candidate = f.prepare(manifest(), {"brain/demo.py": ORIGINAL})
+        source = (
+            "import unittest\n"
+            "from brain.demo import compute\n"
+            "class ReviewedFixTest(unittest.TestCase):\n"
+            "    def test_source_value(self): self.assertEqual(compute(), 2)\n"
+        )
+        reviewed = {
+            "path": "tests/test_v11_reviewed_demo.py",
+            "source": source, "sha256": f.sha256(source.encode("utf-8")),
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "brain").mkdir()
+            (root / "tests").mkdir()
+            (root / "brain/demo.py").write_bytes(ORIGINAL)
+            original_test = root / "tests/test_original.py"
+            original_test.write_text(
+                "import unittest\n"
+                "class Existing(unittest.TestCase):\n"
+                "    def test_green(self): self.assertTrue(True)\n"
+            )
+            runs = []
+            def runner(command, **options):
+                self.assertEqual(command[command.index("--network") + 1], "none")
+                self.assertIn("--read-only", command)
+                self.assertIn("--cap-drop=ALL", command)
+                self.assertEqual(command[command.index("--user") + 1], "65534:65534")
+                bind = command[command.index("--mount") + 1]
+                src = Path(bind.split("src=", 1)[1].split(",dst=", 1)[0])
+                self.assertEqual(
+                    (src / reviewed["path"]).read_text(encoding="utf-8"), source)
+                self.assertEqual(original_test.read_text().count("test_green"), 1)
+                self.assertFalse((root / reviewed["path"]).exists())
+                runs.append((src / "brain/demo.py").read_bytes())
+                if len(runs) == 1:
+                    self.assertEqual(runs[0], ORIGINAL)
+                    return types.SimpleNamespace(
+                        returncode=1, stdout="",
+                        stderr="V10_TEST_COUNT=2\nRan 2 tests in 0.01s\n"
+                               "FAILED (failures=1)\n")
+                self.assertIn(b"return 2", runs[1])
+                return types.SimpleNamespace(
+                    returncode=0, stdout="",
+                    stderr="V10_TEST_COUNT=2\nRan 2 tests in 0.01s\nOK\n")
+            output = f.run_isolated_tests(
+                root, candidate, runner=runner, reviewed_regression=reviewed)
+            self.assertEqual(output["reviewed_regression_sha256"], reviewed["sha256"])
+            self.assertEqual(output["reviewed_regression_path"], reviewed["path"])
+            self.assertEqual(output["baseline_test_cases"], 2)
+            self.assertEqual(output["corrected_test_cases"], 2)
+            self.assertTrue(output["regression_red_verified"])
+            self.assertTrue(output["corrected_green_verified"])
+            self.assertFalse((root / reviewed["path"]).exists())
+            self.assertEqual(len(runs), 2)
+
+    def test_reviewed_regression_cannot_overwrite_original_test(self):
+        candidate = f.prepare(manifest(), {"brain/demo.py": ORIGINAL})
+        source = (
+            "import unittest\n"
+            "class Unsafe(unittest.TestCase):\n"
+            "    def test_noop(self): self.assertTrue(True)\n"
+        )
+        doc = {"path": "tests/test_v11_reviewed_guard.py",
+               "source": source, "sha256": f.sha256(source.encode())}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "brain").mkdir()
+            (root / "tests").mkdir()
+            (root / "brain/demo.py").write_bytes(ORIGINAL)
+            (root / doc["path"]).write_text(source)
+            with patch.object(f.subprocess, "run", side_effect=AssertionError(
+                    "unreviewed Docker execution")):
+                with self.assertRaisesRegex(f.FactoryError,
+                                            "REVIEWED_TEST_OVERWRITE"):
+                    f.run_isolated_tests(root, candidate, reviewed_regression=doc)
+
+    def test_reviewed_regression_requires_source_digest_and_safe_path(self):
+        source = ("import unittest\nclass Guard(unittest.TestCase):\n"
+                  "    def test_one(self): self.assertTrue(True)\n")
+        good = {"path": "tests/test_v11_reviewed_guard.py",
+                "source": source, "sha256": f.sha256(source.encode())}
+        self.assertEqual(f.validate_reviewed_regression(good), good)
+        for variant in (
+            {**good, "sha256": "0" * 64},
+            {**good, "path": "../tests/test.py"},
+            {**good, "path": "tests/test_brain_v11_delivery.py"},
+            {**good, "source": "import unittest\n"},
+        ):
+            with self.assertRaisesRegex(f.FactoryError, "REVIEWED_TEST"):
+                f.validate_reviewed_regression(variant)
+
     def test_failed_isolated_test_does_not_become_a_green_receipt(self):
         candidate = f.prepare(manifest(), {"brain/demo.py": ORIGINAL})
         with tempfile.TemporaryDirectory() as tmp:
