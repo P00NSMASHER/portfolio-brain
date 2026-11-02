@@ -29,12 +29,26 @@ class Fake:
             {"number": 210, "title": "Automation audit remediation tracker",
              "body": "Open remediation", "updated_at": "2026-11-01T00:00:00Z"},
         ]
-        self.runs = [{"name": "brain-cycle-v2", "head_sha": MAIN,
-                      "status": "completed", "conclusion": "success"},
-                     {"name": "brain-cycle-v2", "head_sha": MAIN,
-                      "status": "completed", "conclusion": "failure"},
-                     {"name": "foundation-ci", "head_sha": "e" * 40,
-                      "status": "completed", "conclusion": "success"}]
+        self.core_steps = [
+            {"name": "Verify independently signed Cloudflare Cron provenance",
+             "conclusion": "success"}
+        ]
+        self.runs = [
+            {"id": 104, "name": "brain-cycle-v2",
+             "path": ".github/workflows/brain-cycle.yml",
+             "head_branch": "main", "head_sha": MAIN,
+             "repository": {"full_name": v.REPO},
+             "run_attempt": 1, "event": "workflow_dispatch",
+             "status": "completed", "conclusion": "success"},
+            {"id": 105, "name": "brain-cycle-v2",
+             "path": ".github/workflows/brain-cycle.yml",
+             "head_branch": "main", "head_sha": MAIN,
+             "repository": {"full_name": v.REPO},
+             "run_attempt": 1, "event": "workflow_dispatch",
+             "status": "completed", "conclusion": "failure"},
+            {"id": 106, "name": "foundation-ci", "head_sha": "e" * 40,
+             "status": "completed", "conclusion": "success"},
+        ]
 
     def get(self, path):
         self.calls.append(path)
