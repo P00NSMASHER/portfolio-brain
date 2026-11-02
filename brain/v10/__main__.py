@@ -26,6 +26,14 @@ def _read_spec(path):
     factory.validate_request(obj)
     return obj
 
+def _read_reviewed_test(path):
+    candidate = Path(path)
+    factory.require(candidate.is_file() and not candidate.is_symlink()
+                    and 1 <= candidate.stat().st_size <= 32 * 1024,
+                    "FACTORY_REVIEWED_TEST_FILE_UNSAFE")
+    record = factory._strict_json(candidate.read_bytes())
+    return factory.validate_reviewed_regression(record)
+
 def _checkout_sources(root, spec):
     workspace = Path(root)
     factory.require(not workspace.is_symlink(), "FACTORY_WORKSPACE_INVALID")
@@ -61,12 +69,15 @@ def _write_receipt(path, receipt):
         raise
 
 def run(spec, workspace, *, publish=False, intent=None, receipt=None,
-        token="", test_runner=None):
+        token="", test_runner=None, reviewed_test=None):
     spec = _read_spec(spec)
     originals = _checkout_sources(workspace, spec)
     candidate = factory.prepare(spec, originals)
-    tests = factory.run_isolated_tests(
-        workspace, candidate, **({"runner":test_runner} if test_runner else {}))
+    reviewed = _read_reviewed_test(reviewed_test) if reviewed_test is not None else None
+    test_args = {"reviewed_regression": reviewed}
+    if test_runner is not None:
+        test_args["runner"] = test_runner
+    tests = factory.run_isolated_tests(workspace, candidate, **test_args)
     output = {
         "schema_version": 1,
         "status": tests["status"],
@@ -80,6 +91,8 @@ def run(spec, workspace, *, publish=False, intent=None, receipt=None,
         "changed_paths": [row["path"] for row in candidate["changes"]],
         "original_failed_run_id": spec["failure_run_id"],
         "test_output_sha256": tests["output_sha256"],
+        "reviewed_regression_sha256": tests["reviewed_regression_sha256"],
+        "reviewed_regression_path": tests["reviewed_regression_path"],
         "independent_ci_verified": False,
         "merged": False, "deployed": False, "production_accepted": False,
     }
@@ -101,12 +114,14 @@ def main(argv=None):
     parser.add_argument("--workspace", required=True)
     parser.add_argument("--receipt", required=True)
     parser.add_argument("--publish", action="store_true")
+    parser.add_argument("--reviewed-test")
     parser.add_argument("--intent")
     args = parser.parse_args(argv)
     try:
         result = run(args.spec, args.workspace, publish=args.publish,
                      intent=args.intent, receipt=args.receipt,
-                     token=os.environ.get("PORTFOLIO_RUNTIME_TOKEN", ""))
+                     token=os.environ.get("PORTFOLIO_RUNTIME_TOKEN", ""),
+                     reviewed_test=args.reviewed_test)
         print(json.dumps({"status": result["status"],
                           "operation_id": result["operation_id"],
                           "production_accepted": False}, sort_keys=True))
