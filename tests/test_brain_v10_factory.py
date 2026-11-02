@@ -292,12 +292,14 @@ class FactoryTests(unittest.TestCase):
                     self.assertEqual(runs[0], ORIGINAL)
                     return types.SimpleNamespace(
                         returncode=1, stdout="",
-                        stderr="V10_TEST_COUNT=2\nRan 2 tests in 0.01s\n"
+                        stderr="V10_REVIEWED_COUNT=1\nV10_REVIEWED_RESULT=FAIL\n"
+                               "V10_TEST_COUNT=2\nRan 2 tests in 0.01s\n"
                                "FAILED (failures=1)\n")
                 self.assertIn(b"return 2", runs[1])
                 return types.SimpleNamespace(
                     returncode=0, stdout="",
-                    stderr="V10_TEST_COUNT=2\nRan 2 tests in 0.01s\nOK\n")
+                    stderr="V10_REVIEWED_COUNT=1\nV10_REVIEWED_RESULT=PASS\n"
+                           "V10_TEST_COUNT=2\nRan 2 tests in 0.01s\nOK\n")
             output = f.run_isolated_tests(
                 root, candidate, runner=runner, reviewed_regression=reviewed)
             self.assertEqual(output["reviewed_regression_sha256"], reviewed["sha256"])
@@ -344,6 +346,38 @@ class FactoryTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(f.FactoryError, "REVIEWED_TEST"):
                 f.validate_reviewed_regression(variant)
+
+
+    def test_unrelated_failing_suite_never_substitutes_for_reviewed_red(self):
+        candidate = f.prepare(manifest(), {"brain/demo.py": ORIGINAL})
+        source = ("import unittest\nclass Reviewed(unittest.TestCase):\n"
+                  "    def test_target(self): self.assertTrue(True)\n")
+        doc = {"path": "tests/test_v11_reviewed_redguard.py",
+               "source": source, "sha256": f.sha256(source.encode())}
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "brain").mkdir()
+            (root / "tests").mkdir()
+            (root / "brain/demo.py").write_bytes(ORIGINAL)
+            (root / "tests/test_existing.py").write_text(
+                "import unittest\nclass AlreadyBroken(unittest.TestCase):\n"
+                "    def test_bad(self): self.assertFalse(True)\n"
+            )
+            calls = []
+            def fake(command, **_):
+                calls.append(command)
+                if len(calls) == 1:
+                    return types.SimpleNamespace(returncode=1, stdout="",
+                        stderr="V10_REVIEWED_COUNT=1\nV10_REVIEWED_RESULT=PASS\n"
+                               "V10_TEST_COUNT=2\nRan 2 tests in 0.01s\n"
+                               "FAILED (failures=1)\n")
+                return types.SimpleNamespace(returncode=0, stdout="",
+                    stderr="V10_REVIEWED_COUNT=1\nV10_REVIEWED_RESULT=PASS\n"
+                           "V10_TEST_COUNT=2\nRan 2 tests in 0.01s\nOK\n")
+            with self.assertRaisesRegex(f.FactoryError,
+                                        "FACTORY_REVIEWED_TEST_NOT_RED_GREEN"):
+                f.run_isolated_tests(root, candidate, runner=fake,
+                                     reviewed_regression=doc)
 
     def test_failed_isolated_test_does_not_become_a_green_receipt(self):
         candidate = f.prepare(manifest(), {"brain/demo.py": ORIGINAL})
