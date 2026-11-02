@@ -452,9 +452,13 @@ def create_draft(api, spec, candidate, tested, *, intent_path):
                      str(spec["failure_run_id"]),
             "head": candidate["branch"], "base": "main", "draft": True,
             "body": marker + "\nOriginal run: " + str(spec["failure_run_id"])
+                + "\nV10_RED_GREEN_RECEIPT_SHA256: "
+                + sha256(canonical(tested).encode())
                 + "\nExact source: " + spec["base_sha"]
-                + "\nLocal isolated tests passed; independent CI and"
-                  " independent exact-head checks remain required. NO AUTOMERGE.",
+                + "\nLocal red/green tests passed; independent CI and"
+                  " exact-head App checks remain mandatory. Draft-only"
+                  " publication; trusted-main native delivery may enroll"
+                  " after independent original-source verification.",
         })
     except (FactoryError, ValueError, OSError) as exc:
         raise FactoryError("FACTORY_WRITE_UNCERTAIN_NEEDS_READBACK") from exc
