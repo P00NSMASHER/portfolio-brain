@@ -73,8 +73,11 @@ def intake(api, *, run_id, source_sha):
     factory.require(len(monitors) == 1,
                     "FAILURE_INTAKE_MONITOR_UNVERIFIED")
     job = monitors[0]
-    factory.require(job.get("run_id") == run_id
-                    and job.get("run_attempt") == 1
+    factory.require(type(job.get("id")) is int and
+                    0 < job["id"] < 10**12
+                    and job.get("run_id") == run_id
+                    and type(job.get("run_attempt")) is int and
+                    job["run_attempt"] == 1
                     and job.get("head_sha") == source_sha
                     and job.get("status") == "completed"
                     and job.get("conclusion") == run["conclusion"]
