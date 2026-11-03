@@ -34,8 +34,10 @@ jobs:
           test "$(git rev-parse HEAD)" = "${{ github.sha }}"
           test "$(git hash-object brain/v8/repair_core_origin.py)" = "0caf91b20aaad741f27f361f2963d5818d053aab"
           test "$(git hash-object brain/v8/repair_runtime.py)" = "6619993314d32af11a0fbab9b914837bc7f556b4"
+          test "$(git hash-object brain/v8/target_readiness.py)" = "d9301c79ac18cd19dab293dcc4d6e7da71e5c372"
           install -m 0500 brain/v8/repair_core_origin.py "$RUNNER_TEMP/v8-origin.py"
           install -m 0500 brain/v8/repair_runtime.py "$RUNNER_TEMP/v8-repair.py"
+          install -m 0500 brain/v8/target_readiness.py "$RUNNER_TEMP/v8-target-source.py"
       - name: Authenticate original current-source automatic core before token mint
         env:
           GH_TOKEN: ${{ github.token }}
@@ -64,8 +66,14 @@ jobs:
               handle.write("allowed="+str(receipt["token_mint_allowed"]).lower()+"\n")
           print("V8_AUTHORITY:",receipt["reason"],"token_mint_allowed:",receipt["token_mint_allowed"])
           PY
-      - name: Mint one-CaptureBrief-repository short-lived draft-only contents token
+      - name: Read protected CaptureBrief source before requesting a writer token
+        id: target-source
         if: ${{ steps.authority.outputs.allowed == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -I "$RUNNER_TEMP/v8-target-source.py"
+      - name: Mint one-CaptureBrief-repository short-lived draft-only contents token
+        if: ${{ steps.authority.outputs.allowed == 'true' && steps.target-source.outputs.ready == 'true' }}
         id: runtime
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
         with:
@@ -77,7 +85,7 @@ jobs:
           permission-pull-requests: write
           skip-token-revoke: false
       - name: Reobserve canonical docs and create ONLY source-bound draft PR
-        if: ${{ steps.authority.outputs.allowed == 'true' }}
+        if: ${{ steps.authority.outputs.allowed == 'true' && steps.target-source.outputs.ready == 'true' }}
         env:
           GH_TOKEN: ${{ steps.runtime.outputs.token }}
           INSTALLATION_ID: ${{ steps.runtime.outputs.installation-id }}
@@ -91,6 +99,7 @@ jobs:
           path: |
             ${{ runner.temp }}/v8-origin.json
             ${{ runner.temp }}/v8-authority.json
+            ${{ runner.temp }}/v8-target-preflight.json
             ${{ runner.temp }}/v8-capturebrief-repair.json
           if-no-files-found: warn
           retention-days: 30
