@@ -15,6 +15,7 @@ import re
 import urllib.request
 
 from brain.v10.engineering_factory import verified_automatic_origin
+from brain.v11 import downstream_outcomes
 
 REPO = "P00NSMASHER/portfolio-brain"
 ROOT = "https://api.github.com/repos/" + REPO + "/"
@@ -211,6 +212,7 @@ def report(api, *, expected_main, generated_at):
             "head_sha": head,
             "verification": status,
             "merged_at": p.get("merged_at"),
+            "downstream_completion": "UNVERIFIED_NO_LIVE_REPLAY",
         })
     open_issues = []
     for row in issues:
@@ -276,9 +278,11 @@ def report(api, *, expected_main, generated_at):
                 for x in open_issues),
             "production_deployments_verified": None,
             "actual_operating_cost_usd": None,
+            "all_repo_repairs_completed": None,
         },
         "uncertainty": {
             "production_deployments_verified": "NO_PRODUCTION_RECEIPT_READ",
+            "all_repo_repairs_completed": "UNREGISTERED_TARGETS_NOT_CENSUSED",
             "actual_operating_cost_usd": "NO_BILLING_PROVIDER_DATA",
             "retired_issue_candidates": "REVIEW_ONLY_NOT_AUTOCLOSED",
             "green_actions": "WORKFLOW_SUCCESS_IS_NOT_REPAIR_OR_BUSINESS_OUTCOME",
@@ -342,7 +346,13 @@ th{background:#e8edf1}a{color:#175e92}.note{font-size:13px;color:#546575}
         "<section class='grid'>" + cards + "</section>"
         "<h2>Original merged PR evidence</h2>" +
         table(data["merged_pr_evidence"],
-              ["number", "title", "verification", "merged_at"]) +
+              ["number", "title", "verification", "downstream_completion", "merged_at"]) +
+        ("<h2>Registered real-world repair verification</h2>" +
+         table(data["downstream_completion"]["results"],
+               ["pr_number", "repository", "status", "reason"]) +
+         "<p class='note'>Only preapproved registered candidates are inspected. "
+         "No approved candidates is not a verified zero across the portfolio.</p>"
+         if "downstream_completion" in data else "") +
         "<h2>Open-issue backlog and retired-policy candidates</h2>" +
         table(data["backlog_evidence"],
               ["number", "title", "classification"], url_field="issues") +
@@ -361,6 +371,26 @@ def main(argv=None):
         at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
         api = GitHubReadOnly(os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN", ""))
         outcome = report(api, expected_main=args.expected_main, generated_at=at)
+        # Existing after-core read-only job: independently replay only targets
+        # recorded on this protected exact-source checkout, never infer
+        # success from the dashboard's PR/check sample.
+        candidate_file = Path("repair/V11_DOWNSTREAM_CANDIDATES.json")
+        check(candidate_file.is_file() and not candidate_file.is_symlink()
+              and 0 < candidate_file.stat().st_size <= 4096,
+              "RESULTS_DOWNSTREAM_REGISTRY_MISSING_OR_UNSAFE")
+        registered = downstream_outcomes._json(
+            candidate_file.read_text(encoding="utf-8"),
+            "RESULTS_DOWNSTREAM_REGISTRY_INVALID")
+        result = downstream_outcomes.replay_registered_targets(
+            registered,
+            lambda: downstream_outcomes.GitHubReadOnly(
+                os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN", "")),
+            downstream_outcomes.live_get)
+        outcome["downstream_completion"] = result
+        outcome["metrics"]["registered_real_world_repairs_verified"] = (
+            result["verified_real_world_repairs"])
+        outcome["metrics"]["registered_repairs_held"] = (
+            result["unverified_candidates"])
         for name, body in ((args.json, json.dumps(outcome, indent=2, sort_keys=True) + "\n"),
                            (args.html, html_report(outcome))):
             path = Path(name)
