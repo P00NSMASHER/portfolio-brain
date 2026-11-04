@@ -16,7 +16,7 @@ API = f"repos/{REPO}"
 ARTIFACT = "retally-app-request-v1"
 WRITERS = {
     "technology": ("technology-intelligence.yml", {"push"}),
-    "scout": ("public-repo-hunter.yml", {"schedule", "workflow_dispatch"}),
+    "scout": ("public-repo-hunter.yml", {"schedule", "workflow_dispatch", "push"}),
     "catalog": ("catalog-append.yml", {"push"}),
     "integrator": ("integrator-sync.yml", {"push"}),
 }
