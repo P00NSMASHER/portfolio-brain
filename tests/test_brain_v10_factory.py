@@ -40,6 +40,8 @@ class FakeProvider:
         self.calls = []
         self.main = SOURCE
         self.conclusion = "failure"
+        self.run_attempt = 1
+        self.job_attempt = 1
         self.event = "workflow_dispatch"
         self.origin_step = True
         self.origin_step_conclusion = "success"
@@ -70,12 +72,12 @@ class FakeProvider:
                     "path": ".github/workflows/brain-cycle.yml",
                     "repository": {"full_name": f.REPOSITORY},
                     "head_branch": "main", "head_sha": SOURCE,
-                    "run_attempt": 1, "event": self.event,
+                    "run_attempt": self.run_attempt, "event": self.event,
                     "status": "completed", "conclusion": self.conclusion,
                 }
             if route == "actions/runs/" + str(RUN_ID) + "/jobs?per_page=100":
                 return {"total_count": 1, "jobs": [{
-                    "name": "monitor", "run_id": RUN_ID, "run_attempt": 1,
+                    "name": "monitor", "run_id": RUN_ID, "run_attempt": self.job_attempt,
                     "head_sha": SOURCE, "status": "completed",
                     "conclusion": self.conclusion, "steps": (
                         [{"name": "Verify independently signed Cloudflare Cron provenance",
@@ -184,6 +186,22 @@ class FactoryTests(unittest.TestCase):
         api.conclusion = "success"
         with self.assertRaisesRegex(f.FactoryError, "FACTORY_NO_ORIGINAL_FAILED_CORE"):
             f.verify_original_failed_core(api, manifest())
+
+    def test_run_and_job_attempts_require_exact_integer_one(self):
+        # Python True == 1 and 1.0 == 1, but neither is a valid native
+        # GitHub first-attempt integer. Malformed provider data fails closed.
+        for field in ("run_attempt", "job_attempt"):
+            for invalid in (True, 1.0, "1", None, 2, False, 0):
+                with self.subTest(field=field, invalid=invalid):
+                    api = FakeProvider()
+                    setattr(api, field, invalid)
+                    code = ("FACTORY_NO_ORIGINAL_FAILED_CORE"
+                            if field == "run_attempt"
+                            else "FACTORY_ORIGINAL_AUTOMATIC_ORIGIN_UNVERIFIED")
+                    with self.assertRaisesRegex(f.FactoryError, code):
+                        f.verify_original_failed_core(api, manifest())
+                    self.assertFalse(any(method != "GET"
+                                         for method, _, _ in api.calls))
 
     def test_manual_failed_dispatch_without_authenticated_origin_is_denied(self):
         api = FakeProvider()
