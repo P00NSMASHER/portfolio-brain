@@ -1,6 +1,8 @@
 import hashlib
 import io
 import json
+import os
+import tempfile
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -64,14 +66,44 @@ class AppProposalTests(unittest.TestCase):
         artifact={"workflow_run":{"id":12345,"head_branch":"main"},"id":55,
                   "name":broker.ARTIFACT,"expired":False,"size_in_bytes":100}
         with patch.object(broker,"read_request",return_value=REQUEST):
-            for existing,ref in (([{"number":9}],None),([],BASE)):
-                calls=[RUN,b"data",{"commit":{"sha":BASE}},existing]
-                if ref:
-                    calls.append({"object":{"sha":ref}})
-                with patch.object(broker,"api",side_effect=calls) as api:
-                    if existing:
-                        self.assertIsNone(broker.current_request(artifact))
-                    else:
-                        with self.assertRaises(ValueError):
-                            broker.current_request(artifact)
-                    self.assertFalse(any("payload" in c.kwargs for c in api.call_args_list))
+            valid_diff={"status":"ahead","ahead_by":1,"behind_by":0,
+                        "files":[{"filename":"evidence.json","status":"modified"}]}
+            existing={"number":9,"head":{"sha":HEAD},"base":{"sha":BASE}}
+            calls=[RUN,b"data",{"commit":{"sha":BASE}},[existing],valid_diff["files"]]
+            with patch.object(broker,"api",side_effect=calls) as api:
+                self.assertIsNone(broker.current_request(artifact))
+                self.assertFalse(any("payload" in c.kwargs for c in api.call_args_list))
+            calls=[RUN,b"data",{"commit":{"sha":BASE}},[],{"object":{"sha":BASE}}]
+            with patch.object(broker,"api",side_effect=calls), self.assertRaises(ValueError):
+                broker.current_request(artifact)
+
+    def test_stale_receipts_regenerate_only_latest_unsuperseded_worker(self):
+        stale_one={**REQUEST,"lane":"scout","base":"1"*40,"scout_fingerprint":"1"*64}
+        stale_two={**stale_one,"branch":"automation/retally-scout-23456-1","head":"2"*40}
+        artifacts=[{"id":1},{"id":2},{"id":3}]
+        inspected=[
+            ({**stale_one,"branch":"automation/retally-scout-34567-1"},BASE,"HUNTER-01",True),
+            (stale_one,BASE,"HUNTER-01",False),
+            (stale_two,BASE,"HUNTER-02",False),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            output=os.path.join(tmp,"output")
+            with patch.dict(os.environ,{"GITHUB_OUTPUT":output}), \
+                    patch.object(broker,"api",return_value={"artifacts":artifacts}), \
+                    patch.object(broker,"inspect_request",side_effect=inspected), \
+                    patch("sys.argv",["retally_app_proposals"]):
+                broker.main()
+            with open(output,encoding="utf-8") as handle:
+                self.assertEqual(handle.read(),f"recovery=HUNTER-02:{BASE}\n")
+
+    def test_recovery_dispatch_rechecks_main_and_holds_when_active(self):
+        empty={"workflow_runs":[]}
+        with patch.object(broker,"api",side_effect=[{"commit":{"sha":BASE}},empty,empty,None]) as api:
+            broker.dispatch_recovery("HUNTER-05",BASE)
+        self.assertEqual(api.call_args_list[-1].args[0],
+                         "actions/workflows/public-repo-hunter.yml/dispatches")
+        self.assertEqual(api.call_args_list[-1].kwargs["payload"]["inputs"]["worker"],"HUNTER-05")
+        with patch.object(broker,"api",side_effect=[{"commit":{"sha":BASE}},
+                                                    {"workflow_runs":[{"id":7}]}]), \
+                self.assertRaisesRegex(ValueError,"already active"):
+            broker.dispatch_recovery("HUNTER-05",BASE)

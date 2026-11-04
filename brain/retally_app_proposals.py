@@ -22,12 +22,14 @@ WRITERS = {
 }
 SHA = re.compile(r"[0-9a-f]{40}")
 APP_BOT = 343751880
+SCOUT_WORKFLOW = "public-repo-hunter.yml"
+SCOUT_WORKER = re.compile(r"intelligence/scout_queue/(HUNTER-(?:0[1-9]|1[0-4]))\.json")
 
 
 def api(path, *, payload=None, binary=False):
     method = "POST" if payload is not None else "GET"
-    if method == "POST" and path != "pulls":
-        raise ValueError("Only PR creation is authorized")
+    if method == "POST" and path not in {"pulls", f"actions/workflows/{SCOUT_WORKFLOW}/dispatches"}:
+        raise ValueError("Only PR creation and scoped Scout recovery are authorized")
     args = ["gh", "api", "--method", method, API + "/" + path]
     if payload is not None:
         args.extend(["--input", "-"])
@@ -67,7 +69,43 @@ def check_request(request, run, main):
     return request["base"] == main
 
 
-def current_request(artifact):
+def validate_branch(request, main):
+    branch = quote(request["branch"], safe="")
+    existing = api(f"pulls?state=all&head=P00NSMASHER%3A{branch}&base=main&per_page=1")
+    if existing:
+        record = existing[0]
+        if (record["head"]["sha"] != request["head"]
+                or record["base"]["sha"] != request["base"]):
+            raise ValueError("Existing proposal does not match the writer request")
+        files = api(f"pulls/{int(record['number'])}/files?per_page=100")
+        if (len(files) != request["file_count"]
+                or len({f["filename"] for f in files}) != len(files)
+                or any(f["status"] not in {"modified", "added"}
+                       or not re.fullmatch(r"(?!\.)(?!.*(?:/\.|//))[A-Za-z0-9_./-]+\.(?:md|json|jsonl|txt|csv)",
+                                           f["filename"])
+                       for f in files)):
+            raise ValueError("Existing proposal files differ from the writer request")
+        return files, True
+    head = request["head"]
+    if api("git/ref/heads/" + request["branch"])["object"]["sha"] != head:
+        raise ValueError("Generated branch moved")
+    commit = api(f"git/commits/{head}")
+    if [p["sha"] for p in commit["parents"]] != [request["base"]]:
+        raise ValueError("Generated commit is not a direct child of its recorded base")
+    diff = api(f"compare/{request['base']}...{head}")
+    files = diff["files"]
+    if (diff["status"] != "ahead" or diff["ahead_by"] != 1 or diff["behind_by"] != 0
+            or len(files) != request["file_count"] or len({f["filename"] for f in files}) != len(files)
+            or any(f["status"] not in {"modified", "added"}
+                   or not re.fullmatch(r"(?!\.)(?!.*(?:/\.|//))[A-Za-z0-9_./-]+\.(?:md|json|jsonl|txt|csv)", f["filename"])
+                   for f in files)):
+        raise ValueError("Generated diff differs from the writer request")
+    if request["base"] == main and [p["sha"] for p in commit["parents"]] != [main]:
+        raise ValueError("Generated commit is not a direct child of current main")
+    return files, False
+
+
+def inspect_request(artifact):
     origin = artifact["workflow_run"]
     if artifact["name"] != ARTIFACT or artifact["expired"] or origin["head_branch"] != "main":
         return None
@@ -77,32 +115,40 @@ def current_request(artifact):
     if (run["path"] not in {".github/workflows/" + name for name, _ in WRITERS.values()}
             or run["conclusion"] != "success" or run["head_branch"] != "main"):
         return None
-    raw = api(f"actions/artifacts/{artifact['id']}/zip", binary=True)
-    request = read_request(artifact, raw)
+    request = read_request(artifact, api(f"actions/artifacts/{artifact['id']}/zip", binary=True))
     main = api("branches/main")["commit"]["sha"]
-    if request.get("base") != main:
+    check_request(request, run, main)
+    files, existing = validate_branch(request, main)
+    worker = None
+    if request["lane"] == "scout":
+        workers = {match.group(1) for item in files
+                   if (match := SCOUT_WORKER.fullmatch(item["filename"]))}
+        if len(workers) != 1:
+            raise ValueError("Scout request does not identify exactly one worker queue")
+        worker = workers.pop()
+    return request, main, worker, existing
+
+
+def current_request(artifact):
+    inspected = inspect_request(artifact)
+    if inspected is None:
         return None
-    if not check_request(request, run, main):
-        return None
-    branch = quote(request["branch"], safe="")
-    existing = api(f"pulls?state=all&head=P00NSMASHER%3A{branch}&base=main&per_page=1")
-    if existing:
-        return None
-    head = request["head"]
-    if api("git/ref/heads/" + request["branch"])["object"]["sha"] != head:
-        raise ValueError("Generated branch moved")
-    commit = api(f"git/commits/{head}")
-    if [p["sha"] for p in commit["parents"]] != [main]:
-        raise ValueError("Generated commit is not a direct child of current main")
-    diff = api(f"compare/{main}...{head}")
-    files = diff["files"]
-    if (diff["status"] != "ahead" or diff["ahead_by"] != 1 or diff["behind_by"] != 0
-            or len(files) != request["file_count"] or len({f["filename"] for f in files}) != len(files)
-            or any(f["status"] not in {"modified", "added"}
-                   or not re.fullmatch(r"(?!\.)(?!.*(?:/\.|//))[A-Za-z0-9_./-]+\.(?:md|json|jsonl|txt|csv)", f["filename"])
-                   for f in files)):
-        raise ValueError("Generated diff differs from the writer request")
-    return request
+    request, main, _, existing = inspected
+    return request if request["base"] == main and not existing else None
+
+
+def dispatch_recovery(worker, expected_main):
+    if not re.fullmatch(r"HUNTER-(?:0[1-9]|1[0-4])", worker):
+        raise ValueError("Invalid Scout recovery worker")
+    if api("branches/main")["commit"]["sha"] != expected_main:
+        raise ValueError("Main moved before Scout recovery dispatch")
+    for status in ("queued", "in_progress"):
+        active = api(f"actions/workflows/{SCOUT_WORKFLOW}/runs?event=workflow_dispatch&status={status}&per_page=1")
+        if active["workflow_runs"]:
+            raise ValueError("A manual Scout run is already active")
+    api(f"actions/workflows/{SCOUT_WORKFLOW}/dispatches",
+        payload={"ref": "main", "inputs": {"worker": worker}})
+    print(f"Requested source-bound refresh for stale {worker} receipt at {expected_main}")
 
 
 def create(request):
@@ -125,18 +171,38 @@ def create(request):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--publish", type=int)
+    parser.add_argument("--recover")
     args = parser.parse_args()
     if args.publish is not None:
         request = current_request(api(f"actions/artifacts/{args.publish}"))
         if request:
             create(request)
         return
+    if args.recover is not None:
+        worker, expected_main = args.recover.split(":", 1)
+        dispatch_recovery(worker, expected_main)
+        return
     listing = api(f"actions/artifacts?name={ARTIFACT}&per_page=100")
+    seen_workers = set()
     for artifact in listing["artifacts"]:
-        if current_request(artifact):
+        inspected = inspect_request(artifact)
+        if inspected is None:
+            continue
+        request, main, worker, existing = inspected
+        if existing:
+            if worker:
+                seen_workers.add(worker)
+            continue
+        if request["base"] == main:
             with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
                 print(f"artifact={int(artifact['id'])}", file=out)
             return
+        if worker and worker not in seen_workers:
+            with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+                print(f"recovery={worker}:{main}", file=out)
+            return
+        if worker:
+            seen_workers.add(worker)
     print("No current unsubmitted RETALLY proposal")
 
 
