@@ -15,17 +15,17 @@ class GovernanceBoundaryTests(unittest.TestCase):
         self.assertEqual(result["projects"],12)
         self.assertEqual(result["authority_model"],"DENY_BY_DEFAULT_PROJECT_SCOPED_NO_INHERITANCE")
 
-    def test_exact_single_downstream_candidate_grant_is_not_inherited(self):
+    def test_downstream_candidate_grants_are_not_inherited(self):
         policy=json.loads((ROOT/"governance/boundaries.json").read_text())
         downstream=[row for row in policy["project_capabilities"] if row["project_id"]!="PRJ-000"]
         permitted=[row for row in downstream if row["CANDIDATE_PR"]["allowed"]]
-        self.assertEqual([x["project_id"] for x in permitted], ["PRJ-004"])
+        self.assertEqual([x["project_id"] for x in permitted], ["PRJ-004", "PRJ-011"])
         self.assertEqual(permitted[0]["CANDIDATE_PR"], {
             "allowed": True, "repository_ids": ["REPO-007"],
             "branch_prefixes": ["v8-capturebrief-hosting-doc-"],
         })
         self.assertTrue(all(row["CANDIDATE_PR"]["allowed"] is False
-                            for row in downstream if row["project_id"]!="PRJ-004"))
+                            for row in downstream if row["project_id"] not in {"PRJ-004", "PRJ-011"}))
         self.assertTrue(all(row["DEPLOY"]["allowed"] is False for row in downstream))
         self.assertTrue(all(row["EXTERNAL_ACTION"]["allowed"] is False for row in downstream))
 

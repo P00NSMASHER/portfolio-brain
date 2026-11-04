@@ -1,0 +1,65 @@
+name: Open validated RETALLY proposals
+
+on:
+  workflow_run:
+    workflows: [brain-cycle-v2]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: retally-app-proposals
+  cancel-in-progress: false
+
+jobs:
+  open-proposal:
+    if: >-
+      github.repository == 'P00NSMASHER/portfolio-brain' && github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.repository.full_name == github.repository &&
+      github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_sha == github.sha &&
+      github.event.workflow_run.conclusion == 'success' &&
+      (github.event.workflow_run.event == 'schedule' || github.event.workflow_run.event == 'workflow_dispatch')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Read RETALLY writer receipts
+        id: read
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: '5352505'
+          private-key: ${{ secrets.PORTFOLIO_RUNTIME_PRIVATE_KEY }}
+          owner: P00NSMASHER
+          repositories: github-value-hunt-ledger
+          permission-actions: read
+          permission-contents: read
+          permission-pull-requests: read
+      - name: Authenticate source writer, candidate authority and current branch
+        id: request
+        env:
+          GH_TOKEN: ${{ steps.read.outputs.token }}
+        run: python -m brain.retally_app_proposals
+      - name: Mint RETALLY-only PR writer for validated request
+        if: steps.request.outputs.artifact != ''
+        id: writer
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: '5352505'
+          private-key: ${{ secrets.PORTFOLIO_RUNTIME_PRIVATE_KEY }}
+          owner: P00NSMASHER
+          repositories: github-value-hunt-ledger
+          permission-actions: read
+          permission-contents: read
+          permission-pull-requests: write
+      - name: Revalidate and open the generated PR as the runtime App
+        if: steps.request.outputs.artifact != ''
+        env:
+          GH_TOKEN: ${{ steps.writer.outputs.token }}
+          REQUEST: ${{ steps.request.outputs.artifact }}
+        run: python -m brain.retally_app_proposals --publish "$REQUEST"
