@@ -159,7 +159,7 @@ class OwnerFollowThroughTests(unittest.TestCase):
                     if x["dedupe_key"] == work["dedupe_key"])
         self.assertTrue(task["technical_main_source_verified"])
         self.assertEqual(task["next_operation"],
-                         "MAIN_TECHNICAL_SOURCE_VERIFIED_REVIEW_RUNTIME_SEPARATELY")
+                         "VERIFY_ACTUAL_DOWNSTREAM_DELIVERY_AND_FUNCTIONAL_BEHAVIOR")
         self.assertFalse(task["live_deployment_verified"])
         self.assertFalse(task["financial_or_external_action_authorized"])
         self.assertEqual(plan["technical_main_verified_count"], 1)
