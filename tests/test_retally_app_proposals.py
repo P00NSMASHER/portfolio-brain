@@ -100,9 +100,11 @@ class AppProposalTests(unittest.TestCase):
         empty={"workflow_runs":[]}
         with patch.object(broker,"api",side_effect=[{"commit":{"sha":BASE}},empty,empty,None]) as api:
             broker.dispatch_recovery("HUNTER-05",BASE)
-        self.assertEqual(api.call_args_list[-1].args[0],
-                         "actions/workflows/public-repo-hunter.yml/dispatches")
-        self.assertEqual(api.call_args_list[-1].kwargs["payload"]["inputs"]["worker"],"HUNTER-05")
+        self.assertEqual(api.call_args_list[-1].args[0],"dispatches")
+        self.assertEqual(api.call_args_list[-1].kwargs["payload"]["client_payload"]["worker"],
+                         "HUNTER-05")
+        self.assertEqual(api.call_args_list[-1].kwargs["payload"]["client_payload"]["expected_main"],
+                         BASE)
         with patch.object(broker,"api",side_effect=[{"commit":{"sha":BASE}},
                                                     {"workflow_runs":[{"id":7}]}]), \
                 self.assertRaisesRegex(ValueError,"already active"):
