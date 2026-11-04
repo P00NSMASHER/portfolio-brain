@@ -231,7 +231,8 @@ def verify_original_failed_core(api, spec):
             and run.get("repository", {}).get("full_name") == REPOSITORY
             and run.get("head_branch") == "main"
             and run.get("head_sha") == spec["base_sha"]
-            and run.get("run_attempt") == 1
+            and type(run.get("run_attempt")) is int
+            and run["run_attempt"] == 1
             and run.get("event") in ("schedule", "workflow_dispatch")
             and run.get("status") == "completed"
             and run.get("conclusion") in ("failure", "timed_out"),
@@ -246,7 +247,9 @@ def verify_original_failed_core(api, spec):
     origin_authenticated = False
     for job in rows:
         if (type(job) is dict and job.get("name") == "monitor"
-                and job.get("run_id") == run_id and job.get("run_attempt") == 1
+                and job.get("run_id") == run_id
+                and type(job.get("run_attempt")) is int
+                and job["run_attempt"] == 1
                 and job.get("head_sha") == spec["base_sha"]
                 and job.get("status") == "completed"
                 and job.get("conclusion") in ("failure", "timed_out")):
