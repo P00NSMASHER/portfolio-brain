@@ -68,7 +68,7 @@ jobs:
             --tmpfs /work:rw,nosuid,nodev,size=2048m,mode=1777 \
             -e HOME=/tmp -e PYTHONDONTWRITEBYTECODE=1 \
             -v "$PWD/candidate:/src:ro" python:3.12-bookworm \
-            sh -lc 'find /src -mindepth 1 -maxdepth 1 ! -name .git -printf '%f\\0' | tar -C /src --null -T - -cf - | tar -C /work --no-same-owner --no-same-permissions --touch --no-overwrite-dir -xf - && ln -s /src/.git /work/.git && cd /work && python -I -c '"'"'import sys,unittest;sys.path.insert(0,"/work");suite=unittest.defaultTestLoader.discover("/work/tests",pattern="test_*.py");n=suite.countTestCases();print("MIGRATION_INDEPENDENT_FULL_TEST_COUNT="+str(n),flush=True);sys.exit(3) if n<1000 else None;result=unittest.TextTestRunner(verbosity=1).run(suite);raise SystemExit(not result.wasSuccessful())'"'"''
+            sh -lc 'cd /src && find . -mindepth 1 -maxdepth 1 ! -name .git -print0 | tar --null -T - -cf - | tar -C /work --no-same-owner --no-same-permissions --touch --no-overwrite-dir -xf - && ln -s /src/.git /work/.git && cd /work && python -I -c '"'"'import sys,unittest;sys.path.insert(0,"/work");suite=unittest.defaultTestLoader.discover("/work/tests",pattern="test_*.py");n=suite.countTestCases();print("MIGRATION_INDEPENDENT_FULL_TEST_COUNT="+str(n),flush=True);sys.exit(3) if n<1000 else None;result=unittest.TextTestRunner(verbosity=1).run(suite);raise SystemExit(not result.wasSuccessful())'"'"''
 
       - name: Independently execute focused Phase 1 regressions offline
         run: |
@@ -79,7 +79,7 @@ jobs:
             --tmpfs /work:rw,nosuid,nodev,size=2048m,mode=1777 \
             -e HOME=/tmp -e PYTHONDONTWRITEBYTECODE=1 \
             -v "$PWD/candidate:/src:ro" python:3.12-bookworm \
-            sh -lc 'find /src -mindepth 1 -maxdepth 1 ! -name .git -printf '%f\\0' | tar -C /src --null -T - -cf - | tar -C /work --no-same-owner --no-same-permissions --touch --no-overwrite-dir -xf - && ln -s /src/.git /work/.git && cd /work && python -I -c '"'"'import sys,unittest;sys.path.insert(0,"/work");suite=unittest.defaultTestLoader.discover("/work/tests",pattern="test_phase1_*.py");n=suite.countTestCases();print("MIGRATION_INDEPENDENT_PHASE1_TEST_COUNT="+str(n),flush=True);sys.exit(3) if n<1 else None;result=unittest.TextTestRunner(verbosity=1).run(suite);raise SystemExit(not result.wasSuccessful())'"'"''
+            sh -lc 'cd /src && find . -mindepth 1 -maxdepth 1 ! -name .git -print0 | tar --null -T - -cf - | tar -C /work --no-same-owner --no-same-permissions --touch --no-overwrite-dir -xf - && ln -s /src/.git /work/.git && cd /work && python -I -c '"'"'import sys,unittest;sys.path.insert(0,"/work");suite=unittest.defaultTestLoader.discover("/work/tests",pattern="test_phase1_*.py");n=suite.countTestCases();print("MIGRATION_INDEPENDENT_PHASE1_TEST_COUNT="+str(n),flush=True);sys.exit(3) if n<1 else None;result=unittest.TextTestRunner(verbosity=1).run(suite);raise SystemExit(not result.wasSuccessful())'"'"''
 
       - name: Independently verify operating-mode invariants offline
         run: |
@@ -90,7 +90,7 @@ jobs:
             --tmpfs /work:rw,nosuid,nodev,size=2048m,mode=1777 \
             -e HOME=/tmp -e PYTHONDONTWRITEBYTECODE=1 \
             -v "$PWD/candidate:/src:ro" python:3.12-bookworm \
-            sh -lc 'find /src -mindepth 1 -maxdepth 1 ! -name .git -printf '%f\\0' | tar -C /src --null -T - -cf - | tar -C /work --no-same-owner --no-same-permissions --touch --no-overwrite-dir -xf - && ln -s /src/.git /work/.git && cd /work && python -I -c '"'"'import sys;sys.path.insert(0,"/work");from operations.validate_operating_mode import validate_operating_mode;print(validate_operating_mode())'"'"''
+            sh -lc 'cd /src && find . -mindepth 1 -maxdepth 1 ! -name .git -print0 | tar --null -T - -cf - | tar -C /work --no-same-owner --no-same-permissions --touch --no-overwrite-dir -xf - && ln -s /src/.git /work/.git && cd /work && python -I -c '"'"'import sys;sys.path.insert(0,"/work");from operations.validate_operating_mode import validate_operating_mode;print(validate_operating_mode())'"'"''
 
       - name: Create existing independent App5121826 token after tests pass
         id: independent-token
