@@ -210,6 +210,41 @@ class DownstreamOutcomeTests(unittest.TestCase):
         with self.assertRaisesRegex(o.OutcomeHold, "REPOSITORY_OR_PR_NOT_ELIGIBLE"):
             o.verify(self.api, self.live, repo="P00NSMASHER/capturebrief", pr_number=900)
 
+    def test_no_approved_candidates_does_not_invent_completed_work(self):
+        result = o.replay_registered_targets(
+            {"schema_version": 1, "targets": []},
+            lambda: self.api, self.live)
+        self.assertEqual(result["status"], "NO_APPROVED_OUTCOME_CANDIDATES")
+        self.assertEqual(result["registered_candidates"], 0)
+        self.assertEqual(result["verified_real_world_repairs"], 0)
+        self.assertEqual(result["scope"],
+                         "REGISTERED_CANDIDATES_ONLY_NOT_GLOBAL_REPAIR_COUNT")
+        self.assertEqual(self.api.calls, [])
+        self.assertEqual(self.live.calls, [])
+
+    def test_approved_batch_counts_only_replayed_original_live_proof(self):
+        target = {"repository": REPO, "pr_number": 900}
+        result = o.replay_registered_targets(
+            {"schema_version": 1, "targets": [target]},
+            lambda: self.api, self.live)
+        self.assertEqual(result["verified_real_world_repairs"], 1)
+        self.assertEqual(result["unverified_candidates"], 0)
+        self.api.bad_issuer = True
+        failed = o.replay_registered_targets(
+            {"schema_version": 1, "targets": [target]},
+            lambda: self.api, self.live)
+        self.assertEqual(failed["verified_real_world_repairs"], 0)
+        self.assertEqual(failed["unverified_candidates"], 1)
+        self.assertEqual(failed["results"][0]["status"],
+                         "DOWNSTREAM_OUTCOME_UNVERIFIED")
+
+    def test_duplicate_batch_claim_cannot_be_double_counted(self):
+        item = {"repository": REPO, "pr_number": 900}
+        with self.assertRaisesRegex(o.OutcomeHold, "BATCH_DUPLICATE"):
+            o.replay_registered_targets(
+                {"schema_version": 1, "targets": [item, item]},
+                lambda: self.api, self.live)
+
     def test_untrusted_client_cannot_use_write_or_secrets_route(self):
         client = o.GitHubReadOnly("x" * 30)
         for route in ("pulls/900/merge", "actions/dispatches",
