@@ -163,6 +163,7 @@ class OwnerFollowThroughTests(unittest.TestCase):
         self.assertFalse(task["live_deployment_verified"])
         self.assertFalse(task["financial_or_external_action_authorized"])
         self.assertEqual(plan["technical_main_verified_count"], 1)
+        self.assertEqual(plan["verified_downstream_repairs_complete"], 0)
 
     def test_all_nonterminal_main_checks_reopen_previous_technical_verification(self):
         for project in ("retally", "product-factory"):
