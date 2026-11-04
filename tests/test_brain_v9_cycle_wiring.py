@@ -138,6 +138,47 @@ class CycleWiringTests(unittest.TestCase):
         self.assertEqual(self.queue.checkpoint(), evidence_before)
         self.assertIn(work_id, self.queue.snapshot()['work'])
 
+    def test_pressure_archives_only_superseded_low_priority_observations(self):
+        with patch('brain.v9.batch_queue.MAX_WORK', 12):
+            low = report()
+            project = low['projects'][0]
+            project['source_check_state'] = 'INCOMPLETE_OR_INCONCLUSIVE_CHECKS_OBSERVED'
+            for index in range(8):
+                project['repository_revision'] = f'{index:040x}'
+                run_cycle(low, self.queue, source_sha=SOURCE, cycle=index, now=NOW)
+            original = self.queue.snapshot()['work']
+            held = next(iter(original))
+            self.queue.claim(held, original[held]['owner'], now=NOW)
+            run_cycle(report(), self.queue, source_sha=SOURCE, cycle=8, now=NOW)
+            current = report()
+            project = current['projects'][0]
+            project.update(repository_revision='c'*40,
+                           source_check_state='NO_ADVERSE_CHECKS_OBSERVED_NOT_RELEASE_APPROVAL')
+            source = dict(repository=project['repository'], default_branch='main',
+                          data_kind='ACTUAL', head_sha=project['repository_revision'],
+                          source_ref=f"https://github.com/{project['repository']}/commit/{project['repository_revision']}",
+                          observed_at=LATER)
+            checkpoint = self.queue.checkpoint()
+            for snapshots in ([], [dict(source, head_sha='d'*40)],
+                              [dict(source, observed_at='2026-10-21T08:00:00Z')],
+                              [source, source], [dict(source, data_kind='SIMULATED')]):
+                current['repositories'] = snapshots
+                run_cycle(current, self.queue, source_sha=SOURCE, cycle=9, now=LATER)
+                self.assertEqual(self.queue.checkpoint(), checkpoint)
+
+            current['repositories'] = [source]
+            result = run_cycle(current, self.queue, source_sha=SOURCE, cycle=9, now=LATER)
+            self.assertEqual(result['metrics']['work_items'], 2)
+            self.assertEqual(result['archived_superseded_observations'], 7)
+            work = self.queue.snapshot()['work']
+            self.assertIn(held, work)
+            self.assertEqual(sum(row['priority'] == 1 for row in work.values()), 1)
+            self.assertEqual(self.queue.checkpoint()['chain_hash'], checkpoint['chain_hash'])
+            self.assertEqual(self.queue.restore_drill()['checkpoint'], self.queue.checkpoint())
+            self.assertEqual(result['metrics']['actual_live_verified'], 0)
+            repeated = run_cycle(current, self.queue, source_sha=SOURCE, cycle=10, now=LATER)
+            self.assertEqual(repeated['archived_superseded_observations'], 0)
+
     def test_missing_source_remains_unknown(self):
         payload = report()
         payload['projects'][0]['repository_revision'] = None
