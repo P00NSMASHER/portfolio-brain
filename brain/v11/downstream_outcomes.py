@@ -152,13 +152,18 @@ def _approved_contract(api, repo, number, base):
          and type(doc.get("size")) is int
          and 0 < doc["size"] <= 4096, "OUTCOME_PREAPPROVED_CONTRACT_MISSING")
     try:
-        raw = base64.b64decode(doc["content"], validate=True)
+        encoded = doc["content"].replace("\n", "").replace("\r", "")
+        raw = base64.b64decode(encoded, validate=True)
     except (ValueError, TypeError) as exc:
         raise OutcomeHold("OUTCOME_CONTRACT_ENCODING_INVALID") from exc
     blob_sha = hashlib.sha1(b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw).hexdigest()
     need(len(raw) == doc["size"] and blob_sha == doc["sha"],
          "OUTCOME_APPROVED_SOURCE_BLOB_MISMATCH")
-    contract = _json(raw.decode("utf-8"), "OUTCOME_CONTRACT_JSON_INVALID")
+    try:
+        decoded = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise OutcomeHold("OUTCOME_CONTRACT_UTF8_INVALID") from exc
+    contract = _json(decoded, "OUTCOME_CONTRACT_JSON_INVALID")
     need(type(contract) is dict and set(contract) == {
         "schema_version", "repository", "pr_number", "environment",
         "build_url", "behavior_url", "expected_behavior_sha256"}
@@ -249,7 +254,11 @@ def verify(api, probe, *, repo, pr_number):
          and 0 < len(build["body"]) <= MAX_HTTP
          and "json" in str(build.get("content_type", "")).lower(),
          "OUTCOME_LIVE_BUILD_NOT_VERIFIED")
-    build_data = _json(build["body"].decode("utf-8"), "OUTCOME_LIVE_BUILD_INVALID")
+    try:
+        build_text = build["body"].decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise OutcomeHold("OUTCOME_LIVE_BUILD_UTF8_INVALID") from exc
+    build_data = _json(build_text, "OUTCOME_LIVE_BUILD_INVALID")
     need(type(build_data) is dict and build_data.get("source_sha") == merge,
          "OUTCOME_LIVE_SOURCE_REVISION_MISMATCH")
     behavior = probe(repo, contract["behavior_url"])
