@@ -273,21 +273,75 @@ def verify(api, probe, *, repo, pr_number):
     }
 
 
+def replay_registered_targets(raw, api_factory, probe):
+    """Read-only bounded scan of owner-approved candidates; holds are not PASS."""
+    need(type(raw) is dict and set(raw) == {"schema_version", "targets"}
+         and raw["schema_version"] == 1
+         and type(raw["targets"]) is list and len(raw["targets"]) <= 3,
+         "OUTCOME_BATCH_SCHEMA_INVALID")
+    seen, entries = set(), []
+    for candidate in raw["targets"]:
+        need(type(candidate) is dict and set(candidate) == {"repository", "pr_number"}
+             and candidate["repository"] in INDEPENDENT
+             and type(candidate["pr_number"]) is int
+             and 0 < candidate["pr_number"] < 10**9,
+             "OUTCOME_BATCH_TARGET_INVALID")
+        key = (candidate["repository"], candidate["pr_number"])
+        need(key not in seen, "OUTCOME_BATCH_DUPLICATE")
+        seen.add(key)
+        try:
+            entry = verify(api_factory(), probe, repo=key[0], pr_number=key[1])
+        except OutcomeHold as exc:
+            entry = {"repository": key[0], "pr_number": key[1],
+                     "status": "DOWNSTREAM_OUTCOME_UNVERIFIED",
+                     "reason": str(exc), "provider_writes": 0}
+        entries.append(entry)
+    return {
+        "schema_version": 1,
+        "status": ("NO_APPROVED_OUTCOME_CANDIDATES" if not entries
+                   else "REGISTERED_OUTCOMES_CHECKED"),
+        "scope": "REGISTERED_CANDIDATES_ONLY_NOT_GLOBAL_REPAIR_COUNT",
+        "registered_candidates": len(entries),
+        "verified_real_world_repairs": sum(
+            row["status"] == "VERIFIED_REAL_WORLD_REPAIR" for row in entries),
+        "unverified_candidates": sum(
+            row["status"] != "VERIFIED_REAL_WORLD_REPAIR" for row in entries),
+        "results": entries,
+        "provider_writes": 0,
+    }
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--repository", required=True)
-    parser.add_argument("--pr", required=True, type=int)
+    parser.add_argument("--repository")
+    parser.add_argument("--pr", type=int)
+    parser.add_argument("--batch", type=Path)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args(argv)
     try:
-        provider = GitHubReadOnly(os.environ.get("GITHUB_TOKEN") or "")
-        result = verify(provider, live_get, repo=args.repository, pr_number=args.pr)
+        if args.batch is not None:
+            need(args.repository is None and args.pr is None
+                 and args.batch.as_posix() == "repair/V11_DOWNSTREAM_CANDIDATES.json"
+                 and args.batch.is_file() and not args.batch.is_symlink()
+                 and 0 < args.batch.stat().st_size <= 4096,
+                 "OUTCOME_BATCH_SOURCE_UNSAFE")
+            raw = _json(args.batch.read_text("utf-8"),
+                        "OUTCOME_BATCH_INVALID_JSON")
+            result = replay_registered_targets(
+                raw, lambda: GitHubReadOnly(os.environ.get("GITHUB_TOKEN") or ""),
+                live_get)
+        else:
+            need(args.repository is not None and args.pr is not None,
+                 "OUTCOME_SINGLE_TARGET_MISSING")
+            provider = GitHubReadOnly(os.environ.get("GITHUB_TOKEN") or "")
+            result = verify(provider, live_get,
+                            repo=args.repository, pr_number=args.pr)
         need(args.output.parent.is_dir() and not args.output.exists()
              and not args.output.is_symlink(), "OUTCOME_OUTPUT_UNSAFE")
         with args.output.open("x", encoding="utf-8") as f:
             json.dump(result, f, sort_keys=True, indent=2)
             f.write("\n")
-        print(json.dumps({"status": result["status"], "pr": args.pr, "provider_writes": 0}))
+        print(json.dumps({"status": result["status"], "provider_writes": 0}))
         return 0
     except (OutcomeHold, OSError, UnicodeError, ValueError) as exc:
         print(json.dumps({"status": "DOWNSTREAM_OUTCOME_UNVERIFIED",
