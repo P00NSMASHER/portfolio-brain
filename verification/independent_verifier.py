@@ -75,19 +75,45 @@ def _api(token: str, path: str, *, method: str = "GET", payload: dict[str, Any] 
         return json.loads(raw.decode("utf-8")) if raw else {}
 
 
+def _valid_compare_filename(value: Any) -> bool:
+    """GitHub compare filenames must be unambiguous repository-relative paths."""
+    return (
+        type(value) is str and 0 < len(value) <= 4096
+        and not value.startswith("/") and chr(92) not in value
+        and all(part not in ("", ".", "..") for part in value.split("/"))
+        and all(ord(char) >= 32 and ord(char) != 127 for char in value)
+    )
+
+
 def _current_main_changed_files(compare: dict[str, Any]) -> set[str]:
+    req(type(compare) is dict, "current-main compare response invalid")
     rows = compare.get("files")
-    req(isinstance(rows, list), "current-main compare file listing malformed")
+    req(type(rows) is list, "current-main compare file listing malformed")
     # GitHub's compare API caps file output at 300 entries. Exactly 300 is
     # ambiguous, so fail closed rather than risk missing a trust-anchor change.
     req(len(rows) < MAX_COMPARE_FILES, "current-main compare file listing hit verifier bound")
     changed: set[str] = set()
+    valid_statuses = {"added", "removed", "modified", "renamed",
+                      "copied", "changed", "unchanged"}
     for row in rows:
+        req(type(row) is dict, "current-main compare file entry invalid")
         filename = row.get("filename")
-        req(
-            isinstance(filename, str) and filename and not filename.startswith("/"),
-            "current-main compare filename invalid",
-        )
+        req(_valid_compare_filename(filename),
+            "current-main compare filename invalid")
+        status = row.get("status")
+        req(type(status) is str and status in valid_statuses,
+            "current-main compare file status invalid")
+        if status in {"renamed", "copied"}:
+            # A rename *away from* an immutable anchor is just as dangerous
+            # as a rename *to* one. Preserve both sides of the GitHub diff.
+            previous = row.get("previous_filename")
+            req(_valid_compare_filename(previous) and previous != filename,
+                "current-main compare original filename invalid")
+            changed.add(previous)
+        else:
+            req("previous_filename" not in row
+                or row["previous_filename"] is None,
+                "current-main compare unexpected previous filename")
         changed.add(filename)
     return changed
 
