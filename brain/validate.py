@@ -17,11 +17,42 @@ def validate_policy():
         require(p[name] is False, "forbidden authority/filter: "+name)
     workflow_dir=ROOT/".github/workflows"
     expected={"foundation-ci.yml","portfolio-independent-verifier.yml",
+              "portfolio-one-time-anchor-migration-845.yml",
               "x402-gateway-ci.yml","x402-render-gateway-smoke.yml",
               "brain-cycle.yml","brain-clock.yml",
               "state-capacity-qualification.yml", "v8-runtime-preflight.yml",
               "v8-scoped-repair.yml", "v9-guarded-native-automerge.yml"}
     require({x.name for x in workflow_dir.iterdir() if x.suffix in {".yml",".yaml"}}==expected, "active workflow inventory changed")
+    migration=(workflow_dir/"portfolio-one-time-anchor-migration-845.yml").read_text(
+        encoding="utf-8")
+    for fragment in (
+        'workflows: ["foundation-ci"]',
+        "types: [completed]",
+        "cancel-in-progress: false",
+        "security/fail-closed-rename-trust-anchor-20261104",
+        "github.event.workflow_run.conclusion == 'success'",
+        "github.event.workflow_run.event == 'pull_request'",
+        "github.event.workflow_run.head_repository.full_name == 'P00NSMASHER/portfolio-brain'",
+        "ref: ${{ github.sha }}",
+        "persist-credentials: false",
+        "verification/one_time_anchor_migration_845.py",
+        "verification/independent_verifier.py" if False else "portfolio-one-time-anchor-migration-845",
+        "--network none", "--user 65534:65534", "--read-only",
+        "--cap-drop=ALL", "--security-opt=no-new-privileges",
+        'app-id: "5121826"',
+        "secrets.PORTFOLIO_VERIFIER_PRIVATE_KEY",
+        "PORTFOLIO_VERIFIER_TOKEN",
+        "one-time check" if False else "--mode publish",
+    ):
+        require(fragment in migration,
+                "single-PR trust-root migration isolation changed: "+fragment)
+    require("schedule:" not in migration and "workflow_dispatch:" not in migration
+            and "pull_request_target:" not in migration
+            and "pull_request:" not in migration
+            and "gh pr merge" not in migration
+            and "pulls/845/merge" not in migration
+            and "permissions:\n  actions: read\n  checks: read\n  contents: read\n  pull-requests: read" in migration,
+            "single-PR migration has unreviewed trigger, permission or merge")
     scoped=(workflow_dir/"v8-scoped-repair.yml").read_text(encoding="utf-8")
     for phrase in (
         "workflow_run:", 'workflows: ["brain-cycle-v2"]',
