@@ -27,7 +27,7 @@ def utc(value):
         raise ClockError("TIME_INVALID") from exc
 
 def decide(document, source_sha, *, now=None):
-    """Dispatch only if no healthy same-source core in 35 minutes and none active."""
+    """Suppress overlapping runs or a recent repair-eligible core on this source."""
     require(isinstance(source_sha, str) and SHA.fullmatch(source_sha), "SOURCE_SHA_INVALID")
     now = now or datetime.now(timezone.utc)
     require(now.tzinfo is not None and now.utcoffset().total_seconds() == 0, "NOW_NOT_UTC")
@@ -53,8 +53,9 @@ def decide(document, source_sha, *, now=None):
         return {"schema_version":1, "status":"ACTIVE" if age <= MAX_ACTIVE_AGE else "BLOCKED_STALE_ACTIVE",
                 "dispatch":False,"source_sha":source_sha,"run_id":active[0][1]["id"],
                 "age_seconds":int(age),"soak_pass":False}
-    success = sorted(((t,r) for t,r in live if r.get("status")=="completed" and
-                       r.get("conclusion")=="success"),reverse=True,key=lambda x:x[0])
+    # A completed push cannot trigger the scoped repair workflow.
+    success = sorted(((t,r) for t,r in live if r.get("event") in ("schedule", "workflow_dispatch")
+                       and r.get("status")=="completed" and r.get("conclusion")=="success"),reverse=True,key=lambda x:x[0])
     if success:
         created,run=success[0]
         completed=utc(run.get("updated_at"))

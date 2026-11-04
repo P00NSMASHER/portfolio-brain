@@ -47,7 +47,9 @@ export function decide(runs, source, nowMs) {
     const age=nowMs-Date.parse(active[0].created_at);
     return {status:age<=ACTIVE_STALE_MS?"ACTIVE":"STALE_ACTIVE_BLOCKED",dispatch:false,run_id:active[0].id,age_ms:age};
   }
-  const successful = present.filter(r => r.status === "completed" && r.conclusion === "success").sort((a,b) => Date.parse(b.updated_at)-Date.parse(a.updated_at));
+  // Successful push runs cannot trigger the scoped repair workflow.
+  const successful = present.filter(r => ["schedule", "workflow_dispatch"].includes(r.event) &&
+    r.status === "completed" && r.conclusion === "success").sort((a,b) => Date.parse(b.updated_at)-Date.parse(a.updated_at));
   if (successful.length) {
     const last=successful[0], when=Date.parse(last.updated_at);
     if (!Number.isFinite(when) || when > nowMs + CLOCK_SKEW_MS) fail("SUCCESS_TIME_INVALID");
