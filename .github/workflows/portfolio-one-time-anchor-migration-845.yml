@@ -53,7 +53,7 @@ jobs:
         with:
           ref: ${{ env.CANDIDATE_SHA }}
           path: candidate
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Pull isolated standard-library Python image before any App token
