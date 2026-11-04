@@ -362,9 +362,16 @@
         ]
       },
       "CANDIDATE_PR": {
-        "allowed": false,
-        "repository_ids": [],
-        "branch_prefixes": []
+        "allowed": true,
+        "repository_ids": [
+          "REPO-001"
+        ],
+        "branch_prefixes": [
+          "automation/retally-technology-",
+          "automation/retally-scout-",
+          "automation/retally-catalog-",
+          "automation/retally-integrator-"
+        ]
       },
       "DEPLOY": {
         "allowed": false

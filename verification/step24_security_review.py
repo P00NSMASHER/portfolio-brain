@@ -455,7 +455,15 @@ def static_review(root: Path = ROOT) -> dict[str, Any]:
                     }
                 )
                 or (
-                    row.get("project_id") not in ("PRJ-000", "PRJ-004")
+                    row.get("project_id") == "PRJ-011"
+                    and row.get("CANDIDATE_PR") == {
+                        "allowed": True, "repository_ids": ["REPO-001"],
+                        "branch_prefixes": ["automation/retally-" + lane + "-" for lane in
+                                            ("technology", "scout", "catalog", "integrator")],
+                    }
+                )
+                or (
+                    row.get("project_id") not in ("PRJ-000", "PRJ-004", "PRJ-011")
                     and row.get("CANDIDATE_PR") == {
                         "allowed": False,
                         "repository_ids": [],

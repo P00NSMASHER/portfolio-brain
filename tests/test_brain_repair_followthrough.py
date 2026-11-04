@@ -159,10 +159,11 @@ class OwnerFollowThroughTests(unittest.TestCase):
                     if x["dedupe_key"] == work["dedupe_key"])
         self.assertTrue(task["technical_main_source_verified"])
         self.assertEqual(task["next_operation"],
-                         "MAIN_TECHNICAL_SOURCE_VERIFIED_REVIEW_RUNTIME_SEPARATELY")
+                         "VERIFY_ACTUAL_DOWNSTREAM_DELIVERY_AND_FUNCTIONAL_BEHAVIOR")
         self.assertFalse(task["live_deployment_verified"])
         self.assertFalse(task["financial_or_external_action_authorized"])
         self.assertEqual(plan["technical_main_verified_count"], 1)
+        self.assertEqual(plan["verified_downstream_repairs_complete"], 0)
 
     def test_all_nonterminal_main_checks_reopen_previous_technical_verification(self):
         for project in ("retally", "product-factory"):
@@ -314,16 +315,21 @@ class OwnerFollowThroughTests(unittest.TestCase):
                          "PRESERVE_EXTERNAL_HOLD_FIX_NEXT")
         self.assertFalse(task["live_deployment_verified"])
 
-    def test_delivered_main_history_is_preserved_without_reopening_work(self):
+    def test_technical_main_history_requires_downstream_proof_not_archival(self):
         work = getwork(active(), "retally")
         prior_source = prior(work, state="MAIN_TECHNICALLY_VERIFIED")
         q = copy.deepcopy(active())
         q["actions"] = []
         plan = follow_through(q, cycle=15, history=[prior_source])
-        self.assertEqual(plan["selected_count"], 0)
-        self.assertEqual(plan["status"], "NO_UNFINISHED_ACTION_OBSERVED")
-        self.assertEqual(plan["archived_verified_count"], 1)
-        self.assertEqual(plan["next_history"], [prior_source])
+        self.assertEqual(plan["selected_count"], 1)
+        self.assertEqual(plan["status"], "UNFINISHED_REPAIRS_TO_CONTINUE")
+        self.assertEqual(plan["archived_verified_count"], 0)
+        self.assertEqual(plan["unfinished_count"], 1)
+        self.assertEqual(plan["verified_downstream_repairs_complete"], 0)
+        self.assertFalse(plan["actions"][0]["live_deployment_verified"])
+        self.assertEqual(plan["actions"][0]["next_operation"],
+                         "REVERIFY_PREVIOUSLY_VERIFIED_MAIN")
+        self.assertEqual(plan["next_history"][0]["state"], "OBSERVED")
 
     def test_missing_external_human_gate_stays_recorded_but_not_retried(self):
         work = getwork(active(), "retally")

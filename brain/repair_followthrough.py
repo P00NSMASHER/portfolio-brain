@@ -109,7 +109,7 @@ def _next(prior, work, cycle):
     if prior["exact_evidence_key"] != work["exact_evidence_key"]:
         return "RECHECK_CHANGED_SOURCE_AND_CI"
     if prior["state"] == "MAIN_TECHNICALLY_VERIFIED":
-        return "DO_NOT_DUPLICATE_COMPLETED_TECHNICAL_FIX"
+        return "VERIFY_ACTUAL_DOWNSTREAM_DELIVERY_AND_FUNCTIONAL_BEHAVIOR"
     if prior["state"] == "BLOCKED_EXTERNAL":
         return "PRESERVE_EXTERNAL_HOLD_FIX_NEXT"
     if prior["state"] == "CI_RED" and prior["source_revision_attempts"] == 2:
@@ -233,7 +233,7 @@ def follow_through(queue, *, cycle, history=None, provider_receipts=None,
         observed = proof.get((work["repository"], work["candidate_pr_number"]))
         state, verified = _verified_main(work, observed)
         if verified:
-            op = "MAIN_TECHNICAL_SOURCE_VERIFIED_REVIEW_RUNTIME_SEPARATELY"
+            op = "VERIFY_ACTUAL_DOWNSTREAM_DELIVERY_AND_FUNCTIONAL_BEHAVIOR"
         elif (observed is not None and observed["merged"]
               and (not prior or prior["state"] != "BLOCKED_EXTERNAL")):
             op = "REVERIFY_PREVIOUSLY_VERIFIED_MAIN"
@@ -253,23 +253,19 @@ def follow_through(queue, *, cycle, history=None, provider_receipts=None,
         if key in active:
             continue
         observed = proof.get((prior["repository"], prior["pr_number"]))
-        if prior["state"] == "MAIN_TECHNICALLY_VERIFIED" and observed is None:
-            continue
         project = next(k for k,v in FOCUS.items() if v[0] == prior["repository"])
         status, verified = _verified_main(
             dict(repository=prior["repository"], candidate_pr_number=prior["pr_number"],
                  source_head_sha=prior["head_sha"]),
             observed,
         )
-        if prior["state"] == "MAIN_TECHNICALLY_VERIFIED" and verified:
-            continue
         results.append(dict(
             dedupe_key=key, evidence_key=prior["exact_evidence_key"],
             project_id=project, repository=prior["repository"],
             owner_task=prior["owner_task"],
             independent_gate_owner=FOCUS[project][2],
             source_pr=prior["pr_number"], source_head_sha=prior["head_sha"],
-            next_operation=("MAIN_TECHNICAL_SOURCE_VERIFIED_REVIEW_RUNTIME_SEPARATELY"
+            next_operation=("VERIFY_ACTUAL_DOWNSTREAM_DELIVERY_AND_FUNCTIONAL_BEHAVIOR"
                             if verified else
                             "REVERIFY_PREVIOUSLY_VERIFIED_MAIN"
                             if (prior["state"] == "MAIN_TECHNICALLY_VERIFIED"
@@ -325,14 +321,13 @@ def follow_through(queue, *, cycle, history=None, provider_receipts=None,
             "last_progress_cycle": progress_cycle,
             "source_revision_attempts": attempts,
         })
-    archived = [
-        dict(item) for key, item in known.items()
-        if key not in {task["dedupe_key"] for task in results}
-        and item["state"] == "MAIN_TECHNICALLY_VERIFIED"
-    ]
-    records.extend(archived)
+    # A protected merge and source-level CI are NOT downstream delivery.
+    # Never silently archive technically verified items or count them complete.
+    # Genuine completion requires an independently replayed deployed behavior
+    # receipt; offline owner history has no authority to mint that receipt.
+    archived = []
     require(len(records) <= HISTORY_LIMIT, "FOLLOWTHROUGH_HISTORY_OUTPUT_BOUND")
-    outstanding = sum(not x["technical_main_source_verified"] for x in results)
+    outstanding = len(results)
     return {
         "schema_version": 1,
         "status": ("UNFINISHED_REPAIRS_TO_CONTINUE" if outstanding
@@ -346,6 +341,8 @@ def follow_through(queue, *, cycle, history=None, provider_receipts=None,
         "technical_main_verified_count": sum(
             1 for item in results if item["technical_main_source_verified"]
         ),
+        "verified_downstream_repairs_complete": 0,
+        "completion_gate": "INDEPENDENT_LIVE_DELIVERY_AND_FUNCTIONAL_REPLAY_REQUIRED",
         "unfinished_count": outstanding,
         "carried_forward_count": sum(
             1 for item in results if item["dedupe_key"] in known
