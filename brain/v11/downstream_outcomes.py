@@ -71,6 +71,7 @@ class GitHubReadOnly:
             or route == "branches/main"
             or route == "rulesets/" + str(RULESETS[repo])
             or re.fullmatch(r"commits/[0-9a-f]{40}/check-runs\?per_page=100", route) is not None
+            or re.fullmatch(r"git/commits/[0-9a-f]{40}", route) is not None
             or re.fullmatch(r"contents/repair/downstream-outcomes/[1-9][0-9]{0,8}\.json\?ref=[0-9a-f]{40}", route) is not None
             or re.fullmatch(r"deployments\?sha=[0-9a-f]{40}&per_page=100", route) is not None
             or re.fullmatch(r"deployments/[1-9][0-9]{0,11}/statuses\?per_page=100", route) is not None
@@ -200,11 +201,22 @@ def verify(api, probe, *, repo, pr_number):
          and pr.get("base", {}).get("ref") == "main"
          and pr.get("base", {}).get("repo", {}).get("full_name") == repo,
          "OUTCOME_PR_NOT_PROTECTED_MERGE")
-    base = pr["base"].get("sha")
     head = pr.get("head", {}).get("sha")
     merge = pr.get("merge_commit_sha")
-    need(all(type(x) is str and SHA.fullmatch(x) for x in (base, head, merge))
-         and len({base, head, merge}) == 3
+    need(type(head) is str and SHA.fullmatch(head)
+         and type(merge) is str and SHA.fullmatch(merge),
+         "OUTCOME_EXACT_SOURCE_IDENTITY_INVALID")
+    # The PR's base.sha is mutable after merge. Get the immutable first
+    # parent of the actual merge commit, which cannot be moved afterwards.
+    committed = api.get(repo, "git/commits/" + merge)
+    parents = committed.get("parents") if type(committed) is dict else None
+    need(type(parents) is list and len(parents) in (1, 2)
+         and all(type(x) is dict and type(x.get("sha")) is str
+                 and SHA.fullmatch(x["sha"]) for x in parents)
+         and (len(parents) == 1 or parents[1]["sha"] == head),
+         "OUTCOME_MERGE_ANCESTRY_NOT_PROVEN")
+    base = parents[0]["sha"]
+    need(len({base, head, merge}) == 3
          and pr.get("head", {}).get("repo", {}).get("full_name") == repo,
          "OUTCOME_EXACT_SOURCE_IDENTITY_INVALID")
     # Contract must predate the repair. A post-hoc probe expectation is rejected.
