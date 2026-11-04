@@ -51,7 +51,7 @@ class GitHubOriginalReader:
         if type(repo) is not str or repo not in set(PROJECTS.values()):
             raise BatchFault('READBACK_REPOSITORY_REFUSED')
         if type(suffix) is not str or not re.fullmatch(
-                r'/(branches/main|pulls/[1-9][0-9]*|commits/[0-9a-f]{40}/check-runs\?per_page=100)',suffix):
+                r'/(branches/main|pulls/[1-9][0-9]*|commits/[0-9a-f]{40}/check-runs\?per_page=100|actions/runs/[1-9][0-9]{0,11}(?:/jobs\?per_page=100)?)',suffix):
             raise BatchFault('READBACK_ROUTE_REFUSED')
         if self.used_gets>=self.max_gets: raise BatchFault('READBACK_BUDGET_EXHAUSTED')
         self.used_gets+=1
@@ -81,6 +81,49 @@ class GitHubOriginalReader:
             raise BatchFault('READBACK_JSON_INVALID') from exc
         if type(doc) is not dict: raise BatchFault('READBACK_JSON_INVALID')
         return doc
+    def failed_main_job(self, repo, sha, run_id, job_id):
+        """Corroborate one first-attempt failure at the observed main revision."""
+        if (not hashval(sha, 40) or any(type(n) is not int or not 0 < n < 10**12
+                                       for n in (run_id, job_id))):
+            raise BatchFault("FAILURE_IDENTITY_INVALID")
+        route = "/actions/runs/" + str(run_id)
+        run = self._get(repo, route)
+        if not (run.get("id") == run_id and run.get("head_sha") == sha
+                and run.get("head_branch") == "main"
+                and run.get("repository", {}).get("full_name") == repo
+                and run.get("head_repository", {}).get("full_name") == repo
+                and run.get("event") in ("push", "schedule", "workflow_dispatch")
+                and run.get("run_attempt") == 1 and run.get("status") == "completed"
+                and run.get("conclusion") in ("failure", "timed_out")):
+            raise BatchFault("ORIGINAL_FAILED_MAIN_RUN_UNVERIFIED")
+        census = self._get(repo, route + "/jobs?per_page=100")
+        jobs = census.get("jobs")
+        if (type(jobs) is not list or type(census.get("total_count")) is not int
+                or len(jobs) != census["total_count"] or len(jobs) > 100):
+            raise BatchFault("ORIGINAL_FAILED_JOB_CENSUS_INCOMPLETE")
+        matches = [j for j in jobs if type(j) is dict and j.get("id") == job_id]
+        url = f"https://github.com/{repo}/actions/runs/{run_id}/job/{job_id}"
+        if len(matches) != 1:
+            raise BatchFault("ORIGINAL_FAILED_JOB_UNVERIFIED")
+        job = matches[0]
+        if not (job.get("run_id") == run_id and job.get("run_attempt") == 1
+                and job.get("head_sha") == sha and job.get("head_branch") == "main"
+                and job.get("html_url") == url and job.get("status") == "completed"
+                and job.get("conclusion") in ("failure", "timed_out")
+                and type(job.get("steps")) is list and 1 <= len(job["steps"]) <= 100):
+            raise BatchFault("ORIGINAL_FAILED_JOB_UNVERIFIED")
+        steps = [{"number": s["number"], "name": s["name"]}
+                 for s in job["steps"] if type(s) is dict and s.get("status") == "completed"
+                 and s.get("conclusion") in ("failure", "timed_out")
+                 and type(s.get("number")) is int and 0 < s["number"] <= 1000
+                 and type(s.get("name")) is str and 0 < len(s["name"]) <= 180
+                 and s["name"].isprintable()]
+        if not steps:
+            raise BatchFault("ORIGINAL_FAILED_STEP_UNVERIFIED")
+        return {"status": "ORIGINAL_MAIN_JOB_FAILURE_CONFIRMED", "url": url,
+                "run_id": run_id, "job_id": job_id, "source_sha": sha,
+                "event": run["event"], "failed_steps": steps, "root_cause_verified": False}
+
     def read_draft_only(self, repo, number, *, base_sha, head_sha, operation_id):
         """Reconcile original draft creation independent of CI success."""
         if (type(repo) is not str or repo not in set(PROJECTS.values())
