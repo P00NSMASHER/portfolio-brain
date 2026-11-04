@@ -30,6 +30,36 @@ class CaptureBriefPremintTests(unittest.TestCase):
         self.assertFalse(result["ready"])
         self.assertEqual(result["status"], "TARGET_SOURCE_CHANGED_NO_TOKEN")
 
+    def test_guide_repair_changes_only_the_wrong_branch_reference(self):
+        canonical = "The website build guide lives on gh-pages."
+        release = ("Start. See `DEPLOYMENT-TARGET.md` and `STANDALONE_SITE.md` on `gh-pages`. "
+                   "End.")
+        runtime = repair_runtime
+        with patch.object(runtime, "LINK_CANONICAL_BLOB", runtime.digest_blob(canonical.encode())), \
+             patch.object(runtime, "LINK_RELEASE_BLOB", runtime.digest_blob(release.encode())):
+            fixed = runtime.repair_guide_links(canonical, release)
+            self.assertEqual(fixed, "Start. See the [deployment target on main](DEPLOYMENT-TARGET.md) "
+                             "and the [standalone build guide on gh-pages]"
+                             "(https://github.com/P00NSMASHER/capturebrief/blob/gh-pages/STANDALONE_SITE.md). End.")
+            for changed in ((canonical + "!", release), (canonical, release + "!")):
+                with self.assertRaisesRegex(ValueError, "REVIEWED_GUIDE_LINK_SOURCE_CHANGED"):
+                    runtime.repair_guide_links(*changed)
+
+    def test_after_premint_drift_to_historical_recipe_refuses_any_write(self):
+        runtime = repair_runtime
+        def read(method, path):
+            self.assertEqual(method, "GET")
+            if path.startswith("installation/"):
+                return {"total_count": 1, "repositories": [{"full_name": runtime.TARGET}]}
+            if path == "repos/" + runtime.TARGET:
+                return {"full_name": runtime.TARGET, "archived": False, "default_branch": "main"}
+            self.assertTrue(path.endswith("/branches/main"))
+            return current_branch(runtime.EXPECTED_TARGET_HEAD)
+        result = runtime.execute(read, installation=runtime.INSTALLATION, slug=runtime.APP_SLUG,
+                                 expected_source=runtime.LINK_REPAIR_HEAD)
+        self.assertEqual(result["status"], "TARGET_SOURCE_CHANGED_NO_MUTATION")
+        self.assertEqual(result["provider_writes"], 0)
+
     def test_unprotected_missing_or_invalid_branch_fails_closed(self):
         inputs = [
             current_branch(protected=False), {"commit": {"sha": "not-a-sha"}},
@@ -92,7 +122,8 @@ class CaptureBriefPremintTests(unittest.TestCase):
         self.assertIn('test "$(git hash-object brain/v8/target_readiness.py)" = "' +
                       sha + '"', wf)
         self.assertEqual(target.EXPECTED_TARGET_HEAD,
-                         repair_runtime.EXPECTED_TARGET_HEAD)
+                         repair_runtime.LINK_REPAIR_HEAD)
+        self.assertFalse(target.assess_branch(current_branch(repair_runtime.EXPECTED_TARGET_HEAD))["ready"])
         preflight = wf.index("- name: Read protected CaptureBrief source before requesting a writer token")
         mint = wf.index("- name: Mint one-CaptureBrief-repository short-lived draft-only contents token")
         writer = wf.index("- name: Reobserve canonical docs and create ONLY source-bound draft PR")

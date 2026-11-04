@@ -33,8 +33,8 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.sha }}"
           test "$(git hash-object brain/v8/repair_core_origin.py)" = "0caf91b20aaad741f27f361f2963d5818d053aab"
-          test "$(git hash-object brain/v8/repair_runtime.py)" = "6619993314d32af11a0fbab9b914837bc7f556b4"
-          test "$(git hash-object brain/v8/target_readiness.py)" = "d9301c79ac18cd19dab293dcc4d6e7da71e5c372"
+          test "$(git hash-object brain/v8/repair_runtime.py)" = "a537388a556c2c5160850694525691acc1f9fae7"
+          test "$(git hash-object brain/v8/target_readiness.py)" = "945224ab56b06921737dfb9a251e868076598da2"
           install -m 0500 brain/v8/repair_core_origin.py "$RUNNER_TEMP/v8-origin.py"
           install -m 0500 brain/v8/repair_runtime.py "$RUNNER_TEMP/v8-repair.py"
           install -m 0500 brain/v8/target_readiness.py "$RUNNER_TEMP/v8-target-source.py"
@@ -54,11 +54,12 @@ jobs:
           import os
           from pathlib import Path
           from governance.validate_boundaries import candidate_pr_authority
+          from brain.v8.target_readiness import EXPECTED_TARGET_HEAD
 
           receipt=candidate_pr_authority(
               "PRJ-004",
               "REPO-007",
-              "v8-capturebrief-hosting-doc-4a7c5d6c223b",
+              "v8-capturebrief-hosting-doc-" + EXPECTED_TARGET_HEAD[:12],
           )
           output=Path(os.environ["RUNNER_TEMP"])/"v8-authority.json"
           output.write_text(json.dumps(receipt,sort_keys=True,indent=2)+"\n",encoding="utf-8")
