@@ -36,6 +36,13 @@ class IndependentVerifierTests(unittest.TestCase):
         head_sha="c"*40
         if compare_files is None:
             compare_files=[]
+        # Model the native compare API's status field for existing fixtures.
+        # Explicit hostile statuses remain unchanged.
+        compare_files = [
+            {"status": "modified", **row}
+            if type(row) is dict and "status" not in row else row
+            for row in compare_files
+        ]
         return [
             {
                 "head":{"repo":{"full_name":"P00NSMASHER/portfolio-brain"},"sha":head_sha},
@@ -92,6 +99,83 @@ class IndependentVerifierTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertFalse(any("/pulls/7/files" in path for path in calls))
         self.assertTrue(any(path.startswith("/compare/") for path in calls))
+
+    def test_renamed_immutable_anchor_is_blocked_from_both_directions(self):
+        from verification import independent_verifier as iv
+        for anchor in sorted(iv.IMMUTABLE_TRUST_ANCHORS):
+            for row in (
+                {"status": "renamed", "filename": "docs/safe-name.md",
+                 "previous_filename": anchor},
+                {"status": "renamed", "filename": anchor,
+                 "previous_filename": "docs/old-name.md"},
+                {"status": "copied", "filename": "docs/safe-name.md",
+                 "previous_filename": anchor},
+            ):
+                with self.subTest(anchor=anchor, row=row):
+                    responses = self.responses(compare_files=[row])
+                    with patch.object(iv, "_api", side_effect=responses):
+                        with self.assertRaisesRegex(
+                                IndependentVerifierError,
+                                "candidate modifies immutable verifier trust anchor"):
+                            iv.verify_exact_head(
+                                token="token", pr_number=7,
+                                expected_head_sha="c"*40,
+                                full_exit=0, phase1_exit=0, operating_exit=0)
+
+    def test_benign_rename_and_standard_edit_preserve_protected_admission(self):
+        from verification import independent_verifier as iv
+        renamed = {"status": "renamed",
+                   "previous_filename": "docs/old-name.md",
+                   "filename": "docs/new-name.md"}
+        edited = {"status": "modified", "filename": "runtime/state.py"}
+        self.assertEqual(iv._current_main_changed_files(
+            {"files": [renamed, edited]}),
+            {"docs/old-name.md", "docs/new-name.md", "runtime/state.py"})
+        with patch.object(iv, "_api", side_effect=self.responses(
+                compare_files=[renamed, edited])):
+            ok, _ = iv.verify_exact_head(
+                token="token", pr_number=7, expected_head_sha="c"*40,
+                full_exit=0, phase1_exit=0, operating_exit=0)
+        self.assertTrue(ok)
+
+    def test_malformed_rename_evidence_fails_closed(self):
+        from verification import independent_verifier as iv
+        destination = "docs/new-name.md"
+        originals = [
+            {}, {"previous_filename": None},
+            {"previous_filename": ""}, {"previous_filename": 1},
+            {"previous_filename": True},
+            {"previous_filename": destination},
+            {"previous_filename": "/verification/independent_verifier.py"},
+            {"previous_filename": "docs/../verification/independent_verifier.py"},
+            {"previous_filename": "docs//old.md"},
+            {"previous_filename": "docs/old" + chr(10) + "name.md"},
+            {"previous_filename": "docs" + chr(92) + "old.md"},
+        ]
+        for extra in originals:
+            with self.subTest(extra=extra):
+                row = {"status": "renamed", "filename": destination, **extra}
+                with self.assertRaisesRegex(
+                        IndependentVerifierError,
+                        "current-main compare original filename invalid"):
+                    iv._current_main_changed_files({"files": [row]})
+
+        for row, error in (
+            ({"status": "modified", "filename": destination,
+              "previous_filename": "verification/independent_verifier.py"},
+             "unexpected previous filename"),
+            ({"status": "renamed", "filename": destination,
+              "previous_filename": destination}, "original filename invalid"),
+            ({"status": "RENAME", "filename": destination,
+              "previous_filename": "docs/old.md"}, "file status invalid"),
+            ({"filename": destination}, "file status invalid"),
+            ({"status": "added", "filename": "docs/../new.md"},
+             "compare filename invalid"),
+            (None, "file entry invalid"),
+        ):
+            with self.subTest(row=row):
+                with self.assertRaisesRegex(IndependentVerifierError, error):
+                    iv._current_main_changed_files({"files": [row]})
 
     def test_current_main_compare_file_cap_fails_closed(self):
         responses=self.responses(compare_files=[
