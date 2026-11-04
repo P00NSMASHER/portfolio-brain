@@ -81,6 +81,12 @@ and 12 chunks. Versus 6d6b01afb06512922745bb262606e771f0cfc661,
 raw state decreased 4,239,360 bytes: changes include an intervening
 compaction/reduction, not just monotonic growth.
 
+A separate original-GitHub object inventory over the six consecutive
+snapshots ending at 3be1261d shows 44 distinct state-chunk blob identities,
+totaling 56,241,760 bytes of compressed payload across those six snapshots.
+This directly establishes retained blob diversity in recent state history,
+not the total on-disk Git pack size or the size of all repository refs.
+
 The GitHub repository metadata size of roughly 5.2 GiB is NOT the same as
 the current working state. It likely includes Git object history and other
 refs; the precise source of that reported size has not been reconstructed.
