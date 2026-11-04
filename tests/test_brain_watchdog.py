@@ -48,6 +48,14 @@ class WatchdogTests(unittest.TestCase):
         result=decide(inventory(run(45)),SHA,now=NOW)
         self.assertTrue(result["dispatch"])
         self.assertFalse(result["soak_pass"])
+    def test_completed_push_does_not_substitute_for_an_automatic_core(self):
+        pushed = {**run(1), "event": "push"}
+        self.assertTrue(decide(inventory(pushed), SHA, now=NOW)["dispatch"])
+        active = {**pushed, "status": "in_progress", "conclusion": None}
+        self.assertFalse(decide(inventory(active), SHA, now=NOW)["dispatch"])
+        scheduled = run(9, run_id=2)
+        self.assertFalse(decide(inventory(pushed, scheduled), SHA, now=NOW)["dispatch"])
+
     def test_recent_in_progress_is_not_duplicated(self):
         result=decide(inventory(run(2,status="in_progress",conclusion=None),run(50,run_id=2)),SHA,now=NOW)
         self.assertEqual(result["status"],"ACTIVE")

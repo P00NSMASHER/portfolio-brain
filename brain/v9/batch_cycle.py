@@ -7,10 +7,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 import sqlite3
 import tempfile
 from brain.v9.batch_queue import BatchQueue, BatchFault, PROJECTS, digest, hashval, instant
+from brain.v9.batch_provider import GitHubOriginalReader
 from brain.v9.batch_routing import route_defect, select_distinct_owners
 from brain.v9.publication_reader import PublicationReader, REQUIRED_BUDGET
 
@@ -58,7 +60,55 @@ def need(condition, code):
     if not condition:
         raise BatchFault(code)
 
-def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=None):
+def attach_original_failure(jobs, snapshots, *, budget, cycle, reader=None):
+    """Give an owner the failed step, within the remaining shared GET budget."""
+    if type(snapshots) is not list or len(snapshots) > 16:
+        return 0
+    candidates = []
+    for job in jobs:
+        if job['source_check_state'] != 'ADVERSE_CHECKS_OBSERVED':
+            continue
+        repo, sha = job['repository'], job['source_sha']
+        rows = [s for s in snapshots if type(s) is dict and s.get('repository') == repo]
+        if len(rows) != 1:
+            continue
+        row = rows[0]
+        checks = row.get('checks')
+        if (row.get('data_kind') != 'ACTUAL' or row.get('head_sha') != sha
+                or row.get('default_branch') != 'main' or type(checks) is not list):
+            continue
+        prefix = f'https://github.com/{repo}/actions/runs/'
+        refs = []
+        for check in checks:
+            if (type(check) is not dict or check.get('head_sha') != sha
+                    or check.get('status') != 'completed' or not isinstance(check.get('url'), str)
+                    or check.get('conclusion') not in ('failure', 'timed_out')):
+                continue
+            match = re.fullmatch(re.escape(prefix) + r'([1-9][0-9]{0,11})/job/([1-9][0-9]{0,11})',
+                                 check['url'])
+            if match:
+                refs.append((int(match[1]), int(match[2]), check['url']))
+        if refs:
+            run_id, job_id, url = refs[cycle % len(refs)]
+            job['observed_failed_job_url'] = url
+            candidates.append((job, run_id, job_id))
+    if not candidates or budget < 2:
+        return 0
+    job, run_id, job_id = candidates[cycle % len(candidates)]
+    actual = reader if reader is not None else GitHubOriginalReader(
+        token=os.environ.get('GITHUB_TOKEN', ''), max_gets=2)
+    need(type(actual) is GitHubOriginalReader and actual.max_gets == 2
+         and actual.used_gets == 0, 'CYCLE_READER_BUDGET_INVALID')
+    try:
+        job['failure_evidence'] = actual.failed_main_job(
+            job['repository'], job['source_sha'], run_id, job_id)
+    except (BatchFault, OSError, ValueError, KeyError, TypeError, AttributeError):
+        job['failure_evidence'] = {'status': 'ORIGINAL_MAIN_JOB_UNVERIFIED',
+                                   'root_cause_verified': False}
+    return actual.used_gets
+
+
+def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=None, failure_reader=None):
     need(hashval(source_sha, 40) and type(cycle) is int and 0 <= cycle < 2**63,
          'CYCLE_SOURCE_INVALID')
     when = instant(now)
@@ -193,6 +243,10 @@ def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=
             source_reobservation_required=True, durable_claim_required_before_mutation=True,
             automatic_execution_authority=False))
     selected = select_distinct_owners(candidates, limit=5, cycle=cycle)
+    failure_gets = attach_original_failure(selected['selected'], report.get('repositories', []),
+                                           budget=24-total, cycle=cycle, reader=failure_reader)
+    total += failure_gets
+    need(total <= 24, 'CYCLE_GET_BUDGET_EXCEEDED')
     return dict(schema_version=1, status='DURABLE_OWNER_QUEUE_UPDATED_NOT_RELEASED',
                 source_sha=source_sha, owner_jobs=selected['selected'],
                 deferred_work_ids=[row['work_id'] for row in selected['deferred']],
@@ -201,7 +255,8 @@ def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=
                 archived_superseded_observations=archived,
                 outside_owner_scope=skipped, queue_checkpoint=queue.checkpoint(),
                 metrics=queue.metrics(now=now), provider_readback=provider,
-                provider_gets=provider.get('provider_gets', 0), total_project_gets=total,
+                failure_evidence_gets=failure_gets,
+                provider_gets=provider.get('provider_gets', 0) + failure_gets, total_project_gets=total,
                 provider_writes=0, production_accepted=False,
                 six_hour_acceptance_passed=False, automatic_execution_authority=False)
 
