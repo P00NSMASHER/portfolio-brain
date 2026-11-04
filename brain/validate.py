@@ -32,7 +32,7 @@ def validate_policy():
         "github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain'",
         "persist-credentials: false", "actions: read",
         "0caf91b20aaad741f27f361f2963d5818d053aab",
-        "6619993314d32af11a0fbab9b914837bc7f556b4",
+        "a537388a556c2c5160850694525691acc1f9fae7",
         "repositories: capturebrief", "permission-contents: write",
         "permission-pull-requests: write", "skip-token-revoke: false",
         "PORTFOLIO_RUNTIME_PRIVATE_KEY", "python -I",
