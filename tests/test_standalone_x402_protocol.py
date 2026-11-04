@@ -43,7 +43,7 @@ class StandaloneX402ProtocolTests(unittest.TestCase):
     def test_mocked_payment_origin_and_settlement_regressions(self):
         self.assertTrue(PROTOCOL.is_file(), "reviewed protocol test missing")
         result = subprocess.run(
-            [self.node(), "--test", "--test-concurrency=1",
+            [self.node(), "--test", "--test-reporter=tap", "--test-concurrency=1",
              str(PROTOCOL.relative_to(SERVICE))],
             cwd=SERVICE, capture_output=True, text=True,
             timeout=40, check=False,
