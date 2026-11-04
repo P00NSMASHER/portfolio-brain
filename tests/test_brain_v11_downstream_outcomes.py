@@ -72,8 +72,8 @@ class Provider:
                 {"sha": "f" * 40 if self.wrong_merge_parent else BASE},
                 {"sha": HEAD}
             ]}
-        if route == "contents/repair/downstream-outcomes/900.json?ref=" + BASE:
-            if self.missing_contract:
+        if route.startswith("contents/repair/downstream-outcomes/900.json?ref="):
+            if self.missing_contract or not route.endswith(BASE):
                 return {"type": "missing"}
             raw = json.dumps(self.contract).encode("utf-8")
             return {"type": "file", "encoding": "base64", "size": len(raw),
@@ -137,7 +137,6 @@ class DownstreamOutcomeTests(unittest.TestCase):
         self.assertEqual(receipt["provider_writes"], 0)
         self.assertIsNone(receipt["verified_customer_revenue"])
         self.assertEqual(len(self.live.calls), 2)
-        self.assertIn(("get",), []) if False else None
 
     def test_preapproved_contract_read_from_immutable_base_not_pr_current_base(self):
         self.verify()
