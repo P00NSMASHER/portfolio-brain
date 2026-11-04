@@ -156,6 +156,14 @@ def choose(root, receipt, registry):
                                     and workspace in ancestor.parents),
                         "RECIPE_SOURCE_PATH_UNSAFE")
         sources[patch["path"]] = path.read_bytes()
+    # A corrected (or otherwise changed) file no longer matches this recipe.
+    # It must not turn an unrelated failure in the same stage into a writer request.
+    if any(factory.sha256(sources[change["path"]]) != change["expected_sha256"]
+           for change in spec["changes"]):
+        return {"status": "NO_PREAPPROVED_SOURCE_FIX", "eligible": False,
+                "reason": "REVIEWED_PREIMAGE_NOT_PRESENT",
+                "source_sha": main_sha, "source_run_id": receipt["source_run_id"],
+                "provider_writes": 0, "draft_pr_created": False}, None
     candidate = factory.prepare(spec, sources)
     return {
         "status": "SOURCE_LOCKED_REVIEWED_RECIPE_PREPARED_NOT_TESTED",

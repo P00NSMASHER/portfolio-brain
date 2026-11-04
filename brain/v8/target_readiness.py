@@ -13,7 +13,7 @@ import urllib.error
 import urllib.request
 
 TARGET_URL = "https://api.github.com/repos/P00NSMASHER/capturebrief/branches/main"
-EXPECTED_TARGET_HEAD = "4a7c5d6c223b8488995ab221dc169ba32ae828f8"
+EXPECTED_TARGET_HEAD = "a25ecfd74e8e19b03b470959772f964b3c78d8bb"
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 MAX_RESPONSE = 16384
 

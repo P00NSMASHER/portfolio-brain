@@ -1,5 +1,23 @@
 {
   "schema_version": 1,
   "repository": "P00NSMASHER/portfolio-brain",
-  "recipes": []
+  "recipes": [
+    {
+      "id": "github-pending-check-status",
+      "stage_family": "PUBLIC_OBSERVATION",
+      "changes": [
+        {
+          "path": "brain/intelligence.py",
+          "expected_sha256": "7feaa352760438ae61a90761d50d3772c1bf378aa56f6c766a36bf698c400f0f",
+          "old": "            require(check[\"status\"] in {\"queued\",\"in_progress\",\"completed\"}, \"check status invalid\")\n",
+          "new": "            # GitHub Actions can also report waiting/requested/pending. These\n            # are valid observations, never terminal conclusions or successes.\n            require(type(check[\"status\"]) is str and check[\"status\"] in {\n                \"queued\", \"in_progress\", \"completed\", \"waiting\", \"requested\", \"pending\"\n            }, \"check status invalid\")\n"
+        }
+      ],
+      "regression": {
+        "path": "tests/test_v11_reviewed_pending_check.py",
+        "sha256": "10788a59e382c2420e486c9bc6074393c8bd248f54ed4bea60262452ce025368",
+        "source": "import unittest\n\nfrom brain.core import BrainError\nfrom brain.intelligence import validate_payload\n\n\nclass PendingProviderCheck(unittest.TestCase):\n    def test_pending_is_valid_only_without_a_terminal_conclusion(self):\n        repository = \"P00NSMASHER/abvmschoolstarworld\"\n        sha = \"15886d848294450265313ac3d3f439fa18702afc\"\n        root = \"https://github.com/\" + repository\n        check = {\"name\": \"verify\", \"head_sha\": sha, \"status\": \"pending\", \"conclusion\": None,\n                 \"url\": root + \"/actions/runs/41740686942/job/126281121501\"}\n        payload = {\"repository\": repository, \"head_sha\": sha, \"default_branch\": \"main\",\n                   \"source_ref\": root + \"/commit/\" + sha, \"checks\": [check], \"open_issues\": 0}\n        validate_payload(\"repository\", payload, \"2026-11-03T23:41:36Z\")\n        check[\"conclusion\"] = \"success\"\n        with self.assertRaises(BrainError):\n            validate_payload(\"repository\", payload, \"2026-11-03T23:41:36Z\")\n"
+      }
+    }
+  ]
 }

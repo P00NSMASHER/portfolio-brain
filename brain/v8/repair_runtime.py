@@ -17,6 +17,9 @@ OWNER = "P00NSMASHER"
 APP_SLUG = "portfolio-brain-v8-runtime"
 INSTALLATION = "172257326"
 EXPECTED_TARGET_HEAD = "4a7c5d6c223b8488995ab221dc169ba32ae828f8"
+LINK_REPAIR_HEAD = "a25ecfd74e8e19b03b470959772f964b3c78d8bb"
+LINK_CANONICAL_BLOB = "7fb6b2168e9a9f0ad5267d368fdd1d215f46a713"
+LINK_RELEASE_BLOB = "b3c9bcf9edea655ab2d458b37e9aa4048c2d9949"
 EXPECTED_CANONICAL_BLOB = "f4182f742af5e793cb98efcf4b3dac5bfc0d9dd9"
 EXPECTED_RELEASE_BLOB = "11eb0d1674bc7b2cf9ccb1a5aa907060f1e833c1"
 ORIGINAL_DRAFT_PR = 47
@@ -111,6 +114,18 @@ def plan(source, original):
             and corrected.split(HANDOFF_END, 1)[1] == tail,
             "REPAIR_CHANGED_UNREVIEWED_CONTENT")
     return corrected
+
+
+def repair_guide_links(canonical, release):
+    """Correct the two guide locations in the reviewed Cloudflare handoff."""
+    old = "See `DEPLOYMENT-TARGET.md` and `STANDALONE_SITE.md` on `gh-pages`."
+    new = ("See the [deployment target on main](DEPLOYMENT-TARGET.md) and the "
+           "[standalone build guide on gh-pages]"
+           "(https://github.com/P00NSMASHER/capturebrief/blob/gh-pages/STANDALONE_SITE.md).")
+    require(digest_blob(canonical.encode()) == LINK_CANONICAL_BLOB
+            and digest_blob(release.encode()) == LINK_RELEASE_BLOB
+            and release.count(old) == 1, "REVIEWED_GUIDE_LINK_SOURCE_CHANGED")
+    return release.replace(old, new, 1)
 
 
 def checked_document(value, label):
@@ -432,7 +447,7 @@ def readback_original_draft_after_source_drift(api, *, prefix, current_main):
             "provider_writes": 0, "merged": False, "deployed": False}
 
 
-def execute(api, *, installation, slug):
+def execute(api, *, installation, slug, expected_source=EXPECTED_TARGET_HEAD):
     """One exact-source, resumable, doc-only draft proposal; never delivery."""
     check_scope(api("GET", "installation/repositories?per_page=100"),
                 installation, slug)
@@ -445,7 +460,13 @@ def execute(api, *, installation, slug):
     main_sha = before.get("commit", {}).get("sha")
     require(type(main_sha) is str and GIT_SHA.fullmatch(main_sha) is not None,
             "TARGET_MAIN_NOT_VERIFIED")
-    if main_sha != EXPECTED_TARGET_HEAD:
+    require(expected_source in (EXPECTED_TARGET_HEAD, LINK_REPAIR_HEAD),
+            "UNREVIEWED_SOURCE_REQUEST")
+    if main_sha != expected_source:
+        if main_sha == EXPECTED_TARGET_HEAD:
+            return {"status": "TARGET_SOURCE_CHANGED_NO_MUTATION",
+                    "repository": TARGET, "target_source": main_sha,
+                    "provider_writes": 0, "merged": False, "deployed": False}
         pending = readback_original_draft_after_source_drift(
             api, prefix=prefix, current_main=main_sha)
         if pending is not None:
@@ -459,10 +480,19 @@ def execute(api, *, installation, slug):
     previous, old_blob = checked_document(
         api("GET", prefix + "contents/" + DOC + "?ref=" + main_sha),
         "RELEASE_DOC")
-    require(canonical_blob == EXPECTED_CANONICAL_BLOB
-            and old_blob == EXPECTED_RELEASE_BLOB,
-            "REVIEWED_SOURCE_BLOBS_MOVED")
-    fixed = plan(original_source, previous)
+    if main_sha == LINK_REPAIR_HEAD:
+        require(before.get("protected") is True, "REVIEWED_TARGET_NOT_PROTECTED")
+        fixed = repair_guide_links(original_source, previous)
+        description = ("PUBLIC-RELEASE.md directs both guide lookups to gh-pages. "
+                       "DEPLOYMENT-TARGET.md is on main and STANDALONE_SITE.md is on gh-pages.")
+        title = "docs: link CaptureBrief release guides to their actual branches"
+    else:
+        require(canonical_blob == EXPECTED_CANONICAL_BLOB
+                and old_blob == EXPECTED_RELEASE_BLOB, "REVIEWED_SOURCE_BLOBS_MOVED")
+        fixed = plan(original_source, previous)
+        description = ("PUBLIC-RELEASE.md incorrectly names Netlify as current hosting. "
+                       "DEPLOYMENT-TARGET.md identifies GitHub Pages/gh-pages.")
+        title = "docs: correct outdated CaptureBrief deployment instructions"
     if fixed is None:
         return {"status": "ALREADY_CORRECT", "repository": TARGET,
                 "target_source": main_sha, "provider_writes": 0,
@@ -508,7 +538,7 @@ def execute(api, *, installation, slug):
                 "ORIGINAL_BRANCH_WRITE_NOT_VERIFIED")
         print("V8_SAFE_STAGE: BRANCH_CREATED", flush=True)
         applied = api("PUT", prefix + "contents/" + DOC, {
-            "message": "docs: flag obsolete Netlify release instructions",
+            "message": title,
             "content": base64.b64encode(fixed.encode("utf-8")).decode("ascii"),
             "sha": old_blob, "branch": branch})
         branch_sha = applied.get("commit", {}).get("sha") if type(applied) is dict else None
@@ -538,16 +568,12 @@ def execute(api, *, installation, slug):
     print("V8_SAFE_STAGE: SUBMITTING_ONE_DRAFT_PR", flush=True)
     try:
         opened = api("POST", prefix + "pulls", {
-            "title": "docs: correct outdated CaptureBrief deployment instructions",
+            "title": title,
             "head": branch, "base": "main", "draft": True,
             "maintainer_can_modify": False,
             "body": (
-                "Original source defect: PUBLIC-RELEASE.md incorrectly names "
-                "Netlify as current hosting. DEPLOYMENT-TARGET.md identifies "
-                "GitHub Pages/gh-pages. This deterministic bounded proposal "
-                "changes ONLY PUBLIC-RELEASE.md and preserves historical build "
-                "instructions as explicitly historical. Independent "
-                "project-specific QA and protected review are REQUIRED. "
+                "Original source defect: " + description + "\n"
+                "Only PUBLIC-RELEASE.md changes. Protected project review and QA are required.\n"
                 "AUTO_REPAIR_FINGERPRINT: " + main_sha + "/" + old_blob
                 + "\nNo automated merge, deployment, customer contact, or paid API."
             )})
@@ -640,7 +666,7 @@ class GitHubAPI:
 def main():
     api = GitHubAPI(os.environ.get("GH_TOKEN", ""))
     result = execute(api, installation=os.environ.get("INSTALLATION_ID", ""),
-                     slug=os.environ.get("APP_SLUG", ""))
+                     slug=os.environ.get("APP_SLUG", ""), expected_source=LINK_REPAIR_HEAD)
     result["schema_version"] = 1
     result["runtime_source"] = os.environ.get("GITHUB_SHA")
     require(type(result["runtime_source"]) is str

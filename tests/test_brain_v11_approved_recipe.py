@@ -110,8 +110,10 @@ class ApprovedRecipeTests(unittest.TestCase):
             recipes.choose(self.root, self.receipt, bad)
         bad = deepcopy(self.registry)
         bad["recipes"][0]["changes"][0]["expected_sha256"] = "0" * 64
-        with self.assertRaisesRegex(factory.FactoryError, "SOURCE_HASH"):
-            recipes.choose(self.root, self.receipt, bad)
+        result, spec = recipes.choose(self.root, self.receipt, bad)
+        self.assertIsNone(spec)
+        self.assertFalse(result["eligible"])
+        self.assertEqual(result["reason"], "REVIEWED_PREIMAGE_NOT_PRESENT")
 
     def test_ambiguous_or_duplicate_reviewed_recipe_never_auto_selects(self):
         bad = deepcopy(self.registry)
