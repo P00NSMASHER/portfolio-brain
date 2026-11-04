@@ -110,6 +110,9 @@ class ResultsTests(unittest.TestCase):
         self.assertEqual(x["backlog_evidence"][-1]["number"], 210)
         self.assertEqual(x["merged_pr_evidence"][0]["verification"],
                          "VERIFIED_BOTH_APPS")
+        self.assertEqual(x["merged_pr_evidence"][0]["downstream_completion"],
+                         "UNVERIFIED_NO_LIVE_REPLAY")
+        self.assertIsNone(x["metrics"]["all_repo_repairs_completed"])
 
     def test_forged_independent_issuer_is_not_a_verified_result(self):
         self.api.independent = 999
