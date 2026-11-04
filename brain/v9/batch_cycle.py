@@ -127,6 +127,10 @@ def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=
                     owner=route['owner'], path=path, priority=priority)
         inputs.append((item, route))
     # All report fields are checked before adding any durable observations.
+    heads = {row['id']: row['repository_revision'] for row in rows
+             if row['id'] in PROJECTS and row.get('repository_revision') is not None}
+    archived = queue.archive_superseded_observations(
+        heads, report.get('repositories', []), now=now)
     current_ids = []
     routes = {}
     for item, route in inputs:
@@ -194,6 +198,7 @@ def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=
                 deferred_work_ids=[row['work_id'] for row in selected['deferred']],
                 held_work_ids=held, unobserved_projects=missing,
                 nonactionable_source_signals=signals,
+                archived_superseded_observations=archived,
                 outside_owner_scope=skipped, queue_checkpoint=queue.checkpoint(),
                 metrics=queue.metrics(now=now), provider_readback=provider,
                 provider_gets=provider.get('provider_gets', 0), total_project_gets=total,

@@ -196,20 +196,73 @@ class BatchQueue:
                 (old["priority"] in (2,3) and old["path"]=="repository-observation"))
 
 
-    def _rotate(self,retired=()):
+    def archive_superseded_observations(self, heads, snapshots, *, now):
+        """Reclaim queue capacity against fresh, corroborated default-branch heads."""
+        if type(snapshots) is not list or not 1 <= len(snapshots) <= 16:
+            return 0
+        when = instant(now)
+        sources = {}
+        for project, head in heads.items():
+            repo = PROJECTS[project]
+            matches = [s for s in snapshots if type(s) is dict and s.get("repository") == repo]
+            if len(matches) != 1:
+                continue
+            source = matches[0]
+            if (source.get("data_kind") != "ACTUAL" or source.get("head_sha") != head
+                    or source.get("default_branch") != "main"
+                    or source.get("source_ref") != f"https://github.com/{repo}/commit/{head}"):
+                continue
+            try:
+                seen = instant(source.get("observed_at"))
+            except BatchFault:
+                continue
+            if 0 <= (when - seen).total_seconds() <= 300:
+                sources[project] = (head, seen)
+
+        if not sources:
+            return 0
+        with self.tx():
+            work, _, _ = self.scan()
+            if len(work) < MAX_WORK * 3 // 4:
+                return 0
+            must(self._last_event_time is None or when >= self._last_event_time, "TIME_REVERSED")
+            retired = []
+            for ident, row in work.items():
+                observed = sources.get(row["project_id"])
+                if (observed and row["source_sha"] != observed[0]
+                        and instant(row["updated_at"]) < observed[1]
+                        and row["priority"] in (2, 3) and row["path"] == "repository-observation"
+                        and self._retirable(row)):
+                    retired.append(ident)
+            # Batch maintenance to avoid spending a finite archive slot per item.
+            if len(retired) < max(1, MAX_WORK // 8):
+                return 0
+            return len(retired) if self._rotate(retired, optional=True) else 0
+
+    def _rotate(self,retired=(),*,optional=False):
         # Called only in the same IMMEDIATE transaction as the new append.
         # Preserve the full event chain in compressed segments in this SAME
         # state image. Never retire progressed work, leases or unknown writes.
         self.scan()
         count=self.db.execute("SELECT COUNT(*) FROM batch_archive").fetchone()[0]
+        if optional and count >= MAX_ARCHIVE_SEGMENTS - 1:
+            return False
         must(count<MAX_ARCHIVE_SEGMENTS,"ARCHIVE_CAPACITY_RECONCILIATION_REQUIRED")
         events=self.db.execute("SELECT sequence,body,prev_hash,chain_hash FROM batch_event ORDER BY sequence").fetchall()
+        if optional and not events:
+            return False
         must(bool(events),"ARCHIVE_EMPTY")
         body={"events":events,"retired":sorted(retired)}
-        compressed=zlib.compress(encode(body).encode(),9)
+        raw=encode(body).encode()
+        if optional and self._archive_raw_bytes + len(raw) > MAX_ARCHIVE_RAW_BYTES:
+            return False
+        compressed=zlib.compress(raw,9)
+        if optional and len(compressed)>MAX_BYTES:
+            return False
         self.db.execute("INSERT INTO batch_archive VALUES(?,?,?)",(count+1,compressed,digest(body)))
         self.db.execute("DELETE FROM batch_event")
         self.scan()
+        return True
     def _append(self,row,at):
         records,seq,previous=self.scan()
         count=self.db.execute("SELECT COUNT(*) FROM batch_event").fetchone()[0]
