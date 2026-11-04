@@ -11,7 +11,6 @@ import os
 from pathlib import Path
 import shutil
 import sqlite3
-import subprocess
 import tempfile
 import unittest
 
@@ -117,6 +116,19 @@ def read_consistent_state_revision(*, git_reader=None, state_reader=None,
     raise AssertionError("STATE_REF_CHANGED_BEYOND_BOUNDED_READBACK")
 
 
+def verify_main_ancestry(recorded_source, main, *, origin):
+    """Verify commit ancestry without deepening the checkout holding state blobs."""
+    with tempfile.TemporaryDirectory(prefix="brain-main-ancestry-") as graph:
+        git("init", "--quiet", "--bare", graph)
+        # A fresh graph has no state ref or other shallow boundaries. Only
+        # commit objects are needed to prove the recorded source is reachable.
+        git("-C", graph, "fetch", "--quiet", "--no-tags", "--depth=17",
+            "--filter=tree:0", origin, main)
+        if git("-C", graph, "rev-parse", "FETCH_HEAD") != main:
+            raise AssertionError("Ancestry fetch did not return the pinned main")
+        git("-C", graph, "merge-base", "--is-ancestor", recorded_source, main)
+
+
 class DeployedV5ReadOnlyProof(unittest.TestCase):
     def test_current_source_and_sqlite_replay_without_production_writes(self):
         if os.environ.get("GITHUB_ACTIONS") != "true":
@@ -144,7 +156,7 @@ class DeployedV5ReadOnlyProof(unittest.TestCase):
             branch_ref = "refs/heads/" + head_name
             expected_head = git("ls-remote", "origin", branch_ref).split()[0]
             self.assertRegex(expected_head, r"^[0-9a-f]{40}$")
-            git("fetch", "--quiet", "--no-tags", "origin", branch_ref)
+            git("fetch", "--quiet", "--no-tags", "--depth=1", "origin", branch_ref)
             source = git("rev-parse", "FETCH_HEAD")
             self.assertEqual(source, expected_head, "Reviewed head drift")
             # GitHub PR jobs run a synthetic merge; its tree can legitimately
@@ -194,19 +206,8 @@ class DeployedV5ReadOnlyProof(unittest.TestCase):
             recorded_source = latest[0]
             self.assertRegex(recorded_source, r"^[0-9a-f]{40}$")
             if recorded_source != main:
-                if git("rev-parse", "--is-shallow-repository") == "true":
-                    git("fetch", "--quiet", "--no-tags", "--deepen=16",
-                        "origin", "refs/heads/main")
-                ancestry = subprocess.run(
-                    ["git", "merge-base", "--is-ancestor",
-                     recorded_source, main],
-                    capture_output=True, text=True, timeout=15, check=False,
-                )
-                self.assertEqual(
-                    ancestry.returncode, 0,
-                    "Stored report source not a verified protected-main "
-                    "ancestor (or history too shallow): fail closed",
-                )
+                verify_main_ancestry(recorded_source, main,
+                                     origin=git("remote", "get-url", "origin"))
                 self.assertEqual(
                     git("ls-remote", "origin", "refs/heads/main").split()[0],
                     main, "Main drift during ancestry check",
