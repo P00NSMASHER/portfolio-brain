@@ -69,6 +69,10 @@ def validate_boundaries()->dict[str,object]:
         if pid=="PRJ-000":
             req(candidate["allowed"] is True and candidate["repository_ids"]==["REPO-008"],"Portfolio Brain candidate scope changed")
             req(candidate["branch_prefixes"]==["factory/","auto-repair/"],"candidate branch scope changed")
+        elif pid=="PRJ-011":
+            prefixes = ["automation/retally-" + lane + "-" for lane in ("technology","scout","catalog","integrator")]
+            req(candidate == {"allowed":True,"repository_ids":["REPO-001"],"branch_prefixes":prefixes},
+                "RETALLY candidate grant escaped generated writer branches")
         elif pid=="PRJ-004":
             # The owner explicitly enabled one existing, already source-pinned
             # CaptureBrief documentation-only repair recipe. This is NOT
