@@ -128,7 +128,7 @@ jobs:
           private-key: ${{ secrets.PORTFOLIO_RUNTIME_PRIVATE_KEY }}
           owner: P00NSMASHER
           repositories: github-value-hunt-ledger
-          permission-actions: write
+          permission-actions: read
           permission-contents: read
           permission-pull-requests: read
       - name: Authenticate source writer, candidate authority and current branch
@@ -136,10 +136,21 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.read.outputs.token }}
         run: python -m brain.retally_app_proposals
-      - name: Regenerate one uniquely attributable stale Scout receipt from current main
+      - name: Mint scoped dispatcher for one stale Scout receipt
+        if: steps.request.outputs.recovery != ''
+        id: recovery-writer
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: '5352505'
+          private-key: ${{ secrets.PORTFOLIO_RUNTIME_PRIVATE_KEY }}
+          owner: P00NSMASHER
+          repositories: github-value-hunt-ledger
+          permission-actions: read
+          permission-contents: write
+      - name: Dispatch exact-main Scout regeneration
         if: steps.request.outputs.recovery != ''
         env:
-          GH_TOKEN: ${{ steps.read.outputs.token }}
+          GH_TOKEN: ${{ steps.recovery-writer.outputs.token }}
           RECOVERY: ${{ steps.request.outputs.recovery }}
         run: python -m brain.retally_app_proposals --recover "$RECOVERY"
       - name: Mint RETALLY-only PR writer for validated request

@@ -28,7 +28,7 @@ SCOUT_WORKER = re.compile(r"intelligence/scout_queue/(HUNTER-(?:0[1-9]|1[0-4]))\
 
 def api(path, *, payload=None, binary=False):
     method = "POST" if payload is not None else "GET"
-    if method == "POST" and path not in {"pulls", f"actions/workflows/{SCOUT_WORKFLOW}/dispatches"}:
+    if method == "POST" and path not in {"pulls", "dispatches"}:
         raise ValueError("Only PR creation and scoped Scout recovery are authorized")
     args = ["gh", "api", "--method", method, API + "/" + path]
     if payload is not None:
@@ -146,8 +146,9 @@ def dispatch_recovery(worker, expected_main):
         active = api(f"actions/workflows/{SCOUT_WORKFLOW}/runs?event=workflow_dispatch&status={status}&per_page=1")
         if active["workflow_runs"]:
             raise ValueError("A manual Scout run is already active")
-    api(f"actions/workflows/{SCOUT_WORKFLOW}/dispatches",
-        payload={"ref": "main", "inputs": {"worker": worker}})
+    api("dispatches", payload={"event_type": "retally-scout-recovery-v1",
+                               "client_payload": {"worker": worker,
+                                                  "expected_main": expected_main}})
     print(f"Requested source-bound refresh for stale {worker} receipt at {expected_main}")
 
 
