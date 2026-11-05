@@ -96,6 +96,26 @@ class AppProposalTests(unittest.TestCase):
             with open(output,encoding="utf-8") as handle:
                 self.assertEqual(handle.read(),f"recovery=HUNTER-02:{BASE}\n")
 
+    def test_invalid_historical_artifact_does_not_block_valid_request(self):
+        artifacts=[{"id":1},{"id":2}]
+        valid=({**REQUEST},BASE,None,False)
+        with tempfile.TemporaryDirectory() as tmp:
+            output=os.path.join(tmp,"output")
+            with patch.dict(os.environ,{"GITHUB_OUTPUT":output}), \
+                    patch.object(broker,"api",return_value={"artifacts":artifacts}), \
+                    patch.object(broker,"inspect_request",side_effect=[ValueError("malformed"),valid]), \
+                    patch("sys.argv",["retally_app_proposals"]):
+                broker.main()
+            with open(output,encoding="utf-8") as handle:
+                self.assertEqual(handle.read(),"artifact=2\n")
+
+    def test_explicit_publish_remains_fail_closed_for_invalid_artifact(self):
+        with patch.object(broker,"api",return_value={"id":1}), \
+                patch.object(broker,"current_request",side_effect=ValueError("malformed")), \
+                patch("sys.argv",["retally_app_proposals","--publish","1"]), \
+                self.assertRaisesRegex(ValueError,"malformed"):
+            broker.main()
+
     def test_recovery_dispatch_rechecks_main_and_holds_when_active(self):
         empty={"workflow_runs":[]}
         with patch.object(broker,"api",side_effect=[{"commit":{"sha":BASE}},empty,empty,None]) as api:
