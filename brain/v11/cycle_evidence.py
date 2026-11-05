@@ -107,7 +107,7 @@ def inspect(root, *, source_sha, run_id, run_attempt=1):
             and engineering.get("production_accepted") is False
             and type(engineering.get("owner_jobs")) is list,
             "CYCLE_ENGINEERING_PROOF_UNVERIFIED")
-    new_candidates = None
+    persisted_candidates = None
     coalesced = None
     if research is not None:
         op = research.get("operation")
@@ -120,7 +120,7 @@ def inspect(root, *, source_sha, run_id, run_attempt=1):
         require(type(coalesced) is int
                 and 0 <= coalesced <= op["candidates_observed"],
                 "CYCLE_RESEARCH_ACTIVITY_INVALID")
-        new_candidates = op["candidates_observed"] - coalesced
+        persisted_candidates = op["candidates_observed"] - coalesced
     cooldown = None
     if upgrade is not None:
         require(upgrade.get("source_sha") == source_sha,
@@ -145,14 +145,15 @@ def inspect(root, *, source_sha, run_id, run_attempt=1):
         "verified_compressed_capacity_bytes": capacity["verified_compressed_capacity_bytes"],
         "storage_warning": maintenance["storage_pressure"].get("capacity_warning"),
         "reports_retained": maintenance["storage_pressure"].get("reports"),
-        "observed_new_source_candidates": new_candidates,
+        "candidate_events_persisted": persisted_candidates,
+        "verified_novel_candidates": None,
         "unchanged_source_events_coalesced": coalesced,
         "unreleased_owner_jobs": len(engineering["owner_jobs"]),
         "knowledge_cooldown_observed": cooldown,
         "functional_release_verified": None,
         "real_world_value_verified": None,
-        "activity_classification": ("NEW_UNREVIEWED_SOURCE_CANDIDATES" if new_candidates
-                                    else "NO_NEW_SOURCE_CANDIDATES_VERIFIED" if new_candidates == 0
+        "activity_classification": ("SOURCE_OBSERVATIONS_PERSISTED_NOT_PROVEN_NEW" if persisted_candidates
+                                    else "NO_SOURCE_OBSERVATIONS_APPENDED" if persisted_candidates == 0
                                     else "RESEARCH_ACTIVITY_UNKNOWN"),
         "provider_writes": 0,
     }

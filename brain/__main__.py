@@ -41,6 +41,7 @@ def monitor(store, sha, output, *, api=None, repositories=None):
     repositories=repositories or policy()["repositories"]
     require(0<len(repositories)<=4, "monitor repository bound exceeded")
     errors=[]
+    coalesced_before=store.coalesced_events
     for repo in repositories:
         try:
             payload,private=api.observe(repo)
@@ -51,7 +52,7 @@ def monitor(store, sha, output, *, api=None, repositories=None):
             errors.append({"repository":repo,"error_class":type(exc).__name__,"error":str(exc)[:300]})
     report=store.report(sha)
     report["operation"]={"name":"monitor","requests":api.requests,"required_repositories":repositories,"errors":errors,
-                         "unchanged_events_coalesced":store.coalesced_events}
+                         "unchanged_events_coalesced":store.coalesced_events-coalesced_before}
     if errors:
         report["status"]="FAIL"
     write_report(report,output)
@@ -150,7 +151,9 @@ def research(store, sha, output, *, api=None, repository=None):
     # Original genuinely empty searches preserve the former NO_MATCHES path.
     # Alternate recovery requires actual source/hash inspection.
     items=[event("candidate",p["repository"]+":"+p["path"],p,sha,private=private) for p,private in found]
+    coalesced_before=store.coalesced_events
     report=persist(store,items,sha,output,coalesce_seconds=6*3600)
+    newly_coalesced=store.coalesced_events-coalesced_before
     unavailable=list(getattr(api,"discovery_unavailable",[]))
     bounded=list(getattr(api,"discovery_bounded_trees",[]))
     # Every bounded-tree candidate's ORIGINAL source blob is still hashed,
@@ -165,7 +168,7 @@ def research(store, sha, output, *, api=None, repository=None):
         "name":"research","requests":api.requests,
         "target":target["project"],"original_target":requested["project"],
         "candidates_observed":len(items),"result":result,
-        "unchanged_events_coalesced":store.coalesced_events,
+        "unchanged_events_coalesced":newly_coalesced,
         "unavailable_search_results":unavailable,
         "prior_unavailable_targets":skipped,
         "bounded_tree_scans":bounded,"license_filter_applied":False,

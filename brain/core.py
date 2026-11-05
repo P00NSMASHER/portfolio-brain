@@ -175,6 +175,7 @@ class Store:
         for event in events:
             validate_event(event, now)
             require(self.visibility == "PRIVATE" or event["visibility"] == "PUBLIC", "private input rejected by public state")
+        coalesced_this_batch = 0
         with self.transaction():
             for event in events:
                 # Source timestamps are UTC instants, not bytewise string keys.
@@ -211,9 +212,10 @@ class Store:
                     # Unchanged source evidence stays anchored to its actual
                     # observation time. No fabricated refresh, no lost change,
                     # and the event ledger remains append-only.
-                    self.coalesced_events += 1
+                    coalesced_this_batch += 1
                 else:
                     self.db.execute("INSERT INTO events(id,body,hash,status,received_at) VALUES(?,?,?,'PENDING',?)", (event["id"], body, value_hash, now))
+        self.coalesced_events += coalesced_this_batch
         return self.pending()
 
     def pending(self):

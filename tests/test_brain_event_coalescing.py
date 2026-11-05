@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from brain.core import Store
+from brain.core import Store, BrainError
 from brain.adapters import event
 from brain.state_archive import pack, restore
 from tests.test_brain_v2 import SHA, NOW, REPOSITORY, payload
@@ -43,6 +43,19 @@ class BoundedObservationTests(unittest.TestCase):
         self.observe("2026-10-07T21:30:00Z", changed)
         self.observe("2026-10-07T21:31:00Z")
         self.assertEqual(self.count(), 3)
+
+    def test_rolled_back_batch_does_not_credit_suppressed_observations(self):
+        self.observe(NOW)
+        same = event("repository", REPOSITORY, payload(), SHA,
+                     now="2026-10-07T21:30:00Z")
+        conflicting = event("repository", REPOSITORY,
+                            dict(payload(), open_issues=4), SHA, now=NOW)
+        with self.assertRaisesRegex(BrainError, "AMBIGUOUS_OBSERVATION"):
+            self.store.submit([same, conflicting],
+                              now="2026-10-07T21:30:00Z",
+                              coalesce_seconds=21600)
+        self.assertEqual(self.store.coalesced_events, 0)
+        self.assertEqual(self.count(), 1)
 
     def test_source_change_and_six_hour_expiry_preserve_updates(self):
         self.observe(NOW)

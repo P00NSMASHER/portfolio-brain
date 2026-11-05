@@ -348,7 +348,7 @@ th{background:#e8edf1}a{color:#175e92}.note{font-size:13px;color:#546575}
         ("<h2>Original core: storage and useful work</h2>" +
          table([data["cycle_accounting"]],
                ["run_id", "state_growth_raw_bytes", "raw_headroom_bytes",
-                "compressed_headroom_bytes", "observed_new_source_candidates",
+                "compressed_headroom_bytes", "candidate_events_persisted",
                 "unchanged_source_events_coalesced", "unreleased_owner_jobs",
                 "activity_classification", "state_tip_status"])
          if "cycle_accounting" in data else "") +
@@ -445,7 +445,8 @@ def main(argv=None):
                 "HISTORICAL_DELIVERY_NOT_CURRENT")
             outcome["cycle_accounting"] = account
             outcome["metrics"]["core_cycle_growth_raw_bytes"] = account["state_growth_raw_bytes"]
-            outcome["metrics"]["core_cycle_new_candidates"] = account["observed_new_source_candidates"]
+            outcome["metrics"]["core_cycle_candidate_events_persisted"] = account["candidate_events_persisted"]
+            outcome["metrics"]["core_cycle_verified_novel_candidates"] = None
             outcome["metrics"]["core_cycle_coalesced_unchanged"] = account["unchanged_source_events_coalesced"]
             outcome["metrics"]["core_cycle_functional_release_verified"] = None
         for name, body in ((args.json, json.dumps(outcome, indent=2, sort_keys=True) + "\n"),
