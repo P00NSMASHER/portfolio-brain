@@ -116,6 +116,12 @@ class AppProposalTests(unittest.TestCase):
                 self.assertRaisesRegex(ValueError,"malformed"):
             broker.main()
 
+    def test_successful_no_content_dispatch_is_accepted(self):
+        result=type("Result",(),{"stdout":b""})()
+        with patch.object(broker.subprocess,"run",return_value=result) as run:
+            self.assertIsNone(broker.api("dispatches",payload={"event_type":"test"}))
+        self.assertEqual(run.call_args.args[0][2:4],["--method","POST"])
+
     def test_recovery_dispatch_rechecks_main_and_holds_when_active(self):
         empty={"workflow_runs":[]}
         with patch.object(broker,"api",side_effect=[{"commit":{"sha":BASE}},empty,empty,None]) as api:
