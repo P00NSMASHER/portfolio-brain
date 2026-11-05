@@ -27,12 +27,18 @@ MAX_BYTES = 5 * 1024 * 1024 * 1024
 VERIFIED_PRODUCTION_RAW_BYTES = 180_000_000
 VERIFIED_PRODUCTION_COMPRESSED_BYTES = 20_602_941
 COMPACTION_TRIGGER_BYTES = VERIFIED_PRODUCTION_RAW_BYTES * 3 // 4
-COMPACTION_TRIGGER_COMPRESSED_BYTES = VERIFIED_PRODUCTION_COMPRESSED_BYTES * 3 // 4
+# Trigger before the 75%+ plateau observed after the first retained-report
+# reduction, while preserving the independently verified *hard* cap.
+COMPACTION_TRIGGER_COMPRESSED_BYTES = VERIFIED_PRODUCTION_COMPRESSED_BYTES * 72 // 100
 COMPACTION_TRIGGER_REPORTS = 256
 # Keep stronger recent-history retention until the already-triggered bounded
 # compaction reaches the independently verified low-headroom reserve. Every
 # non-PASS report and the latest report per source is always preserved.
 HEADROOM_RETENTION_TRIGGER_BYTES = 16 * 1024 * 1024
+# At under 30% compressed reserve, retain fewer *recomputable PASS copies*
+# only. Every non-PASS report, latest per source, canonical event and attempt
+# remains byte-for-byte unchanged and verified after SQLite VACUUM.
+COMPRESSED_HEADROOM_RETENTION_TRIGGER_BYTES = VERIFIED_PRODUCTION_COMPRESSED_BYTES * 30 // 100
 LOW_HEADROOM_KEEP_RECENT = 64
 
 def storage_pressure(source):
@@ -156,9 +162,15 @@ def maintain_within_verified_capacity(
     # all failure reports and the latest source report remain immutable.
     remaining=verified_raw_bytes-before
     recent_retention=keep_recent
-    if remaining<HEADROOM_RETENTION_TRIGGER_BYTES and keep_recent>LOW_HEADROOM_KEEP_RECENT:
+    low_raw = remaining < HEADROOM_RETENTION_TRIGGER_BYTES
+    low_compressed = (pressure['compressed_headroom_bytes'] <
+                      COMPRESSED_HEADROOM_RETENTION_TRIGGER_BYTES)
+    if (low_raw or low_compressed) and keep_recent>LOW_HEADROOM_KEEP_RECENT:
         recent_retention=LOW_HEADROOM_KEEP_RECENT
-        reasons.append('VERIFIED_RAW_HEADROOM_RESERVE')
+        if low_raw:
+            reasons.append('VERIFIED_RAW_HEADROOM_RESERVE')
+        if low_compressed:
+            reasons.append('VERIFIED_COMPRESSED_HEADROOM_RESERVE')
     fd,name=tempfile.mkstemp(prefix='.capacity-',suffix='.sqlite',dir=source.parent)
     os.close(fd);target=Path(name);target.unlink()
     try:
@@ -172,6 +184,8 @@ def maintain_within_verified_capacity(
     finally:
         target.unlink(missing_ok=True)
     return dict(receipt,status='COMPACTED_TO_VERIFIED_PRODUCTION_CAPACITY',
+        reclaimed_raw_bytes=before-after['raw_bytes'],
+        reclaimed_compressed_bytes=pressure['compressed_bytes']-after['compressed_bytes'],
         compacted=True,compaction_reasons=reasons,storage_pressure=after,
         retained_recent_report_target=recent_retention,
         verified_raw_capacity_bytes=verified_raw_bytes,
