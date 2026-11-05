@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import sqlite3
 import unittest
+from unittest.mock import patch
 
 from brain.core import digest
 from brain import state_maintenance as maint
@@ -68,6 +69,35 @@ class HeadroomReserveTests(unittest.TestCase):
             self.assertNotIn(20, ids)  # Only old redundant PASS copies removed.
             self.assertGreaterEqual(len(ids), 64)
             self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+
+    def test_low_compressed_headroom_selects_64_without_falsifying_history(self):
+        before = self.snapshot()
+        source_hash = hashlib.sha256(self.source.read_bytes()).hexdigest()
+        # Exercise measured compressed pressure without changing the original
+        # durable image or weakening source/ledger integrity checks.
+        with patch.object(
+            maint, 'COMPACTION_TRIGGER_COMPRESSED_BYTES', 1
+        ), patch.object(
+            maint, 'COMPRESSED_HEADROOM_RETENTION_TRIGGER_BYTES',
+            maint.VERIFIED_PRODUCTION_COMPRESSED_BYTES + 1
+        ):
+            result = maint.maintain_within_verified_capacity(self.source)
+        self.assertTrue(result['compacted'])
+        self.assertEqual(result['retained_recent_report_target'], 64)
+        self.assertIn('VERIFIED_COMPRESSED_HEADROOM_RESERVE',
+                      result['compaction_reasons'])
+        self.assertEqual(self.snapshot(), before)
+        self.assertGreater(result['reclaimed_raw_bytes'], 0)
+        self.assertGreaterEqual(result['reclaimed_compressed_bytes'], 0)
+        self.assertNotEqual(hashlib.sha256(self.source.read_bytes()).hexdigest(),
+                            source_hash)
+        with sqlite3.connect(self.source) as db:
+            old_failures = [x[0] for x in db.execute(
+                "SELECT id FROM reports WHERE json_extract(body,'$.status')!='PASS'"
+            )]
+            self.assertIn(3, old_failures)
+            self.assertIn(90, old_failures)
+            self.assertEqual(db.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
 
     def test_normal_headroom_preserves_existing_128_recent_reports(self):
         self.compact_at_headroom(18 * 1024 * 1024)

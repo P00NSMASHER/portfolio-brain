@@ -67,6 +67,19 @@ class MaintenanceTests(unittest.TestCase):
         self.assertFalse(result['compacted'])
         self.assertEqual(hashlib.sha256(self.source.read_bytes()).hexdigest(),self.original)
 
+    def test_proactive_compressed_trigger_stays_inside_proven_hard_bound(self):
+        from brain.state_maintenance import (
+            COMPACTION_TRIGGER_COMPRESSED_BYTES,
+            VERIFIED_PRODUCTION_COMPRESSED_BYTES,
+            COMPRESSED_HEADROOM_RETENTION_TRIGGER_BYTES,
+        )
+        self.assertEqual(COMPACTION_TRIGGER_COMPRESSED_BYTES,
+                         VERIFIED_PRODUCTION_COMPRESSED_BYTES*72//100)
+        self.assertEqual(COMPRESSED_HEADROOM_RETENTION_TRIGGER_BYTES,
+                         VERIFIED_PRODUCTION_COMPRESSED_BYTES*30//100)
+        self.assertLess(COMPACTION_TRIGGER_COMPRESSED_BYTES,
+                        VERIFIED_PRODUCTION_COMPRESSED_BYTES*3//4)
+
     def test_packed_pressure_compacts_before_raw_trigger(self):
         with patch('brain.state_maintenance.COMPACTION_TRIGGER_COMPRESSED_BYTES',1):
             result=maintain_within_verified_capacity(self.source,keep_recent=2)
