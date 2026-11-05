@@ -43,7 +43,9 @@ def storage_pressure(source):
     with sqlite3.connect(source.resolve().as_uri()+'?mode=ro&immutable=1',uri=True) as db:
         reports=db.execute('SELECT count(*) FROM reports').fetchone()[0]
         events=db.execute('SELECT count(*) FROM events').fetchone()[0]
-        attempts=db.execute('SELECT count(*) FROM attempts').fetchone()[0]
+        attempts=(db.execute('SELECT count(*) FROM attempts').fetchone()[0]
+                  if db.execute("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='attempts'").fetchone()
+                  else 0)
     raw=source.stat().st_size
     return dict(raw_bytes=raw,compressed_bytes=packed,reports=reports,
         events=events,attempts=attempts,
