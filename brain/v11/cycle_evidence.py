@@ -139,9 +139,13 @@ def inspect(root, *, source_sha, run_id, run_attempt=1):
                     and proof.get("production_accepted") is False,
                     "CYCLE_OWNER_PROGRESS_SCHEMA_INVALID")
             if proof["status"] == "REVIEWED_OWNER_REPAIR_TESTED_FROM_ORIGINAL_GITHUB":
-                from brain.v9.reviewed_owner_followthrough import WORK_ID, MERGE_SHA
+                from brain.v9.reviewed_owner_followthrough import WORK_ID, PR_NUMBER
                 require(proof.get("work_id") == WORK_ID
-                        and proof.get("protected_merge_sha") == MERGE_SHA
+                        and proof.get("reviewed_pr") == PR_NUMBER
+                        and type(proof.get("candidate_head_sha")) is str
+                        and SHA.fullmatch(proof["candidate_head_sha"]) is not None
+                        and type(proof.get("protected_merge_sha")) is str
+                        and SHA.fullmatch(proof["protected_merge_sha"]) is not None
                         and proof.get("independent_checks_verified") is True
                         and proof.get("real_world_functionality_verified") is False
                         and proof["transitions"] > 0

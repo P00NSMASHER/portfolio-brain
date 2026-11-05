@@ -1,39 +1,43 @@
-"""Canonical owner-work transitions require original GitHub App/merge evidence."""
+"""Canonical owner-work stage transitions require original protected GitHub proof."""
 from pathlib import Path
 import tempfile
 import unittest
 
-from brain.v9.batch_queue import BatchQueue, BatchFault, digest
+from brain.v9.batch_queue import BatchQueue
 from brain.v9 import reviewed_owner_followthrough as follow
 
-
-AT = "2026-11-05T21:31:00Z"
+AT = "2026-11-05T21:51:00Z"
+CANDIDATE = "d" * 40
+MERGE = "c" * 40
 
 
 class FakeGitHub:
     def __init__(self, *, issuer=5121826, parent=follow.SOURCE_SHA,
-                 merged=True, head=follow.CANDIDATE_SHA, bad_census=False):
+                 merged=True, head=CANDIDATE, bad_census=False, bad_base=False):
         self.issuer=issuer
         self.parent=parent
         self.merged=merged
         self.head=head
         self.bad_census=bad_census
+        self.bad_base=bad_base
         self.reads=0
 
     def get(self,route):
         self.reads += 1
-        if route=="pulls/871":
-            return {"number":871,"state":"closed","merged":self.merged,
-                    "merged_at":"2026-11-05T21:16:19Z",
+        if route=="pulls/873":
+            return {"number":873,"state":"closed","merged":self.merged,
+                    "merged_at":"2026-11-05T21:45:00Z",
                     "head":{"sha":self.head,"repo":{"full_name":follow.REPO}},
-                    "base":{"ref":"main","repo":{"full_name":follow.REPO}},
-                    "merge_commit_sha":follow.MERGE_SHA}
-        if route=="git/commits/"+follow.MERGE_SHA:
-            return {"sha":follow.MERGE_SHA,"parents":[{"sha":self.parent}]}
-        if route=="commits/"+follow.CANDIDATE_SHA+"/check-runs?per_page=100":
-            checks=[{"name":name,"head_sha":follow.CANDIDATE_SHA,
+                    "base":{"ref":"feature" if self.bad_base else "main",
+                            "repo":{"full_name":follow.REPO}},
+                    "merge_commit_sha":MERGE}
+        if route=="git/commits/"+MERGE:
+            return {"sha":MERGE,"parents":[{"sha":self.parent}]}
+        if route=="commits/"+self.head+"/check-runs?per_page=100":
+            checks=[{"name":name,"head_sha":self.head,
                      "status":"completed","conclusion":"success",
-                     "app":{"id":self.issuer if name=="portfolio-phase1-gate" else app}}
+                     "app":{"id":self.issuer if name=="portfolio-phase1-gate"
+                            else app}}
                     for name,app in follow.REQUIRED_APPS.items()]
             return {"total_count":3 if self.bad_census else 2,
                     "check_runs":checks}
@@ -46,20 +50,17 @@ class OriginalOwnerProgressTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.queue=BatchQueue(Path(self.temp.name)/"queue.sqlite")
         self.addCleanup(self.queue.close)
-        item=dict(project_id="portfolio-brain",
-                  repository=follow.REPO,
-                  source_sha=follow.SOURCE_SHA,
-                  fingerprint=follow.FINGERPRINT,
-                  path="repository-observation",
-                  owner=follow.EXPECTED_OWNER,
+        item=dict(project_id="portfolio-brain",repository=follow.REPO,
+                  source_sha=follow.SOURCE_SHA,fingerprint=follow.FINGERPRINT,
+                  path="repository-observation",owner=follow.EXPECTED_OWNER,
                   priority=2)
-        self.wid=self.queue.observe(item,now="2026-11-05T21:00:00Z")
+        self.wid=self.queue.observe(item,now="2026-11-05T21:30:00Z")
         self.assertEqual(self.wid,follow.WORK_ID)
 
     def stage(self):
         return self.queue.snapshot()["work"][self.wid]["stage"]
 
-    def progress(self,api=None,budget=3,source=follow.MERGE_SHA):
+    def progress(self,api=None,budget=3,source=MERGE):
         return follow.try_progress(self.queue,source_sha=source,now=AT,
                                    budget=budget,api=api)
 
@@ -69,6 +70,9 @@ class OriginalOwnerProgressTests(unittest.TestCase):
         result=self.progress(provider)
         self.assertEqual(result["status"],
                          "REVIEWED_OWNER_REPAIR_TESTED_FROM_ORIGINAL_GITHUB")
+        self.assertEqual(result["reviewed_pr"],873)
+        self.assertEqual(result["protected_merge_sha"],MERGE)
+        self.assertEqual(result["candidate_head_sha"],CANDIDATE)
         self.assertEqual(result["transitions"],3)
         self.assertEqual(result["provider_gets"],3)
         self.assertEqual(provider.reads,3)
@@ -86,50 +90,58 @@ class OriginalOwnerProgressTests(unittest.TestCase):
         self.assertFalse(result["real_world_functionality_verified"])
         self.assertFalse(result["production_accepted"])
 
-    def test_provider_did_not_release_or_report_census_partial(self):
+    def test_missing_original_proof_preserves_observed(self):
         for kwargs in ({"merged":False},{"bad_census":True},
-                       {"parent":"f"*40},{"head":"e"*40}):
+                       {"parent":"f"*40},{"bad_base":True},
+                       {"head":"e"*40}):
             with self.subTest(kwargs=kwargs):
+                # Valid-looking but another head is still a valid source if
+                # independently verified. For an invalid head, use nonhex.
+                if "head" in kwargs:
+                    kwargs={"head":"not-a-commit"}
                 out=self.progress(FakeGitHub(**kwargs))
                 self.assertEqual(out["status"],"ORIGINAL_OWNER_REVIEW_NOT_VERIFIED")
                 self.assertEqual(out["transitions"],0)
                 self.assertEqual(self.stage(),"OBSERVED")
 
-    def test_float_bool_or_forged_app_does_not_credit_tested(self):
-        for app in (5121826.0,True,9999):
+    def test_forged_check_issuers_denied(self):
+        for app in (5121826.0, True, 9999):
             with self.subTest(app=app):
-                provider=FakeGitHub(issuer=app)
-                out=self.progress(provider)
+                out=self.progress(FakeGitHub(issuer=app))
                 self.assertEqual(out["status"],"ORIGINAL_OWNER_REVIEW_NOT_VERIFIED")
                 self.assertEqual(self.stage(),"OBSERVED")
 
-    def test_budget_lack_or_same_unreleased_source_preserves_original(self):
+    def test_budget_lack_or_unreleased_source_never_mutates(self):
         self.assertEqual(self.progress(FakeGitHub(),budget=2)["provider_gets"],0)
         self.assertEqual(self.progress(FakeGitHub(),source=follow.SOURCE_SHA)["transitions"],0)
         self.assertEqual(self.stage(),"OBSERVED")
 
-    def test_active_owner_claim_cannot_be_stolen(self):
-        self.queue.claim(self.wid,follow.EXPECTED_OWNER,now="2026-11-05T21:30:00Z")
+    def test_active_owner_claim_cannot_be_reused(self):
+        self.queue.claim(self.wid,follow.EXPECTED_OWNER,now="2026-11-05T21:50:00Z")
         out=self.progress(FakeGitHub())
         self.assertEqual(out["status"],"OWNER_WORK_CLAIM_HELD")
         self.assertEqual(out["provider_gets"],0)
         self.assertEqual(self.stage(),"OBSERVED")
 
-    def test_unenrolled_work_missing_is_no_provider_read(self):
+    def test_unenrolled_queue_missing_skips_all_provider_reads(self):
         self.queue.close()
         other=BatchQueue(Path(self.temp.name)/"empty.sqlite")
         try:
-            out=follow.try_progress(other,source_sha=follow.MERGE_SHA,
+            out=follow.try_progress(other,source_sha=MERGE,
                                     now=AT,budget=3,api=FakeGitHub())
             self.assertEqual(out["status"],"NO_REVIEWED_OWNER_WORK_IN_ACTIVE_QUEUE")
             self.assertEqual(out["provider_gets"],0)
         finally:
             other.close()
 
-    def test_credential_transport_has_fixed_route_allowlist(self):
+    def test_route_allowlist_rejects_arbitrary_remote(self):
         reader=follow.OriginalGitHub("x"*40)
-        with self.assertRaisesRegex(follow.OwnerProofHeld,"ROUTE_DENIED"):
-            reader.get("repos/another/private")
+        for path in ("repos/another/private","pulls/872",
+                     "git/commits/something-invalid",
+                     "commits/danger/check-runs?per_page=100"):
+            with self.subTest(path=path),self.assertRaisesRegex(
+                follow.OwnerProofHeld,"ROUTE_DENIED"):
+                reader.get(path)
         self.assertEqual(reader.reads,0)
 
 

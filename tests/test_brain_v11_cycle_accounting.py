@@ -78,7 +78,9 @@ class CycleAccountingTests(unittest.TestCase):
             }},
             "verified_owner_progress": {
                 "status": "REVIEWED_OWNER_REPAIR_TESTED_FROM_ORIGINAL_GITHUB",
-                "work_id": v.WORK_ID, "protected_merge_sha": v.MERGE_SHA,
+                "work_id": v.WORK_ID, "reviewed_pr": v.PR_NUMBER,
+                "candidate_head_sha": "d"*40,
+                "protected_merge_sha": "c"*40,
                 "independent_checks_verified": True,
                 "real_world_functionality_verified": False,
                 "transitions": 3, "provider_gets": 3,

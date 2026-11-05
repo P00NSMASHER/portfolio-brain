@@ -1,35 +1,32 @@
-# Original-provider owner-work stage reconciliation (one scoped positive control)
+# One live-queue owner repair, protected original GitHub proof
 
-**Case enrolled:** the original Portfolio Brain owner observation
-`938e4a2975ef04adbdf95c78b15aa701bbdb9917940d8a4f4aa2997bc5ab9cc9`
-on protected source `b333d9685373a51ee8e567a4d0768950660bcc29`,
-owner `brain-engineering`, was recorded as `OBSERVED` in original core
-42108594544. The verified technical defect concerned missing-monitor
-unverified-result accounting, repaired under [PR #871](https://github.com/P00NSMASHER/portfolio-brain/pull/871).
+Previously selected original source `b333d968...` has been superseded and
+archived. Original core `42113953109` on protected main
+`a680fa9e888940ff907bf3364aba6b9f12e4ecfc` instead records
+the still-active Portfolio Brain owner observation as:
+- Work ID: `03749797de0a5276d44002bd95a600fa2468c6cc7fade30bbcbfe69303fe0d0d`
+- Owner: `brain-engineering`, priority 2, stage `OBSERVED`
+- Project: `portfolio-brain`, path `repository-observation`
+- Evidence state: `INCOMPLETE_OR_INCONCLUSIVE_CHECKS_OBSERVED`
 
-The reviewed exact candidate head `892349571e16d26fc7cc59f336003ec1a7303b42`
-received both original GitHub checks `validate` (App 15368) and
-`portfolio-phase1-gate` (App 5121826), and merged via the protected
-GitHub PR #871 process into commit
-`7e4f483c8595437342d510bcfdca9f4fbfb5660b` whose immutable
-first parent matches the original observed source.
+This PR #873 addresses that owner's actual progress-blocking integration
+defect. It is enrolled **by exact PR number**, the immutable original source
+and work identity, not by a self-referential commit SHA. The protected
+squash merge's immutable first parent must match the original source.
+The exact candidate SHA and merge SHA are obtained from GitHub's
+original PR response, checked as full hex SHAs and used to read original
+Git commit ancestry and exact-head provider checks with issuer IDs
+App15368 and independent App5121826. No third-party or self-reported
+source controls those identities.
 
-The **existing** Brain core (no new workflow or credential) is allowed to
-spend at most three unreserved GitHub GETs to independently re-read the
-original PR, merge ancestry and exact-head checks. Only the one explicit
-historical work item may be claimed and moved sequentially through
-`DIAGNOSED → PATCHED → TESTED`, each transition bearing a digest of
-the original provider facts. The queue still enforces owner claims, lease
-fencing, immutable journal replay, and source identity. A missing provider
-receipt/budget or a conflicting work identity makes no transition. Once
-tested, no further provider calls are spent on this item.
+On the first successful *postmerge* core with enough unreserved GET budget,
+the existing journal may advance this one observation from OBSERVED through
+DIAGNOSED, PATCHED, TESTED only, with separate source-bound digests for each
+stage. Claims and owner leases remain enforced by the existing BatchQueue.
+It does **not** claim LIVE_VERIFIED, deployment, customer value, revenue,
+or third-party code integration. Unknown or absent GitHub proof or insufficient
+budget does not change any stage. The original core result dashboard is
+required to show the real state after durable publication and replay.
 
-This **does not** claim a live behavior replay, automatic deployment,
-client value, earned income, or promote the item to `LIVE_VERIFIED`.
-The separate original result dashboard records stages from a genuine
-successful core artifact; it never converts green CI or a queued item into
-an operational outcome.
-
-This is a narrowly enrolled positive control proving the owner-work
-handoff can progress from a real reviewed fix. Other observed items remain
-unverified until individually matched to original release evidence.
+After that first positive control, remaining source observations must still
+be individually reconciled; no bulk labeling or invented success.
