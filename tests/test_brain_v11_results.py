@@ -216,5 +216,43 @@ class ResultsTests(unittest.TestCase):
         self.assertEqual(got["metrics"]["main_cycle_failures_in_sample"], 0)
         self.assertEqual(got["metrics"]["unverified_main_cycle_runs_in_sample"], 1)
 
+    def test_original_job_rejects_noninteger_provider_identity(self):
+        """Provider JSON booleans/floats must not attest original run identity."""
+        row = self.api.runs[0]
+        clean_get = self.api.get
+        self.assertEqual(v._original_core_verdict(self.api, row, MAIN),
+                         "ORIGINAL_SUCCESS")
+        for field, value in (("run_attempt", True), ("run_attempt", 1.0),
+                             ("run_id", 104.0)):
+            def forged(route):
+                data = clean_get(route)
+                if route.startswith("actions/runs/") and route.endswith("/jobs?per_page=100"):
+                    data["jobs"][0][field] = value
+                return data
+            self.api.get = forged
+            with self.subTest(field=field, value=repr(value)):
+                self.assertEqual(v._original_core_verdict(self.api, row, MAIN),
+                                 "AUTOMATIC_CORE_PROVENANCE_UNVERIFIED")
+            self.api.get = clean_get
+
+    def test_issuer_identity_requires_original_integer(self):
+        """A float equal to a real App ID is not authenticated App evidence."""
+        clean_get = self.api.get
+        self.assertEqual(v._verification(self.api, HEAD), "VERIFIED_BOTH_APPS")
+        for forged_app_id in (15368.0, 5121826.0):
+            def forged(route):
+                data = clean_get(route)
+                if route.startswith("commits/") and route.endswith("/check-runs?per_page=100"):
+                    for check in data["check_runs"]:
+                        if check["app"]["id"] == forged_app_id:
+                            check["app"]["id"] = forged_app_id
+                return data
+            self.api.get = forged
+            with self.subTest(app_id=forged_app_id):
+                self.assertEqual(v._verification(self.api, HEAD),
+                                 "NOT_BOTH_APPS_VERIFIED")
+            self.api.get = clean_get
+
+
 if __name__ == "__main__":
     unittest.main()
