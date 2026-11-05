@@ -15,7 +15,7 @@ import re
 import urllib.request
 
 from brain.v10.engineering_factory import verified_automatic_origin
-from brain.v11 import downstream_outcomes
+from brain.v11 import downstream_outcomes, cycle_evidence, value_funnel
 
 REPO = "P00NSMASHER/portfolio-brain"
 ROOT = "https://api.github.com/repos/" + REPO + "/"
@@ -52,7 +52,8 @@ class GitHubReadOnly:
         check(type(route) is str
               and (route in {"branches/main", "pulls?state=all&per_page=30",
                              "issues?state=open&per_page=60",
-                             "actions/runs?per_page=30", "rulesets/24182301"}
+                             "actions/runs?per_page=30", "rulesets/24182301",
+                             "branches/brain-state-v2"}
                    or re.fullmatch(r"commits/[0-9a-f]{40}/check-runs\?per_page=100",
                                    route) is not None
                    or re.fullmatch(r"actions/runs/[1-9][0-9]{0,11}/jobs\?per_page=100",
@@ -344,6 +345,20 @@ th{background:#e8edf1}a{color:#175e92}.note{font-size:13px;color:#546575}
         escape(data["main_sha"]) + "</code> | Generated: " +
         escape(data["generated_at"]) + ". Read-only; sampled results, not global totals.</p>"
         "<section class='grid'>" + cards + "</section>"
+        ("<h2>Original core: storage and useful work</h2>" +
+         table([data["cycle_accounting"]],
+               ["run_id", "state_growth_raw_bytes", "raw_headroom_bytes",
+                "compressed_headroom_bytes", "observed_new_source_candidates",
+                "unchanged_source_events_coalesced", "unreleased_owner_jobs",
+                "activity_classification", "state_tip_status"])
+         if "cycle_accounting" in data else "") +
+        ("<h2>Discovery to delivery: verified evidence</h2>" +
+         table([data["outcome_funnel"]],
+               ["discovered_source_revisions", "operator_linked_review_candidates",
+                "independently_verified_reviews", "source_linked_protected_merges",
+                "source_linked_live_behavior_repairs", "verified_customer_revenue",
+                "verified_saved_engineering_hours"])
+         if "outcome_funnel" in data else "") +
         "<h2>Original merged PR evidence</h2>" +
         table(data["merged_pr_evidence"],
               ["number", "title", "verification", "downstream_completion", "merged_at"]) +
@@ -366,6 +381,9 @@ def main(argv=None):
     parser.add_argument("--expected-main", required=True)
     parser.add_argument("--json", required=True)
     parser.add_argument("--html", required=True)
+    parser.add_argument("--core-artifacts")
+    parser.add_argument("--core-run-id", type=int)
+    parser.add_argument("--core-run-attempt", type=int)
     args = parser.parse_args(argv)
     try:
         at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
@@ -391,6 +409,45 @@ def main(argv=None):
             result["verified_real_world_repairs"])
         outcome["metrics"]["registered_repairs_held"] = (
             result["unverified_candidates"])
+        knowledge = Path("brain/REUSE_KNOWLEDGE.json")
+        links_file = Path("repair/V11_OUTCOME_LINKS.json")
+        check(knowledge.is_file() and not knowledge.is_symlink()
+              and 0 < knowledge.stat().st_size <= 128_000
+              and links_file.is_file() and not links_file.is_symlink()
+              and 0 < links_file.stat().st_size <= 12_000,
+              "RESULTS_FUNNEL_SOURCE_MISSING_OR_UNSAFE")
+        funnel = value_funnel.summarize(
+            json.loads(knowledge.read_text(encoding="utf-8")),
+            json.loads(links_file.read_text(encoding="utf-8")),
+            outcome["merged_pr_evidence"], result)
+        outcome["outcome_funnel"] = funnel
+        outcome["metrics"]["discovered_source_revisions"] = funnel["discovered_source_revisions"]
+        outcome["metrics"]["source_linked_protected_merges"] = funnel["source_linked_protected_merges"]
+        outcome["metrics"]["source_linked_live_behavior_repairs"] = funnel["source_linked_live_behavior_repairs"]
+        outcome["metrics"]["independently_verified_reviews"] = funnel["independently_verified_reviews"]
+        outcome["metrics"]["verified_customer_revenue"] = funnel["verified_customer_revenue"]
+        parameters = (args.core_artifacts, args.core_run_id, args.core_run_attempt)
+        check(all(value is None for value in parameters) or
+              all(value is not None for value in parameters),
+              "RESULTS_CORE_EVIDENCE_PARAMETERS_INCOMPLETE")
+        if args.core_artifacts is not None:
+            account = cycle_evidence.inspect(
+                args.core_artifacts, source_sha=args.expected_main,
+                run_id=args.core_run_id, run_attempt=args.core_run_attempt)
+            tip = api.get("branches/brain-state-v2")
+            check(type(tip) is dict and type(tip.get("commit")) is dict
+                  and type(tip["commit"].get("sha")) is str
+                  and SHA.fullmatch(tip["commit"]["sha"]),
+                  "RESULTS_STATE_TIP_UNVERIFIED")
+            account["state_tip_status"] = (
+                "LATEST_COMMIT_CONFIRMED" if
+                tip["commit"]["sha"] == account["state_commit"] else
+                "HISTORICAL_DELIVERY_NOT_CURRENT")
+            outcome["cycle_accounting"] = account
+            outcome["metrics"]["core_cycle_growth_raw_bytes"] = account["state_growth_raw_bytes"]
+            outcome["metrics"]["core_cycle_new_candidates"] = account["observed_new_source_candidates"]
+            outcome["metrics"]["core_cycle_coalesced_unchanged"] = account["unchanged_source_events_coalesced"]
+            outcome["metrics"]["core_cycle_functional_release_verified"] = None
         for name, body in ((args.json, json.dumps(outcome, indent=2, sort_keys=True) + "\n"),
                            (args.html, html_report(outcome))):
             path = Path(name)
