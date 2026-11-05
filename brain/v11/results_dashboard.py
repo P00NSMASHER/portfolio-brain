@@ -344,7 +344,7 @@ th{background:#e8edf1}a{color:#175e92}.note{font-size:13px;color:#546575}
         "<p class='note'>Source: original GitHub API | Main: <code>" +
         escape(data["main_sha"]) + "</code> | Generated: " +
         escape(data["generated_at"]) + ". Read-only; sampled results, not global totals.</p>"
-        "<section class='grid'>" + cards + "</section>"
+        "<section class='grid'>" + cards + "</section>" +
         ("<h2>Original core: storage and useful work</h2>" +
          table([data["cycle_accounting"]],
                ["run_id", "state_growth_raw_bytes", "raw_headroom_bytes",
