@@ -93,7 +93,12 @@ def inspect(root, *, source_sha, run_id, run_attempt=1):
             and packed["compressed_size"] == capacity["compressed_size"]
             and type(maintenance.get("storage_pressure")) is dict
             and maintenance["storage_pressure"].get("raw_bytes") == packed["raw_size"]
-            and maintenance["storage_pressure"].get("compressed_bytes") == packed["compressed_size"],
+            # Maintenance is measured before later SQLite activity; the final
+            # separately packed archive can differ even at identical raw size.
+            # Only publication + capacity receipts certify the packed bytes.
+            and type(maintenance["storage_pressure"].get("compressed_bytes")) is int
+            and 0 < maintenance["storage_pressure"]["compressed_bytes"] <=
+            capacity["verified_compressed_capacity_bytes"],
             "CYCLE_STATE_CAPACITY_RECEIPTS_CONFLICT")
     require(0 < restored["raw_size"] <= capacity["verified_raw_capacity_bytes"]
             and 0 < packed["raw_size"] <= capacity["verified_raw_capacity_bytes"]
@@ -137,6 +142,10 @@ def inspect(root, *, source_sha, run_id, run_attempt=1):
         "source_snapshot_restored_bytes": restored["raw_size"],
         "published_snapshot_raw_bytes": packed["raw_size"],
         "published_snapshot_compressed_bytes": packed["compressed_size"],
+        # This is an observation, not the authoritative packed archive size.
+        "maintenance_compression_observation_bytes": maintenance["storage_pressure"]["compressed_bytes"],
+        "maintenance_to_pack_compression_delta_bytes": (
+            maintenance["storage_pressure"]["compressed_bytes"] - packed["compressed_size"]),
         "state_growth_raw_bytes": packed["raw_size"] - restored["raw_size"],
         "state_growth_compressed_bytes": packed["compressed_size"] - restored["compressed_size"],
         "raw_headroom_bytes": capacity["raw_headroom_bytes"],
