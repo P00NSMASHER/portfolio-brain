@@ -151,6 +151,8 @@ class Store:
             self.db.execute("INSERT OR IGNORE INTO meta VALUES('schema_version','2')")
             require(self.db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0] == '2', "unsupported state schema")
         self.visibility = visibility
+        # This counter is diagnostic, never an extra committed event.
+        self.coalesced_events = 0
 
     @contextmanager
     def transaction(self):
@@ -165,12 +167,15 @@ class Store:
     def close(self):
         self.db.close()
 
-    def submit(self, events, *, now=None):
+    def submit(self, events, *, now=None, coalesce_seconds=0):
         now = now or utcnow()
+        require(type(coalesce_seconds) is int and 0 <= coalesce_seconds <= 21600,
+                "COALESCE_WINDOW_INVALID")
         require(type(events) is list and 0 < len(events) <= 100, "batch must contain 1..100 events")
         for event in events:
             validate_event(event, now)
             require(self.visibility == "PRIVATE" or event["visibility"] == "PUBLIC", "private input rejected by public state")
+        coalesced_this_batch = 0
         with self.transaction():
             for event in events:
                 # Source timestamps are UTC instants, not bytewise string keys.
@@ -182,19 +187,35 @@ class Store:
                     (event["kind"], event["key"]),
                 ).fetchall()
                 this_instant = timestamp(event["observed_at"])
+                latest = None
+                latest_at = None
                 for row in previous_rows:
                     previous = json.loads(row[0])
-                    if timestamp(previous["observed_at"]) == this_instant:
+                    previous_at = timestamp(previous["observed_at"])
+                    if previous_at == this_instant:
                         require(
                             same_semantic_observation(previous, event),
                             "AMBIGUOUS_OBSERVATION: conflicting payload or evidence label at same source time",
                         )
+                    if latest_at is None or previous_at > latest_at:
+                        latest, latest_at = previous, previous_at
                 body, value_hash = canonical(event), digest(event)
                 old = self.db.execute("SELECT hash FROM events WHERE id=?", (event["id"],)).fetchone()
                 if old:
                     require(old[0] == value_hash, "IDEMPOTENCY_CONFLICT: event id reused with different content")
+                elif (coalesce_seconds > 0
+                      and event["kind"] in {"repository", "candidate", "experiment"}
+                      and latest is not None
+                      and latest["source_sha"] == event["source_sha"]
+                      and same_semantic_observation(latest, event)
+                      and 0 <= (this_instant - latest_at).total_seconds() < coalesce_seconds):
+                    # Unchanged source evidence stays anchored to its actual
+                    # observation time. No fabricated refresh, no lost change,
+                    # and the event ledger remains append-only.
+                    coalesced_this_batch += 1
                 else:
                     self.db.execute("INSERT INTO events(id,body,hash,status,received_at) VALUES(?,?,?,'PENDING',?)", (event["id"], body, value_hash, now))
+        self.coalesced_events += coalesced_this_batch
         return self.pending()
 
     def pending(self):
