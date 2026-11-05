@@ -13,6 +13,9 @@ on:
       - tests/test_brain_state_maintenance.py
       - .github/workflows/brain-cycle.yml
       - .github/workflows/state-capacity-qualification.yml
+  push:
+    branches: [main]
+    paths: [.github/workflows/state-capacity-qualification.yml]
   workflow_dispatch:
 
 permissions:
@@ -24,6 +27,7 @@ concurrency:
 
 jobs:
   build-five-gb-archive:
+    if: ${{ github.event_name != 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -96,4 +100,116 @@ jobs:
         with:
           name: brain-state-five-gb-verification-${{ github.event.pull_request.head.sha || github.sha }}
           path: /tmp/brain-capacity/independent-verification.json
+          retention-days: 90
+
+  backend-canary-publish:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'P00NSMASHER/portfolio-brain' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build and publish isolated synthetic 180MB SQLite state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROBE_BRANCH: brain-capacity-canary-180mb-20261105
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq .commit.sha)" = "$GITHUB_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/rulesets/24182301" --jq .enforcement)" = active
+          if gh api "repos/$GITHUB_REPOSITORY/branches/$PROBE_BRANCH" >/dev/null 2>&1; then echo CANARY_ALREADY_EXISTS; exit 1; fi
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from brain.state_capacity_probe import build
+          from brain.state_maintenance import VERIFIED_PRODUCTION_COMPRESSED_BYTES
+          root=Path(os.environ['RUNNER_TEMP'])/'backend-canary'
+          root.mkdir()
+          result=build(root,target_bytes=180_000_000,code_source_sha=os.environ['GITHUB_SHA'])
+          if result['raw_size'] < 180_000_000 or result['compressed_size'] > VERIFIED_PRODUCTION_COMPRESSED_BYTES:
+              raise SystemExit('BACKEND_CAPACITY_OUTSIDE_REVIEWED_BOUND')
+          PY
+          cd "$RUNNER_TEMP/backend-canary"
+          git init -b canary
+          git config user.name portfolio-brain-capacity
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          echo 'Synthetic state capacity evidence; NOT the production state.' > README.md
+          git add -- state-chunks state-manifest.json capacity-receipt.json README.md
+          git commit -m 'Synthetic 180MB state archive backend proof'
+          sha="$(git rev-parse HEAD)"
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git -c credential.helper='!gh auth git-credential' push origin "HEAD:refs/heads/$PROBE_BRANCH"
+          test "$(gh api -H 'Cache-Control: no-cache' "repos/$GITHUB_REPOSITORY/branches/$PROBE_BRANCH" --jq .commit.sha)" = "$sha"
+          echo "$sha" > "$RUNNER_TEMP/canary-sha.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-canary-sha-${{ github.sha }}
+          path: ${{ runner.temp }}/canary-sha.txt
+          if-no-files-found: error
+          retention-days: 30
+
+  backend-canary-independent-restore:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'P00NSMASHER/portfolio-brain' }}
+    needs: backend-canary-publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: source
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: brain-capacity-canary-180mb-20261105
+          path: backend
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-canary-sha-${{ github.sha }}
+          path: ${{ runner.temp }}/canary-sha
+      - name: Check original branch identity and independently replay SQLite
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROBE_BRANCH: brain-capacity-canary-180mb-20261105
+        run: |
+          set -euo pipefail
+          test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
+          sha="$(cat "$RUNNER_TEMP/canary-sha/canary-sha.txt")"
+          test "$sha" = "$(git -C backend rev-parse HEAD)"
+          test "$sha" = "$(gh api -H 'Cache-Control: no-cache' "repos/$GITHUB_REPOSITORY/branches/$PROBE_BRANCH" --jq .commit.sha)"
+          mkdir -p "$RUNNER_TEMP/canary-proof"
+          PYTHONPATH="$PWD/source" PROBE_SHA="$sha" python - <<'PY'
+          import json,os
+          from pathlib import Path
+          from brain.state_capacity_probe import verify
+          from brain.state_maintenance import VERIFIED_PRODUCTION_COMPRESSED_BYTES
+          proof=verify(Path('backend'),minimum_bytes=180_000_000,expected_code_source=os.environ['GITHUB_SHA'])
+          if proof['raw_size']<180_000_000 or proof['compressed_size']>VERIFIED_PRODUCTION_COMPRESSED_BYTES:
+              raise SystemExit('BACKEND_CAPACITY_READBACK_MISMATCH')
+          result=dict(status='ACTUAL_GITHUB_BACKEND_CANARY_VERIFIED',
+                      raw_bytes=proof['raw_size'],compressed_bytes=proof['compressed_size'],
+                      branch_commit=os.environ['PROBE_SHA'],source_sha=os.environ['GITHUB_SHA'],
+                      production_state_modified=False,production_data_verified=False)
+          (Path(os.environ['RUNNER_TEMP'])/'canary-proof'/'proof.json').write_text(json.dumps(result,sort_keys=True)+chr(10))
+          print(json.dumps(result,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-canary-proof-${{ github.sha }}
+          path: ${{ runner.temp }}/canary-proof/proof.json
+          if-no-files-found: error
           retention-days: 90
