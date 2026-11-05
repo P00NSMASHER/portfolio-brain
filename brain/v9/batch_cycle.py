@@ -15,6 +15,7 @@ from brain.v9.batch_queue import BatchQueue, BatchFault, PROJECTS, digest, hashv
 from brain.v9.batch_provider import GitHubOriginalReader
 from brain.v9.batch_routing import route_defect, select_distinct_owners
 from brain.v9.publication_reader import PublicationReader, REQUIRED_BUDGET
+from brain.v9 import reviewed_owner_followthrough
 
 # Approved bounded reader codes only. Never preserve raw provider response text,
 # exceptions, URLs, token values, stack traces or unrecognized BatchFault payloads.
@@ -177,6 +178,15 @@ def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=
                     owner=route['owner'], path=path, priority=priority)
         inputs.append((item, route))
     # All report fields are checked before adding any durable observations.
+    # Reconcile one explicitly reviewed historical owner item using only
+    # original GitHub PR + immutable merge + two exact-head App checks.
+    # Spending is bounded by the existing shared 24-GET source budget;
+    # reserved publication GETs remain untouched. A missing or disputed
+    # readback creates no diagnosis, patch or test stage.
+    owner_progress = reviewed_owner_followthrough.try_progress(
+        queue, source_sha=source_sha, now=now, budget=ceiling-used)
+    used += owner_progress['provider_gets']
+    need(used <= ceiling, 'OWNER_PROOF_SHARED_GET_BUDGET_EXCEEDED')
     heads = {row['id']: row['repository_revision'] for row in rows
              if row['id'] in PROJECTS and row.get('repository_revision') is not None}
     archived = queue.archive_superseded_observations(
@@ -253,10 +263,12 @@ def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=
                 held_work_ids=held, unobserved_projects=missing,
                 nonactionable_source_signals=signals,
                 archived_superseded_observations=archived,
+                verified_owner_progress=owner_progress,
                 outside_owner_scope=skipped, queue_checkpoint=queue.checkpoint(),
                 metrics=queue.metrics(now=now), provider_readback=provider,
                 failure_evidence_gets=failure_gets,
-                provider_gets=provider.get('provider_gets', 0) + failure_gets, total_project_gets=total,
+                provider_gets=provider.get('provider_gets', 0) + failure_gets +
+                owner_progress['provider_gets'], total_project_gets=total,
                 provider_writes=0, production_accepted=False,
                 six_hour_acceptance_passed=False, automatic_execution_authority=False)
 

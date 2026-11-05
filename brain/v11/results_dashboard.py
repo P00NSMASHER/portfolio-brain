@@ -354,7 +354,8 @@ th{background:#e8edf1}a{color:#175e92}.note{font-size:13px;color:#546575}
                ["run_id", "state_growth_raw_bytes", "raw_headroom_bytes",
                 "compressed_headroom_bytes", "candidate_events_persisted",
                 "unchanged_source_events_coalesced", "unreleased_owner_jobs",
-                "activity_classification", "state_tip_status"])
+                "activity_classification", "state_tip_status",
+                "original_provider_owner_stage_transitions"])
          if "cycle_accounting" in data else "") +
         ("<h2>Discovery to delivery: verified evidence</h2>" +
          table([data["outcome_funnel"]],
@@ -484,6 +485,15 @@ def main(argv=None):
             outcome["metrics"]["core_cycle_verified_novel_candidates"] = None
             outcome["metrics"]["core_cycle_coalesced_unchanged"] = account["unchanged_source_events_coalesced"]
             outcome["metrics"]["core_cycle_functional_release_verified"] = None
+            outcome["metrics"]["owner_stage_transitions_verified_in_cycle"] = (
+                account["original_provider_owner_stage_transitions"])
+            stage_counts = account.get("owner_queue_stages")
+            outcome["metrics"]["owner_queue_observed_work"] = (
+                stage_counts["OBSERVED"] if stage_counts is not None else None)
+            outcome["metrics"]["owner_queue_tested_work"] = (
+                stage_counts["TESTED"] if stage_counts is not None else None)
+            outcome["metrics"]["owner_queue_live_verified_work"] = (
+                stage_counts["LIVE_VERIFIED"] if stage_counts is not None else None)
         for name, body in ((args.json, json.dumps(outcome, indent=2, sort_keys=True) + "\n"),
                            (args.html, html_report(outcome))):
             path = Path(name)

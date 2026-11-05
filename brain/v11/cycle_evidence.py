@@ -61,6 +61,7 @@ def inspect(root, *, source_sha, run_id, run_attempt=1):
     capacity = _json(root, "state-capacity.json")
     maintenance = _json(root, "state-maintenance.json")
     engineering = _json(root, "v8-engineering.json")
+    owner_queue = _json(root, "v9-engineering.json", required=False)
     research = _json(root, "research/report.json", required=False)
     upgrade = _json(root, "upgrade/report.json", required=False)
     require(delivery.get("schema_version") == 2
@@ -112,6 +113,43 @@ def inspect(root, *, source_sha, run_id, run_attempt=1):
             and engineering.get("production_accepted") is False
             and type(engineering.get("owner_jobs")) is list,
             "CYCLE_ENGINEERING_PROOF_UNVERIFIED")
+    verified_owner_stages = None
+    owner_work_counts = None
+    if owner_queue is not None:
+        data = owner_queue.get("metrics")
+        stages = data.get("stages") if type(data) is dict else None
+        require(owner_queue.get("source_sha") == source_sha
+                and type(data) is dict
+                and type(data.get("work_items")) is int
+                and 0 <= data["work_items"] <= 256
+                and type(stages) is dict
+                and set(stages) == {"OBSERVED","DIAGNOSED","PATCHED","TESTED","LIVE_VERIFIED"}
+                and all(type(v) is int and v >= 0 for v in stages.values())
+                and sum(stages.values()) == data["work_items"]
+                and owner_queue.get("production_accepted") is False,
+                "CYCLE_OWNER_QUEUE_SOURCE_UNVERIFIED")
+        owner_work_counts = stages
+        proof = owner_queue.get("verified_owner_progress")
+        if proof is not None:
+            require(type(proof) is dict and type(proof.get("status")) is str
+                    and type(proof.get("provider_gets")) is int
+                    and 0 <= proof["provider_gets"] <= 3
+                    and type(proof.get("transitions")) is int
+                    and 0 <= proof["transitions"] <= 3
+                    and proof.get("production_accepted") is False,
+                    "CYCLE_OWNER_PROGRESS_SCHEMA_INVALID")
+            if proof["status"] == "REVIEWED_OWNER_REPAIR_TESTED_FROM_ORIGINAL_GITHUB":
+                from brain.v9.reviewed_owner_followthrough import WORK_ID, MERGE_SHA
+                require(proof.get("work_id") == WORK_ID
+                        and proof.get("protected_merge_sha") == MERGE_SHA
+                        and proof.get("independent_checks_verified") is True
+                        and proof.get("real_world_functionality_verified") is False
+                        and proof["transitions"] > 0
+                        and stages["TESTED"] >= 1,
+                        "CYCLE_OWNER_PROGRESS_CANNOT_SELF_CERTIFY")
+                verified_owner_stages = proof["transitions"]
+            else:
+                verified_owner_stages = 0
     persisted_candidates = None
     coalesced = None
     if research is not None:
@@ -158,6 +196,8 @@ def inspect(root, *, source_sha, run_id, run_attempt=1):
         "verified_novel_candidates": None,
         "unchanged_source_events_coalesced": coalesced,
         "unreleased_owner_jobs": len(engineering["owner_jobs"]),
+        "owner_queue_stages": owner_work_counts,
+        "original_provider_owner_stage_transitions": verified_owner_stages,
         "knowledge_cooldown_observed": cooldown,
         "functional_release_verified": None,
         "real_world_value_verified": None,

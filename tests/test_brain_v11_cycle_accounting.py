@@ -68,6 +68,33 @@ class CycleAccountingTests(unittest.TestCase):
         self.assertTrue(row["knowledge_cooldown_observed"])
         self.assertIsNone(row["real_world_value_verified"])
 
+    def test_original_queue_stage_receipt_is_tied_to_exact_successful_core(self):
+        from brain.v9 import reviewed_owner_followthrough as v
+        self.data["v9-engineering.json"] = {
+            "source_sha": SHA, "production_accepted": False,
+            "metrics": {"work_items": 2, "stages": {
+                "OBSERVED": 1, "DIAGNOSED": 0, "PATCHED": 0,
+                "TESTED": 1, "LIVE_VERIFIED": 0,
+            }},
+            "verified_owner_progress": {
+                "status": "REVIEWED_OWNER_REPAIR_TESTED_FROM_ORIGINAL_GITHUB",
+                "work_id": v.WORK_ID, "protected_merge_sha": v.MERGE_SHA,
+                "independent_checks_verified": True,
+                "real_world_functionality_verified": False,
+                "transitions": 3, "provider_gets": 3,
+                "production_accepted": False,
+            },
+        }
+        self.write()
+        row = self.inspect()
+        self.assertEqual(row["owner_queue_stages"]["TESTED"], 1)
+        self.assertEqual(row["original_provider_owner_stage_transitions"], 3)
+        self.data["v9-engineering.json"]["verified_owner_progress"]["independent_checks_verified"] = False
+        self.write()
+        with self.assertRaisesRegex(cycle_evidence.CycleEvidenceError,
+                                    "OWNER_PROGRESS_CANNOT_SELF_CERTIFY"):
+            self.inspect()
+
     def test_reject_forged_release_or_mismatched_pub(self):
         self.data["delivery.json"]["publication_verified"] = False
         self.write()
