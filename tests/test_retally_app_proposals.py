@@ -26,6 +26,15 @@ class AppProposalTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 broker.check_request(REQUEST, RUN, BASE)
 
+    def test_app_recovery_receipt_is_an_authorized_scout_source(self):
+        request={**REQUEST, "lane":"scout", "scout_fingerprint":"1"*64,
+                 "branch":"automation/retally-scout-12345-1"}
+        run={**RUN, "event":"repository_dispatch",
+             "path":".github/workflows/public-repo-hunter.yml"}
+        self.assertTrue(broker.check_request(request, run, BASE))
+        with self.assertRaises(ValueError):
+            broker.check_request(request, {**run, "event":"pull_request"}, BASE)
+
     def test_rejects_ineligible_sources(self):
         for changes in (dict(path=".github/workflows/other.yml"),dict(event="pull_request"),
                         dict(run_attempt=2),dict(id=23456),dict(head_branch="topic"),
