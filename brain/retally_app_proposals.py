@@ -6,6 +6,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import zipfile
 from urllib.parse import quote
 
@@ -186,7 +187,11 @@ def main():
     listing = api(f"actions/artifacts?name={ARTIFACT}&per_page=100")
     seen_workers = set()
     for artifact in listing["artifacts"]:
-        inspected = inspect_request(artifact)
+        try:
+            inspected = inspect_request(artifact)
+        except (ValueError, KeyError, TypeError, json.JSONDecodeError, zipfile.BadZipFile) as exc:
+            print(f"Rejected invalid RETALLY artifact {artifact.get('id', 'unknown')}: {exc}", file=sys.stderr)
+            continue
         if inspected is None:
             continue
         request, main, worker, existing = inspected
