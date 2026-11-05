@@ -120,10 +120,12 @@ jobs:
       - name: Read-only public project monitoring
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          BRAIN_CYCLE_COMPACT_REPORTS: '1'
         run: python -m brain monitor --db state/state.sqlite --output /tmp/brain/report --expected-sha "$BRAIN_SOURCE_SHA"
       - name: Bounded public code and opportunity research
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          BRAIN_CYCLE_COMPACT_REPORTS: '1'
         run: python -m brain research --db state/state.sqlite --output /tmp/brain/research --expected-sha "$BRAIN_SOURCE_SHA"
       - name: Evidence-bound deterministic experiment
         run: python -m brain experiment --db state/state.sqlite --output /tmp/brain/experiment --expected-sha "$BRAIN_SOURCE_SHA"

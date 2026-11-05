@@ -56,7 +56,9 @@ def monitor(store, sha, output, *, api=None, repositories=None):
     # The original monitor artifact keeps its report; do not save another
     # full PASS projection until the final experiment+doctor checkpoint.
     # Partial monitoring failures still preserve a durable report and FAIL attempt.
-    report=store.report(sha,persist=bool(errors))
+    compact=(store.visibility=="PUBLIC" and os.environ.get("BRAIN_CYCLE_COMPACT_REPORTS")=="1")
+    report=(store.report(sha) if (errors or not compact)
+            else store.report(sha,persist=False))
     report["operation"]={"name":"monitor","requests":api.requests,"required_repositories":repositories,"errors":errors,
                          "unchanged_events_coalesced":store.coalesced_events-coalesced_before}
     if errors:
@@ -158,8 +160,9 @@ def research(store, sha, output, *, api=None, repository=None):
     # Alternate recovery requires actual source/hash inspection.
     items=[event("candidate",p["repository"]+":"+p["path"],p,sha,private=private) for p,private in found]
     coalesced_before=store.coalesced_events
+    compact=(store.visibility=="PUBLIC" and os.environ.get("BRAIN_CYCLE_COMPACT_REPORTS")=="1")
     report=persist(store,items,sha,output,coalesce_seconds=6*3600,
-                   persist_report=False)
+                   persist_report=not compact)
     newly_coalesced=store.coalesced_events-coalesced_before
     unavailable=list(getattr(api,"discovery_unavailable",[]))
     bounded=list(getattr(api,"discovery_bounded_trees",[]))

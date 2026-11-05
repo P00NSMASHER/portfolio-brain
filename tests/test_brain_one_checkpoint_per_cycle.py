@@ -4,6 +4,7 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from brain.core import Store, BrainError
 from brain.__main__ import monitor, research, experiment, doctor
@@ -30,12 +31,13 @@ class OneCheckpointTests(unittest.TestCase):
             def discover(self,target,repository=None):
                 return []
         api=API()
-        monitor(self.store,SHA,self.root/"monitor",api=api)
-        self.assertEqual(self.reports(),0)
-        with self.assertRaisesRegex(BrainError,"MISSING_REPORT"):
-            self.store.read_report(SHA)
-        research(self.store,SHA,self.root/"research",api=api)
-        self.assertEqual(self.reports(),0)
+        with patch.dict("os.environ", {"BRAIN_CYCLE_COMPACT_REPORTS":"1"}):
+            monitor(self.store,SHA,self.root/"monitor",api=api)
+            self.assertEqual(self.reports(),0)
+            with self.assertRaisesRegex(BrainError,"MISSING_REPORT"):
+                self.store.read_report(SHA)
+            research(self.store,SHA,self.root/"research",api=api)
+            self.assertEqual(self.reports(),0)
         result=experiment(self.store,SHA,self.root/"experiment")
         self.assertEqual(result["status"],"PASS")
         self.assertEqual(self.reports(),1)
@@ -52,6 +54,21 @@ class OneCheckpointTests(unittest.TestCase):
                 self.assertTrue((self.root/operation/"report.html").exists())
         self.assertEqual(self.store.read_report(SHA)["canonical_hash"],
                          result["canonical_hash"])
+
+    def test_standalone_workload_retains_previous_report_contract(self):
+        class API:
+            requests=1
+            def observe(self,repo): return payload(repo),False
+            def discover(self,target,repository=None): return []
+        api=API()
+        with patch.dict("os.environ", {"BRAIN_CYCLE_COMPACT_REPORTS":""}):
+            monitor(self.store,SHA,self.root/"monitor-standalone",api=api)
+            self.assertEqual(self.reports(),1)
+            research(self.store,SHA,self.root/"research-standalone",api=api)
+            self.assertEqual(self.reports(),2)
+            experiment(self.store,SHA,self.root/"experiment-standalone")
+            self.assertEqual(self.reports(),3)
+            self.assertEqual(doctor(self.store,SHA,self.root/"doctor-standalone")["status"],"PASS")
 
     def test_adverse_derived_report_is_persisted_even_in_preview(self):
         item=event("repository",REPOSITORY,payload(),SHA,now=NOW)
@@ -76,6 +93,17 @@ class OneCheckpointTests(unittest.TestCase):
         row=self.store.db.execute("SELECT status FROM attempts WHERE operation='monitor'").fetchone()
         self.assertEqual(row[0],"FAIL")
         self.assertEqual(self.store.db.execute("SELECT count(*) FROM ledger").fetchone()[0],1)
+
+    def test_nonpublic_database_never_uses_compact_marker(self):
+        # A manual private workflow must not inherit the public core option.
+        with patch.dict("os.environ", {"BRAIN_CYCLE_COMPACT_REPORTS":"1"}):
+            private=Store(self.root/"private.sqlite",visibility="PRIVATE")
+            try:
+                self.assertEqual(private.visibility,"PRIVATE")
+                self.assertFalse(private.visibility=="PUBLIC" and
+                                 __import__("os").environ.get("BRAIN_CYCLE_COMPACT_REPORTS")=="1")
+            finally:
+                private.close()
 
     def test_invalid_persistence_flag_denied_without_state_mutation(self):
         item=event("repository",REPOSITORY,payload(),SHA,now=NOW)
