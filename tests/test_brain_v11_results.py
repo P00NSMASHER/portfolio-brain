@@ -201,6 +201,24 @@ class ResultsTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["main_cycle_failures_in_sample"], 1)
         self.assertEqual(result["metrics"]["unverified_main_cycle_runs_in_sample"], 0)
 
+    def test_missing_monitor_is_accounted_as_unverified_not_hidden(self):
+        """A core without its original monitor job must appear as unverified."""
+        self.api.runs = [self.api.runs[0]]
+        original_get = self.api.get
+
+        def missing_monitor(route):
+            if route == "actions/runs/104/jobs?per_page=100":
+                return {"total_count": 0, "jobs": []}
+            return original_get(route)
+
+        self.api.get = missing_monitor
+        result = self.snapshot()
+        self.assertEqual(result["core_run_verifications"][0]["outcome"],
+                         "ORIGINAL_MONITOR_UNVERIFIED")
+        self.assertEqual(result["metrics"]["main_cycle_successes_in_sample"], 0)
+        self.assertEqual(result["metrics"]["main_cycle_failures_in_sample"], 0)
+        self.assertEqual(result["metrics"]["unverified_main_cycle_runs_in_sample"], 1)
+
     def test_failed_original_without_signed_origin_not_counted(self):
         self.api.runs = [
             {"id": 106, "name": "brain-cycle-v2",

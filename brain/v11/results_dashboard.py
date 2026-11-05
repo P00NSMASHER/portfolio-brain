@@ -272,7 +272,7 @@ def report(api, *, expected_main, generated_at):
             "main_cycle_failures_in_sample": sum(
                 x["outcome"] == "ORIGINAL_FAILURE" for x in core_verifications),
             "unverified_main_cycle_runs_in_sample": sum(
-                not x["outcome"].startswith("ORIGINAL_")
+                x["outcome"] not in {"ORIGINAL_SUCCESS", "ORIGINAL_FAILURE"}
                 for x in core_verifications),
             "open_issue_sample": len(open_issues),
             "historical_retired_issue_candidates": sum(
