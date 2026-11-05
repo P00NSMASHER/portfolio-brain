@@ -42,10 +42,15 @@ def storage_pressure(source):
             packed+=len(zlib.compress(chunk,level=6))
     with sqlite3.connect(source.resolve().as_uri()+'?mode=ro&immutable=1',uri=True) as db:
         reports=db.execute('SELECT count(*) FROM reports').fetchone()[0]
+        events=db.execute('SELECT count(*) FROM events').fetchone()[0]
+        attempts=db.execute('SELECT count(*) FROM attempts').fetchone()[0]
     raw=source.stat().st_size
     return dict(raw_bytes=raw,compressed_bytes=packed,reports=reports,
+        events=events,attempts=attempts,
         raw_headroom_bytes=VERIFIED_PRODUCTION_RAW_BYTES-raw,
         compressed_headroom_bytes=VERIFIED_PRODUCTION_COMPRESSED_BYTES-packed,
+        raw_utilization_percent=round(100*raw/VERIFIED_PRODUCTION_RAW_BYTES,2),
+        compressed_utilization_percent=round(100*packed/VERIFIED_PRODUCTION_COMPRESSED_BYTES,2),
         capacity_warning=('LOW_VERIFIED_HEADROOM' if
             raw*5>=VERIFIED_PRODUCTION_RAW_BYTES*4 or
             packed*5>=VERIFIED_PRODUCTION_COMPRESSED_BYTES*4 else None))
