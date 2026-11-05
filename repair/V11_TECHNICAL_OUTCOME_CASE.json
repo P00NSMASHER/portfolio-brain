@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "kind": "OPERATOR_REQUESTED_STORAGE_REPAIR",
+  "source_pr": 865,
+  "candidate_sha": "c1da4cd8cd6bf0067a1e5a3cf14d7fb4859a9dd8",
+  "merge_sha": "dbd548034c6002009098c1cab9bee3aa65a64bdb",
+  "before": [
+    "05ab80db2bf1d66c4f4e09923f5ca3388ba88c7d",
+    "4e7bec5fc476c79f2ead74b6e021799de9c234cc"
+  ],
+  "after": [
+    "9c06fad17d8ca49c7e4a883252fb52fef01a8a6e",
+    "75ad3036fc90b5ed6189c6203f7a71c0cdd1dd53"
+  ]
+}

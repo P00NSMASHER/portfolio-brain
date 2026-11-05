@@ -15,7 +15,7 @@ import re
 import urllib.request
 
 from brain.v10.engineering_factory import verified_automatic_origin
-from brain.v11 import downstream_outcomes, cycle_evidence, value_funnel
+from brain.v11 import downstream_outcomes, cycle_evidence, value_funnel, technical_outcome
 
 REPO = "P00NSMASHER/portfolio-brain"
 ROOT = "https://api.github.com/repos/" + REPO + "/"
@@ -359,6 +359,13 @@ th{background:#e8edf1}a{color:#175e92}.note{font-size:13px;color:#546575}
                 "source_linked_live_behavior_repairs", "verified_customer_revenue",
                 "verified_saved_engineering_hours"])
          if "outcome_funnel" in data else "") +
+        ("<h2>Source-bound measured engineering outcome (short window)</h2>" +
+         table([data["technical_outcome"]],
+               ["status", "reviewed_pr", "before_raw_delta_bytes", "after_raw_delta_bytes",
+                "before_raw_bytes_per_hour", "after_raw_bytes_per_hour",
+                "raw_capacity_margin_at_end_bytes", "sustained_improvement_verified",
+                "causal_attribution_verified", "customer_value_verified"])
+         if "technical_outcome" in data else "") +
         "<h2>Original merged PR evidence</h2>" +
         table(data["merged_pr_evidence"],
               ["number", "title", "verification", "downstream_completion", "merged_at"]) +
@@ -426,6 +433,30 @@ def main(argv=None):
         outcome["metrics"]["source_linked_live_behavior_repairs"] = funnel["source_linked_live_behavior_repairs"]
         outcome["metrics"]["independently_verified_reviews"] = funnel["independently_verified_reviews"]
         outcome["metrics"]["verified_customer_revenue"] = funnel["verified_customer_revenue"]
+        case_file = Path("repair/V11_TECHNICAL_OUTCOME_CASE.json")
+        check(case_file.is_file() and not case_file.is_symlink()
+              and 0 < case_file.stat().st_size <= 4096,
+              "RESULTS_TECHNICAL_CASE_UNAVAILABLE")
+        try:
+            evidence = technical_outcome.evaluate(
+                technical_outcome.GitHubOriginal(
+                    os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN", "")),
+                json.loads(case_file.read_text(encoding="utf-8")))
+        except (technical_outcome.MeasurementHold, OSError, ValueError) as exc:
+            evidence = {"status": "ORIGINAL_PROVIDER_TECHNICAL_MEASUREMENT_UNAVAILABLE",
+                        "reason": (str(exc) if isinstance(exc, technical_outcome.MeasurementHold)
+                                   else "MEASUREMENT_UNTRUSTED_OR_UNAVAILABLE"),
+                        "before_raw_bytes_per_hour": None,
+                        "after_raw_bytes_per_hour": None,
+                        "customer_value_verified": None}
+        outcome["technical_outcome"] = evidence
+        outcome["metrics"]["source_bound_technical_outcomes_measured"] = (
+            1 if evidence["status"] == "INDEPENDENTLY_MEASURED_SHORT_WINDOW_TECHNICAL_OUTCOME"
+            else None)
+        outcome["metrics"]["baseline_raw_growth_bytes_per_hour"] = evidence.get(
+            "before_raw_bytes_per_hour")
+        outcome["metrics"]["post_release_raw_growth_bytes_per_hour"] = evidence.get(
+            "after_raw_bytes_per_hour")
         parameters = (args.core_artifacts, args.core_run_id, args.core_run_attempt)
         check(all(value is None for value in parameters) or
               all(value is not None for value in parameters),

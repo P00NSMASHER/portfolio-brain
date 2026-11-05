@@ -16,11 +16,17 @@ from brain.core import canonical, digest, require
 from brain.state_archive import CHUNK_BYTES
 
 MAX_BYTES = 5 * 1024 * 1024 * 1024
-# Exact live brain-state-v2 image independently restored and replayed from
-# commit 3de54070a8256073e667bfbf481170d693b6663a on 2026-10-16.
-VERIFIED_PRODUCTION_RAW_BYTES = 120_512_512
+# Original production-state backend qualification: raw 120,512,512 bytes,
+# compressed 20,602,941 bytes (2026-10-16). An independent 2026-11-05
+# Git-branch roundtrip of the same SQLite pack/restore codec qualified
+# 180,043,776 raw bytes on the actual GitHub backend, exact canary commit
+# 3ca5f50852b8e582a427a148e0e74b38ea9e5ed5; separate runner
+# restored SQLite and replayed the ledger (run 42076693102).
+# This is synthetic backend capacity, not production data certification;
+# keep the smaller already verified compressed production ceiling.
+VERIFIED_PRODUCTION_RAW_BYTES = 180_000_000
 VERIFIED_PRODUCTION_COMPRESSED_BYTES = 20_602_941
-COMPACTION_TRIGGER_BYTES = 80 * 1024 * 1024
+COMPACTION_TRIGGER_BYTES = VERIFIED_PRODUCTION_RAW_BYTES * 3 // 4
 COMPACTION_TRIGGER_COMPRESSED_BYTES = VERIFIED_PRODUCTION_COMPRESSED_BYTES * 3 // 4
 COMPACTION_TRIGGER_REPORTS = 256
 # Keep stronger recent-history retention until the already-triggered bounded
