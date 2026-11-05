@@ -1,13 +1,13 @@
 """A complete core keeps only one durable PASS report while retaining all sources."""
 import json
+from argparse import Namespace
 from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
-from unittest.mock import patch
 
 from brain.core import Store, BrainError
-from brain.__main__ import monitor, research, experiment, doctor
+from brain.__main__ import monitor, research, experiment, doctor, compact_public_core_context
 from tests.test_brain_v2 import SHA, payload, NOW, REPOSITORY
 from brain.adapters import event
 
@@ -31,13 +31,12 @@ class OneCheckpointTests(unittest.TestCase):
             def discover(self,target,repository=None):
                 return []
         api=API()
-        with patch.dict("os.environ", {"BRAIN_CYCLE_COMPACT_REPORTS":"1"}):
-            monitor(self.store,SHA,self.root/"monitor",api=api)
-            self.assertEqual(self.reports(),0)
-            with self.assertRaisesRegex(BrainError,"MISSING_REPORT"):
-                self.store.read_report(SHA)
-            research(self.store,SHA,self.root/"research",api=api)
-            self.assertEqual(self.reports(),0)
+        monitor(self.store,SHA,self.root/"monitor",api=api,compact_reports=True)
+        self.assertEqual(self.reports(),0)
+        with self.assertRaisesRegex(BrainError,"MISSING_REPORT"):
+            self.store.read_report(SHA)
+        research(self.store,SHA,self.root/"research",api=api,compact_reports=True)
+        self.assertEqual(self.reports(),0)
         result=experiment(self.store,SHA,self.root/"experiment")
         self.assertEqual(result["status"],"PASS")
         self.assertEqual(self.reports(),1)
@@ -61,14 +60,13 @@ class OneCheckpointTests(unittest.TestCase):
             def observe(self,repo): return payload(repo),False
             def discover(self,target,repository=None): return []
         api=API()
-        with patch.dict("os.environ", {"BRAIN_CYCLE_COMPACT_REPORTS":""}):
-            monitor(self.store,SHA,self.root/"monitor-standalone",api=api)
-            self.assertEqual(self.reports(),1)
-            research(self.store,SHA,self.root/"research-standalone",api=api)
-            self.assertEqual(self.reports(),2)
-            experiment(self.store,SHA,self.root/"experiment-standalone")
-            self.assertEqual(self.reports(),3)
-            self.assertEqual(doctor(self.store,SHA,self.root/"doctor-standalone")["status"],"PASS")
+        monitor(self.store,SHA,self.root/"monitor-standalone",api=api)
+        self.assertEqual(self.reports(),1)
+        research(self.store,SHA,self.root/"research-standalone",api=api)
+        self.assertEqual(self.reports(),2)
+        experiment(self.store,SHA,self.root/"experiment-standalone")
+        self.assertEqual(self.reports(),3)
+        self.assertEqual(doctor(self.store,SHA,self.root/"doctor-standalone")["status"],"PASS")
 
     def test_adverse_derived_report_is_persisted_even_in_preview(self):
         item=event("repository",REPOSITORY,payload(),SHA,now=NOW)
@@ -94,16 +92,35 @@ class OneCheckpointTests(unittest.TestCase):
         self.assertEqual(row[0],"FAIL")
         self.assertEqual(self.store.db.execute("SELECT count(*) FROM ledger").fetchone()[0],1)
 
-    def test_nonpublic_database_never_uses_compact_marker(self):
-        # A manual private workflow must not inherit the public core option.
-        with patch.dict("os.environ", {"BRAIN_CYCLE_COMPACT_REPORTS":"1"}):
-            private=Store(self.root/"private.sqlite",visibility="PRIVATE")
-            try:
-                self.assertEqual(private.visibility,"PRIVATE")
-                self.assertFalse(private.visibility=="PUBLIC" and
-                                 __import__("os").environ.get("BRAIN_CYCLE_COMPACT_REPORTS")=="1")
-            finally:
-                private.close()
+    def test_exact_source_public_core_context_only(self):
+        args=Namespace(db="state/state.sqlite",private=False,repository=None)
+        valid={"GITHUB_WORKFLOW":"brain-cycle-v2",
+               "GITHUB_REPOSITORY":"P00NSMASHER/portfolio-brain",
+               "GITHUB_REF":"refs/heads/main",
+               "GITHUB_EVENT_NAME":"workflow_dispatch",
+               "GITHUB_RUN_ATTEMPT":"1",
+               "GITHUB_RUN_ID":"42089686825",
+               "GITHUB_SHA":SHA,"BRAIN_SOURCE_SHA":SHA}
+        self.assertTrue(compact_public_core_context(args,SHA,env=valid))
+        for key,value in (
+            ("GITHUB_REF","refs/heads/feature"),
+            ("GITHUB_SHA","b"*40),
+            ("BRAIN_SOURCE_SHA","b"*40),
+            ("GITHUB_RUN_ATTEMPT","2"),
+            ("GITHUB_WORKFLOW","manual"),
+            ("GITHUB_EVENT_NAME","pull_request"),
+            ("GITHUB_RUN_ID","invalid"),
+            ("GITHUB_REPOSITORY","elsewhere/repository"),
+        ):
+            with self.subTest(key=key):
+                self.assertFalse(compact_public_core_context(
+                    args,SHA,env={**valid,key:value}))
+        self.assertFalse(compact_public_core_context(
+            Namespace(db="private/state.sqlite",private=False,repository=None),SHA,env=valid))
+        self.assertFalse(compact_public_core_context(
+            Namespace(db="state/state.sqlite",private=True,repository=None),SHA,env=valid))
+        self.assertFalse(compact_public_core_context(
+            Namespace(db="state/state.sqlite",private=False,repository=["example/x"]),SHA,env=valid))
 
     def test_invalid_persistence_flag_denied_without_state_mutation(self):
         item=event("repository",REPOSITORY,payload(),SHA,now=NOW)

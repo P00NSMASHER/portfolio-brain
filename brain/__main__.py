@@ -17,6 +17,28 @@ from brain.render import write_report, write_private_test_log
 
 ROOT=Path(__file__).resolve().parents[1]
 
+def compact_public_core_context(args, sha, *, env=None):
+    """Only select cheaper PASS projection storage for the existing main core.
+
+    This is NOT workflow authorization and never grants writes or releases.
+    It avoids changing the independently reviewed workflow source digest.
+    Direct function callers and all private/standalone modes retain their
+    original durable-report contract.
+    """
+    scope=os.environ if env is None else env
+    return (
+        args.db=="state/state.sqlite" and not args.private
+        and args.repository is None
+        and scope.get("GITHUB_WORKFLOW")=="brain-cycle-v2"
+        and scope.get("GITHUB_REPOSITORY")=="P00NSMASHER/portfolio-brain"
+        and scope.get("GITHUB_REF")=="refs/heads/main"
+        and scope.get("GITHUB_EVENT_NAME") in {"push","workflow_dispatch"}
+        and scope.get("GITHUB_RUN_ATTEMPT")=="1"
+        and str(scope.get("GITHUB_RUN_ID","")).isdigit()
+        and scope.get("GITHUB_SHA")==sha
+        and scope.get("BRAIN_SOURCE_SHA")==sha
+    )
+
 def source_sha(expected=None):
     sha=subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip()
     require(expected is None or sha==expected, "EXACT_SHA_MISMATCH")
@@ -39,7 +61,7 @@ def persist(store, items, sha, output, *, coalesce_seconds=0,
     write_report(result,output)
     return result
 
-def monitor(store, sha, output, *, api=None, repositories=None):
+def monitor(store, sha, output, *, api=None, repositories=None, compact_reports=False):
     api=api or GitHub(private=store.visibility=="PRIVATE")
     repositories=repositories or policy()["repositories"]
     require(0<len(repositories)<=4, "monitor repository bound exceeded")
@@ -56,7 +78,8 @@ def monitor(store, sha, output, *, api=None, repositories=None):
     # The original monitor artifact keeps its report; do not save another
     # full PASS projection until the final experiment+doctor checkpoint.
     # Partial monitoring failures still preserve a durable report and FAIL attempt.
-    compact=(store.visibility=="PUBLIC" and os.environ.get("BRAIN_CYCLE_COMPACT_REPORTS")=="1")
+    require(type(compact_reports) is bool, "compact report mode invalid")
+    compact=compact_reports and store.visibility=="PUBLIC"
     report=(store.report(sha) if (errors or not compact)
             else store.report(sha,persist=False))
     report["operation"]={"name":"monitor","requests":api.requests,"required_repositories":repositories,"errors":errors,
@@ -70,7 +93,7 @@ def monitor(store, sha, output, *, api=None, repositories=None):
     require(not errors, "MONITOR_INCOMPLETE: see sanitized operation errors; useful observations retained")
     return report
 
-def research(store, sha, output, *, api=None, repository=None):
+def research(store, sha, output, *, api=None, repository=None, compact_reports=False):
     api=api or GitHub(private=store.visibility=="PRIVATE")
     targets=policy()["research_targets"]
     # Fair rotation persists in analytical history, rather than a second scheduler.
@@ -160,7 +183,8 @@ def research(store, sha, output, *, api=None, repository=None):
     # Alternate recovery requires actual source/hash inspection.
     items=[event("candidate",p["repository"]+":"+p["path"],p,sha,private=private) for p,private in found]
     coalesced_before=store.coalesced_events
-    compact=(store.visibility=="PUBLIC" and os.environ.get("BRAIN_CYCLE_COMPACT_REPORTS")=="1")
+    require(type(compact_reports) is bool, "compact report mode invalid")
+    compact=compact_reports and store.visibility=="PUBLIC"
     report=persist(store,items,sha,output,coalesce_seconds=6*3600,
                    persist_report=not compact)
     newly_coalesced=store.coalesced_events-coalesced_before
@@ -458,10 +482,14 @@ def main(argv=None):
                 require(type(items) is list,"input must be explicit event list")
                 result=persist(store,items,sha,args.output)
             elif args.command=="monitor":
-                result=monitor(store,sha,args.output,repositories=args.repository)
+                compact=compact_public_core_context(args,sha)
+                result=monitor(store,sha,args.output,repositories=args.repository,
+                               compact_reports=compact)
             elif args.command=="research":
                 require(args.repository is None or len(args.repository)==1,"research accepts one authorized repository")
-                result=research(store,sha,args.output,repository=args.repository[0] if args.repository else None)
+                compact=compact_public_core_context(args,sha)
+                result=research(store,sha,args.output,repository=args.repository[0] if args.repository else None,
+                                compact_reports=compact)
             elif args.command=="experiment":
                 result=experiment(store,sha,args.output)
             elif args.command=="evolve":

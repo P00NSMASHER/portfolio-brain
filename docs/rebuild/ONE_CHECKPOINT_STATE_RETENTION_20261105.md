@@ -1,6 +1,6 @@
 # One durable PASS checkpoint per complete core cycle
 
-Only production core steps explicitly setting `BRAIN_CYCLE_COMPACT_REPORTS=1` use compact mode. Standalone/manual callers retain the original durable-report behavior. The monitor/research PASS reports are deterministic recomputable projections
+Only the original GitHub core CLI, on the exact expected source and state pathname, selects compact mode. The independently reviewed core workflow YAML is unchanged. Standalone/manual callers retain the original durable-report behavior. The monitor/research PASS reports are deterministic recomputable projections
 over the original canonical event/attempt ledger. Persisting all three full
 versions per 30-minute core cycle was growing raw SQLite by several hundred
 kilobytes per run even when no useful new integration was released.
