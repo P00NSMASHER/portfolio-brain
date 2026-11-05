@@ -25,14 +25,17 @@ def source_sha(expected=None):
     require(not dirty.strip(), "DIRTY_SOURCE: commit reviewed source before exact-SHA evidence")
     return sha
 
-def persist(store, items, sha, output, *, coalesce_seconds=0):
+def persist(store, items, sha, output, *, coalesce_seconds=0,
+            persist_report=True):
+    """Write event lineage; render intermediate derived PASS reports without duplicate SQLite copies."""
     if items:
         if coalesce_seconds:
             store.submit(items, coalesce_seconds=coalesce_seconds)
         else:
             store.submit(items)
     store.drain()
-    result=store.report(sha)
+    result=(store.report(sha) if persist_report
+            else store.report(sha,persist=False))
     write_report(result,output)
     return result
 
@@ -50,7 +53,10 @@ def monitor(store, sha, output, *, api=None, repositories=None):
             store.drain()
         except (BrainError,KeyError,UnicodeError,TypeError) as exc:
             errors.append({"repository":repo,"error_class":type(exc).__name__,"error":str(exc)[:300]})
-    report=store.report(sha)
+    # The original monitor artifact keeps its report; do not save another
+    # full PASS projection until the final experiment+doctor checkpoint.
+    # Partial monitoring failures still preserve a durable report and FAIL attempt.
+    report=store.report(sha,persist=bool(errors))
     report["operation"]={"name":"monitor","requests":api.requests,"required_repositories":repositories,"errors":errors,
                          "unchanged_events_coalesced":store.coalesced_events-coalesced_before}
     if errors:
@@ -152,7 +158,8 @@ def research(store, sha, output, *, api=None, repository=None):
     # Alternate recovery requires actual source/hash inspection.
     items=[event("candidate",p["repository"]+":"+p["path"],p,sha,private=private) for p,private in found]
     coalesced_before=store.coalesced_events
-    report=persist(store,items,sha,output,coalesce_seconds=6*3600)
+    report=persist(store,items,sha,output,coalesce_seconds=6*3600,
+                   persist_report=False)
     newly_coalesced=store.coalesced_events-coalesced_before
     unavailable=list(getattr(api,"discovery_unavailable",[]))
     bounded=list(getattr(api,"discovery_bounded_trees",[]))

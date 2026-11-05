@@ -277,16 +277,27 @@ class Store:
             self._verified_events()
         return len(rows)
 
-    def report(self, source_sha, *, now=None, max_age=172800):
+    def report(self, source_sha, *, now=None, max_age=172800, persist=True):
+        """Project deterministic evidence without saving redundant PASS snapshots.
+
+        Non-PASS reports always remain durable. A caller may request a
+        recomputable PASS preview for a separately archived operation; the
+        final verified cycle report is still written to canonical SQLite.
+        The event ledger, attempts and hash chain are unaffected.
+        """
         now = now or utcnow()
         require(re.fullmatch(r"[0-9a-f]{40}", source_sha or ""), "report exact source SHA required")
         require(type(max_age) is int and 0 < max_age <= 172800, "freshness threshold out of bounds")
+        require(type(persist) is bool, "report persist flag invalid")
         with self.transaction():
             events, seq, chain = self._verified_events()
             report = analyze_events(events, now=now, max_age=max_age)
             report.update(source_sha=source_sha, state_sequence=seq, canonical_hash=chain, pending_events=0, generated_at=now)
-            encoded = canonical(report)
-            self.db.execute("INSERT INTO reports(seq,chain_hash,source_sha,created_at,body,hash) VALUES(?,?,?,?,?,?)", (seq,chain,source_sha,now,encoded,digest(report)))
+            # Only PASS reports are recomputable previews. Preserve every
+            # adverse report, including when a caller requested preview mode.
+            if persist or report["status"] != "PASS":
+                encoded = canonical(report)
+                self.db.execute("INSERT INTO reports(seq,chain_hash,source_sha,created_at,body,hash) VALUES(?,?,?,?,?,?)", (seq,chain,source_sha,now,encoded,digest(report)))
         return report
 
     def read_report(self, source_sha, *, now=None, max_age=172800):
