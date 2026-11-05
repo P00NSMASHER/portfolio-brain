@@ -79,6 +79,23 @@ class CycleAccountingTests(unittest.TestCase):
         with self.assertRaisesRegex(cycle_evidence.CycleEvidenceError, "CAPACITY"):
             self.inspect()
 
+    def test_independent_maintenance_compression_measurement(self):
+        # Original provider run 42065131307 returned a one-byte difference
+        # between maintenance observation and separately packed final state.
+        self.data["state-maintenance.json"]["storage_pressure"]["compressed_bytes"] = 251
+        self.write()
+        row = self.inspect()
+        self.assertEqual(row["maintenance_compression_observation_bytes"], 251)
+        self.assertEqual(row["published_snapshot_compressed_bytes"], 250)
+        self.assertEqual(row["maintenance_to_pack_compression_delta_bytes"], 1)
+        self.assertEqual(row["compressed_headroom_bytes"], 750)
+
+    def test_independent_compression_observation_cannot_exceed_capacity(self):
+        self.data["state-maintenance.json"]["storage_pressure"]["compressed_bytes"] = 1001
+        self.write()
+        with self.assertRaisesRegex(cycle_evidence.CycleEvidenceError, "CAPACITY"):
+            self.inspect()
+
     def test_no_freshness_from_missing_research(self):
         (self.root / "research/report.json").unlink()
         self.assertEqual(self.inspect()["activity_classification"],
