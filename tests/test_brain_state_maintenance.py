@@ -112,10 +112,24 @@ class MaintenanceTests(unittest.TestCase):
         valid=dict(raw_size=100,compressed_size=50,chunks=1,published=False)
         self.assertEqual(validate_publication_receipt(valid)['status'],
                          'VERIFIED_PRODUCTION_CAPACITY_ENVELOPE_PASS')
-        for field,value in (('raw_size',120_512_513),
+        for field,value in (('raw_size',180_000_001),
                             ('compressed_size',20_602_942),('chunks',False)):
             with self.subTest(field=field),self.assertRaises(BrainError):
                 validate_publication_receipt(dict(valid,**{field:value}))
+
+    def test_backend_qualified_raw_ceiling_preserves_compressed_boundary(self):
+        from brain.state_maintenance import (VERIFIED_PRODUCTION_RAW_BYTES,
+            VERIFIED_PRODUCTION_COMPRESSED_BYTES, COMPACTION_TRIGGER_BYTES)
+        self.assertEqual(VERIFIED_PRODUCTION_RAW_BYTES, 180_000_000)
+        self.assertEqual(VERIFIED_PRODUCTION_COMPRESSED_BYTES, 20_602_941)
+        self.assertEqual(COMPACTION_TRIGGER_BYTES, 135_000_000)
+        admitted = validate_publication_receipt(dict(
+            raw_size=179_999_999, compressed_size=20_602_941,
+            chunks=22, published=False))
+        self.assertEqual(admitted['raw_headroom_bytes'],1)
+        with self.assertRaises(BrainError):
+            validate_publication_receipt(dict(raw_size=180_000_001,
+                compressed_size=20_602_941,chunks=22,published=False))
 
     def test_capacity_cli_writes_new_auditable_receipt(self):
         receipt=self.source.with_name('capacity-receipt.json')
