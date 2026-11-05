@@ -68,7 +68,8 @@ def _original_failed_run(api, run_id, main):
          and run.get("head_sha") == main and run.get("head_branch") == "main"
          and run.get("status") == "completed"
          and run.get("conclusion") in {"failure", "timed_out"}
-         and run.get("run_attempt") == 1
+         and type(run.get("run_attempt")) is int
+         and run["run_attempt"] == 1
          and run.get("event") in {"schedule", "workflow_dispatch"},
          "V11_ORIGINAL_FAILURE_UNVERIFIED")
     data = api.get(ROOT + "actions/runs/" + str(run_id) + "/jobs?per_page=100")
@@ -79,7 +80,9 @@ def _original_failed_run(api, run_id, main):
     matching = [
         row for row in jobs
         if type(row) is dict and row.get("name") == "monitor"
-        and row.get("run_id") == run_id and row.get("run_attempt") == 1
+        and row.get("run_id") == run_id
+        and type(row.get("run_attempt")) is int
+        and row["run_attempt"] == 1
         and row.get("head_sha") == main and row.get("status") == "completed"
         and row.get("conclusion") in {"failure", "timed_out"}
         and factory.verified_automatic_origin(run.get("event"), row.get("steps"))
