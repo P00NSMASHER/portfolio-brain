@@ -108,9 +108,11 @@ def attach_original_failure(jobs, snapshots, *, budget, cycle, reader=None):
     return actual.used_gets
 
 
-def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=None, failure_reader=None):
+def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None,
+              reader=None, failure_reader=None, original_incident_gate=False):
     need(hashval(source_sha, 40) and type(cycle) is int and 0 <= cycle < 2**63,
          'CYCLE_SOURCE_INVALID')
+    need(type(original_incident_gate) is bool, 'INCIDENT_GATE_MODE_INVALID')
     when = instant(now)
     need(type(report) is dict and report.get('source_sha') == source_sha
          and type(report.get('schema_version')) is int and report['schema_version'] == 1
@@ -150,14 +152,13 @@ def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=
         need(hashval(sha, 40), 'CYCLE_PROJECT_SOURCE_INVALID')
         adverse = state == 'ADVERSE_CHECKS_OBSERVED'
         clean = state == 'NO_ADVERSE_CHECKS_OBSERVED_NOT_RELEASE_APPROVAL'
-        if clean:
-            # A clean source revision is useful telemetry, NOT a demonstrated
-            # defect. Do not consume scarce engineering leases and queue slots
-            # for every healthy source SHA. Retain the bounded observation in
-            # the original core artifact, without promoting it to a repair.
+        if clean or (original_incident_gate and not adverse):
+            # A non-adverse or inconclusive repository check result is
+            # telemetry, NEVER a confirmed root cause or durable repair job.
             signals.append(dict(project_id=project, repository=row['repository'],
                                 source_sha=sha, source_check_state=state,
-                                disposition='OBSERVED_NON_ACTIONABLE'))
+                                disposition=('OBSERVED_NON_ACTIONABLE' if clean else
+                                             'UNVERIFIED_SOURCE_CHECK_TELEMETRY_ONLY')))
             continue
         # Check-run history for a commit also includes checks from unrelated
         # feature-branch runs on that SHA.  This source-only envelope cannot
@@ -176,6 +177,37 @@ def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=
                                             purpose='SOURCE_BOUND_DIAGNOSIS')),
                     owner=route['owner'], path=path, priority=priority)
         inputs.append((item, route))
+    original_evidence_gets = 0
+    confirmed = {}
+    if original_incident_gate:
+        # All other-repository checks remain untrusted feature-branch signals.
+        # An original GitHub protected-main run and failed job must be read
+        # through the existing bounded provider before queue.observe().
+        proposed = [dict(repository=item["repository"],
+                         source_sha=item["source_sha"],
+                         source_check_state=route["source_check_state"])
+                    for item,route in inputs]
+        original_evidence_gets = attach_original_failure(
+            proposed, report.get('repositories', []),
+            budget=ceiling-used, cycle=cycle, reader=failure_reader)
+        used += original_evidence_gets
+        need(used <= ceiling, 'CYCLE_ORIGINAL_FAILURE_GET_BUDGET_EXCEEDED')
+        for job in proposed:
+            evidence=job.get('failure_evidence')
+            if (type(evidence) is dict and
+                    evidence.get('status') == 'ORIGINAL_MAIN_JOB_FAILURE_CONFIRMED'):
+                confirmed[(job['repository'],job['source_sha'])] = evidence
+        rejected = []
+        for item,route in inputs:
+            if (item['repository'],item['source_sha']) not in confirmed:
+                rejected.append(dict(project_id=item['project_id'],
+                                     repository=item['repository'],
+                                     source_sha=item['source_sha'],
+                                     source_check_state=route['source_check_state'],
+                                     disposition='NO_ORIGINAL_MAIN_FAILURE_PROOF_NO_WORK'))
+        signals.extend(rejected)
+        inputs=[(item,route) for item,route in inputs
+                if (item['repository'],item['source_sha']) in confirmed]
     # All report fields are checked before adding any durable observations.
     heads = {row['id']: row['repository_revision'] for row in rows
              if row['id'] in PROJECTS and row.get('repository_revision') is not None}
@@ -243,15 +275,27 @@ def run_cycle(report, queue, *, source_sha, cycle, now, proof_spec=None, reader=
             source_reobservation_required=True, durable_claim_required_before_mutation=True,
             automatic_execution_authority=False))
     selected = select_distinct_owners(candidates, limit=5, cycle=cycle)
-    failure_gets = attach_original_failure(selected['selected'], report.get('repositories', []),
-                                           budget=24-total, cycle=cycle, reader=failure_reader)
-    total += failure_gets
+    if original_incident_gate:
+        failure_gets = original_evidence_gets
+        for job in selected['selected']:
+            proof = confirmed.get((job['repository'],job['source_sha']))
+            if proof is not None:
+                job['failure_evidence'] = proof
+                job['incident_classification'] = 'ORIGINAL_MAIN_JOB_FAILURE_CONFIRMED_ROOT_CAUSE_OPEN'
+        # The original provider queries were counted before queue mutation.
+    else:
+        failure_gets = attach_original_failure(selected['selected'], report.get('repositories', []),
+                                               budget=24-total, cycle=cycle, reader=failure_reader)
+        total += failure_gets
     need(total <= 24, 'CYCLE_GET_BUDGET_EXCEEDED')
     return dict(schema_version=1, status='DURABLE_OWNER_QUEUE_UPDATED_NOT_RELEASED',
                 source_sha=source_sha, owner_jobs=selected['selected'],
                 deferred_work_ids=[row['work_id'] for row in selected['deferred']],
                 held_work_ids=held, unobserved_projects=missing,
                 nonactionable_source_signals=signals,
+                incident_gate=('ORIGINAL_MAIN_FAILURE_PROOF_REQUIRED'
+                               if original_incident_gate else 'LEGACY_OFFLINE_DIAGNOSTIC'),
+                original_main_incidents_queued=len(inputs) if original_incident_gate else None,
                 archived_superseded_observations=archived,
                 outside_owner_scope=skipped, queue_checkpoint=queue.checkpoint(),
                 metrics=queue.metrics(now=now), provider_readback=provider,
@@ -289,6 +333,19 @@ def write_receipt(path, result):
         if os.path.exists(temporary):
             os.unlink(temporary)
 
+def _is_trusted_native_core(args):
+    """Only the existing authenticated main core can enroll incident work."""
+    return (args.command == 'cycle'
+            and args.db == Path('state/state.sqlite')
+            and os.environ.get('GITHUB_WORKFLOW') == 'brain-cycle-v2'
+            and os.environ.get('GITHUB_REPOSITORY') == 'P00NSMASHER/portfolio-brain'
+            and os.environ.get('GITHUB_REF') == 'refs/heads/main'
+            and os.environ.get('GITHUB_EVENT_NAME') in ('push','workflow_dispatch')
+            and os.environ.get('GITHUB_RUN_ATTEMPT') == '1'
+            and str(os.environ.get('GITHUB_RUN_ID','')).isdigit()
+            and os.environ.get('GITHUB_SHA') == args.expected_sha
+            and os.environ.get('BRAIN_SOURCE_SHA') == args.expected_sha)
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
@@ -310,7 +367,8 @@ def main(argv=None):
         if args.command == 'cycle':
             result = run_cycle(load_json(args.input), queue, source_sha=args.expected_sha,
                 cycle=args.cycle, now=args.now,
-                proof_spec=load_json(args.proof_manifest) if args.proof_manifest else None)
+                proof_spec=load_json(args.proof_manifest) if args.proof_manifest else None,
+                original_incident_gate=_is_trusted_native_core(args))
         else:
             spec = load_json(args.spec)
             reader = PublicationReader(token=os.environ.get('GITHUB_TOKEN', ''), max_gets=10)

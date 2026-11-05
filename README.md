@@ -1,10 +1,14 @@
 # Portfolio Brain
 
-An autonomous research, upgrade and repair engine for all current projects.
-It observes failures, researches useful improvements, prepares scoped repairs
-through existing owners, and requires independent checks and actual delivery
-verification. Success means reliable useful projects and less user intervention.
-Revenue is optional project context, not the portfolio objective.
+An autonomous research and verified-evidence engine for current projects.
+It observes source changes and potential failures, researches improvements,
+and produces scoped repair handoffs. **The existing GitHub Actions runner
+does not have cross-project write or deployment authority.** Consequently
+it is NOT an unattended general-purpose software repair worker, and a
+successful core cycle is not evidence of useful changes shipped elsewhere.
+Actual repairs require an authorized owner worker and independent delivery
+verification. Success means measurable project improvements, not workflow
+volume or source observations.
 
 **Current product status:** [Operator quickstart, tested source matrix, and explicit security/deployment holds](docs/rebuild/PRODUCT_RELEASE_READINESS_20261030.md). The Brain core runs under existing source-bound controls; optional bot admission, native approval and standalone x402 seller code are **review-only** and cannot independently authorize a protected merge, real payment or hosted launch. The user's 12-hour observation remains explicitly **paused**; ordinary code quality tests are not a substitute for a signed 12-hour acceptance.
 
