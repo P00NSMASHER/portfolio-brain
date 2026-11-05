@@ -36,7 +36,7 @@ def api(path, *, payload=None, binary=False):
         args.extend(["--input", "-"])
     raw = subprocess.run(args, input=json.dumps(payload).encode() if payload else None,
                          capture_output=True, check=True, timeout=30).stdout
-    return raw if binary else json.loads(raw)
+    return raw if binary else (json.loads(raw) if raw else None)
 
 
 def read_request(artifact, raw):
