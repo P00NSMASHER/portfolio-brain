@@ -93,7 +93,9 @@ def _check_issuer(rows, sha, name, issuer):
             and matches[0].get("head_sha") == sha
             and matches[0].get("status") == "completed"
             and matches[0].get("conclusion") == "success"
-            and matches[0].get("app", {}).get("id") == issuer)
+            and type(matches[0].get("app")) is dict
+            and type(matches[0]["app"].get("id")) is int
+            and matches[0]["app"]["id"] == issuer)
 
 
 def _verification(api, head):
@@ -153,8 +155,10 @@ def _original_core_verdict(api, row, source_sha):
     if len(matching) != 1:
         return "ORIGINAL_MONITOR_UNVERIFIED"
     job = matching[0]
-    if not (job.get("run_id") == row["id"]
-            and job.get("run_attempt") == 1
+    if not (type(job.get("run_id")) is int
+            and job["run_id"] == row["id"]
+            and type(job.get("run_attempt")) is int
+            and job["run_attempt"] == 1
             and job.get("head_sha") == source_sha
             and job.get("status") == "completed"
             and job.get("conclusion") == row["conclusion"]
