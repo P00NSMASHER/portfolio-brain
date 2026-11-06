@@ -54,14 +54,14 @@ class V11CoreResultRefreshTests(unittest.TestCase):
 
     def test_read_only_postcore_supports_protected_main_push_without_forged_approval(self):
         scoped = SCOPED.read_text(encoding="utf-8")
-        stage = scoped.split(MARKER, 1)[1].split("\\n  classify-original-failed-core:", 1)[0]
+        stage = scoped.split(MARKER, 1)[1].split("\n  classify-original-failed-core:", 1)[0]
         premise = stage.split("    steps:", 1)[0]
         self.assertIn("github.event.workflow_run.conclusion == 'success'", premise)
         self.assertIn("github.event.workflow_run.head_branch == 'main'", premise)
         self.assertIn("github.event.workflow_run.head_sha == github.sha", premise)
         self.assertIn("github.event.workflow_run.run_attempt == 1", premise)
         self.assertIn("github.event.workflow_run.event == 'push'", premise)
-        self.assertIn("    permissions:\\n      contents: read\\n      actions: read", stage)
+        self.assertIn("    permissions:\n      contents: read\n      actions: read", stage)
         self.assertIn("python -m brain.v11.owner_inbox", stage)
         self.assertIn("--input /tmp/brain-v11-original/v9-engineering.json", stage)
         self.assertIn("--expected-sha", stage)
