@@ -69,7 +69,8 @@ class Provider:
             return r
         if route == "branches/main":
             return {"protected": True, "commit": {"sha": self.main_sha}}
-        if route == "actions/runs?per_page=100":
+        if route == ("actions/workflows/" + str(WORKFLOW)
+                     + "/runs?branch=main&per_page=100"):
             return {"total_count": len(self.history),
                     "workflow_runs": self.history}
         raise AssertionError("unreviewed route")
@@ -90,6 +91,8 @@ class CurrentnessTests(unittest.TestCase):
         self.assertFalse(row["live_repair_verified"])
         self.assertEqual(result["live_repairs_verified"], 0)
         self.assertEqual(result["provider_writes"], 0)
+        self.assertIn((REPO, "actions/workflows/" + str(WORKFLOW)
+                       + "/runs?branch=main&per_page=100"), api.routes)
         token = result["verdict_sha256"]
         self.assertEqual(digest({k:v for k,v in result.items()
                                  if k!="verdict_sha256"}), token)
@@ -219,13 +222,24 @@ class CurrentnessTests(unittest.TestCase):
     def test_bounded_ambiguous_census_is_not_a_false_recovery(self):
         class Bad(Provider):
             def get(self, repository, route):
-                if route == "actions/runs?per_page=100":
+                if route == ("actions/workflows/" + str(WORKFLOW)
+                             + "/runs?branch=main&per_page=100"):
                     self.reads += 1
                     return {"total_count": True, "workflow_runs": [later(42118307425)]}
                 return super().get(repository, route)
         result = evaluate(packet(), Bad())
         self.assertEqual(result["items"][0]["status"], "CURRENTNESS_UNVERIFIED")
         self.assertFalse(result["items"][0]["reproduction_candidate"])
+
+    def test_busy_repository_cannot_hide_later_same_workflow_success(self):
+        # PermitPlate has thousands of runs across many workflows. The old
+        # all-repository page omitted run 42088840369 even though it was a
+        # same-workflow/event/source success after failure 41890592940.
+        api = Provider(same=[later(42088840369)])
+        result = evaluate(packet(), api)
+        self.assertEqual(result["items"][0]["latest_run_id"], 42088840369)
+        self.assertEqual(result["historical_or_changed"], 1)
+        self.assertEqual(result["reproduction_candidates"], 0)
 
 
 if __name__ == "__main__":
