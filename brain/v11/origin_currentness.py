@@ -198,7 +198,7 @@ def evaluate(packet, api):
                         base["status"] = "LATER_SAME_SOURCE_WORKFLOW_SUCCESS_ORIGINAL_FAILURE_HISTORICAL"
                     else:
                         base["status"] = "LATEST_SAME_SOURCE_WORKFLOW_NOT_SUCCESS"
-        except (CurrentnessError, OSError, TypeError, KeyError, ValueError) as exc:
+        except (CurrentnessError, OSError, TypeError, KeyError, ValueError, AttributeError) as exc:
             known = str(exc) if isinstance(exc, CurrentnessError) else ""
             base["status"] = "CURRENTNESS_UNVERIFIED"
             base["reason"] = (known if known.startswith("CURRENTNESS_")
