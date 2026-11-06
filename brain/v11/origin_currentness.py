@@ -152,7 +152,8 @@ def evaluate(packet, api):
             and type(packet.get("packet_sha256")) is str
             and re.fullmatch(r"[0-9a-f]{64}", packet["packet_sha256"]) is not None
             and packet.get("production_verified") is False
-            and packet.get("provider_writes") == 0
+            and type(packet.get("provider_writes")) is int
+            and packet["provider_writes"] == 0
             and packet.get("general_cross_project_executor") == "NOT_CONFIGURED",
             "CURRENTNESS_INBOX_INVALID")
     body = dict(packet)
