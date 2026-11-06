@@ -102,9 +102,8 @@ class CurrentnessTests(unittest.TestCase):
         self.assertTrue(row["reproduction_candidate"])
         self.assertFalse(row["root_cause_verified"])
 
-    def test_different_event_workflow_or_source_is_not_recovery(self):
+    def test_different_workflow_or_source_is_not_recovery(self):
         api = Provider(same=[later(42118307425, workflow=WORKFLOW+1),
-                             later(42118307424, event="push"),
                              later(42118307423, sha="f"*40)])
         row = evaluate(packet(), api)["items"][0]
         self.assertEqual(row["status"], "NO_LATER_MATCHING_COMPLETED_RUN")
@@ -161,6 +160,25 @@ class CurrentnessTests(unittest.TestCase):
         self.assertEqual(result["items"][0]["status"],
                          "LATEST_SAME_SOURCE_WORKFLOW_NOT_SUCCESS")
         self.assertTrue(result["items"][0]["reproduction_candidate"])
+
+    def test_failed_cross_event_attempt_is_not_a_false_hold(self):
+        inp = packet()
+        inp["original_failure_handoffs"][0]["original_run_event"] = "push"
+        inp["packet_sha256"] = digest({
+            k: v for k, v in inp.items() if k != "packet_sha256"})
+
+        class CrossEvent(Provider):
+            def get(self, repository, route):
+                run = super().get(repository, route)
+                if route == "actions/runs/" + str(ORIGINAL):
+                    run["event"] = "push"
+                return run
+
+        api = CrossEvent(same=[later(ORIGINAL + 100, event="schedule",
+                                     conclusion="failure")])
+        row = evaluate(inp, api)["items"][0]
+        self.assertEqual(row["status"], "NO_LATER_MATCHING_COMPLETED_RUN")
+        self.assertTrue(row["reproduction_candidate"])
 
     def test_source_drift_stops_without_sampling_run_list(self):
         api = Provider(same=[later(42118307425)], main_sha="f"*40)
