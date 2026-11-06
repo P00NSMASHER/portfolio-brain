@@ -49,6 +49,9 @@ class V11CoreResultRefreshTests(unittest.TestCase):
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, report)
+        self.assertIn("python -m brain.v11.origin_currentness", report)
+        self.assertIn("--inbox /tmp/brain-v11-core/owner-inbox.json", report)
+        self.assertIn("--output /tmp/brain-v11-core/owner-currentness.json", report)
         self.assertNotIn("continue-on-error: true", report)
         self.assertNotIn("create-github-app-token", report)
 
