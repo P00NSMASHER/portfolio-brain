@@ -102,12 +102,15 @@ class CurrentnessTests(unittest.TestCase):
         self.assertTrue(row["reproduction_candidate"])
         self.assertFalse(row["root_cause_verified"])
 
-    def test_different_workflow_or_source_is_not_recovery(self):
+    def test_mixed_workflow_inventory_fails_closed_not_actionable(self):
+        # Workflow-specific GitHub inventory must reject foreign workflow rows
+        # instead of treating a corrupt provider response as no later run.
         api = Provider(same=[later(42118307425, workflow=WORKFLOW+1),
                              later(42118307423, sha="f"*40)])
         row = evaluate(packet(), api)["items"][0]
-        self.assertEqual(row["status"], "NO_LATER_MATCHING_COMPLETED_RUN")
-        self.assertTrue(row["reproduction_candidate"])
+        self.assertEqual(row["status"], "CURRENTNESS_UNVERIFIED")
+        self.assertEqual(row["reason"], "CURRENTNESS_WORKFLOW_INVENTORY_MISMATCH")
+        self.assertFalse(row["reproduction_candidate"])
         self.assertIsNone(row["latest_run_id"])
 
     def test_later_same_source_cross_event_green_is_hold_not_patch_authority(self):
