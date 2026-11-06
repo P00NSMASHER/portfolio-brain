@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "status": "AUTHORIZED_OWNER_WORKER_CONFIGURED",
+  "worker_id": "6ae5c1bae9508191bd3be58a022b7b80",
+  "worker_thread": "6ae6dd37-83dc-83e9-96ef-0c4102ba84f0",
+  "worker_title": "Hunters: GitHub Core Engineering",
+  "repositories": [
+    "P00NSMASHER/portfolio-brain",
+    "P00NSMASHER/capturebrief",
+    "P00NSMASHER/permitplate-nyc",
+    "P00NSMASHER/abvmschoolstarworld",
+    "P00NSMASHER/trading-platform"
+  ],
+  "authority": {
+    "code_write": "OWNER_SESSION_SCOPED_BRANCHES_AND_PULL_REQUESTS",
+    "protected_merge": "REQUIRED_CHECKS_AND_REPOSITORY_RULES",
+    "deployment": "NOT_CONFIGURED",
+    "credential_location": "OWNER_SESSION_ONLY_NOT_BRAIN_RUNTIME"
+  },
+  "acceptance": {
+    "repository": "P00NSMASHER/portfolio-brain",
+    "pr_number": 881,
+    "candidate_sha": "ca3db8d7a45a5ac651017550bdf73ef98092b911",
+    "merge_sha": "f6d13275fc310d92d0840296b844d0349912abad",
+    "attributed_commit_sha": "5d5754a0357eca26c7d641ee6d6feb968346fbf5",
+    "required_checks": {
+      "validate": 15368,
+      "v10-docker-sandbox": 15368,
+      "portfolio-phase1-gate": 5121826
+    },
+    "postmerge_runs": {
+      "foundation-ci": 42264655429,
+      "brain-cycle-v2": 42264655455,
+      "v8-scoped-repair-proposal": 42265082820
+    }
+  }
+}

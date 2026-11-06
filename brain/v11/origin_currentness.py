@@ -178,7 +178,8 @@ def evaluate(packet, api):
             and packet.get("production_verified") is False
             and type(packet.get("provider_writes")) is int
             and packet["provider_writes"] == 0
-            and packet.get("general_cross_project_executor") == "NOT_CONFIGURED",
+            and packet.get("general_cross_project_executor") in {
+                "NOT_CONFIGURED", "AUTHORIZED_OWNER_WORKER_CONFIGURED"},
             "CURRENTNESS_INBOX_INVALID")
     body = dict(packet)
     recorded = body.pop("packet_sha256")
@@ -249,7 +250,8 @@ def evaluate(packet, api):
         "provider_writes": 0,
         "code_changes": 0,
         "live_repairs_verified": 0,
-        "general_cross_project_executor": "NOT_CONFIGURED",
+        "general_cross_project_executor":
+            packet["general_cross_project_executor"],
     }
     verdict["verdict_sha256"] = digest(verdict)
     return verdict

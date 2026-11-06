@@ -318,6 +318,13 @@ jobs:
           python -m brain.v11.origin_currentness \
             --inbox /tmp/brain-v11-core/owner-inbox.json \
             --output /tmp/brain-v11-core/owner-currentness.json
+      - name: Verify authorized owner executor from original provider evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python -m brain.v11.owner_executor \
+            --token "$GITHUB_TOKEN" \
+            --output /tmp/brain-v11-core/owner-executor.json
       - name: Reconcile actual GitHub engineering outcomes after completed core
         env:
           GITHUB_TOKEN: ${{ github.token }}
