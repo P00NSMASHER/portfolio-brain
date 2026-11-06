@@ -28,6 +28,7 @@ class IndependentScoutClockTests(unittest.TestCase):
             "hunter-integrator-\n"
             "needs.scout.outputs.worker != 'INTEGRATOR'\n"
             "types: [retally-scout-recovery-v1]\n"
+            "group: starblox-roblox-accelerator-main-writer\n"
         )
         h.check_source(content + "\n" + required)
         with self.assertRaises(h.EvidenceError):
@@ -100,6 +101,9 @@ class IndependentScoutClockTests(unittest.TestCase):
         now = when(4, 30)
         missing = h.reconcile(now, [], lambda *_: False)
         self.assertEqual(missing["due"][0]["worker"], "HUNTER-01")
+        self.assertEqual(len(missing["due"]), 1)
+        self.assertGreater(missing["backlog"], 1)
+        self.assertEqual(h.MAX_PER_CYCLE, 1)
         self.assertEqual(missing["due"][0]["slot"], "2026-11-06T02:07:00Z")
         native = item(23, "schedule", "Hunter 7 2,14 * * * slot=native", when(2, 13))
         self.assertFalse(any(x["worker"] == "HUNTER-01" for x in
@@ -141,6 +145,27 @@ class IndependentScoutClockTests(unittest.TestCase):
         self.assertIn("brain-hunter-schedule-recovery-", job)
         self.assertNotIn("\n  schedule:", job)
         self.assertNotIn("on:\n  schedule:", job)
+
+
+    def test_shared_github_pending_queue_never_gets_a_second_dispatch(self):
+        now = when(4, 30)
+        for status in ("queued", "in_progress", "pending", "waiting", "requested"):
+            with self.subTest(status=status):
+                pending = item(933, "repository_dispatch",
+                               "Hunter HUNTER-05 slot=2026-11-06T02:39:00Z",
+                               when(4, 20), status, None)
+                plan = h.reconcile(now, [pending], lambda *_: False)
+                self.assertEqual(plan["due"], [])
+                self.assertGreater(plan["backlog"], 0)
+                self.assertEqual(plan["blocking_run_ids"], [933])
+        # Failed and cancelled completed runs are not counted as active.
+        canceled = item(934, "repository_dispatch",
+                        "Hunter HUNTER-05 slot=2026-11-06T02:39:00Z",
+                        when(3, 30), "completed", "cancelled")
+        later = h.reconcile(now, [canceled], lambda *_: False)
+        self.assertEqual(len(later["due"]), 1)
+        self.assertEqual(later["blocking_run_ids"], [])
+
 
 
 if __name__ == "__main__":
