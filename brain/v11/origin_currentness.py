@@ -22,6 +22,8 @@ MAX_HANDOFFS = 5
 MAX_RUNS = 100
 MAX_HTTP_BYTES = 2 * 1024 * 1024
 RUN_PATH = re.compile(r"actions/runs/[1-9][0-9]{0,11}\Z")
+WORKFLOW_RUNS_PATH = re.compile(
+    r"actions/workflows/[1-9][0-9]{0,11}/runs\?per_page=100\Z")
 API_BASE = "https://api.github.com/repos/"
 ALLOWED_REPOS = frozenset(PROJECTS.values())
 
@@ -52,8 +54,10 @@ class PublicGitHub:
     def get(self, repository, route):
         require(type(repository) is str and repository in ALLOWED_REPOS,
                 "CURRENTNESS_REPOSITORY_REFUSED")
-        require(route in {"branches/main", "actions/runs?per_page=100"}
-                or (type(route) is str and RUN_PATH.fullmatch(route) is not None),
+        require(route == "branches/main"
+                or (type(route) is str and (
+                    RUN_PATH.fullmatch(route) is not None
+                    or WORKFLOW_RUNS_PATH.fullmatch(route) is not None)),
                 "CURRENTNESS_ROUTE_REFUSED")
         require(self.reads < MAX_HANDOFFS * 3, "CURRENTNESS_GET_BUDGET_EXCEEDED")
         self.reads += 1
@@ -93,7 +97,7 @@ def _verified_failure(original, item):
             and type(original.get("id")) is int
             and original["id"] == item["run_id"]
             and type(original.get("workflow_id")) is int
-            and original["workflow_id"] > 0
+            and 0 < original["workflow_id"] < 10**12
             and type(original.get("name")) is str
             and 1 <= len(original["name"]) <= 150
             and type(original.get("path")) is str
@@ -127,6 +131,15 @@ def _latest_same_source(document, item, identity):
             and len({r["id"] for r in rows}) == len(rows),
             "CURRENTNESS_RUN_ROW_INVALID")
     workflow_id, path, name, event = identity
+    # This response is from the workflow-specific GitHub endpoint. Reject
+    # cross-workflow data and never infer absence from a truncated first page.
+    require(all(r.get("workflow_id") == workflow_id
+                and type(r.get("repository")) is dict
+                and r["repository"].get("full_name") == item["repository"]
+                for r in rows), "CURRENTNESS_WORKFLOW_INVENTORY_MISMATCH")
+    if (document["total_count"] > len(rows)
+            and item["run_id"] not in {r["id"] for r in rows}):
+        raise CurrentnessError("CURRENTNESS_RUN_WINDOW_INCOMPLETE")
     matched = []
     cross_event_green = []
     for r in rows:
@@ -198,7 +211,8 @@ def evaluate(packet, api):
                 base["status"] = "SOURCE_CHANGED_ORIGINAL_FAILURE_HISTORICAL"
             else:
                 newest, cross_event_green = _latest_same_source(
-                    api.get(repository, "actions/runs?per_page=100"),
+                    api.get(repository, "actions/workflows/"
+                            + str(identity[0]) + "/runs?per_page=100"),
                     item, identity)
                 if newest is None and cross_event_green is not None:
                     base["latest_run_id"] = cross_event_green["id"]
