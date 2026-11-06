@@ -262,8 +262,9 @@ jobs:
         run: python -m brain.retally_app_proposals --publish "$REQUEST"
 
   verified-results-after-core:
-    # Existing successful genuine Brain cycles are the trigger. This read-only
-    # job is separate from the CaptureBrief draft-only runtime credential.
+    # Original completed main-branch push cycles are also admissible for
+    # READ-ONLY result reporting; they are not signed scheduler acceptance.
+    # This job is separate from the CaptureBrief draft-only runtime credential.
     if: >-
       ${{
         github.repository == 'P00NSMASHER/portfolio-brain' &&
@@ -274,7 +275,8 @@ jobs:
         github.event.workflow_run.head_sha == github.sha &&
         github.event.workflow_run.run_attempt == 1 &&
         (github.event.workflow_run.event == 'schedule' ||
-         github.event.workflow_run.event == 'workflow_dispatch')
+         github.event.workflow_run.event == 'workflow_dispatch' ||
+         github.event.workflow_run.event == 'push')
       }}
     runs-on: ubuntu-latest
     timeout-minutes: 4
