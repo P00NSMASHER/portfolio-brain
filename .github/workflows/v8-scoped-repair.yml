@@ -311,6 +311,13 @@ jobs:
             --input /tmp/brain-v11-original/v9-engineering.json \
             --output /tmp/brain-v11-core/owner-inbox.json \
             --expected-sha "${{ github.sha }}"
+      - name: Reobserve original failures against later same-source workflow runs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python -m brain.v11.origin_currentness \
+            --inbox /tmp/brain-v11-core/owner-inbox.json \
+            --output /tmp/brain-v11-core/owner-currentness.json
       - name: Reconcile actual GitHub engineering outcomes after completed core
         env:
           GITHUB_TOKEN: ${{ github.token }}
