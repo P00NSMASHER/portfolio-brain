@@ -97,7 +97,7 @@ class IndependentScoutClockTests(unittest.TestCase):
         self.assertTrue(h.completed_receipt(integrator, "INTEGRATOR", integrator_receipt))
 
     def test_missing_slot_is_recovered_once_then_bounded(self):
-        now = when(2, 50)
+        now = when(4, 30)
         missing = h.reconcile(now, [], lambda *_: False)
         self.assertEqual(missing["due"][0]["worker"], "HUNTER-01")
         self.assertEqual(missing["due"][0]["slot"], "2026-11-06T02:07:00Z")
@@ -105,19 +105,19 @@ class IndependentScoutClockTests(unittest.TestCase):
         self.assertFalse(any(x["worker"] == "HUNTER-01" for x in
                              h.reconcile(now, [native], lambda *_: True)["due"]))
         queued = item(25, "repository_dispatch",
-                      "Hunter HUNTER-01 slot=2026-11-06T02:07:00Z", when(2, 40),
+                      "Hunter HUNTER-01 slot=2026-11-06T02:07:00Z", when(4, 0),
                       "in_progress", None)
         self.assertFalse(any(x["worker"] == "HUNTER-01" for x in
                              h.reconcile(now, [queued], lambda *_: False)["due"]))
         failed = {**queued, "status": "completed", "conclusion": "failure"}
         self.assertFalse(any(x["worker"] == "HUNTER-01" for x in
                              h.reconcile(now, [failed], lambda *_: False)["due"]))
-        later = when(3, 30)
+        later = when(5, 30)
         self.assertTrue(any(x["worker"] == "HUNTER-01" for x in
                             h.reconcile(later, [failed], lambda *_: False)["due"]))
-        failed2 = {**failed, "id": 26, "created_at": when(3, 20).isoformat().replace("+00:00","Z")}
+        failed2 = {**failed, "id": 26, "created_at": when(5, 20).isoformat().replace("+00:00","Z")}
         self.assertTrue(any(x["worker"] == "HUNTER-01" for x in
-                            h.reconcile(when(4, 5), [failed, failed2], lambda *_: False)["exhausted"]))
+                            h.reconcile(when(6, 5), [failed, failed2], lambda *_: False)["exhausted"]))
 
     def test_does_not_write_other_repositories_or_extra_endpoints(self):
         with self.assertRaises(h.EvidenceError):
