@@ -85,7 +85,7 @@ def _original(job):
          and proof.get("status") == "ORIGINAL_MAIN_JOB_FAILURE_CONFIRMED"
          and proof.get("source_sha") == source
          and proof.get("root_cause_verified") is False
-         and proof.get("event") in ("schedule", "workflow_dispatch"),
+         and proof.get("event") in ("push", "schedule", "workflow_dispatch"),
          "INBOX_PROVIDER_PROOF_INVALID")
     run_id, job_id = proof.get("run_id"), proof.get("job_id")
     need(type(run_id) is int and RUN_ID.fullmatch(str(run_id)) is not None
@@ -102,7 +102,7 @@ def _original(job):
         need(type(step) is dict and type(step.get("number")) is int
              and 0 < step["number"] < 1000
              and type(step.get("name")) is str
-             and 1 <= len(step["name"]) <= 120
+             and 1 <= len(step["name"]) <= 180
              and "\n" not in step["name"],
              "INBOX_FAILURE_STEP_INVALID")
         need(step["number"] not in seen_steps, "INBOX_DUPLICATE_FAILURE_STEP")
