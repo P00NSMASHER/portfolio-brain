@@ -128,10 +128,10 @@ def _latest_same_source(document, item, identity):
             "CURRENTNESS_RUN_ROW_INVALID")
     workflow_id, path, name, event = identity
     matched = []
+    cross_event_green = []
     for r in rows:
         if not (r.get("workflow_id") == workflow_id
                 and r.get("path") == path and r.get("name") == name
-                and r.get("event") == event
                 and r.get("repository", {}).get("full_name") == item["repository"]
                 and r.get("head_branch") == "main"
                 and r.get("head_sha") == item["source_sha"]
@@ -139,10 +139,19 @@ def _latest_same_source(document, item, identity):
                 and r["run_attempt"] == 1
                 and r["id"] > item["run_id"]):
             continue
-        if r.get("status") == "completed" and r.get("conclusion") in {
-                "success", "failure", "timed_out", "cancelled"}:
-            matched.append(r)
-    return max(matched, key=lambda r: r["id"]) if matched else None
+        if r.get("event") == event:
+            if r.get("status") == "completed" and r.get("conclusion") in {
+                    "success", "failure", "timed_out", "cancelled"}:
+                matched.append(r)
+        elif (r.get("event") in {"push", "schedule", "workflow_dispatch"}
+              and r.get("status") == "completed"
+              and r.get("conclusion") == "success"):
+            # Different triggers may exercise different paths: evidence to
+            # recheck, NOT proof of a repaired original failure.
+            cross_event_green.append(r)
+    return (max(matched, key=lambda r: r["id"]) if matched else None,
+            max(cross_event_green, key=lambda r: r["id"])
+            if cross_event_green else None)
 
 
 def evaluate(packet, api):
@@ -188,10 +197,13 @@ def evaluate(packet, api):
             if branch["commit"].get("sha") != item["source_sha"]:
                 base["status"] = "SOURCE_CHANGED_ORIGINAL_FAILURE_HISTORICAL"
             else:
-                newest = _latest_same_source(
+                newest, cross_event_green = _latest_same_source(
                     api.get(repository, "actions/runs?per_page=100"),
                     item, identity)
-                if newest is None:
+                if newest is None and cross_event_green is not None:
+                    base["latest_run_id"] = cross_event_green["id"]
+                    base["status"] = "LATER_SAME_SOURCE_CROSS_EVENT_SUCCESS_RECHECK_HOLD"
+                elif newest is None:
                     base["status"] = "NO_LATER_MATCHING_COMPLETED_RUN"
                 else:
                     base["latest_run_id"] = newest["id"]
