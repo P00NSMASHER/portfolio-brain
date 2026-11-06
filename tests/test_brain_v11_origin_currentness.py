@@ -102,14 +102,83 @@ class CurrentnessTests(unittest.TestCase):
         self.assertTrue(row["reproduction_candidate"])
         self.assertFalse(row["root_cause_verified"])
 
-    def test_different_event_workflow_or_source_is_not_recovery(self):
+    def test_different_workflow_or_source_is_not_recovery(self):
         api = Provider(same=[later(42118307425, workflow=WORKFLOW+1),
-                             later(42118307424, event="push"),
                              later(42118307423, sha="f"*40)])
         row = evaluate(packet(), api)["items"][0]
         self.assertEqual(row["status"], "NO_LATER_MATCHING_COMPLETED_RUN")
         self.assertTrue(row["reproduction_candidate"])
         self.assertIsNone(row["latest_run_id"])
+
+    def test_later_same_source_cross_event_green_is_hold_not_patch_authority(self):
+        # Real regression: PermitPlate push source-health failed (41813490059)
+        # and the identical source-health workflow succeeded via schedule
+        # (42087457417) on the same SHA. Different triggers are not identical
+        # execution evidence, so hold/recheck rather than falsely mark fixed
+        # or propose a new repair from the superseded failure.
+        inp = packet()
+        inp["original_failure_handoffs"][0]["original_run_event"] = "push"
+        inp["packet_sha256"] = digest({
+            k: v for k, v in inp.items() if k != "packet_sha256"})
+
+        class CrossEvent(Provider):
+            def get(self, repository, route):
+                run = super().get(repository, route)
+                if route == "actions/runs/" + str(ORIGINAL):
+                    run["event"] = "push"
+                return run
+
+        provider = CrossEvent(same=[later(ORIGINAL + 100, event="schedule")])
+        result = evaluate(inp, provider)
+        row = result["items"][0]
+        self.assertEqual(row["status"],
+                         "LATER_SAME_SOURCE_CROSS_EVENT_SUCCESS_RECHECK_HOLD")
+        self.assertEqual(row["latest_run_id"], ORIGINAL + 100)
+        self.assertEqual(result["reproduction_candidates"], 0)
+        self.assertEqual(result["historical_or_changed"], 0)
+        self.assertFalse(row["writer_authorized"])
+        self.assertFalse(row["live_repair_verified"])
+        self.assertEqual(result["provider_writes"], 0)
+
+    def test_cross_event_green_cannot_mask_later_same_event_failure(self):
+        inp = packet()
+        inp["original_failure_handoffs"][0]["original_run_event"] = "push"
+        inp["packet_sha256"] = digest({
+            k: v for k, v in inp.items() if k != "packet_sha256"})
+
+        class CrossEvent(Provider):
+            def get(self, repository, route):
+                run = super().get(repository, route)
+                if route == "actions/runs/" + str(ORIGINAL):
+                    run["event"] = "push"
+                return run
+
+        provider = CrossEvent(same=[
+            later(ORIGINAL + 200, event="schedule"),
+            later(ORIGINAL + 150, event="push", conclusion="failure")])
+        result = evaluate(inp, provider)
+        self.assertEqual(result["items"][0]["status"],
+                         "LATEST_SAME_SOURCE_WORKFLOW_NOT_SUCCESS")
+        self.assertTrue(result["items"][0]["reproduction_candidate"])
+
+    def test_failed_cross_event_attempt_is_not_a_false_hold(self):
+        inp = packet()
+        inp["original_failure_handoffs"][0]["original_run_event"] = "push"
+        inp["packet_sha256"] = digest({
+            k: v for k, v in inp.items() if k != "packet_sha256"})
+
+        class CrossEvent(Provider):
+            def get(self, repository, route):
+                run = super().get(repository, route)
+                if route == "actions/runs/" + str(ORIGINAL):
+                    run["event"] = "push"
+                return run
+
+        api = CrossEvent(same=[later(ORIGINAL + 100, event="schedule",
+                                     conclusion="failure")])
+        row = evaluate(inp, api)["items"][0]
+        self.assertEqual(row["status"], "NO_LATER_MATCHING_COMPLETED_RUN")
+        self.assertTrue(row["reproduction_candidate"])
 
     def test_source_drift_stops_without_sampling_run_list(self):
         api = Provider(same=[later(42118307425)], main_sha="f"*40)
