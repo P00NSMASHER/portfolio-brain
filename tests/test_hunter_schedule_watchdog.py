@@ -28,6 +28,7 @@ class IndependentScoutClockTests(unittest.TestCase):
             "hunter-integrator-\n"
             "needs.scout.outputs.worker != 'INTEGRATOR'\n"
             "types: [retally-scout-recovery-v1]\n"
+            "group: starblox-roblox-accelerator-main-writer\n"
         )
         h.check_source(content + "\n" + required)
         with self.assertRaises(h.EvidenceError):
