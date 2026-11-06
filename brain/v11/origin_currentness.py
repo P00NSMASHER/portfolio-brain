@@ -96,7 +96,7 @@ def _verified_failure(original, item):
             and type(original.get("id")) is int
             and original["id"] == item["run_id"]
             and type(original.get("workflow_id")) is int
-            and original["workflow_id"] > 0
+            and 0 < original["workflow_id"] < 10**12
             and type(original.get("name")) is str
             and 1 <= len(original["name"]) <= 150
             and type(original.get("path")) is str
@@ -130,6 +130,18 @@ def _latest_same_source(document, item, identity):
             and len({r["id"] for r in rows}) == len(rows),
             "CURRENTNESS_RUN_ROW_INVALID")
     workflow_id, path, name, event = identity
+    # The provider response must be exclusively from the authenticated workflow.
+    # Never turn a foreign row into an apparent absence of later executions.
+    require(all(type(r.get("workflow_id")) is int
+                and r["workflow_id"] == workflow_id
+                and type(r.get("repository")) is dict
+                and r["repository"].get("full_name") == item["repository"]
+                for r in rows), "CURRENTNESS_WORKFLOW_INVENTORY_MISMATCH")
+    # A truncated page that omits the original execution cannot establish
+    # whether there is a later same-source run beyond the sampled window.
+    if (document["total_count"] > len(rows)
+            and item["run_id"] not in {r["id"] for r in rows}):
+        raise CurrentnessError("CURRENTNESS_RUN_WINDOW_INCOMPLETE")
     matched = []
     cross_event_green = []
     for r in rows:
