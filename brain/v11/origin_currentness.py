@@ -23,7 +23,7 @@ MAX_RUNS = 100
 MAX_HTTP_BYTES = 2 * 1024 * 1024
 RUN_PATH = re.compile(r"actions/runs/[1-9][0-9]{0,11}\Z")
 WORKFLOW_RUNS_PATH = re.compile(
-    r"actions/workflows/[1-9][0-9]{0,11}/runs\?per_page=100\Z")
+    r"actions/workflows/[1-9][0-9]{0,11}/runs\?branch=main&per_page=100\Z")
 API_BASE = "https://api.github.com/repos/"
 ALLOWED_REPOS = frozenset(PROJECTS.values())
 
@@ -55,9 +55,8 @@ class PublicGitHub:
         require(type(repository) is str and repository in ALLOWED_REPOS,
                 "CURRENTNESS_REPOSITORY_REFUSED")
         require(route == "branches/main"
-                or (type(route) is str and (
-                    RUN_PATH.fullmatch(route) is not None
-                    or WORKFLOW_RUNS_PATH.fullmatch(route) is not None)),
+                or (type(route) is str and (RUN_PATH.fullmatch(route) is not None
+                                            or WORKFLOW_RUNS_PATH.fullmatch(route) is not None)),
                 "CURRENTNESS_ROUTE_REFUSED")
         require(self.reads < MAX_HANDOFFS * 3, "CURRENTNESS_GET_BUDGET_EXCEEDED")
         self.reads += 1
@@ -131,12 +130,15 @@ def _latest_same_source(document, item, identity):
             and len({r["id"] for r in rows}) == len(rows),
             "CURRENTNESS_RUN_ROW_INVALID")
     workflow_id, path, name, event = identity
-    # This response is from the workflow-specific GitHub endpoint. Reject
-    # cross-workflow data and never infer absence from a truncated first page.
-    require(all(r.get("workflow_id") == workflow_id
+    # The provider response must be exclusively from the authenticated workflow.
+    # Never turn a foreign row into an apparent absence of later executions.
+    require(all(type(r.get("workflow_id")) is int
+                and r["workflow_id"] == workflow_id
                 and type(r.get("repository")) is dict
                 and r["repository"].get("full_name") == item["repository"]
                 for r in rows), "CURRENTNESS_WORKFLOW_INVENTORY_MISMATCH")
+    # A truncated page that omits the original execution cannot establish
+    # whether there is a later same-source run beyond the sampled window.
     if (document["total_count"] > len(rows)
             and item["run_id"] not in {r["id"] for r in rows}):
         raise CurrentnessError("CURRENTNESS_RUN_WINDOW_INCOMPLETE")
@@ -211,8 +213,8 @@ def evaluate(packet, api):
                 base["status"] = "SOURCE_CHANGED_ORIGINAL_FAILURE_HISTORICAL"
             else:
                 newest, cross_event_green = _latest_same_source(
-                    api.get(repository, "actions/workflows/"
-                            + str(identity[0]) + "/runs?per_page=100"),
+                    api.get(repository, "actions/workflows/" + str(identity[0])
+                            + "/runs?branch=main&per_page=100"),
                     item, identity)
                 if newest is None and cross_event_green is not None:
                     base["latest_run_id"] = cross_event_green["id"]

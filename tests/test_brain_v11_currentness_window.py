@@ -56,8 +56,7 @@ class Provider:
             return original()
         if route == "branches/main":
             return {"protected": True, "commit": {"sha": SOURCE}}
-        if route in ("actions/runs?per_page=100",
-                     f"actions/workflows/{WORKFLOW}/runs?per_page=100"):
+        if route == f"actions/workflows/{WORKFLOW}/runs?branch=main&per_page=100":
             return {"total_count": self.count, "workflow_runs": self.rows}
         raise AssertionError("Unapproved read route: " + route)
 
@@ -83,7 +82,7 @@ class OriginalWindowTests(unittest.TestCase):
         evaluate(packet(), api)
         self.assertEqual(api.routes, [
             f"actions/runs/{RUN}", "branches/main",
-            f"actions/workflows/{WORKFLOW}/runs?per_page=100",
+            f"actions/workflows/{WORKFLOW}/runs?branch=main&per_page=100",
         ])
 
     def test_genuinely_complete_no_success_can_reach_reproduction_review(self):
