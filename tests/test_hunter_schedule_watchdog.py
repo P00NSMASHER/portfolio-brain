@@ -127,5 +127,21 @@ class IndependentScoutClockTests(unittest.TestCase):
                   payload={"injected": "write"})
 
 
+    def test_watchdog_is_downstream_of_original_core_and_does_not_create_timer(self):
+        from pathlib import Path
+        source = Path(".github/workflows/v8-scoped-repair.yml").read_text(encoding="utf-8")
+        job = source.split("\n  recover-missed-hunter-slots:\n", 1)[1]
+        self.assertIn("github.event.workflow_run.name == 'brain-cycle-v2'", job)
+        self.assertIn("github.event.workflow_run.head_sha == github.sha", job)
+        self.assertIn("github.event.workflow_run.run_attempt == 1", job)
+        self.assertIn("steps.missed.outputs.due == 'true'", job)
+        self.assertIn("permission-contents: write", job)
+        self.assertIn("permission-actions: read", job)
+        self.assertIn("--dispatch", job)
+        self.assertIn("brain-hunter-schedule-recovery-", job)
+        self.assertNotIn("\n  schedule:", job)
+        self.assertNotIn("on:\n  schedule:", job)
+
+
 if __name__ == "__main__":
     unittest.main()
