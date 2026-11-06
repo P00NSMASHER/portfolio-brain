@@ -23,9 +23,23 @@ MAX_INPUT = 2 * 1024 * 1024
 MAX_JOBS = 16
 MAX_STEPS = 40
 MAX_OUTPUT_JOBS = 5
+EXECUTOR_CONFIG = Path(__file__).with_name("owner-executor.json")
 
 class InboxError(ValueError):
     pass
+
+
+def configured_status():
+    try:
+        value = json.loads(EXECUTOR_CONFIG.read_text(encoding="utf-8"))
+    except (OSError, ValueError, UnicodeError) as exc:
+        raise InboxError("INBOX_EXECUTOR_CONFIG_INVALID") from exc
+    need(value.get("schema_version") == 1 and
+         value.get("status") == "AUTHORIZED_OWNER_WORKER_CONFIGURED" and
+         value.get("authority", {}).get("credential_location") ==
+         "OWNER_SESSION_ONLY_NOT_BRAIN_RUNTIME",
+         "INBOX_EXECUTOR_CONFIG_INVALID")
+    return value["status"]
 
 
 def need(ok, reason):
@@ -178,7 +192,7 @@ def build(document, *, expected_source):
         "deferred_original_failure_handoffs": max(0, len(ready)-MAX_OUTPUT_JOBS),
         "next_action": ("AUTHORIZED_OWNERS_MUST_REPRODUCE_AND_PATCH"
                         if ready else "NO_CONFIRMED_INCIDENT_FOR_OWNER"),
-        "general_cross_project_executor": "NOT_CONFIGURED",
+        "general_cross_project_executor": configured_status(),
         "requires_provider_reread": True,
         "provider_writes": 0,
         "production_verified": False,
