@@ -52,6 +52,27 @@ class V11CoreResultRefreshTests(unittest.TestCase):
         self.assertNotIn("continue-on-error: true", report)
         self.assertNotIn("create-github-app-token", report)
 
+    def test_read_only_postcore_supports_protected_main_push_without_forged_approval(self):
+        scoped = SCOPED.read_text(encoding="utf-8")
+        stage = scoped.split(MARKER, 1)[1].split("\n  classify-original-failed-core:", 1)[0]
+        premise = stage.split("    steps:", 1)[0]
+        self.assertIn("github.event.workflow_run.conclusion == 'success'", premise)
+        self.assertIn("github.event.workflow_run.head_branch == 'main'", premise)
+        self.assertIn("github.event.workflow_run.head_sha == github.sha", premise)
+        self.assertIn("github.event.workflow_run.run_attempt == 1", premise)
+        self.assertIn("github.event.workflow_run.event == 'push'", premise)
+        self.assertIn("    permissions:\n      contents: read\n      actions: read", stage)
+        self.assertIn("python -m brain.v11.owner_inbox", stage)
+        self.assertIn("--input /tmp/brain-v11-original/v9-engineering.json", stage)
+        self.assertIn("--expected-sha", stage)
+        self.assertIn("if-no-files-found: error", stage)
+        self.assertNotIn("continue-on-error: true", stage)
+        for forbidden in ("actions/create-github-app-token", "permission-contents: write",
+                          "pull-requests: write", "id-token: write", "gh pr merge"):
+            self.assertNotIn(forbidden, stage)
+        core = CORE.read_text(encoding="utf-8")
+        self.assertNotIn("python -m brain.v11.owner_inbox", core)
+
     def test_no_timer_new_workflow_or_privileged_trigger(self):
         scoped = SCOPED.read_text(encoding="utf-8")
         for forbidden in ("\n  schedule:", "pull_request_target:",
