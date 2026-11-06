@@ -42,7 +42,11 @@ MAX_AGE = dt.timedelta(hours=12)
 INFLIGHT_AGE = dt.timedelta(hours=2)
 RETRY_AGE = dt.timedelta(minutes=40)
 MAX_OBSERVED_RECOVERIES = 2
-MAX_PER_CYCLE = 5
+MAX_PER_CYCLE = 1
+# GitHub workflow concurrency has at most one pending run per group. A burst
+# of accepted dispatches cancels older pending executions even when
+# cancel-in-progress is false; serialize catch-up until the previous run ends.
+ACTIVE_STATUSES = frozenset({"queued", "in_progress", "pending", "waiting", "requested"})
 
 
 class EvidenceError(ValueError):
@@ -89,6 +93,7 @@ def check_source(yaml):
         "github.event.client_payload.expected_main == github.sha",
         "hunter-integrator-", "needs.scout.outputs.worker != 'INTEGRATOR'",
         "types: [retally-scout-recovery-v1]",
+        "group: starblox-roblox-accelerator-main-writer",
     ):
         if required not in yaml:
             raise EvidenceError("Hunter schedule or App authority unverified")
@@ -163,7 +168,7 @@ def reconcile(now, runs, verify=completed_receipt):
     due, completed, active, exhausted = [], [], [], []
     for slot in recent_due_slots(now):
         matches = [r for r in runs if belongs(r, slot, now)]
-        if any(r.get("status") in ("queued", "in_progress")
+        if any(r.get("status") in ACTIVE_STATUSES
                and now - timestamp(r["created_at"]) <= INFLIGHT_AGE
                for r in matches):
             active.append(slot)
@@ -180,7 +185,15 @@ def reconcile(now, runs, verify=completed_receipt):
             active.append(slot)
             continue
         due.append({**slot, "observed_recovery_attempts": len(attempts)})
-    return {"due": due[:MAX_PER_CYCLE], "backlog": len(due),
+    # A run for ANOTHER Hunter can still occupy the one-slot shared queue.
+    # Do not send another recovery while any real upstream Scout run is
+    # queued, pending, waiting, requested, or still executing.
+    blocking = sorted({r["id"] for r in runs
+                       if type(r.get("id")) is int
+                       and r.get("status") in ACTIVE_STATUSES
+                       and dt.timedelta(0) <= now - timestamp(r["created_at"]) <= INFLIGHT_AGE})
+    return {"due": [] if blocking else due[:MAX_PER_CYCLE],
+            "backlog": len(due), "blocking_run_ids": blocking,
             "completed": completed, "active": active, "exhausted": exhausted,
             "slots_checked": len(recent_due_slots(now))}
 
