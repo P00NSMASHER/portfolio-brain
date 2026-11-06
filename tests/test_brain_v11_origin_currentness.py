@@ -134,6 +134,7 @@ class CurrentnessTests(unittest.TestCase):
     def test_tampered_packet_and_bools_rejected_before_provider_calls(self):
         for changes in (
             {"provider_writes": True},
+            {"provider_writes": False},
             {"production_verified": True},
             {"packet_sha256": "0" * 64},
             {"general_cross_project_executor": "FULL_ACCESS"},
