@@ -303,7 +303,6 @@ jobs:
           repository: ${{ github.repository }}
           path: /tmp/brain-v11-original
       - name: Compile source-pinned original incident owner inbox
-        continue-on-error: true
         run: |
           mkdir -p /tmp/brain-v11-core
           python -m brain.v11.owner_inbox \
