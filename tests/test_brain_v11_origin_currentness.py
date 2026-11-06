@@ -69,7 +69,7 @@ class Provider:
             return r
         if route == "branches/main":
             return {"protected": True, "commit": {"sha": self.main_sha}}
-        if route == "actions/runs?per_page=100":
+        if route == f"actions/workflows/{WORKFLOW}/runs?per_page=100":
             return {"total_count": len(self.history),
                     "workflow_runs": self.history}
         raise AssertionError("unreviewed route")
@@ -219,7 +219,7 @@ class CurrentnessTests(unittest.TestCase):
     def test_bounded_ambiguous_census_is_not_a_false_recovery(self):
         class Bad(Provider):
             def get(self, repository, route):
-                if route == "actions/runs?per_page=100":
+                if route == f"actions/workflows/{WORKFLOW}/runs?per_page=100":
                     self.reads += 1
                     return {"total_count": True, "workflow_runs": [later(42118307425)]}
                 return super().get(repository, route)
