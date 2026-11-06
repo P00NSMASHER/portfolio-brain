@@ -8,8 +8,9 @@ admission is performed by brain.v9.batch_cycle; it samples original provider
 jobs and requires a failed original protected-main job, not aggregate checks
 on a commit. Do not bypass these controls.
 
-The additive brain.v11.owner_inbox stage reads that original v9 result
-from the SAME core execution. It emits a content-addressed, restart-stable
+The additive brain.v11.owner_inbox stage runs in the EXISTING
+post-core results job and reads the immutable v9 result downloaded from the
+same original completed core. It emits a content-addressed, restart-stable
 owner handoff artifact with original repository, run ID, job ID, failing step,
 work ID, state checkpoint, and an exact source revision. It uses zero external
 requests, no tokens, no model calls, no GitHub writes and no new scheduler.
