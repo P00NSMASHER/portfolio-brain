@@ -1,25 +1,6 @@
 {
   "version": 1,
-  "decisions": [
-    {
-      "acceptance": "Reproduce the failed behavior and verify it on the target after delivery.",
-      "behavior_verified": false,
-      "currentness": "NO_LATER_MATCHING_COMPLETED_RUN",
-      "delivered_by": null,
-      "existing_pr": null,
-      "id": "81d32bc10dc98aeb0bd0f4547d054d0ab793989e219ee3438514570270e32a15",
-      "incident_run": 42398993002,
-      "latest_run_id": null,
-      "owner": "retally-product",
-      "owner_decision": "AWAITING_CHAT_DECISION",
-      "problem": "Build scored opportunity packages for customer-eligible detections",
-      "repository": "P00NSMASHER/permitplate-nyc",
-      "request": "Recheck the original failure, active owner and open PRs before proposing a fix.",
-      "source": "https://github.com/P00NSMASHER/permitplate-nyc/actions/runs/42398993002/job/128482493396",
-      "source_sha": "c8418e2f66cd33efae658e06f2b092cfac5cd571",
-      "state": "ORIGINAL_FAILURE_NEEDS_TRIAGE"
-    }
-  ],
+  "decisions": [],
   "remaining": 0,
   "provider_writes": 0
 }
