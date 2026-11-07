@@ -14,7 +14,6 @@ import urllib.request
 from brain.v11.owner_inbox import canonical, digest, strict_load
 from brain.v11 import origin_currentness, owner_inbox
 from brain.v11.origin_currentness import NoRedirect
-from brain.v9.batch_queue import PROJECTS
 
 REGISTRY = Path(__file__).resolve().parents[2] / "repair" / "OWNER_DECISIONS.json"
 DECISIONS = {"AWAITING_CHAT_DECISION", "APPROVED_IN_CHAT", "DECLINED", "DEFERRED"}
@@ -30,12 +29,13 @@ def require(value, reason):
 
 
 class Original:
-    def __init__(self, token):
+    def __init__(self, token, repositories):
         self.opener = urllib.request.build_opener(NoRedirect())
         self.token = token
+        self.repositories = frozenset(repositories)
 
     def get(self, repo, route):
-        require(repo in PROJECTS.values() and ROUTES.fullmatch(route), "unreviewed provider route")
+        require(repo in self.repositories and ROUTES.fullmatch(route), "unreviewed provider route")
         headers = {"Accept": "application/vnd.github+json", "User-Agent": "brain-owner-decisions"}
         if self.token:
             headers["Authorization"] = "Bearer " + self.token
@@ -176,35 +176,51 @@ def incidents(cycle, currentness_api, rotation):
                "behavior_verified": False, "delivered_by": None}
 
 
+def registered_rows(records, api, rotation, rows):
+    """Rotate one active original-target readback. Preserve all other durable decisions."""
+    active = sorted(r["id"] for r in records if r.get("original_run") and
+                    r["owner_decision"] not in {"DECLINED", "DEFERRED"})
+    selected = active[rotation % len(active)] if active else None
+    seen = set()
+    for record in records:
+        ident = record["id"]
+        require(ident not in seen and record["owner_decision"] in DECISIONS
+                and re.fullmatch(r"P00NSMASHER/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", record["repository"])
+                and (record["owner_decision"] != "APPROVED_IN_CHAT" or
+                     (record["chat_approval"] and record["approved_scope"])),
+                "duplicate target, invalid decision or missing chat approval scope")
+        seen.add(ident)
+        if ident == selected:
+            rows[ident] = observe(record, api)
+        elif ident in active:
+            rows.pop(ident, None)
+        else:
+            row = rows.get(ident, {"state": "OWNER_DECISION_RECORDED",
+                                   "behavior_verified": False, "delivered_by": None})
+            for key in ("id", "repository", "problem", "owner", "owner_decision", "chat_approval",
+                        "approved_scope", "existing_pr", "request", "acceptance"):
+                row[key] = record[key]
+            row["source"] = record.get("source") or (
+                f"https://github.com/{record['repository']}/pull/{record['existing_pr']}"
+                if record["existing_pr"] else f"https://github.com/{record['repository']}")
+            rows[ident] = row
+    return rows
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for arg in ("db", "cycle", "output"):
         parser.add_argument("--" + arg, type=Path, required=True)
     args = parser.parse_args()
     ledger = strict_load(REGISTRY)
-    require(ledger["version"] == 1 and len(ledger["records"]) <= 6, "invalid decision registry")
-    api = Original(os.environ.get("GITHUB_TOKEN", ""))
-    currentness = origin_currentness.PublicGitHub(os.environ.get("GITHUB_TOKEN", ""))
-    rows = {item["id"]: item for item in incidents(strict_load(args.cycle), currentness,
-                                                   int(os.environ.get("GITHUB_RUN_NUMBER", "0")))}
-    seen = set()
-    for record in ledger["records"]:
-        ident = record["id"]
-        require(ident not in seen and record["owner_decision"] in DECISIONS
-                and record["repository"] in PROJECTS.values()
-                and (record["owner_decision"] != "APPROVED_IN_CHAT" or
-                     (record["chat_approval"] and record["approved_scope"])),
-                "duplicate target, invalid decision or missing chat approval scope")
-        seen.add(ident)
-        if "original_run" in record:
-            rows[ident] = observe(record, api)
-        else:
-            row = rows.get(ident, {"state": "OWNER_DECISION_RECORDED",
-                                   "behavior_verified": False, "delivered_by": None})
-            for key in ("id", "repository", "source", "problem", "owner", "owner_decision",
-                        "chat_approval", "approved_scope", "existing_pr", "request", "acceptance"):
-                row[key] = record[key]
-            rows[ident] = row
+    require(ledger["version"] == 1 and isinstance(ledger["records"], list), "invalid decision registry")
+    records = ledger["records"]
+    token = os.environ.get("GITHUB_TOKEN", "")
+    rotation = int(os.environ.get("GITHUB_RUN_NUMBER", "0"))
+    api = Original(token, [r["repository"] for r in records])
+    currentness = origin_currentness.PublicGitHub(token)
+    rows = {item["id"]: item for item in incidents(strict_load(args.cycle), currentness, rotation)}
+    registered_rows(records, api, rotation, rows)
     with sqlite3.connect(args.db) as db:
         result = changes(db, rows.values())
     args.output.write_text(json.dumps(result, indent=2) + "\n")

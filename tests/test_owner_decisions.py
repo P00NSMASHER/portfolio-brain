@@ -3,8 +3,9 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from brain.v11.owner_decisions import REGISTRY, changes, incidents, observe, strict_load
+from brain.v11.owner_decisions import REGISTRY, changes, incidents, observe, registered_rows, strict_load
 from tests.test_brain_v11_currentness_window import Provider, REPO, RUN, SOURCE, PATH, original
 from tests.test_brain_v11_owner_inbox import report
 
@@ -37,6 +38,18 @@ class DecisionTests(unittest.TestCase):
             self.assertEqual(list(incidents(doc, api, 0)), [])
             self.assertEqual(api.reads, 3)
         self.assertEqual(len(list(incidents(doc, Provider([original()]), 0))), 1)
+
+    def test_large_registry_rotates_and_keeps_declined_records(self):
+        base = strict_load(REGISTRY)["records"][0]
+        records = [dict(base, id=f"target-{n}") for n in range(14)]
+        records[-1]["owner_decision"] = "DECLINED"
+        with patch("brain.v11.owner_decisions.observe", side_effect=lambda r, api: dict(r)) as reader:
+            for index in range(13):
+                rows = registered_rows(records, None, index, {})
+                self.assertEqual(len(rows), 2)
+                self.assertEqual(rows["target-13"]["owner_decision"], "DECLINED")
+        self.assertEqual({c.args[0]["id"] for c in reader.call_args_list},
+                         {r["id"] for r in records[:-1]})
 
     def test_target_postrelease_requires_original_behavior_at_exact_merge(self):
         record = strict_load(REGISTRY)["records"][0]
