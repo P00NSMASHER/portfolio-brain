@@ -167,7 +167,7 @@ def _original_core_verdict(api, row, source_sha):
         return "AUTOMATIC_CORE_PROVENANCE_UNVERIFIED"
     if row["event"] == "push":
         if row["conclusion"] == "success" and any(
-                step.get("name") == "Bind execution to unchanged current main"
+                type(step) is dict and step.get("name") == "Bind execution to unchanged current main"
                 and step.get("conclusion") == "success" for step in job["steps"]):
             return "PROTECTED_MAIN_PUSH_OBSERVED"
         return "SOURCE_ORIGIN_UNVERIFIED"
