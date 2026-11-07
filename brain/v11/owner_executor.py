@@ -114,7 +114,8 @@ def verify(api, config=None):
         verified_runs[name] = run_id
     result = {
         "schema_version": 1,
-        "status": "AUTHORIZED_OWNER_EXECUTOR_LIVE_VERIFIED",
+        "status": "HISTORICAL_OWNER_DELIVERY_VERIFIED",
+        "new_outcomes": 0,
         "worker_id": config["worker_id"],
         "worker_thread": config["worker_thread"],
         "repository": repo,

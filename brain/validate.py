@@ -61,7 +61,7 @@ def validate_policy():
         "62c3d4346eefea2f10fc0759dd51a1738de49f1c",
         "03b019cbcb1bd057e486456dff8ac8c40a6aa1ee",
         "permissions:\n  contents: read",
-        "    permissions:\n      contents: write\n      pull-requests: write",
+        "    permissions:\n      contents: read\n      pull-requests: read",
         "FOUNDATION_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}",
         "python -m brain.v9.guarded_merge_runner",
     ):
@@ -74,8 +74,8 @@ def validate_policy():
             and "gh pr merge" not in native
             and "permission-workflows:" not in native
             and "id-token: write" not in native
-            and native.count("      contents: write") == 1
-            and native.count("      pull-requests: write") == 1
+            and native.count("      contents: write") == 0
+            and native.count("      pull-requests: write") == 0
             and native.count("FOUNDATION_HEAD_SHA:") == 1
             and "PORTFOLIO_RUNTIME_PRIVATE_KEY" not in native
             and "PORTFOLIO_VERIFIER_PRIVATE_KEY" not in native,

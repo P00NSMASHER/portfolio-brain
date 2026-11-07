@@ -40,8 +40,8 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: write
-      pull-requests: write
-      actions: write
+      pull-requests: read
+      actions: read
     steps:
       - name: Checkout exact source without persisted credentials
         uses: actions/checkout@v4
@@ -146,10 +146,12 @@ jobs:
             --input /tmp/brain/projects/report.json --expected-sha "$BRAIN_SOURCE_SHA" \
             --cycle "$GITHUB_RUN_NUMBER" --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --proof-manifest brain/v9/repair-proof.json --output /tmp/brain/v9-engineering.json
-      - name: Propose a measured protected knowledge upgrade when eligible
+      - name: Record changed owner decisions before durable state publication
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python -m brain evolve --db state/state.sqlite --output /tmp/brain/upgrade --expected-sha "$BRAIN_SOURCE_SHA"
+        run: |
+          python -m brain.v11.owner_decisions --db state/state.sqlite \
+            --cycle /tmp/brain/v9-engineering.json --output /tmp/brain/decisions.json
       - name: Bound working state to independently verified production capacity
         run: |
           python -m brain.state_maintenance --source state/state.sqlite \

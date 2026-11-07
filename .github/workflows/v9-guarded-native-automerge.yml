@@ -32,8 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
+      pull-requests: read
       actions: read
       checks: read
       issues: read
@@ -55,11 +55,13 @@ jobs:
         with:
           python-version: '3.12'
       - name: Admit only the exact successful Foundation candidate before second check
+        if: ${{ false }} # Explicit owner-chat execution only.
         env:
           GH_TOKEN: ${{ github.token }}
           FOUNDATION_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: python -m brain.v9.guarded_merge_runner
       - name: Admit source-bound v10 bot repair to native protected auto-merge
+        if: ${{ false }} # Explicit owner-chat execution only.
         env:
           GH_TOKEN: ${{ github.token }}
           V11_EVENT_HEAD: ${{ github.event.workflow_run.head_sha }}

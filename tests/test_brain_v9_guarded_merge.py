@@ -641,8 +641,8 @@ class EventRunnerTests(unittest.TestCase):
         self.assertIn("FOUNDATION_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}", workflow)
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn("permissions:\n  contents: read", workflow)
-        self.assertEqual(workflow.count("      contents: write"), 1)
-        self.assertEqual(workflow.count("      pull-requests: write"), 1)
+        self.assertEqual(workflow.count("      contents: write"), 0)
+        self.assertEqual(workflow.count("      pull-requests: write"), 0)
         self.assertIn("persist-credentials: false", workflow)
         for forbidden in ("schedule:", "pull_request_target:", "workflow_dispatch:"):
             self.assertNotIn(forbidden, workflow)

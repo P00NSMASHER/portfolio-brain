@@ -18,6 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # The immutable verifier integrates successful legacy bot repair branches.
+      # Owner-approved repairs use the owner's scoped branch instead.
+      - name: Hold reserved autonomous repair branches
+        if: startsWith(github.head_ref, 'factory/auto-repair-') || startsWith(github.ref_name, 'factory/auto-repair-')
+        run: |
+          echo "Owner chat approval and an owner-delivered branch are required."
+          exit 1
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:

@@ -88,8 +88,9 @@ jobs:
           retention-days: 14
 
   propose-only:
+    # Release authority belongs to the owner's chat session.
     if: >-
-      ${{ github.repository == 'P00NSMASHER/portfolio-brain' && github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_sha == github.sha && (github.event.workflow_run.event == 'schedule' || github.event.workflow_run.event == 'workflow_dispatch') }}
+      ${{ false && github.repository == 'P00NSMASHER/portfolio-brain' && github.event.workflow_run.repository.full_name == 'P00NSMASHER/portfolio-brain' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_sha == github.sha && (github.event.workflow_run.event == 'schedule' || github.event.workflow_run.event == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     timeout-minutes: 6
     permissions:
@@ -243,7 +244,7 @@ jobs:
           RECOVERY: ${{ steps.request.outputs.recovery }}
         run: python -m brain.retally_app_proposals --recover "$RECOVERY"
       - name: Mint RETALLY-only PR writer for validated request
-        if: steps.request.outputs.artifact != ''
+        if: ${{ false && steps.request.outputs.artifact != '' }}
         id: writer
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
         with:
@@ -255,7 +256,7 @@ jobs:
           permission-contents: read
           permission-pull-requests: write
       - name: Revalidate and open the generated PR as the runtime App
-        if: steps.request.outputs.artifact != ''
+        if: ${{ false && steps.request.outputs.artifact != '' }}
         env:
           GH_TOKEN: ${{ steps.writer.outputs.token }}
           REQUEST: ${{ steps.request.outputs.artifact }}
@@ -318,13 +319,6 @@ jobs:
           python -m brain.v11.origin_currentness \
             --inbox /tmp/brain-v11-core/owner-inbox.json \
             --output /tmp/brain-v11-core/owner-currentness.json
-      - name: Verify authorized owner executor from original provider evidence
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          python -m brain.v11.owner_executor \
-            --token "$GITHUB_TOKEN" \
-            --output /tmp/brain-v11-core/owner-executor.json
       - name: Reconcile actual GitHub engineering outcomes after completed core
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -408,7 +402,7 @@ jobs:
           fi
       - name: Mint one-repository short-lived repair token only for an exact reviewed recipe
         id: repair-token
-        if: ${{ steps.recipe.outputs.eligible == 'true' }}
+        if: ${{ false && steps.recipe.outputs.eligible == 'true' }}
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
         with:
           app-id: '5352505'
@@ -420,7 +414,7 @@ jobs:
           permission-actions: read
           skip-token-revoke: false
       - name: Prove original RED and candidate GREEN offline before creating draft PR
-        if: ${{ steps.recipe.outputs.eligible == 'true' }}
+        if: ${{ false && steps.recipe.outputs.eligible == 'true' }}
         env:
           PORTFOLIO_RUNTIME_TOKEN: ${{ steps.repair-token.outputs.token }}
         run: |

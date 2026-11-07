@@ -122,7 +122,8 @@ class GitHubOriginalReader:
             raise BatchFault("ORIGINAL_FAILED_STEP_UNVERIFIED")
         return {"status": "ORIGINAL_MAIN_JOB_FAILURE_CONFIRMED", "url": url,
                 "run_id": run_id, "job_id": job_id, "source_sha": sha,
-                "event": run["event"], "failed_steps": steps, "root_cause_verified": False}
+                "event": run["event"], "workflow_path": run.get("path"), "job_name": job.get("name"),
+                "failed_steps": steps, "root_cause_verified": False}
 
     def read_draft_only(self, repo, number, *, base_sha, head_sha, operation_id):
         """Reconcile original draft creation independent of CI success."""
