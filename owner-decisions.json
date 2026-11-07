@@ -1,25 +1,6 @@
 {
   "version": 1,
-  "decisions": [
-    {
-      "acceptance": "Reproduce the failed behavior and verify it on the target after delivery.",
-      "behavior_verified": false,
-      "currentness": "LATEST_SAME_SOURCE_WORKFLOW_NOT_SUCCESS",
-      "delivered_by": null,
-      "existing_pr": null,
-      "id": "64913d4aed903ab7209e4ebe4e3b4ddc9e90207c4b9dda9f965b7742260a3e83",
-      "incident_run": 42297894814,
-      "latest_run_id": 42410275212,
-      "owner": "retally-product",
-      "owner_decision": "AWAITING_CHAT_DECISION",
-      "problem": "Validate freshness and source-bound content",
-      "repository": "P00NSMASHER/capturebrief",
-      "request": "Recheck the original failure, active owner and open PRs before proposing a fix.",
-      "source": "https://github.com/P00NSMASHER/capturebrief/actions/runs/42297894814/job/128167776484",
-      "source_sha": "01520d46a90cd0b07fad1850a2873cb30374bfce",
-      "state": "ORIGINAL_FAILURE_NEEDS_TRIAGE"
-    }
-  ],
+  "decisions": [],
   "remaining": 0,
   "provider_writes": 0
 }
