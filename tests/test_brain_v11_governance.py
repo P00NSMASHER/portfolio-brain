@@ -18,8 +18,8 @@ class GovernanceTests(unittest.TestCase):
                           "permission-workflows:", "PORTFOLIO_RUNTIME_PRIVATE_KEY",
                           "PORTFOLIO_VERIFIER_PRIVATE_KEY", "gh pr merge"):
             self.assertNotIn(forbidden, native)
-        self.assertEqual(native.count("      pull-requests: write"), 1)
-        self.assertEqual(native.count("      contents: write"), 1)
+        self.assertEqual(native.count("      pull-requests: write"), 0)
+        self.assertEqual(native.count("      contents: write"), 0)
 
     def test_original_core_artifact_not_new_recurring_workflow(self):
         core = (ROOT / ".github/workflows/brain-cycle.yml").read_text()

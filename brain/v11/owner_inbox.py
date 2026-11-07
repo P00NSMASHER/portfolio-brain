@@ -190,7 +190,7 @@ def build(document, *, expected_source):
         "observed_not_necessarily_actionable": metrics["stages"]["OBSERVED"],
         "original_failure_handoffs": ready[:MAX_OUTPUT_JOBS],
         "deferred_original_failure_handoffs": max(0, len(ready)-MAX_OUTPUT_JOBS),
-        "next_action": ("AUTHORIZED_OWNERS_MUST_REPRODUCE_AND_PATCH"
+        "next_action": ("READ_ORIGINAL_EVIDENCE_AND_REQUEST_CHAT_DECISION"
                         if ready else "NO_CONFIRMED_INCIDENT_FOR_OWNER"),
         "general_cross_project_executor": configured_status(),
         "requires_provider_reread": True,

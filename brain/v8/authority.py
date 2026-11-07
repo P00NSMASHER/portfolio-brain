@@ -13,7 +13,7 @@ REPOSITORY = "P00NSMASHER/portfolio-brain"
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github/workflows/brain-cycle.yml"
 # A scope-name scan cannot establish which credentials the workflow uses.
 # Workflow source change reviewed: state push now uses exact readback and both\n# source acceptance jobs are hard-held pending explicit user re-arm.
-REVIEWED_WORKFLOW_SHA256 = "91dd5f7ab8108f1ade660d7038f8a5da6783e3ebe014e51c762aaf626fe61269"
+REVIEWED_WORKFLOW_SHA256 = "de82bdbb69e59da299d6e7095e005ef97d1ea2349cba742a087e3dfbb436431f"
 
 
 def runtime_authority(workflow_text=None):
@@ -36,7 +36,7 @@ def runtime_authority(workflow_text=None):
     )
     require(match is not None, "V8_AUTHORITY_MONITOR_JOB_MISSING")
     body = match.group("body")
-    for scope in ("contents: write", "pull-requests: write", "actions: write"):
+    for scope in ("contents: write", "pull-requests: read", "actions: read"):
         require(re.search(r"(?m)^      " + re.escape(scope) + r"\s*$", body),
                 "V8_AUTHORITY_MONITOR_SCOPE_CHANGED")
     require("permissions: write-all" not in workflow_text,
@@ -52,8 +52,8 @@ def runtime_authority(workflow_text=None):
             "repository_default": {"contents": "read"},
             "monitor_job": {
                 "contents": "write",
-                "pull_requests": "write",
-                "actions": "write",
+                "pull_requests": "read",
+                "actions": "read",
             },
         },
         "credential_scope": "BRAIN_REPOSITORY_WORKFLOW_TOKEN_ONLY",

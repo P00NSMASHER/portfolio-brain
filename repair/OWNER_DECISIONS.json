@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "records": [
+    {
+      "id": "retally-inquiry-rate-limit-writes",
+      "repository": "P00NSMASHER/github-value-hunt-ledger",
+      "problem": "Exhausted inquiry rate-limit buckets still incur D1 writes.",
+      "owner": "Existing RETALLY PR owner",
+      "owner_decision": "AWAITING_CHAT_DECISION",
+      "chat_approval": null,
+      "approved_scope": null,
+      "existing_pr": 1093,
+      "request": "Leave delivery with the existing PR owner. Decide whether to prioritize diagnosing the independent intake-validation blocker.",
+      "acceptance": "Confirm the deployed inquiry handler and observe D1 write counts for exhausted buckets. The intake CI result alone cannot prove production savings.",
+      "original_run": 42355213708,
+      "original_job": 128351707224,
+      "original_head": "4eef3b1f94f9ce4710999d81174c2d1e28ffeaa2",
+      "workflow_id": 378427253,
+      "workflow_path": ".github/workflows/retally-inquiry.yml",
+      "job": "intake-validation",
+      "failed_step": "Verify restored freight and independent Group Content Security Policy",
+      "postrelease_workflow": null
+    }
+  ]
+}

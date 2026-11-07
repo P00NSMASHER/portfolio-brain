@@ -41,7 +41,7 @@ class ExecutorTests(unittest.TestCase):
         config = configuration()
         result = verify(Provider(config), config)
         self.assertEqual(result["status"],
-                         "AUTHORIZED_OWNER_EXECUTOR_LIVE_VERIFIED")
+                         "HISTORICAL_OWNER_DELIVERY_VERIFIED")
         self.assertEqual(result["provider_writes"], 0)
         self.assertFalse(result["brain_runtime_writer_credentials"])
         self.assertEqual(result["lifecycle"][-1], "LIVE_VERIFIED")

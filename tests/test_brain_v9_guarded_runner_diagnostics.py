@@ -71,8 +71,8 @@ class GuardedRunnerDiagnosticTests(unittest.TestCase):
         from pathlib import Path
         workflow = Path(".github/workflows/v9-guarded-native-automerge.yml").read_text()
         self.assertIn("permissions:\n  contents: read", workflow)
-        self.assertEqual(workflow.count("      contents: write"), 1)
-        self.assertEqual(workflow.count("      pull-requests: write"), 1)
+        self.assertEqual(workflow.count("      contents: write"), 0)
+        self.assertEqual(workflow.count("      pull-requests: write"), 0)
         self.assertIn('workflows: ["foundation-ci"]', workflow)
         self.assertNotIn("workflow_dispatch:", workflow)
         self.assertNotIn("pull_request_target:", workflow)

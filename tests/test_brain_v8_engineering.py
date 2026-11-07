@@ -58,7 +58,7 @@ class EngineeringTests(unittest.TestCase):
     def test_authority_receipt_fails_closed_on_broader_or_missing_workflow_scope(self):
         fn=self.component('authority').runtime_authority
         source=self.component('authority').WORKFLOW.read_text(encoding='utf-8')
-        for changed in [source.replace('      actions: write','      actions: read'),
+        for changed in [source.replace('      actions: read','      actions: write'),
                         source.replace('      contents: write','      contents: read',1),
                         source.replace('permissions:\n  contents: read','permissions: write-all',1)]:
             with self.subTest(changed=changed[:60]),self.assertRaises(BrainError):
@@ -68,7 +68,7 @@ class EngineeringTests(unittest.TestCase):
         authority=self.component('authority')
         source=authority.WORKFLOW.read_text(encoding='utf-8')
         changes=[
-            source.replace('      actions: write', '      actions: write\n      issues: write', 1),
+            source.replace('      actions: read', '      actions: read\n      issues: write', 1),
             source.replace('          GITHUB_TOKEN: ${{ github.token }}',
                            '          GITHUB_TOKEN: ${{ secrets.CROSS_PROJECT_TOKEN }}', 1),
             source.replace('permissions:\n  contents: read',

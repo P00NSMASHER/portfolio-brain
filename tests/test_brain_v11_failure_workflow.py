@@ -71,7 +71,7 @@ class ReadOnlyOriginalFailureJobTests(unittest.TestCase):
             "--reviewed-test /tmp/brain-v11-failure/approved-reviewed-test.json",
             "if test -s /tmp/brain-v11-failure/approved-spec.json",
             'eligible=true', 'eligible=false',
-            "if: " + "$" + "{{ steps.recipe.outputs.eligible == 'true' }}",
+            "if: " + "$" + "{{ false && steps.recipe.outputs.eligible == 'true' }}",
             "app-id: '5352505'", "repositories: portfolio-brain",
             "permission-contents: write", "permission-pull-requests: write",
             "permission-actions: read", "skip-token-revoke: false",

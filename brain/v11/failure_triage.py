@@ -36,6 +36,7 @@ STEP_FAMILIES = {
     "Build read-only all-project improvement queue": "PROJECT_REPORT",
     "Build bounded v8 engineering owner handoffs": "ENGINEERING_HANDOFF",
     "Persist v9 owner work and bounded original publication evidence": "WORK_QUEUE",
+    "Record changed owner decisions before durable state publication": "OWNER_DECISION_REPORT",
     "Propose a measured protected knowledge upgrade when eligible": "KNOWLEDGE_UPGRADE",
     "Bound working state to independently verified production capacity": "STATE_CAPACITY",
     "Verify main and state parent before publication": "STATE_PREPUBLICATION",
