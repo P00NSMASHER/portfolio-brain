@@ -1,29 +1,6 @@
 {
   "version": 1,
-  "decisions": [
-    {
-      "acceptance": "Confirm the deployed inquiry handler and observe D1 write counts for exhausted buckets. The intake CI result alone cannot prove production savings.",
-      "approved_scope": null,
-      "behavior_verified": false,
-      "chat_approval": null,
-      "delivered_by": null,
-      "existing_pr": 1093,
-      "head": "5d243512b3cd255b774b1317b03e008c9d4c18a3",
-      "id": "retally-inquiry-rate-limit-writes",
-      "merge_sha": "33af3fc00fcf359ed7f3d95e85dfa6fc760c79da",
-      "merged_by": "P00NSMASHER",
-      "original_evidence": "https://github.com/P00NSMASHER/github-value-hunt-ledger/actions/runs/42355213708/job/128351707224",
-      "owner": "Existing RETALLY PR owner",
-      "owner_decision": "AWAITING_CHAT_DECISION",
-      "pr_author": "P00NSMASHER",
-      "problem": "Exhausted inquiry rate-limit buckets still incur D1 writes.",
-      "registered_request": "Leave delivery with the existing PR owner. Use the latest intake validation on the current PR revision to determine the next action.",
-      "repository": "P00NSMASHER/github-value-hunt-ledger",
-      "request": "Verify the stated acceptance on the released target at the recorded merge commit.",
-      "source": "https://github.com/P00NSMASHER/github-value-hunt-ledger/pull/1093",
-      "state": "MERGED_AWAITING_TARGET_PROOF"
-    }
-  ],
+  "decisions": [],
   "remaining": 0,
   "provider_writes": 0
 }
