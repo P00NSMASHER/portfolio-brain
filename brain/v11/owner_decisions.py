@@ -121,7 +121,9 @@ def observe(record, api):
 def changes(db, rows):
     db.execute("CREATE TABLE IF NOT EXISTS owner_decision (id TEXT PRIMARY KEY, material TEXT, "
                "record TEXT NOT NULL, pending INTEGER NOT NULL)")
+    identifiers = []
     for row in rows:
+        identifiers.append(row["id"])
         # Store the latest source while notifying only on a material decision transition.
         material = digest([row.get(k) for k in ("state", "owner_decision", "owner", "existing_pr",
                                                 "request", "acceptance", "chat_approval", "approved_scope", "proof")])
@@ -130,11 +132,14 @@ def changes(db, rows):
                    "owner_decision.material != excluded.material THEN 1 ELSE owner_decision.pending END "
                    "WHERE owner_decision.record != excluded.record",
                    (row["id"], material, canonical(row)))
+    # Only current evidence may release a pending notification after an earlier cap.
+    placeholders = ",".join("?" for _ in identifiers) or "NULL"
+    pending = f"FROM owner_decision WHERE pending=1 AND id IN ({placeholders})"
     due = [json.loads(r[0]) for r in db.execute(
-        "SELECT record FROM owner_decision WHERE pending=1 ORDER BY rowid LIMIT 3")]
+        f"SELECT record {pending} ORDER BY rowid LIMIT 3", identifiers)]
     db.executemany("UPDATE owner_decision SET pending=0 WHERE id=?", [(r["id"],) for r in due])
     return {"version": 1, "decisions": due, "remaining": db.execute(
-        "SELECT count(*) FROM owner_decision WHERE pending=1").fetchone()[0], "provider_writes": 0}
+        f"SELECT count(*) {pending}", identifiers).fetchone()[0], "provider_writes": 0}
 
 
 def incidents(cycle, currentness_api, rotation):

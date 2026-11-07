@@ -1,9 +1,10 @@
+import copy
 import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 
-from brain.v11.owner_decisions import changes, incidents
+from brain.v11.owner_decisions import REGISTRY, changes, incidents, observe, strict_load
 from tests.test_brain_v11_currentness_window import Provider, REPO, RUN, SOURCE, PATH, original
 from tests.test_brain_v11_owner_inbox import report
 
@@ -17,6 +18,7 @@ class DecisionTests(unittest.TestCase):
             with sqlite3.connect(path) as db:
                 self.assertEqual(len(changes(db, rows)["decisions"]), 3)
             with sqlite3.connect(path) as db:
+                self.assertEqual(changes(db, [])["decisions"], [])
                 self.assertEqual([r["id"] for r in changes(db, rows)["decisions"]], ["3"])
                 rows[0]["head"] = "different-source-same-block"
                 self.assertEqual(changes(db, rows)["decisions"], [])
@@ -35,6 +37,49 @@ class DecisionTests(unittest.TestCase):
             self.assertEqual(list(incidents(doc, api, 0)), [])
             self.assertEqual(api.reads, 3)
         self.assertEqual(len(list(incidents(doc, Provider([original()]), 0))), 1)
+
+    def test_target_postrelease_requires_original_behavior_at_exact_merge(self):
+        record = strict_load(REGISTRY)["records"][0]
+        repo = record["repository"]
+        head, merge = record["original_head"], "c" * 40
+        pr = {"number": 1093, "state": "closed", "merged": True, "merge_commit_sha": merge,
+              "merged_at": "2026-11-07T00:00:00Z", "merged_by": {"login": "release-owner"},
+              "user": {"login": "pr-author"}, "base": {"repo": {"full_name": repo}, "ref": "main"},
+              "head": {"repo": {"full_name": repo}, "sha": head}}
+        proof = {"run_id": 123, "workflow_id": 456, "path": ".github/workflows/postrelease.yml",
+                 "job": "production-probe", "behavior_step": "Observe exhausted bucket writes",
+                 "reviewed_workflow_blob": "b" * 40}
+        class Provider:
+            def get(self, repository, route):
+                self_test.assertEqual(repository, repo)
+                if route == "pulls/1093":
+                    return pr
+                if route.startswith("contents/"):
+                    return {"path": proof["path"], "sha": proof["reviewed_workflow_blob"]}
+                first = str(record["original_run"]) in route
+                ident = record["original_run"] if first else proof["run_id"]
+                sha = head if first else merge
+                conclusion = "failure" if first else "success"
+                if "/jobs?" in route:
+                    return {"total_count": 1, "jobs": [{"id": record["original_job"] if first else 11,
+                        "name": record["job"] if first else proof["job"], "run_id": ident,
+                        "run_attempt": 1, "head_sha": sha, "conclusion": conclusion,
+                        "html_url": "https://github.com/" + repo + "/actions/runs/123/job/11",
+                        "steps": [{"name": record["failed_step"] if first else proof["behavior_step"],
+                                   "conclusion": conclusion, "status": "completed"}]}]}
+                return {"id": ident, "repository": {"full_name": repo}, "head_repository": {"full_name": repo},
+                        "head_sha": sha, "event": "pull_request" if first else "push", "head_branch": "main",
+                        "workflow_id": record["workflow_id"] if first else proof["workflow_id"],
+                        "path": record["workflow_path"] if first else proof["path"],
+                        "status": "completed", "run_attempt": 1, "conclusion": conclusion,
+                        "created_at": "2026-11-07T01:00:00Z"}
+        self_test = self
+        self.assertEqual(observe(record, Provider())["state"], "MERGED_AWAITING_TARGET_PROOF")
+        enrolled = dict(record, postrelease_workflow=proof)
+        self.assertEqual(observe(enrolled, Provider())["delivered_by"], "release-owner")
+        wrong = copy.deepcopy(enrolled)
+        wrong["postrelease_workflow"]["reviewed_workflow_blob"] = "e" * 40
+        self.assertFalse(observe(wrong, Provider())["behavior_verified"])
 
     def test_scheduled_writers_held_and_recovery_still_enabled(self):
         directory = Path(__file__).resolve().parents[1] / ".github" / "workflows"
