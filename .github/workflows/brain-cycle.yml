@@ -195,10 +195,12 @@ jobs:
           set -euo pipefail
           git -C state config user.name "portfolio-brain-state"
           git -C state config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          test ! -L state/owner-decisions.json
+          install -T -m 0644 /tmp/brain/decisions.json state/owner-decisions.json
           git -C state add --all -- .
           git -C state diff --cached --name-only | while IFS= read -r changed; do
             case "$changed" in
-              state.sqlite|state-manifest.json|state-chunks/part-*.z) ;;
+              state.sqlite|state-manifest.json|owner-decisions.json|state-chunks/part-*.z) ;;
               *) echo "STATE_STAGING_UNEXPECTED_PATH: refusing unrelated state-branch write"; exit 1 ;;
             esac
           done

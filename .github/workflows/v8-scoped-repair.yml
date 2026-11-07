@@ -330,6 +330,7 @@ jobs:
             --expected-main "${{ github.sha }}" \
             --json /tmp/brain-v11-core/results.json \
             --html /tmp/brain-v11-core/results.html \
+            --owner-currentness /tmp/brain-v11-core/owner-currentness.json \
             --core-artifacts /tmp/brain-v11-original \
             --core-run-id "${{ github.event.workflow_run.id }}" \
             --core-run-attempt "${{ github.event.workflow_run.run_attempt }}"

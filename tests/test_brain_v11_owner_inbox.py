@@ -71,8 +71,9 @@ class OwnerInboxTests(unittest.TestCase):
         self.assertFalse(selected["technical_repair_verified"])
         self.assertFalse(selected["cross_project_code_write_authorized"])
         self.assertTrue(selected["source_recheck_required"])
+        self.assertEqual(result["next_action"], "VERIFY_CURRENTNESS_BEFORE_OWNER_TRIAGE")
         self.assertEqual(result["general_cross_project_executor"],
-                         "AUTHORIZED_OWNER_WORKER_CONFIGURED")
+                         "NOT_CONFIGURED")
         self.assertEqual(result, build(report(), expected_source=SOURCE))
         self.assertEqual(len(result["packet_sha256"]), 64)
 
