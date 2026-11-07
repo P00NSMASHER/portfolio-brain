@@ -19,7 +19,7 @@ REGISTRY = Path(__file__).resolve().parents[2] / "repair" / "OWNER_DECISIONS.jso
 DECISIONS = {"AWAITING_CHAT_DECISION", "APPROVED_IN_CHAT", "DECLINED", "DEFERRED"}
 SHA = re.compile(r"[0-9a-f]{40}")
 ROUTES = re.compile(r"(?:pulls/[1-9]\d*|actions/runs/[1-9]\d*(?:/jobs\?per_page=100)?|"
-                    r"commits/[a-f0-9]{40}/check-runs\?per_page=100|"
+                    r"commits/[a-f0-9]{40}/(?:check-runs|pulls)\?per_page=100|"
                     r"contents/\.github/workflows/[A-Za-z0-9_-]+\.ya?ml\?ref=[a-f0-9]{40})")
 
 
@@ -64,12 +64,50 @@ def original_job(api, repo, number, head, workflow_id, path, event, job_name, st
     return run, matches[0]
 
 
+def linked_pr(payload, repo, number):
+    return any(pr["number"] == number and
+               pr["url"] == f"https://api.github.com/repos/{repo}/pulls/{number}"
+               for pr in payload["pull_requests"])
+
+
+def open_pr(row, record, api):
+    repo, head, number = row["repository"], row["head"], row["existing_pr"]
+    checks = api.get(repo, "commits/" + head + "/check-runs?per_page=100")
+    require(checks["total_count"] == len(checks["check_runs"]), "incomplete check census")
+    matches = [c for c in checks["check_runs"] if c["head_sha"] == head
+               and c["app"]["id"] == 15368 and c["name"] == record["job"]
+               and linked_pr(c, repo, number)]
+    require(len(matches) <= 1, "ambiguous current check")
+    if not matches or matches[0]["status"] != "completed" or matches[0]["conclusion"] not in {
+            "failure", "timed_out", "success"}:
+        row.update(state="OPEN_AWAITING_TARGET_CHECK",
+                   request="Wait for a conclusive result from the named check on the existing PR head.")
+        return
+    check = matches[0]
+    route = re.fullmatch(re.escape(f"https://github.com/{repo}/actions/runs/")
+                         + r"([1-9][0-9]*)/job/" + str(check["id"]), check["details_url"])
+    require(route, "unrecognized check job URL")
+    run_id = int(route.group(1))
+    run = api.get(repo, "actions/runs/" + str(run_id))
+    require(run["id"] == run_id and run["repository"]["full_name"] == repo
+            and run["head_repository"]["full_name"] == repo and run["head_sha"] == head
+            and run["event"] == "pull_request" and linked_pr(run, repo, number)
+            and run["workflow_id"] == record["workflow_id"] and run["path"] == record["workflow_path"],
+            "current check belongs to another workflow or PR")
+    row["current_check"] = check["details_url"]
+    if check["conclusion"] == "success":
+        row.update(state="OPEN_WITH_EXISTING_OWNER",
+                   request="The named check passes on the current head. Leave delivery with the existing PR owner.")
+    else:
+        row.update(state="BLOCKED", blocker=check["details_url"])
+
+
 def observe(record, api):
     repo, pr_number = record["repository"], record["existing_pr"]
     prefix = "https://github.com/" + repo
     row = {k: record[k] for k in ("id", "repository", "problem", "owner", "owner_decision",
                                   "chat_approval", "approved_scope", "request", "acceptance", "existing_pr")}
-    row.update(state="EVIDENCE_UNAVAILABLE", source=prefix + "/pull/" + str(pr_number),
+    row.update(registered_request=record["request"], state="EVIDENCE_UNAVAILABLE", source=prefix + "/pull/" + str(pr_number),
                original_evidence=f"{prefix}/actions/runs/{record['original_run']}/job/{record['original_job']}",
                behavior_verified=False, delivered_by=None)
     try:
@@ -78,30 +116,36 @@ def observe(record, api):
                 and pr["head"]["repo"]["full_name"] == repo and pr["base"]["ref"] == "main"
                 and SHA.fullmatch(pr["head"]["sha"]), "PR changed target")
         row.update(head=pr["head"]["sha"], pr_author=pr["user"]["login"])
-        _, failed = original_job(api, repo, record["original_run"], record["original_head"],
+        original, failed = original_job(api, repo, record["original_run"], record["original_head"],
                                  record["workflow_id"], record["workflow_path"], {"pull_request"},
                                  record["job"], record["failed_step"], "failure")
-        require(failed["id"] == record["original_job"], "original failed job changed")
+        require(failed["id"] == record["original_job"], "original job changed")
+        associated = linked_pr(original, repo, pr_number)
+        # GitHub may clear a merged PR's historical run links. Require a unique
+        # original-commit association and the same originating branch in that case.
+        if not original["pull_requests"] and pr["merged"] and original["head_branch"] == pr["head"]["ref"]:
+            links = api.get(repo, "commits/" + record["original_head"] + "/pulls?per_page=100")
+            associated = len(links) == 1 and linked_pr({"pull_requests": links}, repo, pr_number)
+        require(associated, "original failure does not belong to recorded PR")
         if not pr["merged"]:
             if pr["state"] == "closed":
-                row["state"] = "CLOSED_WITHOUT_DELIVERY"
+                row.update(state="CLOSED_WITHOUT_DELIVERY",
+                           request="The existing PR closed without merging. Review whether to pursue the recorded problem.")
             else:
-                checks = api.get(repo, "commits/" + row["head"] + "/check-runs?per_page=100")
-                require(checks["total_count"] == len(checks["check_runs"]), "incomplete check census")
-                matches = [c for c in checks["check_runs"] if c["head_sha"] == row["head"]
-                           and c["app"]["id"] == 15368 and c["name"] == record["job"]]
-                require(len(matches) <= 1, "ambiguous current check")
-                row["state"] = "OPEN_WITH_EXISTING_OWNER"
-                if matches and matches[0]["status"] == "completed" and matches[0]["conclusion"] == "failure":
-                    row.update(state="BLOCKED", blocker=matches[0]["details_url"])
+                open_pr(row, record, api)
             return row
         require(pr["state"] == "closed" and SHA.fullmatch(pr["merge_commit_sha"]), "merge not confirmed")
         row.update(state="MERGED_AWAITING_TARGET_PROOF", merge_sha=pr["merge_commit_sha"],
-                   merged_by=pr["merged_by"]["login"])
+                   merged_by=pr["merged_by"]["login"],
+                   request="Verify the stated acceptance on the released target at the recorded merge commit.")
         proof = record.get("postrelease_workflow")
         if proof:
             # This owner-reviewed target workflow must actually exercise the stated acceptance.
             # A normal release, build, PR check, or historical Brain receipt cannot stand in.
+            acceptance = digest([record[k] for k in ("id", "repository", "existing_pr", "problem", "acceptance")])
+            if proof.get("acceptance_sha256") != acceptance:
+                row["request"] = "Review the post-release probe against the current target and acceptance."
+                return row
             path = proof["path"]
             source = api.get(repo, "contents/" + path + "?ref=" + row["merge_sha"])
             require(source["path"] == path and source["sha"] == proof["reviewed_workflow_blob"]
@@ -112,26 +156,43 @@ def observe(record, api):
             require(run["head_branch"] == "main" and run["created_at"] >= pr["merged_at"],
                     "probe is not post-release")
             row.update(state="VERIFIED_ORIGINAL_TARGET_WORKFLOW", behavior_verified=True,
-                       delivered_by=pr["merged_by"]["login"], proof=job["html_url"])
+                       delivered_by=pr["merged_by"]["login"], proof=job["html_url"],
+                       request="Review the original post-release behavior evidence for the recorded acceptance.")
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
-        row["state"] = "EVIDENCE_UNAVAILABLE"
+        row.update(state="EVIDENCE_UNAVAILABLE",
+                   request="Recheck the original target evidence before acting on this decision.")
     return row
 
 
 def changes(db, rows):
     db.execute("CREATE TABLE IF NOT EXISTS owner_decision (id TEXT PRIMARY KEY, material TEXT, "
                "record TEXT NOT NULL, pending INTEGER NOT NULL)")
+    def fingerprint(row):
+        return digest([row.get(k) for k in ("repository", "problem", "state", "owner_decision", "owner",
+                                            "existing_pr", "request", "acceptance", "chat_approval",
+                                            "approved_scope", "proof")]
+                      + [row.get("registered_request", row.get("request"))])
+
     identifiers = []
     for row in rows:
+        prior = db.execute("SELECT record FROM owner_decision WHERE id=?", (row["id"],)).fetchone()
+        if not prior and row["state"] in {"ORIGINAL_FAILURE_HISTORICAL", "ORIGINAL_FAILURE_RECHECK_REQUIRED"}:
+            continue
+        previous = json.loads(prior[0]) if prior else None
+        if previous and "incident_run" in row:
+            last_run = previous.get("incident_run", 0)
+            if row["incident_run"] < last_run:
+                continue
+            if (row["incident_run"] == last_run and previous["state"] == "ORIGINAL_FAILURE_HISTORICAL"
+                    and row["state"] != previous["state"]):
+                continue  # Reopening a historical failure requires a newly authenticated failed job.
         identifiers.append(row["id"])
-        # Store the latest source while notifying only on a material decision transition.
-        material = digest([row.get(k) for k in ("state", "owner_decision", "owner", "existing_pr",
-                                                "request", "acceptance", "chat_approval", "approved_scope", "proof")])
+        material = fingerprint(row)
+        changed = previous is None or material != fingerprint(previous)
         db.execute("INSERT INTO owner_decision VALUES (?,?,?,1) ON CONFLICT(id) DO UPDATE SET "
-                   "material=excluded.material, record=excluded.record, pending=CASE WHEN "
-                   "owner_decision.material != excluded.material THEN 1 ELSE owner_decision.pending END "
-                   "WHERE owner_decision.record != excluded.record",
-                   (row["id"], material, canonical(row)))
+                   "material=excluded.material, record=excluded.record, pending=CASE WHEN ? THEN 1 "
+                   "ELSE owner_decision.pending END WHERE owner_decision.record != excluded.record",
+                   (row["id"], material, canonical(row), changed))
     # Only current evidence may release a pending notification after an earlier cap.
     placeholders = ",".join("?" for _ in identifiers) or "NULL"
     pending = f"FROM owner_decision WHERE pending=1 AND id IN ({placeholders})"
@@ -155,23 +216,33 @@ def incidents(cycle, currentness_api, rotation):
     del inbox["packet_sha256"]
     inbox["packet_sha256"] = digest(inbox)
     verdict = origin_currentness.evaluate(inbox, currentness_api)
-    if not verdict["items"][0]["reproduction_candidate"]:
-        return
+    observation = verdict["items"][0]
     for job in cycle["owner_jobs"]:
         if job["work_id"] != item["work_id"]:
             continue
         proof = job["failure_evidence"]
-        if proof.get("status") != "ORIGINAL_MAIN_JOB_FAILURE_CONFIRMED":
+        if (proof.get("status") != "ORIGINAL_MAIN_JOB_FAILURE_CONFIRMED"
+                or proof["job_id"] != item["job_id"] or proof["run_id"] != item["run_id"]):
             continue
         names = sorted(s["name"] for s in proof["failed_steps"])
         repo = job["repository"]
         if not proof.get("workflow_path") or not proof.get("job_name"):
             continue
         key = digest([repo, proof["workflow_path"], proof["job_name"], names])
-        yield {"id": key, "repository": repo, "state": "ORIGINAL_FAILURE_NEEDS_TRIAGE",
+        state = "ORIGINAL_FAILURE_NEEDS_TRIAGE"
+        request = "Recheck the original failure, active owner and open PRs before proposing a fix."
+        if observation["status"] in {"SOURCE_CHANGED_ORIGINAL_FAILURE_HISTORICAL",
+                                     "LATER_SAME_SOURCE_WORKFLOW_SUCCESS_ORIGINAL_FAILURE_HISTORICAL"}:
+            state = "ORIGINAL_FAILURE_HISTORICAL"
+            request = "Retire the original failure from triage. A product repair has not been verified."
+        elif not observation["reproduction_candidate"]:
+            state = "ORIGINAL_FAILURE_RECHECK_REQUIRED"
+            request = "Hold triage until the current target evidence can be confirmed."
+        yield {"id": key, "repository": repo, "state": state, "incident_run": proof["run_id"],
+               "currentness": observation["status"], "latest_run_id": observation["latest_run_id"],
                "source": proof["url"], "source_sha": proof["source_sha"], "problem": ", ".join(names),
                "owner": job["owner"], "owner_decision": "AWAITING_CHAT_DECISION", "existing_pr": None,
-               "request": "Recheck the original failure, active owner and open PRs before proposing a fix.",
+               "request": request,
                "acceptance": "Reproduce the failed behavior and verify it on the target after delivery.",
                "behavior_verified": False, "delivered_by": None}
 

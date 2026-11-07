@@ -133,6 +133,12 @@ class StateArchiveTests(unittest.TestCase):
         self.assertIn("git -C state add --all -- .", yaml)
         self.assertIn("push origin HEAD:refs/heads/brain-state-v2", yaml)
         self.assertNotIn("git push --force", yaml)
+        publish = yaml.split("      - name: Publish one nonsecret state transaction without force", 1)[1]
+        self.assertLess(publish.index("/tmp/brain/decisions.json state/owner-decisions.json"),
+                        publish.index("git -C state add --all -- ."))
+        self.assertIn("owner-decisions.json|", publish)
+        self.assertLess(publish.index("push origin HEAD:refs/heads/brain-state-v2"),
+                        publish.index("actions/upload-artifact@"))
         self.assertLess(yaml.index("brain.state_archive restore"),
                         yaml.index("Exact-SHA deterministic preflight"))
         self.assertLess(yaml.index("brain.state_archive pack"),

@@ -10,7 +10,7 @@
       "chat_approval": null,
       "approved_scope": null,
       "existing_pr": 1093,
-      "request": "Leave delivery with the existing PR owner. Decide whether to prioritize diagnosing the independent intake-validation blocker.",
+      "request": "Leave delivery with the existing PR owner. Use the latest intake validation on the current PR revision to determine the next action.",
       "acceptance": "Confirm the deployed inquiry handler and observe D1 write counts for exhausted buckets. The intake CI result alone cannot prove production savings.",
       "original_run": 42355213708,
       "original_job": 128351707224,

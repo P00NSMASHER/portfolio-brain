@@ -15,7 +15,7 @@ import re
 import urllib.request
 
 from brain.v10.engineering_factory import verified_automatic_origin
-from brain.v11 import downstream_outcomes, cycle_evidence, value_funnel, technical_outcome
+from brain.v11 import downstream_outcomes, cycle_evidence, owner_inbox, value_funnel, technical_outcome
 
 REPO = "P00NSMASHER/portfolio-brain"
 ROOT = "https://api.github.com/repos/" + REPO + "/"
@@ -141,7 +141,7 @@ def _original_core_verdict(api, row, source_sha):
             and type(row.get("run_attempt")) is int and row["run_attempt"] == 1
             and row.get("status") == "completed"
             and row.get("conclusion") in {"success", "failure", "timed_out"}
-            and row.get("event") in {"schedule", "workflow_dispatch"}
+            and row.get("event") in {"schedule", "workflow_dispatch", "push"}
             and type(row.get("id")) is int and 0 < row["id"] < 10**12):
         return "SOURCE_ORIGIN_UNVERIFIED"
     jobs = api.get("actions/runs/" + str(row["id"]) + "/jobs?per_page=100")
@@ -163,8 +163,15 @@ def _original_core_verdict(api, row, source_sha):
             and job.get("status") == "completed"
             and job.get("conclusion") == row["conclusion"]
             and type(job.get("steps")) is list
-            and len(job["steps"]) > 0
-            and verified_automatic_origin(row["event"], job["steps"])):
+            and len(job["steps"]) > 0):
+        return "AUTOMATIC_CORE_PROVENANCE_UNVERIFIED"
+    if row["event"] == "push":
+        if row["conclusion"] == "success" and any(
+                type(step) is dict and step.get("name") == "Bind execution to unchanged current main"
+                and step.get("conclusion") == "success" for step in job["steps"]):
+            return "PROTECTED_MAIN_PUSH_OBSERVED"
+        return "SOURCE_ORIGIN_UNVERIFIED"
+    if not verified_automatic_origin(row["event"], job["steps"]):
         return "AUTOMATIC_CORE_PROVENANCE_UNVERIFIED"
     return "ORIGINAL_SUCCESS" if row["conclusion"] == "success" else "ORIGINAL_FAILURE"
 
@@ -307,6 +314,58 @@ def report(api, *, expected_main, generated_at):
     }
 
 
+def owner_review(root, currentness_path, account, verifications):
+    """Present changed decisions only for the current, independently identified core."""
+    held = {"status": "OWNER_EVIDENCE_UNAVAILABLE", "decisions": [], "currentness": [],
+            "remaining": None, "writer_authorized": False}
+    if account["state_tip_status"] != "LATEST_COMMIT_CONFIRMED" or not any(
+            v["run_id"] == account["run_id"] and v["outcome"] in
+            {"ORIGINAL_SUCCESS", "PROTECTED_MAIN_PUSH_OBSERVED"} for v in verifications):
+        return held
+    packet = cycle_evidence._json(Path(root), "decisions.json", required=False)
+    if packet is None or not currentness_path:
+        return held
+    rows = packet.get("decisions")
+    check(type(packet.get("version")) is int and packet["version"] == 1
+          and type(packet.get("provider_writes")) is int and packet["provider_writes"] == 0
+          and type(packet.get("remaining")) is int and packet["remaining"] >= 0
+          and type(rows) is list and len(rows) <= 3, "RESULTS_DECISION_PACKET_INVALID")
+    inbox = owner_inbox.build(cycle_evidence._json(Path(root), "v9-engineering.json"),
+                              expected_source=account["source_sha"])
+    verdict = owner_inbox.strict_load(currentness_path)
+    check(type(verdict) is dict, "RESULTS_CURRENTNESS_INVALID")
+    checksum = verdict.pop("verdict_sha256", None)
+    original = inbox["original_failure_handoffs"]
+    items = verdict.get("items")
+    check(checksum == owner_inbox.digest(verdict)
+          and verdict.get("source_sha") == account["source_sha"]
+          and verdict.get("original_inbox_sha256") == inbox["packet_sha256"]
+          and type(items) is list and len(items) == len(original), "RESULTS_CURRENTNESS_UNBOUND")
+    currentness, live_sources = [], set()
+    for item, handoff in zip(items, original):
+        check(type(item) is dict and item.get("handoff_id") == handoff["handoff_id"]
+              and item.get("repository") == handoff["repository"]
+              and item.get("source_sha") == handoff["source_sha"]
+              and item.get("original_run_id") == handoff["run_id"]
+              and item.get("writer_authorized") is False
+              and item.get("live_repair_verified") is False
+              and type(item.get("status")) is str, "RESULTS_CURRENTNESS_ITEM_INVALID")
+        currentness.append(item)
+        if item.get("reproduction_candidate") is True and item["status"] in {
+                "NO_LATER_MATCHING_COMPLETED_RUN", "LATEST_SAME_SOURCE_WORKFLOW_NOT_SUCCESS"}:
+            live_sources.add(handoff["original_job_url"])
+    decisions = []
+    for row in rows:
+        check(type(row) is dict and all(type(row.get(k)) is str and row[k]
+              for k in ("id", "repository", "source", "problem", "owner", "state",
+                        "owner_decision", "request", "acceptance")), "RESULTS_DECISION_INVALID")
+        if row["state"] == "ORIGINAL_FAILURE_NEEDS_TRIAGE" and row["source"] not in live_sources:
+            continue
+        decisions.append(row)
+    return {"status": "SOURCE_BOUND_OWNER_REVIEW", "decisions": decisions,
+            "remaining": packet["remaining"], "currentness": currentness, "writer_authorized": False}
+
+
 def html_report(data):
     """Standalone local HTML artifact, escaped and with no scripts or network."""
     m = data["metrics"]
@@ -325,6 +384,9 @@ def html_report(data):
             for key in cols:
                 value = row.get(key)
                 content = escape(number(value))
+                if key in {"source", "current_check"} and isinstance(value, str) and re.fullmatch(
+                        r"https://github\.com/P00NSMASHER/[A-Za-z0-9_.-]+/(pull/\d+|actions/runs/\d+/job/\d+)", value):
+                    content = "<a href='" + escape(value, quote=True) + "'>View evidence</a>"
                 if key == "number" and type(value) is int:
                     target = "issues" if url_field == "issues" else "pull"
                     content = "<a href='https://github.com/" + REPO + "/" + target + \
@@ -349,6 +411,14 @@ th{background:#e8edf1}a{color:#175e92}.note{font-size:13px;color:#546575}
         escape(data["main_sha"]) + "</code> | Generated: " +
         escape(data["generated_at"]) + ". Read-only; sampled results, not global totals.</p>"
         "<section class='grid'>" + cards + "</section>" +
+        ("<h2>Owner review</h2><p>" + escape(data["owner_review"]["status"]) +
+         " · Additional pending changes: " + escape(number(data["owner_review"]["remaining"])) +
+         "</p>" + table(data["owner_review"]["decisions"],
+                        ["problem", "state", "owner", "owner_decision", "request", "source", "current_check"]) +
+         "<h3>Reobserved original incidents</h3>" +
+         table(data["owner_review"]["currentness"],
+               ["repository", "original_run_id", "latest_run_id", "status", "reproduction_candidate"])
+         if "owner_review" in data else "") +
         ("<h2>Original core: storage and useful work</h2>" +
          table([data["cycle_accounting"]],
                ["run_id", "state_growth_raw_bytes", "raw_headroom_bytes",
@@ -393,6 +463,7 @@ def main(argv=None):
     parser.add_argument("--json", required=True)
     parser.add_argument("--html", required=True)
     parser.add_argument("--core-artifacts")
+    parser.add_argument("--owner-currentness")
     parser.add_argument("--core-run-id", type=int)
     parser.add_argument("--core-run-attempt", type=int)
     args = parser.parse_args(argv)
@@ -478,6 +549,8 @@ def main(argv=None):
                 "LATEST_COMMIT_CONFIRMED" if
                 tip["commit"]["sha"] == account["state_commit"] else
                 "HISTORICAL_DELIVERY_NOT_CURRENT")
+            outcome["owner_review"] = owner_review(args.core_artifacts, args.owner_currentness, account,
+                                                 outcome["core_run_verifications"])
             outcome["cycle_accounting"] = account
             outcome["metrics"]["core_cycle_growth_raw_bytes"] = account["state_growth_raw_bytes"]
             outcome["metrics"]["core_cycle_candidate_events_persisted"] = account["candidate_events_persisted"]
