@@ -167,6 +167,23 @@ class DecisionTests(unittest.TestCase):
         api.original_link = foreign
         self.assertEqual(observe(enrolled, api)["state"], "EVIDENCE_UNAVAILABLE")
 
+        # GitHub can drop pull_requests from historical run metadata after merge.
+        class ClearedAfterMerge(Provider):
+            associations = [link]
+            def get(self, repository, route):
+                if route == f"commits/{head}/pulls?per_page=100":
+                    return self.associations
+                value = super().get(repository, route)
+                if route == f"actions/runs/{record['original_run']}":
+                    return dict(value, pull_requests=[], head_branch="repair")
+                return value
+        pr["head"]["ref"] = "repair"
+        cleared = ClearedAfterMerge()
+        self.assertEqual(observe(record, cleared)["state"], "MERGED_AWAITING_TARGET_PROOF")
+        for links in ([], [foreign], [link, foreign]):
+            cleared.associations = links
+            self.assertEqual(observe(record, cleared)["state"], "EVIDENCE_UNAVAILABLE")
+
         pr.update(state="open", merged=False)
         api = Provider()
         self.assertEqual(observe(record, api)["state"], "OPEN_AWAITING_TARGET_CHECK")

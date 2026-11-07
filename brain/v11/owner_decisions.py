@@ -19,7 +19,7 @@ REGISTRY = Path(__file__).resolve().parents[2] / "repair" / "OWNER_DECISIONS.jso
 DECISIONS = {"AWAITING_CHAT_DECISION", "APPROVED_IN_CHAT", "DECLINED", "DEFERRED"}
 SHA = re.compile(r"[0-9a-f]{40}")
 ROUTES = re.compile(r"(?:pulls/[1-9]\d*|actions/runs/[1-9]\d*(?:/jobs\?per_page=100)?|"
-                    r"commits/[a-f0-9]{40}/check-runs\?per_page=100|"
+                    r"commits/[a-f0-9]{40}/(?:check-runs|pulls)\?per_page=100|"
                     r"contents/\.github/workflows/[A-Za-z0-9_-]+\.ya?ml\?ref=[a-f0-9]{40})")
 
 
@@ -119,8 +119,14 @@ def observe(record, api):
         original, failed = original_job(api, repo, record["original_run"], record["original_head"],
                                  record["workflow_id"], record["workflow_path"], {"pull_request"},
                                  record["job"], record["failed_step"], "failure")
-        require(failed["id"] == record["original_job"] and linked_pr(original, repo, pr_number),
-                "original failure does not belong to recorded job and PR")
+        require(failed["id"] == record["original_job"], "original job changed")
+        associated = linked_pr(original, repo, pr_number)
+        # GitHub may clear a merged PR's historical run links. Require a unique
+        # original-commit association and the same originating branch in that case.
+        if not original["pull_requests"] and pr["merged"] and original["head_branch"] == pr["head"]["ref"]:
+            links = api.get(repo, "commits/" + record["original_head"] + "/pulls?per_page=100")
+            associated = len(links) == 1 and linked_pr({"pull_requests": links}, repo, pr_number)
+        require(associated, "original failure does not belong to recorded PR")
         if not pr["merged"]:
             if pr["state"] == "closed":
                 row.update(state="CLOSED_WITHOUT_DELIVERY",
