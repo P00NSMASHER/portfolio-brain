@@ -1,25 +1,6 @@
 {
   "version": 1,
-  "decisions": [
-    {
-      "acceptance": "Reproduce the failed behavior and verify it on the target after delivery.",
-      "behavior_verified": false,
-      "currentness": "NO_LATER_MATCHING_COMPLETED_RUN",
-      "delivered_by": null,
-      "existing_pr": null,
-      "id": "175933349788739cede9a80441cda62c3d4af703c252526038a77d32d7392775",
-      "incident_run": 42431904804,
-      "latest_run_id": null,
-      "owner": "abvm-reliability",
-      "owner_decision": "AWAITING_CHAT_DECISION",
-      "problem": "Verify repository and deployed school pack are current",
-      "repository": "P00NSMASHER/abvmschoolstarworld",
-      "request": "Recheck the original failure, active owner and open PRs before proposing a fix.",
-      "source": "https://github.com/P00NSMASHER/abvmschoolstarworld/actions/runs/42431904804/job/128582437739",
-      "source_sha": "8f71769040a7bf3deb9f8c70eb03cb8a96003139",
-      "state": "ORIGINAL_FAILURE_NEEDS_TRIAGE"
-    }
-  ],
+  "decisions": [],
   "remaining": 0,
   "provider_writes": 0
 }
