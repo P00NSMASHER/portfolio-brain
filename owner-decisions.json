@@ -1,25 +1,6 @@
 {
   "version": 1,
-  "decisions": [
-    {
-      "acceptance": "Reproduce the failed behavior and verify it on the target after delivery.",
-      "behavior_verified": false,
-      "currentness": "NO_LATER_MATCHING_COMPLETED_RUN",
-      "delivered_by": null,
-      "existing_pr": null,
-      "id": "fbaeebebbcf1eac0deae0e9ca1101adb5dd992d31b2ad20ccc181c7f83298d0c",
-      "incident_run": 42509511073,
-      "latest_run_id": null,
-      "owner": "retally-product",
-      "owner_decision": "AWAITING_CHAT_DECISION",
-      "problem": "Run no-send scoring promotion canary",
-      "repository": "P00NSMASHER/permitplate-nyc",
-      "request": "Recheck the original failure, active owner and open PRs before proposing a fix.",
-      "source": "https://github.com/P00NSMASHER/permitplate-nyc/actions/runs/42509511073/job/128819296895",
-      "source_sha": "859688d0ce78fdf0f07a17f61b98f9f01c54fd81",
-      "state": "ORIGINAL_FAILURE_NEEDS_TRIAGE"
-    }
-  ],
+  "decisions": [],
   "remaining": 0,
   "provider_writes": 0
 }
