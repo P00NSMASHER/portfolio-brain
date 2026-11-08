@@ -1,6 +1,25 @@
 {
   "version": 1,
-  "decisions": [],
+  "decisions": [
+    {
+      "acceptance": "Reproduce the failed behavior and verify it on the target after delivery.",
+      "behavior_verified": false,
+      "currentness": "LATEST_SAME_SOURCE_WORKFLOW_NOT_SUCCESS",
+      "delivered_by": null,
+      "existing_pr": null,
+      "id": "598f885ebff6cf2dcab7904712dfe33cca66173f07e2ca9b613d23ad2b9db75e",
+      "incident_run": 42422953205,
+      "latest_run_id": 42439453993,
+      "owner": "research-provenance",
+      "owner_decision": "AWAITING_CHAT_DECISION",
+      "problem": "Audit live fleet",
+      "repository": "P00NSMASHER/github-value-hunt-ledger",
+      "request": "Recheck the original failure, active owner and open PRs before proposing a fix.",
+      "source": "https://github.com/P00NSMASHER/github-value-hunt-ledger/actions/runs/42422953205/job/128555114414",
+      "source_sha": "170c76b9e66a371a1231913ded4f2a99d5849c27",
+      "state": "ORIGINAL_FAILURE_NEEDS_TRIAGE"
+    }
+  ],
   "remaining": 0,
   "provider_writes": 0
 }
