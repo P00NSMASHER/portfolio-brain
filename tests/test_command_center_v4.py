@@ -271,7 +271,30 @@ class CommandCenterV4Tests(unittest.TestCase):
         self.assertNotIn("Build SKU-001",public)
         self.assertNotIn("OWNER ACTION REQUIRED: Publish SKU-001",public)
         self.assertIn("Show operations & diagnostics",public)
-        self.assertIn('data-design="engineering-first-v6"',public)
+        self.assertIn('data-design="engineering-first-v7"',public)
+
+    def test_engineering_control_plane_is_source_backed_and_visible_before_diagnostics(self):
+        snapshot=build_command_center_snapshot()
+        control=snapshot["engineering_control_plane"]
+        self.assertEqual(control["status"],"AUTHORIZED_OWNER_WORKER_CONFIGURED")
+        self.assertEqual(control["authority"]["deployment"],"NOT_CONFIGURED")
+        self.assertEqual(control["authority"]["credential_location"],"OWNER_SESSION_ONLY_NOT_BRAIN_RUNTIME")
+        self.assertEqual(control["accepted_repair"]["pr_number"],881)
+        self.assertEqual(control["lifecycle"],[
+            "OBSERVED","DIAGNOSED","PATCHED","TESTED","DELIVERED","LIVE_VERIFIED",
+        ])
+        self.assertIn("brain/v11/owner-executor.json",snapshot["evidence_refs"])
+        public=render_html(snapshot)
+        self.assertIn('id="engineering-control"',public)
+        self.assertIn("Protected repair execution is operational.",public)
+        self.assertIn("https://github.com/P00NSMASHER/portfolio-brain/pull/881",public)
+        self.assertIn("issuer 15368",public)
+        self.assertIn("issuer 5121826",public)
+        self.assertIn("No dashboard field grants authority.",public)
+        self.assertLess(public.index('id="engineering-control"'),public.index('id="advanced-content"'))
+        lifecycle_markup=public[public.index('<ol class="engineering-lifecycle"'):public.index('</ol>',public.index('<ol class="engineering-lifecycle"'))]
+        stage_positions=[lifecycle_markup.index(stage.replace("_"," ")) for stage in control["lifecycle"]]
+        self.assertEqual(stage_positions,sorted(stage_positions))
 
     def test_primary_operator_surface_is_exactly_six_business_answers(self):
         snapshot=build_command_center_snapshot()

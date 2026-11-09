@@ -330,6 +330,7 @@ def build_recommended_upgrades(snapshot: dict[str, Any]) -> list[dict[str, str]]
 
 def build_command_center_snapshot() -> dict[str, Any]:
     executive = build_dashboard_snapshot()
+    owner_executor = load_json("brain/v11/owner-executor.json")
     operating = load_json("operations/OPERATING_MODE_STATUS.json")
     sprint = load_json("operations/VALIDATION_SPRINT_STATE.json")
     agent_registry = load_json("agents/AGENT_REGISTRY.json")
@@ -644,6 +645,16 @@ def build_command_center_snapshot() -> dict[str, Any]:
         "source_dashboard_hash": executive["snapshot_hash"],
         "value_loop": value_loop,
         "primary_operator_view": operator_primary,
+        "engineering_control_plane": {
+            "status": owner_executor["status"],
+            "worker_title": owner_executor["worker_title"],
+            "repository_scope": owner_executor["repositories"],
+            "authority": owner_executor["authority"],
+            "accepted_repair": owner_executor["acceptance"],
+            "lifecycle": ["OBSERVED", "DIAGNOSED", "PATCHED", "TESTED", "DELIVERED", "LIVE_VERIFIED"],
+            "evidence_state": "LIVE_VERIFIED_ACCEPTANCE_RECEIPT",
+            "source_ref": "brain/v11/owner-executor.json",
+        },
         "publication": publication,
         "system": {
             "status": operating["status"],
@@ -907,6 +918,7 @@ def build_command_center_snapshot() -> dict[str, Any]:
                     "runtime/PROVIDER_HEALTH_SEED.json",
                     "runtime/provider_health.py",
                     "dashboard/live/state_sources.json",
+                    "brain/v11/owner-executor.json",
                 ]
             )
         ),
@@ -948,6 +960,7 @@ def render_html(snapshot: dict[str, Any]) -> str:
     commercial = snapshot["commercial_validation"]
     revenue_focus = snapshot["revenue_focus"]
     operator_primary = snapshot["primary_operator_view"]
+    engineering = snapshot["engineering_control_plane"]
     micro_factory = snapshot["micro_product_factory"]
     cost = snapshot["cost_governor"]
     portfolio = snapshot["portfolio"]
@@ -1535,6 +1548,21 @@ def render_html(snapshot: dict[str, Any]) -> str:
     primary_experiment_text = operator_primary["active_external_experiment"] or "None active"
     primary_blocker_text = operator_primary["current_blocker"] or "None"
     primary_owner_action_text = operator_primary["action_required_from_owner"] or "None"
+
+    accepted_repair = engineering["accepted_repair"]
+    lifecycle_steps = "".join(
+        f'<li><span aria-hidden="true">&#10003;</span><strong>{_e(stage.replace("_", " "))}</strong></li>'
+        for stage in engineering["lifecycle"]
+    )
+    issuer_ids = sorted(set(accepted_repair["required_checks"].values()))
+    required_check_rows = "".join(
+        f'<li><strong>{_e(name)}</strong><span>issuer {_e(issuer)}</span></li>'
+        for name, issuer in accepted_repair["required_checks"].items()
+    )
+    postmerge_run_rows = "".join(
+        f'<a href="https://github.com/P00NSMASHER/portfolio-brain/actions/runs/{_e(run_id)}" target="_blank" rel="noopener noreferrer"><span>{_e(name.replace("-", " "))}</span><strong>#{_e(run_id)}</strong></a>'
+        for name, run_id in accepted_repair["postmerge_runs"].items()
+    )
 
     last_cycle = telemetry["cycles"]["latest_overall"]
     if last_cycle is None:
@@ -2321,8 +2349,43 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
 .primary-answer.money strong{{font-size:2rem}}
 .primary-answer.owner{{grid-column:span 2}}
 .primary-diagnostics{{margin:0 0 18px;text-align:center}}
+.engineering-plane{{margin:0 0 18px;padding:28px;color:#f5f7ff;background:linear-gradient(145deg,#101827 0%,#13233c 58%,#102f38 100%);border-color:rgba(255,255,255,.10);box-shadow:0 24px 70px rgba(5,18,36,.24)}}
+.engineering-plane .section-head{{align-items:flex-start}}
+.engineering-plane h2{{margin:4px 0 7px;font-size:clamp(1.45rem,3vw,2.15rem);letter-spacing:-.035em}}
+.engineering-plane p{{color:#b8c3d6}}
+.engineering-plane .focus-label{{color:#74d4ff}}
+.engineering-badges{{display:flex;gap:7px;flex-wrap:wrap}}
+.engineering-badges .badge{{border-color:rgba(255,255,255,.14)}}
+.engineering-metrics{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:20px 0}}
+.engineering-metric{{min-width:0;padding:15px;border:1px solid rgba(255,255,255,.11);border-radius:16px;background:rgba(255,255,255,.055)}}
+.engineering-metric span{{display:block;color:#91a0b8;font-size:.64rem;font-weight:720;letter-spacing:.07em;text-transform:uppercase}}
+.engineering-metric strong{{display:block;margin-top:6px;font-size:.86rem;line-height:1.35;overflow-wrap:anywhere}}
+.engineering-lifecycle{{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));padding:0;margin:0 0 18px;list-style:none;border:1px solid rgba(255,255,255,.11);border-radius:16px;overflow:hidden}}
+.engineering-lifecycle li{{position:relative;padding:15px 9px;text-align:center;background:rgba(255,255,255,.035);border-right:1px solid rgba(255,255,255,.10)}}
+.engineering-lifecycle li:last-child{{border-right:0}}
+.engineering-lifecycle span{{display:grid;width:22px;height:22px;margin:0 auto 7px;place-items:center;border-radius:50%;background:#42d392;color:#071911;font-size:.7rem;font-weight:900}}
+.engineering-lifecycle strong{{font-size:.61rem;letter-spacing:.045em}}
+.engineering-detail-grid{{display:grid;grid-template-columns:1.15fr .85fr;gap:12px}}
+.engineering-detail{{padding:18px;border:1px solid rgba(255,255,255,.11);border-radius:18px;background:rgba(0,0,0,.16)}}
+.engineering-detail h3{{margin:0 0 10px;font-size:.95rem}}
+.repair-link{{display:inline-flex;align-items:center;gap:6px;color:#74d4ff;font-weight:760;text-decoration:none}}
+.sha-grid{{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}}
+.sha-grid div{{padding:10px;border-radius:11px;background:rgba(255,255,255,.055)}}
+.sha-grid span{{display:block;color:#91a0b8;font-size:.61rem;text-transform:uppercase}}
+.sha-grid code{{display:block;margin-top:4px;color:#e9f3ff;font-size:.7rem}}
+.check-list{{display:grid;gap:6px;padding:0;margin:0;list-style:none}}
+.check-list li{{display:flex;justify-content:space-between;gap:12px;font-size:.68rem}}
+.check-list span{{color:#91a0b8}}
+.run-links{{display:grid;gap:7px;margin-top:12px}}
+.run-links a{{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.055);color:#dce9f8;text-decoration:none;font-size:.66rem}}
+.trust-boundary{{margin:12px 0 0!important;padding:12px;border-left:3px solid #74d4ff;border-radius:9px;background:rgba(116,212,255,.07);font-size:.71rem;line-height:1.55}}
 
 @media(max-width:900px){{
+  .engineering-metrics{{grid-template-columns:1fr 1fr}}
+  .engineering-lifecycle{{grid-template-columns:repeat(3,1fr)}}
+  .engineering-lifecycle li:nth-child(3){{border-right:0}}
+  .engineering-lifecycle li:nth-child(-n+3){{border-bottom:1px solid rgba(255,255,255,.10)}}
+  .engineering-detail-grid{{grid-template-columns:1fr}}
   .primary-six-grid{{grid-template-columns:1fr 1fr}}
   .primary-answer.owner{{grid-column:1/-1}}
 
@@ -2331,6 +2394,12 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
   .product-grid{{grid-template-columns:1fr}}
 }}
 @media(max-width:520px){{
+  .engineering-plane{{padding:20px}}
+  .engineering-metrics{{grid-template-columns:1fr}}
+  .engineering-lifecycle{{grid-template-columns:1fr 1fr}}
+  .engineering-lifecycle li:nth-child(3){{border-right:1px solid rgba(255,255,255,.10)}}
+  .engineering-lifecycle li:nth-child(even){{border-right:0}}
+  .engineering-lifecycle li:nth-child(-n+4){{border-bottom:1px solid rgba(255,255,255,.10)}}
   .truth-strip{{align-items:flex-start;flex-direction:column;gap:4px;padding:11px 12px}}
   .focus-card{{padding:17px}}
   .money-number{{font-size:2.6rem}}
@@ -2342,12 +2411,13 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
 }}
 </style>
 </head>
-<body data-design="engineering-first-v6" data-mobile-optimized="true">
+<body data-design="engineering-first-v7" data-mobile-optimized="true">
 <div class="shell">
 <aside>
-  <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Simple operator mode</small></div></div>
+  <div class="brand"><div class="logo"></div><div>PORTFOLIO BRAIN<small>Verified engineering control</small></div></div>
   <nav>
     <a href="#overview">Today</a>
+    <a href="#engineering-control">Engineering</a>
     <button class="detail-toggle" type="button" onclick="toggleAdvanced()">Diagnostics</button>
   </nav>
   <div class="readonly"><strong>OBSERVE ONLY</strong><span>Public command center</span></div>
@@ -2381,6 +2451,41 @@ body:not(.advanced-open) .advanced-nav{{display:none}}
       <article class="primary-answer"><span>Current blocker</span><strong>{_e(primary_blocker_text)}</strong></article>
       <article class="primary-answer owner"><span>Action required from you</span><strong>{_e(primary_owner_action_text)}</strong></article>
       <article class="primary-answer"><span>Last verified customer / market signal</span><strong>{_e(primary_last_signal_text)}</strong></article>
+    </div>
+  </section>
+
+  <section class="card engineering-plane" id="engineering-control" aria-labelledby="engineering-control-title">
+    <div class="section-head">
+      <div>
+        <div class="focus-label">PHASE 1 Â· ENGINEERING CONTROL PLANE</div>
+        <h2 id="engineering-control-title">Protected repair execution is operational.</h2>
+        <p>Current acceptance evidence is visible here without opening diagnostics or granting this dashboard write authority.</p>
+      </div>
+      <div class="engineering-badges">{_badge("EXECUTOR CONFIGURED", "good")} {_badge("LIVE VERIFIED", "good")} {_badge("READ ONLY", "neutral")}</div>
+    </div>
+    <div class="engineering-metrics">
+      <article class="engineering-metric"><span>Executor</span><strong>{_e(engineering["worker_title"])}</strong></article>
+      <article class="engineering-metric"><span>Delivery</span><strong>Protected checks enforced</strong></article>
+      <article class="engineering-metric"><span>Repository scope</span><strong>{len(engineering["repository_scope"])} explicitly listed</strong></article>
+      <article class="engineering-metric"><span>Deployment</span><strong>{_e(engineering["authority"]["deployment"].replace("_", " "))}</strong></article>
+    </div>
+    <ol class="engineering-lifecycle" aria-label="Accepted repair lifecycle">{lifecycle_steps}</ol>
+    <div class="engineering-detail-grid">
+      <article class="engineering-detail">
+        <h3>Accepted repair receipt</h3>
+        <a class="repair-link" href="https://github.com/P00NSMASHER/portfolio-brain/pull/{accepted_repair['pr_number']}" target="_blank" rel="noopener noreferrer">Pull request #{accepted_repair['pr_number']} <span aria-hidden="true">&#8599;</span></a>
+        <div class="sha-grid">
+          <div><span>Candidate head</span><code>{_e(accepted_repair["candidate_sha"][:12])}</code></div>
+          <div><span>Protected merge</span><code>{_e(accepted_repair["merge_sha"][:12])}</code></div>
+        </div>
+        <ul class="check-list">{required_check_rows}</ul>
+      </article>
+      <article class="engineering-detail">
+        <h3>Post-merge evidence</h3>
+        <p>Original workflow runs recorded after protected delivery.</p>
+        <div class="run-links">{postmerge_run_rows}</div>
+        <p class="trust-boundary"><strong>Trust boundary.</strong> Credentials remain in the owner session, never the Brain runtime. Issuer IDs {_e(" and ".join(str(value) for value in issuer_ids))} remain independently visible. No dashboard field grants authority.</p>
+      </article>
     </div>
   </section>
 
