@@ -153,7 +153,9 @@ def validate_publication() -> dict[str, object]:
     require(snapshot["hunter_proposals"]["evidence_reviewed_count"]<=snapshot["hunter_proposals"]["proposal_count"],"public Hunter proposal review count invalid")
     require("Verified Model Value" in html_text, "public verified model value panel missing")
     require("project-mobile-card" in html_text and "project-desktop" in html_text, "public responsive portfolio view missing")
-    require('data-design="engineering-first-v6"' in html_text, "public engineering-first design marker missing")
+    require('data-design="engineering-first-v7"' in html_text, "public engineering-first design marker missing")
+    require('id="engineering-control"' in html_text, "public engineering control plane missing")
+    require("No dashboard field grants authority." in html_text, "public engineering authority boundary missing")
     require("fonts.googleapis.com" not in lower and "<script src=" not in lower, "public redesign introduced external presentation dependency")
     require("operator-console" not in lower and "operator console" not in lower, "private operator console leaked into public command center")
 
