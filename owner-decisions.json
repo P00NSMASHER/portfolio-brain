@@ -1,25 +1,6 @@
 {
   "version": 1,
-  "decisions": [
-    {
-      "acceptance": "Reproduce the failed behavior and verify it on the target after delivery.",
-      "behavior_verified": false,
-      "currentness": "NO_LATER_MATCHING_COMPLETED_RUN",
-      "delivered_by": null,
-      "existing_pr": null,
-      "id": "1c8a80fd63804b43df38e64106fbcf73d2d10f93720068a541ccfa172045bcf8",
-      "incident_run": 42637045272,
-      "latest_run_id": null,
-      "owner": "abvm-reliability",
-      "owner_decision": "AWAITING_CHAT_DECISION",
-      "problem": "Validate the candidate app before changing main",
-      "repository": "P00NSMASHER/abvmschoolstarworld",
-      "request": "Recheck the original failure, active owner and open PRs before proposing a fix.",
-      "source": "https://github.com/P00NSMASHER/abvmschoolstarworld/actions/runs/42637045272/job/129227869760",
-      "source_sha": "b2570827ff3c15d33310142a544f4e9ade3fd03f",
-      "state": "ORIGINAL_FAILURE_NEEDS_TRIAGE"
-    }
-  ],
+  "decisions": [],
   "remaining": 0,
   "provider_writes": 0
 }
