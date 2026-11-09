@@ -185,7 +185,10 @@ def validate_command_center() -> dict[str, object]:
     require("Daily runner-minute quota</td><td class=\"num\">None" in page, "retired runner-minute quota is not explicit")
     for retired_label in ("Accounted runner minutes today", "<td>Daily GitHub job starts</td>", "<td>Daily runner minutes</td>", "Governed runner minutes committed"):
         require(retired_label not in page, f"paid-cost UI still conflates GitHub workload: {retired_label}")
-    require('data-design="engineering-first-v6"' in page, "engineering-first visual-design marker missing")
+    require('data-design="engineering-first-v7"' in page, "engineering-first visual-design marker missing")
+    require('id="engineering-control"' in page, "engineering control plane missing")
+    require("Protected repair execution is operational." in page, "protected repair acceptance is not visible")
+    require("No dashboard field grants authority." in page, "engineering control authority boundary missing")
     require("font-family:-apple-system" in page, "native system typography stack missing")
     require("-webkit-backdrop-filter" in page and "border-radius:var(--radius-xl)" in page, "premium glass/card design contract missing")
     require("Durable Work Queue" in page, "durable queue panel missing")
