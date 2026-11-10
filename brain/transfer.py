@@ -18,6 +18,7 @@ from pathlib import Path
 
 from brain.core import BrainError, digest, require
 from brain.intelligence import REPO, SHA
+from brain.state_maintenance import VERIFIED_PRODUCTION_RAW_BYTES
 
 @contextmanager
 def readonly_authority_snapshot(database):
@@ -32,7 +33,10 @@ def readonly_authority_snapshot(database):
     path = Path(database)
     require(path.is_file(), "TRANSFER_STATE_DB_NOT_FOUND_NO_BOOTSTRAP")
     require(not path.is_symlink(), "TRANSFER_SYMLINK_STATE_REFUSED")
-    require(0 < path.stat().st_size <= 128_000_000, "TRANSFER_STATE_SIZE_UNSUPPORTED")
+    # Match the independently qualified raw production-state bound; do not
+    # remove the limit or weaken the source SQLite integrity checks.
+    require(0 < path.stat().st_size <= VERIFIED_PRODUCTION_RAW_BYTES,
+            "TRANSFER_STATE_SIZE_UNSUPPORTED")
     with tempfile.TemporaryDirectory(prefix="brain-transfer-ro-") as folder:
         os.chmod(folder, 0o700)
         scratch = Path(folder) / "state.sqlite"
