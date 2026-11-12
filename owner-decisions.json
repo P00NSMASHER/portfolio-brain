@@ -1,25 +1,6 @@
 {
   "version": 1,
-  "decisions": [
-    {
-      "acceptance": "Reproduce the failed behavior and verify it on the target after delivery.",
-      "behavior_verified": false,
-      "currentness": "NO_LATER_MATCHING_COMPLETED_RUN",
-      "delivered_by": null,
-      "existing_pr": null,
-      "id": "598f885ebff6cf2dcab7904712dfe33cca66173f07e2ca9b613d23ad2b9db75e",
-      "incident_run": 43152355724,
-      "latest_run_id": null,
-      "owner": "retally-product",
-      "owner_decision": "AWAITING_CHAT_DECISION",
-      "problem": "Audit live fleet",
-      "repository": "P00NSMASHER/github-value-hunt-ledger",
-      "request": "Recheck the original failure, active owner and open PRs before proposing a fix.",
-      "source": "https://github.com/P00NSMASHER/github-value-hunt-ledger/actions/runs/43152355724/job/130964299452",
-      "source_sha": "526dca43a34b5772b66124426af4befab95e3116",
-      "state": "ORIGINAL_FAILURE_NEEDS_TRIAGE"
-    }
-  ],
+  "decisions": [],
   "remaining": 0,
   "provider_writes": 0
 }
