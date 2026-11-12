@@ -1,6 +1,25 @@
 {
   "version": 1,
-  "decisions": [],
+  "decisions": [
+    {
+      "acceptance": "Reproduce the failed behavior and verify it on the target after delivery.",
+      "behavior_verified": false,
+      "currentness": "LATER_SAME_SOURCE_WORKFLOW_SUCCESS_ORIGINAL_FAILURE_HISTORICAL",
+      "delivered_by": null,
+      "existing_pr": null,
+      "id": "6ce52256b0917a28d8baf30800af669b5e968c5bdc0ebe23c62da84e677702f0",
+      "incident_run": 43199471973,
+      "latest_run_id": 43209715358,
+      "owner": "brain-reliability",
+      "owner_decision": "AWAITING_CHAT_DECISION",
+      "problem": "Read-only public project monitoring",
+      "repository": "P00NSMASHER/portfolio-brain",
+      "request": "Retire the original failure from triage. A product repair has not been verified.",
+      "source": "https://github.com/P00NSMASHER/portfolio-brain/actions/runs/43199471973/job/131118797297",
+      "source_sha": "803f1e9be403cfd15a2f62eb316047c20e089445",
+      "state": "ORIGINAL_FAILURE_HISTORICAL"
+    }
+  ],
   "remaining": 0,
   "provider_writes": 0
 }
