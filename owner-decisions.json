@@ -1,6 +1,25 @@
 {
   "version": 1,
-  "decisions": [],
+  "decisions": [
+    {
+      "acceptance": "Reproduce the failed behavior and verify it on the target after delivery.",
+      "behavior_verified": false,
+      "currentness": "LATEST_SAME_SOURCE_WORKFLOW_NOT_SUCCESS",
+      "delivered_by": null,
+      "existing_pr": null,
+      "id": "6ce52256b0917a28d8baf30800af669b5e968c5bdc0ebe23c62da84e677702f0",
+      "incident_run": 43132617606,
+      "latest_run_id": 43199471973,
+      "owner": "brain-reliability",
+      "owner_decision": "AWAITING_CHAT_DECISION",
+      "problem": "Read-only public project monitoring",
+      "repository": "P00NSMASHER/portfolio-brain",
+      "request": "Recheck the original failure, active owner and open PRs before proposing a fix.",
+      "source": "https://github.com/P00NSMASHER/portfolio-brain/actions/runs/43132617606/job/130900178453",
+      "source_sha": "803f1e9be403cfd15a2f62eb316047c20e089445",
+      "state": "ORIGINAL_FAILURE_NEEDS_TRIAGE"
+    }
+  ],
   "remaining": 0,
   "provider_writes": 0
 }
