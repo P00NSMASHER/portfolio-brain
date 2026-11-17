@@ -6,6 +6,8 @@ export const CRON = "*/10 * * * *";
 const API = "https://api.github.com/repos/" + REPO;
 const FRESH_MS = 25 * 60 * 1000;
 const ACTIVE_STALE_MS = 20 * 60 * 1000;
+const FAILED_RETRY_MS = 60 * 60 * 1000;
+const FAILED_RETRY_THRESHOLD = 3;
 const CLOCK_SKEW_MS = 60 * 1000;
 
 function asBytes(b64) {
@@ -55,6 +57,17 @@ export function decide(runs, source, nowMs) {
     if (!Number.isFinite(when) || when > nowMs + CLOCK_SKEW_MS) fail("SUCCESS_TIME_INVALID");
     const age=nowMs-when;
     if (age<FRESH_MS) return {status:"FRESH",dispatch:false,run_id:last.id,age_ms:age};
+  }
+  // Match the native watchdog: preserve hourly recovery after three failures,
+  // while unchanged broken source no longer launches a full cycle every tick.
+  const recent = present.filter(r => ["schedule", "workflow_dispatch"].includes(r.event) &&
+    r.status === "completed").sort((a,b) => Date.parse(b.created_at)-Date.parse(a.created_at)).slice(0,FAILED_RETRY_THRESHOLD);
+  if (recent.length === FAILED_RETRY_THRESHOLD && recent.every(r => ["failure", "timed_out"].includes(r.conclusion))) {
+    const completed=recent.map(r => Date.parse(r.updated_at));
+    if (completed.some((t,i) => !Number.isFinite(t) || t < Date.parse(recent[i].created_at) || t > nowMs)) fail("FAILURE_TIME_INVALID");
+    const age=nowMs-Math.max(...completed);
+    if (age<FAILED_RETRY_MS) return {status:"FAILED_RETRY_COOLDOWN",dispatch:false,
+      run_id:recent[0].id,recent_failed_run_ids:recent.map(r => r.id),age_ms:age,retry_after_ms:FAILED_RETRY_MS-age};
   }
   return {status:"DUE",dispatch:true,last_success_id:successful[0]?.id ?? null};
 }

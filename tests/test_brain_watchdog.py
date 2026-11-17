@@ -71,6 +71,40 @@ class WatchdogTests(unittest.TestCase):
         self.assertEqual(result["recent_failed_run_ids"],[1])
     def test_empty_inventory_due(self):
         self.assertTrue(decide(inventory(),SHA,now=NOW)["dispatch"])
+    def test_three_consecutive_failures_back_off_without_claiming_success(self):
+        rows=[run(minutes,run_id=index+1,conclusion="failure") for index,minutes in enumerate((2,12,22))]
+        result=decide(inventory(*rows),SHA,now=NOW)
+        self.assertEqual(result["status"],"FAILED_RETRY_COOLDOWN")
+        self.assertFalse(result["dispatch"])
+        self.assertFalse(result["soak_pass"])
+        self.assertEqual(result["retry_after_seconds"],3480)
+        self.assertEqual(result["recent_failed_run_ids"],[1,2,3])
+        self.assertTrue(decide(inventory(*rows[:2]),SHA,now=NOW)["dispatch"])
+    def test_failed_recovery_resumes_after_one_hour(self):
+        rows=[run(minutes,run_id=index+1,conclusion="failure") for index,minutes in enumerate((60,70,80))]
+        self.assertTrue(decide(inventory(*rows),SHA,now=NOW)["dispatch"])
+        rows[0]["updated_at"]=stamp(NOW-timedelta(seconds=3599))
+        self.assertEqual(decide(inventory(*rows),SHA,now=NOW)["status"],"FAILED_RETRY_COOLDOWN")
+    def test_failure_backoff_resets_on_new_source_or_intervening_success(self):
+        rows=[run(minutes,run_id=index+1,conclusion="failure") for index,minutes in enumerate((2,12,22))]
+        self.assertTrue(decide(inventory(*rows),"b"*40,now=NOW)["dispatch"])
+        rows[1]["conclusion"]="success"
+        self.assertEqual(decide(inventory(*rows),SHA,now=NOW)["status"],"FRESH")
+        older=[run(minutes,run_id=index+1,conclusion="failure") for index,minutes in enumerate((40,50,60))]
+        older[1]["conclusion"]="success"
+        self.assertTrue(decide(inventory(*older),SHA,now=NOW)["dispatch"])
+    def test_push_failure_and_cancelled_run_do_not_trip_backoff(self):
+        rows=[run(minutes,run_id=index+1,conclusion="failure") for index,minutes in enumerate((2,12,22))]
+        rows[0]["event"]="push"
+        self.assertTrue(decide(inventory(*rows),SHA,now=NOW)["dispatch"])
+        rows[0]["event"]="schedule"
+        rows[1]["conclusion"]="cancelled"
+        self.assertTrue(decide(inventory(*rows),SHA,now=NOW)["dispatch"])
+    def test_failure_backoff_validates_completion_times(self):
+        rows=[run(minutes,run_id=index+1,conclusion="failure") for index,minutes in enumerate((2,12,22))]
+        for bad in ("invalid",stamp(NOW+timedelta(seconds=1)),stamp(NOW-timedelta(hours=1))):
+            with self.subTest(completed=bad),self.assertRaises(ClockError):
+                decide(inventory({**rows[0],"updated_at":bad},*rows[1:]),SHA,now=NOW)
     def test_partial_or_duplicate_or_wrong_workflow_fails(self):
         truncated={"total_count":2,"workflow_runs":[run(1)]}
         repeated=inventory(run(2),run(4))

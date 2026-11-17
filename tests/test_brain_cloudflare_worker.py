@@ -42,6 +42,25 @@ assert.equal(failed.status,'DUE');
 assert.equal(failed.dispatch,true);
 const otherSource=decide(history(row(1,7,'completed','success','b'.repeat(40))),sha,now);
 assert.equal(otherSource.status,'DUE');
+const failures=[row(2,11,'completed','failure'),row(12,12,'completed','failure'),row(22,13,'completed','failure')];
+const cooldown=decide(history(...failures),sha,now);
+assert.equal(cooldown.status,'FAILED_RETRY_COOLDOWN');
+assert.equal(cooldown.dispatch,false);
+assert.equal(cooldown.retry_after_ms,58*60000);
+assert.deepEqual(cooldown.recent_failed_run_ids,[11,12,13]);
+assert.equal(decide(history(...failures.slice(0,2)),sha,now).dispatch,true);
+assert.equal(decide(history(...failures),'b'.repeat(40),now).dispatch,true);
+assert.equal(decide(history(failures[0],row(12,12),failures[2]),sha,now).status,'FRESH');
+assert.equal(decide(history(row(40,11,'completed','failure'),row(50,12),row(60,13,'completed','failure')),sha,now).dispatch,true);
+assert.equal(decide(history({...failures[0],event:'push'},...failures.slice(1)),sha,now).dispatch,true);
+assert.equal(decide(history(failures[0],{...failures[1],conclusion:'cancelled'},failures[2]),sha,now).dispatch,true);
+const hourly=[row(60,11,'completed','failure'),row(70,12,'completed','failure'),row(80,13,'completed','failure')];
+assert.equal(decide(history(...hourly),sha,now).dispatch,true);
+assert.equal(decide(history({...hourly[0],updated_at:new Date(now-3599000).toISOString()},...hourly.slice(1)),sha,now).dispatch,false);
+assert.equal(decide(history(row(1,14,'in_progress',null),...failures),sha,now).status,'ACTIVE');
+for (const bad of ['invalid',new Date(now+1000).toISOString(),new Date(now-3600000).toISOString()]) {
+ assert.throws(()=>decide(history({...failures[0],updated_at:bad},...failures.slice(1)),sha,now),/FAILURE_TIME_INVALID/);
+}
 assert.throws(()=>decide({total_count:2,workflow_runs:[row(1,1)]},sha,now));
 assert.throws(()=>decide(history(row(1,1),row(1,2,'completed','success','notsha')),sha,now));
 console.log('WORKER_DECISIONS_PASS');

@@ -11,6 +11,8 @@ CORE = ".github/workflows/brain-cycle.yml"
 CLOCK = ".github/workflows/brain-clock.yml"
 THRESHOLD_SECONDS = 2100
 MAX_ACTIVE_AGE = 1200
+FAILED_RETRY_SECONDS = 3600
+FAILED_RETRY_THRESHOLD = 3
 
 class ClockError(ValueError):
     pass
@@ -65,6 +67,20 @@ def decide(document, source_sha, *, now=None):
             return {"schema_version":1,"status":"FRESH","dispatch":False,
                     "source_sha":source_sha,"run_id":run["id"],
                     "age_seconds":int(age),"soak_pass":False}
+    # Repeated failures on unchanged source need repair, not another immediate
+    # full cycle. Keep one hourly recovery attempt; new source resets this gate.
+    recent = sorted(((t,r) for t,r in live if r.get("event") in ("schedule", "workflow_dispatch")
+                     and r.get("status")=="completed"), reverse=True, key=lambda x:x[0])[:FAILED_RETRY_THRESHOLD]
+    if len(recent) == FAILED_RETRY_THRESHOLD and all(r.get("conclusion") in ("failure", "timed_out") for _,r in recent):
+        completed = [utc(r.get("updated_at")) for _,r in recent]
+        require(all(created <= done <= now for (created,_),done in zip(recent,completed)), "COMPLETION_TIME_INVALID")
+        age = (now - max(completed)).total_seconds()
+        if age < FAILED_RETRY_SECONDS:
+            return {"schema_version":1,"status":"FAILED_RETRY_COOLDOWN","dispatch":False,
+                    "source_sha":source_sha,"run_id":recent[0][1]["id"],
+                    "recent_failed_run_ids":[r["id"] for _,r in recent],
+                    "age_seconds":int(age),"retry_after_seconds":int(FAILED_RETRY_SECONDS-age),
+                    "soak_pass":False}
     failed=[r["id"] for _,r in live if r.get("status")=="completed" and
             r.get("conclusion")!="success"]
     return {"schema_version":1,"status":"DUE","dispatch":True,
